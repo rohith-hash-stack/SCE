@@ -21,15 +21,20 @@ dependencies = [
     "tree-sitter-c-sharp>=0.23,<1.0",
     "networkx>=3.0,<4.0",
     "click>=8.0,<9.0",
+    # Core, not optional: `uvx --from git+https://...` (and a plain `pip
+    # install semantic-context-engine`) must run `sce mcp` out of the box,
+    # with no extras flag, for the zero-install VS Code/Claude Desktop
+    # setup documented in docs/mcp_setup.md to actually be zero-install.
+    # `sce.cli`'s `mcp` command (src/sce/cli.py) still imports
+    # `sce.mcp.server` lazily rather than at module load time - that stays
+    # unchanged and keeps `sce index`/`query`/`trace`/`status` free of any
+    # MCP-specific import cost - but the dependency itself is no longer
+    # conditional on an extra.
+    "mcp[cli]>=2.0,<3.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "tiktoken>=0.7,<1.0", "openai>=1.0", "python-dotenv>=1.0,<2.0", "sqlalchemy>=2.0,<3.0", "mcp[cli]>=2.0,<3.0"]
-# `sce mcp` (src/sce/mcp/) - a heavier, opt-in dependency most CLI-only
-# uses of this package (index/query/trace) have no need for; imported
-# lazily inside sce.mcp.server/sce.cli's `mcp` command so the rest of the
-# package works fine without it installed at all.
-mcp = ["mcp[cli]>=2.0,<3.0"]
+dev = ["pytest>=7.0", "tiktoken>=0.7,<1.0", "openai>=1.0", "python-dotenv>=1.0,<2.0", "sqlalchemy>=2.0,<3.0"]
 
 [project.scripts]
 sce = "sce.cli:main"

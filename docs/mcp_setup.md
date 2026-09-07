@@ -6,13 +6,99 @@ repository's variable-resolution context, architectural invariants, and tagged s
 directly - the same engine `sce index`/`sce query` expose on the command line, wrapped as
 tools an agent calls itself instead of a human running commands.
 
-## Install
+## Zero-install setup via `uvx` (recommended for VS Code)
 
-The `mcp` package is an optional dependency - the rest of SCE (`sce index`, `sce query`,
-`sce trace`, `sce status`) works without it.
+`mcp[cli]` is a core dependency of `semantic-context-engine` (not an extra), so a single
+`uvx --from git+https://github.com/<OWNER>/<REPO>.git sce ...` invocation resolves, builds, and
+runs the CLI with everything `sce mcp` needs, with no separate install step and no extras flag -
+the same "run a tool straight from its source, no `pip install` first" experience `npx` gives
+Node packages. [Install `uv`](https://docs.astral.sh/uv/getting-started/installation/) once
+(`curl -LsSf https://astral.sh/uv/install.sh | sh` on Linux/macOS, or see the docs for Windows);
+after that, no per-machine SCE install is needed at all - the client config below is
+self-contained. Substitute your repository's real `<OWNER>/<REPO>` (this project itself is
+`rohith-hash-stack/SCE`, so `git+https://github.com/rohith-hash-stack/SCE.git` for a fork or a
+clone of this exact repo).
+
+`scripts/verify_uvx_execution.py` exercises this exact path locally (`uvx --from .` instead of a
+`git+...` URL - the same build-from-source-tree machinery either way) before you ship a config
+that depends on it: CLI help, `sce mcp --help`, and a real MCP stdio `initialize` ->
+`tools/list` handshake confirming all 5 tools register. Run it after any packaging-relevant
+change (`pyproject.toml`, `[project.scripts]`, a new `sce.*` submodule) - `python
+scripts/verify_uvx_execution.py`.
+
+### A. Roo Code / Cline global user configuration (`mcp_settings.json`)
+
+Roo Code and Cline read a global `mcp_settings.json` (VS Code command palette → "Roo Code: Open
+MCP Config File", or Cline's equivalent settings entry):
+
+```json
+{
+  "mcpServers": {
+    "semantic-context-engine": {
+      "command": "uvx",
+      "args": [
+        "--refresh",
+        "--from",
+        "git+https://github.com/<OWNER>/<REPO>.git",
+        "sce",
+        "mcp",
+        "--transport",
+        "stdio",
+        "--repo",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}
+```
+
+`--refresh` makes `uv` re-check the git ref for updates on every launch instead of reusing a
+stale cached build - drop it once you've pinned a specific tag/commit you don't expect to
+change. `${workspaceFolder}` is expanded by the client to the currently open project, so
+`--repo` always points at whatever repository you're actually working in.
+
+### B. Native VS Code MCP integration (`.vscode/mcp.json`)
+
+VS Code's own built-in MCP support (no extension required, recent VS Code versions) reads a
+workspace-level `.vscode/mcp.json`, so this config travels with the project instead of living in
+a user's global settings:
+
+```json
+{
+  "servers": {
+    "semantic-context-engine": {
+      "command": "uvx",
+      "args": [
+        "--refresh",
+        "--from",
+        "git+https://github.com/<OWNER>/<REPO>.git",
+        "sce",
+        "mcp",
+        "--transport",
+        "stdio",
+        "--repo",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}
+```
+
+Note the top-level key is `servers`, not `mcpServers` - VS Code's native format differs from
+Roo Code/Cline's even though the per-server shape is identical. Commit this file so every
+contributor gets SCE wired up automatically the first time they open the project, with nothing
+to install by hand.
+
+## Install (local development / non-`uvx` clients)
+
+For local development, or a client that doesn't support launching a tool via `uvx` directly, a
+normal editable or PyPI-style install works the same way - `mcp[cli]` installs automatically
+since it's a core dependency, not an extra:
 
 ```bash
-pip install "semantic-context-engine[mcp]"
+pip install -e ".[dev]"    # this checkout, editable
+# or, once published:
+pip install semantic-context-engine
 ```
 
 ## Run it directly
@@ -31,6 +117,10 @@ server process. Omit `--repo` entirely and the server falls back to its own curr
 directory.
 
 ## Client configuration
+
+For VS Code (Roo Code/Cline or native MCP support), prefer the `uvx`-based zero-install configs
+in the section above - no local `sce` install to keep up to date. The configs below are for a
+client pointed at a local `pip`/`pip -e` install instead.
 
 Most MCP clients (Claude Desktop, Cursor, Claude Code) read a JSON config naming the command
 to launch. Add an entry like this - substituting the real absolute path to the repository you

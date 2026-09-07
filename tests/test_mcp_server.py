@@ -1,9 +1,9 @@
 """Hermetic tests for `sce.mcp.server` - all in-process via the official
 MCP SDK's `Client(server)` in-memory transport (see
 `mcp.client._memory.InMemoryTransport`): no subprocess, no stdio, no
-network, no persistent daemon. Requires the optional `mcp` extra
-(`pip install semantic-context-engine[mcp]` or `pip install
-'mcp[cli]>=2.0,<3.0'`), same as the server module itself.
+network, no persistent daemon. Requires `mcp[cli]` (a core dependency -
+`pip install semantic-context-engine`, or `pip install 'mcp[cli]>=2.0,<3.0'`
+directly), same as the server module itself.
 """
 from __future__ import annotations
 

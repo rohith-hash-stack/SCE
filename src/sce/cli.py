@@ -225,9 +225,14 @@ def mcp_command(transport: str, repo_path: str | None) -> None:
     try:
         from sce.mcp.server import run_server
     except ImportError as exc:
+        # `mcp[cli]` is a core dependency (pyproject.toml) - a normal `pip
+        # install semantic-context-engine` or `uvx --from ...` already
+        # pulls it in. This only fires for an environment deliberately
+        # installed without it (e.g. `pip install --no-deps`), so the fix
+        # is a plain reinstall, not an extras flag.
         click.echo(
-            "error: the 'mcp' extra is required for this command - install it with "
-            "`pip install semantic-context-engine[mcp]` (or `pip install 'mcp[cli]>=2.0,<3.0'`)",
+            "error: the 'mcp' package is required for this command but isn't importable - "
+            "reinstall with `pip install semantic-context-engine` (or `pip install 'mcp[cli]>=2.0,<3.0'` directly)",
             err=True,
         )
         raise SystemExit(1) from exc
