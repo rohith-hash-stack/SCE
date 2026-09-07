@@ -6,6 +6,7 @@ repository (see `archetypes.py`'s module docstring). Consumed by
 from __future__ import annotations
 
 from benchmarks.prompt_taxonomy.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_SLUG
+from benchmarks.prompt_taxonomy.polyglot_prompts import PROMPT_TEMPLATES, PROMPT_TEMPLATES_BY_ID, PROMPT_TEMPLATES_BY_SLUG, PolyglotPromptTemplate
 from benchmarks.prompt_taxonomy.spec import DEFAULT_SYSTEM_PROMPT, PromptArchetype
 
 __all__ = [
@@ -14,4 +15,8 @@ __all__ = [
     "ARCHETYPES_BY_SLUG",
     "DEFAULT_SYSTEM_PROMPT",
     "PromptArchetype",
+    "PROMPT_TEMPLATES",
+    "PROMPT_TEMPLATES_BY_ID",
+    "PROMPT_TEMPLATES_BY_SLUG",
+    "PolyglotPromptTemplate",
 ]

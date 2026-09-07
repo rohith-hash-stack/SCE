@@ -655,3 +655,108 @@ OR-logic. A gated `SCE_LIVE_NETWORK_TESTS=1` test confirms the exact named
 symbols from the live run (`db_for_write`, `_iterable_class`,
 `_middleware_chain`) are indexed as attributes against the real,
 already-cloned django repo.
+
+## Polyglot 33-prompt matrix, all six languages (`polyglot_33_matrix.py`)
+
+`large_repo_prompt_matrix.py` runs the 33-archetype taxonomy against one
+real repository in one language (django/Python). This harness runs the
+SAME 33-item taxonomy - as language-agnostic templates parameterized by a
+single `{target}` symbol, `benchmarks/prompt_taxonomy/polyglot_prompts.py`
+- against one real, cloned, architecturally distinct repository per
+language SCE's parser/tagger/slicer layers support:
+
+| Language   | Repository                              | Target symbol (confirmed by actually cloning + indexing, not guessed) |
+|------------|------------------------------------------|-------------------------------------------------------------------------|
+| Python     | django/django                            | `django.db.models.base.Model.save` |
+| TypeScript | honojs/hono                              | `src.hono-base.Hono.route` (calls `basePath` + `compose`) |
+| JavaScript | expressjs/express                        | `lib.response.onfinish` (see note below) |
+| Go         | gin-gonic/gin                            | `gin.handleHTTPRequest` |
+| Java       | spring-projects/spring-petclinic         | `org.springframework.samples.petclinic.owner.PetController.processCreationForm` |
+| C#         | dotnet-architecture/eShopOnWeb           | `Microsoft.eShopWeb.Web.Controllers.UserController.GetCurrentUser` |
+
+```bash
+# One language, all 33 prompts:
+python -m benchmarks.polyglot_33_matrix --repo gin --report benchmarks/polyglot_33_results.json
+
+# The full six-language suite:
+python -m benchmarks.polyglot_33_matrix --run-all --report benchmarks/polyglot_33_results.json
+
+# A single archetype by id, one repo:
+python -m benchmarks.polyglot_33_matrix --repo hono --prompt 17
+
+# No API key needed: index every repo, build every context, print sizes/
+# compression/SCE's-own-hallucination-freedom/syntax-validity, zero API calls:
+python -m benchmarks.polyglot_33_matrix --run-all --dry-run
+```
+
+**Scoring, generalized to five more languages without an LLM judge anywhere:**
+
+- **Token compression** - identical to every other harness here.
+- **Syntax validity** - `ast.parse()` for Python; a real Tree-sitter
+  reparse (reusing `validity.py`'s exact class-wrap fallback heuristic) for
+  the other five, applied to the model's own generated code this time
+  rather than SCE's rendered package.
+- **Hallucination detection** - `ast`-based call extraction for Python
+  (`spec.py`'s existing checker, unchanged); a regex-based call-name
+  extractor for the other five (`find_hallucinated_calls_generic`), which
+  also strips the snippet's own declared function/method/class names first
+  so a model's own generated function is never flagged as a "call" to
+  itself - checked against the real repository's `GlobalSymbolTable`
+  either way. Every archetype also gets `spec.py`'s prose-mention scan
+  (`find_referenced_symbol_mentions`), already fully language-agnostic.
+- **Contract adherence** - all of `spec.py`'s checkers (output format,
+  negative constraints, forbidden tags, required substrings/regexes,
+  self-consistency) are pure text/regex operations with no Python-specific
+  parsing, so they apply unchanged across all six languages.
+- **`--dry-run`** additionally verifies SCE's OWN rendered context package
+  (not a model response) is 100% syntactically valid and hallucination-free
+  per repository - the same static regression guard `multi_repo_eval.py`
+  and `polyglot_prompt_matrix.py` already run, just across all six
+  languages and all 33 archetypes' targets in one pass.
+
+**Real findings from indexing all six repositories** (each confirmed by
+actually cloning and indexing, not assumed):
+
+1. **`express`'s core dispatch is invisible to SCE's current JS indexer.**
+   `app.handle`/`Router.process_params` (the task's originally-suggested
+   targets) are legacy CommonJS prototype-method assignments
+   (`app.handle = function handle(req, res, callback) {...}`) - SCE's
+   symbol collector for JS/TS only indexes `function_declaration`/
+   `method_definition` nodes, unlike its Python counterpart's dedicated
+   attribute-assignment pass (see the django fixes above). Every such
+   assignment in express's own `lib/` indexes with **zero** outgoing call
+   edges; `lib.response.onfinish` is the one function in express's own
+   source that has any resolvable outgoing edges at all
+   (`-> onaborted`, `-> onerror`) at time of writing - used here instead,
+   and reported rather than silently substituted.
+2. **The same gap exists in `hono`, just less severely.** `Hono.fetch`/
+   `.use` are class-field arrow functions assigned in the constructor
+   (`this.use = (...) => {...}`), not `method_definition` nodes, so they
+   aren't indexed as callable symbols either. `Hono.route` (a real
+   `method_definition`) is used instead - it calls `basePath` and
+   `compose` directly, a real, representative slice of the router/
+   middleware pipeline.
+3. **`eShopOnWeb`'s `OrderService.CreateOrderAsync`** (the task's
+   originally-suggested C# target) is a real, indexed symbol but resolves
+   with **zero** outgoing call edges: its body calls exclusively through
+   constructor-injected interface-typed fields (`_orderRepository`,
+   `_uriComposer`, ...), which SCE's no-type-inference `InstanceTypeMap`
+   cannot statically resolve to a concrete implementation - the same
+   documented class of limitation as httpx's inheritance-based `self.method()`
+   gap above, just via dependency injection instead. `UserController.GetCurrentUser`
+   (real edges, `#route_handler` + `#auth_guard` tags) is used instead.
+4. **`gin` and `django` need no substitution** - both suggested targets
+   (`(*Engine).handleHTTPRequest`, `Model.save`) are real, richly-connected,
+   already-indexed symbols exactly as proposed.
+5. **Small, shallow real-world targets can show *negative* compression at
+   the 3000-token default budget** - e.g. spring-petclinic's
+   `processCreationForm` (raw dump: 1519 tokens; SCE package: ~4000
+   tokens). This is `ContextKnapsackPacker`'s documented Adaptive Compact
+   Scaffolding boundary (see the "Adaptive Compact Scaffolding" fix above):
+   compact mode triggers under a ~1200-token raw-footprint threshold, and
+   this target's raw footprint sits just above it, so the normal (richer,
+   undirected-neighborhood) packing mode runs and its fixed scaffold
+   overhead exceeds this particular target's own small raw footprint. A
+   real, honest property of this specific target at this specific budget,
+   not a harness bug - a larger `--budget` or a richer target (e.g. `gin`,
+   `django`) does not exhibit it.
