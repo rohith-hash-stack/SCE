@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import textwrap
 from dataclasses import dataclass, field
 
 from sce.parser.tree_sitter_loader import LanguageID
@@ -29,7 +30,13 @@ def _raw_slice(source: str, line_range: tuple[int, int]) -> str:
     start, end = line_range
     start = max(start, 1)
     end = min(end, len(lines))
-    return "\n".join(lines[start - 1 : end])
+    raw = "\n".join(lines[start - 1 : end])
+    # A method's line range is a literal slice of the file, so it carries
+    # its original class-body indentation (e.g. 4 spaces). L1-L3 render from
+    # a freshly unparsed AST and are always flush to column 0; dedenting L0
+    # too keeps every resolution level independently valid, standalone
+    # Python rather than only being parseable in its original file context.
+    return textwrap.dedent(raw)
 
 
 # ---------------------------------------------------------------------- #

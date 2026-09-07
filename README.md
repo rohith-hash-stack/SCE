@@ -66,3 +66,13 @@ src/sce/
 ├── slicer/                    # distance, AST compressor, knapsack packer
 └── serializers/                # markdown / json_debug output
 ```
+
+## Benchmarks
+
+`benchmarks/` quantifies SCE's context packing against a naive whole-file
+dump: token compression, call-graph/invariant-tag coverage, and syntactic
+validity of every rendered code block. See `benchmarks/README.md`.
+
+```bash
+python -m benchmarks.run_benchmark --suite
+```
