@@ -1,16 +1,16 @@
-"""SCE as a Model Context Protocol server (roadmap Step 4).
+"""Prism as a Model Context Protocol server (roadmap Step 4).
 
-Five tools, each a thin wrapper around the same engine `sce.cli` already
+Five tools, each a thin wrapper around the same engine `prism.cli` already
 exposes as `index`/`query`/`trace`/`status`, backed by a per-repository
-`GraphCache` (`sce.mcp.cache`) so an agent session that calls these tools
+`GraphCache` (`prism.mcp.cache`) so an agent session that calls these tools
 repeatedly against the same repository only pays the indexing cost once:
 
   - `get_symbol_context`: the variable-resolution Markdown package
-    `sce query` renders (L0 target, L1/L2/L3 neighbors, architectural
+    `prism query` renders (L0 target, L1/L2/L3 neighbors, architectural
     path) - `ContextKnapsackPacker`'s own `D_hybrid` distance metric
     already discounts `CONFIRMED_RUNTIME` edges (see
-    `sce.slicer.distance`), so a runtime-confirmed path is preferentially
-    packed automatically whenever `.sce/runtime_state.json` exists for
+    `prism.slicer.distance`), so a runtime-confirmed path is preferentially
+    packed automatically whenever `.prism/runtime_state.json` exists for
     the repository, with no extra flag needed here.
   - `get_architectural_invariants`: a target's own tags, its incoming/
     outgoing edges' runtime confidence, and any `REQUIRES_BEFORE`
@@ -19,10 +19,10 @@ repeatedly against the same repository only pays the indexing cost once:
     satisfies.
   - `find_symbols_by_tag`: every symbol matrix `M` maps to a given tag,
     with its file/line-range and runtime invocation count.
-  - `get_graph_status`: the same summary `sce status` prints, as
+  - `get_graph_status`: the same summary `prism status` prints, as
     structured data.
   - `reindex_repo`: forces `GraphCache` to drop and rebuild one
-    repository's entry, re-merging `.sce/runtime_state.json`.
+    repository's entry, re-merging `.prism/runtime_state.json`.
 
 All five raise `ToolError` (never a bare, opaque crash) for the two
 foreseeable failure modes - an unknown repository path and an unknown
@@ -37,15 +37,15 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from sce.graph.metamodel import TagRelation
-from sce.mcp.cache import GraphCache, RepoNotFoundError
-from sce.serializers.markdown import render_markdown
-from sce.slicer.knapsack import ContextKnapsackPacker
+from prism.graph.metamodel import TagRelation
+from prism.mcp.cache import GraphCache, RepoNotFoundError
+from prism.serializers.markdown import render_markdown
+from prism.slicer.knapsack import ContextKnapsackPacker
 
 DEFAULT_TOKEN_BUDGET = 2000
 
 server = MCPServer(
-    "semantic-context-engine",
+    "prism",
     version="0.1.0",
     instructions=(
         "Deterministic, offline dual-layer semantic context engine for a cloned repository. "
@@ -57,7 +57,7 @@ server = MCPServer(
         "callers. Use find_symbols_by_tag to enumerate every route handler / db write / auth "
         "guard / external call in the repository. get_graph_status reports index size and how "
         "much of the graph runtime tracing has actually confirmed. Every tool indexes lazily and "
-        "caches per repository - call reindex_repo after the source or a new `sce trace` run "
+        "caches per repository - call reindex_repo after the source or a new `prism trace` run "
         "changes underfoot."
     ),
 )
@@ -266,8 +266,8 @@ def get_graph_status(repo_path: str | None = None) -> dict[str, Any]:
 @server.tool()
 def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
     """Drop the cached graph for a repository (if any) and rebuild it
-    from source, re-merging `.sce/runtime_state.json` if present. Call
-    this after editing source files or after a new `sce trace` run, since
+    from source, re-merging `.prism/runtime_state.json` if present. Call
+    this after editing source files or after a new `prism trace` run, since
     nothing here watches the filesystem automatically.
 
     Args:
@@ -288,11 +288,11 @@ def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
 
 
 def run_server(transport: str = "stdio", repo_path: str | None = None) -> None:
-    """Entry point for `sce mcp` (`src/sce/cli.py`). `repo_path`, if given,
+    """Entry point for `prism mcp` (`src/prism/cli.py`). `repo_path`, if given,
     becomes the default `repo_path` for any tool call that omits it -
-    via `SCE_MCP_DEFAULT_REPO` (see `GraphCache.canonical_path`), not by
+    via `PRISM_MCP_DEFAULT_REPO` (see `GraphCache.canonical_path`), not by
     changing this process's actual working directory.
     """
     if repo_path is not None:
-        os.environ["SCE_MCP_DEFAULT_REPO"] = os.path.abspath(repo_path)
+        os.environ["PRISM_MCP_DEFAULT_REPO"] = os.path.abspath(repo_path)
     server.run(transport=transport)

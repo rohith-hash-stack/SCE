@@ -1,11 +1,11 @@
 """Emits the dual-layer graph as JSON, for inspection/diagnostics
-(`sce index --debug-json`, or programmatic consumption).
+(`prism index --debug-json`, or programmatic consumption).
 """
 from __future__ import annotations
 
 import json
 
-from sce.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.concrete_builder import ConcreteGraphBuilder
 
 
 def build_debug_dict(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]]) -> dict:

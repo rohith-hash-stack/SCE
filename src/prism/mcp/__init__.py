@@ -1,8 +1,8 @@
-"""Roadmap Step 4: packaging SCE as an official Model Context Protocol
+"""Roadmap Step 4: packaging Prism as an official Model Context Protocol
 (MCP) server.
 
 Everything in this package is a thin integration layer over the same
-engine `sce.cli` already exposes to a human via the `index`/`query`/
+engine `prism.cli` already exposes to a human via the `index`/`query`/
 `trace`/`status` commands - `server.py` wraps it as MCP tools instead, so
 any MCP-aware coding agent (Claude Desktop, Cursor, ...) can query a
 repository's variable-resolution context, architectural invariants, and

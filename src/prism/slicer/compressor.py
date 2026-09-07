@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 from tree_sitter import Node
 
-from sce.parser.tree_sitter_loader import LanguageID
+from prism.parser.tree_sitter_loader import LanguageID
 
 
 @dataclass
@@ -331,8 +331,8 @@ def compress_universal(source: str, def_node: Node, language_id: str, resolution
     recover, an existing, pre-existing-elsewhere degradation, not a new
     one this introduces).
     """
-    from sce.parser.lang_config import CLASS_NODE_TYPES
-    from sce.slicer.universal_slicer import UniversalSlicer
+    from prism.parser.lang_config import CLASS_NODE_TYPES
+    from prism.slicer.universal_slicer import UniversalSlicer
 
     slicer = UniversalSlicer()
     source_bytes = source.encode("utf-8")
@@ -373,7 +373,7 @@ class ASTCompressor:
         if language_id == LanguageID.PYTHON:
             return compress_python(source, name, line_range, resolution, context)
         if resolution != 0 and def_node is not None:
-            from sce.slicer.universal_slicer import UniversalSlicer
+            from prism.slicer.universal_slicer import UniversalSlicer
 
             if language_id in UniversalSlicer.SUPPORTED_LANGUAGES:
                 return compress_universal(source, def_node, language_id, resolution, context)

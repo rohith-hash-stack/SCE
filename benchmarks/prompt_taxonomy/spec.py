@@ -43,7 +43,7 @@ class PromptArchetype:
     slug: str
     title: str
     cluster: str  # short grouping label, e.g. "Interaction style", "Prompting technique"
-    # The symbol SCE queries / the raw dump's call-chain closure is scoped
+    # The symbol Prism queries / the raw dump's call-chain closure is scoped
     # around. Always a real, verified-to-exist qualified name in the target
     # repository (see archetypes.py's module docstring for how these were
     # confirmed against a real indexed django/django clone).

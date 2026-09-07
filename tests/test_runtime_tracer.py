@@ -1,4 +1,4 @@
-"""Hermetic tests for `sce.runtime.tracer` - no network, no external
+"""Hermetic tests for `prism.runtime.tracer` - no network, no external
 processes beyond a real (local-only) pytest subprocess for the end-to-end
 case, matching how `benchmarks/clone_eval.py`-style tools are tested
 elsewhere in this suite (only *network*-dependent tests are gated; a
@@ -9,12 +9,12 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from sce.cli import build_pipeline
-from sce.graph.metamodel import SemanticMetamodel
-from sce.runtime.reconciler import GraphReconciler, load_trace_file
-from sce.runtime.tracer import Tracer, TraceRecord, resolve_qualified_name, run_traced_pytest
-from sce.slicer.distance import DistanceConfig, DistanceEngine
-from sce.slicer.knapsack import ContextKnapsackPacker
+from prism.cli import build_pipeline
+from prism.graph.metamodel import SemanticMetamodel
+from prism.runtime.reconciler import GraphReconciler, load_trace_file
+from prism.runtime.tracer import Tracer, TraceRecord, resolve_qualified_name, run_traced_pytest
+from prism.slicer.distance import DistanceConfig, DistanceEngine
+from prism.slicer.knapsack import ContextKnapsackPacker
 
 
 def _write_traced_module(tmp_path):
@@ -161,7 +161,7 @@ def test_module_entry_point_runs_traced_pytest(tmp_path):
     output = tmp_path / "trace.jsonl"
 
     result = subprocess.run(
-        [sys.executable, "-m", "sce.runtime.trace", "--repo", str(repo), "--output", str(output), "--", "pytest", "test_orders.py", "-q"],
+        [sys.executable, "-m", "prism.runtime.trace", "--repo", str(repo), "--output", str(output), "--", "pytest", "test_orders.py", "-q"],
         capture_output=True, text=True, cwd=str(repo),
     )
 
@@ -216,7 +216,7 @@ def _trace_dispatch_fixture(repo, output_path, action="create", amount=5):
 
 def test_tracer_captures_getattr_dynamic_dispatch(tmp_path):
     """Tracer Execution: a small multi-module fixture with a dynamic
-    `getattr()` dispatch, traced under `sce.runtime.tracer` - the trace
+    `getattr()` dispatch, traced under `prism.runtime.tracer` - the trace
     log must capture the actual concrete handler the dispatch resolved
     to at runtime.
     """

@@ -1,6 +1,6 @@
 """Stage 3: Deterministic Tag Grounding Engine.
 
-Evaluates the rules in `sce.tagger.rules` against every function/method
+Evaluates the rules in `prism.tagger.rules` against every function/method
 subtree collected by the `ConcreteGraphBuilder`, producing the bipartite
 matrix `M` (as a `qualified_name -> set[tag]` mapping, and mirrored onto the
 `tags` node attribute of `G_C` for convenience).
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from tree_sitter import Node
 
-from sce.graph.concrete_builder import ConcreteGraphBuilder
-from sce.parser.lang_config import (
+from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
     CALL_NODE_TYPE,
     DECORATED_WRAPPER_TYPES,
@@ -21,8 +21,8 @@ from sce.parser.lang_config import (
     flatten_reference_chain,
     iter_scoped_nodes,
 )
-from sce.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
-from sce.tagger.rules import (
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
+from prism.tagger.rules import (
     AUTH_GUARD_RULE,
     CALL_SINK_RULES,
     DECORATOR_RULES,

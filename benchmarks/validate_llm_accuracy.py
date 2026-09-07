@@ -1,5 +1,5 @@
 """End-to-end LLM accuracy validation: does a real model produce
-functionally correct, hallucination-free code when given SCE's sliced
+functionally correct, hallucination-free code when given Prism's sliced
 context vs. a raw whole-file dump?
 
 Three tasks with deterministic ground truth (verified by actually running
@@ -40,23 +40,23 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
+def _ensure_prism_importable() -> None:
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
-from sce.cli import build_pipeline  # noqa: E402
-from sce.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
-from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
-from sce.serializers.markdown import render_markdown  # noqa: E402
-from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
-from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
+from prism.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
+from prism.graph.metamodel import SemanticMetamodel  # noqa: E402
+from prism.serializers.markdown import render_markdown  # noqa: E402
+from prism.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
+from prism.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.openai_client import LLMClient, OpenAIClientError  # noqa: E402
 from benchmarks.raw_context import build_raw_context, dump_files  # noqa: E402
@@ -68,7 +68,7 @@ ACCURACY_REPO = PROJECT_ROOT / "benchmarks" / "fixtures" / "accuracy_repo"
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_BUDGET = 2000
 DEFAULT_REPORT_PATH = PROJECT_ROOT / "benchmarks" / "accuracy_report.json"
-VARIANTS: tuple[str, ...] = ("raw", "sce")
+VARIANTS: tuple[str, ...] = ("raw", "prism")
 PYTEST_TIMEOUT_SECONDS = 60
 
 SYSTEM_PROMPT = (
@@ -91,7 +91,7 @@ class ValidationError(Exception):
 class AccuracyTask:
     task_id: str
     title: str
-    # The symbol SCE queries / the raw dump is scoped around.
+    # The symbol Prism queries / the raw dump is scoped around.
     context_target: str
     # The symbol whose body actually gets replaced with the LLM's code in
     # the sandbox. Equal to context_target for Tasks 1 and 3 (fixing code
@@ -157,7 +157,7 @@ TASKS_BY_ID: dict[str, AccuracyTask] = {t.task_id: t for t in TASKS}
 
 
 # --------------------------------------------------------------------- #
-# Context building (raw whole-file dump vs. SCE L0-L3 package)
+# Context building (raw whole-file dump vs. Prism L0-L3 package)
 # --------------------------------------------------------------------- #
 def _whole_repo_files(builder: ConcreteGraphBuilder) -> tuple[str, ...]:
     return tuple(sorted({symbol.file for symbol in builder.symbol_table}))
@@ -166,11 +166,11 @@ def _whole_repo_files(builder: ConcreteGraphBuilder) -> tuple[str, ...]:
 def build_contexts(
     builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], task: AccuracyTask, budget: int, lambda_weight: float = 0.7
 ) -> tuple[str, str]:
-    """Returns (raw_text, sce_text) for a task's context_target."""
+    """Returns (raw_text, prism_text) for a task's context_target."""
     metamodel = SemanticMetamodel()
     distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
     pack_result = ContextKnapsackPacker(token_budget=budget).pack(task.context_target, builder, tag_matrix, distance_engine)
-    sce_text = render_markdown(pack_result, tag_matrix)
+    prism_text = render_markdown(pack_result, tag_matrix)
 
     if task.raw_scope == "whole_repo":
         raw_files = _whole_repo_files(builder)
@@ -178,7 +178,7 @@ def build_contexts(
         raw_files = build_raw_context(builder, task.context_target).files
     raw_text = dump_files(builder, raw_files)
 
-    return raw_text, sce_text
+    return raw_text, prism_text
 
 
 def read_original_snippet(builder: ConcreteGraphBuilder, qualified_name: str) -> str:
@@ -229,7 +229,7 @@ def run_in_sandbox(builder: ConcreteGraphBuilder, task: AccuracyTask, llm_code: 
     symbol = builder.symbol_table.get(task.patch_target)
     fixture_root = Path(builder.repo_root)
 
-    with tempfile.TemporaryDirectory(prefix="sce_accuracy_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="prism_accuracy_") as tmp:
         sandbox_root = Path(tmp) / "repo"
         shutil.copytree(fixture_root, sandbox_root)
 
@@ -261,7 +261,7 @@ def run_in_sandbox(builder: ConcreteGraphBuilder, task: AccuracyTask, llm_code: 
 _BUILTIN_NAMES = frozenset(dir(_builtins_module))
 # Common built-in container/string methods AST-level call-name inspection
 # can't distinguish from a hallucinated project-level method without type
-# inference (which this checker deliberately doesn't do, matching SCE's own
+# inference (which this checker deliberately doesn't do, matching Prism's own
 # "no dynamic execution" design principle). Kept short and genuinely
 # common - anything not in this set, not a builtin, and not a real
 # GlobalSymbolTable symbol is still flagged.
@@ -465,10 +465,10 @@ def dry_run_preview(tasks: list[AccuracyTask], budget: int) -> str:
         if task.context_target not in builder.symbol_table or task.patch_target not in builder.symbol_table:
             lines.append(f"=== {task.task_id} === ERROR: target(s) not found in fixture")
             continue
-        raw_text, sce_text = build_contexts(builder, tag_matrix, task, budget)
+        raw_text, prism_text = build_contexts(builder, tag_matrix, task, budget)
         lines.append(f"=== {task.task_id}: {task.title} ===")
         lines.append(f"  [raw] context={count_tokens(raw_text)} tok")
-        lines.append(f"  [sce] context={count_tokens(sce_text)} tok")
+        lines.append(f"  [prism] context={count_tokens(prism_text)} tok")
         lines.append("")
     return "\n".join(lines)
 
@@ -479,7 +479,7 @@ def dry_run_preview(tasks: list[AccuracyTask], budget: int) -> str:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m benchmarks.validate_llm_accuracy",
-        description="Validate downstream LLM coding accuracy: SCE-sliced vs. raw-dump context, scored by real pytest execution.",
+        description="Validate downstream LLM coding accuracy: Prism-sliced vs. raw-dump context, scored by real pytest execution.",
     )
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"OpenAI model to use (default: {DEFAULT_MODEL}).")
     parser.add_argument(
@@ -488,7 +488,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--variants", default=",".join(VARIANTS), help=f"Comma-separated context variants (available: {', '.join(VARIANTS)})."
     )
-    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"SCE token budget (default: {DEFAULT_BUDGET}).")
+    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"Prism token budget (default: {DEFAULT_BUDGET}).")
     parser.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature (default: 0.0).")
     parser.add_argument(
         "--report", default=str(DEFAULT_REPORT_PATH), help=f"Write full results as JSON here (default: {DEFAULT_REPORT_PATH}). Pass '' to skip."
@@ -545,8 +545,8 @@ def main(argv: list[str] | None = None) -> int:
         if task.context_target not in builder.symbol_table or task.patch_target not in builder.symbol_table:
             print(f"error: task '{task.task_id}' target(s) not found in the fixture repo", file=sys.stderr)
             return 1
-        raw_text, sce_text = build_contexts(builder, tag_matrix, task, args.budget)
-        context_by_variant = {"raw": raw_text, "sce": sce_text}
+        raw_text, prism_text = build_contexts(builder, tag_matrix, task, args.budget)
+        context_by_variant = {"raw": raw_text, "prism": prism_text}
         for variant in variants:
             print(f"Running {task.task_id} [{variant}] with {args.model} ...", file=sys.stderr)
             try:

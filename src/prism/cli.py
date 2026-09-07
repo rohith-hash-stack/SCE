@@ -1,4 +1,4 @@
-"""SCE command-line interface: `sce index`, `sce query`."""
+"""Prism command-line interface: `prism index`, `prism query`."""
 from __future__ import annotations
 
 import json
@@ -6,11 +6,11 @@ import os
 
 import click
 
-from sce.graph.concrete_builder import ConcreteGraphBuilder
-from sce.graph.metamodel import SemanticMetamodel
-from sce.graph.symbol_table import GlobalSymbolTable
-from sce.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
-from sce.runtime.reconciler import (
+from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.metamodel import SemanticMetamodel
+from prism.graph.symbol_table import GlobalSymbolTable
+from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
+from prism.runtime.reconciler import (
     GraphReconciler,
     ingest_otel_file,
     load_runtime_state,
@@ -21,16 +21,16 @@ from sce.runtime.reconciler import (
     save_runtime_state,
     write_trace_file,
 )
-from sce.runtime.tracer import run_traced_pytest
-from sce.serializers.json_debug import render_json_debug
-from sce.serializers.markdown import render_markdown
-from sce.slicer.distance import DistanceConfig, DistanceEngine
-from sce.slicer.knapsack import ContextKnapsackPacker
-from sce.tagger.engine import TaggingEngine
+from prism.runtime.tracer import run_traced_pytest
+from prism.serializers.json_debug import render_json_debug
+from prism.serializers.markdown import render_markdown
+from prism.slicer.distance import DistanceConfig, DistanceEngine
+from prism.slicer.knapsack import ContextKnapsackPacker
+from prism.tagger.engine import TaggingEngine
 
 IGNORED_DIRS = {
     ".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build",
-    ".mypy_cache", ".pytest_cache", ".tox", "site-packages", ".sce_cache",
+    ".mypy_cache", ".pytest_cache", ".tox", "site-packages", ".prism_cache",
 }
 
 
@@ -57,9 +57,9 @@ def build_pipeline(repo_path: str) -> tuple[ConcreteGraphBuilder, dict[str, set[
 
 
 @click.group()
-@click.version_option(package_name="semantic-context-engine")
+@click.version_option(package_name="prism-context")
 def main() -> None:
-    """Semantic Context Engine: deterministic, offline repo context extraction."""
+    """Prism: deterministic, offline repo context extraction."""
 
 
 @main.command()
@@ -105,7 +105,7 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
 
     if symbol not in builder.symbol_table:
         click.echo(f"error: symbol '{symbol}' not found in {repo_path}", err=True)
-        click.echo("hint: run `sce index REPO_PATH --debug-json` to list known symbols.", err=True)
+        click.echo("hint: run `prism index REPO_PATH --debug-json` to list known symbols.", err=True)
         raise SystemExit(1)
 
     metamodel = SemanticMetamodel()
@@ -141,8 +141,8 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
     help=(
         "Record a runtime trace and reconcile it into the static graph.\n\n"
         "\b\n"
-        "  sce trace --repo . -- pytest tests/test_orders.py\n"
-        "  sce trace --repo . --ingest-otel ./traces/otel_export.json"
+        "  prism trace --repo . -- pytest tests/test_orders.py\n"
+        "  prism trace --repo . --ingest-otel ./traces/otel_export.json"
     ),
 )
 @click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
@@ -161,7 +161,7 @@ def trace(repo_path: str, otel_path: str | None, command: tuple[str, ...]) -> No
         click.echo(f"Ingested {len(events)} event(s) from {otel_path}")
     else:
         if not command:
-            click.echo("error: no command given - expected e.g. `sce trace --repo . -- pytest tests/`", err=True)
+            click.echo("error: no command given - expected e.g. `prism trace --repo . -- pytest tests/`", err=True)
             raise SystemExit(1)
         cmd = list(command)
         if cmd[0] != "pytest":
@@ -208,7 +208,7 @@ def status(repo_path: str) -> None:
     if state["last_updated"]:
         click.echo(f"Last updated:                 {state['last_updated']}")
     else:
-        click.echo("No runtime trace has been recorded yet - run `sce trace --repo . -- pytest ...` first.")
+        click.echo("No runtime trace has been recorded yet - run `prism trace --repo . -- pytest ...` first.")
 
 
 @main.command(name="mcp")
@@ -221,18 +221,18 @@ def status(repo_path: str) -> None:
     help="Default repository root for a tool call that omits its own repo_path (defaults to this process's cwd).",
 )
 def mcp_command(transport: str, repo_path: str | None) -> None:
-    """Run SCE as a Model Context Protocol server (see docs/mcp_setup.md)."""
+    """Run Prism as a Model Context Protocol server (see docs/mcp_setup.md)."""
     try:
-        from sce.mcp.server import run_server
+        from prism.mcp.server import run_server
     except ImportError as exc:
         # `mcp[cli]` is a core dependency (pyproject.toml) - a normal `pip
-        # install semantic-context-engine` or `uvx --from ...` already
+        # install prism-context` or `uvx --from ...` already
         # pulls it in. This only fires for an environment deliberately
         # installed without it (e.g. `pip install --no-deps`), so the fix
         # is a plain reinstall, not an extras flag.
         click.echo(
             "error: the 'mcp' package is required for this command but isn't importable - "
-            "reinstall with `pip install semantic-context-engine` (or `pip install 'mcp[cli]>=2.0,<3.0'` directly)",
+            "reinstall with `pip install prism-context` (or `pip install 'mcp[cli]>=2.0,<3.0'` directly)",
             err=True,
         )
         raise SystemExit(1) from exc

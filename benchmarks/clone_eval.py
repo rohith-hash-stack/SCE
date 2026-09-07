@@ -1,9 +1,9 @@
-"""Clones a real, public Git repository and runs SCE's full pipeline
+"""Clones a real, public Git repository and runs Prism's full pipeline
 against it: proves the cross-file linker builds `G_C` without crashing on
 real-world Python (decorators, type hints, relative imports, complex
 `__init__.py` barrels), then reports the same compression/coverage/
 validity metrics `run_benchmark.py` computes on the synthetic fixtures -
-against a target you name or one SCE auto-selects.
+against a target you name or one Prism auto-selects.
 
 Usage:
     python -m benchmarks.clone_eval --repo https://github.com/encode/starlette.git \
@@ -23,23 +23,23 @@ from urllib.parse import urlparse
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
+def _ensure_prism_importable() -> None:
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
-from sce.cli import build_pipeline  # noqa: E402
-from sce.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
-from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
-from sce.serializers.markdown import render_markdown  # noqa: E402
-from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
-from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
+from prism.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
+from prism.graph.metamodel import SemanticMetamodel  # noqa: E402
+from prism.serializers.markdown import render_markdown  # noqa: E402
+from prism.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
+from prism.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.openai_client import LLMClient, OpenAIClientError  # noqa: E402
 from benchmarks.raw_context import RawContextError, build_raw_context  # noqa: E402
@@ -166,7 +166,7 @@ def run_live_architecture_query(
     model: str,
     client: LLMClient,
 ) -> dict[str, dict]:
-    """Sends both the raw-dump and SCE-sliced context for `target` to the
+    """Sends both the raw-dump and Prism-sliced context for `target` to the
     model with an architecture-explanation prompt, and returns both
     responses plus usage - a qualitative side-by-side, not an automated
     pass/fail grade (unlike the live_eval.py tasks, "does this explanation
@@ -176,7 +176,7 @@ def run_live_architecture_query(
     metamodel = SemanticMetamodel()
     distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig())
     pack_result = ContextKnapsackPacker(token_budget=budget).pack(target, builder, tag_matrix, distance_engine)
-    sce_text = render_markdown(pack_result, tag_matrix)
+    prism_text = render_markdown(pack_result, tag_matrix)
 
     try:
         raw_text = build_raw_context(builder, target).text
@@ -184,7 +184,7 @@ def run_live_architecture_query(
         raise CloneError(str(exc)) from exc
 
     outputs: dict[str, dict] = {}
-    for variant, context_text in (("raw", raw_text), ("sce", sce_text)):
+    for variant, context_text in (("raw", raw_text), ("prism", prism_text)):
         user_prompt = ARCHITECTURE_EXPLANATION_USER_TEMPLATE.format(context=context_text, target=target)
         call = client.complete(model=model, system=ARCHITECTURE_EXPLANATION_SYSTEM_PROMPT, user=user_prompt)
         outputs[variant] = {
@@ -204,11 +204,11 @@ def run_live_architecture_query(
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m benchmarks.clone_eval",
-        description="Clone a real repository and benchmark SCE's context packing against it.",
+        description="Clone a real repository and benchmark Prism's context packing against it.",
     )
     parser.add_argument("--repo", required=True, help="Git URL (or local path) to clone.")
     parser.add_argument("--target", default=None, help="Fully qualified target symbol (default: auto-select).")
-    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"SCE token budget (default: {DEFAULT_BUDGET}).")
+    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"Prism token budget (default: {DEFAULT_BUDGET}).")
     parser.add_argument("--k-hops", type=int, default=3, dest="k_hops", help="Ground-truth subgraph hop radius (default: 3).")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help=f"Clone cache directory (default: {DEFAULT_CACHE_DIR}).")
     parser.add_argument("--force-clone", action="store_true", help="Re-clone even if a cached copy already exists.")
@@ -233,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         builder, tag_matrix = build_pipeline(str(repo_path))
     except Exception as exc:  # noqa: BLE001 - this *is* the crash-survival assertion
-        print(f"error: SCE's pipeline crashed while indexing '{repo_path}': {exc!r}", file=sys.stderr)
+        print(f"error: Prism's pipeline crashed while indexing '{repo_path}': {exc!r}", file=sys.stderr)
         return 1
     index_elapsed = time.perf_counter() - index_start
 
@@ -257,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Auto-selected target: {target}")
     elif target not in builder.symbol_table:
         print(f"error: target symbol '{target}' was not found in {repo_path}", file=sys.stderr)
-        print(f"hint: run `sce index {repo_path} --debug-json` to list known symbols.", file=sys.stderr)
+        print(f"hint: run `prism index {repo_path} --debug-json` to list known symbols.", file=sys.stderr)
         return 1
 
     try:
@@ -286,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
         except (OpenAIClientError, CloneError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        for variant in ("raw", "sce"):
+        for variant in ("raw", "prism"):
             out = live_outputs[variant]
             print(f"\n--- [{variant}] context={out['context_tokens']} tok, prompt={out['prompt_tokens']} tok, "
                   f"completion={out['completion_tokens']} tok, cost=${out['cost_usd']}, latency={out['latency_seconds']}s ---")

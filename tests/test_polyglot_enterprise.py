@@ -29,13 +29,13 @@ from tree_sitter import Language, Parser
 import tree_sitter_c_sharp as tscs
 import tree_sitter_java as tsj
 
-from sce.cli import build_pipeline
-from sce.graph.metamodel import SemanticMetamodel
-from sce.parser.queries import run_query
-from sce.parser.tree_sitter_loader import LanguageID, get_parser
-from sce.slicer.distance import DistanceConfig, DistanceEngine
-from sce.slicer.knapsack import ContextKnapsackPacker
-from sce.slicer.universal_slicer import UniversalSlicer
+from prism.cli import build_pipeline
+from prism.graph.metamodel import SemanticMetamodel
+from prism.parser.queries import run_query
+from prism.parser.tree_sitter_loader import LanguageID, get_parser
+from prism.slicer.distance import DistanceConfig, DistanceEngine
+from prism.slicer.knapsack import ContextKnapsackPacker
+from prism.slicer.universal_slicer import UniversalSlicer
 
 slicer = UniversalSlicer()
 

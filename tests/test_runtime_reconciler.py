@@ -1,11 +1,11 @@
-"""Hermetic tests for `sce.runtime.reconciler` - JSONL trace I/O, OTel
+"""Hermetic tests for `prism.runtime.reconciler` - JSONL trace I/O, OTel
 export normalization, edge promotion/discovery, sink-tag attachment, and
 persisted-state accumulation. No network, no subprocess.
 """
 from __future__ import annotations
 
-from sce.cli import build_pipeline
-from sce.runtime.reconciler import (
+from prism.cli import build_pipeline
+from prism.runtime.reconciler import (
     GraphReconciler,
     _infer_sink,
     _normalize_kind,
@@ -17,7 +17,7 @@ from sce.runtime.reconciler import (
     save_runtime_state,
     write_trace_file,
 )
-from sce.runtime.tracer import TraceRecord
+from prism.runtime.tracer import TraceRecord
 
 
 def _order_repo(tmp_path):

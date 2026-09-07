@@ -1,7 +1,7 @@
 """Roadmap Step 2: a universal, language-agnostic slicer operating directly
 on Tree-sitter Concrete Syntax Trees via byte-range statement pruning.
 
-`sce.slicer.compressor`'s L1 skeletonizer is a real `ast.NodeTransformer` -
+`prism.slicer.compressor`'s L1 skeletonizer is a real `ast.NodeTransformer` -
 exact, but Python-only, since there is no equivalent stdlib AST for
 TypeScript/JavaScript/Go. `UniversalSlicer` gets the same *effect* (retain
 control flow, error handling, and call shape; drop noise) from the CST every
@@ -15,7 +15,7 @@ rebuilding a language-specific AST:
   4. Splice the original source bytes from the last edit to the first (so
      earlier byte offsets never shift out from under a later edit).
 
-This module does not touch the existing `sce.slicer.compressor` path or
+This module does not touch the existing `prism.slicer.compressor` path or
 `ContextKnapsackPacker` - it is a standalone component, validated in
 `tests/test_universal_slicer.py` against real TypeScript/Go snippets and
 for parity with the legacy Python AST compressor on the same input.
@@ -24,9 +24,9 @@ from __future__ import annotations
 
 from tree_sitter import Node
 
-from sce.parser.lang_config import CALL_NODE_TYPE, CLASS_NODE_TYPES, FUNCTION_NODE_TYPES, call_callee_segments
-from sce.parser.tree_sitter_loader import LanguageID, node_text
-from sce.slicer.compressor import ControlFlowSkeletonizer
+from prism.parser.lang_config import CALL_NODE_TYPE, CLASS_NODE_TYPES, FUNCTION_NODE_TYPES, call_callee_segments
+from prism.parser.tree_sitter_loader import LanguageID, node_text
+from prism.slicer.compressor import ControlFlowSkeletonizer
 
 # --------------------------------------------------------------------- #
 # Per-language structural node-type tables
@@ -463,7 +463,7 @@ class UniversalSlicer:
         """L2: signature only, body replaced with a placeholder, plus a
         contract metadata block (tags, raised/thrown exception names,
         known downstream callees) - mirrors
-        `sce.slicer.compressor._render_contract_block`'s format.
+        `prism.slicer.compressor._render_contract_block`'s format.
         """
         if language_id not in self.SUPPORTED_LANGUAGES:
             raise ValueError(f"UniversalSlicer does not support language id: {language_id!r}")

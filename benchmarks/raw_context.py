@@ -1,9 +1,9 @@
-"""The "standard whole-file dumping" baseline SCE is benchmarked against.
+"""The "standard whole-file dumping" baseline Prism is benchmarked against.
 
 For a target symbol, the raw baseline is the full, unmodified text of every
 source file that the target's call chain transitively touches - i.e. every
 file containing a symbol reachable from the seed via `CALLS` edges in the
-concrete graph `G_C`. This is the realistic alternative to SCE: instead of
+concrete graph `G_C`. This is the realistic alternative to Prism: instead of
 a variable-resolution slice, an agent (or a human) pastes in whole files.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 import networkx as nx
 
-from sce.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.concrete_builder import ConcreteGraphBuilder
 
 FILE_HEADER_TEMPLATE = "# ==== FILE: {relative_path} ====\n"
 
@@ -74,7 +74,7 @@ def build_raw_context(builder: ConcreteGraphBuilder, seed: str) -> RawContextRes
     if not files:
         raise RawContextError(
             f"seed symbol '{seed}' resolved to zero source files "
-            "(it may be an external/unresolved symbol rather than one SCE indexed)"
+            "(it may be an external/unresolved symbol rather than one Prism indexed)"
         )
 
     sorted_files = tuple(sorted(files))

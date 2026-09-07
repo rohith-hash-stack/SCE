@@ -1,6 +1,6 @@
 """Polyglot 33-prompt evaluation matrix: the same 33-archetype taxonomy
 `large_repo_prompt_matrix.py` runs against django/Python alone, generalized
-across all six languages SCE's parser/tagger/slicer layers support, each
+across all six languages Prism's parser/tagger/slicer layers support, each
 against a real, cloned, architecturally distinct open-source repository:
 
   - Python:      django/django                (Model.save)
@@ -16,14 +16,14 @@ real concrete graph - never guessed; the same methodology
 `benchmarks/README.md` documents for every other multi-repo harness here).
 
 For every (repo, archetype) pair, both a raw whole-file-dump context (the
-target's call-chain closure) and an SCE L0-L3 context package are sent to a
+target's call-chain closure) and an Prism L0-L3 context package are sent to a
 real OpenAI model, then scored entirely mechanically - never an LLM judge:
 
-  - **Token compression**: `(1 - sce_tokens / raw_tokens) * 100`.
+  - **Token compression**: `(1 - prism_tokens / raw_tokens) * 100`.
   - **Syntax validity**: Python responses via `ast.parse`; every other
-    language via a real Tree-sitter reparse (`sce.parser.tree_sitter_loader`),
+    language via a real Tree-sitter reparse (`prism.parser.tree_sitter_loader`),
     reusing the exact same class-wrap fallback heuristic
-    `benchmarks/validity.py` already validates SCE's OWN rendered code
+    `benchmarks/validity.py` already validates Prism's OWN rendered code
     blocks with.
   - **Hallucination detection**: every called symbol's simple name checked
     against the repository's real `GlobalSymbolTable` - `ast`-based for
@@ -53,7 +53,7 @@ Usage:
     python -m benchmarks.polyglot_33_matrix --repo gin --prompt 17
 
     # No API key needed: index every repo, build every context, print
-    # sizes/compression/SCE's-own-hallucination-freedom, zero API calls:
+    # sizes/compression/Prism's-own-hallucination-freedom, zero API calls:
     python -m benchmarks.polyglot_33_matrix --run-all --dry-run
 """
 from __future__ import annotations
@@ -72,23 +72,23 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
+def _ensure_prism_importable() -> None:
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
-from sce.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
-from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
-from sce.cli import build_pipeline  # noqa: E402
-from sce.serializers.markdown import render_markdown  # noqa: E402
-from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
-from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
+from prism.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
+from prism.graph.metamodel import SemanticMetamodel  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
+from prism.serializers.markdown import render_markdown  # noqa: E402
+from prism.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
+from prism.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.clone_eval import CloneError, clone_repo  # noqa: E402
 from benchmarks.multi_repo_eval import check_no_hallucinated_symbols  # noqa: E402
@@ -122,7 +122,7 @@ DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_TEMPERATURE = 0.0
 SELF_CONSISTENCY_TEMPERATURE = 0.7
 DEFAULT_REPORT_PATH = PROJECT_ROOT / "benchmarks" / "polyglot_33_results.json"
-VARIANTS: tuple[str, ...] = ("raw", "sce")
+VARIANTS: tuple[str, ...] = ("raw", "prism")
 
 
 class PolyglotMatrixError(Exception):
@@ -139,7 +139,7 @@ class PolyglotMatrixError(Exception):
 class RepoSpec:
     key: str
     url: str
-    language_id: str  # sce.parser.tree_sitter_loader.LanguageID value
+    language_id: str  # prism.parser.tree_sitter_loader.LanguageID value
     target: str
     description: str
     notes: str = ""
@@ -157,7 +157,7 @@ REPOS: dict[str, RepoSpec] = {
         "TypeScript - router registration feeding into the middleware compose() pipeline",
         notes=(
             "Hono.fetch/.use are class-FIELD arrow functions assigned in the constructor "
-            "(`this.use = (...) => {...}`), not `method_definition` nodes, so SCE's current "
+            "(`this.use = (...) => {...}`), not `method_definition` nodes, so Prism's current "
             "TS/JS symbol collector (which only indexes function_declaration/method_definition, "
             "unlike its Python counterpart's separate attribute-assignment pass) does not index "
             "them as callable symbols - Hono.route is the closest real, indexed, richly-connected "
@@ -171,7 +171,7 @@ REPOS: dict[str, RepoSpec] = {
         notes=(
             "app.handle/Router.process_params are legacy CommonJS prototype-method assignments "
             "(`app.handle = function handle(req, res, callback) {...}`) - a real, confirmed gap in "
-            "SCE's current JS symbol collector, which only indexes function_declaration/"
+            "Prism's current JS symbol collector, which only indexes function_declaration/"
             "method_definition nodes. Every such assignment in express's own lib/ indexes with "
             "ZERO resolvable call edges under the current pipeline; lib.response.onfinish is the "
             "one real function in express's own source with any outgoing CALLS edges at all "
@@ -197,7 +197,7 @@ REPOS: dict[str, RepoSpec] = {
         notes=(
             "OrderService.CreateOrderAsync (a real, indexed symbol) resolves with ZERO outgoing "
             "call edges under the current pipeline - its body calls only through constructor-"
-            "injected interface-typed fields (_orderRepository, _uriComposer, ...), which SCE's "
+            "injected interface-typed fields (_orderRepository, _uriComposer, ...), which Prism's "
             "no-type-inference InstanceTypeMap cannot statically resolve to a concrete "
             "implementation. UserController.GetCurrentUser is the nearby real, richly-connected, "
             "auth-tagged alternative actually used here."
@@ -320,7 +320,7 @@ def build_repo_index(builder: ConcreteGraphBuilder) -> RepoIndex:
 
 
 # --------------------------------------------------------------------- #
-# Section 2: context building (SCE package vs. raw whole-file dump) -
+# Section 2: context building (Prism package vs. raw whole-file dump) -
 # already fully language-agnostic (ContextKnapsackPacker/build_raw_context
 # operate purely on the concrete graph/symbol table, never on Python-
 # specific AST), so this is identical to large_repo_prompt_matrix.py.
@@ -332,14 +332,14 @@ def build_contexts(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]
     metamodel = SemanticMetamodel()
     distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
     pack_result = ContextKnapsackPacker(token_budget=budget).pack(archetype.target, builder, tag_matrix, distance_engine)
-    sce_text = render_markdown(pack_result, tag_matrix)
+    prism_text = render_markdown(pack_result, tag_matrix)
 
     try:
         raw_text = build_raw_context(builder, archetype.target).text
     except RawContextError as exc:
         raise PolyglotMatrixError(str(exc)) from exc
 
-    return raw_text, sce_text
+    return raw_text, prism_text
 
 
 # --------------------------------------------------------------------- #
@@ -501,10 +501,10 @@ class ArchetypeRunResult:
     target: str
     model: str
     raw_tokens: int
-    sce_tokens: int
+    prism_tokens: int
     compression_pct: float
     raw: VariantRunResult
-    sce: VariantRunResult
+    prism: VariantRunResult
 
 
 def _run_turns(archetype: PromptArchetype, context_text: str, model: str, client: LLMClient, temperature: float) -> tuple[list[TurnResult], str, list[str]]:
@@ -625,12 +625,12 @@ def run_archetype(
     client: LLMClient,
     temperature: float,
 ) -> ArchetypeRunResult:
-    raw_text, sce_text = build_contexts(builder, tag_matrix, archetype, budget)
+    raw_text, prism_text = build_contexts(builder, tag_matrix, archetype, budget)
     raw_tokens = count_tokens(raw_text)
-    sce_tokens = count_tokens(sce_text)
-    compression_pct = round((1 - sce_tokens / raw_tokens) * 100, 1) if raw_tokens else 0.0
+    prism_tokens = count_tokens(prism_text)
+    compression_pct = round((1 - prism_tokens / raw_tokens) * 100, 1) if raw_tokens else 0.0
 
-    context_by_variant = {"raw": raw_text, "sce": sce_text}
+    context_by_variant = {"raw": raw_text, "prism": prism_text}
     results: dict[str, VariantRunResult] = {}
     for variant in variants:
         print(f"  [{repo_key}] [{archetype.archetype_id:02d}] {archetype.slug} [{variant}] ...", file=sys.stderr)
@@ -646,10 +646,10 @@ def run_archetype(
         target=archetype.target,
         model=model,
         raw_tokens=raw_tokens,
-        sce_tokens=sce_tokens,
+        prism_tokens=prism_tokens,
         compression_pct=compression_pct,
         raw=results.get("raw"),
-        sce=results.get("sce"),
+        prism=results.get("prism"),
     )
 
 
@@ -686,26 +686,26 @@ def run_repo(
         for template in templates:
             archetype = template.instantiate(spec.target, spec.language_id, spec.description)
             try:
-                raw_text, sce_text = build_contexts(builder, tag_matrix, archetype, budget)
+                raw_text, prism_text = build_contexts(builder, tag_matrix, archetype, budget)
             except PolyglotMatrixError as exc:
                 lines.append(f"=== [{archetype.archetype_id:02d}] {archetype.slug} === ERROR: {exc}")
                 continue
             raw_tokens = count_tokens(raw_text)
-            sce_tokens = count_tokens(sce_text)
-            compression = round((1 - sce_tokens / raw_tokens) * 100, 1) if raw_tokens else 0.0
-            hallucination = check_no_hallucinated_symbols(sce_text, builder)
+            prism_tokens = count_tokens(prism_text)
+            compression = round((1 - prism_tokens / raw_tokens) * 100, 1) if raw_tokens else 0.0
+            hallucination = check_no_hallucinated_symbols(prism_text, builder)
             blocks = (
-                check_python_syntax(sce_text)
+                check_python_syntax(prism_text)
                 if spec.language_id == "python"
-                else check_tree_sitter_syntax(sce_text, languages=frozenset({spec.language_id}))
+                else check_tree_sitter_syntax(prism_text, languages=frozenset({spec.language_id}))
             )
             total = len(blocks)
             invalid = sum(1 for b in blocks if not b.valid)
             lines.append(f"=== [{archetype.archetype_id:02d}] {archetype.title} ({archetype.slug}) ===")
             lines.append(f"  target={archetype.target}")
             lines.append(
-                f"  raw={raw_tokens} tok  sce={sce_tokens} tok  compression={compression:.1f}%  "
-                f"sce_syntax_valid={total - invalid}/{total}  sce_hallucinations={len(hallucination.unknown_symbols)}"
+                f"  raw={raw_tokens} tok  prism={prism_tokens} tok  compression={compression:.1f}%  "
+                f"prism_syntax_valid={total - invalid}/{total}  prism_hallucinations={len(hallucination.unknown_symbols)}"
             )
         return result, "\n".join(lines)
 
@@ -742,7 +742,7 @@ class LanguageSummary:
 
 
 def summarize_repo(result: RepoRunResult) -> LanguageSummary:
-    variant_results = [v for a in result.archetypes for v in (a.raw, a.sce) if v is not None]
+    variant_results = [v for a in result.archetypes for v in (a.raw, a.prism) if v is not None]
     n = len(variant_results) or 1
 
     syntax_checked = [v for v in variant_results if v.syntax_valid is not None]
@@ -794,7 +794,7 @@ def render_summary_table(results: list[ArchetypeRunResult]) -> str:
     headers = ["Repo", "ID", "Archetype", "Compression %", "Variant", "Syntax", "Halluc", "Contract", "Result"]
     rows = []
     for r in results:
-        for variant_result in (r.raw, r.sce):
+        for variant_result in (r.raw, r.prism):
             if variant_result is None:
                 continue
             syntax_cell = "n/a" if variant_result.syntax_valid is None else ("OK" if variant_result.syntax_valid else "FAIL")
@@ -816,8 +816,8 @@ def render_detail(results: list[ArchetypeRunResult]) -> str:
     for r in results:
         lines.append(f"=== [{r.repo}] [{r.archetype_id:02d}] {r.title} ({r.slug}) - {r.cluster} ===")
         lines.append(f"  Target: {r.target}")
-        lines.append(f"  Raw tokens: {r.raw_tokens}  SCE tokens: {r.sce_tokens}  Compression: {r.compression_pct:.1f}%")
-        for variant_result in (r.raw, r.sce):
+        lines.append(f"  Raw tokens: {r.raw_tokens}  Prism tokens: {r.prism_tokens}  Compression: {r.compression_pct:.1f}%")
+        for variant_result in (r.raw, r.prism):
             if variant_result is None:
                 continue
             lines.append(f"  --- [{variant_result.variant}] {'PASS' if variant_result.passed else 'FAIL'} ---")
@@ -838,7 +838,7 @@ def render_detail(results: list[ArchetypeRunResult]) -> str:
 
 
 def render_cost_summary(results: list[ArchetypeRunResult]) -> str:
-    all_variants = [v for r in results for v in (r.raw, r.sce) if v is not None]
+    all_variants = [v for r in results for v in (r.raw, r.prism) if v is not None]
     if not all_variants:
         return "(no runs)"
     passed = sum(1 for v in all_variants if v.passed)
@@ -849,7 +849,7 @@ def render_cost_summary(results: list[ArchetypeRunResult]) -> str:
             continue
         vp = sum(1 for v in vr if v.passed)
         lines.append(f"  [{variant}] {vp}/{len(vr)} passed ({vp / len(vr) * 100:.1f}%)")
-    total_cost = sum(t.cost_usd for r in results for v in (r.raw, r.sce) if v is not None for t in v.turns if t.cost_usd is not None)
+    total_cost = sum(t.cost_usd for r in results for v in (r.raw, r.prism) if v is not None for t in v.turns if t.cost_usd is not None)
     lines.append(f"Total estimated cost: ${total_cost:.5f}")
     return "\n".join(lines)
 
@@ -879,7 +879,7 @@ def write_report(repo_results: list[RepoRunResult], summaries: list[LanguageSumm
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m benchmarks.polyglot_33_matrix",
-        description="Run the 33-prompt archetype taxonomy against real repositories across all six languages SCE supports.",
+        description="Run the 33-prompt archetype taxonomy against real repositories across all six languages Prism supports.",
     )
     parser.add_argument("--repo", choices=sorted(REPOS), default=None, help="Run a single repository by key.")
     parser.add_argument("--run-all", action="store_true", help="Run every repository in the built-in six-language suite.")
@@ -887,7 +887,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prompt", type=int, default=None, help="Convenience alias for --prompts with a single numeric id, e.g. --prompt 17.")
     parser.add_argument("--variants", default=",".join(VARIANTS), help=f"Comma-separated context variants (available: {', '.join(VARIANTS)}).")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"OpenAI model to use (default: {DEFAULT_MODEL}).")
-    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"SCE token budget (default: {DEFAULT_BUDGET}).")
+    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"Prism token budget (default: {DEFAULT_BUDGET}).")
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE, help=f"Sampling temperature (default: {DEFAULT_TEMPERATURE}).")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help=f"Clone cache directory (default: {DEFAULT_CACHE_DIR}).")
     parser.add_argument("--force-clone", action="store_true", help="Re-clone even if a cached copy already exists.")
@@ -988,7 +988,7 @@ def main(argv: list[str] | None = None) -> int:
         write_report(repo_results, summaries, args.report)
         print(f"\nWrote report to {args.report}")
 
-    all_passed = all(v.passed for a in all_archetype_results for v in (a.raw, a.sce) if v is not None)
+    all_passed = all(v.passed for a in all_archetype_results for v in (a.raw, a.prism) if v is not None)
     return 0 if (not had_error and all_passed) else 1
 
 

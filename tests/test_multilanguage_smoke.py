@@ -7,7 +7,7 @@ can be expected to resolve, not perfect equivalence with the Python path.
 """
 import os
 
-from sce.cli import build_pipeline
+from prism.cli import build_pipeline
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 

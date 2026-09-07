@@ -1,11 +1,11 @@
 """Syntactic validity checks (HLD evaluation dimension 3): every code block
-SCE renders into its Markdown context package must still parse. This is a
+Prism renders into its Markdown context package must still parse. This is a
 direct, black-box check against the rendered Markdown text itself (not
 against internal compressor state), so it also catches any bug the
 Markdown serializer might introduce independent of the compressor.
 
 Python gets an exact `ast.parse` check (`check_python_syntax`). Every other
-language SCE renders (JS/TS/Go/Java/C#) gets `check_tree_sitter_syntax`
+language Prism renders (JS/TS/Go/Java/C#) gets `check_tree_sitter_syntax`
 instead - a real Tree-sitter reparse (`root_node.has_error`), the same
 authoritative "is this still valid code" check `tests/test_universal_slicer.py`
 and `tests/test_polyglot_enterprise.py` already use, rather than a second
@@ -51,7 +51,7 @@ class CodeBlockValidity:
 
 def extract_code_blocks(markdown_text: str) -> list[CodeBlockValidity]:
     """Locate every `### symbol (label)` + fenced-code-block pair in a
-    rendered SCE Markdown package. Validity is filled in as `True`/`None`
+    rendered Prism Markdown package. Validity is filled in as `True`/`None`
     here for non-Python blocks (no applicable check); call
     `check_python_syntax` to actually validate the Python ones.
     """
@@ -136,7 +136,7 @@ def _count_error_nodes(node) -> int:
 
 
 def _tree_sitter_reparses_cleanly(language_id: str, code: str) -> tuple[bool, str | None]:
-    from sce.parser.tree_sitter_loader import get_parser
+    from prism.parser.tree_sitter_loader import get_parser
 
     parser = get_parser(language_id)
     unwrapped_errors = _count_error_nodes(parser.parse(code.encode("utf-8")).root_node)
@@ -144,7 +144,7 @@ def _tree_sitter_reparses_cleanly(language_id: str, code: str) -> tuple[bool, st
         return True, None
 
     if language_id in _TRY_CLASS_WRAP_LANGUAGES:
-        wrapped = f"class __SCEBenchmarkWrapper {{\n{code}\n}}"
+        wrapped = f"class __PrismBenchmarkWrapper {{\n{code}\n}}"
         wrapped_errors = _count_error_nodes(parser.parse(wrapped.encode("utf-8")).root_node)
         if wrapped_errors == 0:
             return True, None

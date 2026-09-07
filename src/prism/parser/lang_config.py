@@ -1,7 +1,7 @@
 """Per-language structural node-type tables and generic tree-walking helpers.
 
-Shared by `sce.graph.concrete_builder` (Pass 2 call linking) and
-`sce.tagger.engine` (Stage 3 deterministic tagging) so both operate on the
+Shared by `prism.graph.concrete_builder` (Pass 2 call linking) and
+`prism.tagger.engine` (Stage 3 deterministic tagging) so both operate on the
 same notion of "call expression", "attribute chain", "self token", and
 "scoped subtree" without duplicating tree-sitter plumbing.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from tree_sitter import Node
 
-from sce.parser.tree_sitter_loader import LanguageID, node_text
+from prism.parser.tree_sitter_loader import LanguageID, node_text
 
 CALL_NODE_TYPE = {
     LanguageID.PYTHON: "call",

@@ -4,10 +4,10 @@ events during a test run into a JSON-lines trace file, for
 
 Two ways to drive it:
 
-  1. As a pytest plugin (the primary, recommended path) - `sce trace
+  1. As a pytest plugin (the primary, recommended path) - `prism trace
      --repo . -- pytest ...` runs pytest as a subprocess with this module
-     auto-loaded as a plugin (`-p sce.runtime.tracer`) and two environment
-     variables set (`SCE_TRACE_REPO_ROOT`, `SCE_TRACE_OUTPUT`); this
+     auto-loaded as a plugin (`-p prism.runtime.tracer`) and two environment
+     variables set (`PRISM_TRACE_REPO_ROOT`, `PRISM_TRACE_OUTPUT`); this
      module's `pytest_configure`/`pytest_unconfigure` hooks start/stop the
      tracer around the whole test session. Any Python testing tool that
      honors pytest's plugin-discovery protocol picks this up the same way.
@@ -33,7 +33,7 @@ import time
 import types
 from pathlib import Path
 
-from sce.graph.symbol_table import path_to_module
+from prism.graph.symbol_table import path_to_module
 
 # Frames whose file lives under one of these directory names (anywhere in
 # its path) are never traced - virtualenvs, vendored/third-party code, and
@@ -43,7 +43,7 @@ from sce.graph.symbol_table import path_to_module
 _EXCLUDED_PATH_MARKERS = (
     f"{os.sep}.venv{os.sep}", f"{os.sep}venv{os.sep}", f"{os.sep}site-packages{os.sep}",
     f"{os.sep}node_modules{os.sep}", f"{os.sep}.git{os.sep}",
-    f"{os.sep}sce{os.sep}runtime{os.sep}tracer.py",
+    f"{os.sep}prism{os.sep}runtime{os.sep}tracer.py",
 )
 
 # Frame co_name values that are not a "symbol" a static index would ever
@@ -56,7 +56,7 @@ _SKIP_CO_NAMES = frozenset({"<module>", "<lambda>", "<genexpr>", "<listcomp>", "
 
 @dataclasses.dataclass(frozen=True)
 class TraceRecord:
-    """One row of a `.sce/traces/run_*.jsonl` file - a single observed
+    """One row of a `.prism/traces/run_*.jsonl` file - a single observed
     runtime event. `callee=None` with `sink_tag` set represents a pure
     external-sink observation (e.g. an OTel client span) with no
     resolvable in-repo callee of its own; every other combination is a
@@ -76,8 +76,8 @@ class TraceRecord:
 
 def resolve_qualified_name(frame: types.FrameType, repo_root: str) -> str | None:
     """The `module.Class.method`-shaped qualified name for `frame`, in the
-    exact convention `sce.graph.concrete_builder._register_definition`
-    uses for its own static symbols - or None if `frame` isn't a call SCE
+    exact convention `prism.graph.concrete_builder._register_definition`
+    uses for its own static symbols - or None if `frame` isn't a call Prism
     would ever have statically indexed (outside `repo_root`, or a
     module/lambda/comprehension frame rather than a real function/method).
 
@@ -181,21 +181,21 @@ class Tracer:
 
 
 # --------------------------------------------------------------------- #
-# pytest plugin hooks - auto-loaded via `-p sce.runtime.tracer` (see
-# `sce.cli.trace`). Configuration travels through environment variables,
+# pytest plugin hooks - auto-loaded via `-p prism.runtime.tracer` (see
+# `prism.cli.trace`). Configuration travels through environment variables,
 # not pytest CLI flags, so this works identically whether pytest is
-# invoked directly (`pytest -p sce.runtime.tracer ...`, with the env vars
-# exported by hand) or through `sce trace`.
+# invoked directly (`pytest -p prism.runtime.tracer ...`, with the env vars
+# exported by hand) or through `prism trace`.
 # --------------------------------------------------------------------- #
 _active_tracer: Tracer | None = None
 
 
 def pytest_configure(config) -> None:  # noqa: ANN001 - pytest's own hook signature
     global _active_tracer
-    output = os.environ.get("SCE_TRACE_OUTPUT")
+    output = os.environ.get("PRISM_TRACE_OUTPUT")
     if not output:
         return
-    repo_root = os.environ.get("SCE_TRACE_REPO_ROOT") or str(config.rootpath)
+    repo_root = os.environ.get("PRISM_TRACE_REPO_ROOT") or str(config.rootpath)
     _active_tracer = Tracer(repo_root, output)
     _active_tracer.start()
 
@@ -208,8 +208,8 @@ def pytest_unconfigure(config) -> None:  # noqa: ANN001 - pytest's own hook sign
 
 
 # --------------------------------------------------------------------- #
-# Subprocess driver - shared by `sce trace` (src/sce/cli.py) and this
-# module's own `python -m sce.runtime.tracer -- <command>` entry point.
+# Subprocess driver - shared by `prism trace` (src/prism/cli.py) and this
+# module's own `python -m prism.runtime.tracer -- <command>` entry point.
 # Runs pytest as a real subprocess (not an in-process re-exec) with this
 # module auto-loaded as a plugin, so tracing happens inside the actual
 # process the tests run in - the simplest way to get correct behavior for
@@ -218,7 +218,7 @@ def pytest_unconfigure(config) -> None:  # noqa: ANN001 - pytest's own hook sign
 # semantics (console-script entry point vs. `-m` vs. a bare script path).
 # --------------------------------------------------------------------- #
 def run_traced_pytest(repo_root: str, output_path: str | os.PathLike[str], pytest_args: list[str]) -> int:
-    """Run `python -m pytest -p sce.runtime.tracer <pytest_args>` as a
+    """Run `python -m pytest -p prism.runtime.tracer <pytest_args>` as a
     subprocess with tracing enabled, returning pytest's own exit code.
     """
     abs_repo_root = os.path.abspath(repo_root)
@@ -228,28 +228,28 @@ def run_traced_pytest(repo_root: str, output_path: str | os.PathLike[str], pytes
     # against `repo_root` once the child process's cwd changes.
     abs_output = os.path.abspath(str(output_path))
     env = dict(os.environ)
-    env["SCE_TRACE_REPO_ROOT"] = abs_repo_root
-    env["SCE_TRACE_OUTPUT"] = abs_output
-    cmd = [sys.executable, "-m", "pytest", "-p", "sce.runtime.tracer", *pytest_args]
+    env["PRISM_TRACE_REPO_ROOT"] = abs_repo_root
+    env["PRISM_TRACE_OUTPUT"] = abs_output
+    cmd = [sys.executable, "-m", "pytest", "-p", "prism.runtime.tracer", *pytest_args]
     # Run from `repo_root` so a relative test path/pattern in `pytest_args`
-    # (the common case: `sce trace --repo . -- pytest tests/test_orders.py`)
+    # (the common case: `prism trace --repo . -- pytest tests/test_orders.py`)
     # resolves against the traced repository, not this process's own
-    # working directory - which, run through `sce`'s CLI, is very often a
+    # working directory - which, run through `prism`'s CLI, is very often a
     # different directory entirely.
     result = subprocess.run(cmd, env=env, cwd=abs_repo_root)
     return result.returncode
 
 
 def _main(argv: list[str] | None = None) -> int:
-    """`python -m sce.runtime.tracer --repo . --output PATH -- pytest ...`
+    """`python -m prism.runtime.tracer --repo . --output PATH -- pytest ...`
     - a thin standalone entry point for tracing a pytest run without going
-    through the full `sce` CLI. Prefer `sce trace` (`src/sce/cli.py`) for
+    through the full `prism` CLI. Prefer `prism trace` (`src/prism/cli.py`) for
     everyday use - it also picks a timestamped output path and persists
     the resulting reconciliation automatically.
     """
     import argparse
 
-    parser = argparse.ArgumentParser(prog="python -m sce.runtime.tracer")
+    parser = argparse.ArgumentParser(prog="python -m prism.runtime.tracer")
     parser.add_argument("--repo", default=".", help="Repository root (default: current directory).")
     parser.add_argument("--output", required=True, help="Path to write the JSON-lines trace file to.")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="The pytest invocation to run, after `--`.")

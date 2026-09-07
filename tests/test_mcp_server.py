@@ -1,8 +1,8 @@
-"""Hermetic tests for `sce.mcp.server` - all in-process via the official
+"""Hermetic tests for `prism.mcp.server` - all in-process via the official
 MCP SDK's `Client(server)` in-memory transport (see
 `mcp.client._memory.InMemoryTransport`): no subprocess, no stdio, no
 network, no persistent daemon. Requires `mcp[cli]` (a core dependency -
-`pip install semantic-context-engine`, or `pip install 'mcp[cli]>=2.0,<3.0'`
+`pip install prism-context`, or `pip install 'mcp[cli]>=2.0,<3.0'`
 directly), same as the server module itself.
 """
 from __future__ import annotations
@@ -16,10 +16,10 @@ pytest.importorskip("mcp")
 
 from mcp.client import Client  # noqa: E402
 
-from sce.mcp import server as mcp_server  # noqa: E402
-from sce.runtime.reconciler import GraphReconciler, load_runtime_state, merge_result_into_state, save_runtime_state  # noqa: E402
-from sce.runtime.tracer import TraceRecord  # noqa: E402
-from sce.cli import build_pipeline  # noqa: E402
+from prism.mcp import server as mcp_server  # noqa: E402
+from prism.runtime.reconciler import GraphReconciler, load_runtime_state, merge_result_into_state, save_runtime_state  # noqa: E402
+from prism.runtime.tracer import TraceRecord  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -238,7 +238,7 @@ def test_get_graph_status_reflects_confirmed_and_discovered_runtime_edges_after_
     before = _run(_call("get_graph_status", {"repo_path": str(repo)}))
     assert before.structured_content["confirmed_runtime_edges"] == 0
 
-    # Record a runtime trace independently of the MCP server (as `sce
+    # Record a runtime trace independently of the MCP server (as `prism
     # trace` would) - one edge the static resolver already found
     # (create_order -> validate) plus one it didn't (create_order ->
     # OrderService.__init__, a constructor call the static resolver

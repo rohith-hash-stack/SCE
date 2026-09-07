@@ -16,20 +16,20 @@ repository and inspecting its real concrete graph and tag matrix (see the
 comments next to each `QueryScenario`) - not guessed.
 
 What's checked, per (repo, scenario, budget):
-  1. every Java/C# code block SCE renders reparses cleanly via Tree-sitter
+  1. every Java/C# code block Prism renders reparses cleanly via Tree-sitter
      (`benchmarks.validity.check_tree_sitter_syntax` - the same
      `root_node.has_error` check `tests/test_polyglot_enterprise.py`
      already uses, generalized to a real cloned repo's rendered Markdown);
   2. >=1 direct callee of the target is reachable within budget (the same
      coverage guarantee `multi_repo_eval.py` checks for Python);
-  3. every symbol SCE's own Markdown output references resolves to a real
+  3. every symbol Prism's own Markdown output references resolves to a real
      node in the repository's `GlobalSymbolTable`/`G_C` - a package/
      namespace-aware hallucination guard, reusing `multi_repo_eval.py`'s
      own (already language-agnostic) checker;
   4. compression ratio and symbol-hallucination rate, reported per
      scenario/budget, not gated on a fixed threshold (a real third-party
      repo's achievable compression is a property of that repo's own call
-     density, not a correctness property of SCE - matching
+     density, not a correctness property of Prism - matching
      `multi_repo_eval.py`'s own stance on its `expected_tag` diagnostic).
 
 Usage:
@@ -48,23 +48,23 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
+def _ensure_prism_importable() -> None:
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
-from sce.cli import build_pipeline  # noqa: E402
-from sce.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
-from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
-from sce.serializers.markdown import render_markdown  # noqa: E402
-from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
-from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
+from prism.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
+from prism.graph.metamodel import SemanticMetamodel  # noqa: E402
+from prism.serializers.markdown import render_markdown  # noqa: E402
+from prism.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
+from prism.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.clone_eval import CloneError, clone_repo  # noqa: E402
 from benchmarks.multi_repo_eval import (  # noqa: E402
@@ -317,7 +317,7 @@ def run_repo(
 # Reporting
 # --------------------------------------------------------------------- #
 def render_summary_table(results: list[RepoRunResult]) -> str:
-    headers = ["Repo", "Scenario", "Type", "Budget", "Raw Tok", "SCE Tok", "Compression %", "Direct Callees", "Bad Syntax", "Hallucinations", "Result"]
+    headers = ["Repo", "Scenario", "Type", "Budget", "Raw Tok", "Prism Tok", "Compression %", "Direct Callees", "Bad Syntax", "Hallucinations", "Result"]
     rows = []
     for repo_result in results:
         for s in repo_result.scenarios:
@@ -330,7 +330,7 @@ def render_summary_table(results: list[RepoRunResult]) -> str:
                     s.query_type,
                     str(s.budget),
                     str(s.benchmark.raw_tokens),
-                    str(s.benchmark.sce_tokens),
+                    str(s.benchmark.prism_tokens),
                     f"{s.benchmark.compression_pct:.1f}%",
                     f"{dc.reached_nodes}/{dc.subgraph_node_count}",
                     f"{bad_syntax}/{len(s.syntax_blocks)}",
@@ -387,7 +387,7 @@ def write_report(results: list[RepoRunResult], path: str) -> None:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m benchmarks.polyglot_prompt_matrix",
-        description="Validate SCE's Java/C# support against real, cloned enterprise-framework repositories.",
+        description="Validate Prism's Java/C# support against real, cloned enterprise-framework repositories.",
     )
     parser.add_argument("--suite", choices=["all"], default=None, help="Run every repository in the built-in suite.")
     parser.add_argument("--repo", choices=sorted(REPOS), default=None, help="Run a single repository by key.")

@@ -1,17 +1,17 @@
-# SCE Evaluation Harness
+# Prism Evaluation Harness
 
-Quantifies the Semantic Context Engine's packed context against a naive
+Quantifies the Prism's packed context against a naive
 "whole-file dump" baseline across three dimensions:
 
 1. **Token reduction** - exact token counts (`tiktoken`'s `cl100k_base`
    encoding when reachable, otherwise a deterministic regex-based fallback -
-   see `tokenizer.py`) for the raw-file-dump baseline vs. the SCE L0-L3
+   see `tokenizer.py`) for the raw-file-dump baseline vs. the Prism L0-L3
    Markdown package, at one or more token budgets.
 2. **Call-graph & invariant-tag coverage** - builds a ground-truth k-hop
    subgraph around the target (`coverage.py`) and measures what fraction of
    its nodes, edges, and architectural invariant tags (`#auth_guard`,
    `#db_write`, ...) survive into the packed context.
-3. **Syntactic validity** - every Python code block SCE renders is
+3. **Syntactic validity** - every Python code block Prism renders is
    extracted straight from the Markdown output and checked with
    `ast.parse()` (`validity.py`), so AST-stripping regressions (e.g. an
    empty loop body missing a `pass`) get caught immediately.
@@ -53,13 +53,13 @@ and writes full raw metrics to `benchmarks/results.json` (override with
 ## A note on the barrel re-export
 
 `app/__init__.py` re-exports `OrderController` for external consumers
-(`main.py` uses `from app import OrderController`). SCE's import resolution
+(`main.py` uses `from app import OrderController`). Prism's import resolution
 follows a file's own `import`/`from...import` statements textually; it does
 not chase a re-export back to where a symbol was *originally* defined. So
 `main.bootstrap`'s call to the barrel-imported `OrderController(...)`
 resolves to an external/unknown node rather than
 `app.controllers.orders.OrderController` - a known, documented limitation
-(see `sce.graph.concrete_builder`'s module docstring). It's deliberately
+(see `prism.graph.concrete_builder`'s module docstring). It's deliberately
 kept off the benchmarked target's own call chain here so it demonstrates
 the pattern without skewing this harness's coverage numbers.
 
@@ -68,7 +68,7 @@ the pattern without skewing this harness's coverage numbers.
 ## Live evaluation (`live_eval.py`)
 
 Runs two code tasks against a real OpenAI model, once with a whole-file-dump
-context and once with an SCE-sliced context, and scores each response with
+context and once with an Prism-sliced context, and scores each response with
 a deterministic **AST verifier** - never another LLM - so results are
 reproducible and free to re-check:
 
@@ -103,14 +103,14 @@ call, plus an overall and per-variant pass rate.
 calls the auth guard (that's the bug), so a raw dump scoped to only the
 target's own call chain wouldn't include it either - making the fix
 undiscoverable for both variants and the comparison meaningless. That
-task's raw baseline dumps the whole fixture instead; SCE's baseline still
+task's raw baseline dumps the whole fixture instead; Prism's baseline still
 uses its normal sliced package, which surfaces the guard via the
 `#db_write REQUIRES_BEFORE #auth_guard` architectural-path annotation
 regardless of the literal call graph. See `benchmarks/tasks.py`.
 
 ## Real-repository evaluation (`clone_eval.py`)
 
-Clones a real, public Git repository and runs SCE's actual pipeline against
+Clones a real, public Git repository and runs Prism's actual pipeline against
 it, to prove the cross-file linker survives real-world Python (decorators,
 type hints, relative imports, complex `__init__.py` barrels) rather than
 only the hand-built fixtures above.
@@ -131,23 +131,23 @@ Clones with `git clone --depth 1` into `.benchmarks/clones/<repo_name>`
 (cached across runs; pass `--force-clone` to re-clone) and reports the same
 compression/coverage/validity metrics as `run_benchmark.py`, reusing that
 module's `run_single_benchmark_from_pipeline` directly. `--live` sends both
-the raw and SCE contexts to OpenAI for an architectural explanation of the
+the raw and Prism contexts to OpenAI for an architectural explanation of the
 target - printed side by side, not auto-graded (unlike `live_eval.py`'s
 tasks, "did it reason correctly" isn't a cheap, trustworthy static check).
 
 **Validated against a real clone**: `encode/starlette` indexes cleanly in
 ~2-3s (1711 symbols, 2005 `CALLS` edges) with zero pipeline crashes, and
-every one of the 250+ Python code blocks SCE renders from it parses with
+every one of the 250+ Python code blocks Prism renders from it parses with
 `ast.parse()` - including `async def` methods, PEP 604 union types
 (`X | None`), and keyword-only parameters. The default test suite doesn't
 repeat this clone (it would make CI depend on network access); set
-`SCE_LIVE_NETWORK_TESTS=1` to run `tests/test_clone_eval.py`'s opt-in
+`PRISM_LIVE_NETWORK_TESTS=1` to run `tests/test_clone_eval.py`'s opt-in
 real-network smoke test.
 
 ## Multi-repository, multi-query validation (`multi_repo_eval.py`)
 
 Before building a client wrapper (an MCP server, an IDE extension, ...) on
-top of SCE, this validates it against three real, architecturally distinct
+top of Prism, this validates it against three real, architecturally distinct
 codebases - not just hand-built fixtures - across three realistic query
 types:
 
@@ -180,12 +180,12 @@ python -m benchmarks.multi_repo_eval --repo httpx
 For every (repo, scenario, budget) combination this asserts: every L0-L3
 Python code block parses cleanly; >=50% compression vs. the whole-file-dump
 baseline with 100% of direct callees still reachable; and zero
-"hallucinated" symbols (anything SCE's own Markdown references that isn't a
+"hallucinated" symbols (anything Prism's own Markdown references that isn't a
 real node in `GlobalSymbolTable`/`G_C` - a static regression guard, since
 nothing in this pipeline is LLM-generated). Graph connectivity/density
 (total symbols, edges, isolated-node ratio, approximate traversal depth) is
 reported per repo, not gated on - it describes the target codebase, not
-SCE's correctness. Exits non-zero if any scenario fails.
+Prism's correctness. Exits non-zero if any scenario fails.
 
 **Result across all 3 repos x 3 scenarios x 2 budgets (18 runs): 18/18
 pass.** Compression ranged 59.8%-98.7%, zero hallucinated symbols anywhere.
@@ -198,7 +198,7 @@ hidden**:
    confirmed to be maximally different" (`MAX_TAG_DISTANCE`). Against
    httpx's real call graph, this let a same-tagged-but-4-hops-away sibling
    method outrank a genuine untagged 1-hop callee, dropping that callee
-   from a tight budget. Fixed in `sce.graph.metamodel` by giving "untagged"
+   from a tight budget. Fixed in `prism.graph.metamodel` by giving "untagged"
    its own, smaller `UNTAGGED_TAG_DISTANCE` (no signal, not a confirmed
    gap) - see `tests/test_distance_metric.py`.
 2. **`self.method()` resolution doesn't know about inheritance.** When a
@@ -227,10 +227,10 @@ not a defect in compression, coverage, or hallucination-freedom.
 
 ## Downstream LLM accuracy validation (`validate_llm_accuracy.py`)
 
-Every harness above proves SCE's *own* output is well-formed - it never
+Every harness above proves Prism's *own* output is well-formed - it never
 proves a real model actually writes correct code from it. This is the one
 that closes that gap: it sends real tasks to a real OpenAI model under both
-a raw whole-file-dump context and an SCE L0-L3 context, then scores each
+a raw whole-file-dump context and an Prism L0-L3 context, then scores each
 response by **actually running it**, never by asking another LLM to judge
 it.
 
@@ -267,7 +267,7 @@ python -m benchmarks.validate_llm_accuracy --dry-run
 - **Syntax check**: `ast.parse()` on the code block extracted from the
   model's Markdown response.
 - **Execution sandbox**: the response's code is spliced into a temp copy of
-  the fixture repo at the target symbol's exact `line_range` (from SCE's
+  the fixture repo at the target symbol's exact `line_range` (from Prism's
   own symbol table), re-indented to match the surrounding block, then the
   task's pytest file is run against it via `subprocess.run`. This is a real
   `pytest` process on real (copied) files, not a mock.
@@ -287,7 +287,7 @@ python -m benchmarks.validate_llm_accuracy --dry-run
   to just its own call-chain closure would never include `app/auth.py`
   either, making the fix equally undiscoverable for both variants (the same
   situation as `live_eval.py`'s bug-localization task; see `benchmarks/tasks.py`).
-- **Task 2 queries one symbol but patches another.** SCE's context is built
+- **Task 2 queries one symbol but patches another.** Prism's context is built
   around the working `cancel_order` method (a template that already
   exercises the gateway + repository pattern); the model's code actually
   replaces the placeholder `refund_transaction` next to it. Querying the
@@ -296,10 +296,10 @@ python -m benchmarks.validate_llm_accuracy --dry-run
 - **`OrderService.__init__` constructs its own `PaymentGateway`** (rather
   than accepting one as a pass-through parameter) so the
   `cancel_order -> PaymentGateway.reverse_charge` edge is statically
-  resolvable by SCE's `InstanceTypeMap`; tests substitute
+  resolvable by Prism's `InstanceTypeMap`; tests substitute
   `service.gateway = RecordingGateway()` post-construction for
   observability instead.
-- **`app/repository.py` imports `sqlalchemy`** purely to trigger SCE's
+- **`app/repository.py` imports `sqlalchemy`** purely to trigger Prism's
   `#db_write` tag on `.commit()` - unlike every earlier fixture in this
   repo, this one's code is actually *executed* by pytest, which is why
   `sqlalchemy` is now a real `dev` extra in `pyproject.toml`.
@@ -308,18 +308,18 @@ python -m benchmarks.validate_llm_accuracy --dry-run
 across all 3 tasks x 2 variants, after fixing the real engine bug below.
 
 **One real engine bug was found and fixed by this validation.** The first
-live run scored 5/6: the `missing_invariant` / `sce` variant failed with a
+live run scored 5/6: the `missing_invariant` / `prism` variant failed with a
 runtime `NameError: name 'app' is not defined`. The model had written
 `app.auth.verify_session(token)` verbatim - it had copied the fully
-qualified dotted name straight out of SCE's Markdown "Architectural Path"
+qualified dotted name straight out of Prism's Markdown "Architectural Path"
 section, which named `verify_session` only as a bare `requires` annotation
 with no accompanying code block, and treated that internal qualified name
 as if it were literal, callable Python. Root-caused by rendering the actual
-SCE package sent to the model and confirming `verify_session` never got its
+Prism package sent to the model and confirming `verify_session` never got its
 own contract block - only symbols reachable via the seed's *call graph* were
 being packed as real content; `requires` targets (found via the metamodel's
 tag-relation graph, a different structure) were previously only ever
-mentioned by name in prose. Fixed in `sce.slicer.knapsack.ContextKnapsackPacker.pack()`
+mentioned by name in prose. Fixed in `prism.slicer.knapsack.ContextKnapsackPacker.pack()`
 by force-packing a real L2 contract for every `requires` target before the
 normal distance-ranked candidate loop runs, so the model always sees an
 actual signature and import path to act on instead of a bare dotted name.
@@ -340,9 +340,9 @@ API key required.
 
 ## Large-repo prompt-archetype matrix (`large_repo_prompt_matrix.py`)
 
-Everything above validates SCE against small hand-built fixtures or a
+Everything above validates Prism against small hand-built fixtures or a
 handful of mid-sized real repos. This one asks a different question: how
-does SCE actually behave, at scale, against a genuine large enterprise
+does Prism actually behave, at scale, against a genuine large enterprise
 codebase, across the full breadth of how developers actually talk to an
 LLM coding assistant - not just "fix this bug" but zero/few-shot setups,
 chain-of-thought and ReAct-style reasoning, negative constraints,
@@ -395,7 +395,7 @@ python -m benchmarks.large_repo_prompt_matrix --repo django --dry-run
 **Scoring is entirely mechanical, matching the spec's four checks - no LLM
 judge anywhere:**
 
-- **Token compression ratio**: `(1 - sce_tokens / raw_tokens) * 100`,
+- **Token compression ratio**: `(1 - prism_tokens / raw_tokens) * 100`,
   computed per archetype from the same `ContextKnapsackPacker`
   (3000-token budget by default) vs. `build_raw_context`'s call-chain-closure
   dump this whole benchmark suite uses everywhere else.
@@ -452,7 +452,7 @@ improve every harness that reuses `benchmarks/prompt_taxonomy/spec.py`):
    accept either.
 
 **A third, unrelated real engine bug was found and fixed while first
-indexing django**: `sce.slicer.compressor.compress_python` crashed with an
+indexing django**: `prism.slicer.compressor.compress_python` crashed with an
 unhandled `SyntaxError` on any file using a PEP 695 `type` alias statement
 (Python 3.12+ grammar - a real example is
 `tests/auth_tests/test_auth_backends.py`), because it re-parses a symbol's
@@ -489,7 +489,7 @@ deliberately not "fixed" by loosening a check:**
   fictional integration the task asks for - that's the task, not a defect.
 - **The closed-ended archetype (25, "what line number...") structurally
   favors the raw baseline.** Asked to name an exact source line, the raw
-  variant (the literal, uncompressed file) could and did cite one; the SCE
+  variant (the literal, uncompressed file) could and did cite one; the Prism
   variant, given a compressed package that doesn't preserve original line
   numbers for less-central content, honestly answered it couldn't
   determine one rather than fabricating a line number - a genuine,
@@ -501,21 +501,21 @@ against `tests/fixtures/python_repo` (fast, no cloning) and cover every
 mechanical checker, context building, and `run_variant`/`run_archetype`
 end-to-end with canned/sequenced responses standing in for the real model -
 including multi-turn and self-consistency archetypes. A separate opt-in
-suite (`SCE_LIVE_NETWORK_TESTS=1`) re-indexes the real django clone to
+suite (`PRISM_LIVE_NETWORK_TESTS=1`) re-indexes the real django clone to
 confirm all 33 archetype targets still resolve upstream and the CLI's
 dry-run path works end-to-end - both passed as of this validation.
 
 ### Closing the 8 failures: four structural engine fixes
 
 The validation above wasn't the end of the story: its 8 failures were
-real, reproducible, and traced back to genuine gaps in `src/sce/` itself,
+real, reproducible, and traced back to genuine gaps in `src/prism/` itself,
 not just this harness. Four structural fixes closed them, each verified
 against the full `pytest` suite (**174 passed** hermetically, **164
 passed** including the opt-in real-django suite - both zero regressions)
 and a fresh live run before and after.
 
 **1. Module/class/instance-level attribute indexing
-(`sce.graph.concrete_builder`).** Django relies heavily on dynamically
+(`prism.graph.concrete_builder`).** Django relies heavily on dynamically
 assigned callables the old Pass 1 never saw, since it only collected
 `function_definition`/`class_definition` nodes: a module-level factory
 result (`db_for_write = _router_func("db_for_write")` in
@@ -552,7 +552,7 @@ no-type-inference philosophy the call-based checker already used,
 completed to its logical conclusion rather than left half-applied.
 
 **2. Line-range + relative-path headers
-(`sce.slicer.compressor`/`knapsack`, `sce.serializers.markdown`).** Every
+(`prism.slicer.compressor`/`knapsack`, `prism.serializers.markdown`).** Every
 `PackedItem` now carries its symbol's real `line_range` and
 `relative_path` (computed once per node in `pack()`, alongside the
 existing content rendering), and `render_markdown` renders headings as
@@ -583,8 +583,8 @@ and would have pulled the "distractor" back into the packed candidate set
 packed L2 items).
 
 **3. Adaptive Compact Scaffolding for small contexts
-(`sce.slicer.knapsack`).** Ten archetypes showed negative compression
-because SCE's normal scaffold (the Architectural Path diagram, per-item
+(`prism.slicer.knapsack`).** Ten archetypes showed negative compression
+because Prism's normal scaffold (the Architectural Path diagram, per-item
 line-range/path headers, multi-line contract blocks) has a real fixed
 cost that can exceed a small target's own raw footprint. `pack()` now
 computes the seed's directed call-chain closure once
@@ -630,7 +630,7 @@ question entirely in declarative sentences, with no "?" anywhere, which
 the old strict-punctuation check flagged unfairly.
 
 **Live result after all four fixes, `gpt-4o-mini`, temperature 0: 63/66
-passed (95.5%)**, and **the SCE variant alone reached 33/33 (100%)** - up
+passed (95.5%)**, and **the Prism variant alone reached 33/33 (100%)** - up
 from the original 56/66 (84.8%). The 3 remaining failures are all on the
 *raw* baseline, none introduced by these fixes and none in scope for
 them: two are archetypes (12, 29) whose task genuinely requires inventing
@@ -651,7 +651,7 @@ asserting they're indexed, not flagged as hallucinated, and correctly
 excluded from knapsack candidates; header format assertions for both the
 compact and non-compact cases (including that the "requires" contract
 still survives compact mode); and the Socratic `required_any_regexes`
-OR-logic. A gated `SCE_LIVE_NETWORK_TESTS=1` test confirms the exact named
+OR-logic. A gated `PRISM_LIVE_NETWORK_TESTS=1` test confirms the exact named
 symbols from the live run (`db_for_write`, `_iterable_class`,
 `_middleware_chain`) are indexed as attributes against the real,
 already-cloned django repo.
@@ -663,7 +663,7 @@ real repository in one language (django/Python). This harness runs the
 SAME 33-item taxonomy - as language-agnostic templates parameterized by a
 single `{target}` symbol, `benchmarks/prompt_taxonomy/polyglot_prompts.py`
 - against one real, cloned, architecturally distinct repository per
-language SCE's parser/tagger/slicer layers support:
+language Prism's parser/tagger/slicer layers support:
 
 | Language   | Repository                              | Target symbol (confirmed by actually cloning + indexing, not guessed) |
 |------------|------------------------------------------|-------------------------------------------------------------------------|
@@ -685,7 +685,7 @@ python -m benchmarks.polyglot_33_matrix --run-all --report benchmarks/polyglot_3
 python -m benchmarks.polyglot_33_matrix --repo hono --prompt 17
 
 # No API key needed: index every repo, build every context, print sizes/
-# compression/SCE's-own-hallucination-freedom/syntax-validity, zero API calls:
+# compression/Prism's-own-hallucination-freedom/syntax-validity, zero API calls:
 python -m benchmarks.polyglot_33_matrix --run-all --dry-run
 ```
 
@@ -695,7 +695,7 @@ python -m benchmarks.polyglot_33_matrix --run-all --dry-run
 - **Syntax validity** - `ast.parse()` for Python; a real Tree-sitter
   reparse (reusing `validity.py`'s exact class-wrap fallback heuristic) for
   the other five, applied to the model's own generated code this time
-  rather than SCE's rendered package.
+  rather than Prism's rendered package.
 - **Hallucination detection** - `ast`-based call extraction for Python
   (`spec.py`'s existing checker, unchanged); a regex-based call-name
   extractor for the other five (`find_hallucinated_calls_generic`), which
@@ -708,7 +708,7 @@ python -m benchmarks.polyglot_33_matrix --run-all --dry-run
   negative constraints, forbidden tags, required substrings/regexes,
   self-consistency) are pure text/regex operations with no Python-specific
   parsing, so they apply unchanged across all six languages.
-- **`--dry-run`** additionally verifies SCE's OWN rendered context package
+- **`--dry-run`** additionally verifies Prism's OWN rendered context package
   (not a model response) is 100% syntactically valid and hallucination-free
   per repository - the same static regression guard `multi_repo_eval.py`
   and `polyglot_prompt_matrix.py` already run, just across all six
@@ -717,10 +717,10 @@ python -m benchmarks.polyglot_33_matrix --run-all --dry-run
 **Real findings from indexing all six repositories** (each confirmed by
 actually cloning and indexing, not assumed):
 
-1. **`express`'s core dispatch is invisible to SCE's current JS indexer.**
+1. **`express`'s core dispatch is invisible to Prism's current JS indexer.**
    `app.handle`/`Router.process_params` (the task's originally-suggested
    targets) are legacy CommonJS prototype-method assignments
-   (`app.handle = function handle(req, res, callback) {...}`) - SCE's
+   (`app.handle = function handle(req, res, callback) {...}`) - Prism's
    symbol collector for JS/TS only indexes `function_declaration`/
    `method_definition` nodes, unlike its Python counterpart's dedicated
    attribute-assignment pass (see the django fixes above). Every such
@@ -740,7 +740,7 @@ actually cloning and indexing, not assumed):
    originally-suggested C# target) is a real, indexed symbol but resolves
    with **zero** outgoing call edges: its body calls exclusively through
    constructor-injected interface-typed fields (`_orderRepository`,
-   `_uriComposer`, ...), which SCE's no-type-inference `InstanceTypeMap`
+   `_uriComposer`, ...), which Prism's no-type-inference `InstanceTypeMap`
    cannot statically resolve to a concrete implementation - the same
    documented class of limitation as httpx's inheritance-based `self.method()`
    gap above, just via dependency injection instead. `UserController.GetCurrentUser`
@@ -750,7 +750,7 @@ actually cloning and indexing, not assumed):
    already-indexed symbols exactly as proposed.
 5. **Small, shallow real-world targets can show *negative* compression at
    the 3000-token default budget** - e.g. spring-petclinic's
-   `processCreationForm` (raw dump: 1519 tokens; SCE package: ~4000
+   `processCreationForm` (raw dump: 1519 tokens; Prism package: ~4000
    tokens). This is `ContextKnapsackPacker`'s documented Adaptive Compact
    Scaffolding boundary (see the "Adaptive Compact Scaffolding" fix above):
    compact mode triggers under a ~1200-token raw-footprint threshold, and

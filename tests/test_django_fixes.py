@@ -6,7 +6,7 @@
    `self._iterable_class(...)` isn't mistaken for a hallucination.
 2. Line-range + relative-path annotations in packed headers
    (compressor.py / markdown.py) - exact grounding back to the real file.
-3. Adaptive Compact Scaffolding for small contexts (knapsack.py) - SCE's
+3. Adaptive Compact Scaffolding for small contexts (knapsack.py) - Prism's
    own scaffold shouldn't make a small package bigger than a raw dump.
 4. Socratic verification robustness (prompt_taxonomy) - accept an
    interrogative response whether or not it uses literal "?" punctuation.
@@ -20,7 +20,7 @@ uses pervasively.
 A separate opt-in suite at the bottom checks the *exact* named symbols from
 the live run (`db_for_write`, `_iterable_class`) against the real,
 already-cloned django/django repo - skipped unless
-`SCE_LIVE_NETWORK_TESTS=1` is set, mirroring every other real-network test
+`PRISM_LIVE_NETWORK_TESTS=1` is set, mirroring every other real-network test
 in this suite.
 """
 from __future__ import annotations
@@ -30,11 +30,11 @@ import re
 
 import pytest
 
-from sce.cli import build_pipeline
-from sce.graph.metamodel import SemanticMetamodel
-from sce.serializers.markdown import render_markdown
-from sce.slicer.distance import DistanceConfig, DistanceEngine
-from sce.slicer.knapsack import ContextKnapsackPacker
+from prism.cli import build_pipeline
+from prism.graph.metamodel import SemanticMetamodel
+from prism.serializers.markdown import render_markdown
+from prism.slicer.distance import DistanceConfig, DistanceEngine
+from prism.slicer.knapsack import ContextKnapsackPacker
 
 PYTHON_FIXTURE = "tests/fixtures/python_repo"
 STRESS_FIXTURE = "benchmarks/fixtures/stress_repo"
@@ -222,14 +222,14 @@ def test_compact_mode_achieves_positive_or_near_parity_compression_on_small_fixt
 
     markdown_text = render_markdown(pack_result, tag_matrix)
     raw_text = build_raw_context(builder, target).text
-    sce_tokens = count_tokens(markdown_text)
+    prism_tokens = count_tokens(markdown_text)
     raw_tokens = count_tokens(raw_text)
     # "Matches or beats" with a small allowance for the document's fixed
     # preamble (title/budget/allocation lines), which no amount of content
     # trimming removes - see benchmarks/README.md for the measured margin
-    # on this exact target (155 raw vs. 157 sce tokens).
-    assert sce_tokens <= raw_tokens + 10, (
-        f"compact-mode package ({sce_tokens} tok) should match or nearly match the raw dump ({raw_tokens} tok)"
+    # on this exact target (155 raw vs. 157 prism tokens).
+    assert prism_tokens <= raw_tokens + 10, (
+        f"compact-mode package ({prism_tokens} tok) should match or nearly match the raw dump ({raw_tokens} tok)"
     )
 
 
@@ -308,8 +308,8 @@ def test_socratic_archetype_rejects_a_flat_statement():
 # Opt-in: the exact named symbols from the live run, against real django
 # --------------------------------------------------------------------- #
 @pytest.mark.skipif(
-    os.environ.get("SCE_LIVE_NETWORK_TESTS") != "1",
-    reason="set SCE_LIVE_NETWORK_TESTS=1 to index the real django/django clone (large, network-dependent)",
+    os.environ.get("PRISM_LIVE_NETWORK_TESTS") != "1",
+    reason="set PRISM_LIVE_NETWORK_TESTS=1 to index the real django/django clone (large, network-dependent)",
 )
 def test_real_django_db_for_write_and_iterable_class_are_indexed():
     from benchmarks.large_repo_prompt_matrix import DEFAULT_CACHE_DIR, index_repo

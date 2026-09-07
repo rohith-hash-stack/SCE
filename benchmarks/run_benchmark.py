@@ -1,4 +1,4 @@
-"""SCE evaluation harness: quantify variable-resolution context packing
+"""Prism evaluation harness: quantify variable-resolution context packing
 against a naive whole-file-dump baseline.
 
 Usage:
@@ -23,26 +23,26 @@ import networkx as nx
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
-    """Make `import sce` work even without an editable install, as long as
-    this script is run from a checkout that still has `src/sce` in place.
+def _ensure_prism_importable() -> None:
+    """Make `import prism` work even without an editable install, as long as
+    this script is run from a checkout that still has `src/prism` in place.
     """
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
-from sce.cli import build_pipeline  # noqa: E402
-from sce.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
-from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
-from sce.serializers.markdown import render_markdown  # noqa: E402
-from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
-from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
+from prism.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
+from prism.graph.metamodel import SemanticMetamodel  # noqa: E402
+from prism.serializers.markdown import render_markdown  # noqa: E402
+from prism.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
+from prism.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.coverage import CoverageError, CoverageResult, compute_coverage, ground_truth_subgraph  # noqa: E402
 from benchmarks.raw_context import RawContextError, build_raw_context  # noqa: E402
@@ -74,7 +74,7 @@ class BenchmarkResult:
     budget: int
     tokenizer_backend: str
     raw_tokens: int
-    sce_tokens: int
+    prism_tokens: int
     compression_pct: float
     k_hops: int
     coverage: CoverageResult
@@ -89,7 +89,7 @@ class BenchmarkResult:
 
 
 def _callable_only(g_sub: nx.DiGraph, builder) -> nx.DiGraph:
-    """Restrict a ground-truth subgraph to nodes SCE could ever render as
+    """Restrict a ground-truth subgraph to nodes Prism could ever render as
     their own L0-L3 contract: known internal functions/methods. Excludes
     classes (constructor calls) and external/unresolved symbols, neither of
     which the knapsack packer treats as a candidate (see
@@ -110,7 +110,7 @@ def run_single_benchmark(
     k_hops: int = 3,
     lambda_weight: float = 0.7,
 ) -> BenchmarkResult:
-    """Run the full SCE pipeline for one (repo, target, budget) combination
+    """Run the full Prism pipeline for one (repo, target, budget) combination
     and compute every benchmark metric against it.
 
     Raises `BenchmarkError` for expected, user-facing failures (unknown
@@ -145,7 +145,7 @@ def run_single_benchmark_from_pipeline(
     if target not in builder.symbol_table:
         raise BenchmarkError(
             f"target symbol '{target}' was not found in '{repo_path}'. "
-            f"Run `sce index {repo_path} --debug-json` to list known symbols."
+            f"Run `prism index {repo_path} --debug-json` to list known symbols."
         )
 
     metamodel = SemanticMetamodel()
@@ -156,7 +156,7 @@ def run_single_benchmark_from_pipeline(
     except ValueError as exc:
         raise BenchmarkError(str(exc)) from exc
 
-    sce_markdown = render_markdown(pack_result, tag_matrix)
+    prism_markdown = render_markdown(pack_result, tag_matrix)
 
     try:
         raw_result = build_raw_context(builder, target)
@@ -164,8 +164,8 @@ def run_single_benchmark_from_pipeline(
         raise BenchmarkError(str(exc)) from exc
 
     raw_tokens = count_tokens(raw_result.text)
-    sce_tokens = count_tokens(sce_markdown)
-    compression_pct = round((1.0 - (sce_tokens / raw_tokens)) * 100.0, 2) if raw_tokens else 0.0
+    prism_tokens = count_tokens(prism_markdown)
+    compression_pct = round((1.0 - (prism_tokens / raw_tokens)) * 100.0, 2) if raw_tokens else 0.0
 
     packed_symbols = {item.symbol for item in pack_result.items}
 
@@ -187,7 +187,7 @@ def run_single_benchmark_from_pipeline(
     except CoverageError as exc:
         raise BenchmarkError(str(exc)) from exc
 
-    code_blocks = check_python_syntax(sce_markdown)
+    code_blocks = check_python_syntax(prism_markdown)
     invalid_blocks = [block for block in code_blocks if not block.valid]
 
     elapsed = time.perf_counter() - start
@@ -198,7 +198,7 @@ def run_single_benchmark_from_pipeline(
         budget=budget,
         tokenizer_backend=active_backend(),
         raw_tokens=raw_tokens,
-        sce_tokens=sce_tokens,
+        prism_tokens=prism_tokens,
         compression_pct=compression_pct,
         k_hops=k_hops,
         coverage=coverage,
@@ -217,7 +217,7 @@ def run_single_benchmark_from_pipeline(
 # Reporting: ASCII summary table + per-result detail
 # --------------------------------------------------------------------- #
 def render_summary_table(results: list[BenchmarkResult]) -> str:
-    headers = ["Target Symbol", "Budget", "Raw Tokens", "SCE Tokens", "Compression %", "Reached Nodes", "Invariant Coverage"]
+    headers = ["Target Symbol", "Budget", "Raw Tokens", "Prism Tokens", "Compression %", "Reached Nodes", "Invariant Coverage"]
     rows = []
     for r in results:
         tag_total = sum(r.coverage.tag_totals.values())
@@ -227,7 +227,7 @@ def render_summary_table(results: list[BenchmarkResult]) -> str:
                 shorten(r.target),
                 str(r.budget),
                 str(r.raw_tokens),
-                str(r.sce_tokens),
+                str(r.prism_tokens),
                 f"{r.compression_pct:.1f}%",
                 f"{r.coverage.reached_nodes}/{r.coverage.subgraph_node_count} ({r.coverage.reached_node_ratio * 100:.0f}%)",
                 f"{tag_preserved}/{tag_total} ({r.coverage.invariant_coverage_ratio * 100:.0f}%)",
@@ -253,7 +253,7 @@ def render_detail_section(result: BenchmarkResult) -> str:
         f"{result.direct_callee_coverage.subgraph_node_count} reached "
         f"({result.direct_callee_coverage.reached_node_ratio * 100:.1f}%)"
     )
-    lines.append(f"Reported preserved semantics (SCE's own knapsack metric): {result.reported_preserved_semantics}%")
+    lines.append(f"Reported preserved semantics (Prism's own knapsack metric): {result.reported_preserved_semantics}%")
     lines.append(f"Syntactic validity:   {result.code_blocks_valid}/{result.code_blocks_total} Python code blocks parse cleanly")
     for block in result.invalid_code_blocks:
         lines.append(f"  INVALID: {block.symbol} ({block.resolution_label}): {block.error}")
@@ -275,7 +275,7 @@ def _to_json_payload(results: list[BenchmarkResult]) -> dict:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m benchmarks.run_benchmark",
-        description="Benchmark SCE's variable-resolution context packing against a whole-file-dump baseline.",
+        description="Benchmark Prism's variable-resolution context packing against a whole-file-dump baseline.",
     )
     parser.add_argument("--repo", default=None, help=f"Repository to benchmark (default: bundled fixture at {DEFAULT_PYTHON_FIXTURE}).")
     parser.add_argument("--target", default=None, help="Fully qualified target symbol (required unless --suite is given).")

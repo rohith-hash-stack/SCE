@@ -9,7 +9,7 @@ treated as the "python" leg.
 
 A separate opt-in suite at the bottom confirms all six real REPOS targets
 still resolve against their real, already-cloned repositories - skipped
-unless `SCE_LIVE_NETWORK_TESTS=1` is set, mirroring
+unless `PRISM_LIVE_NETWORK_TESTS=1` is set, mirroring
 `tests/test_large_repo_prompt_matrix.py`'s and `tests/test_clone_eval.py`'s
 real-network opt-in tests.
 """
@@ -36,7 +36,7 @@ from benchmarks.polyglot_33_matrix import (
 from benchmarks.prompt_taxonomy.polyglot_prompts import PROMPT_TEMPLATES, PROMPT_TEMPLATES_BY_ID
 from benchmarks.prompt_taxonomy.spec import PromptArchetype
 
-from sce.cli import build_pipeline
+from prism.cli import build_pipeline
 
 PYTHON_FIXTURE = "tests/fixtures/python_repo"
 
@@ -218,7 +218,7 @@ def test_run_variant_passes_for_clean_python_response(builder_and_tags, repo_ind
         target="src.services.billing.PaymentProcessor.charge", task_prompt="Add a docstring.", expects_code=True,
     )
     client = _fake_client("```python\ndef charge(self, amount):\n    return self._gateway.charge(amount)\n```")
-    result = run_variant(repo_index, tag_matrix, "python", archetype, "sce", "CTX", "gpt-4o-mini", client, 0.0)
+    result = run_variant(repo_index, tag_matrix, "python", archetype, "prism", "CTX", "gpt-4o-mini", client, 0.0)
     assert result.syntax_valid is True
     assert result.hallucinated_calls == ()
     assert result.passed is True
@@ -257,7 +257,7 @@ def test_run_variant_skips_code_checks_when_expects_code_false(builder_and_tags,
         target="src.services.billing.PaymentProcessor.charge", task_prompt="Explain it.", expects_code=False,
     )
     client = _fake_client("This method charges the customer via the gateway.")
-    result = run_variant(repo_index, tag_matrix, "python", archetype, "sce", "CTX", "gpt-4o-mini", client, 0.0)
+    result = run_variant(repo_index, tag_matrix, "python", archetype, "prism", "CTX", "gpt-4o-mini", client, 0.0)
     assert result.syntax_valid is None
     assert "syntax_valid" not in result.contract_checks
     assert result.passed is True
@@ -270,19 +270,19 @@ def test_run_archetype_computes_compression_and_both_variants(builder_and_tags, 
         target="src.services.billing.PaymentProcessor.charge", task_prompt="Explain it.", expects_code=False,
     )
     client = _fake_client("This charges the customer.")
-    result = run_archetype(builder, tag_matrix, repo_index, "python-fixture", "python", archetype, ["raw", "sce"], 1000, "gpt-4o-mini", client, 0.0)
+    result = run_archetype(builder, tag_matrix, repo_index, "python-fixture", "python", archetype, ["raw", "prism"], 1000, "gpt-4o-mini", client, 0.0)
     assert result.raw is not None
-    assert result.sce is not None
+    assert result.prism is not None
     assert result.raw_tokens > 0
-    assert result.sce_tokens > 0
+    assert result.prism_tokens > 0
 
 
-def test_build_contexts_returns_nonempty_raw_and_sce_text(builder_and_tags):
+def test_build_contexts_returns_nonempty_raw_and_prism_text(builder_and_tags):
     builder, tag_matrix = builder_and_tags
     archetype = PromptArchetype(archetype_id=1, slug="x", title="X", cluster="C", target="src.services.billing.PaymentProcessor.charge", task_prompt="x")
-    raw_text, sce_text = build_contexts(builder, tag_matrix, archetype, 2000)
+    raw_text, prism_text = build_contexts(builder, tag_matrix, archetype, 2000)
     assert raw_text
-    assert sce_text
+    assert prism_text
 
 
 # --------------------------------------------------------------------- #
@@ -330,11 +330,11 @@ def test_main_unknown_prompt_exits_nonzero_without_indexing(capsys):
 
 
 # --------------------------------------------------------------------- #
-# Opt-in: real network, all six real repositories (SCE_LIVE_NETWORK_TESTS=1)
+# Opt-in: real network, all six real repositories (PRISM_LIVE_NETWORK_TESTS=1)
 # --------------------------------------------------------------------- #
 pytestmark_live = pytest.mark.skipif(
-    os.environ.get("SCE_LIVE_NETWORK_TESTS") != "1",
-    reason="set SCE_LIVE_NETWORK_TESTS=1 to run the real multi-repo clone/index suite",
+    os.environ.get("PRISM_LIVE_NETWORK_TESTS") != "1",
+    reason="set PRISM_LIVE_NETWORK_TESTS=1 to run the real multi-repo clone/index suite",
 )
 
 

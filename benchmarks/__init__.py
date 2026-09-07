@@ -1,9 +1,9 @@
-"""SCE evaluation/benchmarking harness.
+"""Prism evaluation/benchmarking harness.
 
-Quantifies the Semantic Context Engine's context-packing quality against a
+Quantifies the Prism's context-packing quality against a
 naive whole-file-dump baseline, across three dimensions:
 
-  - token reduction (exact tokenizer counts, SCE vs. raw file dump)
+  - token reduction (exact tokenizer counts, Prism vs. raw file dump)
   - structural/semantic coverage (how much of the ground-truth k-hop call
     subgraph and its architectural invariant tags survive into the packed
     context)

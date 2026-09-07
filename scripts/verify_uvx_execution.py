@@ -1,12 +1,12 @@
-"""Hermetic, local verification that `uvx --from .` runs SCE's CLI and MCP
+"""Hermetic, local verification that `uvx --from .` runs Prism's CLI and MCP
 server exactly the way an end-user's `uvx --from git+https://github.com/
-<OWNER>/<REPO>.git sce ...` would - proving the zero-install VS Code/Claude
+<OWNER>/<REPO>.git prism ...` would - proving the zero-install VS Code/Claude
 Desktop setup in `docs/mcp_setup.md` actually works before anyone tries it.
 
 `--from .` (a local path) exercises the identical code path `uv` uses for a
 `--from git+...` URL: it builds an ephemeral wheel from the working tree via
 the project's own PEP 517 build backend (`setuptools.build_meta`, per
-`pyproject.toml`) into a throwaway venv, then runs the `sce` console script
+`pyproject.toml`) into a throwaway venv, then runs the `prism` console script
 `[project.scripts]` declares - so anything this script catches (a missing
 submodule, a dependency that only exists as a `pip install [extra]` someone
 forgot to make core, a broken entry point) would equally break the real
@@ -15,13 +15,13 @@ form, which is what makes it fast enough to run as part of routine
 verification rather than only ever by hand against the real remote.
 
 Checks, in order (see the corresponding `run_check` calls in `main()`):
-  1. `uvx --from . sce --help` exits 0.
-  2. `uvx --from . sce mcp --help` exits 0 and documents `stdio`, `sse`,
+  1. `uvx --from . prism --help` exits 0.
+  2. `uvx --from . prism mcp --help` exits 0 and documents `stdio`, `sse`,
      and `--repo`.
   3. A real MCP JSON-RPC stdio handshake (`initialize` ->
      `notifications/initialized` -> `tools/list`) against
-     `uvx --from . sce mcp --transport stdio --repo .` returns exactly the
-     5 tools `sce.mcp.server` registers: `get_symbol_context`,
+     `uvx --from . prism mcp --transport stdio --repo .` returns exactly the
+     5 tools `prism.mcp.server` registers: `get_symbol_context`,
      `get_architectural_invariants`, `find_symbols_by_tag`,
      `get_graph_status`, `reindex_repo`.
 
@@ -52,7 +52,7 @@ class VerificationError(Exception):
 
 
 def _run_uvx(args: list[str], *, input_text: str | None = None) -> subprocess.CompletedProcess:
-    """Runs `uvx --from . sce <args>` from the project root. Deliberately
+    """Runs `uvx --from . prism <args>` from the project root. Deliberately
     does NOT sanitize the environment the way a packaged-binary smoke test
     would: `uv` itself needs the host's normal environment (HOME, PATH for
     finding/downloading a Python interpreter, its own cache dirs, ...) to
@@ -60,7 +60,7 @@ def _run_uvx(args: list[str], *, input_text: str | None = None) -> subprocess.Co
     resolution and entry-point wiring*, not process isolation.
     """
     return subprocess.run(
-        ["uvx", "--from", ".", "sce", *args],
+        ["uvx", "--from", ".", "prism", *args],
         input=input_text,
         capture_output=True,
         text=True,
@@ -80,19 +80,19 @@ def check_uv_installed() -> None:
 def check_cli_help() -> None:
     result = _run_uvx(["--help"])
     if result.returncode != 0:
-        raise VerificationError(f"`uvx --from . sce --help` exited {result.returncode}\nstderr:\n{result.stderr}")
-    if "Semantic Context Engine" not in result.stdout:
-        raise VerificationError(f"`sce --help` output looks wrong (missing the CLI's own description):\n{result.stdout}")
+        raise VerificationError(f"`uvx --from . prism --help` exited {result.returncode}\nstderr:\n{result.stderr}")
+    if "Prism" not in result.stdout:
+        raise VerificationError(f"`prism --help` output looks wrong (missing the CLI's own description):\n{result.stdout}")
 
 
 def check_mcp_help() -> None:
     result = _run_uvx(["mcp", "--help"])
     if result.returncode != 0:
-        raise VerificationError(f"`uvx --from . sce mcp --help` exited {result.returncode}\nstderr:\n{result.stderr}")
+        raise VerificationError(f"`uvx --from . prism mcp --help` exited {result.returncode}\nstderr:\n{result.stderr}")
     missing = [token for token in ("stdio", "sse", "--repo") if token not in result.stdout]
     if missing:
         raise VerificationError(
-            f"`sce mcp --help` output is missing expected token(s) {missing}:\n{result.stdout}"
+            f"`prism mcp --help` output is missing expected token(s) {missing}:\n{result.stdout}"
         )
 
 
@@ -126,7 +126,7 @@ def check_mcp_stdio_tool_discovery() -> None:
     )
     if result.returncode != 0:
         raise VerificationError(
-            f"`uvx --from . sce mcp --transport stdio --repo .` exited {result.returncode}\nstderr:\n{result.stderr}"
+            f"`uvx --from . prism mcp --transport stdio --repo .` exited {result.returncode}\nstderr:\n{result.stderr}"
         )
 
     response_lines = [line for line in result.stdout.splitlines() if line.strip()]
@@ -177,8 +177,8 @@ def main() -> int:
         return 1
 
     checks = [
-        ("uvx --from . sce --help", check_cli_help),
-        ("uvx --from . sce mcp --help (documents stdio/sse/--repo)", check_mcp_help),
+        ("uvx --from . prism --help", check_cli_help),
+        ("uvx --from . prism mcp --help (documents stdio/sse/--repo)", check_mcp_help),
         ("MCP stdio handshake returns all 5 tools", check_mcp_stdio_tool_discovery),
     ]
     results = [run_check(name, fn) for name, fn in checks]

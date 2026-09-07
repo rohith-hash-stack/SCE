@@ -1,6 +1,6 @@
 """Call-graph and architectural-invariant coverage metrics (HLD evaluation
 dimension 2): how much of a "ground-truth" k-hop neighborhood around the
-target seed actually survives into the packed SCE context.
+target seed actually survives into the packed Prism context.
 """
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from dataclasses import dataclass, field
 
 import networkx as nx
 
-from sce.tagger.rules import AUTH_GUARD_RULE, CALL_SINK_RULES, DECORATOR_RULES, STATE_MUTATION_TAG
+from prism.tagger.rules import AUTH_GUARD_RULE, CALL_SINK_RULES, DECORATOR_RULES, STATE_MUTATION_TAG
 
-# The 8 tags SCE's deterministic tagger can actually assign (derived from
+# The 8 tags Prism's deterministic tagger can actually assign (derived from
 # the rule tables themselves, not hand-duplicated, so this can't drift out
-# of sync with sce.tagger.rules). `#payment_charge` is a metamodel-only
+# of sync with prism.tagger.rules). `#payment_charge` is a metamodel-only
 # relationship node - HLD section 4.2's rule table never assigns it - so it
 # is intentionally excluded here.
 INVARIANT_TAGS: tuple[str, ...] = tuple(
@@ -66,7 +66,7 @@ def compute_coverage(
     invariant_tags: tuple[str, ...] = INVARIANT_TAGS,
 ) -> CoverageResult:
     """Compare `g_sub` (the ground truth) against `packed_symbols` (the set
-    of symbols that actually made it into the SCE context package).
+    of symbols that actually made it into the Prism context package).
     """
     sub_nodes = set(g_sub.nodes)
     reached = sub_nodes & packed_symbols

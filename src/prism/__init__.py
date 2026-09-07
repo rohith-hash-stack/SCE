@@ -1,4 +1,4 @@
-"""Semantic Context Engine (SCE).
+"""Prism.
 
 A deterministic, offline dual-layer semantic graph engine that extracts
 variable-resolution context slices from a cloned repository for LLM coding

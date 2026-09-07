@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from sce.cli import build_pipeline
+from prism.cli import build_pipeline
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 PYTHON_REPO = os.path.join(FIXTURES_DIR, "python_repo")

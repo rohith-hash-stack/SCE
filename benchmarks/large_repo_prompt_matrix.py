@@ -1,4 +1,4 @@
-"""Validates SCE against a large-scale, real enterprise repository
+"""Validates Prism against a large-scale, real enterprise repository
 (django/django - 42,282 symbols, 79,268 CALLS edges once indexed; see
 `index_repo`'s docstring for the full metrics this harness measures) across
 33 structured prompt archetypes covering the breadth of how a real
@@ -10,11 +10,11 @@ mapping, documentation, and more. See `benchmarks/prompt_taxonomy/` for the
 full numbered list and the real target symbol each one queries.
 
 For every archetype, both a raw whole-file-dump context (the target's
-call-chain closure) and an SCE L0-L3 context package (3000-token budget by
+call-chain closure) and an Prism L0-L3 context package (3000-token budget by
 default) are sent to a real OpenAI model, then scored entirely
 mechanically - never an LLM judge:
 
-  - **Token compression ratio**: `(1 - sce_tokens / raw_tokens) * 100`.
+  - **Token compression ratio**: `(1 - prism_tokens / raw_tokens) * 100`.
   - **Syntax validation**: `ast.parse()` on the extracted code block, for
     archetypes that expect one.
   - **Hallucination counters**: every called symbol (for code-producing
@@ -53,23 +53,23 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
+def _ensure_prism_importable() -> None:
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
-from sce.cli import build_pipeline  # noqa: E402
-from sce.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
-from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
-from sce.serializers.markdown import render_markdown  # noqa: E402
-from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
-from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
+from prism.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
+from prism.graph.metamodel import SemanticMetamodel  # noqa: E402
+from prism.serializers.markdown import render_markdown  # noqa: E402
+from prism.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
+from prism.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.clone_eval import CloneError, clone_repo  # noqa: E402
 from benchmarks.openai_client import LLMClient, OpenAIClientError  # noqa: E402
@@ -97,7 +97,7 @@ DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_TEMPERATURE = 0.0
 SELF_CONSISTENCY_TEMPERATURE = 0.7
 DEFAULT_REPORT_PATH = PROJECT_ROOT / "benchmarks" / "django_33_prompts.json"
-VARIANTS: tuple[str, ...] = ("raw", "sce")
+VARIANTS: tuple[str, ...] = ("raw", "prism")
 
 REPOS: dict[str, str] = {
     "django": "https://github.com/django/django.git",
@@ -225,7 +225,7 @@ def build_repo_index(builder: ConcreteGraphBuilder) -> RepoIndex:
     # functions/classes/methods GlobalSymbolTable indexes (e.g.
     # "django.contrib.auth.backends" on its own, referring to the whole
     # file) - confirmed as a real, non-hallucinated false positive from a
-    # live gpt-4o-mini run (archetype 29's SCE variant). Every real
+    # live gpt-4o-mini run (archetype 29's Prism variant). Every real
     # module's dotted path, plus every real package prefix along the way,
     # counts as known for the mention-hallucination check.
     module_paths: set[str] = set()
@@ -245,7 +245,7 @@ def build_repo_index(builder: ConcreteGraphBuilder) -> RepoIndex:
 
 
 # --------------------------------------------------------------------- #
-# Section 2: context building (SCE package vs. raw whole-file dump)
+# Section 2: context building (Prism package vs. raw whole-file dump)
 # --------------------------------------------------------------------- #
 def build_contexts(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], archetype: PromptArchetype, budget: int, lambda_weight: float = 0.7) -> tuple[str, str]:
     if archetype.target not in builder.symbol_table:
@@ -254,14 +254,14 @@ def build_contexts(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]
     metamodel = SemanticMetamodel()
     distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
     pack_result = ContextKnapsackPacker(token_budget=budget).pack(archetype.target, builder, tag_matrix, distance_engine)
-    sce_text = render_markdown(pack_result, tag_matrix)
+    prism_text = render_markdown(pack_result, tag_matrix)
 
     try:
         raw_text = build_raw_context(builder, archetype.target).text
     except RawContextError as exc:
         raise PromptMatrixError(str(exc)) from exc
 
-    return raw_text, sce_text
+    return raw_text, prism_text
 
 
 def read_original_signature(builder: ConcreteGraphBuilder, qualified_name: str) -> str:
@@ -322,10 +322,10 @@ class ArchetypeRunResult:
     target: str
     model: str
     raw_tokens: int
-    sce_tokens: int
+    prism_tokens: int
     compression_pct: float
     raw: VariantRunResult
-    sce: VariantRunResult
+    prism: VariantRunResult
 
 
 def _run_turns(
@@ -492,12 +492,12 @@ def run_archetype(
     client: LLMClient,
     temperature: float,
 ) -> ArchetypeRunResult:
-    raw_text, sce_text = build_contexts(builder, tag_matrix, archetype, budget)
+    raw_text, prism_text = build_contexts(builder, tag_matrix, archetype, budget)
     raw_tokens = count_tokens(raw_text)
-    sce_tokens = count_tokens(sce_text)
-    compression_pct = round((1 - sce_tokens / raw_tokens) * 100, 1) if raw_tokens else 0.0
+    prism_tokens = count_tokens(prism_text)
+    compression_pct = round((1 - prism_tokens / raw_tokens) * 100, 1) if raw_tokens else 0.0
 
-    context_by_variant = {"raw": raw_text, "sce": sce_text}
+    context_by_variant = {"raw": raw_text, "prism": prism_text}
     results: dict[str, VariantRunResult] = {}
     for variant in variants:
         print(f"  [{archetype.archetype_id:02d}] {archetype.slug} [{variant}] ...", file=sys.stderr)
@@ -511,10 +511,10 @@ def run_archetype(
         target=archetype.target,
         model=model,
         raw_tokens=raw_tokens,
-        sce_tokens=sce_tokens,
+        prism_tokens=prism_tokens,
         compression_pct=compression_pct,
         raw=results.get("raw"),
-        sce=results.get("sce"),
+        prism=results.get("prism"),
     )
 
 
@@ -525,7 +525,7 @@ def render_summary_table(results: list[ArchetypeRunResult]) -> str:
     headers = ["ID", "Archetype", "Target", "Compression %", "Variant", "Syntax", "Halluc", "Contract", "Result"]
     rows = []
     for r in results:
-        for variant_result in (r.raw, r.sce):
+        for variant_result in (r.raw, r.prism):
             if variant_result is None:
                 continue
             syntax_cell = "n/a" if variant_result.syntax_valid is None else ("OK" if variant_result.syntax_valid else "FAIL")
@@ -552,8 +552,8 @@ def render_detail(results: list[ArchetypeRunResult]) -> str:
     for r in results:
         lines.append(f"=== [{r.archetype_id:02d}] {r.title} ({r.slug}) - {r.cluster} ===")
         lines.append(f"  Target: {r.target}")
-        lines.append(f"  Raw tokens: {r.raw_tokens}  SCE tokens: {r.sce_tokens}  Compression: {r.compression_pct:.1f}%")
-        for variant_result in (r.raw, r.sce):
+        lines.append(f"  Raw tokens: {r.raw_tokens}  Prism tokens: {r.prism_tokens}  Compression: {r.compression_pct:.1f}%")
+        for variant_result in (r.raw, r.prism):
             if variant_result is None:
                 continue
             lines.append(f"  --- [{variant_result.variant}] {'PASS' if variant_result.passed else 'FAIL'} ---")
@@ -574,7 +574,7 @@ def render_detail(results: list[ArchetypeRunResult]) -> str:
 
 
 def render_cost_summary(results: list[ArchetypeRunResult]) -> str:
-    all_variants = [v for r in results for v in (r.raw, r.sce) if v is not None]
+    all_variants = [v for r in results for v in (r.raw, r.prism) if v is not None]
     if not all_variants:
         return "(no runs)"
     passed = sum(1 for v in all_variants if v.passed)
@@ -586,8 +586,8 @@ def render_cost_summary(results: list[ArchetypeRunResult]) -> str:
         vp = sum(1 for v in vr if v.passed)
         lines.append(f"  [{variant}] {vp}/{len(vr)} passed ({vp / len(vr) * 100:.1f}%)")
     avg_compression = sum(r.compression_pct for r in results) / len(results)
-    lines.append(f"Average token compression ratio (SCE vs. raw): {avg_compression:.1f}%")
-    total_cost = sum(t.cost_usd for r in results for v in (r.raw, r.sce) if v is not None for t in v.turns if t.cost_usd is not None)
+    lines.append(f"Average token compression ratio (Prism vs. raw): {avg_compression:.1f}%")
+    total_cost = sum(t.cost_usd for r in results for v in (r.raw, r.prism) if v is not None for t in v.turns if t.cost_usd is not None)
     lines.append(f"Total estimated cost: ${total_cost:.5f}")
     return "\n".join(lines)
 
@@ -607,16 +607,16 @@ def dry_run_preview(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str
     lines = [render_index_metrics(metrics), "", "(dry run - no API calls made)", ""]
     for archetype in archetypes:
         try:
-            raw_text, sce_text = build_contexts(builder, tag_matrix, archetype, budget)
+            raw_text, prism_text = build_contexts(builder, tag_matrix, archetype, budget)
         except PromptMatrixError as exc:
             lines.append(f"=== [{archetype.archetype_id:02d}] {archetype.slug} === ERROR: {exc}")
             continue
         raw_tokens = count_tokens(raw_text)
-        sce_tokens = count_tokens(sce_text)
-        compression = round((1 - sce_tokens / raw_tokens) * 100, 1) if raw_tokens else 0.0
+        prism_tokens = count_tokens(prism_text)
+        compression = round((1 - prism_tokens / raw_tokens) * 100, 1) if raw_tokens else 0.0
         lines.append(f"=== [{archetype.archetype_id:02d}] {archetype.title} ({archetype.slug}) ===")
         lines.append(f"  target={archetype.target}")
-        lines.append(f"  raw={raw_tokens} tok  sce={sce_tokens} tok  compression={compression:.1f}%")
+        lines.append(f"  raw={raw_tokens} tok  prism={prism_tokens} tok  compression={compression:.1f}%")
     return "\n".join(lines)
 
 
@@ -626,14 +626,14 @@ def dry_run_preview(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m benchmarks.large_repo_prompt_matrix",
-        description="Validate SCE against a large real repository across 33 structured prompt archetypes.",
+        description="Validate Prism against a large real repository across 33 structured prompt archetypes.",
     )
     parser.add_argument("--repo", default="django", choices=sorted(REPOS), help="Repository key to evaluate (default: django).")
     parser.add_argument("--prompts", default="all", help="Comma-separated archetype ids and/or slugs, or 'all' (default: all).")
     parser.add_argument("--prompt", type=int, default=None, help="Convenience alias for --prompts with a single numeric id, e.g. --prompt 17.")
     parser.add_argument("--variants", default=",".join(VARIANTS), help=f"Comma-separated context variants (available: {', '.join(VARIANTS)}).")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"OpenAI model to use (default: {DEFAULT_MODEL}).")
-    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"SCE token budget (default: {DEFAULT_BUDGET}).")
+    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"Prism token budget (default: {DEFAULT_BUDGET}).")
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE, help=f"Sampling temperature (default: {DEFAULT_TEMPERATURE}).")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help=f"Clone cache directory (default: {DEFAULT_CACHE_DIR}).")
     parser.add_argument("--force-clone", action="store_true", help="Re-clone even if a cached copy already exists.")
@@ -725,7 +725,7 @@ def main(argv: list[str] | None = None) -> int:
         write_report(results, metrics, args.report)
         print(f"\nWrote report to {args.report}")
 
-    all_passed = all(v.passed for r in results for v in (r.raw, r.sce) if v is not None)
+    all_passed = all(v.passed for r in results for v in (r.raw, r.prism) if v is not None)
     return 0 if all_passed else 1
 
 

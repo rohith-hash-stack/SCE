@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from tree_sitter import Language, Node, Query, QueryCursor
 
-from sce.parser.tree_sitter_loader import LanguageID, _load_language
+from prism.parser.tree_sitter_loader import LanguageID, _load_language
 
 PYTHON_QUERIES = {
     "definitions": """
@@ -123,7 +123,7 @@ CSHARP_QUERIES = {
 }
 
 # `slicer_defs`: locates a function/method/class definition's structural
-# parts (parameters, return type, body) for `sce.slicer.universal_slicer`.
+# parts (parameters, return type, body) for `prism.slicer.universal_slicer`.
 # Deliberately separate from `definitions` above (used by
 # `concrete_builder`'s Pass 1) rather than adding captures to it - field
 # names below were verified against the actual installed grammars (e.g.

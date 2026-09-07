@@ -4,7 +4,7 @@ signature + contract comment block, L3 is a one-line alias.
 """
 import ast
 
-from sce.slicer.compressor import ASTCompressor, CompressionContext
+from prism.slicer.compressor import ASTCompressor, CompressionContext
 
 
 def _compress(builder, tag_matrix, qualified_name, resolution):

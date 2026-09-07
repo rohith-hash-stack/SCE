@@ -5,7 +5,7 @@
 `d_hat_{G_C}` is the topological hop count in the (undirected) concrete
 graph, normalized against a fixed horizon so a handful of hops still reads
 as "close" while an unreachable node reads as maximally far - except an
-edge `sce.runtime.reconciler` has marked `confidence="CONFIRMED_RUNTIME"`
+edge `prism.runtime.reconciler` has marked `confidence="CONFIRMED_RUNTIME"`
 (a real execution actually traversed it, not just static inference) costs
 less than a normal hop, per `DistanceConfig.runtime_confidence_weight`, so
 a path validated by actual execution reads as closer than an equal-length
@@ -18,13 +18,13 @@ from dataclasses import dataclass
 
 import networkx as nx
 
-from sce.graph.metamodel import MAX_TAG_DISTANCE, SemanticMetamodel
+from prism.graph.metamodel import MAX_TAG_DISTANCE, SemanticMetamodel
 
 DEFAULT_LAMBDA = 0.7
 DEFAULT_MAX_HOPS = 10.0
 
 # Hop cost for a `confidence="CONFIRMED_RUNTIME"` edge (see
-# `sce.runtime.reconciler`) - strictly less than the normal 1.0-per-hop
+# `prism.runtime.reconciler`) - strictly less than the normal 1.0-per-hop
 # cost, so a path an actual execution traversed accumulates a smaller
 # d_hat_{G_C} than an equal-length path inferred from static analysis
 # alone. 0.5 halves a single confirmed hop's cost; a graph with no
@@ -96,7 +96,7 @@ class DistanceEngine:
         the normal 1.0 otherwise - so `single_source_dijkstra[_path_length]`
         below reduces to plain unweighted hop counting whenever a graph
         carries no runtime confidence data at all (every edge then weighs
-        exactly 1.0), and only diverges from that once a `sce trace` run
+        exactly 1.0), and only diverges from that once a `prism trace` run
         has actually confirmed some of its edges.
         """
         undirected = g_c.to_undirected()
@@ -134,7 +134,7 @@ def architectural_path(
     graph that satisfies it (e.g. a `#db_write` callee "requires" a node
     tagged `#auth_guard` somewhere in the same graph).
     """
-    from sce.graph.metamodel import TagRelation
+    from prism.graph.metamodel import TagRelation
 
     lines: list[tuple[int, str | None, str]] = [(0, None, seed)]
     if seed not in g_c:

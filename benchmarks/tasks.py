@@ -1,7 +1,7 @@
 """Live-eval task definitions and their automated AST verifiers.
 
 Each `Task` pins an "anchor" symbol in `benchmarks/fixtures/task_repo` that
-SCE (and the raw-dump baseline) build a context package around, plus a
+Prism (and the raw-dump baseline) build a context package around, plus a
 prompt asking the model to produce a function/method that must call real,
 specific dependency symbols. The verifier is a static AST check - it never
 asks another LLM to grade the answer - so scoring is deterministic and
@@ -20,22 +20,22 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
+def _ensure_prism_importable() -> None:
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
-from sce.cli import build_pipeline  # noqa: E402
-from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
-from sce.serializers.markdown import render_markdown  # noqa: E402
-from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
-from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
+from prism.graph.metamodel import SemanticMetamodel  # noqa: E402
+from prism.serializers.markdown import render_markdown  # noqa: E402
+from prism.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
+from prism.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.raw_context import build_raw_context, dump_files  # noqa: E402
 
@@ -185,23 +185,23 @@ class Task:
 class TaskContext:
     task: Task
     raw_text: str
-    sce_text: str
+    prism_text: str
     known_symbols_raw: frozenset[str]
-    known_symbols_sce: frozenset[str]
+    known_symbols_prism: frozenset[str]
 
     def context_for(self, variant: str) -> str:
         if variant == "raw":
             return self.raw_text
-        if variant == "sce":
-            return self.sce_text
-        raise ValueError(f"unknown context variant: {variant!r} (expected 'raw' or 'sce')")
+        if variant == "prism":
+            return self.prism_text
+        raise ValueError(f"unknown context variant: {variant!r} (expected 'raw' or 'prism')")
 
     def known_symbols_for(self, variant: str) -> frozenset[str]:
         if variant == "raw":
             return self.known_symbols_raw
-        if variant == "sce":
-            return self.known_symbols_sce
-        raise ValueError(f"unknown context variant: {variant!r} (expected 'raw' or 'sce')")
+        if variant == "prism":
+            return self.known_symbols_prism
+        raise ValueError(f"unknown context variant: {variant!r} (expected 'raw' or 'prism')")
 
 
 def _whole_repo_files(builder) -> tuple[str, ...]:
@@ -218,12 +218,12 @@ def _known_simple_names_for_files(builder, files: set[str]) -> frozenset[str]:
 
 def _known_simple_names_mentioned_in(builder, text: str) -> frozenset[str]:
     """Every real qualified symbol whose *fully-qualified* name literally
-    appears in `text`, reduced to its simple name. Works for SCE's rendered
+    appears in `text`, reduced to its simple name. Works for Prism's rendered
     Markdown specifically, since it always spells out fully-qualified
     dotted names (in contract headings and architectural-path lines alike)
     - unlike a raw source file, which never contains a symbol's synthetic
     dotted path as literal text. This is the actual "vocabulary" a model
-    reading the SCE package could draw on without inventing anything: it
+    reading the Prism package could draw on without inventing anything: it
     covers both fully-rendered contract blocks and symbols that only
     appear as an architectural-path annotation (e.g. "requires ->
     [#auth_guard] app.auth.require_auth", which names a dependency without
@@ -235,7 +235,7 @@ def _known_simple_names_mentioned_in(builder, text: str) -> frozenset[str]:
 
 
 def build_task_context(task: Task, budget: int, lambda_weight: float = 0.7) -> TaskContext:
-    """Build both the raw-dump and SCE-sliced context packages for a task's
+    """Build both the raw-dump and Prism-sliced context packages for a task's
     anchor symbol, plus the set of "real" simple names visible in each -
     the ground truth the verifier checks generated calls against.
     """
@@ -246,8 +246,8 @@ def build_task_context(task: Task, budget: int, lambda_weight: float = 0.7) -> T
     metamodel = SemanticMetamodel()
     distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
     pack_result = ContextKnapsackPacker(token_budget=budget).pack(task.anchor_target, builder, tag_matrix, distance_engine)
-    sce_text = render_markdown(pack_result, tag_matrix)
-    known_symbols_sce = _known_simple_names_mentioned_in(builder, sce_text)
+    prism_text = render_markdown(pack_result, tag_matrix)
+    known_symbols_prism = _known_simple_names_mentioned_in(builder, prism_text)
 
     if task.raw_scope == "whole_repo":
         raw_files = _whole_repo_files(builder)
@@ -259,9 +259,9 @@ def build_task_context(task: Task, budget: int, lambda_weight: float = 0.7) -> T
     return TaskContext(
         task=task,
         raw_text=raw_text,
-        sce_text=sce_text,
+        prism_text=prism_text,
         known_symbols_raw=known_symbols_raw,
-        known_symbols_sce=known_symbols_sce,
+        known_symbols_prism=known_symbols_prism,
     )
 
 
@@ -317,7 +317,7 @@ def bug_localization_task() -> Task:
         # process_order (the buggy code) never calls require_auth - that's
         # the bug. A call-chain-scoped raw dump would therefore never
         # include app/auth.py either, making the fix undiscoverable for
-        # *both* variants. SCE still surfaces it via the metamodel's
+        # *both* variants. Prism still surfaces it via the metamodel's
         # #db_write REQUIRES_BEFORE #auth_guard architectural-path
         # annotation regardless of the literal call graph; the raw
         # baseline needs the whole repo to have an equally fair shot.

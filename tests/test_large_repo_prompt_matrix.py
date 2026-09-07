@@ -8,7 +8,7 @@ already-tracked fixture, so no cloning is needed for these).
 A separate opt-in suite at the bottom actually indexes the real
 django/django clone (reusing the cache at `.benchmarks/clones/django` if
 present) to confirm the 33 real taxonomy archetypes' target symbols still
-exist upstream - skipped unless `SCE_LIVE_NETWORK_TESTS=1` is set, mirroring
+exist upstream - skipped unless `PRISM_LIVE_NETWORK_TESTS=1` is set, mirroring
 `tests/test_clone_eval.py`'s real-network opt-in test.
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ from benchmarks.prompt_taxonomy.spec import (
     function_signature,
 )
 
-from sce.cli import build_pipeline
+from prism.cli import build_pipeline
 
 PYTHON_FIXTURE = "tests/fixtures/python_repo"
 
@@ -195,7 +195,7 @@ def test_find_referenced_symbol_mentions_flags_fabricated_qualified_name():
 def test_find_referenced_symbol_mentions_accepts_known_module_path():
     """A model legitimately talks about a *module*, not just a leaf symbol
     (e.g. "handled in src.repositories.orders") - confirmed as a real false
-    positive from a live run against django/django (archetype 29's SCE
+    positive from a live run against django/django (archetype 29's Prism
     variant referenced `django.contrib.auth.backends` on its own)."""
     known_qualified = frozenset({"src.repositories.orders.OrderRepository.mark_paid"})
     known_modules = frozenset({"src", "src.repositories", "src.repositories.orders"})
@@ -375,15 +375,15 @@ def test_render_index_metrics_includes_tag_distribution():
 # --------------------------------------------------------------------- #
 # large_repo_prompt_matrix.py: context building
 # --------------------------------------------------------------------- #
-def test_build_contexts_returns_nonempty_raw_and_sce_text(builder_and_tags):
+def test_build_contexts_returns_nonempty_raw_and_prism_text(builder_and_tags):
     builder, tag_matrix = builder_and_tags
     archetype = PromptArchetype(
         archetype_id=1, slug="x", title="X", cluster="C",
         target="src.controllers.checkout.CheckoutController.process_checkout", task_prompt="Do it.",
     )
-    raw_text, sce_text = build_contexts(builder, tag_matrix, archetype, budget=1000)
+    raw_text, prism_text = build_contexts(builder, tag_matrix, archetype, budget=1000)
     assert "process_checkout" in raw_text
-    assert "process_checkout" in sce_text
+    assert "process_checkout" in prism_text
 
 
 def test_read_original_signature(builder_and_tags):
@@ -403,7 +403,7 @@ def test_run_variant_passes_for_clean_code_response(builder_and_tags, repo_index
         expects_code=True,
     )
     client = _fake_client("```python\ndef charge(self, amount):\n    return self._gateway.charge(amount)\n```")
-    result = run_variant(builder, tag_matrix, repo_index, archetype, "sce", "CTX", "gpt-4o-mini", client, 0.0)
+    result = run_variant(builder, tag_matrix, repo_index, archetype, "prism", "CTX", "gpt-4o-mini", client, 0.0)
     assert result.syntax_valid is True
     assert result.hallucinated_calls == ()
     assert result.passed is True
@@ -428,7 +428,7 @@ def test_run_variant_skips_code_checks_when_expects_code_false(builder_and_tags,
         target="src.services.billing.PaymentProcessor.charge", task_prompt="Explain it.", expects_code=False,
     )
     client = _fake_client("This method charges the customer via the gateway.")
-    result = run_variant(builder, tag_matrix, repo_index, archetype, "sce", "CTX", "gpt-4o-mini", client, 0.0)
+    result = run_variant(builder, tag_matrix, repo_index, archetype, "prism", "CTX", "gpt-4o-mini", client, 0.0)
     assert result.syntax_valid is None
     assert "syntax_valid" not in result.contract_checks
     assert result.passed is True
@@ -480,7 +480,7 @@ def test_run_variant_multi_turn_scores_final_turn(builder_and_tags, repo_index):
             "```python\ndef charge(self, amount):\n    if amount <= 0:\n        raise ValueError('bad amount')\n    return self._gateway.charge(amount)\n```",
         ]
     )
-    result = run_variant(builder, tag_matrix, repo_index, archetype, "sce", "CTX", "gpt-4o-mini", client, 0.0)
+    result = run_variant(builder, tag_matrix, repo_index, archetype, "prism", "CTX", "gpt-4o-mini", client, 0.0)
     assert len(result.turns) == 2
     assert "bad amount" in result.extracted_code
     assert result.passed is True
@@ -500,7 +500,7 @@ def test_run_variant_self_consistency_reaches_consensus(builder_and_tags, repo_i
             "Not entirely sure, maybe somewhere else.",
         ]
     )
-    result = run_variant(builder, tag_matrix, repo_index, archetype, "sce", "CTX", "gpt-4o-mini", client, 0.0)
+    result = run_variant(builder, tag_matrix, repo_index, archetype, "prism", "CTX", "gpt-4o-mini", client, 0.0)
     assert len(result.turns) == 3
     assert result.consensus_reached is True
     assert result.consensus_symbol == "src.services.billing.PaymentProcessor.charge"
@@ -514,11 +514,11 @@ def test_run_archetype_computes_compression_and_both_variants(builder_and_tags, 
         target="src.services.billing.PaymentProcessor.charge", task_prompt="Explain it.", expects_code=False,
     )
     client = _fake_client("This charges the customer.")
-    result: ArchetypeRunResult = run_archetype(builder, tag_matrix, repo_index, archetype, ["raw", "sce"], 1000, "gpt-4o-mini", client, 0.0)
+    result: ArchetypeRunResult = run_archetype(builder, tag_matrix, repo_index, archetype, ["raw", "prism"], 1000, "gpt-4o-mini", client, 0.0)
     assert result.raw is not None
-    assert result.sce is not None
+    assert result.prism is not None
     assert result.raw_tokens > 0
-    assert result.sce_tokens > 0
+    assert result.prism_tokens > 0
 
 
 # --------------------------------------------------------------------- #
@@ -601,8 +601,8 @@ def test_repos_registry_has_django():
 # Opt-in: real django/django clone + index (reuses the cache if present)
 # --------------------------------------------------------------------- #
 @pytest.mark.skipif(
-    os.environ.get("SCE_LIVE_NETWORK_TESTS") != "1",
-    reason="set SCE_LIVE_NETWORK_TESTS=1 to index the real django/django clone (large, network-dependent)",
+    os.environ.get("PRISM_LIVE_NETWORK_TESTS") != "1",
+    reason="set PRISM_LIVE_NETWORK_TESTS=1 to index the real django/django clone (large, network-dependent)",
 )
 def test_all_33_archetype_targets_resolve_against_real_django():
     from benchmarks.large_repo_prompt_matrix import DEFAULT_CACHE_DIR, index_repo
@@ -615,8 +615,8 @@ def test_all_33_archetype_targets_resolve_against_real_django():
 
 
 @pytest.mark.skipif(
-    os.environ.get("SCE_LIVE_NETWORK_TESTS") != "1",
-    reason="set SCE_LIVE_NETWORK_TESTS=1 to index the real django/django clone (large, network-dependent)",
+    os.environ.get("PRISM_LIVE_NETWORK_TESTS") != "1",
+    reason="set PRISM_LIVE_NETWORK_TESTS=1 to index the real django/django clone (large, network-dependent)",
 )
 def test_dry_run_cli_against_real_django(capsys):
     exit_code = main(["--repo", "django", "--prompts", "1,17,29", "--dry-run"])

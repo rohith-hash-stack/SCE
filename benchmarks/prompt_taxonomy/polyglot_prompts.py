@@ -263,7 +263,7 @@ PROMPT_TEMPLATES: tuple[PolyglotPromptTemplate, ...] = (
     ),
     PolyglotPromptTemplate(
         22, "meta-prompt", "Meta-Prompt", "Prompting technique: meta",
-        "Critique the following retrieval prompt for querying `{target}` using SCE's own "
+        "Critique the following retrieval prompt for querying `{target}` using Prism's own "
         "architectural tag grammar (e.g. #db_write, #auth_guard, #external_io, #state_mutation), "
         "then rewrite it to be more precise: \"Tell me about {target}.\"",
         expects_code=False,

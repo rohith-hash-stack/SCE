@@ -1,7 +1,7 @@
 """Tree-sitter grammar loading and per-language parser construction.
 
 Supported extensions map to tree-sitter grammar binaries. Loading is lazy
-and memoized so repeated `sce query` invocations only pay the grammar
+and memoized so repeated `prism query` invocations only pay the grammar
 construction cost once per process.
 """
 from __future__ import annotations

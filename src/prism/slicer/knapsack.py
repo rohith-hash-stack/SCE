@@ -5,7 +5,7 @@ ordered by `D_hybrid` - into a token budget, downgrading resolution (L1 ->
 L2 -> L3) for any candidate that doesn't fit until the budget is exhausted.
 
 A candidate reached via a `confidence="CONFIRMED_RUNTIME"` edge (see
-`sce.runtime.reconciler` - a real execution actually traversed it, not
+`prism.runtime.reconciler` - a real execution actually traversed it, not
 just static inference) is preferentially packed over an equal-or-lesser-
 priority unexercised static candidate: `D_hybrid` itself already discounts
 a confirmed edge's hop cost (`DistanceEngine.compute_all`), and `pack`
@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 
 import networkx as nx
 
-from sce.graph.concrete_builder import ConcreteGraphBuilder
-from sce.slicer.compressor import ASTCompressor, CompressionContext
-from sce.slicer.distance import DistanceEngine, architectural_path
+from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.slicer.compressor import ASTCompressor, CompressionContext
+from prism.slicer.distance import DistanceEngine, architectural_path
 
 # Illustrative resolution weights used only to report a deterministic
 # "preserved semantics" figure: how much of the theoretically-available
@@ -59,7 +59,7 @@ def _wrapping_overhead_tokens(symbol: str, relative_path: str) -> float:
     is exactly what happens against a real, densely-connected repository.
 
     This lives in the slicer layer and stays deliberately approximate
-    rather than byte-exact, since `sce.serializers.markdown` imports
+    rather than byte-exact, since `prism.serializers.markdown` imports
     `PackResult` from this module - importing it back here to render the
     real wrapping would be circular. "99999-99999" is used as a stand-in
     line range (a 5-digit line number comfortably covers any real file),
@@ -97,11 +97,11 @@ class PackResult:
     architectural_path: list[tuple[int, str | None, str]] = field(default_factory=list)
     preserved_semantics: float = 0.0
     # Adaptive Compact Scaffolding: True when the seed's own call-chain
-    # neighborhood is small enough that SCE's normal scaffolding (the
+    # neighborhood is small enough that Prism's normal scaffolding (the
     # Architectural Path diagram, per-item line-range/path headers,
     # multi-line contract blocks) would cost more tokens than it's worth -
     # see `ContextKnapsackPacker._detect_compact_mode`. The serializer
-    # (`sce.serializers.markdown`) reads this to render a denser document.
+    # (`prism.serializers.markdown`) reads this to render a denser document.
     compact: bool = False
 
 
@@ -119,7 +119,7 @@ class ContextKnapsackPacker:
     # Adaptive Compact Scaffolding thresholds: below either one, the normal
     # verbose scaffold (architectural-path diagram, per-item line-range/path
     # headers, multi-line L2 contracts) costs more tokens than it delivers
-    # in value, and can even make SCE's own package *larger* than a naive
+    # in value, and can even make Prism's own package *larger* than a naive
     # whole-file dump of the same small neighborhood - the opposite of the
     # point. `COMPACT_MODE_RAW_FOOTPRINT_TOKENS` mirrors the threshold a
     # human would eyeball ("this is a small, few-file corner of the repo");
@@ -268,7 +268,7 @@ class ContextKnapsackPacker:
         """The seed plus every node on its own directed call-chain
         closure - exactly what `benchmarks.raw_context.build_raw_context`
         would dump for this seed. Computed independently here (the core
-        engine never depends on `benchmarks`, which depends on `sce`, not
+        engine never depends on `benchmarks`, which depends on `prism`, not
         the other way around); used both to decide Adaptive Compact
         Scaffolding and, when compact, to scope candidate selection to the
         same footprint a raw dump would have covered.
@@ -281,7 +281,7 @@ class ContextKnapsackPacker:
 
     def _is_compact_mode(self, builder: ConcreteGraphBuilder, reachable: set[str]) -> bool:
         """Adaptive Compact Scaffolding's trigger: is the seed's own
-        call-chain neighborhood small enough that SCE's normal, verbose
+        call-chain neighborhood small enough that Prism's normal, verbose
         scaffolding - and packing candidates beyond that neighborhood at
         all - isn't worth its token cost?
         """

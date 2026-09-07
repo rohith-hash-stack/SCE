@@ -23,7 +23,7 @@ from benchmarks.validate_llm_accuracy import (
     select_variants,
 )
 
-from sce.cli import build_pipeline
+from prism.cli import build_pipeline
 
 
 @pytest.fixture(scope="module")
@@ -178,7 +178,7 @@ def test_run_task_variant_passes_for_correct_canned_response(builder_and_tags):
     builder, tag_matrix = builder_and_tags
     task = TASKS_BY_ID["missing_invariant"]
     client = _fake_client(f"Here is the fix:\n```python\n{CORRECT_CHECKOUT_ORDER}```")
-    result = run_task_variant(builder, task, "sce", "irrelevant context text", "gpt-4o-mini", client, 0.0)
+    result = run_task_variant(builder, task, "prism", "irrelevant context text", "gpt-4o-mini", client, 0.0)
     assert result.syntax_valid is True
     assert result.pytest_passed is True
     assert result.hallucinated_calls == ()
@@ -199,7 +199,7 @@ def test_run_task_variant_reports_syntax_error_without_running_pytest(builder_an
     builder, tag_matrix = builder_and_tags
     task = TASKS_BY_ID["missing_invariant"]
     client = _fake_client("```python\ndef checkout_order(self, token\n    pass\n```")
-    result = run_task_variant(builder, task, "sce", "irrelevant context text", "gpt-4o-mini", client, 0.0)
+    result = run_task_variant(builder, task, "prism", "irrelevant context text", "gpt-4o-mini", client, 0.0)
     assert result.syntax_valid is False
     assert result.syntax_error is not None
     assert result.pytest_passed is False
@@ -210,7 +210,7 @@ def test_run_task_variant_handles_missing_code_block(builder_and_tags):
     builder, tag_matrix = builder_and_tags
     task = TASKS_BY_ID["missing_invariant"]
     client = _fake_client("I refuse to write code.")
-    result = run_task_variant(builder, task, "sce", "irrelevant context text", "gpt-4o-mini", client, 0.0)
+    result = run_task_variant(builder, task, "prism", "irrelevant context text", "gpt-4o-mini", client, 0.0)
     assert result.extracted_code is None
     assert result.syntax_valid is False
     assert result.passed is False
@@ -239,7 +239,7 @@ def test_select_variants_rejects_unknown_variant():
 
 
 def test_select_variants_accepts_single_variant():
-    assert select_variants("sce") == ["sce"]
+    assert select_variants("prism") == ["prism"]
 
 
 # --------------------------------------------------------------------- #
@@ -250,7 +250,7 @@ def test_dry_run_preview_reports_both_variants_for_every_task():
     for task_id in TASKS_BY_ID:
         assert task_id in output
     assert "[raw]" in output
-    assert "[sce]" in output
+    assert "[prism]" in output
 
 
 def test_main_dry_run_exits_zero(capsys):

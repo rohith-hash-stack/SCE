@@ -27,7 +27,7 @@ from benchmarks.prompt_taxonomy.spec import PromptArchetype
 # illustrations of "a stated contract -> a conforming implementation" -
 # deliberately not lifted from django's own source, so the demonstration
 # teaches the *pattern* (validate/derive an input before using it) without
-# asserting anything about django internals that the SCE/raw context itself
+# asserting anything about django internals that the Prism/raw context itself
 # is responsible for supplying accurately.
 # --------------------------------------------------------------------- #
 _ONE_SHOT_EXAMPLE = """Contract: a mixin method that must call the object's existing accessor \
@@ -408,7 +408,7 @@ ARCHETYPES: tuple[PromptArchetype, ...] = (
         task_prompt=(
             'Analyze the following prompt intended for querying Django\'s authentication pipeline: '
             '"Tell me about authenticate." Critique its vagueness, then rewrite it as a precise, '
-            "unambiguous prompt that makes good use of SCE's tag grammar (e.g. referencing specific "
+            "unambiguous prompt that makes good use of Prism's tag grammar (e.g. referencing specific "
             "tags like #auth_guard or #db_write, and the exact symbol shown in the context above) "
             "to get a useful, scoped answer."
         ),

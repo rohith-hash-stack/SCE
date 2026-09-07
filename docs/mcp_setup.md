@@ -1,29 +1,29 @@
-# SCE as a Model Context Protocol server
+# Prism as a Model Context Protocol server
 
-`sce mcp` runs the Semantic Context Engine as an [MCP](https://modelcontextprotocol.io)
+`prism mcp` runs Prism as an [MCP](https://modelcontextprotocol.io)
 server, so any MCP-aware coding agent (Claude Desktop, Cursor, Claude Code, ...) can query a
 repository's variable-resolution context, architectural invariants, and tagged symbols
-directly - the same engine `sce index`/`sce query` expose on the command line, wrapped as
+directly - the same engine `prism index`/`prism query` expose on the command line, wrapped as
 tools an agent calls itself instead of a human running commands.
 
 ## Zero-install setup via `uvx` (recommended for VS Code)
 
-`mcp[cli]` is a core dependency of `semantic-context-engine` (not an extra), so a single
-`uvx --from git+https://github.com/<OWNER>/<REPO>.git sce ...` invocation resolves, builds, and
-runs the CLI with everything `sce mcp` needs, with no separate install step and no extras flag -
+`mcp[cli]` is a core dependency of `prism-context` (not an extra), so a single
+`uvx --from git+https://github.com/<OWNER>/<REPO>.git prism ...` invocation resolves, builds, and
+runs the CLI with everything `prism mcp` needs, with no separate install step and no extras flag -
 the same "run a tool straight from its source, no `pip install` first" experience `npx` gives
 Node packages. [Install `uv`](https://docs.astral.sh/uv/getting-started/installation/) once
 (`curl -LsSf https://astral.sh/uv/install.sh | sh` on Linux/macOS, or see the docs for Windows);
-after that, no per-machine SCE install is needed at all - the client config below is
+after that, no per-machine Prism install is needed at all - the client config below is
 self-contained. Substitute your repository's real `<OWNER>/<REPO>` (this project itself is
 `rohith-hash-stack/SCE`, so `git+https://github.com/rohith-hash-stack/SCE.git` for a fork or a
 clone of this exact repo).
 
 `scripts/verify_uvx_execution.py` exercises this exact path locally (`uvx --from .` instead of a
 `git+...` URL - the same build-from-source-tree machinery either way) before you ship a config
-that depends on it: CLI help, `sce mcp --help`, and a real MCP stdio `initialize` ->
+that depends on it: CLI help, `prism mcp --help`, and a real MCP stdio `initialize` ->
 `tools/list` handshake confirming all 5 tools register. Run it after any packaging-relevant
-change (`pyproject.toml`, `[project.scripts]`, a new `sce.*` submodule) - `python
+change (`pyproject.toml`, `[project.scripts]`, a new `prism.*` submodule) - `python
 scripts/verify_uvx_execution.py`.
 
 ### A. Roo Code / Cline global user configuration (`mcp_settings.json`)
@@ -34,13 +34,13 @@ MCP Config File", or Cline's equivalent settings entry):
 ```json
 {
   "mcpServers": {
-    "semantic-context-engine": {
+    "prism": {
       "command": "uvx",
       "args": [
         "--refresh",
         "--from",
         "git+https://github.com/<OWNER>/<REPO>.git",
-        "sce",
+        "prism",
         "mcp",
         "--transport",
         "stdio",
@@ -66,13 +66,13 @@ a user's global settings:
 ```json
 {
   "servers": {
-    "semantic-context-engine": {
+    "prism": {
       "command": "uvx",
       "args": [
         "--refresh",
         "--from",
         "git+https://github.com/<OWNER>/<REPO>.git",
-        "sce",
+        "prism",
         "mcp",
         "--transport",
         "stdio",
@@ -86,7 +86,7 @@ a user's global settings:
 
 Note the top-level key is `servers`, not `mcpServers` - VS Code's native format differs from
 Roo Code/Cline's even though the per-server shape is identical. Commit this file so every
-contributor gets SCE wired up automatically the first time they open the project, with nothing
+contributor gets Prism wired up automatically the first time they open the project, with nothing
 to install by hand.
 
 ## Install (local development / non-`uvx` clients)
@@ -98,17 +98,17 @@ since it's a core dependency, not an extra:
 ```bash
 pip install -e ".[dev]"    # this checkout, editable
 # or, once published:
-pip install semantic-context-engine
+pip install prism-context
 ```
 
 ## Run it directly
 
 ```bash
 # Standard stdio mode (what Claude Desktop / Cursor / Claude Code expect):
-sce mcp --transport stdio --repo /absolute/path/to/project
+prism mcp --transport stdio --repo /absolute/path/to/project
 
 # Streamable HTTP, for a client that connects over the network instead:
-sce mcp --transport streamable-http --repo /absolute/path/to/project
+prism mcp --transport streamable-http --repo /absolute/path/to/project
 ```
 
 `--repo` sets the default repository for any tool call that omits its own `repo_path` - every
@@ -119,7 +119,7 @@ directory.
 ## Client configuration
 
 For VS Code (Roo Code/Cline or native MCP support), prefer the `uvx`-based zero-install configs
-in the section above - no local `sce` install to keep up to date. The configs below are for a
+in the section above - no local `prism` install to keep up to date. The configs below are for a
 client pointed at a local `pip`/`pip -e` install instead.
 
 Most MCP clients (Claude Desktop, Cursor, Claude Code) read a JSON config naming the command
@@ -129,8 +129,8 @@ want indexed:
 ```json
 {
   "mcpServers": {
-    "semantic-context-engine": {
-      "command": "sce",
+    "prism": {
+      "command": "prism",
       "args": ["mcp", "--transport", "stdio", "--repo", "/absolute/path/to/project"]
     }
   }
@@ -140,20 +140,20 @@ want indexed:
 - **Claude Desktop**: `claude_desktop_config.json` (`~/Library/Application Support/Claude/`
   on macOS, `%APPDATA%\Claude\` on Windows) - open Settings → Developer → Edit Config, or edit
   the file directly.
-- **Claude Code**: `claude mcp add semantic-context-engine -- sce mcp --transport stdio --repo /absolute/path/to/project`,
+- **Claude Code**: `claude mcp add prism -- prism mcp --transport stdio --repo /absolute/path/to/project`,
   or add the same JSON block under `mcpServers` in `.claude.json` / the project's
   `.mcp.json`.
 - **Cursor**: Settings → MCP → Add new MCP server, or add the same JSON block to
   `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per-project).
 
-If `sce` isn't on the launching process's `PATH` (e.g. it lives inside a virtualenv the
+If `prism` isn't on the launching process's `PATH` (e.g. it lives inside a virtualenv the
 client doesn't activate), use the interpreter's absolute path instead:
 
 ```json
 {
   "mcpServers": {
-    "semantic-context-engine": {
-      "command": "/absolute/path/to/venv/bin/sce",
+    "prism": {
+      "command": "/absolute/path/to/venv/bin/prism",
       "args": ["mcp", "--transport", "stdio", "--repo", "/absolute/path/to/project"]
     }
   }
@@ -165,12 +165,12 @@ client doesn't activate), use the interpreter's absolute path instead:
 Every tool lazily indexes and caches its target repository (keyed by canonical path) on
 first use - the first call against a given repository pays the indexing cost, every
 subsequent call in the same server process reuses it. Call `reindex_repo` after editing
-source files or after a new `sce trace` run changes the picture underfoot; nothing here
+source files or after a new `prism trace` run changes the picture underfoot; nothing here
 watches the filesystem automatically.
 
 ### `get_symbol_context`
 
-The variable-resolution Markdown context package `sce query` renders: full source (L0) for
+The variable-resolution Markdown context package `prism query` renders: full source (L0) for
 the target symbol, progressively lighter control-flow skeletons (L1), interface contracts
 (L2), or signature stubs (L3) for its call-graph and tag-similarity neighbors, plus an
 architectural-path diagram - all within a token budget.
@@ -181,7 +181,7 @@ architectural-path diagram - all within a token budget.
 | `repo_path` | string | no | server's cwd / `--repo` | Absolute path to the repository root. |
 | `token_budget` | int | no | `2000` | Approximate token budget for the packed context. |
 
-A call graph edge marked `CONFIRMED_RUNTIME` (see `sce trace`) is preferentially packed over
+A call graph edge marked `CONFIRMED_RUNTIME` (see `prism trace`) is preferentially packed over
 an equally-distant, unexercised static one - no separate flag needed; `D_hybrid` (the
 distance metric the packer ranks candidates by) already discounts a runtime-confirmed edge's
 hop cost.
@@ -223,7 +223,7 @@ revealed them (`RUNTIME_DISCOVERED`), and a per-tag symbol count.
 ### `reindex_repo`
 
 Drops the cached graph for a repository (if any) and rebuilds it from source, re-merging
-`.sce/runtime_state.json` if present.
+`.prism/runtime_state.json` if present.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|

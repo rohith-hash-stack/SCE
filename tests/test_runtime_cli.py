@@ -1,4 +1,4 @@
-"""Hermetic tests for the `sce trace`/`sce status` CLI commands. The
+"""Hermetic tests for the `prism trace`/`prism status` CLI commands. The
 `trace -- pytest ...` path spawns a real (local-only) pytest subprocess;
 `--ingest-otel` and `status` are pure in-process.
 """
@@ -8,8 +8,8 @@ import json
 
 from click.testing import CliRunner
 
-from sce.cli import main
-from sce.runtime.reconciler import runtime_state_path
+from prism.cli import main
+from prism.runtime.reconciler import runtime_state_path
 
 
 def _order_repo(tmp_path):

@@ -1,6 +1,6 @@
 """Multi-repository, multi-query validation harness.
 
-Validates SCE against three real, architecturally distinct Python
+Validates Prism against three real, architecturally distinct Python
 codebases - not just hand-built fixtures - across three realistic
 developer query types, before any client wrapper (e.g. an MCP server) gets
 built on top of it:
@@ -12,13 +12,13 @@ built on top of it:
 Per repository, per query scenario (Root-Cause Analysis, Architectural
 Invariant Audit, Feature Extension), per token budget, this asserts:
 
-  1. every Python code block SCE renders parses cleanly (`ast.parse`);
+  1. every Python code block Prism renders parses cleanly (`ast.parse`);
   2. reports graph connectivity/density (symbols, edges, isolated-node
      ratio, approximate traversal depth) - descriptive, not a pass/fail
-     gate, since that's a property of the target repo, not of SCE;
+     gate, since that's a property of the target repo, not of Prism;
   3. >=50% token compression vs. the whole-file-dump baseline, with 100%
      of direct callees still reachable in the packed context;
-  4. every symbol SCE's own output references resolves to a real node in
+  4. every symbol Prism's own output references resolves to a real node in
      the repository's `GlobalSymbolTable` (or concrete graph, for a
      legitimately external/unresolved call) - a static regression guard
      against the renderer ever fabricating a name, since nothing in this
@@ -43,23 +43,23 @@ import networkx as nx
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
+def _ensure_prism_importable() -> None:
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
-from sce.cli import build_pipeline  # noqa: E402
-from sce.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
-from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
-from sce.serializers.markdown import render_markdown  # noqa: E402
-from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
-from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
+from prism.cli import build_pipeline  # noqa: E402
+from prism.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
+from prism.graph.metamodel import SemanticMetamodel  # noqa: E402
+from prism.serializers.markdown import render_markdown  # noqa: E402
+from prism.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
+from prism.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.clone_eval import CloneError, clone_repo  # noqa: E402
 from benchmarks.reporting import format_table, shorten  # noqa: E402
@@ -100,7 +100,7 @@ class QueryScenario:
     # diagnostic reporting - NOT a pass/fail gate. Whether a specific
     # heuristic tag fires is a property of the target codebase's naming
     # conventions (see benchmarks/README.md for a concrete example of this
-    # not firing on httpx), not a correctness property of SCE itself.
+    # not firing on httpx), not a correctness property of Prism itself.
     expected_tag: str | None = None
 
 
@@ -273,7 +273,7 @@ class HallucinationCheckResult:
 
 
 def check_no_hallucinated_symbols(markdown_text: str, builder: ConcreteGraphBuilder) -> HallucinationCheckResult:
-    """Every dotted symbol SCE's own Markdown references - in a heading, a
+    """Every dotted symbol Prism's own Markdown references - in a heading, a
     "Calls:" contract line, or an architectural-path arrow - must resolve
     to a real node: either a fully indexed symbol in `GlobalSymbolTable`,
     or a real (if externally-unresolved) node the linker actually recorded
@@ -445,7 +445,7 @@ def run_repo(
 # Reporting
 # --------------------------------------------------------------------- #
 def render_summary_table(results: list[RepoRunResult]) -> str:
-    headers = ["Repo", "Scenario", "Type", "Budget", "Raw Tok", "SCE Tok", "Compression %", "Direct Callees", "Hallucinations", "Result"]
+    headers = ["Repo", "Scenario", "Type", "Budget", "Raw Tok", "Prism Tok", "Compression %", "Direct Callees", "Hallucinations", "Result"]
     rows = []
     for repo_result in results:
         for s in repo_result.scenarios:
@@ -457,7 +457,7 @@ def render_summary_table(results: list[RepoRunResult]) -> str:
                     s.query_type,
                     str(s.budget),
                     str(s.benchmark.raw_tokens),
-                    str(s.benchmark.sce_tokens),
+                    str(s.benchmark.prism_tokens),
                     f"{s.benchmark.compression_pct:.1f}%",
                     f"{dc.reached_nodes}/{dc.subgraph_node_count}",
                     str(len(s.hallucination.unknown_symbols)),
@@ -510,7 +510,7 @@ def write_report(results: list[RepoRunResult], path: str) -> None:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m benchmarks.multi_repo_eval",
-        description="Validate SCE against multiple real, architecturally distinct repositories and query scenarios.",
+        description="Validate Prism against multiple real, architecturally distinct repositories and query scenarios.",
     )
     parser.add_argument("--suite", choices=["all"], default=None, help="Run every repository in the built-in suite.")
     parser.add_argument("--repo", choices=sorted(REPOS), default=None, help="Run a single repository by key.")

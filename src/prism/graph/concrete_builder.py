@@ -26,7 +26,7 @@ import os
 import networkx as nx
 from tree_sitter import Node
 
-from sce.parser.lang_config import (
+from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
     CALL_NODE_TYPE,
     CLASS_NODE_TYPES,
@@ -37,9 +37,9 @@ from sce.parser.lang_config import (
     flatten_reference_chain,
     iter_scoped_nodes,
 )
-from sce.parser.queries import run_query
-from sce.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file
-from sce.graph.symbol_table import (
+from prism.parser.queries import run_query
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file
+from prism.graph.symbol_table import (
     GlobalSymbolTable,
     InstanceTypeMap,
     LocalImportMap,

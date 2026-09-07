@@ -1,7 +1,7 @@
 """Tests for the clone-and-index harness. The default suite is fully
 hermetic - it clones from a local throwaway git repo, never the network -
 so it stays fast and deterministic in CI. A real-GitHub smoke test is
-included but skipped unless `SCE_LIVE_NETWORK_TESTS=1` is set, since it
+included but skipped unless `PRISM_LIVE_NETWORK_TESTS=1` is set, since it
 depends on outbound network access this sandbox may not always have.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from benchmarks.clone_eval import (
     clone_repo,
     derive_repo_name,
 )
-from sce.cli import build_pipeline
+from prism.cli import build_pipeline
 
 PYTHON_FIXTURE = "tests/fixtures/python_repo"
 STRESS_FIXTURE = "benchmarks/fixtures/stress_repo"
@@ -195,8 +195,8 @@ def test_clone_eval_cli_unknown_target_exits_nonzero(tmp_path, python_fixture_as
 # Real-network smoke test (opt-in only)
 # --------------------------------------------------------------------- #
 @pytest.mark.skipif(
-    os.environ.get("SCE_LIVE_NETWORK_TESTS") != "1",
-    reason="set SCE_LIVE_NETWORK_TESTS=1 to clone a real GitHub repo over the network",
+    os.environ.get("PRISM_LIVE_NETWORK_TESTS") != "1",
+    reason="set PRISM_LIVE_NETWORK_TESTS=1 to clone a real GitHub repo over the network",
 )
 def test_clone_real_github_repo_and_index_without_crashing(tmp_path):
     cache_dir = tmp_path / "cache"

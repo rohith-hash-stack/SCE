@@ -1,5 +1,5 @@
 """Graph reconciler & edge synthesizer: merges recorded runtime evidence
-(a `.sce/traces/run_*.jsonl` file written by `tracer.py`, or an ingested
+(a `.prism/traces/run_*.jsonl` file written by `tracer.py`, or an ingested
 OpenTelemetry export) into the static Concrete Graph (`G_C`) and tag
 matrix (`M`) an already-built `ConcreteGraphBuilder` holds.
 
@@ -23,7 +23,7 @@ found:
 
 Every outcome that *can't* be attached to a real static symbol (an
 unresolvable caller, a callee the indexer never saw) is kept, not
-dropped - as an `unresolved_events` entry - so `sce status` can report
+dropped - as an `unresolved_events` entry - so `prism status` can report
 "N runtime events observed with no static counterpart" honestly rather
 than silently discarding evidence that doesn't fit the graph.
 """
@@ -34,23 +34,23 @@ import json
 import time
 from pathlib import Path
 
-from sce.graph.concrete_builder import ConcreteGraphBuilder
-from sce.runtime.tracer import TraceRecord
+from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.runtime.tracer import TraceRecord
 
 # --------------------------------------------------------------------- #
 # Trace file I/O
 # --------------------------------------------------------------------- #
 def traces_dir(repo_root: str) -> Path:
-    return Path(repo_root) / ".sce" / "traces"
+    return Path(repo_root) / ".prism" / "traces"
 
 
 def new_trace_path(repo_root: str) -> Path:
-    """A fresh, timestamped path under `.sce/traces/` - nanosecond
-    resolution (not just second-resolution) specifically so two `sce
+    """A fresh, timestamped path under `.prism/traces/` - nanosecond
+    resolution (not just second-resolution) specifically so two `prism
     trace` invocations issued in quick succession (a scripted loop, back-
     to-back CLI calls in a test) still land in genuinely distinct files;
     at whole-second resolution alone this collided in practice (confirmed
-    by two CliRunner-driven `sce trace` calls in the same test producing
+    by two CliRunner-driven `prism trace` calls in the same test producing
     only one trace file, since `Tracer.start` opens its output in append
     mode and silently merged the second run's events into the first's
     file instead of starting a new one).
@@ -61,7 +61,7 @@ def new_trace_path(repo_root: str) -> Path:
 
 
 def load_trace_file(path: str | Path) -> list[TraceRecord]:
-    """Read a `.sce/traces/run_*.jsonl` file back into `TraceRecord`s -
+    """Read a `.prism/traces/run_*.jsonl` file back into `TraceRecord`s -
     the inverse of `TraceRecord.to_json_line`, and also what
     `ingest_otel_file` below normalizes an OTel export down to, so
     `GraphReconciler.reconcile` never needs to know which source produced
@@ -132,7 +132,7 @@ def _symbol_for_attrs(attrs: dict[str, object]) -> str | None:
     attributes (https://opentelemetry.io/docs/specs/semconv/attributes-registry/code/)
     are the one standard way a span identifies *which source symbol*
     emitted it - when an instrumentation library populates them, they
-    already land in the exact `module.Class.method`-shaped form SCE's own
+    already land in the exact `module.Class.method`-shaped form Prism's own
     static indexer uses (a well-behaved auto-instrumenter derives
     `code.namespace`/`code.function` from the same qualified-name
     machinery this project's own `co_qualname`-based tracer uses). A span
@@ -303,7 +303,7 @@ class GraphReconciler:
             # outside the repo (a test runner, a framework dispatch loop)
             # or the traced frame belonging to a symbol kind Pass 1 never
             # registers (module-level code, a lambda). Kept for
-            # visibility, not silently dropped - `sce status` surfaces
+            # visibility, not silently dropped - `prism status` surfaces
             # this count - but there's no real `G_C` node pair to draw an
             # edge between.
             unresolved.append(event)
@@ -326,13 +326,13 @@ class GraphReconciler:
 
 
 # --------------------------------------------------------------------- #
-# Persisted runtime state - what `sce status` reads back, across separate
+# Persisted runtime state - what `prism status` reads back, across separate
 # CLI invocations, without needing to keep a live process (or the whole
-# networkx graph) around between a `sce trace` run and a later `sce
+# networkx graph) around between a `prism trace` run and a later `prism
 # status` call.
 # --------------------------------------------------------------------- #
 def runtime_state_path(repo_root: str) -> Path:
-    return Path(repo_root) / ".sce" / "runtime_state.json"
+    return Path(repo_root) / ".prism" / "runtime_state.json"
 
 
 def _empty_state() -> dict:
@@ -369,7 +369,7 @@ def save_runtime_state(repo_root: str, state: dict) -> None:
 def merge_result_into_state(state: dict, result: ReconciliationResult, trace_file_name: str) -> dict:
     """A pure function (returns a new dict) that folds one reconciliation
     run's results into a persisted state dict - accumulating across
-    however many `sce trace` runs a caller has done, so the graph's
+    however many `prism trace` runs a caller has done, so the graph's
     runtime-confirmed picture only ever grows richer over time, the same
     way real test coverage accumulates across separate runs.
     """
@@ -420,7 +420,7 @@ def merge_result_into_state(state: dict, result: ReconciliationResult, trace_fil
 
 def apply_runtime_state(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], state: dict) -> None:
     """Rehydrate a freshly-built (purely static) `ConcreteGraphBuilder`/
-    `tag_matrix` with a *persisted* `.sce/runtime_state.json` - the
+    `tag_matrix` with a *persisted* `.prism/runtime_state.json` - the
     counterpart to `GraphReconciler.reconcile()` for a caller (the MCP
     server's `GraphCache`, primarily) that has the summarized state but
     not the original trace events. Mutates both in place, the same way

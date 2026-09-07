@@ -3,7 +3,7 @@ package handed to an LLM coding agent.
 """
 from __future__ import annotations
 
-from sce.slicer.knapsack import PackResult
+from prism.slicer.knapsack import PackResult
 
 # Short form ("L0", not "Full Implementation - L0"): every heading now also
 # carries the symbol's original line range and relative file path (see

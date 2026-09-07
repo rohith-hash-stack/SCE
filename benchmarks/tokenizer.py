@@ -2,7 +2,7 @@
 
 Prefers `tiktoken`'s `cl100k_base` encoding (the GPT-4/GPT-3.5 byte-pair
 encoding) since that is the standard reference tokenizer for LLM context
-budgeting. SCE itself is a 100%-offline, no-network tool, and `tiktoken`
+budgeting. Prism itself is a 100%-offline, no-network tool, and `tiktoken`
 lazily downloads its merge-rank table from a remote blob on first use - so
 in a genuinely air-gapped environment (or one without that specific host
 allowlisted) loading the encoding will fail. Rather than let that crash the

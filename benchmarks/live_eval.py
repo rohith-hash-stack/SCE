@@ -1,5 +1,5 @@
-"""Live OpenAI evaluation: runs SCE's two code-task benchmarks against a
-real model, once per context variant (`raw` whole-file dump, `sce` sliced
+"""Live OpenAI evaluation: runs Prism's two code-task benchmarks against a
+real model, once per context variant (`raw` whole-file dump, `prism` sliced
 context), and scores each response with a deterministic AST verifier -
 never another LLM - so results are reproducible and free to re-check.
 
@@ -18,16 +18,16 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _ensure_sce_importable() -> None:
+def _ensure_prism_importable() -> None:
     try:
-        import sce  # noqa: F401
+        import prism  # noqa: F401
     except ImportError:
         src_path = str(PROJECT_ROOT / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
 
-_ensure_sce_importable()
+_ensure_prism_importable()
 
 from benchmarks.openai_client import LLMClient, OpenAIClientError  # noqa: E402
 from benchmarks.reporting import format_table  # noqa: E402
@@ -37,7 +37,7 @@ from benchmarks.tokenizer import active_backend, count_tokens  # noqa: E402
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_BUDGET = 2000
 DEFAULT_REPORT_PATH = PROJECT_ROOT / "benchmarks" / "live_report.json"
-VARIANTS: tuple[str, ...] = ("raw", "sce")
+VARIANTS: tuple[str, ...] = ("raw", "prism")
 
 
 @dataclasses.dataclass
@@ -172,7 +172,7 @@ def write_report(results: list[LiveRunResult], path: str) -> None:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m benchmarks.live_eval",
-        description="Run live OpenAI evaluations of SCE-sliced vs. whole-file-dump context on code tasks.",
+        description="Run live OpenAI evaluations of Prism-sliced vs. whole-file-dump context on code tasks.",
     )
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"OpenAI model to use (default: {DEFAULT_MODEL}).")
     parser.add_argument(
@@ -183,7 +183,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--variants", default=",".join(VARIANTS),
         help=f"Comma-separated context variants to run (available: {', '.join(VARIANTS)}).",
     )
-    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"SCE token budget (default: {DEFAULT_BUDGET}).")
+    parser.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help=f"Prism token budget (default: {DEFAULT_BUDGET}).")
     parser.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature (default: 0.0).")
     parser.add_argument("--report", default=str(DEFAULT_REPORT_PATH), help=f"Write full results as JSON here (default: {DEFAULT_REPORT_PATH}). Pass '' to skip.")
     parser.add_argument("--price-in", type=float, default=None, dest="price_in", help="Override input price (USD per 1M tokens) for cost estimation.")

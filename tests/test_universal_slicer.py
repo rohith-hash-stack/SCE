@@ -1,4 +1,4 @@
-"""Hermetic polyglot test suite for `sce.slicer.universal_slicer` (roadmap
+"""Hermetic polyglot test suite for `prism.slicer.universal_slicer` (roadmap
 Step 2: a language-agnostic slicer operating directly on Tree-sitter CSTs
 via byte-range statement pruning, replacing the need for a per-language
 AST reconstruction).
@@ -26,10 +26,10 @@ import ast
 import pytest
 from tree_sitter import Node
 
-from sce.parser.queries import run_query
-from sce.parser.tree_sitter_loader import LanguageID, get_parser
-from sce.slicer.compressor import ASTCompressor, CompressionContext, compress_python
-from sce.slicer.universal_slicer import UniversalSlicer
+from prism.parser.queries import run_query
+from prism.parser.tree_sitter_loader import LanguageID, get_parser
+from prism.slicer.compressor import ASTCompressor, CompressionContext, compress_python
+from prism.slicer.universal_slicer import UniversalSlicer
 
 slicer = UniversalSlicer()
 
@@ -265,7 +265,7 @@ def test_python_parity_both_skeletons_are_syntactically_valid(source):
 @pytest.mark.parametrize("source", PY_PARITY_SNIPPETS)
 def test_python_parity_compression_ratio_within_5_percentage_points(source):
     """"Token compression ratio", per the project's own established
-    word-count token proxy (`sce.slicer.knapsack.estimate_tokens`, used
+    word-count token proxy (`prism.slicer.knapsack.estimate_tokens`, used
     for every other compression-ratio figure in this codebase) rather than
     raw character length - a blank line left behind where the CST slicer
     deleted a pruned statement's bytes (its own leading indentation isn't
@@ -274,7 +274,7 @@ def test_python_parity_compression_ratio_within_5_percentage_points(source):
     character-based comparison against `ast.unparse`'s fully
     regenerated, whitespace-free output.
     """
-    from sce.slicer.knapsack import estimate_tokens
+    from prism.slicer.knapsack import estimate_tokens
 
     legacy = _legacy_ast_skeleton(source)
     universal = _universal_cst_skeleton(source)

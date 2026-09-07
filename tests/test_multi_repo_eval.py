@@ -2,7 +2,7 @@
 pieces (graph metrics, hallucination checking, CLI argument validation)
 run here against already-local fixtures - no cloning, no network. Actually
 running the full httpx/flask/marshmallow suite is documented in
-benchmarks/README.md and gated behind SCE_LIVE_NETWORK_TESTS=1 below, since
+benchmarks/README.md and gated behind PRISM_LIVE_NETWORK_TESTS=1 below, since
 it needs outbound network access this sandbox may not always have.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from benchmarks.multi_repo_eval import (
     main,
     run_repo,
 )
-from sce.cli import build_pipeline
+from prism.cli import build_pipeline
 
 STRESS_FIXTURE = "benchmarks/fixtures/stress_repo"
 PYTHON_FIXTURE = "tests/fixtures/python_repo"
@@ -75,11 +75,11 @@ def test_compute_graph_metrics_on_attribute_only_graph(tmp_path):
     assert metrics.isolated_node_ratio == 1.0
 
 
-def test_hallucination_check_passes_on_real_sce_output():
-    from sce.graph.metamodel import SemanticMetamodel
-    from sce.serializers.markdown import render_markdown
-    from sce.slicer.distance import DistanceConfig, DistanceEngine
-    from sce.slicer.knapsack import ContextKnapsackPacker
+def test_hallucination_check_passes_on_real_prism_output():
+    from prism.graph.metamodel import SemanticMetamodel
+    from prism.serializers.markdown import render_markdown
+    from prism.slicer.distance import DistanceConfig, DistanceEngine
+    from prism.slicer.knapsack import ContextKnapsackPacker
 
     builder, tag_matrix = build_pipeline(STRESS_FIXTURE)
     target = "app.controllers.orders.OrderController.process_order"
@@ -132,8 +132,8 @@ def test_main_rejects_unknown_repo():
 # Real-network smoke test (opt-in only)
 # --------------------------------------------------------------------- #
 @pytest.mark.skipif(
-    os.environ.get("SCE_LIVE_NETWORK_TESTS") != "1",
-    reason="set SCE_LIVE_NETWORK_TESTS=1 to clone and evaluate real repositories over the network",
+    os.environ.get("PRISM_LIVE_NETWORK_TESTS") != "1",
+    reason="set PRISM_LIVE_NETWORK_TESTS=1 to clone and evaluate real repositories over the network",
 )
 @pytest.mark.parametrize("repo_key", sorted(REPOS))
 def test_run_repo_against_real_clone(repo_key, tmp_path):

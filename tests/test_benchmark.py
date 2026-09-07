@@ -2,7 +2,7 @@
 
 These lock in the two headline guarantees the benchmark exists to measure:
 compression actually beats a naive whole-file dump by a wide margin, and
-every Python code block SCE renders stays syntactically valid at every
+every Python code block Prism renders stays syntactically valid at every
 resolution level.
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ def test_compression_ratio_meets_threshold_without_dropping_direct_callees(budge
 
     assert result.compression_pct >= 50.0, (
         f"expected >=50% compression vs. the whole-file-dump baseline, got {result.compression_pct}% "
-        f"(raw={result.raw_tokens} tokens, sce={result.sce_tokens} tokens)"
+        f"(raw={result.raw_tokens} tokens, prism={result.prism_tokens} tokens)"
     )
 
     # "Without dropping direct callee contracts": every function/method the
@@ -64,18 +64,18 @@ def test_packed_context_respects_budget_under_a_real_tokenizer(budget):
     building - badly enough, once compounded across 100+ small packed
     items on a real densely-connected repo, that a 4000-token budget
     rendered a document measuring over 13,000 tokens against a real
-    tokenizer (3.3x over). Fixed in `sce.slicer.knapsack` by costing each
+    tokenizer (3.3x over). Fixed in `prism.slicer.knapsack` by costing each
     item's wrapping overhead, recalibrating the word-to-token ratio against
     measured samples, and packing only up to a safety-margined fraction of
-    the nominal budget. `result.sce_tokens` here is computed with the same
+    the nominal budget. `result.prism_tokens` here is computed with the same
     tokenizer (tiktoken, or its fallback) used everywhere else in this
     harness - not the packer's own internal estimate - so this is a
     genuine, independent check.
     """
     for repo, target in ((DEFAULT_PYTHON_FIXTURE, STANDARD_TARGET), (STRESS_FIXTURE, STRESS_TARGET)):
         result = run_single_benchmark(repo, target, budget=budget)
-        assert result.sce_tokens <= budget, (
-            f"packed context for {target} measured {result.sce_tokens} tokens against a {budget}-token budget"
+        assert result.prism_tokens <= budget, (
+            f"packed context for {target} measured {result.prism_tokens} tokens against a {budget}-token budget"
         )
 
 
@@ -115,11 +115,11 @@ def test_l0_and_l1_blocks_specifically_are_syntactically_valid():
     leaving an empty suite where a `pass` is required)."""
     result = run_single_benchmark(STRESS_FIXTURE, STRESS_TARGET, budget=4000)
 
-    from sce.cli import build_pipeline
-    from sce.graph.metamodel import SemanticMetamodel
-    from sce.serializers.markdown import render_markdown
-    from sce.slicer.distance import DistanceConfig, DistanceEngine
-    from sce.slicer.knapsack import ContextKnapsackPacker
+    from prism.cli import build_pipeline
+    from prism.graph.metamodel import SemanticMetamodel
+    from prism.serializers.markdown import render_markdown
+    from prism.slicer.distance import DistanceConfig, DistanceEngine
+    from prism.slicer.knapsack import ContextKnapsackPacker
 
     builder, tag_matrix = build_pipeline(str(STRESS_FIXTURE))
     distance_engine = DistanceEngine(SemanticMetamodel(), tag_matrix, DistanceConfig())

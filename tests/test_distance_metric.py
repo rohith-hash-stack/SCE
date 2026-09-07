@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import networkx as nx
 
-from sce.graph.metamodel import MAX_TAG_DISTANCE, UNTAGGED_TAG_DISTANCE, SemanticMetamodel
-from sce.slicer.distance import DistanceConfig, DistanceEngine
+from prism.graph.metamodel import MAX_TAG_DISTANCE, UNTAGGED_TAG_DISTANCE, SemanticMetamodel
+from prism.slicer.distance import DistanceConfig, DistanceEngine
 
 
 def test_untagged_distance_is_less_than_confirmed_max_distance():
@@ -83,7 +83,7 @@ def test_distance_metric_unchanged_when_graph_has_no_runtime_confidence_data():
     """A graph with no `confidence` edge attribute at all must behave
     identically to plain unweighted hop counting - the runtime-confidence
     discount is a pure extension, never a behavior change for anything
-    that hasn't gone through `sce.runtime.reconciler`.
+    that hasn't gone through `prism.runtime.reconciler`.
     """
     g = nx.DiGraph()
     g.add_edge("seed", "a")

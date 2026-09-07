@@ -111,25 +111,25 @@ def test_bug_localization_context_surfaces_auth_guard_despite_broken_call_graph(
     variants, or the task would be unfair/impossible."""
     task = ALL_TASKS["bug_localization"]
     ctx = build_task_context(task, budget=2000)
-    assert "require_auth" in ctx.known_symbols_sce
+    assert "require_auth" in ctx.known_symbols_prism
     assert "require_auth" in ctx.known_symbols_raw
-    assert "app.auth.require_auth" in ctx.sce_text
+    assert "app.auth.require_auth" in ctx.prism_text
 
 
 def test_feature_extension_context_includes_all_required_dependencies():
     task = ALL_TASKS["feature_extension"]
     ctx = build_task_context(task, budget=2000)
     for name in ("require_auth", "refund", "publish"):
-        assert name in ctx.known_symbols_sce
+        assert name in ctx.known_symbols_prism
         assert name in ctx.known_symbols_raw
 
 
-def test_sce_context_is_smaller_than_raw_context_for_both_tasks():
+def test_prism_context_is_smaller_than_raw_context_for_both_tasks():
     from benchmarks.tokenizer import count_tokens
 
     for task in ALL_TASKS.values():
         ctx = build_task_context(task, budget=2000)
-        assert count_tokens(ctx.sce_text) < count_tokens(ctx.raw_text)
+        assert count_tokens(ctx.prism_text) < count_tokens(ctx.raw_text)
 
 
 # --------------------------------------------------------------------- #
@@ -140,7 +140,7 @@ def test_dry_run_preview_reports_both_variants_for_every_task():
     for task in ALL_TASKS.values():
         assert task.task_id in output
     assert "[raw]" in output
-    assert "[sce]" in output
+    assert "[prism]" in output
 
 
 def test_select_tasks_all_returns_every_task():
