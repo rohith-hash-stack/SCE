@@ -30,6 +30,30 @@ class RawContextResult:
     text: str = field(repr=False)
 
 
+def dump_files(builder: ConcreteGraphBuilder, files: list[str] | tuple[str, ...]) -> str:
+    """Concatenate the full text of `files` (absolute paths), each preceded
+    by a `# ==== FILE: <relative path> ====` header. The low-level building
+    block behind `build_raw_context`'s call-chain closure; also used
+    directly by callers that need a whole-repo dump instead (e.g. a task
+    whose fix lives outside the target's own call graph - see
+    `benchmarks/tasks.py`).
+    """
+    parts: list[str] = []
+    for path in sorted(files):
+        parsed = builder.parsed_file(path)
+        if parsed is not None:
+            source = parsed.source.decode("utf-8", errors="replace")
+        else:
+            # Defensive fallback: shouldn't happen for a file that produced
+            # at least one indexed symbol, but never let a stale cache
+            # entry crash the benchmark run.
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                source = f.read()
+        relative_path = os.path.relpath(path, builder.repo_root)
+        parts.append(FILE_HEADER_TEMPLATE.format(relative_path=relative_path) + source)
+    return "\n\n".join(parts)
+
+
 def build_raw_context(builder: ConcreteGraphBuilder, seed: str) -> RawContextResult:
     """Concatenate every file reachable (transitively, via CALLS edges) from
     `seed`, in a stable file order, mirroring what a developer would paste
@@ -53,24 +77,10 @@ def build_raw_context(builder: ConcreteGraphBuilder, seed: str) -> RawContextRes
             "(it may be an external/unresolved symbol rather than one SCE indexed)"
         )
 
-    sorted_files = sorted(files)
-    parts: list[str] = []
-    for path in sorted_files:
-        parsed = builder.parsed_file(path)
-        if parsed is not None:
-            source = parsed.source.decode("utf-8", errors="replace")
-        else:
-            # Defensive fallback: shouldn't happen for a file that produced
-            # at least one indexed symbol, but never let a stale cache
-            # entry crash the benchmark run.
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
-                source = f.read()
-        relative_path = os.path.relpath(path, builder.repo_root)
-        parts.append(FILE_HEADER_TEMPLATE.format(relative_path=relative_path) + source)
-
+    sorted_files = tuple(sorted(files))
     return RawContextResult(
         seed=seed,
-        files=tuple(sorted_files),
+        files=sorted_files,
         reachable_symbols=frozenset(reachable),
-        text="\n\n".join(parts),
+        text=dump_files(builder, sorted_files),
     )

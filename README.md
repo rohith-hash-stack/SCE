@@ -71,8 +71,12 @@ src/sce/
 
 `benchmarks/` quantifies SCE's context packing against a naive whole-file
 dump: token compression, call-graph/invariant-tag coverage, and syntactic
-validity of every rendered code block. See `benchmarks/README.md`.
+validity of every rendered code block - offline, on synthetic fixtures, and
+live against a real OpenAI model and a real cloned GitHub repository. See
+`benchmarks/README.md`.
 
 ```bash
-python -m benchmarks.run_benchmark --suite
+python -m benchmarks.run_benchmark --suite                 # offline metrics
+python -m benchmarks.live_eval --dry-run                   # live-eval tasks, no API key needed
+python -m benchmarks.clone_eval --repo <git-url>            # index a real repo
 ```

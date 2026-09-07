@@ -38,6 +38,7 @@ def _ensure_sce_importable() -> None:
 _ensure_sce_importable()
 
 from sce.cli import build_pipeline  # noqa: E402
+from sce.graph.concrete_builder import ConcreteGraphBuilder  # noqa: E402
 from sce.graph.metamodel import SemanticMetamodel  # noqa: E402
 from sce.serializers.markdown import render_markdown  # noqa: E402
 from sce.slicer.distance import DistanceConfig, DistanceEngine  # noqa: E402
@@ -45,6 +46,7 @@ from sce.slicer.knapsack import ContextKnapsackPacker  # noqa: E402
 
 from benchmarks.coverage import CoverageError, CoverageResult, compute_coverage, ground_truth_subgraph  # noqa: E402
 from benchmarks.raw_context import RawContextError, build_raw_context  # noqa: E402
+from benchmarks.reporting import format_table, shorten  # noqa: E402
 from benchmarks.tokenizer import active_backend, count_tokens  # noqa: E402
 from benchmarks.validity import CodeBlockValidity, check_python_syntax  # noqa: E402
 
@@ -115,10 +117,30 @@ def run_single_benchmark(
     repo path, unknown target symbol, a target with no resolvable call
     chain). Anything else (a real bug in the pipeline) propagates as-is.
     """
-    start = time.perf_counter()
     repo_path = str(repo_path)
-
     builder, tag_matrix = build_pipeline(repo_path)
+    return run_single_benchmark_from_pipeline(
+        builder, tag_matrix, repo_path, target, budget, k_hops=k_hops, lambda_weight=lambda_weight
+    )
+
+
+def run_single_benchmark_from_pipeline(
+    builder: ConcreteGraphBuilder,
+    tag_matrix: dict[str, set[str]],
+    repo_path: str,
+    target: str,
+    budget: int,
+    k_hops: int = 3,
+    lambda_weight: float = 0.7,
+) -> BenchmarkResult:
+    """Same as `run_single_benchmark`, but against an already-built pipeline.
+
+    Splitting this out lets a caller that needs the builder/tag_matrix for
+    other reasons too (e.g. `clone_eval.py` auto-selecting a target from the
+    tag matrix before benchmarking it) share a single parse pass instead of
+    re-parsing a potentially large real-world repository twice.
+    """
+    start = time.perf_counter()
 
     if target not in builder.symbol_table:
         raise BenchmarkError(
@@ -194,29 +216,6 @@ def run_single_benchmark(
 # --------------------------------------------------------------------- #
 # Reporting: ASCII summary table + per-result detail
 # --------------------------------------------------------------------- #
-def _shorten(text: str, max_len: int = 52) -> str:
-    if len(text) <= max_len:
-        return text
-    keep = max_len - 1
-    return "…" + text[-keep:]
-
-
-def _format_table(headers: list[str], rows: list[list[str]]) -> str:
-    widths = [len(h) for h in headers]
-    for row in rows:
-        for i, cell in enumerate(row):
-            widths[i] = max(widths[i], len(cell))
-
-    def fmt_row(cells: list[str]) -> str:
-        return "| " + " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells)) + " |"
-
-    separator = "+-" + "-+-".join("-" * w for w in widths) + "-+"
-    lines = [separator, fmt_row(headers), separator]
-    lines.extend(fmt_row(row) for row in rows)
-    lines.append(separator)
-    return "\n".join(lines)
-
-
 def render_summary_table(results: list[BenchmarkResult]) -> str:
     headers = ["Target Symbol", "Budget", "Raw Tokens", "SCE Tokens", "Compression %", "Reached Nodes", "Invariant Coverage"]
     rows = []
@@ -225,7 +224,7 @@ def render_summary_table(results: list[BenchmarkResult]) -> str:
         tag_preserved = sum(r.coverage.tag_preserved.values())
         rows.append(
             [
-                _shorten(r.target),
+                shorten(r.target),
                 str(r.budget),
                 str(r.raw_tokens),
                 str(r.sce_tokens),
@@ -234,7 +233,7 @@ def render_summary_table(results: list[BenchmarkResult]) -> str:
                 f"{tag_preserved}/{tag_total} ({r.coverage.invariant_coverage_ratio * 100:.0f}%)",
             ]
         )
-    return _format_table(headers, rows)
+    return format_table(headers, rows)
 
 
 def render_detail_section(result: BenchmarkResult) -> str:
