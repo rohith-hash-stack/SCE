@@ -224,3 +224,116 @@ whether its `expected_tag` diagnostic was actually observed near the
 target, without treating a miss as a failure: a heuristic tag not firing on
 an unfamiliar naming convention is an honest finding about tagger coverage,
 not a defect in compression, coverage, or hallucination-freedom.
+
+## Downstream LLM accuracy validation (`validate_llm_accuracy.py`)
+
+Every harness above proves SCE's *own* output is well-formed - it never
+proves a real model actually writes correct code from it. This is the one
+that closes that gap: it sends real tasks to a real OpenAI model under both
+a raw whole-file-dump context and an SCE L0-L3 context, then scores each
+response by **actually running it**, never by asking another LLM to judge
+it.
+
+Three tasks, each with deterministic, pytest-verifiable ground truth,
+against a dedicated fixture (`benchmarks/fixtures/accuracy_repo`):
+
+1. **The Missing Invariant Bug** (security/correctness) -
+   `OrderService.checkout_order` performs a `#db_write` with no auth check.
+   Ground truth: unauthenticated calls must raise `PermissionError`
+   (`app.exceptions.Forbidden`, the codebase's one real auth-failure type,
+   subclasses it).
+2. **Interface Conformance & Feature Extension** (no hallucinations) - a new
+   `refund_transaction(order_id, amount)` method must coordinate with the
+   payment gateway and persist the resulting order state. Ground truth:
+   it must call the gateway's one real method, `reverse_charge` - not a
+   plausible-sounding but nonexistent `refund`/`process_refund`.
+3. **Cross-File Control Flow Debugging** - `process_payload()` over-catches
+   `except Exception`, silently reporting an unrelated `RuntimeError` (a
+   simulated payment-gateway outage) as an "invalid payload" error. Ground
+   truth: only the specific `PayloadValidationError`, defined two hops away
+   in `app/exceptions.py`, may be caught this way; other errors must still
+   propagate.
+
+```bash
+# Needs OPENAI_API_KEY in the environment or a .env file (python-dotenv)
+python -m benchmarks.validate_llm_accuracy --model gpt-4o-mini --report benchmarks/accuracy_report.json
+
+# No key needed: build every prompt/context and print sizes, make zero API calls
+python -m benchmarks.validate_llm_accuracy --dry-run
+```
+
+**Scoring is entirely mechanical - no LLM judge anywhere:**
+
+- **Syntax check**: `ast.parse()` on the code block extracted from the
+  model's Markdown response.
+- **Execution sandbox**: the response's code is spliced into a temp copy of
+  the fixture repo at the target symbol's exact `line_range` (from SCE's
+  own symbol table), re-indented to match the surrounding block, then the
+  task's pytest file is run against it via `subprocess.run`. This is a real
+  `pytest` process on real (copied) files, not a mock.
+- **Hallucination counter**: every call/method name the response's AST
+  invokes is checked against `GlobalSymbolTable`'s real qualified names
+  (plus Python builtins and a short common-stdlib-method allowlist, since
+  static AST inspection can't do type inference); anything left over is
+  flagged as invented. `RecordingGateway`, Task 2's test double, backs this
+  with a second, independent check: it only implements the two real gateway
+  methods, so a hallucinated call raises a real `AttributeError` at
+  execution time too.
+
+**Fixture design decisions worth knowing before extending it:**
+
+- **Task 1 uses `raw_scope="whole_repo"`.** `checkout_order` (the buggy
+  code) never calls the auth guard - that's the bug - so a raw dump scoped
+  to just its own call-chain closure would never include `app/auth.py`
+  either, making the fix equally undiscoverable for both variants (the same
+  situation as `live_eval.py`'s bug-localization task; see `benchmarks/tasks.py`).
+- **Task 2 queries one symbol but patches another.** SCE's context is built
+  around the working `cancel_order` method (a template that already
+  exercises the gateway + repository pattern); the model's code actually
+  replaces the placeholder `refund_transaction` next to it. Querying the
+  placeholder itself would surface nothing useful, since it has no call-graph
+  connections yet.
+- **`OrderService.__init__` constructs its own `PaymentGateway`** (rather
+  than accepting one as a pass-through parameter) so the
+  `cancel_order -> PaymentGateway.reverse_charge` edge is statically
+  resolvable by SCE's `InstanceTypeMap`; tests substitute
+  `service.gateway = RecordingGateway()` post-construction for
+  observability instead.
+- **`app/repository.py` imports `sqlalchemy`** purely to trigger SCE's
+  `#db_write` tag on `.commit()` - unlike every earlier fixture in this
+  repo, this one's code is actually *executed* by pytest, which is why
+  `sqlalchemy` is now a real `dev` extra in `pyproject.toml`.
+
+**Live result against `gpt-4o-mini`, temperature 0: 6/6 passed (100%)**
+across all 3 tasks x 2 variants, after fixing the real engine bug below.
+
+**One real engine bug was found and fixed by this validation.** The first
+live run scored 5/6: the `missing_invariant` / `sce` variant failed with a
+runtime `NameError: name 'app' is not defined`. The model had written
+`app.auth.verify_session(token)` verbatim - it had copied the fully
+qualified dotted name straight out of SCE's Markdown "Architectural Path"
+section, which named `verify_session` only as a bare `requires` annotation
+with no accompanying code block, and treated that internal qualified name
+as if it were literal, callable Python. Root-caused by rendering the actual
+SCE package sent to the model and confirming `verify_session` never got its
+own contract block - only symbols reachable via the seed's *call graph* were
+being packed as real content; `requires` targets (found via the metamodel's
+tag-relation graph, a different structure) were previously only ever
+mentioned by name in prose. Fixed in `sce.slicer.knapsack.ContextKnapsackPacker.pack()`
+by force-packing a real L2 contract for every `requires` target before the
+normal distance-ranked candidate loop runs, so the model always sees an
+actual signature and import path to act on instead of a bare dotted name.
+Verified by re-rendering the Markdown (confirmed `verify_session` now gets
+its own "Contract - L2" block), re-running the single failing task/variant
+live (passed), then the full 3x2 suite (6/6, 100%). Checked for regressions
+across every other harness in this repo - `run_benchmark.py --suite`,
+`multi_repo_eval.py --suite all` (still 18/18 against real clones,
+unchanged numbers), `live_eval.py --tasks all` (still 4/4) - and the full
+`pytest` suite: no regressions, only a small, expected compression-ratio
+dip from the extra packed content.
+
+Hermetic regression tests (`tests/test_validate_llm_accuracy.py`) cover
+patching, sandbox execution against real correct/buggy/hallucinated
+snippets, hallucination detection, and the CLI's dry-run/error paths with
+canned `CallResult`s standing in for the real model - no network access or
+API key required.

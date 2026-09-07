@@ -104,6 +104,35 @@ class ContextKnapsackPacker:
         seed_lang = builder.symbol_table.get(seed).language_id
         items = [PackedItem(seed, 0, seed_content, seed_lang)]
         total_tokens = estimate_tokens(seed_content) + _wrapping_overhead_tokens(seed)
+        packed: set[str] = {seed}
+
+        # A "requires" hop in the architectural path names a confirmed
+        # metamodel obligation (e.g. "this #db_write requires an
+        # #auth_guard") that the seed's own call graph does *not* reach -
+        # that's what makes it worth flagging in the first place. Pack a
+        # real L2 contract for it before ranking anything else: without
+        # this, it would surface only as a bare qualified name in the
+        # Architectural Path section with no signature or import path to
+        # act on, which - confirmed against a live model - gets treated as
+        # if the dotted path itself were valid, callable Python
+        # (`app.auth.verify_session(...)` instead of `verify_session(...)`)
+        # rather than a hint to import and call the real function.
+        path = architectural_path(seed, g_c, tag_matrix, distance_engine.metamodel)
+        for _depth, relation, node in path:
+            if relation != "requires" or node in packed:
+                continue
+            symbol = builder.symbol_table.get(node)
+            if symbol is None or symbol.kind not in ("function", "method"):
+                continue
+            content = self._render(builder, tag_matrix, node, 2)
+            if content is None:
+                continue
+            cost = estimate_tokens(content) + _wrapping_overhead_tokens(node)
+            if total_tokens + cost > self._admission_budget:
+                continue
+            items.append(PackedItem(node, 2, content, symbol.language_id))
+            total_tokens += cost
+            packed.add(node)
 
         # Exception/data classes are surfaced inline via a function's own
         # "Raises:"/signature contract; packing them as separate context
@@ -113,7 +142,9 @@ class ContextKnapsackPacker:
             (
                 node
                 for node in distances
-                if (symbol := builder.symbol_table.get(node)) is not None and symbol.kind in ("function", "method")
+                if node not in packed
+                and (symbol := builder.symbol_table.get(node)) is not None
+                and symbol.kind in ("function", "method")
             ),
             key=lambda n: distances[n],
         )
@@ -137,7 +168,6 @@ class ContextKnapsackPacker:
                 break
 
         preserved = self._preserved_semantics(items, candidates)
-        path = architectural_path(seed, g_c, tag_matrix, distance_engine.metamodel)
         return PackResult(
             seed=seed,
             budget=self.budget,
