@@ -226,7 +226,19 @@ def compress_python(source: str, name: str, line_range: tuple[int, int], resolut
     if resolution == 0:
         return _raw_slice(source, line_range)
 
-    tree = ast.parse(source)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        # The file uses syntax this interpreter's `ast` module can't parse -
+        # e.g. a PEP 695 `type` alias statement (Python 3.12+ grammar),
+        # confirmed against a real file in django/django while indexing it
+        # under Python 3.11. tree-sitter's more tolerant, version-agnostic
+        # grammar already indexed this file fine at the graph-building
+        # stage; only this stdlib-`ast`-based skeletonization step can't
+        # re-parse it. Degrade to the same raw-slice fallback already used
+        # just below when a definition can't be relocated post-parse,
+        # rather than crashing the whole pack.
+        return _raw_slice(source, line_range)
     node = locate_python_definition(tree, name, line_range)
     if node is None:
         # Definition couldn't be relocated (e.g. syntax quirk) - degrade to raw slice.

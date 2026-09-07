@@ -337,3 +337,170 @@ patching, sandbox execution against real correct/buggy/hallucinated
 snippets, hallucination detection, and the CLI's dry-run/error paths with
 canned `CallResult`s standing in for the real model - no network access or
 API key required.
+
+## Large-repo prompt-archetype matrix (`large_repo_prompt_matrix.py`)
+
+Everything above validates SCE against small hand-built fixtures or a
+handful of mid-sized real repos. This one asks a different question: how
+does SCE actually behave, at scale, against a genuine large enterprise
+codebase, across the full breadth of how developers actually talk to an
+LLM coding assistant - not just "fix this bug" but zero/few-shot setups,
+chain-of-thought and ReAct-style reasoning, negative constraints,
+multi-turn dialogue, closed-ended fact checks, documentation generation,
+and more.
+
+**Target repository: `django/django`.** Shallow-cloned (`--depth 1`) and
+cached at `.benchmarks/clones/django`. Indexed metrics from a real run:
+
+```
+Total symbols (G_C):   42,282
+Total CALLS edges:     79,268
+Indexing time:         ~155-162s
+Peak memory (RSS):     ~1.8 GB
+Tag distribution (M):  #state_mutation: 1595   #auth_guard: 60
+                        #db_write: 7            #external_io: 3
+```
+
+**33 structured prompt archetypes** (`benchmarks/prompt_taxonomy/`), each
+declaratively specified as a `PromptArchetype` - a real, verified target
+symbol in django, a task prompt, and a small set of *contract* fields
+(expects code? forbidden tags? output format? required substrings? few-shot
+demonstrations? follow-up turns for multi-turn techniques? self-consistency
+sample count?). One generic pipeline in `large_repo_prompt_matrix.py` builds
+the right prompt shape and runs the right mechanical checks purely from
+those fields, rather than 33 bespoke scorers. The full numbered list -
+informational query, instruction-following, creative/generative,
+analytical reasoning, rewrite, classification, fact-check, zero/one/few-shot,
+system/persona prompting, chain-of-thought, self-consistency,
+tree-of-thoughts, ReAct, negative constraints, output formatting,
+bias-mitigation, iterative follow-up, prompt chaining, meta-prompting,
+conversational, open/closed-ended, hypotheticals, Socratic questioning,
+self-reflection, code generation, debugging, architecture mapping,
+documentation, and data extraction - lives in
+`benchmarks/prompt_taxonomy/archetypes.py`, with the real django target and
+exact task prompt for each.
+
+```bash
+# Needs OPENAI_API_KEY in the environment or a .env file (python-dotenv)
+python -m benchmarks.large_repo_prompt_matrix --repo django --prompts all \
+    --report benchmarks/django_33_prompts.json
+
+# A single archetype by numeric id:
+python -m benchmarks.large_repo_prompt_matrix --repo django --prompt 17
+
+# No key needed: index the repo and build every context, print sizes/compression, zero API calls
+python -m benchmarks.large_repo_prompt_matrix --repo django --dry-run
+```
+
+**Scoring is entirely mechanical, matching the spec's four checks - no LLM
+judge anywhere:**
+
+- **Token compression ratio**: `(1 - sce_tokens / raw_tokens) * 100`,
+  computed per archetype from the same `ContextKnapsackPacker`
+  (3000-token budget by default) vs. `build_raw_context`'s call-chain-closure
+  dump this whole benchmark suite uses everywhere else.
+- **Syntax validation**: `ast.parse()` on the extracted code block, for the
+  ~15 archetypes that actually expect one (`expects_code=True`); archetypes
+  that expect prose (an explanation, an audit, an open design question)
+  skip this check entirely rather than trivially "passing" it.
+- **Hallucination counters, two independent layers**: every *called*
+  symbol in a code-producing archetype's response, checked against
+  django's real `GlobalSymbolTable` (mirroring `validate_llm_accuracy.py`'s
+  checker); and, uniquely for this harness, every fully-qualified,
+  dotted-path-shaped symbol *mentioned in prose* - in ANY archetype, code or
+  not - checked the same way. A model that writes out
+  `django.contrib.auth.tokens.PasswordResetTokenGenerator` in an
+  explanation is claiming that path is real, so a fabricated one is caught
+  exactly like a fabricated call.
+- **Prompt contract adherence**: archetype-declared checks run generically
+  from the archetype's own fields - output format (JSON/YAML actually
+  parses), negative constraints (a banned substring didn't appear),
+  forbidden semantic tags (no call resolves to e.g. `#db_write`), exact
+  signature preservation (via `ast.unparse`-normalized comparison),
+  required substrings/regexes (closed-ended YES/NO, balanced-viewpoint
+  coverage, Socratic question marks, ToT's "Strategy 1/2/3" structure),
+  and self-consistency consensus (does a real symbol get mentioned in a
+  majority of `sample_count` independent samples).
+
+**Live result against `gpt-4o-mini`, temperature 0 (33 archetypes x 2
+variants = 66 runs): 58/66 passed (87.9%)**, average compression 28.7%,
+total cost $0.098.
+
+**Two real, generic false-positive bugs in the mechanical checkers were
+found and fixed by this live run** (not django-specific hacks - both
+improve every harness that reuses `benchmarks/prompt_taxonomy/spec.py`):
+
+1. **A too-narrow stdlib allowlist flagged completely ordinary Python as
+   "hallucinated".** `logging.getLogger(...)`/`.debug(...)` (archetype 17,
+   asked to add exactly this) and `hmac`/`secrets`'s `compare_digest`
+   (archetype 5, refactoring a constant-time comparison - the single most
+   likely real function a correct answer would reach for) aren't in
+   django's own symbol table and aren't container/string methods, so the
+   existing narrow allowlist missed them. Fixed by widening
+   `_COMMON_STDLIB_METHOD_NAMES` in `spec.py` with these specific,
+   confirmed-real names - not a blanket allowance, the same
+   "kept short and genuinely common" principle the allowlist already
+   documented.
+2. **The prose hallucination check didn't know modules are real too.** A
+   model correctly referenced the module `django.contrib.auth.backends` on
+   its own (not a specific class/function inside it) while explaining
+   where a new backend class belongs; since `GlobalSymbolTable` only
+   indexes `def`/`class` symbols, not module paths, this real reference
+   was flagged unknown. Fixed by having `build_repo_index` also compute
+   every real module's dotted path (and each package prefix along the
+   way) from the indexed files, and `find_referenced_symbol_mentions`
+   accept either.
+
+**A third, unrelated real engine bug was found and fixed while first
+indexing django**: `sce.slicer.compressor.compress_python` crashed with an
+unhandled `SyntaxError` on any file using a PEP 695 `type` alias statement
+(Python 3.12+ grammar - a real example is
+`tests/auth_tests/test_auth_backends.py`), because it re-parses a symbol's
+*whole file* with the stdlib `ast` module at L1-L3 (L0 already worked,
+since raw slicing doesn't need to parse anything) even though tree-sitter's
+more tolerant grammar had already indexed that same file just fine at the
+graph-building stage. Fixed by catching the `SyntaxError` and degrading to
+the same raw-slice fallback already used a few lines down for "definition
+couldn't be relocated" - one line of defense extended to cover the parse
+step itself, not just the post-parse lookup. Verified with the full
+`pytest` suite (no regressions) before re-running against django.
+
+**Findings surfaced, not hidden, by this validation - real, stable, and
+deliberately not "fixed" by loosening a check:**
+
+- **Metaprogrammed/attribute-based real code isn't in `GlobalSymbolTable`,
+  by design** (it only indexes `def`/`class` nodes). Three confirmed real
+  examples from this exact run: `QuerySet._fetch_all`'s own body calling
+  `self._iterable_class(self)` (an instance attribute, not a method -
+  archetype 32, which merely asked to add a docstring to the *existing*
+  body); `BaseHandler`'s `self._middleware_chain(request)` (same pattern -
+  archetype 16); and `router.db_for_write(...)`, whose real implementation
+  in `django/db/utils.py` is `db_for_write = _router_func("db_for_write")`
+  - a dynamically bound class attribute, never a literal `def` (archetype
+  1). All three are genuine, correct Django API usage that the checker
+  can't distinguish from a hallucination without attribute-level type
+  inference - the same documented limitation `find_hallucinated_calls`
+  already carries for its call-based check, just also true of the
+  mention-based one, and now demonstrated concretely rather than
+  hypothetically.
+- **Archetype 29 (code-generation against a "fictional external API") is
+  structurally guaranteed to trip the hallucination counter**, since any
+  correct implementation necessarily invents a helper name for the
+  fictional integration the task asks for - that's the task, not a defect.
+- **The closed-ended archetype (25, "what line number...") structurally
+  favors the raw baseline.** Asked to name an exact source line, the raw
+  variant (the literal, uncompressed file) could and did cite one; the SCE
+  variant, given a compressed package that doesn't preserve original line
+  numbers for less-central content, honestly answered it couldn't
+  determine one rather than fabricating a line number - a genuine,
+  worth-knowing trade-off of compression for this specific fact-shape, not
+  a bug in either the model or the checker.
+
+Hermetic regression tests (`tests/test_large_repo_prompt_matrix.py`) run
+against `tests/fixtures/python_repo` (fast, no cloning) and cover every
+mechanical checker, context building, and `run_variant`/`run_archetype`
+end-to-end with canned/sequenced responses standing in for the real model -
+including multi-turn and self-consistency archetypes. A separate opt-in
+suite (`SCE_LIVE_NETWORK_TESTS=1`) re-indexes the real django clone to
+confirm all 33 archetype targets still resolve upstream and the CLI's
+dry-run path works end-to-end - both passed as of this validation.

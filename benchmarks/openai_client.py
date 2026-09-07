@@ -129,16 +129,33 @@ class LLMClient:
         temperature: float = 0.0,
         max_tokens: int | None = None,
     ) -> CallResult:
+        return self.complete_conversation(
+            model,
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    def complete_conversation(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ) -> CallResult:
+        """Like `complete()`, but for multi-turn callers (follow-up
+        questions, prompt-chaining) that need to send a full prior
+        conversation - a system message plus alternating user/assistant
+        turns - rather than a single system+user pair. `complete()` is just
+        the one-turn special case of this.
+        """
         import openai as openai_module
 
         start = time.perf_counter()
         try:
             response = self._client.chat.completions.create(
                 model=model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
