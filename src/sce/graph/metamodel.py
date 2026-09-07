@@ -27,10 +27,23 @@ class Tag:
     description: str
 
 
-# Default penalty distance in G_T for tag sets that share no path (or where
-# either side is untagged). Mirrors the token-budget "max resolution decay"
-# treatment used by the slicer's distance metric.
+# Penalty distance in G_T for two tag sets that are both known but share no
+# path in the metamodel graph - a *confirmed* maximal semantic gap. Mirrors
+# the token-budget "max resolution decay" treatment used by the slicer's
+# distance metric.
 MAX_TAG_DISTANCE = 5.0
+
+# Penalty distance when either side carries no tag at all. Deliberately
+# *less* than MAX_TAG_DISTANCE: an untagged node (most real code - plain
+# helpers, data classes, glue) means "no semantic signal", not "confirmed
+# to be maximally different". Treating them the same systematically
+# misranks D_hybrid: a genuine 1-hop callee that happens to be untagged
+# would otherwise score *worse* than an unrelated node 4 hops away that
+# merely happens to share a tag with the seed - caught via a real-world
+# validation run (see benchmarks/multi_repo_eval.py) where this dropped an
+# actual direct callee of httpx's Client.send from a tight token budget in
+# favor of a same-tagged but structurally unrelated sibling method.
+UNTAGGED_TAG_DISTANCE = MAX_TAG_DISTANCE / 2
 
 
 class SemanticMetamodel:
@@ -69,7 +82,7 @@ class SemanticMetamodel:
     def get_tag_distance(self, tags_a: set[str], tags_b: set[str]) -> float:
         """Minimum hop distance between two tag sets in `G_T` (undirected)."""
         if not tags_a or not tags_b:
-            return MAX_TAG_DISTANCE
+            return UNTAGGED_TAG_DISTANCE
         if tags_a.intersection(tags_b):
             return 0.0
 

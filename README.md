@@ -79,4 +79,5 @@ live against a real OpenAI model and a real cloned GitHub repository. See
 python -m benchmarks.run_benchmark --suite                 # offline metrics
 python -m benchmarks.live_eval --dry-run                   # live-eval tasks, no API key needed
 python -m benchmarks.clone_eval --repo <git-url>            # index a real repo
+python -m benchmarks.multi_repo_eval --suite all            # httpx/flask/marshmallow x 3 query types
 ```

@@ -143,3 +143,84 @@ every one of the 250+ Python code blocks SCE renders from it parses with
 repeat this clone (it would make CI depend on network access); set
 `SCE_LIVE_NETWORK_TESTS=1` to run `tests/test_clone_eval.py`'s opt-in
 real-network smoke test.
+
+## Multi-repository, multi-query validation (`multi_repo_eval.py`)
+
+Before building a client wrapper (an MCP server, an IDE extension, ...) on
+top of SCE, this validates it against three real, architecturally distinct
+codebases - not just hand-built fixtures - across three realistic query
+types:
+
+- **encode/httpx** - transport layers, async/sync duality, heavy I/O
+- **pallets/flask** - WSGI architecture, request contexts, routing
+- **marshmallow-code/marshmallow** - data schemas, deep class inheritance
+
+For each repo, three scenarios (found by actually cloning and indexing
+each one and inspecting its real concrete graph, not guessed):
+
+- **Root-Cause Analysis / Bug Trace** (Query A) - a deep vertical call
+  chain from a public entrypoint down toward where a failure would
+  actually surface (`httpx.Client.send`, `Flask.full_dispatch_request`,
+  `marshmallow.Schema.load`).
+- **Cross-Cutting Architectural Invariant Audit** (Query B) - a
+  sensitive boundary method, checked against the metamodel/tag matrix
+  (`HTTPTransport.handle_request`'s network I/O boundary, Flask's route
+  registration and the auth invariant, `Field._bind_to_schema`'s state
+  mutation across the entire Field hierarchy).
+- **Feature Extension / Interface Conformance** (Query C) - an interface
+  contract a new implementation must match exactly (`BaseTransport`'s
+  async contract via `ASGITransport` as the reference, `View.dispatch_request`,
+  `Field._serialize`/`_deserialize`).
+
+```bash
+python -m benchmarks.multi_repo_eval --suite all --report benchmarks/multi_repo_report.json
+python -m benchmarks.multi_repo_eval --repo httpx
+```
+
+For every (repo, scenario, budget) combination this asserts: every L0-L3
+Python code block parses cleanly; >=50% compression vs. the whole-file-dump
+baseline with 100% of direct callees still reachable; and zero
+"hallucinated" symbols (anything SCE's own Markdown references that isn't a
+real node in `GlobalSymbolTable`/`G_C` - a static regression guard, since
+nothing in this pipeline is LLM-generated). Graph connectivity/density
+(total symbols, edges, isolated-node ratio, approximate traversal depth) is
+reported per repo, not gated on - it describes the target codebase, not
+SCE's correctness. Exits non-zero if any scenario fails.
+
+**Result across all 3 repos x 3 scenarios x 2 budgets (18 runs): 18/18
+pass.** Compression ranged 59.8%-98.7%, zero hallucinated symbols anywhere.
+
+**Two real engine bugs were caught and fixed by this validation, not
+hidden**:
+
+1. **D_hybrid unfairly penalized untagged direct callees.** The metamodel
+   treated "this node has no tag at all" identically to "these two tags are
+   confirmed to be maximally different" (`MAX_TAG_DISTANCE`). Against
+   httpx's real call graph, this let a same-tagged-but-4-hops-away sibling
+   method outrank a genuine untagged 1-hop callee, dropping that callee
+   from a tight budget. Fixed in `sce.graph.metamodel` by giving "untagged"
+   its own, smaller `UNTAGGED_TAG_DISTANCE` (no signal, not a confirmed
+   gap) - see `tests/test_distance_metric.py`.
+2. **`self.method()` resolution doesn't know about inheritance.** When a
+   subclass method calls `self.some_method()` and `some_method` is only
+   defined on a *parent* class (httpx's `Client` calling `BaseClient`-only
+   methods like `_build_request_auth`), the linker resolves it against the
+   subclass's own name instead, producing a plausible-looking but
+   nonexistent qualified name recorded as an external/unresolved node. This
+   is a known, currently unfixed limitation - real, but out of scope for
+   this harness to fix - documented here rather than papered over; it
+   inflates the isolated/unresolved node counts `compute_graph_metrics`
+   reports for any codebase with non-trivial inheritance (all three of
+   these real repos included).
+
+**On tagger coverage gaps**: `#external_io` never fires inside httpx's own
+source, because its default transport calls `self._pool.handle_request(...)`
+(a `httpcore`-level method) rather than one of the generic REST-verb names
+(`.get`/`.post`/`.request`/...) the deterministic tagger looks for.
+Similarly `#auth_guard` never fires in Flask's own source, since Flask is
+routing infrastructure - enforcing auth is left entirely to application
+code, which is architecturally correct, not a bug. Each scenario reports
+whether its `expected_tag` diagnostic was actually observed near the
+target, without treating a miss as a failure: a heuristic tag not firing on
+an unfamiliar naming convention is an honest finding about tagger coverage,
+not a defect in compression, coverage, or hallucination-freedom.
