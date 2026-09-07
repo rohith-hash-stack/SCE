@@ -110,7 +110,9 @@ def get_symbol_context(target_symbol: str, repo_path: str | None = None, token_b
         )
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
-    return render_markdown(pack_result, ctx.tag_matrix, contracts=ctx.contracts, graph=ctx.builder.graph)
+    return render_markdown(
+        pack_result, ctx.tag_matrix, contracts=ctx.contracts, graph=ctx.builder.graph, hierarchy=ctx.hierarchy
+    )
 
 
 @server.tool()

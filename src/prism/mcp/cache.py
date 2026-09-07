@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from prism.cli import build_pipeline
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
+from prism.graph.hierarchy import HierarchicalIntentProfile, compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.reconciler import apply_runtime_state, load_runtime_state
@@ -47,6 +48,7 @@ class RepoContext:
     distance_engine: DistanceEngine
     runtime_state: dict
     contracts: dict[str, BehavioralContract] = field(default_factory=dict)
+    hierarchy: HierarchicalIntentProfile | None = None
     indexed_at: float = field(default_factory=time.time)
 
     @property
@@ -116,6 +118,7 @@ class GraphCache:
         metamodel = SemanticMetamodel()
         distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig())
         contracts = compute_or_load_contracts(builder, repo_root)
+        hierarchy = compute_hierarchical_profile(builder, contracts, repo_root)
         return RepoContext(
             repo_root=repo_root,
             builder=builder,
@@ -124,4 +127,5 @@ class GraphCache:
             distance_engine=distance_engine,
             runtime_state=runtime_state,
             contracts=contracts,
+            hierarchy=hierarchy,
         )

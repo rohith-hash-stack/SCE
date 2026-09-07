@@ -17,6 +17,7 @@ context `prism.graph.call_site` computed - `call_kind`, `inside_loop`,
 from __future__ import annotations
 
 from prism.graph.contracts import BehavioralContract
+from prism.graph.hierarchy import HierarchicalIntentProfile
 from prism.slicer.knapsack import PackResult
 
 # Short form ("L0", not "Full Implementation - L0"): every heading now also
@@ -49,6 +50,7 @@ def render_markdown(
     tag_matrix: dict[str, set[str]],
     contracts: dict[str, BehavioralContract] | None = None,
     graph=None,
+    hierarchy: HierarchicalIntentProfile | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("# SEMANTIC REPOSITORY CONTEXT")
@@ -59,6 +61,9 @@ def render_markdown(
         f"Preserved Semantics: {result.preserved_semantics}%"
     )
     lines.append("")
+    if hierarchy is not None:
+        lines.extend(_render_hierarchical_sections(result, hierarchy, contracts or {}, graph))
+        lines.append("")
     if not result.compact:
         # Adaptive Compact Scaffolding: the Architectural Path diagram is
         # exactly the kind of verbose structural overview that isn't worth
@@ -113,6 +118,109 @@ def render_markdown(
                 lines.extend(dep_lines)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+# --------------------------------------------------------------------- #
+# Hierarchical Structural Contracts (Layers 2-5, prism.graph.hierarchy)
+# --------------------------------------------------------------------- #
+def _yaml_scalar(value) -> str:
+    if isinstance(value, str):
+        return _yaml_str(value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return _yaml_list(value)
+    return str(value)
+
+
+def _yaml_inline_dict(d: dict) -> str:
+    return "{ " + ", ".join(f"{k}: {_yaml_scalar(v)}" for k, v in d.items()) + " }"
+
+
+def _render_hierarchical_sections(
+    result: PackResult,
+    hierarchy: HierarchicalIntentProfile,
+    contracts: dict[str, BehavioralContract],
+    graph,
+) -> list[str]:
+    """Renders the four Semantic Knowledge Engine sections the
+    hierarchical-intent-profiling spec asks for, injected ahead of every
+    raw source code fence (`## 2. Injected Code Units` below) - a
+    structural summary an LLM coding agent can read before it ever sees a
+    line of implementation."""
+    lines: list[str] = ["## Hierarchical Structural Contracts", ""]
+
+    repo = hierarchy.repository
+    lines.append("### 1. REPOSITORY INTENT PROFILE")
+    lines.append("```yaml")
+    lines.append(f"Archetype: {_yaml_str(repo.archetype)}")
+    lines.append(f"Global Sinks: {_yaml_inline_dict({k: round(v, 4) for k, v in repo.global_sink_mass.items()})}")
+    lines.append(
+        "Structural Invariants: "
+        + _yaml_inline_dict({
+            "fan_divergence": repo.fan_divergence,
+            "max_critical_path_depth": repo.max_critical_path_depth,
+            "subsystem_count": repo.subsystem_count,
+        })
+    )
+    lines.append("```")
+    lines.append("")
+
+    seed_item = next((i for i in result.items if i.symbol == result.seed), None)
+    subsystem = hierarchy.subsystem_for_relative_path(seed_item.relative_path) if seed_item is not None else None
+    lines.append("### 2. SUBSYSTEM CONTRACT")
+    lines.append("```yaml")
+    if subsystem is not None:
+        lines.append(f"Module: {_yaml_str(subsystem.module)}")
+        lines.append(f"Instability: {subsystem.coupling_instability}")
+        lines.append(f"Cohesion: {subsystem.cohesion_score}")
+        lines.append(f"Dominant Sinks: {_yaml_list(subsystem.dominant_sinks)}")
+        lines.append(f"Purity Ratio: {subsystem.purity_ratio}")
+    else:
+        lines.append("# no subsystem profile available for the target's module")
+    lines.append("```")
+    lines.append("")
+
+    pipeline = hierarchy.flow_covering(result.seed)
+    lines.append("### 3. ACTIVE EXECUTION PIPELINE")
+    lines.append("```yaml")
+    if pipeline is not None:
+        lines.append(f"Entry Root: {_yaml_str(pipeline.entry_root)}")
+        lines.append(f"Flow Topology: {_yaml_str(pipeline.flow_topology)}")
+        lines.append(f"Critical Path Depth: {pipeline.critical_path_depth}")
+        lines.append(f"Sync Mode: {_yaml_str(pipeline.sync_concurrency_mode)}")
+        lines.append(f"Fallibility Index: {pipeline.fallibility_index}")
+    else:
+        lines.append("# target is not reachable from any known entry root within the traversal horizon")
+    lines.append("```")
+    lines.append("")
+
+    lines.append("### 4. TARGET SYMBOL & SINK-AWARE CONTRACTS")
+    lines.append("```yaml")
+    lines.append(f"Target: {_yaml_str(result.seed)}")
+    lines.append(f"Archetype: {_yaml_str(hierarchy.archetype_of(result.seed))}")
+    egress = hierarchy.flow_result.egress(result.seed)
+    ingress = hierarchy.flow_result.ingress(result.seed)
+    lines.append(f"Egress: {_yaml_inline_dict({k: round(v, 4) for k, v in egress.as_dict().items() if v > 0})}")
+    lines.append(f"Ingress: {_yaml_inline_dict({k: round(v, 4) for k, v in ingress.items()})}")
+    if graph is not None and result.seed in graph:
+        deps = [
+            v for _u, v, data in graph.out_edges(result.seed, data=True)
+            if data.get("relation", "CALLS") in _DEPENDENCY_RELATIONS
+        ]
+        if deps:
+            lines.append("Dependencies:")
+            for target in sorted(set(deps)):
+                lines.append(f"  - target: {_yaml_str(target)}")
+                lines.append(f"    archetype: {_yaml_str(hierarchy.archetype_of(target))}")
+                contract = contracts.get(target)
+                if contract is not None:
+                    summary = {"purity": contract.purity}
+                    if contract.effects:
+                        summary["effects"] = contract.effects
+                    lines.append(f"    contract: {_yaml_inline_dict(summary)}")
+    lines.append("```")
+    return lines
 
 
 def _render_architectural_path(result: PackResult, tag_matrix: dict[str, set[str]]) -> list[str]:

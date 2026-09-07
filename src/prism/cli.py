@@ -7,6 +7,7 @@ import os
 import click
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.hierarchy import compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
@@ -113,7 +114,8 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
     distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
     packer = ContextKnapsackPacker(token_budget=budget)
     result = packer.pack(symbol, builder, tag_matrix, distance_engine)
-    contracts = compute_or_load_contracts(builder, os.path.abspath(repo_path))
+    repo_root = os.path.abspath(repo_path)
+    contracts = compute_or_load_contracts(builder, repo_root)
 
     if as_json:
         payload = {
@@ -128,7 +130,8 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
         }
         text = json.dumps(payload, indent=2)
     else:
-        text = render_markdown(result, tag_matrix, contracts=contracts, graph=builder.graph)
+        hierarchy = compute_hierarchical_profile(builder, contracts, repo_root)
+        text = render_markdown(result, tag_matrix, contracts=contracts, graph=builder.graph, hierarchy=hierarchy)
 
     if output:
         with open(output, "w") as f:
