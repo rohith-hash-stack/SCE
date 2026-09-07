@@ -19,11 +19,44 @@ from sce.slicer.distance import DistanceEngine, architectural_path
 # objective - purely a reporting metric for the serialized output.
 RESOLUTION_WEIGHT = {0: 1.0, 1: 0.7, 2: 0.4, 3: 0.15}
 
-TOKENS_PER_WORD = 1.3
+# Whitespace-word count is the only offline, dependency-free token proxy
+# available to the core engine (a real BPE tokenizer needs a model-specific
+# vocabulary; see benchmarks/tokenizer.py, which uses tiktoken - with a
+# fallback of its own - purely for *reporting*, not for gating this budget).
+# Source code tokenizes far denser than prose (BPE splits most punctuation,
+# brackets, and operators into their own tokens), so a prose-appropriate
+# ~1.3 systematically undercounts it. Measured against a punctuation-aware
+# tokenizer across four different packed contexts - two hand-built
+# fixtures, one synthetic stress repo, and a real clone of encode/starlette
+# - the true-to-word-estimate ratio was consistently ~2.0-2.9x, never
+# close to 1.3x. 2.6 is that sample's mean, biased slightly conservative
+# (better to underpack against a hard budget than overshoot it).
+TOKENS_PER_WORD = 2.6
 
 
 def estimate_tokens(text: str) -> float:
     return len(text.split()) * TOKENS_PER_WORD
+
+
+def _wrapping_overhead_tokens(symbol: str) -> float:
+    """Estimated cost of the Markdown a serializer wraps around one packed
+    item's bare `content`: a `### <symbol> (<label>)` heading plus a fenced
+    code block. Without this, the packer's running total only ever counts
+    the code itself and silently diverges from the size of the document it
+    is actually producing - a gap that is tiny for one item but compounds
+    badly once dozens or hundreds of small (L2/L3) items are packed, which
+    is exactly what happens against a real, densely-connected repository.
+
+    This lives in the slicer layer and stays deliberately approximate
+    rather than byte-exact, since `sce.serializers.markdown` imports
+    `PackResult` from this module - importing it back here to render the
+    real wrapping would be circular. "Full Implementation - L0" is used as
+    a stand-in label because it's the longest of the four, which biases
+    the estimate slightly conservative (better to underpack than to blow
+    the budget).
+    """
+    heading = f"### {symbol} (Full Implementation - L0)"
+    return estimate_tokens(f"{heading}\n```python\n```\n")
 
 
 @dataclass
@@ -45,8 +78,19 @@ class PackResult:
 
 
 class ContextKnapsackPacker:
+    # Word-count-based estimation still carries real error even after
+    # calibrating TOKENS_PER_WORD against measured samples (see its
+    # comment) - packing candidates only up to this fraction of the
+    # nominal budget leaves headroom to absorb that error, so the actual
+    # rendered document (measured by a real tokenizer) usually still lands
+    # at or under what the caller asked for. `PackResult.budget` still
+    # reports the true nominal budget; this only tightens the internal
+    # admission threshold.
+    SAFETY_MARGIN = 0.92
+
     def __init__(self, token_budget: int, compressor: ASTCompressor | None = None, distance_engine: DistanceEngine | None = None) -> None:
         self.budget = token_budget
+        self._admission_budget = token_budget * self.SAFETY_MARGIN
         self.compressor = compressor or ASTCompressor()
 
     def pack(self, seed: str, builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], distance_engine: DistanceEngine) -> PackResult:
@@ -59,7 +103,7 @@ class ContextKnapsackPacker:
 
         seed_lang = builder.symbol_table.get(seed).language_id
         items = [PackedItem(seed, 0, seed_content, seed_lang)]
-        total_tokens = estimate_tokens(seed_content)
+        total_tokens = estimate_tokens(seed_content) + _wrapping_overhead_tokens(seed)
 
         # Exception/data classes are surfaced inline via a function's own
         # "Raises:"/signature contract; packing them as separate context
@@ -79,12 +123,13 @@ class ContextKnapsackPacker:
             content = self._render(builder, tag_matrix, node, target_res)
             if content is None:
                 continue
-            cost = estimate_tokens(content)
-            while total_tokens + cost > self.budget and target_res < 3:
+            overhead = _wrapping_overhead_tokens(node)
+            cost = estimate_tokens(content) + overhead
+            while total_tokens + cost > self._admission_budget and target_res < 3:
                 target_res += 1
                 content = self._render(builder, tag_matrix, node, target_res)
-                cost = estimate_tokens(content)
-            if total_tokens + cost <= self.budget:
+                cost = estimate_tokens(content) + overhead
+            if total_tokens + cost <= self._admission_budget:
                 node_lang = builder.symbol_table.get(node).language_id
                 items.append(PackedItem(node, target_res, content, node_lang))
                 total_tokens += cost

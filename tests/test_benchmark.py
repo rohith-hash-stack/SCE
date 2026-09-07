@@ -54,6 +54,31 @@ def test_compression_ratio_meets_threshold_without_dropping_direct_callees(budge
     assert dc.subgraph_node_count > 0, "expected the stress fixture's target to have direct, resolvable callees"
 
 
+@pytest.mark.parametrize("budget", [2000, 4000])
+def test_packed_context_respects_budget_under_a_real_tokenizer(budget):
+    """Regression test for a real bug caught via `clone_eval.py` against a
+    live clone of encode/starlette: the knapsack's internal word-count
+    budget accounting didn't include the Markdown wrapping (heading +
+    fences) added around each packed item, so its own running total
+    silently diverged from the size of the document it was actually
+    building - badly enough, once compounded across 100+ small packed
+    items on a real densely-connected repo, that a 4000-token budget
+    rendered a document measuring over 13,000 tokens against a real
+    tokenizer (3.3x over). Fixed in `sce.slicer.knapsack` by costing each
+    item's wrapping overhead, recalibrating the word-to-token ratio against
+    measured samples, and packing only up to a safety-margined fraction of
+    the nominal budget. `result.sce_tokens` here is computed with the same
+    tokenizer (tiktoken, or its fallback) used everywhere else in this
+    harness - not the packer's own internal estimate - so this is a
+    genuine, independent check.
+    """
+    for repo, target in ((DEFAULT_PYTHON_FIXTURE, STANDARD_TARGET), (STRESS_FIXTURE, STRESS_TARGET)):
+        result = run_single_benchmark(repo, target, budget=budget)
+        assert result.sce_tokens <= budget, (
+            f"packed context for {target} measured {result.sce_tokens} tokens against a {budget}-token budget"
+        )
+
+
 def test_standard_fixture_also_runs_and_preserves_direct_callees():
     """The existing fixture repo is part of the required benchmark surface
     too (HLD's own worked example) - it just isn't large enough to be a
