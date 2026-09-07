@@ -46,7 +46,7 @@ DEFAULT_TOKEN_BUDGET = 2000
 
 server = MCPServer(
     "semantic-context-engine",
-    version="1.0.0",
+    version="0.1.0",
     instructions=(
         "Deterministic, offline dual-layer semantic context engine for a cloned repository. "
         "Call get_symbol_context first for any 'explain/modify/trace X' task - it returns a "
