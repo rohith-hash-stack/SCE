@@ -1,0 +1,8 @@
+"""Semantic Context Engine (SCE).
+
+A deterministic, offline dual-layer semantic graph engine that extracts
+variable-resolution context slices from a cloned repository for LLM coding
+agents.
+"""
+
+__version__ = "1.0.0"
