@@ -17,6 +17,8 @@ CALL_NODE_TYPE = {
     LanguageID.TYPESCRIPT: "call_expression",
     LanguageID.TSX: "call_expression",
     LanguageID.GO: "call_expression",
+    LanguageID.JAVA: "method_invocation",
+    LanguageID.CSHARP: "invocation_expression",
 }
 ATTRIBUTE_NODE_TYPE = {
     LanguageID.PYTHON: "attribute",
@@ -24,6 +26,8 @@ ATTRIBUTE_NODE_TYPE = {
     LanguageID.TYPESCRIPT: "member_expression",
     LanguageID.TSX: "member_expression",
     LanguageID.GO: "selector_expression",
+    LanguageID.JAVA: "field_access",
+    LanguageID.CSHARP: "member_access_expression",
 }
 ATTR_OBJECT_FIELD = {
     LanguageID.PYTHON: "object",
@@ -31,6 +35,8 @@ ATTR_OBJECT_FIELD = {
     LanguageID.TYPESCRIPT: "object",
     LanguageID.TSX: "object",
     LanguageID.GO: "operand",
+    LanguageID.JAVA: "object",
+    LanguageID.CSHARP: "expression",
 }
 ATTR_PROPERTY_FIELD = {
     LanguageID.PYTHON: "attribute",
@@ -38,6 +44,8 @@ ATTR_PROPERTY_FIELD = {
     LanguageID.TYPESCRIPT: "property",
     LanguageID.TSX: "property",
     LanguageID.GO: "field",
+    LanguageID.JAVA: "field",
+    LanguageID.CSHARP: "name",
 }
 IDENTIFIER_NODE_TYPES = {
     LanguageID.PYTHON: {"identifier"},
@@ -45,15 +53,20 @@ IDENTIFIER_NODE_TYPES = {
     LanguageID.TYPESCRIPT: {"identifier"},
     LanguageID.TSX: {"identifier"},
     LanguageID.GO: {"identifier"},
+    LanguageID.JAVA: {"identifier"},
+    LanguageID.CSHARP: {"identifier"},
 }
 SELF_NODE_EXTRA_TYPES = {
     # Languages where the "self" receiver is its own node type rather than a
-    # plain identifier (JS/TS `this`). Python's `self` is just an identifier.
+    # plain identifier (JS/TS/Java/C# `this`). Python's `self` is just an
+    # identifier, by convention rather than grammar.
     LanguageID.JAVASCRIPT: {"this"},
     LanguageID.TYPESCRIPT: {"this"},
     LanguageID.TSX: {"this"},
     LanguageID.GO: set(),
     LanguageID.PYTHON: set(),
+    LanguageID.JAVA: {"this"},
+    LanguageID.CSHARP: {"this_expression"},
 }
 SELF_TOKEN_TEXT = {
     LanguageID.PYTHON: {"self"},
@@ -61,6 +74,8 @@ SELF_TOKEN_TEXT = {
     LanguageID.TYPESCRIPT: {"this"},
     LanguageID.TSX: {"this"},
     LanguageID.GO: set(),
+    LanguageID.JAVA: {"this"},
+    LanguageID.CSHARP: {"this"},
 }
 CLASS_NODE_TYPES = {
     LanguageID.PYTHON: {"class_definition"},
@@ -68,6 +83,8 @@ CLASS_NODE_TYPES = {
     LanguageID.TYPESCRIPT: {"class_declaration"},
     LanguageID.TSX: {"class_declaration"},
     LanguageID.GO: {"type_declaration"},
+    LanguageID.JAVA: {"class_declaration", "interface_declaration", "record_declaration", "enum_declaration"},
+    LanguageID.CSHARP: {"class_declaration", "interface_declaration", "struct_declaration", "record_declaration"},
 }
 FUNCTION_NODE_TYPES = {
     LanguageID.PYTHON: {"function_definition"},
@@ -75,6 +92,8 @@ FUNCTION_NODE_TYPES = {
     LanguageID.TYPESCRIPT: {"function_declaration", "method_definition"},
     LanguageID.TSX: {"function_declaration", "method_definition"},
     LanguageID.GO: {"function_declaration", "method_declaration"},
+    LanguageID.JAVA: {"method_declaration", "constructor_declaration"},
+    LanguageID.CSHARP: {"method_declaration", "constructor_declaration"},
 }
 DECORATED_WRAPPER_TYPES = {
     LanguageID.PYTHON: {"decorated_definition"},
@@ -82,12 +101,21 @@ DECORATED_WRAPPER_TYPES = {
     LanguageID.TYPESCRIPT: set(),
     LanguageID.TSX: set(),
     LanguageID.GO: set(),
+    # Java annotations / C# attributes are inline "modifiers"/"attribute_list"
+    # children of the definition itself, not a separate wrapper node around
+    # it the way Python's `@decorator\ndef f()` is - nothing to unwrap here.
+    LanguageID.JAVA: set(),
+    LanguageID.CSHARP: set(),
 }
 ASSIGNMENT_NODE_TYPE = {
     LanguageID.PYTHON: "assignment",
+    LanguageID.JAVA: "assignment_expression",
+    LanguageID.CSHARP: "assignment_expression",
 }
 RAISE_NODE_TYPE = {
     LanguageID.PYTHON: "raise_statement",
+    LanguageID.JAVA: "throw_statement",
+    LanguageID.CSHARP: "throw_statement",
 }
 
 
@@ -147,3 +175,32 @@ def flatten_reference_chain(node: Node, source: bytes, lang: str) -> list[str] |
             continue
         return None
     return None
+
+
+def call_callee_segments(call_node: Node, source: bytes, lang: str) -> list[str] | None:
+    """The dotted reference-chain segments naming what `call_node` invokes
+    (e.g. `["self", "repo", "save"]` for `self.repo.save(x)`) - the same
+    result `flatten_reference_chain(call_node.child_by_field_name("function"),
+    ...)` gives for every other supported language, generalized to cover
+    Java's structurally different `method_invocation`, which has no single
+    "function" field at all: the receiver and method name are two separate
+    fields ("object", optional, and "name", always present) rather than one
+    combined callee expression.
+    """
+    if lang == LanguageID.JAVA:
+        name_node = call_node.child_by_field_name("name")
+        if name_node is None:
+            return None
+        name = node_text(name_node, source)
+        object_node = call_node.child_by_field_name("object")
+        if object_node is None:
+            return [name]
+        object_segments = flatten_reference_chain(object_node, source, lang)
+        if object_segments is None:
+            return None
+        return [*object_segments, name]
+
+    func_node = call_node.child_by_field_name("function")
+    if func_node is None:
+        return None
+    return flatten_reference_chain(func_node, source, lang)

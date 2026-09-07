@@ -16,6 +16,7 @@ from sce.parser.lang_config import (
     DECORATED_WRAPPER_TYPES,
     RAISE_NODE_TYPE,
     SELF_TOKEN_TEXT,
+    call_callee_segments,
     find_all,
     flatten_reference_chain,
     iter_scoped_nodes,
@@ -46,10 +47,7 @@ class TaggingEngine:
 
         call_type = CALL_NODE_TYPE[lang]
         for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
-            func_node = call_node.child_by_field_name("function")
-            if func_node is None:
-                continue
-            segments = flatten_reference_chain(func_node, parsed.source, lang)
+            segments = call_callee_segments(call_node, parsed.source, lang)
             if not segments:
                 continue
             method_name = segments[-1]
@@ -98,8 +96,14 @@ class TaggingEngine:
         return matrix
 
     # -- helpers ---------------------------------------------------------- #
+    _ANNOTATION_CONTAINER_TYPES = {"modifiers", "attribute_list"}
+    _ANNOTATION_NODE_TYPES = {"annotation", "marker_annotation", "attribute"}
+
     def _collect_decorator_texts(self, def_node: Node, parsed: ParsedFile) -> list[str]:
         lang = parsed.language_id
+        if lang in (LanguageID.JAVA, LanguageID.CSHARP):
+            return self._collect_annotation_texts(def_node, parsed)
+
         wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
         if def_node.parent is None or def_node.parent.type not in wrapper_types:
             return []
@@ -120,18 +124,43 @@ class TaggingEngine:
             texts.append(".".join(segments) if segments else node_text(target, parsed.source))
         return texts
 
+    def _collect_annotation_texts(self, def_node: Node, parsed: ParsedFile) -> list[str]:
+        """Java annotations (`@PreAuthorize`) and C# attributes
+        (`[Authorize]`) are inline children of the definition itself - a
+        `modifiers`/`attribute_list` node holding one or more
+        `annotation`/`marker_annotation`/`attribute` nodes - not a separate
+        wrapper node around the definition the way Python's
+        `@decorator\\ndef f()` is. `attribute_list` can itself hold several
+        attributes (`[HttpPost, Authorize]`), each its own `attribute` node.
+        """
+        texts: list[str] = []
+        for container in def_node.children:
+            if container.type not in self._ANNOTATION_CONTAINER_TYPES:
+                continue
+            for node in container.children:
+                if node.type not in self._ANNOTATION_NODE_TYPES:
+                    continue
+                name_node = node.child_by_field_name("name")
+                texts.append(node_text(name_node if name_node is not None else node, parsed.source))
+        return texts
+
     def _extract_exception_name(self, raise_node: Node, parsed: ParsedFile) -> str | None:
         lang = parsed.language_id
         call_type = CALL_NODE_TYPE.get(lang)
         for child in raise_node.children:
-            if child.type in ("raise", "from"):
+            if child.type in ("raise", "from", "throw"):
                 continue
             if child.type == call_type:
-                func = child.child_by_field_name("function")
-                if func is None:
-                    return None
-                segments = flatten_reference_chain(func, parsed.source, lang)
-                return segments[-1] if segments else node_text(func, parsed.source)
+                segments = call_callee_segments(child, parsed.source, lang)
+                return segments[-1] if segments else None
+            if child.type == "object_creation_expression":
+                # Java/C#: `throw new PermissionDeniedException("...")` -
+                # the exception type name lives in the "type" field, not a
+                # call's "function" field (this isn't a call node at all).
+                type_node = child.child_by_field_name("type")
+                if type_node is not None:
+                    return node_text(type_node, parsed.source)
+                continue
             segments = flatten_reference_chain(child, parsed.source, lang)
             if segments:
                 return segments[-1]
@@ -160,6 +189,16 @@ class TaggingEngine:
                 for c in spec.children:
                     if c.type == "interpreted_string_literal":
                         texts.add(node_text(c, src).strip('"'))
+        elif lang == LanguageID.JAVA:
+            for stmt in find_all(parsed.root_node, {"import_declaration"}):
+                for c in stmt.children:
+                    if c.type == "scoped_identifier":
+                        texts.add(node_text(c, src))
+        elif lang == LanguageID.CSHARP:
+            for stmt in find_all(parsed.root_node, {"using_directive"}):
+                for c in stmt.children:
+                    if c.type in ("qualified_name", "identifier"):
+                        texts.add(node_text(c, src))
         return texts
 
     @staticmethod

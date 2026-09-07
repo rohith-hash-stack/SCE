@@ -80,6 +80,48 @@ GO_QUERIES = {
     """,
 }
 
+JAVA_QUERIES = {
+    "definitions": """
+        (class_declaration name: (identifier) @def.name) @def.class
+        (interface_declaration name: (identifier) @def.name) @def.class
+        (record_declaration name: (identifier) @def.name) @def.class
+        (enum_declaration name: (identifier) @def.name) @def.class
+        (method_declaration name: (identifier) @def.name) @def.function
+        (constructor_declaration name: (identifier) @def.name) @def.function
+    """,
+    "imports": """
+        (import_declaration) @import.stmt
+    """,
+    "calls": """
+        (method_invocation name: (identifier) @call.name) @call.expr
+    """,
+    "decorators": """
+        (marker_annotation name: (identifier) @decorator)
+        (annotation name: (identifier) @decorator)
+    """,
+}
+
+CSHARP_QUERIES = {
+    "definitions": """
+        (class_declaration name: (identifier) @def.name) @def.class
+        (interface_declaration name: (identifier) @def.name) @def.class
+        (struct_declaration name: (identifier) @def.name) @def.class
+        (record_declaration name: (identifier) @def.name) @def.class
+        (method_declaration name: (identifier) @def.name) @def.function
+        (constructor_declaration name: (identifier) @def.name) @def.function
+    """,
+    "imports": """
+        (using_directive) @import.stmt
+    """,
+    "calls": """
+        (invocation_expression function: (identifier) @call.name) @call.expr
+        (invocation_expression function: (member_access_expression) @call.attribute) @call.expr
+    """,
+    "decorators": """
+        (attribute name: (identifier) @decorator)
+    """,
+}
+
 # `slicer_defs`: locates a function/method/class definition's structural
 # parts (parameters, return type, body) for `sce.slicer.universal_slicer`.
 # Deliberately separate from `definitions` above (used by
@@ -151,12 +193,52 @@ GO_SLICER_QUERIES = {
     """,
 }
 
+JAVA_SLICER_QUERIES = {
+    "slicer_defs": """
+        (method_declaration
+            name: (identifier) @def.name
+            parameters: (formal_parameters) @def.params
+            body: (block) @def.body) @def.function
+        (constructor_declaration
+            name: (identifier) @def.name
+            parameters: (formal_parameters) @def.params
+            body: (constructor_body) @def.body) @def.function
+        (class_declaration
+            name: (identifier) @def.name
+            body: (class_body) @def.body) @def.class
+        (interface_declaration
+            name: (identifier) @def.name
+            body: (interface_body) @def.body) @def.class
+    """,
+}
+
+CSHARP_SLICER_QUERIES = {
+    "slicer_defs": """
+        (method_declaration
+            name: (identifier) @def.name
+            parameters: (parameter_list) @def.params
+            body: (block) @def.body) @def.function
+        (constructor_declaration
+            name: (identifier) @def.name
+            parameters: (parameter_list) @def.params
+            body: (block) @def.body) @def.function
+        (class_declaration
+            name: (identifier) @def.name
+            body: (declaration_list) @def.body) @def.class
+        (interface_declaration
+            name: (identifier) @def.name
+            body: (declaration_list) @def.body) @def.class
+    """,
+}
+
 _SLICER_QUERY_SETS: dict[str, dict[str, str]] = {
     LanguageID.PYTHON: PYTHON_SLICER_QUERIES,
     LanguageID.JAVASCRIPT: JAVASCRIPT_SLICER_QUERIES,
     LanguageID.TYPESCRIPT: TYPESCRIPT_SLICER_QUERIES,
     LanguageID.TSX: TYPESCRIPT_SLICER_QUERIES,
     LanguageID.GO: GO_SLICER_QUERIES,
+    LanguageID.JAVA: JAVA_SLICER_QUERIES,
+    LanguageID.CSHARP: CSHARP_SLICER_QUERIES,
 }
 
 _QUERY_SETS: dict[str, dict[str, str]] = {
@@ -165,6 +247,8 @@ _QUERY_SETS: dict[str, dict[str, str]] = {
     LanguageID.TYPESCRIPT: TYPESCRIPT_QUERIES,
     LanguageID.TSX: TYPESCRIPT_QUERIES,
     LanguageID.GO: GO_QUERIES,
+    LanguageID.JAVA: JAVA_QUERIES,
+    LanguageID.CSHARP: CSHARP_QUERIES,
 }
 
 _compiled_cache: dict[tuple[str, str], Query] = {}

@@ -2,10 +2,13 @@
 
 Python gets exact, `ast`-driven compression (HLD section 4.3): a real
 `ast.NodeTransformer` skeletonizes control flow for L1, and L2/L3 render the
-interface contract straight from the parsed signature. Other supported
-languages fall back to conservative, textual approximations - documented
-inline - since we don't have a native AST module for them the way we do for
-Python.
+interface contract straight from the parsed signature. Every other language
+`UniversalSlicer` supports (JS/TS/Go/Java/C#) routes through its own
+CST-based byte-range pruning instead - the same precision as the Python
+path, just derived from Tree-sitter's CST rather than a language-specific
+AST module. A language with neither (or when the caller has no `def_node`
+handy, e.g. an L0 raw-slice request, which needs none) falls back to
+`compress_generic`'s conservative textual approximation.
 """
 from __future__ import annotations
 
@@ -13,6 +16,8 @@ import ast
 import copy
 import textwrap
 from dataclasses import dataclass, field
+
+from tree_sitter import Node
 
 from sce.parser.tree_sitter_loader import LanguageID
 
@@ -314,12 +319,62 @@ def compress_generic(source: str, line_range: tuple[int, int], resolution: int, 
     return "\n".join(kept) if kept else raw
 
 
+def compress_universal(source: str, def_node: Node, language_id: str, resolution: int, context: CompressionContext) -> str:
+    """L1/L2/L3 via `UniversalSlicer`'s CST byte-range pruning - the same
+    approach `compress_python` uses, generalized to every language that
+    doesn't have a native `ast` module. Re-encodes `source` (the decoded
+    file text every other compressor entry point already takes) back to
+    bytes, since `def_node`'s byte offsets were computed against the
+    original file bytes; safe for any file that decoded losslessly to
+    begin with (`errors="replace"` in the initial decode - a genuinely
+    invalid-UTF-8 source file - is the one case this round-trip can't
+    recover, an existing, pre-existing-elsewhere degradation, not a new
+    one this introduces).
+    """
+    from sce.parser.lang_config import CLASS_NODE_TYPES
+    from sce.slicer.universal_slicer import UniversalSlicer
+
+    slicer = UniversalSlicer()
+    source_bytes = source.encode("utf-8")
+    # Classes don't skeletonize meaningfully below L0 (mirrors
+    # compress_python's own `ast.ClassDef` special case exactly - L1 and L2
+    # both render the same header+contract shape for a class; only L3 drops
+    # the metadata block).
+    is_class = def_node.type in CLASS_NODE_TYPES.get(language_id, frozenset())
+    if resolution == 3:
+        # Signature only, no contract metadata block - matches
+        # compress_python's own L3 (`_stub_signature`, no tags/raises/calls).
+        # `signature_line` (not `.splitlines()[0]` on the full L2 contract)
+        # since an annotated/attributed header can itself span multiple
+        # source lines (`@Override\npublic String toString()`) - taking
+        # only the first line silently truncated it to just `@Override`,
+        # a genuine syntax error caught by a live spring-petclinic run.
+        return slicer.signature_line(source_bytes, def_node, language_id)
+    if resolution == 1 and not is_class:
+        return slicer.skeletonize(source_bytes, def_node, language_id)
+    return slicer.extract_contract(source_bytes, def_node, language_id, tags=context.tags, callees=context.callees)
+
+
 class ASTCompressor:
     """Language-dispatching entry point used by the knapsack packer."""
 
-    def compress(self, language_id: str, source: str, name: str, line_range: tuple[int, int], resolution: int, context: CompressionContext | None = None) -> str:
+    def compress(
+        self,
+        language_id: str,
+        source: str,
+        name: str,
+        line_range: tuple[int, int],
+        resolution: int,
+        context: CompressionContext | None = None,
+        def_node: Node | None = None,
+    ) -> str:
         context = context or CompressionContext()
         resolution = max(0, min(resolution, 3))
         if language_id == LanguageID.PYTHON:
             return compress_python(source, name, line_range, resolution, context)
+        if resolution != 0 and def_node is not None:
+            from sce.slicer.universal_slicer import UniversalSlicer
+
+            if language_id in UniversalSlicer.SUPPORTED_LANGUAGES:
+                return compress_universal(source, def_node, language_id, resolution, context)
         return compress_generic(source, line_range, resolution, context)

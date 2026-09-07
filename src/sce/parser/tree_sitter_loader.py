@@ -18,6 +18,8 @@ class LanguageID:
     TYPESCRIPT = "typescript"
     TSX = "tsx"
     GO = "go"
+    JAVA = "java"
+    CSHARP = "csharp"
 
 
 EXTENSION_LANGUAGE_MAP: dict[str, str] = {
@@ -28,6 +30,8 @@ EXTENSION_LANGUAGE_MAP: dict[str, str] = {
     ".ts": LanguageID.TYPESCRIPT,
     ".tsx": LanguageID.TSX,
     ".go": LanguageID.GO,
+    ".java": LanguageID.JAVA,
+    ".cs": LanguageID.CSHARP,
 }
 
 # Languages for which the concrete-graph linker and AST compressor have full,
@@ -56,6 +60,14 @@ def _load_language(language_id: str) -> Language:
         return Language(ts_mod.language_tsx())
     if language_id == LanguageID.GO:
         import tree_sitter_go as ts_mod
+
+        return Language(ts_mod.language())
+    if language_id == LanguageID.JAVA:
+        import tree_sitter_java as ts_mod
+
+        return Language(ts_mod.language())
+    if language_id == LanguageID.CSHARP:
+        import tree_sitter_c_sharp as ts_mod
 
         return Language(ts_mod.language())
     raise ValueError(f"Unsupported language id: {language_id}")

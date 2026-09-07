@@ -70,13 +70,48 @@ CALL_SINK_RULES: tuple[CallSinkRule, ...] = (
 DECORATOR_RULES: tuple[DecoratorRule, ...] = (
     DecoratorRule(
         tag="#route_handler",
-        decorator_patterns=("app.get", "app.post", "app.put", "app.delete", "app.route", "router."),
+        decorator_patterns=(
+            "app.get", "app.post", "app.put", "app.delete", "app.route", "router.",
+            # Java (Spring MVC) and C# (ASP.NET Core) route-binding
+            # annotations/attributes - matched by bare name the same way a
+            # Python decorator is, since `_collect_decorator_texts` reduces
+            # both to plain text before this check runs.
+            "GetMapping", "PostMapping", "PutMapping", "DeleteMapping", "PatchMapping", "RequestMapping",
+            "HttpGet", "HttpPost", "HttpPut", "HttpDelete", "HttpPatch", "Route", "ApiController",
+        ),
         import_triggers=("fastapi", "flask", "express"),
     ),
     DecoratorRule(
         tag="#event_consumer",
         decorator_patterns=("subscribe", "consumer", "app.task"),
         import_triggers=("celery", "kafka", "pika", "redis"),
+    ),
+    DecoratorRule(
+        tag="#auth_guard",
+        # Java (Spring Security / Jakarta EE) and C# (ASP.NET Core)
+        # authorization annotations/attributes - a declarative alternative
+        # to `AUTH_GUARD_RULE`'s call/exception-name-based detection below,
+        # which these frameworks' idiomatic style relies on instead of an
+        # explicit `verify(...)` call or a raised permission exception.
+        decorator_patterns=("PreAuthorize", "PostAuthorize", "Secured", "RolesAllowed", "Authorize", "RequireScope"),
+    ),
+    DecoratorRule(
+        tag="#state_mutation",
+        # Java's `@Transactional`/`@Modifying` and C#'s `[UnitOfWork]`/
+        # `[Transactional]` mark a method as mutating persistent state,
+        # declaratively - the same signal `STATE_MUTATION_TAG`'s
+        # `self.*`/`this.*` assignment-shape heuristic looks for
+        # structurally, just stated up front instead.
+        decorator_patterns=("Transactional", "Modifying", "UnitOfWork"),
+    ),
+    DecoratorRule(
+        tag="#db_write",
+        # The same annotations above also name a persistence-boundary
+        # write explicitly enough to double as a direct #db_write signal,
+        # independent of whether a `.save()`/`.commit()`-shaped call sink
+        # is even visible in this method's own body (e.g. it may delegate
+        # to a repository interface method with no visible implementation).
+        decorator_patterns=("Transactional", "Modifying"),
     ),
 )
 

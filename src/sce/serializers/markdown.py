@@ -19,6 +19,8 @@ _FENCE_LANGUAGE = {
     "typescript": "typescript",
     "tsx": "tsx",
     "go": "go",
+    "java": "java",
+    "csharp": "csharp",
 }
 
 

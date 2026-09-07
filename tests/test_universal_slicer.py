@@ -337,9 +337,12 @@ def test_unsupported_language_raises_value_error():
         slicer.skeletonize(b"", None, "ruby")
 
 
-def test_universal_slicer_supported_languages_matches_the_four_target_languages():
+def test_universal_slicer_supported_languages_matches_the_target_languages():
     assert slicer.SUPPORTED_LANGUAGES == frozenset(
-        {LanguageID.PYTHON, LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX, LanguageID.GO}
+        {
+            LanguageID.PYTHON, LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX,
+            LanguageID.GO, LanguageID.JAVA, LanguageID.CSHARP,
+        }
     )
 
 

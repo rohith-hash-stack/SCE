@@ -85,9 +85,22 @@ class LocalImportMap:
     """local token -> fully-qualified symbol/module, for one source file."""
 
     aliases: dict[str, str] = field(default_factory=dict)
+    # Package/namespace prefixes brought fully into scope without binding
+    # any one simple name - Java's `import com.example.models.*;` and
+    # every C# `using App.Models;` (C# has no separate wildcard import
+    # syntax; a plain `using` already imports the whole namespace's
+    # members, not just one class). Tried as a same-package/namespace
+    # lookup fallback, after an exact `aliases` match and the caller's own
+    # module/package, and in the order declared - see
+    # `ConcreteGraphBuilder._resolve_reference_chain`.
+    wildcard_targets: list[str] = field(default_factory=list)
 
     def add(self, local_name: str, qualified_target: str) -> None:
         self.aliases[local_name] = qualified_target
+
+    def add_wildcard(self, package_or_namespace: str) -> None:
+        if package_or_namespace not in self.wildcard_targets:
+            self.wildcard_targets.append(package_or_namespace)
 
     def resolve(self, local_name: str) -> str | None:
         return self.aliases.get(local_name)

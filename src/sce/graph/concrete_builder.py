@@ -32,6 +32,7 @@ from sce.parser.lang_config import (
     CLASS_NODE_TYPES,
     DECORATED_WRAPPER_TYPES,
     SELF_TOKEN_TEXT,
+    call_callee_segments,
     find_all,
     flatten_reference_chain,
     iter_scoped_nodes,
@@ -73,8 +74,24 @@ class ConcreteGraphBuilder:
             if parsed is None:
                 continue
             self._parsed_files[path] = parsed
-            module = path_to_module(path, self.repo_root)
+            module = self._module_for_file(parsed)
             self._collect_definitions_in_file(parsed, module)
+
+    def _module_for_file(self, parsed: ParsedFile) -> str:
+        """The dotted "module" every symbol in this file is qualified
+        under. For most languages this is derived from the file's own path
+        (import paths mirror the directory tree) - but Java/C# resolve
+        symbols by declared `package`/`namespace`, not file location (a
+        repo's build layout, e.g. Maven's `src/main/java/...` prefix, is
+        not part of the qualified name a real `import`/`using` statement
+        ever names), so their own in-file declaration is authoritative
+        when present.
+        """
+        if parsed.language_id in (LanguageID.JAVA, LanguageID.CSHARP):
+            declared = _parse_package_or_namespace(parsed)
+            if declared is not None:
+                return declared
+        return path_to_module(parsed.path, self.repo_root)
 
     def _collect_definitions_in_file(self, parsed: ParsedFile, module: str) -> None:
         lang = parsed.language_id
@@ -263,7 +280,7 @@ class ConcreteGraphBuilder:
             parsed = self._parsed_files.get(path)
             if parsed is None:
                 continue
-            module = path_to_module(path, self.repo_root)
+            module = self._module_for_file(parsed)
             import_map = self._build_import_map(parsed, module)
             file_symbols = [
                 qname
@@ -272,16 +289,17 @@ class ConcreteGraphBuilder:
                 and symbol.file == path
                 and symbol.kind in ("function", "method")
             ]
+            instance_binding_langs = (LanguageID.PYTHON, LanguageID.JAVA, LanguageID.CSHARP)
             for qualified_name in file_symbols:
                 symbol = self.symbol_table.get(qualified_name)
                 def_node = self._def_nodes[qualified_name]
                 class_instance_map = InstanceTypeMap()
-                if symbol.enclosing_class and parsed.language_id == LanguageID.PYTHON:
+                if symbol.enclosing_class and parsed.language_id in instance_binding_langs:
                     class_instance_map = self._build_class_instance_map(
                         symbol.enclosing_class, parsed, module, import_map
                     )
                 func_instance_map = InstanceTypeMap()
-                if parsed.language_id == LanguageID.PYTHON:
+                if parsed.language_id in instance_binding_langs:
                     func_instance_map = self._build_function_instance_map(def_node, parsed, module, import_map)
                 self._resolve_calls_in_function(
                     qualified_name, def_node, parsed, module, symbol.enclosing_class,
@@ -298,6 +316,10 @@ class ConcreteGraphBuilder:
             self._parse_js_imports(parsed, module, import_map)
         elif lang == LanguageID.GO:
             self._parse_go_imports(parsed, import_map)
+        elif lang == LanguageID.JAVA:
+            self._parse_java_imports(parsed, import_map)
+        elif lang == LanguageID.CSHARP:
+            self._parse_csharp_imports(parsed, import_map)
         return import_map
 
     def _parse_python_imports(self, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
@@ -407,6 +429,45 @@ class ConcreteGraphBuilder:
             alias = node_text(alias_node, src) if alias_node is not None else default_alias
             import_map.add(alias, import_path.replace("/", "."))
 
+    def _parse_java_imports(self, parsed: ParsedFile, import_map: LocalImportMap) -> None:
+        """`import com.example.models.User;` binds the simple name `User`
+        directly (Rule B); `import com.example.models.*;` brings the whole
+        package into scope as a wildcard fallback (Rule D-adjacent) - see
+        `_resolve_reference_chain`. `import static ...` is left unresolved
+        (a static-member import binds a *member* name, not a class one -
+        out of scope for this pass, which only ever binds class-shaped
+        names).
+        """
+        src = parsed.source
+        for stmt in find_all(parsed.root_node, {"import_declaration"}):
+            if any(c.type == "static" for c in stmt.children):
+                continue
+            is_wildcard = any(c.type == "asterisk" for c in stmt.children)
+            scoped = next((c for c in stmt.children if c.type in ("scoped_identifier", "identifier")), None)
+            if scoped is None:
+                continue
+            text = node_text(scoped, src)
+            if is_wildcard:
+                import_map.add_wildcard(text)
+            else:
+                import_map.add(text.rsplit(".", 1)[-1], text)
+
+    def _parse_csharp_imports(self, parsed: ParsedFile, import_map: LocalImportMap) -> None:
+        """Every `using App.Models;` imports the whole namespace's members
+        into scope - C# has no separate per-class `import`/wildcard
+        distinction the way Java does, so this always adds a wildcard
+        target, never a single bound name. `using X = Y;` (an alias
+        directive) and `using static X;` are left unresolved.
+        """
+        src = parsed.source
+        for stmt in find_all(parsed.root_node, {"using_directive"}):
+            if any(c.type in ("=", "static") for c in stmt.children):
+                continue
+            target = next((c for c in stmt.children if c.type in ("qualified_name", "identifier")), None)
+            if target is None:
+                continue
+            import_map.add_wildcard(node_text(target, src))
+
     # -- Instance bindings (Python only) --------------------------------- #
     def _resolve_reference_chain(self, segments: list[str] | None, module: str, import_map: LocalImportMap) -> str | None:
         if not segments:
@@ -414,7 +475,20 @@ class ConcreteGraphBuilder:
         root, *rest = segments
         resolved_root = import_map.resolve(root)
         if resolved_root is None:
+            # Rule D: a bare name defined in the caller's own module - for
+            # Java/C#, `module` is the file's declared package/namespace
+            # (see `_module_for_file`), not a per-file path, so this alone
+            # already covers same-package/namespace implicit visibility
+            # (every file in the package shares the same `module` string).
             resolved_root = self.symbol_table.resolve_in_module(module, root)
+        if resolved_root is None:
+            # Java `import pkg.*;` / any C# `using Namespace;` - try each
+            # wildcard-imported package/namespace as its own same-module
+            # lookup, in declared order.
+            for wildcard in import_map.wildcard_targets:
+                resolved_root = self.symbol_table.resolve_in_module(wildcard, root)
+                if resolved_root is not None:
+                    break
         if resolved_root is None:
             return None
         return ".".join([resolved_root, *rest]) if rest else resolved_root
@@ -434,15 +508,14 @@ class ConcreteGraphBuilder:
             for assign in iter_scoped_nodes(method_node, {assign_type}, parsed.language_id):
                 target = assign.child_by_field_name("left")
                 value = assign.child_by_field_name("right")
-                if target is None or value is None or value.type != CALL_NODE_TYPE[parsed.language_id]:
+                if target is None or value is None:
+                    continue
+                ctor_segments = _constructor_call_segments(value, parsed.language_id, parsed.source)
+                if ctor_segments is None:
                     continue
                 target_segments = flatten_reference_chain(target, parsed.source, parsed.language_id)
                 if not target_segments or len(target_segments) != 2 or target_segments[0] not in self_tokens:
                     continue
-                ctor = value.child_by_field_name("function")
-                ctor_segments = (
-                    flatten_reference_chain(ctor, parsed.source, parsed.language_id) if ctor is not None else None
-                )
                 resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
                 if self._is_known_class(resolved_class):
                     instance_map.bind(".".join(target_segments), resolved_class)
@@ -458,22 +531,39 @@ class ConcreteGraphBuilder:
         self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap
     ) -> InstanceTypeMap:
         instance_map = InstanceTypeMap()
-        assign_type = ASSIGNMENT_NODE_TYPE.get(parsed.language_id)
-        if assign_type is None:
-            return instance_map
-        for assign in iter_scoped_nodes(def_node, {assign_type}, parsed.language_id):
-            target = assign.child_by_field_name("left")
-            value = assign.child_by_field_name("right")
-            if target is None or value is None or target.type != "identifier" or value.type != CALL_NODE_TYPE[parsed.language_id]:
-                continue
-            var_name = node_text(target, parsed.source)
-            ctor = value.child_by_field_name("function")
-            ctor_segments = (
-                flatten_reference_chain(ctor, parsed.source, parsed.language_id) if ctor is not None else None
-            )
-            resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
-            if self._is_known_class(resolved_class):
-                instance_map.bind(var_name, resolved_class)
+        lang = parsed.language_id
+        assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+        if assign_type is not None:
+            for assign in iter_scoped_nodes(def_node, {assign_type}, lang):
+                target = assign.child_by_field_name("left")
+                value = assign.child_by_field_name("right")
+                if target is None or value is None or target.type != "identifier":
+                    continue
+                ctor_segments = _constructor_call_segments(value, lang, parsed.source)
+                if ctor_segments is None:
+                    continue
+                resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+                if self._is_known_class(resolved_class):
+                    instance_map.bind(node_text(target, parsed.source), resolved_class)
+
+        # Java/C# construct almost exclusively through a *typed local
+        # variable declaration* (`OrderValidator v = new OrderValidator();`),
+        # not a bare reassignment - a structurally different node from
+        # `assignment_expression` above (no untyped "declare a new local"
+        # form exists in either language), so it needs its own scan.
+        declarator_type = _LOCAL_VAR_DECLARATOR_TYPE.get(lang)
+        if declarator_type is not None:
+            for declarator in iter_scoped_nodes(def_node, {declarator_type}, lang):
+                name_node = declarator.child_by_field_name("name")
+                value = _declarator_value_node(declarator)
+                if name_node is None or value is None:
+                    continue
+                ctor_segments = _constructor_call_segments(value, lang, parsed.source)
+                if ctor_segments is None:
+                    continue
+                resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+                if self._is_known_class(resolved_class):
+                    instance_map.bind(node_text(name_node, parsed.source), resolved_class)
         return instance_map
 
     # -- Call resolution -------------------------------------------------- #
@@ -492,10 +582,7 @@ class ConcreteGraphBuilder:
         call_type = CALL_NODE_TYPE[lang]
         self_tokens = SELF_TOKEN_TEXT[lang]
         for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
-            func_node = call_node.child_by_field_name("function")
-            if func_node is None:
-                continue
-            segments = flatten_reference_chain(func_node, parsed.source, lang)
+            segments = call_callee_segments(call_node, parsed.source, lang)
             if not segments:
                 continue
             target = self._resolve_segments(
@@ -540,3 +627,76 @@ class ConcreteGraphBuilder:
         if resolved_receiver:
             return f"{resolved_receiver}.{method}"
         return None
+
+
+_LOCAL_VAR_DECLARATOR_TYPE: dict[str, str] = {
+    LanguageID.JAVA: "variable_declarator",
+    LanguageID.CSHARP: "variable_declarator",
+}
+
+
+def _declarator_value_node(declarator: Node) -> Node | None:
+    """The initializer expression of a `variable_declarator`
+    (`Type name = <value>;`), if any. Java's grammar exposes it as a
+    "value" field; C#'s grammar does not assign the initializer a field
+    name at all (confirmed empirically - `child_by_field_name("value")`
+    returns None even though the child node is present as the third
+    positional child, after the name identifier and the "=" token) - so
+    this falls back to the second *named* child, since "=" itself is
+    unnamed and the declared name is always first.
+    """
+    value = declarator.child_by_field_name("value")
+    if value is not None:
+        return value
+    named = [c for c in declarator.children if c.is_named]
+    return named[1] if len(named) > 1 else None
+
+
+def _constructor_call_segments(value: Node, lang: str, source: bytes) -> list[str] | None:
+    """The dotted segments naming the class a constructor-shaped
+    assignment's right-hand side invokes, for Rule A instance binding -
+    either a bare call (`Foo()`, Python/JS's constructor idiom) or
+    Java/C#'s `object_creation_expression` (`new Foo()`), the only way
+    either language actually constructs objects.
+    """
+    call_type = CALL_NODE_TYPE.get(lang)
+    if value.type == call_type:
+        ctor = value.child_by_field_name("function")
+        return flatten_reference_chain(ctor, source, lang) if ctor is not None else None
+    if value.type == "object_creation_expression":
+        type_node = value.child_by_field_name("type")
+        if type_node is None:
+            return None
+        # Java/C#'s "type" field is a simple (`type_identifier`/
+        # `identifier`) or generic node, not one
+        # flatten_reference_chain's identifier/attribute-chain walk
+        # recognizes - take its literal text as a single segment
+        # (qualified/generic types are rare here; the class is normally
+        # already resolvable via the file's own imports/package).
+        # Defensively strips `<...>` generic type arguments if present.
+        return [node_text(type_node, source).split("<")[0].strip()]
+    return None
+
+
+def _parse_package_or_namespace(parsed: ParsedFile) -> str | None:
+    """The file's own declared `package`/`namespace`, if any - Java always
+    declares one at most, at the top level; C# may use either the
+    file-scoped form (`namespace App.Services;`, C# 10+) or the
+    block form (`namespace App.Services { ... }`, unbounded nesting in
+    principle, but this repo's target frameworks - ASP.NET Core
+    controllers/services - never nest namespaces in practice, so only the
+    first top-level declaration is used). Returns None for Java's default
+    (unnamed) package or a C# file with no namespace declaration at all,
+    in which case the caller falls back to the file-path-derived module.
+    """
+    lang = parsed.language_id
+    for node in parsed.root_node.children:
+        if lang == LanguageID.JAVA and node.type == "package_declaration":
+            for child in node.children:
+                if child.type in ("scoped_identifier", "identifier"):
+                    return node_text(child, parsed.source)
+        elif lang == LanguageID.CSHARP and node.type in ("namespace_declaration", "file_scoped_namespace_declaration"):
+            for child in node.children:
+                if child.type in ("qualified_name", "identifier"):
+                    return node_text(child, parsed.source)
+    return None

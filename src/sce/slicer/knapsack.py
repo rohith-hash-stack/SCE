@@ -240,7 +240,8 @@ class ContextKnapsackPacker:
         source = parsed.source.decode("utf-8", errors="replace")
         name = qname.rsplit(".", 1)[-1]
         context = CompressionContext(tags=tag_matrix.get(qname, set()), callees=self._callee_labels(builder, qname), compact=compact)
-        return self.compressor.compress(symbol.language_id, source, name, symbol.line_range, resolution, context)
+        def_node = builder.def_node(qname)
+        return self.compressor.compress(symbol.language_id, source, name, symbol.line_range, resolution, context, def_node=def_node)
 
     @staticmethod
     def _directed_reachable(g_c, seed: str) -> set[str]:

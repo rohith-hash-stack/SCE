@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from tree_sitter import Node
 
-from sce.parser.lang_config import CALL_NODE_TYPE, CLASS_NODE_TYPES, FUNCTION_NODE_TYPES
+from sce.parser.lang_config import CALL_NODE_TYPE, CLASS_NODE_TYPES, FUNCTION_NODE_TYPES, call_callee_segments
 from sce.parser.tree_sitter_loader import LanguageID, node_text
 from sce.slicer.compressor import ControlFlowSkeletonizer
 
@@ -41,6 +41,12 @@ _BLOCK_NODE_TYPES: dict[str, frozenset[str]] = {
     LanguageID.TYPESCRIPT: frozenset({"statement_block"}),
     LanguageID.TSX: frozenset({"statement_block"}),
     LanguageID.GO: frozenset({"statement_list"}),
+    # Java's own body node types both hold their statements directly, no
+    # wrapper - "constructor_body" only differs from "block" by name (a
+    # constructor can't declare a return type, so the grammar gives it a
+    # distinct node type), not by shape.
+    LanguageID.JAVA: frozenset({"block", "constructor_body"}),
+    LanguageID.CSHARP: frozenset({"block"}),
 }
 
 # Nodes that are not themselves a statement-list, but may contain one
@@ -76,6 +82,26 @@ _COMPOUND_NODE_TYPES: dict[str, frozenset[str]] = {
         "type_switch_statement", "select_statement", "expression_case",
         "default_case", "type_case", "communication_case",
     }),
+    # Java has no separate elif/else wrapper node at all - `else if` is
+    # just another `if_statement` directly nested under the `else` keyword
+    # (confirmed via grammar exploration), so "if_statement" alone covers
+    # every arm. `switch_expression` is also Java's statement-level switch
+    # (the grammar reuses one node type for both roles); its
+    # `switch_block_statement_group` case bodies hold their statements
+    # directly with no per-case block wrapper - matching JS/TS's own
+    # switch_case/switch_default shape - so, like those, case bodies are
+    # traversed through but never individually pruned (the group is listed
+    # here, not in _BLOCK_NODE_TYPES).
+    LanguageID.JAVA: frozenset({
+        "if_statement", "for_statement", "enhanced_for_statement",
+        "while_statement", "do_statement", "try_statement", "catch_clause",
+        "finally_clause", "switch_expression", "switch_block", "switch_block_statement_group",
+    }),
+    LanguageID.CSHARP: frozenset({
+        "if_statement", "for_statement", "foreach_statement",
+        "while_statement", "do_statement", "try_statement", "catch_clause",
+        "finally_clause", "switch_statement", "switch_body", "switch_section",
+    }),
 }
 
 # Always retained, never pruned, and never recursed into further - a
@@ -90,6 +116,10 @@ _ALWAYS_RETAIN_TYPES: dict[str, frozenset[str]] = {
     # already covered by return_statement. `defer_statement` is Go's own
     # cleanup-on-exit idiom (structurally analogous to try/finally).
     LanguageID.GO: frozenset({"return_statement", "defer_statement", "break_statement", "continue_statement"}),
+    # `yield_statement` is Java's switch-expression `yield <value>;` arm
+    # (structurally a control-transfer statement, same category as return).
+    LanguageID.JAVA: frozenset({"return_statement", "throw_statement", "break_statement", "continue_statement", "yield_statement"}),
+    LanguageID.CSHARP: frozenset({"return_statement", "throw_statement", "break_statement", "continue_statement"}),
 }
 
 # Statement shapes that assign/declare a variable - retained only when their
@@ -105,6 +135,8 @@ _DECLARATION_NODE_TYPES: dict[str, frozenset[str]] = {
     LanguageID.TYPESCRIPT: frozenset({"lexical_declaration", "variable_declaration"}),
     LanguageID.TSX: frozenset({"lexical_declaration", "variable_declaration"}),
     LanguageID.GO: frozenset({"short_var_declaration", "assignment_statement"}),
+    LanguageID.JAVA: frozenset({"local_variable_declaration"}),
+    LanguageID.CSHARP: frozenset({"local_declaration_statement"}),
 }
 
 # Placeholder inserted when *every* statement in a block gets pruned - a
@@ -118,6 +150,8 @@ _EMPTY_BLOCK_PLACEHOLDER: dict[str, bytes] = {
     LanguageID.TYPESCRIPT: b"/* ... */",
     LanguageID.TSX: b"/* ... */",
     LanguageID.GO: b"/* ... */",
+    LanguageID.JAVA: b"/* ... */",
+    LanguageID.CSHARP: b"/* ... */",
 }
 
 # A collapsed call's replacement argument list. Python's bare `...` is a
@@ -133,6 +167,8 @@ _ARG_COLLAPSE_PLACEHOLDER: dict[str, bytes] = {
     LanguageID.TYPESCRIPT: b"(/* ... */)",
     LanguageID.TSX: b"(/* ... */)",
     LanguageID.GO: b"(/* ... */)",
+    LanguageID.JAVA: b"(/* ... */)",
+    LanguageID.CSHARP: b"(/* ... */)",
 }
 
 # The exception-raising statement type per language - Go has none of its
@@ -142,6 +178,8 @@ _RAISE_LIKE_TYPES: dict[str, str] = {
     LanguageID.JAVASCRIPT: "throw_statement",
     LanguageID.TYPESCRIPT: "throw_statement",
     LanguageID.TSX: "throw_statement",
+    LanguageID.JAVA: "throw_statement",
+    LanguageID.CSHARP: "throw_statement",
 }
 
 # Reuse the exact same "is this call noise, not signal" heuristic the
@@ -178,8 +216,15 @@ def _as_call_node(node: Node | None, language_id: str) -> Node | None:
 
 
 def _is_noisy_call(call_node: Node, language_id: str, source: bytes) -> bool:
-    func = call_node.child_by_field_name("function")
-    name = node_text(func if func is not None else call_node, source).lower()
+    # `call_callee_segments` (not a bare "function"-field lookup) is
+    # required here since Java's `method_invocation` has no unified
+    # "function" field at all - it splits an optional receiver and the
+    # method name into separate "object"/"name" fields instead (see
+    # `lang_config.call_callee_segments`'s own docstring); every other
+    # supported language's call node does follow the "function"-field
+    # convention, so this generalizes cleanly rather than special-casing.
+    segments = call_callee_segments(call_node, source, language_id)
+    name = ".".join(segments).lower() if segments else node_text(call_node, source).lower()
     return any(token in name for token in _NOISY_CALL_TOKENS)
 
 
@@ -225,7 +270,39 @@ def _find_call_in_simple_statement(node: Node, language_id: str) -> Node | None:
                 return call_node
         return None
 
+    if node.type == "local_variable_declaration":  # Java
+        for declarator in node.named_children:
+            if declarator.type != "variable_declarator":
+                continue
+            call_node = _as_call_node(declarator.child_by_field_name("value"), language_id)
+            if call_node is not None:
+                return call_node
+        return None
+
+    if node.type == "local_declaration_statement":  # C#
+        var_decl = next((c for c in node.named_children if c.type == "variable_declaration"), None)
+        if var_decl is None:
+            return None
+        for declarator in var_decl.named_children:
+            if declarator.type != "variable_declarator":
+                continue
+            call_node = _as_call_node(_csharp_declarator_value(declarator), language_id)
+            if call_node is not None:
+                return call_node
+        return None
+
     return None
+
+
+def _csharp_declarator_value(declarator: Node) -> Node | None:
+    """A C# `variable_declarator`'s initializer expression. Unlike Java,
+    C#'s grammar assigns it no field name at all (confirmed empirically -
+    `child_by_field_name("value")` returns None even though the child is
+    present as the third positional child, after the name identifier and
+    the "=" token), so this falls back to the second *named* child.
+    """
+    named = [c for c in declarator.children if c.is_named]
+    return named[1] if len(named) > 1 else None
 
 
 def _find_collapsible_call(node: Node, language_id: str) -> Node | None:
@@ -238,7 +315,11 @@ def _find_collapsible_call(node: Node, language_id: str) -> Node | None:
     """
     if node.type == "return_statement" or node.type == _RAISE_LIKE_TYPES.get(language_id):
         value = _unwrap_await(node.named_children[0] if node.named_children else None)
-        if value is not None and value.type in (CALL_NODE_TYPE.get(language_id), "new_expression"):
+        # "new_expression" is JS/TS's constructor-call shape;
+        # "object_creation_expression" is Java/C#'s (`throw new
+        # X("msg");` / `return new X();`) - both name a constructor call
+        # whose arguments should collapse the same way a plain call's do.
+        if value is not None and value.type in (CALL_NODE_TYPE.get(language_id), "new_expression", "object_creation_expression"):
             return value
         return None
     return _find_call_in_simple_statement(node, language_id)
@@ -388,19 +469,34 @@ class UniversalSlicer:
             raise ValueError(f"UniversalSlicer does not support language id: {language_id!r}")
 
         body = def_node.child_by_field_name("body")
-        if body is None:
-            signature_line = node_text(def_node, source).rstrip()
-        else:
-            header = source[def_node.start_byte : body.start_byte].decode("utf-8", errors="replace").rstrip()
-            if language_id == LanguageID.PYTHON:
-                # `header` already ends in ":" (the block's opening colon).
-                signature_line = f"{header} ..."
-            else:
-                signature_line = f"{header} {{ /* contract */ }}"
-
+        signature_line = self.signature_line(source, def_node, language_id)
         raises = self._extract_raised_names(body, language_id, source) if body is not None else []
         lines = [signature_line, _render_contract_metadata(language_id, tags, raises, callees)]
         return "\n".join(line for line in lines if line)
+
+    def signature_line(self, source: bytes, def_node: Node, language_id: str) -> str:
+        """Just the signature (no contract metadata block) - a def_node's
+        header text up to its body, verbatim including whatever precedes
+        the declaration keyword itself on its own source line(s) (Java
+        annotations, C# attributes: `@Override\\npublic String toString()`
+        is one header, not one line). Callers that need "the first line"
+        specifically (none currently do - `.splitlines()[0]` on this
+        method's own output silently truncated a multi-line annotated
+        header down to just `@Override`, confirmed via a live
+        spring-petclinic benchmark run producing an ERROR-node L3 slice)
+        must not assume this is single-line.
+        """
+        if language_id not in self.SUPPORTED_LANGUAGES:
+            raise ValueError(f"UniversalSlicer does not support language id: {language_id!r}")
+
+        body = def_node.child_by_field_name("body")
+        if body is None:
+            return node_text(def_node, source).rstrip()
+        header = source[def_node.start_byte : body.start_byte].decode("utf-8", errors="replace").rstrip()
+        if language_id == LanguageID.PYTHON:
+            # `header` already ends in ":" (the block's opening colon).
+            return f"{header} ..."
+        return f"{header} {{ /* contract */ }}"
 
     @staticmethod
     def _extract_raised_names(body: Node, language_id: str, source: bytes) -> list[str]:
@@ -417,13 +513,20 @@ class UniversalSlicer:
                 continue
             if value.type == call_type:
                 # Python: `raise ValueError("bad")` - a bare call.
-                func = value.child_by_field_name("function")
-                name = node_text(func if func is not None else value, source)
+                segments = call_callee_segments(value, source, language_id)
+                name = segments[-1] if segments else node_text(value, source)
             elif value.type == "new_expression":
                 # JS/TS: `throw new ValidationError("bad")` - just the
                 # constructor name, not the full `new X(...)` text.
                 ctor = value.child_by_field_name("constructor")
                 name = node_text(ctor if ctor is not None else value, source)
+            elif value.type == "object_creation_expression":
+                # Java/C#: `throw new PermissionDeniedException("bad");` -
+                # the exception type lives in the "type" field, not a
+                # "constructor" field (a differently-named grammar
+                # convention from JS/TS's `new_expression` above).
+                type_node = value.child_by_field_name("type")
+                name = node_text(type_node if type_node is not None else value, source)
             else:
                 name = node_text(value, source)
             if name and name not in names:
@@ -437,6 +540,8 @@ _COMMENT_PREFIX: dict[str, str] = {
     LanguageID.TYPESCRIPT: "//",
     LanguageID.TSX: "//",
     LanguageID.GO: "//",
+    LanguageID.JAVA: "//",
+    LanguageID.CSHARP: "//",
 }
 
 
