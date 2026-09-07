@@ -9,7 +9,12 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from sce.runtime.tracer import Tracer, resolve_qualified_name, run_traced_pytest
+from sce.cli import build_pipeline
+from sce.graph.metamodel import SemanticMetamodel
+from sce.runtime.reconciler import GraphReconciler, load_trace_file
+from sce.runtime.tracer import Tracer, TraceRecord, resolve_qualified_name, run_traced_pytest
+from sce.slicer.distance import DistanceConfig, DistanceEngine
+from sce.slicer.knapsack import ContextKnapsackPacker
 
 
 def _write_traced_module(tmp_path):
@@ -163,3 +168,139 @@ def test_module_entry_point_runs_traced_pytest(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert output.exists()
     assert '"callee":"orders.OrderService.create_order"' in output.read_text()
+
+
+# --------------------------------------------------------------------- #
+# Dynamic dispatch (getattr) end to end: tracer capture, graph
+# reconciliation, and knapsack packing priority. `handlers.handle_create`
+# is invoked only through `getattr(handlers, f"handle_{action}")` in
+# `dispatcher.dispatch` - a name the static two-pass resolver genuinely
+# cannot see (it isn't a literal reference to `handle_create` anywhere in
+# the source text), so this exercises the real gap the runtime watcher
+# exists to close, not a contrived one.
+# --------------------------------------------------------------------- #
+def _write_dispatch_fixture(tmp_path):
+    repo = tmp_path / "dispatch_repo"
+    repo.mkdir()
+    (repo / "handlers.py").write_text(
+        "def handle_create(amount):\n"
+        "    return amount\n"
+        "\n"
+        "\n"
+        "def handle_cancel(amount):\n"
+        "    return -amount\n"
+    )
+    (repo / "dispatcher.py").write_text(
+        "import handlers\n"
+        "\n"
+        "\n"
+        "def dispatch(action, amount):\n"
+        "    handler = getattr(handlers, f'handle_{action}')\n"
+        "    return handler(amount)\n"
+    )
+    return repo
+
+
+def _trace_dispatch_fixture(repo, output_path, action="create", amount=5):
+    sys.path.insert(0, str(repo))
+    try:
+        import dispatcher  # noqa: PLC0415 - deliberately imported after sys.path insert
+
+        with Tracer(str(repo), output_path):
+            dispatcher.dispatch(action, amount)
+    finally:
+        sys.path.remove(str(repo))
+        sys.modules.pop("dispatcher", None)
+        sys.modules.pop("handlers", None)
+
+
+def test_tracer_captures_getattr_dynamic_dispatch(tmp_path):
+    """Tracer Execution: a small multi-module fixture with a dynamic
+    `getattr()` dispatch, traced under `sce.runtime.tracer` - the trace
+    log must capture the actual concrete handler the dispatch resolved
+    to at runtime.
+    """
+    repo = _write_dispatch_fixture(tmp_path)
+    output = tmp_path / "trace.jsonl"
+
+    _trace_dispatch_fixture(repo, output)
+
+    text = output.read_text()
+    assert '"caller":"dispatcher.dispatch"' in text
+    assert '"callee":"handlers.handle_create"' in text
+    # Confirms this is a genuine *dynamic* invocation, not something the
+    # tracer just happened to also see: `getattr` itself is stdlib, so it
+    # must never appear as a traced callee in its own right.
+    assert "getattr" not in text
+
+
+def test_reconciler_injects_dynamic_dispatch_edge_with_confirmed_runtime_confidence(tmp_path):
+    """Graph Reconciliation: `reconciler.reconcile()` must inject the
+    dynamic-dispatch call as a new `G_C` edge, since the static two-pass
+    resolver provably never found it - and that edge's attributes must
+    read `provenance="RUNTIME_DISCOVERED"` /
+    `confidence="CONFIRMED_RUNTIME"`.
+    """
+    repo = _write_dispatch_fixture(tmp_path)
+    builder, tag_matrix = build_pipeline(str(repo))
+    assert not builder.graph.has_edge("dispatcher.dispatch", "handlers.handle_create")
+
+    output = tmp_path / "trace.jsonl"
+    _trace_dispatch_fixture(repo, output)
+    events = load_trace_file(output)
+
+    result = GraphReconciler(builder, tag_matrix).reconcile(events)
+
+    assert ("dispatcher.dispatch", "handlers.handle_create") in result.discovered_edges
+    assert builder.graph.has_edge("dispatcher.dispatch", "handlers.handle_create")
+    edge_data = builder.graph.edges["dispatcher.dispatch", "handlers.handle_create"]
+    assert edge_data["confidence"] == "CONFIRMED_RUNTIME"
+    assert edge_data["provenance"] == "RUNTIME_DISCOVERED"
+    assert edge_data["relation"] == "CALLS"
+
+
+def test_knapsack_prioritizes_confirmed_runtime_path_under_constrained_budget(tmp_path):
+    """Knapsack Priority Check: two statically-equidistant (1-hop)
+    candidates, only one of which was actually exercised at runtime - a
+    budget tight enough to admit just one of them must pick the
+    runtime-confirmed one.
+    """
+    repo = tmp_path / "priority_repo"
+    repo.mkdir()
+    (repo / "orders.py").write_text(
+        "def helper_a(amount):\n"
+        "    return amount + 1\n"
+        "\n"
+        "\n"
+        "def helper_b(amount):\n"
+        "    return amount - 1\n"
+        "\n"
+        "\n"
+        "def create_order(amount):\n"
+        "    x = helper_a(amount)\n"
+        "    y = helper_b(amount)\n"
+        "    return x, y\n"
+    )
+    builder, tag_matrix = build_pipeline(str(repo))
+    seed = "orders.create_order"
+    assert builder.graph.has_edge(seed, "orders.helper_a")
+    assert builder.graph.has_edge(seed, "orders.helper_b")
+
+    # Only helper_a's call was actually exercised by a real run.
+    events = [TraceRecord(caller=seed, callee="orders.helper_a", source="pytest_tracer")]
+    GraphReconciler(builder, tag_matrix).reconcile(events)
+
+    engine = DistanceEngine(SemanticMetamodel(), tag_matrix, DistanceConfig())
+
+    # A generous budget fits both, confirming the fixture itself is sane
+    # (this isn't testing anything about priority yet).
+    generous = ContextKnapsackPacker(token_budget=10_000).pack(seed, builder, tag_matrix, engine)
+    assert {"orders.helper_a", "orders.helper_b"} <= {i.symbol for i in generous.items}
+
+    # A tight budget (empirically: room for the seed plus exactly one more
+    # candidate at this fixture's exact token cost) must admit the
+    # runtime-confirmed helper_a, not the unconfirmed helper_b.
+    tight = ContextKnapsackPacker(token_budget=100).pack(seed, builder, tag_matrix, engine)
+    packed_symbols = {item.symbol for item in tight.items}
+    assert "orders.helper_a" in packed_symbols
+    assert "orders.helper_b" not in packed_symbols

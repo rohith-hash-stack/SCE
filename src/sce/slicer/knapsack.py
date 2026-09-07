@@ -3,6 +3,14 @@
 Greedily packs the seed symbol (pinned at L0) plus its nearest neighbors -
 ordered by `D_hybrid` - into a token budget, downgrading resolution (L1 ->
 L2 -> L3) for any candidate that doesn't fit until the budget is exhausted.
+
+A candidate reached via a `confidence="CONFIRMED_RUNTIME"` edge (see
+`sce.runtime.reconciler` - a real execution actually traversed it, not
+just static inference) is preferentially packed over an equal-or-lesser-
+priority unexercised static candidate: `D_hybrid` itself already discounts
+a confirmed edge's hop cost (`DistanceEngine.compute_all`), and `pack`
+below breaks any remaining tie explicitly via
+`DistanceEngine.confirmed_runtime_reachable`.
 """
 from __future__ import annotations
 
@@ -128,6 +136,15 @@ class ContextKnapsackPacker:
     def pack(self, seed: str, builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], distance_engine: DistanceEngine) -> PackResult:
         g_c = builder.graph
         distances = distance_engine.compute_all(seed, g_c)
+        # `compute_all` already discounts a `confidence="CONFIRMED_RUNTIME"`
+        # edge's hop cost (see `DistanceEngine._weighted_undirected`), so a
+        # runtime-confirmed path's distance value is already lower than an
+        # equal-length static-only one - `confirmed` below is the same
+        # signal made explicit and rigorous (which *nodes*, not just
+        # smaller numbers), used as an admission-order tie-breaker so two
+        # candidates the discount alone left at a near-identical distance
+        # still resolve in favor of the one actual execution validated.
+        confirmed = distance_engine.confirmed_runtime_reachable(seed, g_c)
         reachable = self._directed_reachable(g_c, seed)
         compact = self._is_compact_mode(builder, reachable)
 
@@ -191,7 +208,10 @@ class ContextKnapsackPacker:
                 and (symbol := builder.symbol_table.get(node)) is not None
                 and symbol.kind in ("function", "method")
             ),
-            key=lambda n: distances[n],
+            # Runtime-confirmed candidates sort first at a tied (or
+            # near-tied, post-discount) distance - see the `confirmed`
+            # comment above `pack`'s own call to `compute_all`.
+            key=lambda n: (distances[n], 0 if n in confirmed else 1),
         )
 
         for node in candidates:

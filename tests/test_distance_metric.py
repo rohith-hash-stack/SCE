@@ -47,3 +47,49 @@ def test_direct_callee_beats_a_same_tagged_but_structurally_distant_sibling():
     assert distances["direct_callee"] < distances["distant_sibling"], (
         f"direct_callee={distances['direct_callee']}, distant_sibling={distances['distant_sibling']}"
     )
+
+
+def test_confirmed_runtime_edge_scores_lower_distance_than_equal_length_static_path():
+    g = nx.DiGraph()
+    g.add_edge("seed", "static_a")
+    g.add_edge("static_a", "static_target")
+    g.add_edge("seed", "confirmed_a")
+    g.add_edge("confirmed_a", "confirmed_target", confidence="CONFIRMED_RUNTIME")
+
+    engine = DistanceEngine(SemanticMetamodel(), {}, DistanceConfig())
+    distances = engine.compute_all("seed", g)
+
+    assert distances["confirmed_target"] < distances["static_target"]
+
+
+def test_confirmed_runtime_reachable_identifies_exactly_the_nodes_on_a_confirmed_path():
+    g = nx.DiGraph()
+    g.add_edge("seed", "static_only")
+    g.add_edge("seed", "confirmed_hop")
+    g.add_edge("confirmed_hop", "confirmed_downstream", confidence="CONFIRMED_RUNTIME")
+
+    engine = DistanceEngine(SemanticMetamodel(), {}, DistanceConfig())
+    confirmed = engine.confirmed_runtime_reachable("seed", g)
+
+    # `seed -> confirmed_hop` is itself a plain (unconfirmed) edge - only
+    # `confirmed_downstream`'s path actually traverses the one marked
+    # `CONFIRMED_RUNTIME` (`confirmed_hop -> confirmed_downstream`).
+    assert confirmed == {"confirmed_downstream"}
+    assert "static_only" not in confirmed
+    assert "confirmed_hop" not in confirmed
+
+
+def test_distance_metric_unchanged_when_graph_has_no_runtime_confidence_data():
+    """A graph with no `confidence` edge attribute at all must behave
+    identically to plain unweighted hop counting - the runtime-confidence
+    discount is a pure extension, never a behavior change for anything
+    that hasn't gone through `sce.runtime.reconciler`.
+    """
+    g = nx.DiGraph()
+    g.add_edge("seed", "a")
+    g.add_edge("a", "b")
+
+    engine = DistanceEngine(SemanticMetamodel(), {}, DistanceConfig())
+    distances = engine.compute_all("seed", g)
+    assert distances["a"] < distances["b"]
+    assert engine.confirmed_runtime_reachable("seed", g) == set()

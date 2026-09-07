@@ -4,8 +4,13 @@
 
 `d_hat_{G_C}` is the topological hop count in the (undirected) concrete
 graph, normalized against a fixed horizon so a handful of hops still reads
-as "close" while an unreachable node reads as maximally far. `d_hat_{G_T}`
-is the metamodel tag distance, normalized against its own max penalty.
+as "close" while an unreachable node reads as maximally far - except an
+edge `sce.runtime.reconciler` has marked `confidence="CONFIRMED_RUNTIME"`
+(a real execution actually traversed it, not just static inference) costs
+less than a normal hop, per `DistanceConfig.runtime_confidence_weight`, so
+a path validated by actual execution reads as closer than an equal-length
+unexercised static one. `d_hat_{G_T}` is the metamodel tag distance,
+normalized against its own max penalty.
 """
 from __future__ import annotations
 
@@ -18,11 +23,23 @@ from sce.graph.metamodel import MAX_TAG_DISTANCE, SemanticMetamodel
 DEFAULT_LAMBDA = 0.7
 DEFAULT_MAX_HOPS = 10.0
 
+# Hop cost for a `confidence="CONFIRMED_RUNTIME"` edge (see
+# `sce.runtime.reconciler`) - strictly less than the normal 1.0-per-hop
+# cost, so a path an actual execution traversed accumulates a smaller
+# d_hat_{G_C} than an equal-length path inferred from static analysis
+# alone. 0.5 halves a single confirmed hop's cost; a graph with no
+# runtime-confirmed edges at all (every edge weight 1.0) reduces exactly
+# to plain unweighted hop counting, so this is a pure extension with no
+# behavior change for anything that hasn't been reconciled against a
+# runtime trace.
+DEFAULT_RUNTIME_CONFIDENCE_WEIGHT = 0.5
+
 
 @dataclass(frozen=True)
 class DistanceConfig:
     lambda_weight: float = DEFAULT_LAMBDA
     max_hops: float = DEFAULT_MAX_HOPS
+    runtime_confidence_weight: float = DEFAULT_RUNTIME_CONFIDENCE_WEIGHT
 
 
 class DistanceEngine:
@@ -36,8 +53,8 @@ class DistanceEngine:
     def compute_all(self, seed: str, g_c: nx.DiGraph) -> dict[str, float]:
         if seed not in g_c:
             return {}
-        undirected = g_c.to_undirected()
-        hop_distances = nx.single_source_shortest_path_length(undirected, seed)
+        undirected = self._weighted_undirected(g_c)
+        hop_distances = nx.single_source_dijkstra_path_length(undirected, seed, weight="weight")
         seed_tags = self.tag_matrix.get(seed, set())
 
         distances: dict[str, float] = {}
@@ -48,7 +65,48 @@ class DistanceEngine:
             distances[node] = self._d_hybrid(hops, seed_tags, node_tags)
         return distances
 
-    def _d_hybrid(self, hops: int, seed_tags: set[str], node_tags: set[str]) -> float:
+    def confirmed_runtime_reachable(self, seed: str, g_c: nx.DiGraph) -> set[str]:
+        """Every node whose shortest (weighted) path from `seed` traverses
+        at least one `confidence="CONFIRMED_RUNTIME"` edge - a real
+        execution actually exercised some hop on the way there, not just
+        static inference. `compute_all` already folds this into a lower
+        distance value for such nodes; this is the explicit, rigorous
+        version of that same signal (which specific nodes, not just "the
+        numbers are smaller") `ContextKnapsackPacker` uses as an
+        additional admission/ranking tie-breaker.
+        """
+        if seed not in g_c:
+            return set()
+        undirected = self._weighted_undirected(g_c)
+        _lengths, paths = nx.single_source_dijkstra(undirected, seed, weight="weight")
+        confirmed: set[str] = set()
+        for node, path in paths.items():
+            if node == seed:
+                continue
+            for u, v in zip(path, path[1:]):
+                if (undirected.get_edge_data(u, v) or {}).get("confidence") == "CONFIRMED_RUNTIME":
+                    confirmed.add(node)
+                    break
+        return confirmed
+
+    def _weighted_undirected(self, g_c: nx.DiGraph) -> nx.Graph:
+        """An undirected copy of `g_c` with every edge's hop cost set to
+        `config.runtime_confidence_weight` (< 1.0 by default) if the
+        runtime reconciler marked it `confidence="CONFIRMED_RUNTIME"`, or
+        the normal 1.0 otherwise - so `single_source_dijkstra[_path_length]`
+        below reduces to plain unweighted hop counting whenever a graph
+        carries no runtime confidence data at all (every edge then weighs
+        exactly 1.0), and only diverges from that once a `sce trace` run
+        has actually confirmed some of its edges.
+        """
+        undirected = g_c.to_undirected()
+        for _u, _v, data in undirected.edges(data=True):
+            data["weight"] = (
+                self.config.runtime_confidence_weight if data.get("confidence") == "CONFIRMED_RUNTIME" else 1.0
+            )
+        return undirected
+
+    def _d_hybrid(self, hops: float, seed_tags: set[str], node_tags: set[str]) -> float:
         d_hat_gc = min(hops / self.config.max_hops, 1.0)
         tag_distance = self.metamodel.get_tag_distance(seed_tags, node_tags)
         d_hat_gt = min(tag_distance / MAX_TAG_DISTANCE, 1.0)
