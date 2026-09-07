@@ -23,6 +23,12 @@ class CompressionContext:
 
     tags: set[str] = field(default_factory=set)
     callees: list[str] = field(default_factory=list)
+    # Adaptive Compact Scaffolding (see `ContextKnapsackPacker.pack`'s
+    # small-context detection): when True, render an L2 contract as one
+    # dense line instead of one line per field. Every resolution level's
+    # *content* stays otherwise identical - this only changes how verbosely
+    # the contract metadata is spelled out.
+    compact: bool = False
 
 
 def _raw_slice(source: str, line_range: tuple[int, int]) -> str:
@@ -211,7 +217,21 @@ def _extract_mutates(node: ast.AST) -> list[str]:
     return mutated
 
 
-def _render_contract_block(tags: set[str], raises: list[str], callees: list[str], mutates: list[str]) -> str:
+def _render_contract_block(tags: set[str], raises: list[str], callees: list[str], mutates: list[str], compact: bool = False) -> str:
+    if compact:
+        # Adaptive Compact Scaffolding: one dense line instead of one line
+        # per field - the same information, worth the extra token cost of
+        # multi-line formatting only when the surrounding context is large
+        # enough that a few saved tokens per item don't matter.
+        parts = [f"tags=[{', '.join(sorted(tags))}]"]
+        if mutates:
+            parts.append(f"mutates=[{', '.join(mutates)}]")
+        if raises:
+            parts.append(f"raises=[{', '.join(raises)}]")
+        if callees:
+            parts.append(f"calls=[{', '.join(callees)}]")
+        return "# " + " ".join(parts)
+
     lines = [f"# Tags: [{', '.join(sorted(tags))}]"]
     if mutates:
         lines.append(f"# Mutates: {', '.join(mutates)}")
@@ -251,7 +271,7 @@ def compress_python(source: str, name: str, line_range: tuple[int, int], resolut
         header = f"class {node.name}({bases}):" if bases else f"class {node.name}:"
         if resolution == 3:
             return f"{header} ..."
-        return "\n".join([f"{header} ...", _render_contract_block(context.tags, [], context.callees, [])])
+        return "\n".join([f"{header} ...", _render_contract_block(context.tags, [], context.callees, [], context.compact)])
 
     if resolution == 1:
         working = copy.deepcopy(node)
@@ -265,7 +285,7 @@ def compress_python(source: str, name: str, line_range: tuple[int, int], resolut
 
     raises = _extract_raises(node)
     mutates = _extract_mutates(node) if "#state_mutation" in context.tags else []
-    return "\n".join([signature, _render_contract_block(context.tags, raises, context.callees, mutates)])
+    return "\n".join([signature, _render_contract_block(context.tags, raises, context.callees, mutates, context.compact)])
 
 
 # ---------------------------------------------------------------------- #

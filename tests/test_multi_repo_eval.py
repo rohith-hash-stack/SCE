@@ -47,13 +47,32 @@ def test_compute_graph_metrics_on_known_fixture():
 def test_compute_graph_metrics_handles_empty_graph(tmp_path):
     empty_repo = tmp_path / "empty"
     empty_repo.mkdir()
-    (empty_repo / "constants.py").write_text("X = 1\n")
+    # A bare comment, not `X = 1`: since concrete_builder now indexes
+    # module-level assignments as "attribute" symbols too, `X = 1` would no
+    # longer produce a truly empty graph - this keeps that a separate,
+    # dedicated case (see test_compute_graph_metrics_on_attribute_only_graph).
+    (empty_repo / "constants.py").write_text("# no definitions here\n")
     builder, _ = build_pipeline(str(empty_repo))
     metrics = compute_graph_metrics(builder)
     assert metrics.total_symbols == 0
     assert metrics.total_edges == 0
     assert metrics.isolated_node_ratio == 0.0
     assert metrics.max_traversal_depth == 0
+
+
+def test_compute_graph_metrics_on_attribute_only_graph(tmp_path):
+    """A module with nothing but a top-level constant still indexes one
+    "attribute" symbol (see concrete_builder's Pass 1) - as an isolated
+    graph node, since nothing calls or is called by it."""
+    repo = tmp_path / "attrs_only"
+    repo.mkdir()
+    (repo / "constants.py").write_text("X = 1\n")
+    builder, _ = build_pipeline(str(repo))
+    metrics = compute_graph_metrics(builder)
+    assert metrics.total_symbols == 1
+    assert builder.symbol_table.get("constants.X").kind == "attribute"
+    assert metrics.total_edges == 0
+    assert metrics.isolated_node_ratio == 1.0
 
 
 def test_hallucination_check_passes_on_real_sce_output():

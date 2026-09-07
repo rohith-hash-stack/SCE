@@ -19,12 +19,17 @@ _CODE_SECTION_RE = re.compile(
     re.DOTALL | re.MULTILINE,
 )
 
-_RESOLUTION_FROM_LABEL = {
-    "Full Implementation - L0": 0,
-    "Control Skeleton - L1": 1,
-    "Contract - L2": 2,
-    "Alias - L3": 3,
-}
+# The label now also carries the symbol's original line range and relative
+# file path (e.g. "Full Implementation - L0 - lines 142-168 in
+# django/contrib/sessions/base.py" - see serializers/markdown.py), so an
+# exact-string dict lookup no longer works; extract the "L<n>" token from
+# wherever it appears in the label instead.
+_RESOLUTION_FROM_LABEL_RE = re.compile(r"\bL([0-3])\b")
+
+
+def _resolution_from_label(label: str) -> int | None:
+    match = _RESOLUTION_FROM_LABEL_RE.search(label)
+    return int(match.group(1)) if match else None
 
 
 @dataclass(frozen=True)
@@ -49,7 +54,7 @@ def extract_code_blocks(markdown_text: str) -> list[CodeBlockValidity]:
         blocks.append(
             CodeBlockValidity(
                 symbol=match.group("symbol"),
-                resolution=_RESOLUTION_FROM_LABEL.get(label),
+                resolution=_resolution_from_label(label),
                 resolution_label=label,
                 language=match.group("lang"),
                 valid=True,
@@ -76,7 +81,7 @@ def check_python_syntax(markdown_text: str) -> list[CodeBlockValidity]:
             results.append(
                 CodeBlockValidity(
                     symbol=match.group("symbol"),
-                    resolution=_RESOLUTION_FROM_LABEL.get(label),
+                    resolution=_resolution_from_label(label),
                     resolution_label=label,
                     language="python",
                     valid=False,
@@ -87,7 +92,7 @@ def check_python_syntax(markdown_text: str) -> list[CodeBlockValidity]:
             results.append(
                 CodeBlockValidity(
                     symbol=match.group("symbol"),
-                    resolution=_RESOLUTION_FROM_LABEL.get(label),
+                    resolution=_resolution_from_label(label),
                     resolution_label=label,
                     language="python",
                     valid=True,

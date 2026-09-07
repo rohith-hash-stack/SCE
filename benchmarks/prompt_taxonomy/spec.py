@@ -96,6 +96,14 @@ class PromptArchetype:
     # somewhere in the response - for structural requirements a plain
     # substring can't express (e.g. "contains a question mark").
     required_regexes: tuple[str, ...] = ()
+    # Like `required_regexes`, but "at least one must match" rather than
+    # "all must match" - for a requirement satisfiable multiple ways (e.g.
+    # a Socratic prompt is honestly interrogative whether it literally uses
+    # "?" or phrases the question as "Can you clarify ..." - literal
+    # question-mark punctuation is a real but incomplete proxy for "asked a
+    # question", confirmed by a live gpt-4o-mini response that posed a
+    # genuine clarifying question entirely in declarative sentences).
+    required_any_regexes: tuple[str, ...] = ()
     # >1 for self-consistency sampling (archetype 14): the prompt is sent
     # this many times at a higher temperature and scored for whether a real
     # symbol name reaches consensus (mentioned in a majority of samples).
@@ -171,6 +179,13 @@ def find_hallucinated_calls(code: str, known_simple_names: frozenset[str]) -> tu
     """Every call in `code` whose simple name is neither a real symbol's
     simple name in the target repo, a Python builtin, nor a common built-in
     container/string method - mirrors `validate_llm_accuracy.py`'s checker.
+
+    `known_simple_names` (built by `RepoIndex` from
+    `GlobalSymbolTable.all_qualified_names()`) is kind-agnostic by
+    construction: it includes attribute-kind symbols (module/class/instance
+    assignments, e.g. `_iterable_class = ModelIterable`) alongside
+    functions/methods/classes, so a call to one of those isn't mistaken for
+    a hallucination.
     """
     called = _collect_call_simple_names(code)
     unknown = sorted(
@@ -208,7 +223,11 @@ _QUALIFIED_NAME_RE = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0
 
 
 def find_referenced_symbol_mentions(
-    text: str, known_qualified_names: frozenset[str], root_prefixes: tuple[str, ...], known_module_paths: frozenset[str] = frozenset()
+    text: str,
+    known_qualified_names: frozenset[str],
+    root_prefixes: tuple[str, ...],
+    known_module_paths: frozenset[str] = frozenset(),
+    known_simple_names: frozenset[str] = frozenset(),
 ) -> tuple[str, tuple[str, ...]]:
     """Scans free-form prose (not just a code block) for dotted,
     qualified-name-shaped tokens rooted in the target repo's own package(s)
@@ -221,11 +240,45 @@ def find_referenced_symbol_mentions(
     fully qualified path is claiming that path is real, so a fabricated
     one is caught the same way a fabricated method *call* is elsewhere.
 
+    A third, narrower fallback covers two real patterns a purely
+    file-path-based qualified name can't represent directly:
+
+      - an *instance-attribute chain*, like `django.db.router.db_for_write`
+        - real, correct django usage (`router` is a module-level
+        `ConnectionRouter()` instance; `db_for_write` a real method on that
+        class) that doesn't match any single indexed qualified name, since
+        `GlobalSymbolTable` tracks one attribute-assignment hop at a time,
+        not chained instance attribute access;
+      - a *public re-export*, like `django.urls.get_resolver` - real,
+        idiomatic django usage (the function is defined in
+        `django.urls.base` but re-exported from the `django.urls` package's
+        `__init__.py`, which is how it's actually imported in practice) that
+        doesn't match its own *defining* module's qualified name, since
+        `GlobalSymbolTable` indexes by defining file, not by every place a
+        symbol gets re-exported.
+
+    Both are accepted the same way: when the mention's prefix (everything
+    before the last `.`) is itself a real qualified symbol *or* a real
+    module path, and the trailing segment is some real symbol's simple name
+    anywhere in the repo - the same no-type-inference, simple-name-only
+    heuristic `find_hallucinated_calls` already uses for calls, extended
+    here to prose mentions of the same shape.
+
     Returns (mentioned, unknown) - all qualified-looking mentions found,
-    and the subset that is neither a real symbol nor a real module path.
+    and the subset that is neither a real symbol, a real module path, nor a
+    recognized attribute-chain/re-export mention.
     """
     mentioned = {m.group(0) for m in _QUALIFIED_NAME_RE.finditer(text) if m.group(0).startswith(root_prefixes)}
-    unknown = tuple(sorted(name for name in mentioned if name not in known_qualified_names and name not in known_module_paths))
+
+    def _is_known(name: str) -> bool:
+        if name in known_qualified_names or name in known_module_paths:
+            return True
+        prefix, _, suffix = name.rpartition(".")
+        if not prefix or not suffix or suffix not in known_simple_names:
+            return False
+        return prefix in known_qualified_names or prefix in known_module_paths
+
+    unknown = tuple(sorted(name for name in mentioned if not _is_known(name)))
     return tuple(sorted(mentioned)), unknown
 
 
@@ -282,7 +335,13 @@ def check_negative_constraints(code_or_text: str, negative_constraints: tuple[st
     return tuple(c for c in negative_constraints if c.lower() in lowered)
 
 
-def check_required_substrings(text: str, required_any: tuple[str, ...], required_all: tuple[str, ...], required_regexes: tuple[str, ...]) -> dict[str, bool]:
+def check_required_substrings(
+    text: str,
+    required_any: tuple[str, ...],
+    required_all: tuple[str, ...],
+    required_regexes: tuple[str, ...],
+    required_any_regexes: tuple[str, ...] = (),
+) -> dict[str, bool]:
     lowered = text.lower()
     checks: dict[str, bool] = {}
     if required_any:
@@ -291,6 +350,8 @@ def check_required_substrings(text: str, required_any: tuple[str, ...], required
         checks["required_all_substrings_present"] = all(s.lower() in lowered for s in required_all)
     if required_regexes:
         checks["required_regexes_matched"] = all(re.search(p, text, re.IGNORECASE) for p in required_regexes)
+    if required_any_regexes:
+        checks["required_any_regex_matched"] = any(re.search(p, text, re.IGNORECASE) for p in required_any_regexes)
     return checks
 
 

@@ -5,12 +5,13 @@ from __future__ import annotations
 
 from sce.slicer.knapsack import PackResult
 
-_RESOLUTION_LABELS = {
-    0: "Full Implementation - L0",
-    1: "Control Skeleton - L1",
-    2: "Contract - L2",
-    3: "Alias - L3",
-}
+# Short form ("L0", not "Full Implementation - L0"): every heading now also
+# carries the symbol's original line range and relative file path (see
+# render_markdown below), so keeping the resolution label itself terse
+# matters for real token cost, not just readability - this is the exact
+# format asked for, e.g. "(L0 - lines 142-168 in
+# django/contrib/sessions/base.py)".
+_RESOLUTION_LABELS = {0: "L0", 1: "L1", 2: "L2", 3: "L3"}
 
 _FENCE_LANGUAGE = {
     "python": "python",
@@ -31,14 +32,33 @@ def render_markdown(result: PackResult, tag_matrix: dict[str, set[str]]) -> str:
         f"Preserved Semantics: {result.preserved_semantics}%"
     )
     lines.append("")
-    lines.append("## 1. Architectural Path")
-    lines.extend(_render_architectural_path(result, tag_matrix))
-    lines.append("")
+    if not result.compact:
+        # Adaptive Compact Scaffolding: the Architectural Path diagram is
+        # exactly the kind of verbose structural overview that isn't worth
+        # its token cost once the seed's own neighborhood is already small
+        # enough to read directly - see ContextKnapsackPacker.pack.
+        lines.append("## 1. Architectural Path")
+        lines.extend(_render_architectural_path(result, tag_matrix))
+        lines.append("")
     lines.append("## 2. Injected Code Units")
     lines.append("")
     for item in result.items:
         is_seed = item.symbol == result.seed
-        label = _RESOLUTION_LABELS[item.resolution]
+        if result.compact:
+            # Single-line, no line-range/path suffix: on a small context
+            # (the only time compact mode triggers) a reader can just look
+            # at the whole package directly rather than needing a jump-back
+            # reference into the real file.
+            label = _RESOLUTION_LABELS[item.resolution]
+        else:
+            # Exact line grounding survives compression: even an L1-L3
+            # item, whose *content* is skeletonized/stubbed and no longer a
+            # literal source slice, still names precisely where the real
+            # definition lives - a reader (or an LLM) can always jump to
+            # the real file rather than treating the packed content as the
+            # only truth.
+            start, end = item.line_range
+            label = f"{_RESOLUTION_LABELS[item.resolution]} - lines {start}-{end} in {item.relative_path}"
         heading = f"### [TARGET] {item.symbol} ({label})" if is_seed else f"### {item.symbol} ({label})"
         lines.append(heading)
         fence = _FENCE_LANGUAGE.get(item.language_id, "")

@@ -431,7 +431,7 @@ def run_variant(
                     signature_preserved = check_signature_preserved(extracted_code, original_signature)
 
     referenced, unknown_refs = find_referenced_symbol_mentions(
-        scored_text, repo_index.known_qualified_names, repo_index.root_prefixes, repo_index.known_module_paths
+        scored_text, repo_index.known_qualified_names, repo_index.root_prefixes, repo_index.known_module_paths, repo_index.known_simple_names
     )
 
     consensus_reached: bool | None = None
@@ -456,7 +456,10 @@ def run_variant(
     if archetype.sample_count > 1:
         contract_checks["self_consistency_reached"] = bool(consensus_reached)
     contract_checks.update(
-        check_required_substrings(scored_text, archetype.required_any_substrings, archetype.required_all_substrings, archetype.required_regexes)
+        check_required_substrings(
+            scored_text, archetype.required_any_substrings, archetype.required_all_substrings,
+            archetype.required_regexes, archetype.required_any_regexes,
+        )
     )
 
     return VariantRunResult(

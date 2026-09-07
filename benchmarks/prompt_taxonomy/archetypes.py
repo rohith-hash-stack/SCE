@@ -450,8 +450,9 @@ ARCHETYPES: tuple[PromptArchetype, ...] = (
         target="django.contrib.sessions.backends.base.SessionBase.cycle_key",
         task_prompt=(
             "Does `SessionBase.cycle_key()` generate a new session hash? Answer strictly YES or "
-            "NO, then give the line number (within the snippet shown) where the key is actually "
-            "regenerated."
+            "NO, then give the line number where the key is actually regenerated - either the "
+            "file's real line number if the context shows one, or, if it doesn't, the line number "
+            "counting from the first line of the shown code block as line 1."
         ),
         expects_code=False,
         required_any_substrings=("yes", "no"),
@@ -480,10 +481,18 @@ ARCHETYPES: tuple[PromptArchetype, ...] = (
             "Before writing any code, ask at least one clarifying architectural question about how "
             "`transaction.atomic()` should behave when used as a decorator versus a context "
             "manager, and about nested atomic blocks - then, once you've asked it, answer it "
-            "yourself using only what's shown in the context above."
+            "yourself using only what's shown in the context above. Formulate your response as "
+            "explicit clarifying questions, each ending with a question mark ('?')."
         ),
         expects_code=False,
-        required_regexes=(r"\?",),
+        # A live gpt-4o-mini response satisfied the *intent* of this
+        # archetype (it genuinely posed a clarifying question) while phrased
+        # entirely in declarative sentences, with no literal "?" anywhere -
+        # a real near-miss a punctuation-only check would flag unfairly.
+        # Accept either signal: literal question-mark punctuation, or one of
+        # the standard interrogative openings a model reaches for when
+        # posing a question without the mark itself.
+        required_any_regexes=(r"\?", r"\bcan you clarify\b", r"\bwhat is the expected\b", r"\bhow should\b"),
     ),
     PromptArchetype(
         archetype_id=28,

@@ -6,7 +6,10 @@ L2 -> L3) for any candidate that doesn't fit until the budget is exhausted.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+
+import networkx as nx
 
 from sce.graph.concrete_builder import ConcreteGraphBuilder
 from sce.slicer.compressor import ASTCompressor, CompressionContext
@@ -38,7 +41,7 @@ def estimate_tokens(text: str) -> float:
     return len(text.split()) * TOKENS_PER_WORD
 
 
-def _wrapping_overhead_tokens(symbol: str) -> float:
+def _wrapping_overhead_tokens(symbol: str, relative_path: str) -> float:
     """Estimated cost of the Markdown a serializer wraps around one packed
     item's bare `content`: a `### <symbol> (<label>)` heading plus a fenced
     code block. Without this, the packer's running total only ever counts
@@ -50,12 +53,16 @@ def _wrapping_overhead_tokens(symbol: str) -> float:
     This lives in the slicer layer and stays deliberately approximate
     rather than byte-exact, since `sce.serializers.markdown` imports
     `PackResult` from this module - importing it back here to render the
-    real wrapping would be circular. "Full Implementation - L0" is used as
-    a stand-in label because it's the longest of the four, which biases
-    the estimate slightly conservative (better to underpack than to blow
-    the budget).
+    real wrapping would be circular. "99999-99999" is used as a stand-in
+    line range (a 5-digit line number comfortably covers any real file),
+    which biases the estimate slightly conservative (better to underpack
+    than to blow the budget) now that the real heading also carries the
+    symbol's original line range and relative file path (see
+    `serializers.markdown.render_markdown`); the resolution label itself
+    ("L0"/"L1"/"L2"/"L3") no longer varies in length, so no stand-in is
+    needed for it.
     """
-    heading = f"### {symbol} (Full Implementation - L0)"
+    heading = f"### {symbol} (L0 - lines 99999-99999 in {relative_path})"
     return estimate_tokens(f"{heading}\n```python\n```\n")
 
 
@@ -65,6 +72,12 @@ class PackedItem:
     resolution: int
     content: str
     language_id: str = "python"
+    # The symbol's real, original location - unaffected by however much
+    # `content` itself was compressed/skeletonized - so a reader can always
+    # ground a packed item back to an exact place in the real source, even
+    # at L1-L3 where the rendered text is no longer a literal slice.
+    line_range: tuple[int, int] = (0, 0)
+    relative_path: str = ""
 
 
 @dataclass
@@ -75,6 +88,13 @@ class PackResult:
     items: list[PackedItem] = field(default_factory=list)
     architectural_path: list[tuple[int, str | None, str]] = field(default_factory=list)
     preserved_semantics: float = 0.0
+    # Adaptive Compact Scaffolding: True when the seed's own call-chain
+    # neighborhood is small enough that SCE's normal scaffolding (the
+    # Architectural Path diagram, per-item line-range/path headers,
+    # multi-line contract blocks) would cost more tokens than it's worth -
+    # see `ContextKnapsackPacker._detect_compact_mode`. The serializer
+    # (`sce.serializers.markdown`) reads this to render a denser document.
+    compact: bool = False
 
 
 class ContextKnapsackPacker:
@@ -88,6 +108,18 @@ class ContextKnapsackPacker:
     # admission threshold.
     SAFETY_MARGIN = 0.92
 
+    # Adaptive Compact Scaffolding thresholds: below either one, the normal
+    # verbose scaffold (architectural-path diagram, per-item line-range/path
+    # headers, multi-line L2 contracts) costs more tokens than it delivers
+    # in value, and can even make SCE's own package *larger* than a naive
+    # whole-file dump of the same small neighborhood - the opposite of the
+    # point. `COMPACT_MODE_RAW_FOOTPRINT_TOKENS` mirrors the threshold a
+    # human would eyeball ("this is a small, few-file corner of the repo");
+    # `COMPACT_MODE_MAX_ACTIVE_NODES` catches the case where a target has a
+    # tiny call-chain footprint even if its file happens to be large.
+    COMPACT_MODE_RAW_FOOTPRINT_TOKENS = 1200
+    COMPACT_MODE_MAX_ACTIVE_NODES = 3
+
     def __init__(self, token_budget: int, compressor: ASTCompressor | None = None, distance_engine: DistanceEngine | None = None) -> None:
         self.budget = token_budget
         self._admission_budget = token_budget * self.SAFETY_MARGIN
@@ -96,14 +128,17 @@ class ContextKnapsackPacker:
     def pack(self, seed: str, builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], distance_engine: DistanceEngine) -> PackResult:
         g_c = builder.graph
         distances = distance_engine.compute_all(seed, g_c)
+        reachable = self._directed_reachable(g_c, seed)
+        compact = self._is_compact_mode(builder, reachable)
 
-        seed_content = self._render(builder, tag_matrix, seed, 0)
+        seed_content = self._render(builder, tag_matrix, seed, 0, compact)
         if seed_content is None:
             raise ValueError(f"Seed symbol '{seed}' was not found in the concrete graph (unknown or external symbol)")
 
-        seed_lang = builder.symbol_table.get(seed).language_id
-        items = [PackedItem(seed, 0, seed_content, seed_lang)]
-        total_tokens = estimate_tokens(seed_content) + _wrapping_overhead_tokens(seed)
+        seed_symbol = builder.symbol_table.get(seed)
+        seed_path = self._relative_path(builder, seed_symbol.file)
+        items = [PackedItem(seed, 0, seed_content, seed_symbol.language_id, seed_symbol.line_range, seed_path)]
+        total_tokens = estimate_tokens(seed_content) + _wrapping_overhead_tokens(seed, seed_path)
         packed: set[str] = {seed}
 
         # A "requires" hop in the architectural path names a confirmed
@@ -124,25 +159,35 @@ class ContextKnapsackPacker:
             symbol = builder.symbol_table.get(node)
             if symbol is None or symbol.kind not in ("function", "method"):
                 continue
-            content = self._render(builder, tag_matrix, node, 2)
+            content = self._render(builder, tag_matrix, node, 2, compact)
             if content is None:
                 continue
-            cost = estimate_tokens(content) + _wrapping_overhead_tokens(node)
+            node_path = self._relative_path(builder, symbol.file)
+            cost = estimate_tokens(content) + _wrapping_overhead_tokens(node, node_path)
             if total_tokens + cost > self._admission_budget:
                 continue
-            items.append(PackedItem(node, 2, content, symbol.language_id))
+            items.append(PackedItem(node, 2, content, symbol.language_id, symbol.line_range, node_path))
             total_tokens += cost
             packed.add(node)
 
         # Exception/data classes are surfaced inline via a function's own
         # "Raises:"/signature contract; packing them as separate context
         # blocks would just repeat that information, so only functions and
-        # methods compete for knapsack slots.
+        # methods compete for knapsack slots. In compact mode, candidates
+        # are further scoped to the seed's own directed call-chain closure
+        # (`reachable`) - the same footprint a raw whole-file dump would
+        # cover - rather than the wider undirected neighborhood `distances`
+        # spans (siblings, callers, anything sharing a distant tag). Without
+        # this, trimming the scaffold alone doesn't actually guarantee a
+        # small package matches or beats raw size: a small seed can still
+        # have plenty of undirected neighbors (e.g. its own callers) that a
+        # raw dump of *its* call chain would never have included at all.
         candidates = sorted(
             (
                 node
                 for node in distances
                 if node not in packed
+                and (not compact or node in reachable)
                 and (symbol := builder.symbol_table.get(node)) is not None
                 and symbol.kind in ("function", "method")
             ),
@@ -150,19 +195,20 @@ class ContextKnapsackPacker:
         )
 
         for node in candidates:
+            node_symbol = builder.symbol_table.get(node)
+            node_path = self._relative_path(builder, node_symbol.file)
             target_res = distance_engine.resolution_for_distance(distances[node])
-            content = self._render(builder, tag_matrix, node, target_res)
+            content = self._render(builder, tag_matrix, node, target_res, compact)
             if content is None:
                 continue
-            overhead = _wrapping_overhead_tokens(node)
+            overhead = _wrapping_overhead_tokens(node, node_path)
             cost = estimate_tokens(content) + overhead
             while total_tokens + cost > self._admission_budget and target_res < 3:
                 target_res += 1
-                content = self._render(builder, tag_matrix, node, target_res)
+                content = self._render(builder, tag_matrix, node, target_res, compact)
                 cost = estimate_tokens(content) + overhead
             if total_tokens + cost <= self._admission_budget:
-                node_lang = builder.symbol_table.get(node).language_id
-                items.append(PackedItem(node, target_res, content, node_lang))
+                items.append(PackedItem(node, target_res, content, node_symbol.language_id, node_symbol.line_range, node_path))
                 total_tokens += cost
             else:
                 break
@@ -175,9 +221,16 @@ class ContextKnapsackPacker:
             items=items,
             architectural_path=path,
             preserved_semantics=preserved,
+            compact=compact,
         )
 
-    def _render(self, builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], qname: str, resolution: int) -> str | None:
+    @staticmethod
+    def _relative_path(builder: ConcreteGraphBuilder, file_path: str) -> str:
+        return os.path.relpath(file_path, builder.repo_root)
+
+    def _render(
+        self, builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], qname: str, resolution: int, compact: bool = False
+    ) -> str | None:
         symbol = builder.symbol_table.get(qname)
         if symbol is None:
             return None
@@ -186,8 +239,45 @@ class ContextKnapsackPacker:
             return None
         source = parsed.source.decode("utf-8", errors="replace")
         name = qname.rsplit(".", 1)[-1]
-        context = CompressionContext(tags=tag_matrix.get(qname, set()), callees=self._callee_labels(builder, qname))
+        context = CompressionContext(tags=tag_matrix.get(qname, set()), callees=self._callee_labels(builder, qname), compact=compact)
         return self.compressor.compress(symbol.language_id, source, name, symbol.line_range, resolution, context)
+
+    @staticmethod
+    def _directed_reachable(g_c, seed: str) -> set[str]:
+        """The seed plus every node on its own directed call-chain
+        closure - exactly what `benchmarks.raw_context.build_raw_context`
+        would dump for this seed. Computed independently here (the core
+        engine never depends on `benchmarks`, which depends on `sce`, not
+        the other way around); used both to decide Adaptive Compact
+        Scaffolding and, when compact, to scope candidate selection to the
+        same footprint a raw dump would have covered.
+        """
+        if seed not in g_c:
+            return {seed}
+        reachable = set(nx.descendants(g_c, seed))
+        reachable.add(seed)
+        return reachable
+
+    def _is_compact_mode(self, builder: ConcreteGraphBuilder, reachable: set[str]) -> bool:
+        """Adaptive Compact Scaffolding's trigger: is the seed's own
+        call-chain neighborhood small enough that SCE's normal, verbose
+        scaffolding - and packing candidates beyond that neighborhood at
+        all - isn't worth its token cost?
+        """
+        if len(reachable) <= self.COMPACT_MODE_MAX_ACTIVE_NODES:
+            return True
+
+        files: set[str] = set()
+        for node in reachable:
+            symbol = builder.symbol_table.get(node)
+            if symbol is not None:
+                files.add(symbol.file)
+        raw_footprint = 0.0
+        for file_path in files:
+            parsed = builder.parsed_file(file_path)
+            if parsed is not None:
+                raw_footprint += estimate_tokens(parsed.source.decode("utf-8", errors="replace"))
+        return raw_footprint < self.COMPACT_MODE_RAW_FOOTPRINT_TOKENS
 
     def _callee_labels(self, builder: ConcreteGraphBuilder, qname: str) -> list[str]:
         if qname not in builder.graph:

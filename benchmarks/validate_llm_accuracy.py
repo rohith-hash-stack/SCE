@@ -279,6 +279,14 @@ def find_hallucinated_calls(code: str, builder: ConcreteGraphBuilder) -> tuple[s
     the repository's `GlobalSymbolTable`, a Python builtin, nor a common
     built-in container/string method - i.e. it does not exist in the
     codebase, per section 3's literal check.
+
+    "Real symbol" deliberately means any kind `GlobalSymbolTable` indexes -
+    function, method, class, or attribute (module/class/instance-level
+    assignments like `_iterable_class = ModelIterable`, indexed by
+    `ConcreteGraphBuilder`'s Pass 1) - not just callables. A live run
+    against django/django found real, correct code calling attribute-bound
+    references (e.g. `self._iterable_class(self)`) that a kind-filtered
+    check would have flagged as fabricated.
     """
     tree = ast.parse(code)
     called: set[str] = set()

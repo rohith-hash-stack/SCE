@@ -87,6 +87,8 @@ class ConcreteGraphBuilder:
         def_nodes.sort(key=lambda t: t[0].start_byte)
         for node, is_class in def_nodes:
             self._register_definition(node, is_class, parsed, module)
+        if lang == LanguageID.PYTHON:
+            self._collect_attribute_definitions(parsed, module)
 
     def _register_definition(self, node: Node, is_class: bool, parsed: ParsedFile, module: str) -> None:
         name_node = node.child_by_field_name("name")
@@ -141,6 +143,117 @@ class ConcreteGraphBuilder:
         )
         if enclosing_class is not None and kind == "method":
             self._methods_by_class.setdefault(enclosing_class, []).append(qualified_name)
+
+    # -- Attribute definitions (module/class/instance-level assignments) - #
+    def _collect_attribute_definitions(self, parsed: ParsedFile, module: str) -> None:
+        """A fourth symbol kind, alongside class/function/method: a simple
+        name bound by assignment at module scope (`db_for_write =
+        _router_func("db_for_write")`), class-body scope (`_iterable_class
+        = ModelIterable`), or via `self.<attr> = ...` inside any of a
+        class's own methods (`self._middleware_chain = handler`). These are
+        real, referenceable Python symbols with no `def`/`class` keyword of
+        their own - without indexing them, a call or mention referencing
+        one is indistinguishable, by simple-name matching, from a genuine
+        hallucination. Confirmed via a live gpt-4o-mini run against
+        django/django: `QuerySet._iterable_class`,
+        `BaseHandler._middleware_chain`, and `router.db_for_write` are all
+        real, correct code that a downstream hallucination checker flagged
+        as fabricated purely because none of them had ever been indexed.
+        """
+        assign_type = ASSIGNMENT_NODE_TYPE.get(parsed.language_id)
+        if assign_type is None:
+            return
+        lang = parsed.language_id
+        self_tokens = SELF_TOKEN_TEXT[lang]
+
+        for assign in self._direct_assignments(parsed.root_node, assign_type):
+            self._register_simple_target_attribute(assign, parsed, module, qualifier=module, enclosing_class=None)
+
+        for class_node in find_all(parsed.root_node, CLASS_NODE_TYPES[lang]):
+            name_node = class_node.child_by_field_name("name")
+            if name_node is None:
+                continue
+            class_qname = f"{module}.{node_text(name_node, parsed.source)}"
+
+            body = class_node.child_by_field_name("body")
+            if body is not None:
+                for assign in self._direct_assignments(body, assign_type):
+                    self._register_simple_target_attribute(
+                        assign, parsed, module, qualifier=class_qname, enclosing_class=class_qname
+                    )
+
+            for method_qname in self._methods_by_class.get(class_qname, []):
+                method_node = self._def_nodes.get(method_qname)
+                if method_node is None:
+                    continue
+                for assign in iter_scoped_nodes(method_node, {assign_type}, lang):
+                    self._register_self_attribute(assign, parsed, module, class_qname, self_tokens)
+
+    @staticmethod
+    def _direct_assignments(container: Node, assign_type: str) -> list[Node]:
+        """Assignment nodes that are direct statements of `container` (each
+        wrapped in its own `expression_statement` child) - not nested inside
+        any function or class defined within it. tree-sitter-python always
+        wraps a bare top-level `x = 1` as `expression_statement -> assignment`,
+        so this is a one-level unwrap, not a full subtree search.
+        """
+        found = []
+        for child in container.children:
+            if child.type != "expression_statement":
+                continue
+            for grandchild in child.children:
+                if grandchild.type == assign_type:
+                    found.append(grandchild)
+        return found
+
+    def _register_simple_target_attribute(
+        self, assign: Node, parsed: ParsedFile, module: str, qualifier: str, enclosing_class: str | None
+    ) -> None:
+        target = assign.child_by_field_name("left")
+        if target is None or target.type != "identifier":
+            return
+        name = node_text(target, parsed.source)
+        self._register_attribute(f"{qualifier}.{name}", assign, parsed, module, enclosing_class)
+
+    def _register_self_attribute(
+        self, assign: Node, parsed: ParsedFile, module: str, class_qname: str, self_tokens: set[str]
+    ) -> None:
+        target = assign.child_by_field_name("left")
+        if target is None:
+            return
+        segments = flatten_reference_chain(target, parsed.source, parsed.language_id)
+        if not segments or len(segments) != 2 or segments[0] not in self_tokens:
+            return
+        self._register_attribute(f"{class_qname}.{segments[1]}", assign, parsed, module, class_qname)
+
+    def _register_attribute(
+        self, qualified_name: str, node: Node, parsed: ParsedFile, module: str, enclosing_class: str | None
+    ) -> None:
+        if qualified_name in self.symbol_table:
+            # A real def/class always wins; among multiple attribute
+            # assignments to the same name (e.g. re-set in more than one
+            # method), the first one found stays authoritative.
+            return
+        line_range = (node.start_point[0] + 1, node.end_point[0] + 1)
+        symbol = SymbolInfo(
+            qualified_name=qualified_name,
+            kind="attribute",
+            file=parsed.path,
+            line_range=line_range,
+            language_id=parsed.language_id,
+            module=module,
+            enclosing_class=enclosing_class,
+        )
+        self.symbol_table.add(symbol)
+        self.graph.add_node(
+            qualified_name,
+            kind="attribute",
+            file=parsed.path,
+            line_range=line_range,
+            language_id=parsed.language_id,
+            module=module,
+            enclosing_class=enclosing_class,
+        )
 
     # ------------------------------------------------------------------ #
     # Pass 2: Scoped Resolution & Edge Assembly

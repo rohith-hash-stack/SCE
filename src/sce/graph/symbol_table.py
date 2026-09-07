@@ -33,7 +33,7 @@ def path_to_module(file_path: str, repo_root: str) -> str:
 @dataclass
 class SymbolInfo:
     qualified_name: str
-    kind: str  # "class" | "function" | "method"
+    kind: str  # "class" | "function" | "method" | "attribute"
     file: str
     line_range: tuple[int, int]  # 1-indexed, inclusive [start, end]
     language_id: str
