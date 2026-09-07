@@ -10,6 +10,18 @@ from sce.graph.concrete_builder import ConcreteGraphBuilder
 from sce.graph.metamodel import SemanticMetamodel
 from sce.graph.symbol_table import GlobalSymbolTable
 from sce.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
+from sce.runtime.reconciler import (
+    GraphReconciler,
+    ingest_otel_file,
+    load_runtime_state,
+    load_trace_file,
+    merge_result_into_state,
+    new_trace_path,
+    runtime_state_path,
+    save_runtime_state,
+    write_trace_file,
+)
+from sce.runtime.tracer import run_traced_pytest
 from sce.serializers.json_debug import render_json_debug
 from sce.serializers.markdown import render_markdown
 from sce.slicer.distance import DistanceConfig, DistanceEngine
@@ -122,6 +134,81 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
         click.echo(f"Wrote context package to {output}")
     else:
         click.echo(text)
+
+
+@main.command(
+    context_settings={"ignore_unknown_options": True},
+    help=(
+        "Record a runtime trace and reconcile it into the static graph.\n\n"
+        "\b\n"
+        "  sce trace --repo . -- pytest tests/test_orders.py\n"
+        "  sce trace --repo . --ingest-otel ./traces/otel_export.json"
+    ),
+)
+@click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
+@click.option(
+    "--ingest-otel", "otel_path", type=click.Path(exists=True, dir_okay=False), default=None,
+    help="Ingest an OpenTelemetry JSON export instead of running a traced command.",
+)
+@click.argument("command", nargs=-1, type=click.UNPROCESSED)
+def trace(repo_path: str, otel_path: str | None, command: tuple[str, ...]) -> None:
+    repo_root = os.path.abspath(repo_path)
+
+    if otel_path:
+        events = ingest_otel_file(otel_path)
+        trace_path = new_trace_path(repo_root)
+        write_trace_file(trace_path, events)
+        click.echo(f"Ingested {len(events)} event(s) from {otel_path}")
+    else:
+        if not command:
+            click.echo("error: no command given - expected e.g. `sce trace --repo . -- pytest tests/`", err=True)
+            raise SystemExit(1)
+        cmd = list(command)
+        if cmd[0] != "pytest":
+            click.echo(f"error: only a `pytest` command is currently supported for live tracing, got {cmd[0]!r}", err=True)
+            raise SystemExit(1)
+        trace_path = new_trace_path(repo_root)
+        exit_code = run_traced_pytest(repo_root, trace_path, cmd[1:])
+        events = load_trace_file(trace_path) if trace_path.exists() else []
+        if exit_code != 0:
+            click.echo(f"warning: traced command exited with status {exit_code} - the trace may be incomplete", err=True)
+
+    builder, tag_matrix = build_pipeline(repo_root)
+    result = GraphReconciler(builder, tag_matrix).reconcile(events)
+
+    state = load_runtime_state(repo_root)
+    state = merge_result_into_state(state, result, trace_path.name)
+    save_runtime_state(repo_root, state)
+
+    click.echo(f"Trace written to {trace_path}")
+    click.echo(f"Runtime events processed: {len(events)}")
+    click.echo(f"  Confirmed edges (this run):          {len(result.confirmed_edges)}")
+    click.echo(f"  Newly discovered edges (this run):   {len(result.discovered_edges)}")
+    click.echo(f"  Sink-tagged symbols (this run):      {len(result.sink_symbols)}")
+    click.echo(f"  Unresolved events (this run):        {len(result.unresolved_events)}")
+    click.echo(f"Runtime state saved to {runtime_state_path(repo_root)}")
+
+
+@main.command()
+@click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
+def status(repo_path: str) -> None:
+    """Show combined static + runtime-confirmed graph status."""
+    repo_root = os.path.abspath(repo_path)
+    builder, _tag_matrix = build_pipeline(repo_root)
+    state = load_runtime_state(repo_root)
+
+    click.echo(f"Repository: {repo_root}")
+    click.echo(f"Static symbols:               {len(builder.symbol_table)}")
+    click.echo(f"Static edges:                 {builder.graph.number_of_edges()}")
+    click.echo(f"Confirmed runtime edges:      {len(state['confirmed_edges'])}")
+    click.echo(f"Dynamically discovered edges: {len(state['discovered_edges'])}")
+    click.echo(f"Sink-tagged symbols (runtime):{len(state['sink_symbols']):>2}")
+    click.echo(f"Unresolved runtime events:    {state['unresolved_event_count']}")
+    click.echo(f"Trace files ingested:         {len(state['trace_files'])}")
+    if state["last_updated"]:
+        click.echo(f"Last updated:                 {state['last_updated']}")
+    else:
+        click.echo("No runtime trace has been recorded yet - run `sce trace --repo . -- pytest ...` first.")
 
 
 if __name__ == "__main__":
