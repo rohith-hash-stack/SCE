@@ -80,6 +80,85 @@ GO_QUERIES = {
     """,
 }
 
+# `slicer_defs`: locates a function/method/class definition's structural
+# parts (parameters, return type, body) for `sce.slicer.universal_slicer`.
+# Deliberately separate from `definitions` above (used by
+# `concrete_builder`'s Pass 1) rather than adding captures to it - field
+# names below were verified against the actual installed grammars (e.g.
+# Go's own signature/return-type fields are named "parameters"/"result",
+# not "signature"; a wrong field name fails query compilation outright).
+PYTHON_SLICER_QUERIES = {
+    "slicer_defs": """
+        (function_definition
+            name: (identifier) @def.name
+            parameters: (parameters) @def.params
+            body: (block) @def.body) @def.function
+        (class_definition
+            name: (identifier) @def.name
+            body: (block) @def.body) @def.class
+    """,
+}
+
+JAVASCRIPT_SLICER_QUERIES = {
+    "slicer_defs": """
+        (function_declaration
+            name: (identifier) @def.name
+            parameters: (formal_parameters) @def.params
+            body: (statement_block) @def.body) @def.function
+        (method_definition
+            name: (property_identifier) @def.name
+            parameters: (formal_parameters) @def.params
+            body: (statement_block) @def.body) @def.function
+        (class_declaration
+            name: (identifier) @def.name
+            body: (class_body) @def.body) @def.class
+    """,
+}
+
+TYPESCRIPT_SLICER_QUERIES = {
+    "slicer_defs": """
+        (function_declaration
+            name: (identifier) @def.name
+            parameters: (formal_parameters) @def.params
+            body: (statement_block) @def.body) @def.function
+        (method_definition
+            name: (property_identifier) @def.name
+            parameters: (formal_parameters) @def.params
+            body: (statement_block) @def.body) @def.function
+        (class_declaration
+            name: (type_identifier) @def.name
+            body: (class_body) @def.body) @def.class
+        (interface_declaration
+            name: (type_identifier) @def.name
+            body: (interface_body) @def.body) @def.class
+    """,
+}
+
+GO_SLICER_QUERIES = {
+    "slicer_defs": """
+        (function_declaration
+            name: (identifier) @def.name
+            parameters: (parameter_list) @def.params
+            body: (block) @def.body) @def.function
+        (method_declaration
+            receiver: (parameter_list) @def.receiver
+            name: (field_identifier) @def.name
+            parameters: (parameter_list) @def.params
+            body: (block) @def.body) @def.function
+        (type_declaration
+            (type_spec name: (type_identifier) @def.name
+                type: (struct_type) @def.body)) @def.class
+    """,
+}
+
+_SLICER_QUERY_SETS: dict[str, dict[str, str]] = {
+    LanguageID.PYTHON: PYTHON_SLICER_QUERIES,
+    LanguageID.JAVASCRIPT: JAVASCRIPT_SLICER_QUERIES,
+    LanguageID.TYPESCRIPT: TYPESCRIPT_SLICER_QUERIES,
+    LanguageID.TSX: TYPESCRIPT_SLICER_QUERIES,
+    LanguageID.GO: GO_SLICER_QUERIES,
+}
+
 _QUERY_SETS: dict[str, dict[str, str]] = {
     LanguageID.PYTHON: PYTHON_QUERIES,
     LanguageID.JAVASCRIPT: JAVASCRIPT_QUERIES,
@@ -96,8 +175,7 @@ def get_query(language_id: str, query_name: str) -> Query | None:
     key = (language_id, query_name)
     if key in _compiled_cache:
         return _compiled_cache[key]
-    query_set = _QUERY_SETS.get(language_id, {})
-    query_src = query_set.get(query_name)
+    query_src = _QUERY_SETS.get(language_id, {}).get(query_name) or _SLICER_QUERY_SETS.get(language_id, {}).get(query_name)
     if not query_src:
         return None
     lang: Language = _load_language(language_id)
