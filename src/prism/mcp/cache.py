@@ -17,7 +17,9 @@ from dataclasses import dataclass, field
 
 from prism.cli import build_pipeline
 from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.contracts import BehavioralContract
 from prism.graph.metamodel import SemanticMetamodel
+from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.reconciler import apply_runtime_state, load_runtime_state
 from prism.slicer.distance import DistanceConfig, DistanceEngine
 
@@ -44,6 +46,7 @@ class RepoContext:
     metamodel: SemanticMetamodel
     distance_engine: DistanceEngine
     runtime_state: dict
+    contracts: dict[str, BehavioralContract] = field(default_factory=dict)
     indexed_at: float = field(default_factory=time.time)
 
     @property
@@ -112,6 +115,7 @@ class GraphCache:
 
         metamodel = SemanticMetamodel()
         distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig())
+        contracts = compute_or_load_contracts(builder, repo_root)
         return RepoContext(
             repo_root=repo_root,
             builder=builder,
@@ -119,4 +123,5 @@ class GraphCache:
             metamodel=metamodel,
             distance_engine=distance_engine,
             runtime_state=runtime_state,
+            contracts=contracts,
         )

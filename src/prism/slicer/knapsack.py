@@ -134,7 +134,12 @@ class ContextKnapsackPacker:
         self.compressor = compressor or ASTCompressor()
 
     def pack(self, seed: str, builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], distance_engine: DistanceEngine) -> PackResult:
-        g_c = builder.graph
+        # `calls_graph`, not `graph`: the packer's own notion of "reachable
+        # from the seed" must stay scoped to real behavioral call/construct
+        # edges, not the richer EXTENDS/IMPLEMENTS/READS_STATE relations
+        # `graph` also carries - see `ConcreteGraphBuilder.calls_graph`'s
+        # docstring for the regression this avoids.
+        g_c = builder.calls_graph
         distances = distance_engine.compute_all(seed, g_c)
         # `compute_all` already discounts a `confidence="CONFIRMED_RUNTIME"`
         # edge's hop cost (see `DistanceEngine._weighted_undirected`), so a
@@ -301,10 +306,10 @@ class ContextKnapsackPacker:
         return raw_footprint < self.COMPACT_MODE_RAW_FOOTPRINT_TOKENS
 
     def _callee_labels(self, builder: ConcreteGraphBuilder, qname: str) -> list[str]:
-        if qname not in builder.graph:
+        if qname not in builder.calls_graph:
             return []
         labels = []
-        for successor in sorted(builder.graph.successors(qname)):
+        for successor in sorted(builder.calls_graph.successors(qname)):
             symbol = builder.symbol_table.get(successor)
             if symbol is not None and symbol.kind == "class":
                 # Constructor calls are already visible in the caller's own

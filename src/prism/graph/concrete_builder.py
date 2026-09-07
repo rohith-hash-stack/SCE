@@ -39,6 +39,7 @@ from prism.parser.lang_config import (
 )
 from prism.parser.queries import run_query
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file
+from prism.graph.call_site import compute_call_site_context
 from prism.graph.symbol_table import (
     GlobalSymbolTable,
     InstanceTypeMap,
@@ -46,6 +47,26 @@ from prism.graph.symbol_table import (
     SymbolInfo,
     path_to_module,
 )
+
+
+# Edge relations that represent actual runtime control/data flow reaching
+# a symbol - the notion of "reachable from the seed" the distance engine
+# and knapsack packer (`prism.slicer`) have always operated on, back when
+# `CALLS` (plus, now, `INSTANTIATES` - a bare `Foo()`/`new Foo()`
+# constructor invocation was always folded into a plain `CALLS` edge
+# before the behavioral-contract work split it into its own relation) was
+# the only relation `G_C` had. `EXTENDS`/`IMPLEMENTS`/`READS_STATE` are
+# real, useful edges for a consumer that wants to inspect the graph
+# directly (see `get_architectural_invariants`, `sce status`) but were
+# never part of that traversal and must stay excluded from it: including
+# them would silently inflate every seed's reachable neighborhood (an
+# EXTENDS edge to a base class pulls in that base's entire own call
+# graph, a READS_STATE edge pulls in unrelated attribute nodes, ...),
+# which is exactly what happened - measured directly - before this
+# constant existed: two real regression-test budget assertions broke,
+# real-tokenizer-measured packed output overshot its budget once these
+# richer relations started reaching further than `CALLS` alone ever did.
+TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES"})
 
 
 class ConcreteGraphBuilder:
@@ -58,9 +79,30 @@ class ConcreteGraphBuilder:
         self._parsed_files: dict[str, ParsedFile] = {}
         self._def_nodes: dict[str, Node] = {}
         self._methods_by_class: dict[str, list[str]] = {}
+        self._calls_graph_cache: nx.DiGraph | None = None
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
+
+    @property
+    def calls_graph(self) -> nx.DiGraph:
+        """The pure behavioral-call subgraph (`CALLS`/`INSTANTIATES` edges
+        only) that `prism.slicer`'s distance engine and knapsack packer
+        traverse - see `TRAVERSABLE_RELATIONS`'s own docstring for why this
+        must stay separate from `self.graph`'s full, richer edge set.
+        Recomputed lazily and cached; invalidated automatically the next
+        time this builder's `graph` identity changes is NOT handled here
+        (this builder is only ever fully rebuilt, never incrementally
+        mutated after indexing completes, so a one-shot cache is safe).
+        """
+        if self._calls_graph_cache is None:
+            view = nx.DiGraph()
+            view.add_nodes_from(self.graph.nodes(data=True))
+            for u, v, data in self.graph.edges(data=True):
+                if data.get("relation", "CALLS") in TRAVERSABLE_RELATIONS:
+                    view.add_edge(u, v, **data)
+            self._calls_graph_cache = view
+        return self._calls_graph_cache
 
     def def_node(self, qualified_name: str) -> Node | None:
         return self._def_nodes.get(qualified_name)
@@ -276,12 +318,18 @@ class ConcreteGraphBuilder:
     # Pass 2: Scoped Resolution & Edge Assembly
     # ------------------------------------------------------------------ #
     def pass2_resolve_calls(self, files: list[str]) -> None:
+        classes_by_file: dict[str, list[str]] = {}
+        for symbol in self.symbol_table:
+            if symbol.kind == "class":
+                classes_by_file.setdefault(symbol.file, []).append(symbol.qualified_name)
+
         for path in sorted(files):
             parsed = self._parsed_files.get(path)
             if parsed is None:
                 continue
             module = self._module_for_file(parsed)
             import_map = self._build_import_map(parsed, module)
+            self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
             file_symbols = [
                 qname
                 for qname in self._def_nodes
@@ -527,6 +575,68 @@ class ConcreteGraphBuilder:
         symbol = self.symbol_table.get(qualified_name)
         return symbol is not None and symbol.kind == "class"
 
+    # -- EXTENDS / IMPLEMENTS ---------------------------------------------- #
+    def _link_class_relations(self, class_qnames: list[str], parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
+        """`class Foo(Base): ...` / `class Foo extends Base implements
+        I: ...` - real, verified for Python (a `superclasses` field holding
+        an `argument_list`, `metaclass=`-shaped keyword arguments filtered
+        out) and JS/TS (a `class_heritage` node holding separate
+        `extends_clause`/`implements_clause` children - JS's grammar never
+        produces an `implements_clause` at all, so that half degrades
+        cleanly to "no interfaces" there rather than needing its own
+        branch). Not yet implemented for Go/Java/C# - out of scope for this
+        pass, not silently claimed.
+        """
+        lang = parsed.language_id
+        if lang not in (LanguageID.PYTHON, LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+            return
+        for class_qname in class_qnames:
+            class_node = self._def_nodes.get(class_qname)
+            if class_node is None:
+                continue
+            if lang == LanguageID.PYTHON:
+                self._link_python_bases(class_qname, class_node, parsed, module, import_map)
+            else:
+                self._link_ts_heritage(class_qname, class_node, parsed, module, import_map)
+
+    def _link_python_bases(self, class_qname: str, class_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
+        superclasses = class_node.child_by_field_name("superclasses")
+        if superclasses is None:
+            return
+        for child in superclasses.named_children:
+            if child.type == "keyword_argument":  # `metaclass=Meta` - not a base class
+                continue
+            segments = flatten_reference_chain(child, parsed.source, LanguageID.PYTHON)
+            if not segments:
+                continue
+            target = self._resolve_reference_chain(segments, module, import_map)
+            if self._is_known_class(target):
+                self._add_relation_edge(class_qname, target, "EXTENDS")
+
+    def _link_ts_heritage(self, class_qname: str, class_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
+        heritage = next((c for c in class_node.children if c.type == "class_heritage"), None)
+        if heritage is None:
+            return
+        for clause in heritage.children:
+            if clause.type == "extends_clause":
+                relation = "EXTENDS"
+            elif clause.type == "implements_clause":
+                relation = "IMPLEMENTS"
+            else:
+                continue
+            for name_node in clause.named_children:
+                segments = flatten_reference_chain(name_node, parsed.source, parsed.language_id)
+                if not segments:
+                    continue
+                target = self._resolve_reference_chain(segments, module, import_map)
+                if self._is_known_class(target):
+                    self._add_relation_edge(class_qname, target, relation)
+
+    def _add_relation_edge(self, source: str, target: str, relation: str) -> None:
+        if target not in self.graph:
+            self.graph.add_node(target, external=False)
+        self.graph.add_edge(source, target, relation=relation)
+
     def _build_function_instance_map(
         self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap
     ) -> InstanceTypeMap:
@@ -592,7 +702,87 @@ class ConcreteGraphBuilder:
                 continue
             if target not in self.graph:
                 self.graph.add_node(target, external=target not in self.symbol_table)
-            self.graph.add_edge(caller_qname, target, relation="CALLS")
+            target_symbol = self.symbol_table.get(target)
+            # A bare `Foo()` call resolving to a known *class* is
+            # construction, not behavioral delegation (Python's and JS's
+            # shared "call the class to build an instance" idiom - the same
+            # distinction `_constructor_call_segments`/`_is_known_class`
+            # already draw for instance binding, reused here as an edge
+            # relation instead of a lookup).
+            relation = "INSTANTIATES" if target_symbol is not None and target_symbol.kind == "class" else "CALLS"
+            edge_kwargs = {"relation": relation}
+            if relation == "CALLS":
+                edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
+            self.graph.add_edge(caller_qname, target, **edge_kwargs)
+
+        self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
+        if lang == LanguageID.PYTHON:
+            self._link_state_reads(caller_qname, def_node, parsed, module, enclosing_class, self_tokens)
+
+    # -- INSTANTIATES via `new X()` (JS/TS/Java/C#) ----------------------- #
+    _NEW_EXPRESSION_TYPES = frozenset({"new_expression", "object_creation_expression"})
+
+    def _link_new_expression_instantiations(
+        self, caller_qname: str, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap
+    ) -> None:
+        lang = parsed.language_id
+        new_types = {t for t in self._NEW_EXPRESSION_TYPES if t != CALL_NODE_TYPE.get(lang)}
+        if not new_types:
+            return
+        for new_node in iter_scoped_nodes(def_node, new_types, lang):
+            ctor_segments = _constructor_call_segments(new_node, lang, parsed.source)
+            if ctor_segments is None and new_node.type == "new_expression":
+                ctor_node = new_node.child_by_field_name("constructor")
+                if ctor_node is not None:
+                    ctor_segments = flatten_reference_chain(ctor_node, parsed.source, lang)
+            if not ctor_segments:
+                continue
+            target = self._resolve_reference_chain(ctor_segments, module, import_map)
+            if not self._is_known_class(target):
+                continue
+            if target not in self.graph:
+                self.graph.add_node(target, external=False)
+            self.graph.add_edge(caller_qname, target, relation="INSTANTIATES")
+
+    # -- READS_STATE (Python only - see module docstring) ------------------ #
+    def _link_state_reads(
+        self, caller_qname: str, def_node: Node, parsed: ParsedFile, module: str, enclosing_class: str | None,
+        self_tokens: set[str],
+    ) -> None:
+        if enclosing_class is None:
+            return
+        lang = parsed.language_id
+        attr_type = "attribute"
+        assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+        call_type = CALL_NODE_TYPE.get(lang)
+        for attr_node in iter_scoped_nodes(def_node, {attr_type}, lang):
+            segments = flatten_reference_chain(attr_node, parsed.source, lang)
+            if not segments or len(segments) != 2 or segments[0] not in self_tokens:
+                continue
+            parent = attr_node.parent
+            if parent is None:
+                continue
+            # Skip write targets (`self.x = ...`) and call callees
+            # (`self.x()`) - both are already CALLS/attribute-definition
+            # edges elsewhere; READS_STATE is specifically for reading an
+            # attribute's *value* (`if self.x:`, `return self.x`, `y =
+            # self.x`, ...).
+            # tree-sitter's Python bindings return a fresh wrapper object
+            # per access, so `is` never matches even for the identical
+            # underlying node - `.id` (or `==`, which tree-sitter defines
+            # to compare the same way) is the correct identity check here.
+            left = parent.child_by_field_name("left") if parent.type == assign_type else None
+            if left is not None and left.id == attr_node.id:
+                continue
+            func = parent.child_by_field_name("function") if parent.type == call_type else None
+            if func is not None and func.id == attr_node.id:
+                continue
+            target = f"{enclosing_class}.{segments[1]}"
+            if target not in self.symbol_table:
+                continue
+            if target not in self.graph:
+                self.graph.add_node(target, external=False)
+            self.graph.add_edge(caller_qname, target, relation="READS_STATE")
 
     def _resolve_segments(
         self,

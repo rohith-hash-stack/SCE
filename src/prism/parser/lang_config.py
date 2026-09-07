@@ -109,13 +109,126 @@ DECORATED_WRAPPER_TYPES = {
 }
 ASSIGNMENT_NODE_TYPE = {
     LanguageID.PYTHON: "assignment",
+    # Added for prism.graph.contracts's state-mutation detection (a plain
+    # `this.x = ...`/`this.x[i] = ...` walk, language-agnostic once this
+    # entry exists) - concrete_builder.py's own instance-binding passes
+    # stay unaffected: they gate on `instance_binding_langs`, which does
+    # not include JS/TS/TSX, and `_collect_attribute_definitions` is
+    # separately gated to Python only.
+    LanguageID.JAVASCRIPT: "assignment_expression",
+    LanguageID.TYPESCRIPT: "assignment_expression",
+    LanguageID.TSX: "assignment_expression",
     LanguageID.JAVA: "assignment_expression",
     LanguageID.CSHARP: "assignment_expression",
 }
 RAISE_NODE_TYPE = {
     LanguageID.PYTHON: "raise_statement",
+    LanguageID.JAVASCRIPT: "throw_statement",
+    LanguageID.TYPESCRIPT: "throw_statement",
+    LanguageID.TSX: "throw_statement",
     LanguageID.JAVA: "throw_statement",
     LanguageID.CSHARP: "throw_statement",
+}
+
+# --------------------------------------------------------------------- #
+# Behavioral-contract node-type tables (src/prism/graph/contracts.py,
+# src/prism/graph/call_site.py). Python and JS/TS/TSX get real, verified
+# grammar coverage (see contracts.py's module docstring); Go/Java/C#
+# entries are included where the construct genuinely exists in that
+# grammar, left as an empty set where it doesn't apply (Go has no
+# try/catch or ternary) or hasn't been implemented yet - an empty set
+# degrades a check to "never observed" rather than crashing, the same
+# fail-open convention every other per-language table here already uses.
+# --------------------------------------------------------------------- #
+LOOP_NODE_TYPES = {
+    LanguageID.PYTHON: {"for_statement", "while_statement"},
+    LanguageID.JAVASCRIPT: {"for_statement", "for_in_statement", "while_statement", "do_statement"},
+    LanguageID.TYPESCRIPT: {"for_statement", "for_in_statement", "while_statement", "do_statement"},
+    LanguageID.TSX: {"for_statement", "for_in_statement", "while_statement", "do_statement"},
+    LanguageID.GO: {"for_statement"},
+    LanguageID.JAVA: {"for_statement", "while_statement", "do_statement", "enhanced_for_statement"},
+    LanguageID.CSHARP: {"for_statement", "while_statement", "do_statement", "foreach_statement"},
+}
+# Higher-order iteration methods (`.map()`, `.forEach()`, `.filter()`, ...)
+# also put a call site "inside a loop" in the behavioral sense the task
+# asks for, even though no loop-statement node is on its ancestor chain -
+# detected by callee simple name at the call site, language-agnostically,
+# in call_site.py rather than here (it's a name pattern, not a grammar
+# shape), documented here for discoverability.
+LOOP_LIKE_METHOD_NAMES = frozenset({"map", "forEach", "filter", "reduce", "flatMap", "each"})
+TRY_NODE_TYPES = {
+    LanguageID.PYTHON: {"try_statement"},
+    LanguageID.JAVASCRIPT: {"try_statement"},
+    LanguageID.TYPESCRIPT: {"try_statement"},
+    LanguageID.TSX: {"try_statement"},
+    LanguageID.GO: set(),  # Go has no try/catch construct
+    LanguageID.JAVA: {"try_statement"},
+    LanguageID.CSHARP: {"try_statement"},
+}
+CATCH_NODE_TYPES = {
+    LanguageID.PYTHON: {"except_clause"},
+    LanguageID.JAVASCRIPT: {"catch_clause"},
+    LanguageID.TYPESCRIPT: {"catch_clause"},
+    LanguageID.TSX: {"catch_clause"},
+    LanguageID.GO: set(),
+    LanguageID.JAVA: {"catch_clause"},
+    LanguageID.CSHARP: {"catch_clause"},
+}
+CONDITIONAL_NODE_TYPES = {
+    LanguageID.PYTHON: {"if_statement"},
+    LanguageID.JAVASCRIPT: {"if_statement"},
+    LanguageID.TYPESCRIPT: {"if_statement"},
+    LanguageID.TSX: {"if_statement"},
+    LanguageID.GO: {"if_statement"},
+    LanguageID.JAVA: {"if_statement"},
+    LanguageID.CSHARP: {"if_statement"},
+}
+TERNARY_NODE_TYPES = {
+    LanguageID.PYTHON: {"conditional_expression"},
+    LanguageID.JAVASCRIPT: {"ternary_expression"},
+    LanguageID.TYPESCRIPT: {"ternary_expression"},
+    LanguageID.TSX: {"ternary_expression"},
+    LanguageID.GO: set(),  # Go has no ternary operator
+    LanguageID.JAVA: {"ternary_expression"},
+    LanguageID.CSHARP: {"conditional_expression"},
+}
+AWAIT_NODE_TYPES = {
+    LanguageID.PYTHON: {"await"},
+    LanguageID.JAVASCRIPT: {"await_expression"},
+    LanguageID.TYPESCRIPT: {"await_expression"},
+    LanguageID.TSX: {"await_expression"},
+    LanguageID.GO: set(),  # no async/await; goroutines are a different model
+    LanguageID.JAVA: set(),
+    LanguageID.CSHARP: {"await_expression"},
+}
+ASYNC_KEYWORD_NODE_TYPES = {
+    # Presence of a bare "async" token among a definition's own children -
+    # `is_async` detection.
+    LanguageID.PYTHON: {"async"},
+    LanguageID.JAVASCRIPT: {"async"},
+    LanguageID.TYPESCRIPT: {"async"},
+    LanguageID.TSX: {"async"},
+    LanguageID.GO: set(),
+    LanguageID.JAVA: set(),
+    LanguageID.CSHARP: {"async"},  # a modifier keyword inside `modifiers`
+}
+GLOBAL_NONLOCAL_STATEMENT_TYPES = {
+    # Only Python has an explicit "I'm rebinding an enclosing/module
+    # scope name" statement; every other supported language mutates
+    # outer scope purely through assignment shape, already covered by
+    # ASSIGNMENT_NODE_TYPE/`this.*` detection.
+    LanguageID.PYTHON: {"global_statement", "nonlocal_statement"},
+}
+ASSERT_NODE_TYPE = {
+    LanguageID.PYTHON: "assert_statement",
+}
+EXPORT_WRAPPER_TYPES = {
+    # A definition whose *parent* is one of these is publicly exported -
+    # JS/TS/TSX's `export function foo() {}` / `export class Foo {}`
+    # (`export default ...` is also an `export_statement`).
+    LanguageID.JAVASCRIPT: {"export_statement"},
+    LanguageID.TYPESCRIPT: {"export_statement"},
+    LanguageID.TSX: {"export_statement"},
 }
 
 

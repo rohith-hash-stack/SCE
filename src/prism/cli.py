@@ -10,6 +10,7 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.metamodel import SemanticMetamodel
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
+from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.reconciler import (
     GraphReconciler,
     ingest_otel_file,
@@ -112,6 +113,7 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
     distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
     packer = ContextKnapsackPacker(token_budget=budget)
     result = packer.pack(symbol, builder, tag_matrix, distance_engine)
+    contracts = compute_or_load_contracts(builder, os.path.abspath(repo_path))
 
     if as_json:
         payload = {
@@ -126,7 +128,7 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
         }
         text = json.dumps(payload, indent=2)
     else:
-        text = render_markdown(result, tag_matrix)
+        text = render_markdown(result, tag_matrix, contracts=contracts, graph=builder.graph)
 
     if output:
         with open(output, "w") as f:

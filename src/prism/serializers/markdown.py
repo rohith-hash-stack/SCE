@@ -1,8 +1,22 @@
 """HLD section 7: renders a `PackResult` as the structured Markdown context
 package handed to an LLM coding agent.
+
+`contracts`/`graph` (both optional, default `None` - every existing call
+site keeps working unchanged) turn on token-efficient behavioral-contract
+rendering (see `prism.graph.contracts`): the target symbol (L0) still gets
+its full source, but every other packed item that has a computed
+`BehavioralContract` renders as a compact YAML-shaped contract block
+instead of a skeletonized/stubbed code fence - the whole point being that
+an LLM coding agent rarely needs a callee's *implementation* to reason
+about a call site, only its *interface and effects*. When `graph` is also
+given, the target symbol's own block additionally lists its "Outgoing
+Dependencies" (its own resolved call sites, each with the call-site
+context `prism.graph.call_site` computed - `call_kind`, `inside_loop`,
+`guarded_by_null_check`, ...) and "Incoming Callers".
 """
 from __future__ import annotations
 
+from prism.graph.contracts import BehavioralContract
 from prism.slicer.knapsack import PackResult
 
 # Short form ("L0", not "Full Implementation - L0"): every heading now also
@@ -23,8 +37,19 @@ _FENCE_LANGUAGE = {
     "csharp": "csharp",
 }
 
+# Resolutions that render as a compact contract block, when one is
+# available, instead of a code fence - L0 (the seed, always full source)
+# and L3 (already a one-line alias, nothing left to compact further) are
+# untouched either way.
+_CONTRACT_RESOLUTIONS = frozenset({1, 2})
 
-def render_markdown(result: PackResult, tag_matrix: dict[str, set[str]]) -> str:
+
+def render_markdown(
+    result: PackResult,
+    tag_matrix: dict[str, set[str]],
+    contracts: dict[str, BehavioralContract] | None = None,
+    graph=None,
+) -> str:
     lines: list[str] = []
     lines.append("# SEMANTIC REPOSITORY CONTEXT")
     lines.append(f"Target Symbol: `{result.seed}`")
@@ -44,6 +69,7 @@ def render_markdown(result: PackResult, tag_matrix: dict[str, set[str]]) -> str:
         lines.append("")
     lines.append("## 2. Injected Code Units")
     lines.append("")
+    contracts = contracts or {}
     for item in result.items:
         is_seed = item.symbol == result.seed
         if result.compact:
@@ -63,10 +89,28 @@ def render_markdown(result: PackResult, tag_matrix: dict[str, set[str]]) -> str:
             label = f"{_RESOLUTION_LABELS[item.resolution]} - lines {start}-{end} in {item.relative_path}"
         heading = f"### [TARGET] {item.symbol} ({label})" if is_seed else f"### {item.symbol} ({label})"
         lines.append(heading)
-        fence = _FENCE_LANGUAGE.get(item.language_id, "")
-        lines.append(f"```{fence}")
-        lines.append(item.content)
-        lines.append("```")
+
+        contract = contracts.get(item.symbol)
+        if not is_seed and item.resolution in _CONTRACT_RESOLUTIONS and contract is not None:
+            lines.append("```yaml")
+            lines.extend(_render_contract_block(item.symbol, contract))
+            lines.append("```")
+        else:
+            fence = _FENCE_LANGUAGE.get(item.language_id, "")
+            lines.append(f"```{fence}")
+            lines.append(item.content)
+            lines.append("```")
+            if is_seed and contract is not None:
+                lines.append("")
+                lines.append("```yaml")
+                lines.extend(_render_seed_summary(item.symbol, contract))
+                lines.append("```")
+
+        if is_seed and graph is not None:
+            dep_lines = _render_dependencies(item.symbol, graph, contracts)
+            if dep_lines:
+                lines.append("")
+                lines.extend(dep_lines)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -83,3 +127,99 @@ def _render_architectural_path(result: PackResult, tag_matrix: dict[str, set[str
         arrow = "requires" if relation == "requires" else "calls"
         rendered.append(f"{indent}└── {arrow} ──► {tag_prefix}{node}")
     return rendered
+
+
+# --------------------------------------------------------------------- #
+# Behavioral-contract rendering (prism.graph.contracts)
+# --------------------------------------------------------------------- #
+def _yaml_str(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _yaml_list(values) -> str:
+    return "[" + ", ".join(_yaml_str(v) for v in values) + "]"
+
+
+def _render_contract_block(symbol: str, contract: BehavioralContract) -> list[str]:
+    lines = [f"Symbol: {symbol.rsplit('.', 1)[-1]}"]
+    if contract.params:
+        lines.append(f"Params: {_yaml_list(p.render() for p in contract.params)}")
+    if contract.return_type:
+        lines.append(f"Returns: {_yaml_str(contract.return_type)}")
+    lines.append(f"Purity: {contract.purity}")
+    if contract.is_async:
+        lines.append("Async: true")
+    if contract.effects:
+        lines.append(f"Effects: {_yaml_list(contract.effects)}")
+    if contract.thrown_exceptions:
+        lines.append(f"Throws: {_yaml_list(contract.thrown_exceptions)}")
+    if contract.state_mutations:
+        lines.append(f"Mutates: {_yaml_list(contract.state_mutations)}")
+    lines.append(f"Complexity: {contract.cyclomatic_complexity}")
+    if contract.visibility != "public":
+        lines.append(f"Visibility: {contract.visibility}")
+    if contract.is_deprecated:
+        lines.append("Deprecated: true")
+    if contract.doc_summary:
+        lines.append(f"Summary: {_yaml_str(contract.doc_summary)}")
+    return lines
+
+
+def _render_seed_summary(symbol: str, contract: BehavioralContract) -> list[str]:
+    """The target's own contract, shown alongside its full L0 source (not
+    instead of it) - a compact "here's the shape" header a reader can
+    check without parsing the code fence above it."""
+    lines = [f"Complexity: {contract.cyclomatic_complexity}"]
+    if contract.effects:
+        lines.append(f"Effects: {_yaml_list(contract.effects)}")
+    if contract.thrown_exceptions:
+        lines.append(f"Throws: {_yaml_list(contract.thrown_exceptions)}")
+    lines.append(f"Purity: {contract.purity}")
+    return lines
+
+
+_DEPENDENCY_RELATIONS = frozenset({"CALLS", "INSTANTIATES"})
+
+
+def _render_dependencies(seed: str, graph, contracts: dict[str, BehavioralContract]) -> list[str]:
+    if seed not in graph:
+        return []
+    lines: list[str] = []
+
+    outgoing = [
+        (v, data) for _u, v, data in graph.out_edges(seed, data=True) if data.get("relation", "CALLS") in _DEPENDENCY_RELATIONS
+    ]
+    if outgoing:
+        lines.append("Outgoing Dependencies:")
+        for target, data in sorted(outgoing, key=lambda t: t[0]):
+            lines.append(f"  - target: {target}")
+            if data.get("relation") == "INSTANTIATES":
+                lines.append("    relation: instantiates")
+            else:
+                for key in ("call_kind", "inside_loop", "inside_try_catch", "guarded_by_null_check", "argument_flow"):
+                    if key in data:
+                        value = data[key]
+                        rendered = str(value).lower() if isinstance(value, bool) else value
+                        lines.append(f"    {key}: {rendered}")
+            contract = contracts.get(target)
+            if contract is not None:
+                summary_bits = [f"purity: {_yaml_str(contract.purity)}"]
+                if contract.return_type:
+                    summary_bits.append(f"returns: {_yaml_str(contract.return_type)}")
+                if contract.effects:
+                    summary_bits.append(f"effects: {_yaml_list(contract.effects)}")
+                lines.append(f"    contract: {{ {', '.join(summary_bits)} }}")
+        lines.append("")
+
+    incoming = [
+        (u, data) for u, _v, data in graph.in_edges(seed, data=True) if data.get("relation", "CALLS") in _DEPENDENCY_RELATIONS
+    ]
+    if incoming:
+        lines.append("Incoming Callers:")
+        for caller, data in sorted(incoming, key=lambda t: t[0]):
+            call_kind = data.get("call_kind")
+            suffix = f" ({call_kind})" if call_kind else ""
+            lines.append(f"  - {caller}{suffix}")
+
+    return lines
