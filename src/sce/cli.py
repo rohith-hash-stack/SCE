@@ -211,5 +211,28 @@ def status(repo_path: str) -> None:
         click.echo("No runtime trace has been recorded yet - run `sce trace --repo . -- pytest ...` first.")
 
 
+@main.command(name="mcp")
+@click.option(
+    "--transport", type=click.Choice(["stdio", "sse", "streamable-http"]), default="stdio", show_default=True,
+    help="MCP transport protocol. 'stdio' is what Claude Desktop/Cursor expect.",
+)
+@click.option(
+    "--repo", "repo_path", type=click.Path(exists=True, file_okay=False), default=None,
+    help="Default repository root for a tool call that omits its own repo_path (defaults to this process's cwd).",
+)
+def mcp_command(transport: str, repo_path: str | None) -> None:
+    """Run SCE as a Model Context Protocol server (see docs/mcp_setup.md)."""
+    try:
+        from sce.mcp.server import run_server
+    except ImportError as exc:
+        click.echo(
+            "error: the 'mcp' extra is required for this command - install it with "
+            "`pip install semantic-context-engine[mcp]` (or `pip install 'mcp[cli]>=2.0,<3.0'`)",
+            err=True,
+        )
+        raise SystemExit(1) from exc
+    run_server(transport=transport, repo_path=repo_path)
+
+
 if __name__ == "__main__":
     main()

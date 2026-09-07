@@ -341,6 +341,13 @@ def _empty_state() -> dict:
         "confirmed_edges": [],
         "discovered_edges": [],
         "sink_symbols": {},
+        # [caller, callee, count] triples, not a {"caller|callee": count}
+        # dict - a JSON object needs string keys, and joining the pair into
+        # one string risks colliding with a real qualified name that
+        # happens to contain the same separator (unlikely, but a triple
+        # sidesteps the question entirely rather than picking a separator
+        # and hoping).
+        "edge_invocation_counts": [],
         "unresolved_event_count": 0,
         "last_updated": None,
     }
@@ -399,6 +406,56 @@ def merge_result_into_state(state: dict, result: ReconciliationResult, trace_fil
         sink_symbols.setdefault(symbol, set()).update(tags)
     merged["sink_symbols"] = {k: sorted(v) for k, v in sink_symbols.items()}
 
+    counts: dict[tuple[str, str], int] = {
+        (caller, callee): count for caller, callee, count in merged.get("edge_invocation_counts", [])
+    }
+    for edge, count in result.invocation_counts.items():
+        counts[edge] = counts.get(edge, 0) + count
+    merged["edge_invocation_counts"] = [[caller, callee, count] for (caller, callee), count in sorted(counts.items())]
+
     merged["unresolved_event_count"] = merged.get("unresolved_event_count", 0) + len(result.unresolved_events)
     merged["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     return merged
+
+
+def apply_runtime_state(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], state: dict) -> None:
+    """Rehydrate a freshly-built (purely static) `ConcreteGraphBuilder`/
+    `tag_matrix` with a *persisted* `.sce/runtime_state.json` - the
+    counterpart to `GraphReconciler.reconcile()` for a caller (the MCP
+    server's `GraphCache`, primarily) that has the summarized state but
+    not the original trace events. Mutates both in place, the same way
+    `reconcile()` itself does.
+
+    Every edge is re-validated against the fresh static pass before being
+    touched - the codebase may have changed since the trace was recorded,
+    so a `discovered_edges` entry whose caller/callee no longer exist (or
+    that the static resolver now finds on its own) is skipped rather than
+    blindly re-applied.
+    """
+    for caller, callee in state.get("confirmed_edges", []):
+        if builder.graph.has_edge(caller, callee):
+            builder.graph.edges[caller, callee]["confidence"] = "CONFIRMED_RUNTIME"
+
+    for caller, callee in state.get("discovered_edges", []):
+        if builder.graph.has_edge(caller, callee):
+            # The static resolver now finds this edge on its own (the
+            # source changed since the trace was recorded) - promote it
+            # instead of re-declaring it "discovered".
+            builder.graph.edges[caller, callee]["confidence"] = "CONFIRMED_RUNTIME"
+            continue
+        if caller in builder.symbol_table and callee in builder.symbol_table:
+            builder.graph.add_edge(
+                caller, callee, relation="CALLS", provenance="RUNTIME_DISCOVERED", confidence="CONFIRMED_RUNTIME"
+            )
+
+    for caller, callee, count in state.get("edge_invocation_counts", []):
+        if builder.graph.has_edge(caller, callee):
+            builder.graph.edges[caller, callee]["runtime_invocation_count"] = count
+
+    for symbol, tags in state.get("sink_symbols", {}).items():
+        if symbol not in builder.symbol_table:
+            continue
+        merged_tags = tag_matrix.setdefault(symbol, set())
+        merged_tags.update(tags)
+        if symbol in builder.graph:
+            builder.graph.nodes[symbol]["tags"] = merged_tags
