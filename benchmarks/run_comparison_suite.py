@@ -262,6 +262,20 @@ def detect_hallucinations(response_text: str, real_symbol_names: set[str]) -> tu
     "result", common English words in backticks) - this only ever flags a
     dotted, qualified-looking reference, matching the spec's own
     definition ("phantom functions, invalid method parameters").
+
+    **Not meaningful for Category 3 (codegen) tasks**: those prompts
+    explicitly ask the model to invent a brand-new symbol name (a new
+    method, a new class) that, correctly, does not yet exist anywhere in
+    `real_symbol_names` - this function has no way to distinguish "this
+    method genuinely doesn't exist" from "this method doesn't exist YET
+    because you were asked to write it," so a codegen response's
+    hallucination rate is dominated by that false-positive and is
+    excluded from `generate_report`'s headline aggregate for exactly this
+    reason (see that function). Confirmed as a real false-positive during
+    this benchmark's own live run, not a hypothetical caveat: e.g. a
+    generated `Context.GetUint`/`getTyped[uint]` snippet, which is the
+    CORRECT answer to a "add a new helper following this idiom" prompt,
+    scored as 100% hallucinated under this metric.
     """
     mentioned = set(_CODE_IDENTIFIER_RE.findall(response_text))
     real_simple_names = {n.rsplit(".", 1)[-1] for n in real_symbol_names}
@@ -424,6 +438,20 @@ def generate_report(results: list[TaskResult], model: str, llm_available: bool) 
             "and real graph data - independent of any LLM call - and are fully populated."
         )
         lines.append("")
+    lines.append(
+        "> **Methodology note**: hallucination detection cross-checks every backtick-quoted, "
+        "dotted identifier the model mentions against the repository's real symbol table. "
+        "This is not a meaningful signal for Category 3 (codegen) tasks, whose prompts "
+        "correctly ask the model to invent a new symbol name that doesn't exist yet - the "
+        "headline Hallucination Rate above excludes Category 3 for this reason (its own "
+        "numbers are still shown, unexcluded, in the Categorical Breakdown and Full Task "
+        "Results tables below, so nothing is hidden). Pass@1 is a syntax-validity proxy "
+        "(`ast.parse` for Python, brace/paren balance for Go) checked against the model's own "
+        "generated code, not a full native-test-suite run (`go test`/`pytest`) against the "
+        "actual repository, which requires splicing the generated snippet into the right file "
+        "and resolving that task's own fixtures per-task - out of scope for this run."
+    )
+    lines.append("")
 
     baseline_tokens = [r.baseline.context.token_count for r in results]
     treatment_tokens = [r.treatment.context.token_count for r in results]
@@ -431,8 +459,15 @@ def generate_report(results: list[TaskResult], model: str, llm_available: bool) 
     if sum(baseline_tokens) > 0:
         token_reduction = round(1 - (sum(treatment_tokens) / sum(baseline_tokens)), 4)
 
-    baseline_halluc = _mean([r.baseline.hallucination_rate for r in results if r.baseline.hallucination_rate is not None])
-    treatment_halluc = _mean([r.treatment.hallucination_rate for r in results if r.treatment.hallucination_rate is not None])
+    # Category 3 (codegen) is excluded from the headline hallucination
+    # aggregate - those prompts correctly ask the model to invent a new
+    # symbol name that doesn't exist yet, which `detect_hallucinations`
+    # cannot distinguish from a genuine phantom reference (see that
+    # function's own docstring; confirmed as a real false-positive during
+    # this benchmark's live run, not a hypothetical concern).
+    non_codegen_results = [r for r in results if r.category != CATEGORY_CODEGEN]
+    baseline_halluc = _mean([r.baseline.hallucination_rate for r in non_codegen_results if r.baseline.hallucination_rate is not None])
+    treatment_halluc = _mean([r.treatment.hallucination_rate for r in non_codegen_results if r.treatment.hallucination_rate is not None])
     baseline_synt = _mean([r.baseline.syntactic_conformance for r in results if r.baseline.syntactic_conformance is not None])
     treatment_synt = _mean([r.treatment.syntactic_conformance for r in results if r.treatment.syntactic_conformance is not None])
 
@@ -457,7 +492,7 @@ def generate_report(results: list[TaskResult], model: str, llm_available: bool) 
     lines.append(f"| Blast Radius Context Recall (Cat. 1, {len(c1_results)} tasks) | {_pct(baseline_recall)} | "
                  f"{_pct(treatment_recall)} | "
                  f"{_pct(None if None in (baseline_recall, treatment_recall) else treatment_recall - baseline_recall)} |")
-    lines.append(f"| Hallucination Rate (mean) | {_pct(baseline_halluc)} | {_pct(treatment_halluc)} | "
+    lines.append(f"| Hallucination Rate (mean, excl. Cat. 3 - see note) | {_pct(baseline_halluc)} | {_pct(treatment_halluc)} | "
                  f"{_pct(None if None in (baseline_halluc, treatment_halluc) else baseline_halluc - treatment_halluc)} reduction |")
     lines.append(f"| Syntactic Conformance (mean, 1-5) | {baseline_synt if baseline_synt is not None else 'N/A'} | "
                  f"{treatment_synt if treatment_synt is not None else 'N/A'} | - |")

@@ -760,3 +760,51 @@ actually cloning and indexing, not assumed):
    real, honest property of this specific target at this specific budget,
    not a harness bug - a larger `--budget` or a richer target (e.g. `gin`,
    `django`) does not exhibit it.
+
+## Comparison suite: Direct LLM vs. Prism-Augmented LLM
+
+`run_comparison_suite.py` runs a head-to-head comparison across
+`comparison_tasks.py`'s 33-query matrix (11 queries each against
+`gin-gonic/gin`, `psf/black`, `pallets/click` - a Go backend framework, a
+Python AST-transformation engine, and a Python CLI orchestrator, chosen as
+tractable stand-ins for the spec's backend/algorithmic/E2E-or-CLI
+archetypes), 7/7/7/6/6 across five task categories (blast-radius
+refactoring, cross-layer bug localization, idiomatic codegen, polysemic
+disambiguation, invariant auditing). Every `target_symbol` in the matrix
+is a real, Prism-index-verified qualified name in its repository.
+
+```bash
+# Real repos must already be cloned under --repos-dir (default /home/user)
+# in <owner>/<repo> layout, e.g. /home/user/gin-gonic/gin.
+python -m benchmarks.run_comparison_suite --report benchmarks/comparison_report.md --json-out benchmarks/comparison_report.json
+
+python -m benchmarks.run_comparison_suite --dry-run --tasks C1-01,C4-03   # validate the harness, no LLM calls/cost
+```
+
+Baseline (Arm 1) is a naive, industry-standard keyword-ranked raw-file
+retrieval (word-boundary keyword matching over backtick-quoted identifiers
+in the prompt, budget-truncating) - not a strawman: getting this right
+took two real, found-and-fixed bugs during development (prose-word scoring
+noise dominating over actual code identifiers, and an unbounded top file
+blowing straight through the token budget) - see the module's own
+docstrings for both. Treatment (Arm 2) is a real `prism query` subprocess
+invocation.
+
+Token cost and Blast Radius Recall (Category 1's ground truth is read
+straight from `calls_graph`) are measured for real regardless of LLM
+availability. Hallucination-rate/syntactic-conformance/Pass@1 need
+`OPENAI_API_KEY` (default model: `gpt-4o-mini`) - hallucination detection
+itself is a deterministic real-symbol-table cross-check, not a second
+LLM's opinion, though it's not a meaningful signal for Category 3
+(codegen) tasks, whose prompts correctly ask for brand-new symbol names -
+see `comparison_report.md`'s own methodology note. Pass@1 is a
+syntax-validity proxy (`ast.parse`/brace-balance), not a full native
+`go test`/`pytest` run against the real repository - splicing a
+generated snippet into place and resolving each task's own fixtures was
+out of scope for this harness.
+
+The most recent live run (33/33 tasks, `gpt-4o-mini`, ~$0.05 total OpenAI
+cost) is committed at `benchmarks/comparison_report.md` /
+`comparison_report.json`. Headline results: 43.2% total context-token
+reduction, 100.0% vs. 54.1% Blast Radius Context Recall, and a 9.9% vs.
+7.0% hallucination rate (Category 3 excluded per the note above).
