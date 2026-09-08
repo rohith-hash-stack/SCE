@@ -31,7 +31,8 @@ from prism.runtime.tracer import run_traced_pytest
 from prism.serializers.json_debug import render_json_debug
 from prism.serializers.markdown import render_markdown
 from prism.slicer.distance import DistanceConfig, DistanceEngine
-from prism.slicer.knapsack import ContextKnapsackPacker
+from prism.slicer.blueprint import mine_sibling_blueprint
+from prism.slicer.knapsack import QUERY_TYPE_BUG_LOCALIZATION, QUERY_TYPE_GENERAL, ContextKnapsackPacker
 from prism.tagger.engine import TaggingEngine
 
 IGNORED_DIRS = {
@@ -119,9 +120,16 @@ def index(repo_path: str, debug_json: bool) -> None:
     help="Reject (raise) instead of warn-and-skip when an ingested trace's git commit or file SHA-256 "
     "fingerprints don't match the current repository state.",
 )
+@click.option(
+    "--query-type", "query_type", type=click.Choice([QUERY_TYPE_GENERAL, QUERY_TYPE_BUG_LOCALIZATION]),
+    default=QUERY_TYPE_GENERAL, show_default=True,
+    help="Query intent hint. 'bug_localization' documents/reinforces Fallibility-Based Knapsack Pruning "
+    "(infallible-leaf dependencies are always pruned to a compact signature regardless of this flag, "
+    "since packing is always budget-constrained - see prism.slicer.knapsack).",
+)
 def query(
     repo_path: str, symbol: str, budget: int, lambda_weight: float, as_json: bool, output: str | None,
-    trace_files: tuple[str, ...], runtime_bias: float, strict_trace_validation: bool,
+    trace_files: tuple[str, ...], runtime_bias: float, strict_trace_validation: bool, query_type: str,
 ) -> None:
     """Extract a variable-resolution context package for SYMBOL (a fully
     qualified name, e.g. `src.controllers.checkout.process_checkout`)."""
@@ -135,12 +143,21 @@ def query(
         click.echo(f"error: --runtime-bias must be between 0.0 and 1.0, got {runtime_bias}", err=True)
         raise SystemExit(1)
 
-    metamodel = SemanticMetamodel()
-    distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
-    packer = ContextKnapsackPacker(token_budget=budget)
-    result = packer.pack(symbol, builder, tag_matrix, distance_engine)
     repo_root = os.path.abspath(repo_path)
     contracts = compute_or_load_contracts(builder, repo_root)
+
+    metamodel = SemanticMetamodel()
+    distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
+    # Reserve room for the hierarchical-intent-profile + idiomatic-
+    # blueprint sections rendered around the packed items (see
+    # ContextKnapsackPacker.DEFAULT_RESERVED_OVERHEAD_TOKENS) - both are
+    # always included in the Markdown path below, so the *rendered
+    # document* actually respects `--budget`, not just the packed-items
+    # portion of it.
+    packer = ContextKnapsackPacker(
+        token_budget=budget, reserved_overhead_tokens=ContextKnapsackPacker.DEFAULT_RESERVED_OVERHEAD_TOKENS
+    )
+    result = packer.pack(symbol, builder, tag_matrix, distance_engine, contracts=contracts, query_type=query_type)
 
     runtime_overlay = None
     hybrid_flow_result = None
@@ -182,9 +199,10 @@ def query(
         text = json.dumps(payload, indent=2)
     else:
         hierarchy = compute_hierarchical_profile(builder, contracts, repo_root)
+        blueprint = mine_sibling_blueprint(builder, symbol)
         text = render_markdown(
             result, tag_matrix, contracts=contracts, graph=builder.graph, hierarchy=hierarchy,
-            runtime_overlay=runtime_overlay, hybrid_flow_result=hybrid_flow_result,
+            runtime_overlay=runtime_overlay, hybrid_flow_result=hybrid_flow_result, blueprint=blueprint,
         )
 
     if output:

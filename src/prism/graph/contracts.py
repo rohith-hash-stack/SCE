@@ -47,6 +47,7 @@ from prism.parser.lang_config import (
     iter_scoped_nodes,
 )
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
+from prism.graph.call_site import HofCallbackContract, detect_hof_callback_params
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.effects_rules import classify_effects
 
@@ -93,6 +94,13 @@ class BehavioralContract:
     doc_summary: str | None = None
     visibility: str = "public"  # "public" | "private" | "exported"
     is_deprecated: bool = False
+    #: Higher-Order Function & Callback Signature Contracts
+    #: (`prism.graph.call_site.detect_hof_callback_params`) - one entry
+    #: per callback-typed parameter this symbol declares, since a
+    #: callback parameter never produces a `CALLS` edge of its own (the
+    #: concrete function is supplied by the caller) and would otherwise be
+    #: invisible beyond its bare type name.
+    hof_callbacks: list["HofCallbackContract"] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -108,6 +116,7 @@ class BehavioralContract:
             "doc_summary": self.doc_summary,
             "visibility": self.visibility,
             "is_deprecated": self.is_deprecated,
+            "hof_callbacks": [c.to_dict() for c in self.hof_callbacks],
         }
 
     @classmethod
@@ -125,6 +134,7 @@ class BehavioralContract:
             doc_summary=d.get("doc_summary"),
             visibility=d.get("visibility", "public"),
             is_deprecated=d.get("is_deprecated", False),
+            hof_callbacks=[HofCallbackContract(**c) for c in d.get("hof_callbacks", [])],
         )
 
 
@@ -173,6 +183,7 @@ class ContractExtractor:
         has_mutation = bool(state_mutations)
         has_global = self._has_global_nonlocal(def_node, lang)
         purity = "impure" if (has_mutation or has_global or (_IO_EFFECTS & set(effects))) else "pure"
+        hof_callbacks = detect_hof_callback_params(def_node, parsed)
 
         return BehavioralContract(
             qualified_name=qualified_name,
@@ -187,6 +198,7 @@ class ContractExtractor:
             doc_summary=doc_summary,
             visibility=visibility,
             is_deprecated=is_deprecated,
+            hof_callbacks=hof_callbacks,
         )
 
     def extract_all(self, builder: ConcreteGraphBuilder) -> dict[str, BehavioralContract]:

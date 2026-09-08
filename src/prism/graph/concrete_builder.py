@@ -141,6 +141,21 @@ class ConcreteGraphBuilder:
             if (caller, callee) in breakdown:
                 edge["runtime_breakdown"] = breakdown[(caller, callee)]
             observed_targets.add(callee)
+            # Active Trace Path Prioritization (Issue 4): ACTIVE (real
+            # hits, no recorded error), ERROR_SINK (real hits AND at
+            # least one recorded error/non-zero-exit/panic observation -
+            # a signal to anchor root-cause diagnosis on, not an
+            # unobserved fallback branch), UNOBSERVED (statically
+            # reachable, zero hits in this trace). Every edge this loop
+            # touches has `count > 0` by construction (`edge_counts` only
+            # ever holds observed hits), so ACTIVE/ERROR_SINK are the only
+            # two outcomes here - UNOBSERVED is assigned below, to every
+            # edge this loop never reaches at all.
+            edge["execution_status"] = "ERROR_SINK" if edge.get("runtime_errors", 0) > 0 else "ACTIVE"
+
+        for u, v, edge in self.graph.edges(data=True):
+            if (u, v) not in edge_counts and edge.get("relation", "CALLS") in TRAVERSABLE_RELATIONS:
+                edge.setdefault("execution_status", "UNOBSERVED")
 
         # Section 2.1.5 - Separation of "Unobserved" vs "Dead": every node
         # already in the static graph keeps `statically_reachable=True`

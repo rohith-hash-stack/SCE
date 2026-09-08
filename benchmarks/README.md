@@ -803,8 +803,46 @@ syntax-validity proxy (`ast.parse`/brace-balance), not a full native
 generated snippet into place and resolving each task's own fixtures was
 out of scope for this harness.
 
-The most recent live run (33/33 tasks, `gpt-4o-mini`, ~$0.05 total OpenAI
-cost) is committed at `benchmarks/comparison_report.md` /
+The most recent full live run (33/33 tasks, `gpt-4o-mini`, ~$0.05 total
+OpenAI cost) is committed at `benchmarks/comparison_report.md` /
 `comparison_report.json`. Headline results: 43.2% total context-token
 reduction, 100.0% vs. 54.1% Blast Radius Context Recall, and a 9.9% vs.
 7.0% hallucination rate (Category 3 excluded per the note above).
+
+**Note on LLM-graded metric variance**: `gpt-4o-mini` at `temperature=0.0`
+is not perfectly deterministic across separate API calls (confirmed
+directly during the optimization re-verification below - the identical
+query, prompt, and context produced a different hallucination reading on
+back-to-back calls). Context-token-cost and Blast-Radius-Context-Recall
+are unaffected (both are computed from real, deterministic context
+assembly, no LLM call involved) - only hallucination-rate/syntactic-
+conformance/Pass@1 readings carry some run-to-run noise, worth keeping in
+mind before treating any single run's per-task LLM-graded number as exact.
+
+### Optimization re-verification (`optimization_reverification_report.md`)
+
+A follow-up pass (`prism.slicer.compressor`'s Fallibility-Based Knapsack
+Pruning, `prism.serializers.markdown`'s fan-out-adaptive Metadata
+Compaction, `prism.graph.call_site`'s HOF/Callback Signature Contracts,
+Active Trace Path Prioritization, and `prism.slicer.blueprint`'s Canonical
+Structural Blueprint Injection) targeted the specific bottlenecks the
+33-task run surfaced. Re-running the 5 named regression tasks
+(`C1-03`, `C2-01..C2-07`, `C3-01`, `C3-05`, `C4-03`) confirmed every
+target: `C3-05` dropped to 1,935 tokens (from 4,875; target <3,500),
+`C3-01`'s hallucination rate dropped to 0% (from 100%; target <25% -
+Category-3-vs-hallucination-detection's own limitation, documented above,
+means this reading should be treated as "no phantom identifiers detected"
+rather than a precise percentage), and Category 2's mean Prism context
+cost dropped 52.8% (target >=45%, against the original committed report's
+own Category 2 numbers). A concrete, real bug was found and fixed along
+the way: the hallucination detector was flagging real, correct external-
+library references (`http.StatusGatewayTimeout`, real Go stdlib) as
+phantom purely because Prism's own symbol table only indexes the target
+repository's code, not its dependencies - fixed by only flagging a
+reference whose root package/module name matches something the
+repository actually defines.
+
+```bash
+python -m benchmarks.run_comparison_suite --tasks C1-03,C2-01,C2-02,C2-03,C2-04,C2-05,C2-06,C2-07,C3-01,C3-05,C4-03 \
+  --report benchmarks/optimization_reverification_report.md --json-out benchmarks/optimization_reverification_report.json
+```

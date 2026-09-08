@@ -40,6 +40,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from prism.graph.metamodel import TagRelation
 from prism.mcp.cache import GraphCache, RepoNotFoundError
 from prism.serializers.markdown import render_markdown
+from prism.slicer.blueprint import mine_sibling_blueprint
 from prism.slicer.knapsack import ContextKnapsackPacker
 
 DEFAULT_TOKEN_BUDGET = 2000
@@ -105,13 +106,15 @@ def get_symbol_context(target_symbol: str, repo_path: str | None = None, token_b
             "use find_symbols_by_tag or get_graph_status to inspect what was indexed"
         )
     try:
-        pack_result = ContextKnapsackPacker(token_budget=token_budget).pack(
-            target_symbol, ctx.builder, ctx.tag_matrix, ctx.distance_engine
-        )
+        pack_result = ContextKnapsackPacker(
+            token_budget=token_budget, reserved_overhead_tokens=ContextKnapsackPacker.DEFAULT_RESERVED_OVERHEAD_TOKENS
+        ).pack(target_symbol, ctx.builder, ctx.tag_matrix, ctx.distance_engine, contracts=ctx.contracts)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
+    blueprint = mine_sibling_blueprint(ctx.builder, target_symbol)
     return render_markdown(
-        pack_result, ctx.tag_matrix, contracts=ctx.contracts, graph=ctx.builder.graph, hierarchy=ctx.hierarchy
+        pack_result, ctx.tag_matrix, contracts=ctx.contracts, graph=ctx.builder.graph, hierarchy=ctx.hierarchy,
+        blueprint=blueprint,
     )
 
 

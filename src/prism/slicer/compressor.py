@@ -22,6 +22,69 @@ from tree_sitter import Node
 from prism.parser.tree_sitter_loader import LanguageID
 
 
+#: `PackedItem.resolution`'s sentinel for a "compact infallible-leaf
+#: dependency signature" - not a normal L0-L3 compression level at all.
+#: Negative so it can never collide with a real resolution (0-3) or be
+#: reached by `ASTCompressor.compress`'s own `max(0, min(resolution, 3))`
+#: clamping, and so any code that still assumes "resolution is always
+#: 0-3" fails loudly (an IndexError/KeyError) instead of silently
+#: mis-rendering. See `render_infallible_signature` and
+#: `prism.slicer.knapsack.ContextKnapsackPacker`'s fallibility-based
+#: pruning (spec: "Fallibility-Based Knapsack Pruning").
+INFALLIBLE_SIGNATURE_RESOLUTION = -1
+
+#: `#io_boundary` is this benchmark-optimization spec's own name for the
+#: role tag; the existing tagging engine's real equivalent boundary tags
+#: (`#external_io`, `#db_write`, `#db_read`) are included too so this
+#: reads real tag data rather than a tag name that doesn't otherwise exist
+#: anywhere in the tagger's vocabulary.
+_IO_BOUNDARY_TAGS = frozenset({"#io_boundary", "#external_io", "#db_write", "#db_read"})
+
+#: Complexity threshold above which a node is Fallible regardless of any
+#: other signal - the spec's own explicit "cyclomatic complexity >= 3"
+#: bullet, applied independently from (not merged into) the Infallible
+#: test below (a node can fail the complexity>=3 Fallible test yet still
+#: not qualify as Infallible for an entirely different reason - impure,
+#: say - `is_infallible` alone is the authoritative single predicate this
+#: module actually acts on).
+FALLIBLE_COMPLEXITY_THRESHOLD = 3
+INFALLIBLE_MAX_COMPLEXITY = 2
+
+
+def is_infallible(contract, tags: set[str] | None = None) -> bool:
+    """A node is Infallible if and only if it is provably pure, simple,
+    and boundary-free - purity == "pure", cyclomatic_complexity <= 2, no
+    thrown exceptions, and no recorded effects (`BehavioralContract.effects`
+    - IO/DOM/mutation/assert sinks). `tags` additionally excludes anything
+    carrying an IO-boundary role tag even if its contract otherwise looks
+    pure (belt-and-suspenders against a contract-extraction gap, matching
+    the spec's own "or #io_boundary roles" Fallible criterion). `None` (no
+    contract at all - an external/unresolved symbol) is never Infallible:
+    the whole point is a *proven* absence of failure modes, and "unknown"
+    is not proof.
+    """
+    if contract is None:
+        return False
+    if tags and (tags & _IO_BOUNDARY_TAGS):
+        return False
+    return (
+        contract.purity == "pure"
+        and contract.cyclomatic_complexity <= INFALLIBLE_MAX_COMPLEXITY
+        and not contract.thrown_exceptions
+        and not contract.effects
+    )
+
+
+def render_infallible_signature(name: str, return_type: str | None) -> str:
+    """The compact dependency-signature line an Infallible leaf gets
+    instead of its full AST source - see `is_infallible`. Deliberately a
+    single short line (no code fence, no per-field contract block): the
+    entire point of this pruning is to spend as few tokens as possible on
+    a node already proven to have nothing that could go wrong."""
+    type_repr = return_type if return_type else "None"
+    return f"- callee: {name} [infallible_pure_leaf, returns: {type_repr}]"
+
+
 @dataclass
 class CompressionContext:
     """Everything the compressor needs beyond the raw source text."""

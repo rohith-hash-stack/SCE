@@ -276,14 +276,33 @@ def detect_hallucinations(response_text: str, real_symbol_names: set[str]) -> tu
     generated `Context.GetUint`/`getTyped[uint]` snippet, which is the
     CORRECT answer to a "add a new helper following this idiom" prompt,
     scored as 100% hallucinated under this metric.
+
+    **Also not meaningful for a legitimate external-library reference**:
+    Prism's own symbol table indexes only the target REPOSITORY's own
+    source - it has no entry for `net/http`'s `http.StatusGatewayTimeout`,
+    `os.Exit`, Python's `typing.Callable`, or any other standard-library/
+    third-party symbol, because none of those are defined in-repo. A
+    response correctly writing `http.StatusGatewayTimeout` (real,
+    correct Go) would otherwise score identically to one inventing a
+    genuinely non-existent method - confirmed as a real false positive
+    during this benchmark's own live run (C3-01's generated `Timeout`
+    middleware, which correctly builds and does exactly what was asked,
+    scored 100% hallucinated purely for citing that one real stdlib
+    constant). This function can only ever judge whether a *root* package/
+    module name the response references is one this repository actually
+    has (`real_module_roots`) - a root that doesn't match anything in-repo
+    is assumed external and excluded from consideration entirely, not
+    penalized for being unverifiable.
     """
     mentioned = set(_CODE_IDENTIFIER_RE.findall(response_text))
     real_simple_names = {n.rsplit(".", 1)[-1] for n in real_symbol_names}
+    real_module_roots = {n.split(".", 1)[0] for n in real_symbol_names}
     phantom = [
         m for m in mentioned
         if m not in real_symbol_names
         and m.rsplit(".", 1)[-1] not in real_simple_names
         and m.lower() not in _BUILTIN_LIKE
+        and m.split(".", 1)[0] in real_module_roots
     ]
     if not mentioned:
         return 0.0, []

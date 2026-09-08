@@ -42,7 +42,7 @@ from prism.parser.lang_config import (
     find_all,
     flatten_reference_chain,
 )
-from prism.parser.tree_sitter_loader import node_text
+from prism.parser.tree_sitter_loader import LanguageID, node_text
 
 _STATEMENT_NODE_TYPES = frozenset({"expression_statement"})
 _FUNCTION_LITERAL_TYPES = frozenset(
@@ -403,3 +403,173 @@ def compute_call_site_context(call_node: Node, def_node: Node, lang: str, source
         call_site_role=_call_site_role(call_node, def_node, lang, source, bound_to),
         is_return_bound=_is_return_bound(def_node, lang, source, bound_to),
     )
+
+
+# --------------------------------------------------------------------- #
+# Higher-Order Function (HOF) & Callback Signature Contracts.
+#
+# A parameter typed as a callback (Go's `handle RecoveryFunc` where
+# `RecoveryFunc` is a `type RecoveryFunc func(c *Context, err any)`
+# typedef, a bare inline Go `func(...)` parameter type, a TypeScript
+# arrow-function type annotation, or Python's `typing.Callable[[...],
+# R]`) never produces a `CALLS` edge at all - the callee is a value
+# passed in by the *caller*, not a symbol this function's own body names
+# - so without this, a reader (or an LLM) sees the parameter's bare type
+# name and has no way to know what arguments it will actually be invoked
+# with. Confirmed as a real, not hypothetical, gap: gin's
+# `recovery.CustomRecovery(handle RecoveryFunc)` produced zero visibility
+# into `RecoveryFunc`'s own `(c *Context, err any)` shape, which measured
+# 100% hallucination on every identifier a generated implementation of
+# `handle` needed to reference.
+# --------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class HofCallbackContract:
+    param: str
+    type: str
+    #: Always `True` for every entry this module produces - invoking a
+    #: value held in a callback-typed parameter is, by construction,
+    #: never a statically resolvable named call (the concrete function
+    #: passed in is chosen by the caller, not this definition), so this
+    #: field records that structural fact rather than something that
+    #: could ever come out `False` here.
+    invoked_dynamically: bool
+    expected_signature: str
+
+    def to_dict(self) -> dict:
+        return {
+            "param": self.param,
+            "type": self.type,
+            "invoked_dynamically": self.invoked_dynamically,
+            "expected_signature": self.expected_signature,
+        }
+
+
+_GO_PARAM_TYPE = "parameter_declaration"
+_TS_PARAM_TYPES = frozenset({"required_parameter", "optional_parameter"})
+_TS_FUNCTION_TYPE = "function_type"  # same node-type name Go's grammar also happens to use
+
+
+def _find_go_func_typedef(root_node: Node, source: bytes, type_name: str) -> Node | None:
+    """A Go `type X func(...)` declaration's own `function_type` node, by
+    name - `type_declaration` is always a direct child of the file's root
+    (or of a `block` inside one, for a grouped `type ( ... )` form), so a
+    flat scan via `find_all` is sufficient without needing real scope
+    resolution."""
+    for type_spec in find_all(root_node, {"type_spec"}):
+        name_node = type_spec.child_by_field_name("name")
+        type_node = type_spec.child_by_field_name("type")
+        if name_node is None or type_node is None:
+            continue
+        if node_text(name_node, source) == type_name and type_node.type == "function_type":
+            return type_node
+    return None
+
+
+def _go_hof_params(def_node: Node, parsed_root: Node, source: bytes) -> list[HofCallbackContract]:
+    params_node = def_node.child_by_field_name("parameters")
+    if params_node is None:
+        return []
+    results: list[HofCallbackContract] = []
+    for param in params_node.named_children:
+        if param.type != _GO_PARAM_TYPE:
+            continue
+        name_node = param.child_by_field_name("name")
+        type_node = param.child_by_field_name("type")
+        if name_node is None or type_node is None:
+            continue
+        param_name = node_text(name_node, source)
+        if type_node.type == "function_type":
+            # An inline `handle func(c *Context, err any)` parameter -
+            # the signature is right there, no typedef lookup needed.
+            results.append(HofCallbackContract(
+                param=param_name, type=node_text(type_node, source), invoked_dynamically=True,
+                expected_signature=node_text(type_node, source),
+            ))
+        elif type_node.type == "type_identifier":
+            # A named callback typedef (`handle RecoveryFunc`) - resolve
+            # it against the file's own `type X func(...)` declarations.
+            type_name = node_text(type_node, source)
+            func_type = _find_go_func_typedef(parsed_root, source, type_name)
+            if func_type is not None:
+                results.append(HofCallbackContract(
+                    param=param_name, type=type_name, invoked_dynamically=True,
+                    expected_signature=node_text(func_type, source),
+                ))
+    return results
+
+
+def _ts_hof_params(def_node: Node, source: bytes) -> list[HofCallbackContract]:
+    params_node = def_node.child_by_field_name("parameters")
+    if params_node is None:
+        return []
+    results: list[HofCallbackContract] = []
+    for param in params_node.named_children:
+        if param.type not in _TS_PARAM_TYPES:
+            continue
+        name_node = param.child_by_field_name("pattern")
+        type_annotation = param.child_by_field_name("type")
+        if name_node is None or type_annotation is None:
+            continue
+        # `type_annotation`'s own child is the real type node (a
+        # `function_type` for `(x: number) => void`, something else
+        # otherwise) - the annotation node itself is just the `: `
+        # wrapper.
+        function_type = next((c for c in type_annotation.children if c.type == _TS_FUNCTION_TYPE), None)
+        if function_type is None:
+            continue
+        results.append(HofCallbackContract(
+            param=node_text(name_node, source), type=node_text(function_type, source), invoked_dynamically=True,
+            expected_signature=node_text(function_type, source),
+        ))
+    return results
+
+
+_PY_CALLABLE_RE_PARAM_TYPES = frozenset({"typed_parameter", "typed_default_parameter"})
+
+
+def _python_hof_params(def_node: Node, source: bytes) -> list[HofCallbackContract]:
+    params_node = def_node.child_by_field_name("parameters")
+    if params_node is None:
+        return []
+    results: list[HofCallbackContract] = []
+    for param in params_node.named_children:
+        if param.type not in _PY_CALLABLE_RE_PARAM_TYPES:
+            continue
+        name_node = next((c for c in param.children if c.type == "identifier"), None)
+        type_node = param.child_by_field_name("type")
+        if name_node is None or type_node is None:
+            continue
+        type_text = node_text(type_node, source)
+        # `typing.Callable[[ArgT1, ArgT2], ReturnT]` (or the bare
+        # `Callable[...]` form after `from typing import Callable`) - a
+        # simple prefix check on the type's own text, not a full type-
+        # checker: precise enough for a syntactic annotation match, which
+        # is all this needs.
+        simple_type = type_text.rsplit(".", 1)[-1]
+        if simple_type.startswith("Callable"):
+            results.append(HofCallbackContract(
+                param=node_text(name_node, source), type=type_text, invoked_dynamically=True,
+                expected_signature=type_text,
+            ))
+    return results
+
+
+def detect_hof_callback_params(def_node: Node, parsed) -> list[HofCallbackContract]:
+    """Every callback-typed parameter `def_node` declares, across every
+    language this detection currently covers (Go: named typedef + inline
+    `func(...)`; TypeScript/TSX: inline arrow-function type annotation;
+    Python: `typing.Callable[...]`). JavaScript has no static type
+    annotations at all, and Java/C# functional-interface parameters
+    (`Runnable`, `Function<T,R>`, `Action<T>`) aren't covered - out of
+    scope for this pass, not silently claimed, matching this codebase's
+    established per-language-coverage-gap disclosure convention.
+    """
+    lang = parsed.language_id
+    source = parsed.source
+    if lang == LanguageID.GO:
+        return _go_hof_params(def_node, parsed.root_node, source)
+    if lang in (LanguageID.TYPESCRIPT, LanguageID.TSX):
+        return _ts_hof_params(def_node, source)
+    if lang == LanguageID.PYTHON:
+        return _python_hof_params(def_node, source)
+    return []

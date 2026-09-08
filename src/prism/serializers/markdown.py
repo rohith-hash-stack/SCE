@@ -34,6 +34,8 @@ from prism.analysis.hybrid_engine import synonym_priority_multiplier
 from prism.graph.contracts import BehavioralContract
 from prism.graph.hierarchy import HierarchicalIntentProfile
 from prism.runtime.trace_ingester import AggregatedTrace
+from prism.slicer.blueprint import StructuralBlueprint
+from prism.slicer.compressor import INFALLIBLE_SIGNATURE_RESOLUTION
 from prism.slicer.knapsack import PackResult
 
 # Short form ("L0", not "Full Implementation - L0"): every heading now also
@@ -69,6 +71,7 @@ def render_markdown(
     hierarchy: HierarchicalIntentProfile | None = None,
     runtime_overlay: AggregatedTrace | None = None,
     hybrid_flow_result: FlowEngineResult | None = None,
+    blueprint: StructuralBlueprint | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("# SEMANTIC REPOSITORY CONTEXT")
@@ -93,7 +96,15 @@ def render_markdown(
     lines.append("## 2. Injected Code Units")
     lines.append("")
     contracts = contracts or {}
-    for item in result.items:
+    # Fallibility-Based Knapsack Pruning (prism.slicer.knapsack): an
+    # infallible-leaf item never gets its own "### symbol (Lx)" heading +
+    # fence/YAML block at all - that per-item wrapper overhead is exactly
+    # what this pruning exists to avoid paying for a node already proven
+    # to have nothing that could go wrong. Every such item is grouped
+    # into one compact list instead, rendered once after the normal items.
+    normal_items = [item for item in result.items if item.resolution != INFALLIBLE_SIGNATURE_RESOLUTION]
+    infallible_items = [item for item in result.items if item.resolution == INFALLIBLE_SIGNATURE_RESOLUTION]
+    for item in normal_items:
         is_seed = item.symbol == result.seed
         if result.compact:
             # Single-line, no line-range/path suffix: on a small context
@@ -135,6 +146,16 @@ def render_markdown(
             if dep_lines:
                 lines.append("")
                 lines.extend(dep_lines)
+        if is_seed and blueprint is not None:
+            lines.append("")
+            lines.extend(_render_blueprint(blueprint))
+        lines.append("")
+
+    if infallible_items:
+        lines.append("### Infallible Leaf Dependencies (pruned from full context)")
+        lines.append("")
+        for item in infallible_items:
+            lines.append(item.content)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -242,6 +263,17 @@ def _render_hierarchical_sections(
     return lines
 
 
+def _render_blueprint(blueprint: StructuralBlueprint) -> list[str]:
+    """Canonical Structural Blueprint Injection (`prism.slicer.blueprint`) -
+    the concrete syntactic scaffold (Guard/Delegate idioms) mined from the
+    target's own directory, so a generated addition can match local
+    convention rather than falling back to generic textbook shape."""
+    lines = [f"Idiomatic Blueprint (Mined from {blueprint.sibling_count} sibling methods in package):", "Scaffold:"]
+    for pattern in blueprint.patterns:
+        lines.append(f"  - {pattern.label}: {pattern.text}")
+    return lines
+
+
 def _render_architectural_path(result: PackResult, tag_matrix: dict[str, set[str]]) -> list[str]:
     rendered: list[str] = []
     for depth, relation, node in result.architectural_path:
@@ -268,6 +300,23 @@ def _yaml_list(values) -> str:
     return "[" + ", ".join(_yaml_str(v) for v in values) + "]"
 
 
+def _render_hof_callbacks(contract: BehavioralContract) -> list[str]:
+    """Higher-Order Function & Callback Signature Contracts - surfaces
+    every callback-typed parameter's real signature (see
+    `prism.graph.call_site.detect_hof_callback_params`), since a
+    callback parameter produces no `CALLS` edge of its own and would
+    otherwise be visible only as a bare type name."""
+    if not contract.hof_callbacks:
+        return []
+    lines = ["Higher-Order Callbacks:"]
+    for cb in contract.hof_callbacks:
+        lines.append(f"  - param: {cb.param}")
+        lines.append(f"    type: {cb.type}")
+        lines.append(f"    invoked_dynamically: {str(cb.invoked_dynamically).lower()}")
+        lines.append(f"    expected_signature: {_yaml_str(cb.expected_signature)}")
+    return lines
+
+
 def _render_contract_block(symbol: str, contract: BehavioralContract) -> list[str]:
     lines = [f"Symbol: {symbol.rsplit('.', 1)[-1]}"]
     if contract.params:
@@ -290,6 +339,7 @@ def _render_contract_block(symbol: str, contract: BehavioralContract) -> list[st
         lines.append("Deprecated: true")
     if contract.doc_summary:
         lines.append(f"Summary: {_yaml_str(contract.doc_summary)}")
+    lines.extend(_render_hof_callbacks(contract))
     return lines
 
 
@@ -308,6 +358,7 @@ def _render_seed_summary(
     if contract.thrown_exceptions:
         lines.append(f"Throws: {_yaml_list(contract.thrown_exceptions)}")
     lines.append(f"Purity: {contract.purity}")
+    lines.extend(_render_hof_callbacks(contract))
 
     # Section 2.4 - runtime telemetry, only rendered once a `--trace-file`
     # was actually ingested.
@@ -352,6 +403,125 @@ def _seed_runtime_profile(seed: str, graph, runtime_overlay: AggregatedTrace | N
 
 _DEPENDENCY_RELATIONS = frozenset({"CALLS", "INSTANTIATES"})
 
+#: Metadata Serialization Compaction on High-Coupling Nodes: above this
+#: outgoing-fan-out, the full multi-line YAML contract block per callee
+#: (the dominant token cost on a dense node like `StringParenWrapper.
+#: do_splitter_match`/`Line.append`/`convert_type` - confirmed against
+#: the +5%-22% bloat this benchmark's own C3-05/C3-06/C4-04 measured)
+#: switches to a compact one-line-per-callee representation.
+COMPACT_FANOUT_THRESHOLD = 5
+#: Even in compact mode, only this many callees are individually listed -
+#: the remainder are summarized in one trailing line rather than paying
+#: per-item token cost for a long tail of equally-uninteresting utilities.
+COMPACT_MAX_RENDERED = 8
+
+
+def _is_critical_dependency(data: dict) -> bool:
+    """A dependency that stays in its fuller (though still compacted -
+    two lines, not the full multi-line block) form even under fan-out
+    compaction: either its call site is demonstrably load-bearing
+    (`is_return_bound`), or it's a confirmed runtime error sink (Issue 4 -
+    Active Trace Path Prioritization)."""
+    return bool(data.get("is_return_bound")) or data.get("execution_status") == "ERROR_SINK"
+
+
+def _dependency_priority(target: str, data: dict, runtime_overlay: AggregatedTrace | None, seed: str) -> tuple:
+    """Sort key for which callees survive `COMPACT_MAX_RENDERED`'s cap -
+    critical dependencies first, then by real runtime traffic (a stand-in
+    "hybrid weight" proxy: `prism.analysis.hybrid_engine`'s real hybrid
+    weight is itself seed-relative and needs a full trace-calibrated
+    Markov pass to compute, which is disproportionate machinery to invoke
+    just to order a dependency list - runtime hit count already captures
+    its dominant term, `N_exec`, directly), then alphabetically for a
+    stable, deterministic tie-break."""
+    critical = 0 if _is_critical_dependency(data) else 1
+    hits = runtime_overlay.total_hits(seed, target) if runtime_overlay is not None else 0
+    return (critical, -hits, target)
+
+
+def _render_compact_dependency_line(target: str, contract: BehavioralContract | None) -> str:
+    if contract is None:
+        return f"  - {target}"
+    bits = [contract.purity]
+    if contract.effects:
+        bits.append(f"effects: [{', '.join(contract.effects)}]")
+    elif contract.return_type:
+        bits.append(f"returns: {contract.return_type}")
+    return f"  - {target} [{', '.join(bits)}]"
+
+
+def _render_critical_compact_lines(target: str, data: dict, contract: BehavioralContract | None) -> list[str]:
+    bound_to = data.get("bound_to")
+    role = data.get("call_site_role")
+    role_bits = []
+    if role:
+        role_bits.append(f"role: {role}")
+    if data.get("is_return_bound"):
+        role_bits.append("return_bound")
+    if data.get("execution_status") == "ERROR_SINK":
+        role_bits.append("error_sink")
+    header = f"  - {target}"
+    if bound_to:
+        header += f" -> bound_to: {bound_to}"
+    if role_bits:
+        header += f" [{', '.join(role_bits)}]"
+    lines = [header]
+    if contract is not None:
+        bits = [f"returns: {_yaml_str(contract.return_type)}" if contract.return_type else None, f"purity: {contract.purity}"]
+        if contract.thrown_exceptions:
+            bits.append(f"throws: {_yaml_list(contract.thrown_exceptions)}")
+        lines.append(f"    contract: {{ {', '.join(b for b in bits if b)} }}")
+    return lines
+
+
+def _render_full_dependency_lines(
+    seed: str, target: str, data: dict, contract: BehavioralContract | None, runtime_overlay: AggregatedTrace | None,
+) -> list[str]:
+    """The full, multi-line-per-field dependency block - unchanged from
+    before Metadata Serialization Compaction, used as-is whenever fan-out
+    is at or below `COMPACT_FANOUT_THRESHOLD`."""
+    lines = [f"  - target: {target}"]
+    # Native call-site synonyms (prism.graph.call_site) - what this
+    # *particular* call site does with the callee's result, not just which
+    # symbol it calls. `role` intentionally mirrors `bound_to` when the
+    # call is simply assigned (matching the spec's own worked example:
+    # `role: credentials` for a call bound to `credentials`) rather than
+    # repeating the same value under a second, redundant-looking key for
+    # no reason - a `predicate_guard`/`assertion_subject` role means the
+    # call wasn't assigned at all, so `bound_to` stays `None` there.
+    bound_to = data.get("bound_to")
+    role = data.get("call_site_role")
+    if bound_to:
+        lines.append(f"    bound_to: {bound_to}")
+    if role:
+        lines.append(f"    role: {role}")
+    if data.get("is_return_bound"):
+        lines.append("    criticality: return_bound")
+    if runtime_overlay is not None:
+        hits = runtime_overlay.total_hits(seed, target)
+        if hits:
+            errors = runtime_overlay.total_errors(seed, target)
+            lines.append(f"    runtime_hits: {hits:,} calls ({errors} errors)")
+            beta = synonym_priority_multiplier(data, callee_simple_name=target.rsplit(".", 1)[-1])
+            if beta < 1.0:
+                lines.append("    runtime_note: dampened by log-weighting (priority-collision protection)")
+    if data.get("relation") == "INSTANTIATES":
+        lines.append("    relation: instantiates")
+    else:
+        for key in ("call_kind", "inside_loop", "inside_try_catch", "guarded_by_null_check", "argument_flow"):
+            if key in data:
+                value = data[key]
+                rendered = str(value).lower() if isinstance(value, bool) else value
+                lines.append(f"    {key}: {rendered}")
+    if contract is not None:
+        summary_bits = [f"purity: {_yaml_str(contract.purity)}"]
+        if contract.return_type:
+            summary_bits.append(f"returns: {_yaml_str(contract.return_type)}")
+        if contract.effects:
+            summary_bits.append(f"effects: {_yaml_list(contract.effects)}")
+        lines.append(f"    contract: {{ {', '.join(summary_bits)} }}")
+    return lines
+
 
 def _render_dependencies(
     seed: str,
@@ -367,50 +537,32 @@ def _render_dependencies(
         (v, data) for _u, v, data in graph.out_edges(seed, data=True) if data.get("relation", "CALLS") in _DEPENDENCY_RELATIONS
     ]
     if outgoing:
-        lines.append("Outgoing Dependencies:")
-        for target, data in sorted(outgoing, key=lambda t: t[0]):
-            lines.append(f"  - target: {target}")
-            # Native call-site synonyms (prism.graph.call_site) - what this
-            # *particular* call site does with the callee's result, not
-            # just which symbol it calls. `role` intentionally mirrors
-            # `bound_to` when the call is simply assigned (matching the
-            # spec's own worked example: `role: credentials` for a call
-            # bound to `credentials`) rather than repeating the same value
-            # under a second, redundant-looking key for no reason - a
-            # `predicate_guard`/`assertion_subject` role means the call
-            # wasn't assigned at all, so `bound_to` stays `None` there.
-            bound_to = data.get("bound_to")
-            role = data.get("call_site_role")
-            if bound_to:
-                lines.append(f"    bound_to: {bound_to}")
-            if role:
-                lines.append(f"    role: {role}")
-            if data.get("is_return_bound"):
-                lines.append("    criticality: return_bound")
-            if runtime_overlay is not None:
-                hits = runtime_overlay.total_hits(seed, target)
-                if hits:
-                    errors = runtime_overlay.total_errors(seed, target)
-                    lines.append(f"    runtime_hits: {hits:,} calls ({errors} errors)")
-                    beta = synonym_priority_multiplier(data, callee_simple_name=target.rsplit(".", 1)[-1])
-                    if beta < 1.0:
-                        lines.append("    runtime_note: dampened by log-weighting (priority-collision protection)")
-            if data.get("relation") == "INSTANTIATES":
-                lines.append("    relation: instantiates")
-            else:
-                for key in ("call_kind", "inside_loop", "inside_try_catch", "guarded_by_null_check", "argument_flow"):
-                    if key in data:
-                        value = data[key]
-                        rendered = str(value).lower() if isinstance(value, bool) else value
-                        lines.append(f"    {key}: {rendered}")
-            contract = contracts.get(target)
-            if contract is not None:
-                summary_bits = [f"purity: {_yaml_str(contract.purity)}"]
-                if contract.return_type:
-                    summary_bits.append(f"returns: {_yaml_str(contract.return_type)}")
-                if contract.effects:
-                    summary_bits.append(f"effects: {_yaml_list(contract.effects)}")
-                lines.append(f"    contract: {{ {', '.join(summary_bits)} }}")
+        k_out = len(outgoing)
+        if k_out <= COMPACT_FANOUT_THRESHOLD:
+            lines.append("Outgoing Dependencies:")
+            for target, data in sorted(outgoing, key=lambda t: t[0]):
+                lines.extend(_render_full_dependency_lines(seed, target, data, contracts.get(target), runtime_overlay))
+        else:
+            # Metadata Serialization Compaction on High-Coupling Nodes.
+            lines.append(f"Outgoing Dependencies (Compact View - {k_out} total):")
+            ordered = sorted(outgoing, key=lambda t: _dependency_priority(t[0], t[1], runtime_overlay, seed))
+            rendered, remainder = ordered[:COMPACT_MAX_RENDERED], ordered[COMPACT_MAX_RENDERED:]
+            for target, data in rendered:
+                contract = contracts.get(target)
+                if _is_critical_dependency(data):
+                    lines.extend(_render_critical_compact_lines(target, data, contract))
+                else:
+                    lines.append(_render_compact_dependency_line(target, contract))
+            if remainder:
+                pure_leaf_count = sum(
+                    1 for target, _data in remainder
+                    if (c := contracts.get(target)) is not None and c.purity == "pure"
+                )
+                other_count = len(remainder) - pure_leaf_count
+                summary = f"... and {pure_leaf_count} other pure leaf utilities" if pure_leaf_count else ""
+                if other_count:
+                    summary += (", " if summary else "... and ") + f"{other_count} other dependencies"
+                lines.append(f"  {summary}.")
         lines.append("")
 
     incoming = [
@@ -423,4 +575,62 @@ def _render_dependencies(
             suffix = f" ({call_kind})" if call_kind else ""
             lines.append(f"  - {caller}{suffix}")
 
+    trace_lines = _render_trace_branches(seed, graph, runtime_overlay)
+    if trace_lines:
+        lines.append("")
+        lines.extend(trace_lines)
+
+    return lines
+
+
+def _render_trace_branches(seed: str, graph, runtime_overlay: AggregatedTrace | None) -> list[str]:
+    """Active Trace Path Prioritization (Issue 4): once a `--trace-file`
+    was ingested, the seed's own outgoing edges are split by
+    `execution_status` (set by `ConcreteGraphBuilder.apply_runtime_overlay`)
+    into what a diagnosis should look at first (ACTIVE/ERROR_SINK - real,
+    observed traffic) versus what's merely statically reachable but never
+    actually exercised in this trace (UNOBSERVED) - a dormant, environment-
+    gated fallback branch is exactly the kind of thing a model without
+    this distinction hallucinates as the root cause of a failure it never
+    actually ran (confirmed during this benchmark's own C2-07 run against
+    `Editor.edit_files`'s Windows fallback path). Renders nothing at all
+    when no trace was ingested (every edge's `execution_status` is simply
+    absent), so this is a pure addition with no effect on the untraced
+    default path.
+    """
+    if runtime_overlay is None or not runtime_overlay.per_env_run_counts:
+        return []
+    outgoing = [
+        (v, data) for _u, v, data in graph.out_edges(seed, data=True)
+        if data.get("relation", "CALLS") in _DEPENDENCY_RELATIONS and "execution_status" in data
+    ]
+    if not outgoing:
+        return []
+
+    envs = ",".join(sorted(runtime_overlay.per_env_run_counts.keys()))
+    lines = [f"Outgoing Branches (Trace: {envs}):"]
+
+    active = sorted((v, d) for v, d in outgoing if d["execution_status"] in ("ACTIVE", "ERROR_SINK"))
+    unobserved = sorted((v, d) for v, d in outgoing if d["execution_status"] == "UNOBSERVED")
+
+    if active:
+        lines.append("[ACTIVE PATHS]")
+        for target, data in active:
+            hits = runtime_overlay.total_hits(seed, target)
+            if data["execution_status"] == "ERROR_SINK":
+                errors = runtime_overlay.total_errors(seed, target)
+                lines.append(f"- callee: {target} (hits: {hits}, status: ERROR [errors: {errors}])")
+            else:
+                lines.append(f"- callee: {target} (hits: {hits}, status: OK)")
+    if unobserved:
+        lines.append("[UNOBSERVED PATHS]")
+        for target, _data in unobserved:
+            lines.append(f"- callee: {target} (hits: 0, unobserved in current trace)")
+
+    if active:
+        lines.append("")
+        lines.append(
+            "Diagnosis Guidance: Focus root-cause diagnosis on ACTIVE execution paths with "
+            "non-zero hits before inspecting unobserved fallbacks."
+        )
     return lines
