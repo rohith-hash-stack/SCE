@@ -12,12 +12,28 @@ about a call site, only its *interface and effects*. When `graph` is also
 given, the target symbol's own block additionally lists its "Outgoing
 Dependencies" (its own resolved call sites, each with the call-site
 context `prism.graph.call_site` computed - `call_kind`, `inside_loop`,
-`guarded_by_null_check`, ...) and "Incoming Callers".
+`guarded_by_null_check`, ..., and, per the native-call-site-synonym work,
+`bound_to`/`role`/`criticality`) and "Incoming Callers".
+
+`runtime_overlay`/`runtime_bias`/`hybrid_flow_result` (all optional,
+default `None`/the static-only default) turn on Section 2.4's runtime-
+telemetry rendering when a `--trace-file` was ingested: the target's own
+summary gains a "Profile:" block (runtime execution-hit count with its
+per-environment breakdown, plus a hybrid-recalibrated downstream effect
+distribution), and each outgoing dependency line gains its own
+`runtime_hits` count and a dampening note when its call-site synonym
+priority multiplier reduced its weight (the "noisy logging leaf" case
+Section 2.1.4 exists to protect against).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+from prism.analysis.flow_engine import FlowEngineResult
+from prism.analysis.hybrid_engine import synonym_priority_multiplier
 from prism.graph.contracts import BehavioralContract
 from prism.graph.hierarchy import HierarchicalIntentProfile
+from prism.runtime.trace_ingester import AggregatedTrace
 from prism.slicer.knapsack import PackResult
 
 # Short form ("L0", not "Full Implementation - L0"): every heading now also
@@ -51,6 +67,8 @@ def render_markdown(
     contracts: dict[str, BehavioralContract] | None = None,
     graph=None,
     hierarchy: HierarchicalIntentProfile | None = None,
+    runtime_overlay: AggregatedTrace | None = None,
+    hybrid_flow_result: FlowEngineResult | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("# SEMANTIC REPOSITORY CONTEXT")
@@ -108,11 +126,12 @@ def render_markdown(
             if is_seed and contract is not None:
                 lines.append("")
                 lines.append("```yaml")
-                lines.extend(_render_seed_summary(item.symbol, contract))
+                runtime_profile = _seed_runtime_profile(item.symbol, graph, runtime_overlay)
+                lines.extend(_render_seed_summary(item.symbol, contract, runtime_profile, hybrid_flow_result))
                 lines.append("```")
 
         if is_seed and graph is not None:
-            dep_lines = _render_dependencies(item.symbol, graph, contracts)
+            dep_lines = _render_dependencies(item.symbol, graph, contracts, runtime_overlay)
             if dep_lines:
                 lines.append("")
                 lines.extend(dep_lines)
@@ -274,7 +293,12 @@ def _render_contract_block(symbol: str, contract: BehavioralContract) -> list[st
     return lines
 
 
-def _render_seed_summary(symbol: str, contract: BehavioralContract) -> list[str]:
+def _render_seed_summary(
+    symbol: str,
+    contract: BehavioralContract,
+    runtime_profile: "_SeedRuntimeProfile | None" = None,
+    hybrid_flow_result: FlowEngineResult | None = None,
+) -> list[str]:
     """The target's own contract, shown alongside its full L0 source (not
     instead of it) - a compact "here's the shape" header a reader can
     check without parsing the code fence above it."""
@@ -284,13 +308,57 @@ def _render_seed_summary(symbol: str, contract: BehavioralContract) -> list[str]
     if contract.thrown_exceptions:
         lines.append(f"Throws: {_yaml_list(contract.thrown_exceptions)}")
     lines.append(f"Purity: {contract.purity}")
+
+    # Section 2.4 - runtime telemetry, only rendered once a `--trace-file`
+    # was actually ingested.
+    if runtime_profile is not None:
+        lines.append("Profile:")
+        lines.append(f"  Runtime Profile: {runtime_profile.provenance_summary}")
+        if runtime_profile.total_hits:
+            breakdown = ", ".join(f"{env}={count:,}" for env, count in sorted(runtime_profile.env_breakdown.items()))
+            suffix = f" [{breakdown}]" if breakdown else ""
+            lines.append(f"  Runtime Execution: {runtime_profile.total_hits:,} hits{suffix}")
+        if hybrid_flow_result is not None:
+            egress = hybrid_flow_result.egress(symbol).as_dict()
+            nonzero = {k: round(v, 4) for k, v in egress.items() if v > 0}
+            if nonzero:
+                lines.append(f"  Downstream Flow: {_yaml_inline_dict(nonzero)}")
     return lines
+
+
+@dataclass(frozen=True)
+class _SeedRuntimeProfile:
+    """A pre-computed summary of the seed's own incoming runtime hits -
+    computed once in `render_markdown` (which has the graph handle) and
+    handed to `_render_seed_summary`, rather than that function re-deriving
+    it from `AggregatedTrace` + `graph` itself."""
+
+    total_hits: int
+    env_breakdown: dict[str, int]
+    provenance_summary: str
+
+
+def _seed_runtime_profile(seed: str, graph, runtime_overlay: AggregatedTrace | None) -> "_SeedRuntimeProfile | None":
+    if runtime_overlay is None or not runtime_overlay.per_env_run_counts or graph is None or seed not in graph:
+        return None
+    total = 0
+    env_breakdown: dict[str, int] = {}
+    for caller in graph.predecessors(seed):
+        total += runtime_overlay.total_hits(caller, seed)
+        for env, count in runtime_overlay.breakdown(caller, seed).items():
+            env_breakdown[env] = env_breakdown.get(env, 0) + count
+    return _SeedRuntimeProfile(total_hits=total, env_breakdown=env_breakdown, provenance_summary=runtime_overlay.provenance_summary())
 
 
 _DEPENDENCY_RELATIONS = frozenset({"CALLS", "INSTANTIATES"})
 
 
-def _render_dependencies(seed: str, graph, contracts: dict[str, BehavioralContract]) -> list[str]:
+def _render_dependencies(
+    seed: str,
+    graph,
+    contracts: dict[str, BehavioralContract],
+    runtime_overlay: AggregatedTrace | None = None,
+) -> list[str]:
     if seed not in graph:
         return []
     lines: list[str] = []
@@ -302,6 +370,31 @@ def _render_dependencies(seed: str, graph, contracts: dict[str, BehavioralContra
         lines.append("Outgoing Dependencies:")
         for target, data in sorted(outgoing, key=lambda t: t[0]):
             lines.append(f"  - target: {target}")
+            # Native call-site synonyms (prism.graph.call_site) - what this
+            # *particular* call site does with the callee's result, not
+            # just which symbol it calls. `role` intentionally mirrors
+            # `bound_to` when the call is simply assigned (matching the
+            # spec's own worked example: `role: credentials` for a call
+            # bound to `credentials`) rather than repeating the same value
+            # under a second, redundant-looking key for no reason - a
+            # `predicate_guard`/`assertion_subject` role means the call
+            # wasn't assigned at all, so `bound_to` stays `None` there.
+            bound_to = data.get("bound_to")
+            role = data.get("call_site_role")
+            if bound_to:
+                lines.append(f"    bound_to: {bound_to}")
+            if role:
+                lines.append(f"    role: {role}")
+            if data.get("is_return_bound"):
+                lines.append("    criticality: return_bound")
+            if runtime_overlay is not None:
+                hits = runtime_overlay.total_hits(seed, target)
+                if hits:
+                    errors = runtime_overlay.total_errors(seed, target)
+                    lines.append(f"    runtime_hits: {hits:,} calls ({errors} errors)")
+                    beta = synonym_priority_multiplier(data, callee_simple_name=target.rsplit(".", 1)[-1])
+                    if beta < 1.0:
+                        lines.append("    runtime_note: dampened by log-weighting (priority-collision protection)")
             if data.get("relation") == "INSTANTIATES":
                 lines.append("    relation: instantiates")
             else:

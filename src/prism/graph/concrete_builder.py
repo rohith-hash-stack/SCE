@@ -104,6 +104,64 @@ class ConcreteGraphBuilder:
             self._calls_graph_cache = view
         return self._calls_graph_cache
 
+    def apply_runtime_overlay(
+        self,
+        edge_counts: dict[tuple[str, str], int],
+        edge_errors: dict[tuple[str, str], int] | None = None,
+        edge_breakdown: dict[tuple[str, str], dict[str, int]] | None = None,
+    ) -> None:
+        """Non-destructively merges Phase-2 runtime execution telemetry
+        (`prism.runtime.trace_ingester.AggregatedTrace`, passed here as
+        plain dicts rather than that dataclass to avoid a `graph -> runtime`
+        import - `prism.runtime.reconciler` already imports this module the
+        other way around) onto this builder's own graph as edge/node
+        *attributes only*.
+
+        This is deliberately the one and only thing it does: never adds a
+        node, never adds an edge, never removes either - the "Static AST as
+        Hard Ground Truth" invariant (Section 2.1.1 of the hybrid-runtime-
+        analysis spec). A trace entry whose `(caller, callee)` doesn't
+        match a real static edge is silently skipped, not synthesized into
+        a new one - that's `prism.runtime.reconciler`'s separate, already-
+        existing `RUNTIME_DISCOVERED` mechanism (a deliberately distinct
+        code path with its own, much higher bar for creating a new edge
+        from dynamic evidence alone), not this method's job.
+        """
+        errors = edge_errors or {}
+        breakdown = edge_breakdown or {}
+        observed_targets: set[str] = set()
+
+        for (caller, callee), count in edge_counts.items():
+            if not self.graph.has_edge(caller, callee):
+                continue
+            edge = self.graph.edges[caller, callee]
+            edge["runtime_hits"] = edge.get("runtime_hits", 0) + count
+            if (caller, callee) in errors:
+                edge["runtime_errors"] = edge.get("runtime_errors", 0) + errors[(caller, callee)]
+            if (caller, callee) in breakdown:
+                edge["runtime_breakdown"] = breakdown[(caller, callee)]
+            observed_targets.add(callee)
+
+        # Section 2.1.5 - Separation of "Unobserved" vs "Dead": every node
+        # already in the static graph keeps `statically_reachable=True`
+        # unconditionally; `observed` reflects only whether any accepted
+        # trace actually hit it, and a node with `observed=False` is not
+        # touched or removed in any other way.
+        for node in self.graph.nodes:
+            data = self.graph.nodes[node]
+            data["statically_reachable"] = True
+            if node in observed_targets:
+                data["observed"] = True
+                data["runtime_hits"] = sum(count for (_caller, callee), count in edge_counts.items() if callee == node)
+            else:
+                data.setdefault("observed", False)
+
+        # The cached `calls_graph` view copies edge/node attribute dicts at
+        # construction time (see that property's own docstring) - mutating
+        # `self.graph` in place after it was already built would otherwise
+        # leave the cached view holding stale (pre-overlay) attributes.
+        self._calls_graph_cache = None
+
     def def_node(self, qualified_name: str) -> Node | None:
         return self._def_nodes.get(qualified_name)
 

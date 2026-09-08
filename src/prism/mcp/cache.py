@@ -21,7 +21,7 @@ from prism.graph.contracts import BehavioralContract
 from prism.graph.hierarchy import HierarchicalIntentProfile, compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
 from prism.runtime.contract_cache import compute_or_load_contracts
-from prism.runtime.reconciler import apply_runtime_state, load_runtime_state
+from prism.runtime.reconciler import heal_and_apply_runtime_state, load_runtime_state
 from prism.slicer.distance import DistanceConfig, DistanceEngine
 
 
@@ -113,7 +113,7 @@ class GraphCache:
         # them otherwise (see prism.runtime.reconciler.apply_runtime_state).
         runtime_state = load_runtime_state(repo_root)
         if runtime_state.get("trace_files"):
-            apply_runtime_state(builder, tag_matrix, runtime_state)
+            heal_and_apply_runtime_state(builder, tag_matrix, runtime_state, repo_root)
 
         metamodel = SemanticMetamodel()
         distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig())

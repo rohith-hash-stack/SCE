@@ -6,6 +6,7 @@ import os
 
 import click
 
+from prism.analysis.hybrid_engine import DEFAULT_RUNTIME_BIAS, HybridFlowEngine
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.hierarchy import compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
@@ -14,6 +15,7 @@ from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.reconciler import (
     GraphReconciler,
+    heal_and_apply_runtime_state,
     ingest_otel_file,
     load_runtime_state,
     load_trace_file,
@@ -23,6 +25,8 @@ from prism.runtime.reconciler import (
     save_runtime_state,
     write_trace_file,
 )
+from prism.runtime.trace_ingester import merge_env_traces
+from prism.runtime.trace_validator import StaleTraceError
 from prism.runtime.tracer import run_traced_pytest
 from prism.serializers.json_debug import render_json_debug
 from prism.serializers.markdown import render_markdown
@@ -100,7 +104,25 @@ def index(repo_path: str, debug_json: bool) -> None:
 )
 @click.option("--json", "as_json", is_flag=True, help="Emit the packed context as JSON instead of Markdown.")
 @click.option("-o", "--output", type=click.Path(dir_okay=False), help="Write the context package to a file instead of stdout.")
-def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_json: bool, output: str | None) -> None:
+@click.option(
+    "--trace-file", "trace_files", multiple=True, type=click.Path(exists=True, dir_okay=False),
+    help="Path to a Prism JSON trace export or a raw OpenTelemetry JSON export (may be given more than once, "
+    "one per environment, to merge several - see prism.runtime.trace_ingester).",
+)
+@click.option(
+    "--runtime-bias", "runtime_bias", type=float, default=DEFAULT_RUNTIME_BIAS, show_default=True,
+    help="Blend of runtime execution evidence into edge weighting, in [0.0, 1.0]. 0.0 forces purely static "
+    "traversal while retaining contract/telemetry rendering; only takes effect when --trace-file is given.",
+)
+@click.option(
+    "--strict-trace-validation", "strict_trace_validation", is_flag=True,
+    help="Reject (raise) instead of warn-and-skip when an ingested trace's git commit or file SHA-256 "
+    "fingerprints don't match the current repository state.",
+)
+def query(
+    repo_path: str, symbol: str, budget: int, lambda_weight: float, as_json: bool, output: str | None,
+    trace_files: tuple[str, ...], runtime_bias: float, strict_trace_validation: bool,
+) -> None:
     """Extract a variable-resolution context package for SYMBOL (a fully
     qualified name, e.g. `src.controllers.checkout.process_checkout`)."""
     builder, tag_matrix = build_pipeline(repo_path)
@@ -109,6 +131,9 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
         click.echo(f"error: symbol '{symbol}' not found in {repo_path}", err=True)
         click.echo("hint: run `prism index REPO_PATH --debug-json` to list known symbols.", err=True)
         raise SystemExit(1)
+    if not 0.0 <= runtime_bias <= 1.0:
+        click.echo(f"error: --runtime-bias must be between 0.0 and 1.0, got {runtime_bias}", err=True)
+        raise SystemExit(1)
 
     metamodel = SemanticMetamodel()
     distance_engine = DistanceEngine(metamodel, tag_matrix, DistanceConfig(lambda_weight=lambda_weight))
@@ -116,6 +141,32 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
     result = packer.pack(symbol, builder, tag_matrix, distance_engine)
     repo_root = os.path.abspath(repo_path)
     contracts = compute_or_load_contracts(builder, repo_root)
+
+    runtime_overlay = None
+    hybrid_flow_result = None
+    if trace_files:
+        try:
+            runtime_overlay = merge_env_traces(list(trace_files), repo_root, strict=strict_trace_validation)
+        except StaleTraceError as exc:
+            click.echo(f"error: {exc}", err=True)
+            raise SystemExit(1) from exc
+        for rejection in runtime_overlay.rejected:
+            click.echo(f"warning: {rejection}", err=True)
+        all_counts: dict[tuple[str, str], int] = {}
+        all_errors: dict[tuple[str, str], int] = {}
+        all_breakdown: dict[tuple[str, str], dict[str, int]] = {}
+        for env, counts in runtime_overlay.per_env_edge_counts.items():
+            for edge, count in counts.items():
+                all_counts[edge] = all_counts.get(edge, 0) + count
+                all_breakdown.setdefault(edge, {})[env] = count
+        for env, errors in runtime_overlay.per_env_edge_errors.items():
+            for edge, count in errors.items():
+                all_errors[edge] = all_errors.get(edge, 0) + count
+        builder.apply_runtime_overlay(all_counts, all_errors, all_breakdown)
+        if runtime_overlay.per_env_run_counts:
+            hybrid_flow_result = HybridFlowEngine(runtime_overlay, alpha=runtime_bias).analyze_from_seed(
+                builder, contracts, symbol
+            )
 
     if as_json:
         payload = {
@@ -131,7 +182,10 @@ def query(repo_path: str, symbol: str, budget: int, lambda_weight: float, as_jso
         text = json.dumps(payload, indent=2)
     else:
         hierarchy = compute_hierarchical_profile(builder, contracts, repo_root)
-        text = render_markdown(result, tag_matrix, contracts=contracts, graph=builder.graph, hierarchy=hierarchy)
+        text = render_markdown(
+            result, tag_matrix, contracts=contracts, graph=builder.graph, hierarchy=hierarchy,
+            runtime_overlay=runtime_overlay, hybrid_flow_result=hybrid_flow_result,
+        )
 
     if output:
         with open(output, "w") as f:
@@ -199,8 +253,19 @@ def trace(repo_path: str, otel_path: str | None, command: tuple[str, ...]) -> No
 def status(repo_path: str) -> None:
     """Show combined static + runtime-confirmed graph status."""
     repo_root = os.path.abspath(repo_path)
-    builder, _tag_matrix = build_pipeline(repo_root)
+    builder, tag_matrix = build_pipeline(repo_root)
     state = load_runtime_state(repo_root)
+
+    if state.get("trace_files"):
+        reconciliation = heal_and_apply_runtime_state(builder, tag_matrix, state, repo_root)
+        if reconciliation.renamed:
+            click.echo(f"Self-healed {len(reconciliation.renamed)} renamed symbol(s) in runtime state:")
+            for old_name, new_name in sorted(reconciliation.renamed.items()):
+                click.echo(f"  {old_name} -> {new_name}")
+        if reconciliation.ambiguous:
+            click.echo(f"{len(reconciliation.ambiguous)} vanished symbol(s) have ambiguous rename candidates (left unresolved):")
+            for old_name, candidates in sorted(reconciliation.ambiguous.items()):
+                click.echo(f"  {old_name} -> {candidates}")
 
     click.echo(f"Repository: {repo_root}")
     click.echo(f"Static symbols:               {len(builder.symbol_table)}")

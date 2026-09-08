@@ -121,6 +121,28 @@ ASSIGNMENT_NODE_TYPE = {
     LanguageID.JAVA: "assignment_expression",
     LanguageID.CSHARP: "assignment_expression",
 }
+# `const x = ...` / `let x = ...` (JS/TS/TSX) and `T x = ...;` (Java) both
+# wrap a single binding in its own `variable_declarator` node (`name`/`value`
+# fields) - distinct from `ASSIGNMENT_NODE_TYPE`'s plain `x = ...`
+# re-assignment, since a *declarator* is where a call-site synonym binding
+# (`call_site.py`'s `bound_to`) most commonly originates. Python has no
+# separate declaration form (`ASSIGNMENT_NODE_TYPE`'s `assignment` node
+# already covers `x = ...` whether `x` is new or being rebound), so it has
+# no entry here. Go's `x := f()` is structurally a declaration too, but
+# shaped as a `short_var_declaration` with `left`/`right` fields instead of
+# `name`/`value` - kept as its own entry rather than forced into this table,
+# since callers already have to branch on the field names anyway.
+VARIABLE_DECLARATOR_NODE_TYPE = {
+    LanguageID.JAVASCRIPT: "variable_declarator",
+    LanguageID.TYPESCRIPT: "variable_declarator",
+    LanguageID.TSX: "variable_declarator",
+    LanguageID.JAVA: "variable_declarator",
+}
+SHORT_VAR_DECL_NODE_TYPE = {
+    LanguageID.GO: "short_var_declaration",
+}
+RETURN_STATEMENT_NODE_TYPE = "return_statement"  # identical across every supported grammar
+
 RAISE_NODE_TYPE = {
     LanguageID.PYTHON: "raise_statement",
     LanguageID.JAVASCRIPT: "throw_statement",

@@ -35,6 +35,14 @@ import time
 from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.guard import (
+    GuardReconciliation,
+    build_fingerprints,
+    heal_qualified_names,
+    load_fingerprints,
+    reconcile as guard_reconcile,
+    save_fingerprints,
+)
 from prism.runtime.tracer import TraceRecord
 
 # --------------------------------------------------------------------- #
@@ -459,3 +467,29 @@ def apply_runtime_state(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set
         merged_tags.update(tags)
         if symbol in builder.graph:
             builder.graph.nodes[symbol]["tags"] = merged_tags
+
+
+def heal_and_apply_runtime_state(
+    builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], state: dict, repo_root: str,
+) -> GuardReconciliation:
+    """`apply_runtime_state`, but self-healing across symbol renames first
+    (`prism.graph.guard`): without this, a rename silently drops every
+    runtime-confirmed edge/sink tag that pointed at the old name, because
+    `apply_runtime_state` correctly (and by design) skips anything that no
+    longer resolves against the fresh static graph. This reconciles the
+    persisted fingerprint snapshot from the last index against the current
+    one, rewrites `state`'s qualified-name references for anything it can
+    match unambiguously, applies the (possibly healed) state as normal, and
+    persists the fresh fingerprint snapshot for the next run. Returns the
+    `GuardReconciliation` so a caller (`prism status`) can report what was
+    healed rather than have it happen silently.
+    """
+    old_fingerprints = load_fingerprints(repo_root)
+    new_fingerprints = build_fingerprints(builder)
+    reconciliation = guard_reconcile(old_fingerprints, new_fingerprints)
+
+    healed_state = heal_qualified_names(state, reconciliation.renamed)
+    apply_runtime_state(builder, tag_matrix, healed_state)
+
+    save_fingerprints(repo_root, new_fingerprints)
+    return reconciliation
