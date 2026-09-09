@@ -121,6 +121,16 @@ AUTH_GUARD_RULE = AuthGuardRule()
 # assignment. Pure syntax primitive, no import corroboration needed.
 STATE_MUTATION_TAG = "#state_mutation"
 
+# Dynamic Dispatch Sentinel & Hazard Tagging: a function containing a
+# reflection call, a subscript/map-dispatched invocation, an `eval`/`exec`,
+# or (Go) an interface type switch - see
+# `prism.graph.call_site.has_dynamic_hazard_construct`. A static, no-type-
+# inference pass can never prove such a function's full behavior, so it is
+# never eligible for `pure`/infallible classification (see
+# `prism.slicer.compressor.is_infallible` and
+# `prism.graph.contracts.ContractExtractor`).
+DYNAMIC_HAZARD_TAG = "#dynamic_hazard"
+
 
 def import_roots(import_module_texts: set[str]) -> set[str]:
     """Reduce a set of raw import specifiers to their top-level package

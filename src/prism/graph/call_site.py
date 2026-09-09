@@ -29,6 +29,7 @@ from prism.parser.lang_config import (
     ASSERT_NODE_TYPE,
     ASSIGNMENT_NODE_TYPE,
     AWAIT_NODE_TYPES,
+    CALL_NODE_TYPE,
     CONDITIONAL_NODE_TYPES,
     IDENTIFIER_NODE_TYPES,
     LOOP_LIKE_METHOD_NAMES,
@@ -41,6 +42,7 @@ from prism.parser.lang_config import (
     call_callee_segments,
     find_all,
     flatten_reference_chain,
+    iter_scoped_nodes,
 )
 from prism.parser.tree_sitter_loader import LanguageID, node_text
 
@@ -573,3 +575,125 @@ def detect_hof_callback_params(def_node: Node, parsed) -> list[HofCallbackContra
     if lang == LanguageID.PYTHON:
         return _python_hof_params(def_node, source)
     return []
+
+
+# --------------------------------------------------------------------- #
+# Dynamic Dispatch Sentinel & Hazard Tagging.
+#
+# Static analysis cannot infer a reflection/subscript-dispatched target
+# (`getattr(service, name)`, `handlers[action]()`) or which branch a Go
+# interface type switch will take - these are call/dispatch sites whose
+# *real* target is only known at runtime. `_resolve_calls_in_function`
+# would otherwise either silently drop them (a subscript-callee has no
+# `flatten_reference_chain` at all, so `call_callee_segments` returns
+# `None` for it today) or, for a by-name builtin like `getattr` itself,
+# resolve to nothing and drop just the same. Both are converted here into
+# an explicit `DynamicEdgeSentinel` graph node instead, so the hazard is
+# visible rather than a silent gap - and, via `has_dynamic_hazard_construct`,
+# the *containing* function is tagged as never eligible for a `pure`/
+# infallible classification (see `prism.tagger.rules.DYNAMIC_HAZARD_TAG`
+# and `prism.graph.contracts.ContractExtractor`).
+# --------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class DynamicEdgeSentinel:
+    call_site_expr: str
+    target_object: str | None
+    hazard_type: str  # "REFLECTION" | "SUBSCRIPT_DISPATCH" | "EVAL"
+    call_site_file: str
+    call_site_line: int
+
+    def to_dict(self) -> dict:
+        return {
+            "call_site_expr": self.call_site_expr,
+            "target_object": self.target_object,
+            "hazard_type": self.hazard_type,
+            "call_site_file": self.call_site_file,
+            "call_site_line": self.call_site_line,
+        }
+
+
+def dynamic_edge_sentinel_id(call_site_file: str, call_site_line: int, hazard_type: str) -> str:
+    """A stable, unique graph-node id for one dynamic-dispatch hazard site -
+    distinct from every real qualified name and from `unresolved_polymorphic_
+    node_id`'s own `<ambiguous:...>` shape."""
+    return f"<dynamic:{hazard_type}@{call_site_file}:{call_site_line}>"
+
+
+_EVAL_CALLEE_NAMES = frozenset({"eval", "exec"})
+_REFLECTION_CALLEE_NAMES = frozenset({"getattr", "setattr"})
+_SUBSCRIPT_CALLEE_TYPES = frozenset({"subscript", "index_expression"})
+_GO_REFLECT_ROOT = "reflect"
+_GO_TYPE_SWITCH_NODE_TYPE = "type_switch_statement"
+
+
+def _subscript_base_text(func_field: Node, source: bytes, lang: str) -> str | None:
+    base = func_field.child_by_field_name("value") or func_field.child_by_field_name("operand")
+    if base is None:
+        return None
+    segments = flatten_reference_chain(base, source, lang)
+    return ".".join(segments) if segments else node_text(base, source)
+
+
+def detect_call_site_hazard(call_node: Node, lang: str, source: bytes, call_site_file: str) -> DynamicEdgeSentinel | None:
+    """One call node's own dynamic-dispatch hazard, if any - Python's
+    `eval`/`exec` (EVAL), `getattr`/`setattr` (REFLECTION), or a
+    subscript/index-dispatched callee (`handlers[action]()`,
+    SUBSCRIPT_DISPATCH - Python's `subscript`, Go's `index_expression`).
+    Go `reflect.*` calls resolve to a normal (external) `CALLS` edge on
+    their own - see `has_dynamic_hazard_construct` for that broader,
+    tagging-only signal instead of a per-call sentinel.
+    """
+    line = call_node.start_point[0] + 1
+    expr_text = node_text(call_node, source)
+
+    if lang == LanguageID.PYTHON:
+        segments = call_callee_segments(call_node, source, lang)
+        if segments and len(segments) == 1:
+            name = segments[0]
+            if name in _EVAL_CALLEE_NAMES:
+                return DynamicEdgeSentinel(expr_text, None, "EVAL", call_site_file, line)
+            if name in _REFLECTION_CALLEE_NAMES:
+                args_node = call_node.child_by_field_name("arguments")
+                target_object = None
+                if args_node is not None and args_node.named_children:
+                    target_segments = flatten_reference_chain(args_node.named_children[0], source, lang)
+                    target_object = ".".join(target_segments) if target_segments else None
+                return DynamicEdgeSentinel(expr_text, target_object, "REFLECTION", call_site_file, line)
+
+    func_field = call_node.child_by_field_name("function")
+    if func_field is not None and func_field.type in _SUBSCRIPT_CALLEE_TYPES:
+        target_object = _subscript_base_text(func_field, source, lang)
+        return DynamicEdgeSentinel(expr_text, target_object, "SUBSCRIPT_DISPATCH", call_site_file, line)
+
+    return None
+
+
+def has_dynamic_hazard_construct(def_node: Node, parsed) -> bool:
+    """Broader hazard *presence* scan over `def_node`'s own subtree (not
+    crossing into nested function/class definitions), for tagging purposes
+    only - unlike `detect_call_site_hazard`, this also counts a Go
+    `reflect.*` call (which still resolves to a real, non-dropped `CALLS`
+    edge, so it never gets a sentinel of its own) and a Go interface type
+    switch (`switch v := x.(type) { ... }` - not a call at all, so there is
+    no single call site to attach a sentinel to; the ambiguity is which
+    *branch* runs, not what is called). Used by
+    `prism.tagger.engine.TaggingEngine` (to apply
+    `prism.tagger.rules.DYNAMIC_HAZARD_TAG`) and
+    `prism.graph.contracts.ContractExtractor` (to force `purity="impure"`
+    - a function containing any of these can never be proven pure by a
+    static-only, no-type-inference pass).
+    """
+    lang = parsed.language_id
+    source = parsed.source
+    call_type = CALL_NODE_TYPE.get(lang)
+    if call_type:
+        for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
+            if detect_call_site_hazard(call_node, lang, source, parsed.path) is not None:
+                return True
+            if lang == LanguageID.GO:
+                segments = call_callee_segments(call_node, source, lang)
+                if segments and segments[0] == _GO_REFLECT_ROOT:
+                    return True
+    if lang == LanguageID.GO and iter_scoped_nodes(def_node, {_GO_TYPE_SWITCH_NODE_TYPE}, lang):
+        return True
+    return False

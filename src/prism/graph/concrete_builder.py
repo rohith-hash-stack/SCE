@@ -39,13 +39,24 @@ from prism.parser.lang_config import (
 )
 from prism.parser.queries import run_query
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file
-from prism.graph.call_site import compute_call_site_context
+from prism.graph.call_site import (
+    DynamicEdgeSentinel,
+    compute_call_site_context,
+    detect_call_site_hazard,
+    dynamic_edge_sentinel_id,
+)
 from prism.graph.symbol_table import (
     GlobalSymbolTable,
     InstanceTypeMap,
     LocalImportMap,
     SymbolInfo,
+    arity_match,
+    locality_distance,
+    namespace_match,
     path_to_module,
+    score_candidate,
+    unresolved_polymorphic_node_id,
+    POLYSEMY_THRESHOLD,
 )
 
 
@@ -765,6 +776,19 @@ class ConcreteGraphBuilder:
         call_type = CALL_NODE_TYPE[lang]
         self_tokens = SELF_TOKEN_TEXT[lang]
         for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
+            if lang == LanguageID.GO:
+                generic_target = self._resolve_go_generic_call(call_node, module, import_map, parsed.source)
+                if generic_target is not None:
+                    if generic_target not in self.graph:
+                        self.graph.add_node(generic_target, external=False)
+                    edge_kwargs = {"relation": "CALLS"}
+                    edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
+                    self.graph.add_edge(caller_qname, generic_target, **edge_kwargs)
+                    continue
+            hazard = detect_call_site_hazard(call_node, lang, parsed.source, parsed.path)
+            if hazard is not None:
+                self._emit_dynamic_edge_sentinel(caller_qname, hazard)
+                continue
             segments = call_callee_segments(call_node, parsed.source, lang)
             if not segments:
                 continue
@@ -772,6 +796,7 @@ class ConcreteGraphBuilder:
                 segments, module, enclosing_class, import_map, class_instance_map, func_instance_map, self_tokens
             )
             if target is None:
+                self._resolve_ambiguous_call(caller_qname, call_node, parsed, module, import_map, segments)
                 continue
             if target not in self.graph:
                 self.graph.add_node(target, external=target not in self.symbol_table)
@@ -791,6 +816,142 @@ class ConcreteGraphBuilder:
         self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
         if lang == LanguageID.PYTHON:
             self._link_state_reads(caller_qname, def_node, parsed, module, enclosing_class, self_tokens)
+
+    # -- Go generic instantiation vs. real subscript dispatch (Task 2) ---- #
+    def _resolve_go_generic_call(
+        self, call_node: Node, module: str, import_map: LocalImportMap, source: bytes
+    ) -> str | None:
+        """Go's grammar produces the exact same `index_expression` shape for
+        a generic function instantiation (`getTyped[string](c, key)`) as it
+        does for a real map/dispatch-table index-then-call
+        (`handlers[action]()`) - confirmed directly against tree-sitter-go:
+        both the callable base (`getTyped`/`handlers`) and the bracketed
+        argument (`string`/`action`) parse as plain `identifier` nodes
+        either way, with no distinguishing node type. The one signal this
+        no-type-inference pass *can* use is whether the base identifier
+        itself resolves to a real, known function - a genuine dispatch
+        table's base is a local variable/map, never something the symbol
+        table indexes as a callable definition. Returns the resolved
+        target for a genuine generic instantiation (so it gets a normal
+        `CALLS` edge, same as any other resolved call), or `None` -
+        meaning "not a generic call; try the dynamic-hazard path instead".
+        """
+        func_field = call_node.child_by_field_name("function")
+        if func_field is None or func_field.type != "index_expression":
+            return None
+        base = func_field.child_by_field_name("operand")
+        if base is None or base.type != "identifier":
+            return None
+        target = self._resolve_reference_chain([node_text(base, source)], module, import_map)
+        if target is None:
+            return None
+        symbol = self.symbol_table.get(target)
+        if symbol is None or symbol.kind not in ("function", "method"):
+            return None
+        return target
+
+    # -- Dynamic Dispatch Sentinel (Task 2) -------------------------------- #
+    def _emit_dynamic_edge_sentinel(self, caller_qname: str, hazard: DynamicEdgeSentinel) -> None:
+        """Converts a call site whose real target only exists at runtime
+        (`getattr`/`setattr`, `eval`/`exec`, a subscript/map-dispatched
+        callee) into an explicit `DynamicEdgeSentinel` graph node instead
+        of silently dropping the edge - see `call_site.detect_call_site_
+        hazard`. The sentinel is a terminal leaf by construction: nothing
+        here ever adds an outgoing edge *from* it, so no traversal guard
+        elsewhere is needed to stop blast-radius expansion at this
+        boundary (Task 3.1).
+        """
+        sentinel_id = dynamic_edge_sentinel_id(hazard.call_site_file, hazard.call_site_line, hazard.hazard_type)
+        if sentinel_id not in self.graph:
+            self.graph.add_node(
+                sentinel_id,
+                sentinel_type="dynamic_edge",
+                call_site_expr=hazard.call_site_expr,
+                target_object=hazard.target_object,
+                hazard_type=hazard.hazard_type,
+                call_site_file=hazard.call_site_file,
+                call_site_line=hazard.call_site_line,
+                external=True,
+            )
+        self.graph.add_edge(caller_qname, sentinel_id, relation="CALLS")
+
+    # -- Polysemy Disambiguation (Task 1) ---------------------------------- #
+    def _param_count(self, qualified_name: str, lang: str, is_method: bool) -> int | None:
+        def_node = self._def_nodes.get(qualified_name)
+        if def_node is None:
+            return None
+        params = def_node.child_by_field_name("parameters")
+        if params is None:
+            return None
+        count = len(params.named_children)
+        # Python is the only supported language whose grammar makes the
+        # receiver (`self`) an explicit declared parameter - JS/TS/Go/
+        # Java/C# methods never count their implicit receiver this way -
+        # so only it needs the count adjusted to compare against a call
+        # site's own (receiver-excluded) `args_passed_count`.
+        if is_method and lang == LanguageID.PYTHON and count > 0:
+            count -= 1
+        return count
+
+    def _resolve_ambiguous_call(
+        self,
+        caller_qname: str,
+        call_node: Node,
+        parsed: ParsedFile,
+        module: str,
+        import_map: LocalImportMap,
+        segments: list[str],
+    ) -> None:
+        """A call site the normal import-map/instance-map/same-module rules
+        (`_resolve_segments`) couldn't bind. If two or more repo-local
+        functions/methods share this call's bare simple name, that's
+        genuine polysemy (`Close()`, `Validate()`, ...) worth scoring
+        rather than silently dropping - see
+        `prism.graph.symbol_table.score_candidate`. A single (or zero)
+        same-named candidate is an ordinary resolution gap, unrelated to
+        this task, and is left exactly as before (silently unlinked).
+        """
+        simple_name = segments[-1]
+        candidates = self.symbol_table.candidates_for_simple_name(simple_name)
+        if len(candidates) < 2:
+            return
+
+        args_node = call_node.child_by_field_name("arguments") or call_node.child_by_field_name("argument_list")
+        call_args_count = len(args_node.named_children) if args_node is not None else 0
+        caller_file = parsed.path
+
+        best_candidate: SymbolInfo | None = None
+        best_score = -1.0
+        for candidate in candidates:
+            ns = namespace_match(candidate, module, import_map)
+            loc = locality_distance(candidate, caller_file, module)
+            param_count = self._param_count(candidate.qualified_name, candidate.language_id, candidate.kind == "method")
+            arity = arity_match(param_count, call_args_count)
+            score = score_candidate(ns, arity, loc)
+            if score > best_score:
+                best_score = score
+                best_candidate = candidate
+
+        line = call_node.start_point[0] + 1
+        if best_candidate is not None and best_score >= POLYSEMY_THRESHOLD:
+            target = best_candidate.qualified_name
+            if target not in self.graph:
+                self.graph.add_node(target, external=False)
+            self.graph.add_edge(caller_qname, target, relation="CALLS")
+            return
+
+        sentinel_id = unresolved_polymorphic_node_id(simple_name, caller_file, line)
+        if sentinel_id not in self.graph:
+            self.graph.add_node(
+                sentinel_id,
+                sentinel_type="unresolved_polymorphic",
+                identifier=simple_name,
+                candidates=[c.qualified_name for c in candidates],
+                call_site_file=caller_file,
+                call_site_line=line,
+                external=True,
+            )
+        self.graph.add_edge(caller_qname, sentinel_id, relation="CALLS")
 
     # -- INSTANTIATES via `new X()` (JS/TS/Java/C#) ----------------------- #
     _NEW_EXPRESSION_TYPES = frozenset({"new_expression", "object_creation_expression"})

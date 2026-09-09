@@ -35,8 +35,14 @@ from prism.graph.contracts import BehavioralContract
 from prism.graph.hierarchy import HierarchicalIntentProfile
 from prism.runtime.trace_ingester import AggregatedTrace
 from prism.slicer.blueprint import StructuralBlueprint
-from prism.slicer.compressor import INFALLIBLE_SIGNATURE_RESOLUTION
+from prism.slicer.compressor import (
+    DYNAMIC_EDGE_SENTINEL_RESOLUTION,
+    INFALLIBLE_SIGNATURE_RESOLUTION,
+    UNRESOLVED_POLYMORPHIC_RESOLUTION,
+)
 from prism.slicer.knapsack import PackResult
+
+_SENTINEL_RESOLUTIONS = frozenset({UNRESOLVED_POLYMORPHIC_RESOLUTION, DYNAMIC_EDGE_SENTINEL_RESOLUTION})
 
 # Short form ("L0", not "Full Implementation - L0"): every heading now also
 # carries the symbol's original line range and relative file path (see
@@ -102,8 +108,12 @@ def render_markdown(
     # what this pruning exists to avoid paying for a node already proven
     # to have nothing that could go wrong. Every such item is grouped
     # into one compact list instead, rendered once after the normal items.
-    normal_items = [item for item in result.items if item.resolution != INFALLIBLE_SIGNATURE_RESOLUTION]
+    normal_items = [
+        item for item in result.items
+        if item.resolution != INFALLIBLE_SIGNATURE_RESOLUTION and item.resolution not in _SENTINEL_RESOLUTIONS
+    ]
     infallible_items = [item for item in result.items if item.resolution == INFALLIBLE_SIGNATURE_RESOLUTION]
+    sentinel_items = [item for item in result.items if item.resolution in _SENTINEL_RESOLUTIONS]
     for item in normal_items:
         is_seed = item.symbol == result.seed
         if result.compact:
@@ -157,6 +167,13 @@ def render_markdown(
         for item in infallible_items:
             lines.append(item.content)
         lines.append("")
+
+    if sentinel_items:
+        lines.append("### Resolution Boundaries (ambiguous / dynamic dispatch)")
+        lines.append("")
+        for item in sentinel_items:
+            lines.append(item.content)
+            lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 

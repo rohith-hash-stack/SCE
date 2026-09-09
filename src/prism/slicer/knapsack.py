@@ -22,11 +22,15 @@ import networkx as nx
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.slicer.compressor import (
+    DYNAMIC_EDGE_SENTINEL_RESOLUTION,
     INFALLIBLE_SIGNATURE_RESOLUTION,
+    UNRESOLVED_POLYMORPHIC_RESOLUTION,
     ASTCompressor,
     CompressionContext,
     is_infallible,
+    render_dynamic_edge_sentinel,
     render_infallible_signature,
+    render_unresolved_polymorphic,
 )
 from prism.slicer.distance import DistanceEngine, architectural_path
 
@@ -283,8 +287,10 @@ class ContextKnapsackPacker:
                 for node in distances
                 if node not in packed
                 and (not compact or node in reachable)
-                and (symbol := builder.symbol_table.get(node)) is not None
-                and symbol.kind in ("function", "method")
+                and (
+                    ((symbol := builder.symbol_table.get(node)) is not None and symbol.kind in ("function", "method"))
+                    or self._sentinel_type(g_c, node) is not None
+                )
             ),
             # Runtime-confirmed candidates sort first at a tied (or
             # near-tied, post-discount) distance - see the `confirmed`
@@ -293,6 +299,38 @@ class ContextKnapsackPacker:
         )
 
         for node in candidates:
+            sentinel_type = self._sentinel_type(g_c, node)
+            if sentinel_type is not None:
+                # Resolution Boundary Sentinels (Tasks 1-3): an
+                # `UnresolvedPolymorphicNode`/`DynamicEdgeSentinel` never
+                # goes through L0-L3 tier stepping or the infallible-leaf
+                # branch below - it has no `BehavioralContract`/def_node to
+                # render from at all - and always serializes as the same
+                # compact, fixed-format diagnostic regardless of how close
+                # it sits to the seed ("high-priority, minimal-weight",
+                # per spec). It's also a true terminal leaf: nothing ever
+                # adds an outgoing edge from it (see
+                # `ConcreteGraphBuilder._emit_dynamic_edge_sentinel`/
+                # `_resolve_ambiguous_call`), so no further traversal
+                # guard is needed here either.
+                data = g_c.nodes[node]
+                content = self._render_sentinel(data, tag_matrix, sentinel_type)
+                resolution = (
+                    UNRESOLVED_POLYMORPHIC_RESOLUTION
+                    if sentinel_type == "unresolved_polymorphic"
+                    else DYNAMIC_EDGE_SENTINEL_RESOLUTION
+                )
+                cost = estimate_tokens(content)
+                if total_tokens + cost > self._admission_budget:
+                    break
+                line = data.get("call_site_line", 0)
+                items.append(PackedItem(
+                    node, resolution, content, "text", (line, line), data.get("call_site_file", ""),
+                ))
+                total_tokens += cost
+                packed.add(node)
+                continue
+
             node_symbol = builder.symbol_table.get(node)
             node_path = self._relative_path(builder, node_symbol.file)
 
@@ -366,6 +404,24 @@ class ContextKnapsackPacker:
     @staticmethod
     def _relative_path(builder: ConcreteGraphBuilder, file_path: str) -> str:
         return os.path.relpath(file_path, builder.repo_root)
+
+    @staticmethod
+    def _sentinel_type(g_c, node: str) -> str | None:
+        """`"unresolved_polymorphic"` | `"dynamic_edge"` | `None` - see
+        `ConcreteGraphBuilder._resolve_ambiguous_call`/
+        `_emit_dynamic_edge_sentinel`, which are the only two places that
+        ever set the `sentinel_type` node attribute."""
+        return g_c.nodes[node].get("sentinel_type") if node in g_c.nodes else None
+
+    @staticmethod
+    def _render_sentinel(data: dict, tag_matrix: dict[str, set[str]], sentinel_type: str) -> str:
+        line = data.get("call_site_line", 0)
+        if sentinel_type == "unresolved_polymorphic":
+            candidates = [(c, tag_matrix.get(c, set())) for c in data.get("candidates", [])]
+            return render_unresolved_polymorphic(data.get("identifier", ""), line, candidates)
+        return render_dynamic_edge_sentinel(
+            data.get("call_site_expr", ""), line, data.get("hazard_type", ""), data.get("target_object")
+        )
 
     def _render(
         self, builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], qname: str, resolution: int, compact: bool = False

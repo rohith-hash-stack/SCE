@@ -48,6 +48,14 @@ class GlobalSymbolTable:
         self._symbols: dict[str, SymbolInfo] = {}
         # module -> {simple_name: qualified_name}, for intra-file Rule D lookups.
         self._module_index: dict[str, dict[str, str]] = {}
+        # simple_name -> [qualified_name, ...], across the *whole* repo, for
+        # Polysemy Disambiguation (see `score_candidate` below) - deliberately
+        # separate from `_module_index` (which is scoped to one module and
+        # only ever returns a single winner) since ambiguity detection needs
+        # every same-named candidate across every module at once. Only
+        # function/method symbols are indexed here: a class or a bare
+        # attribute is never itself the target of an ambiguous *call*.
+        self._simple_name_index: dict[str, list[str]] = {}
 
     def add(self, symbol: SymbolInfo) -> None:
         self._symbols[symbol.qualified_name] = symbol
@@ -59,6 +67,8 @@ class GlobalSymbolTable:
             class_simple = symbol.enclosing_class.rsplit(".", 1)[-1]
             local_name = f"{class_simple}.{simple_name}"
             self._module_index.setdefault(symbol.module, {})[local_name] = symbol.qualified_name
+        if symbol.kind in ("function", "method"):
+            self._simple_name_index.setdefault(simple_name, []).append(symbol.qualified_name)
 
     def get(self, qualified_name: str) -> SymbolInfo | None:
         return self._symbols.get(qualified_name)
@@ -78,6 +88,108 @@ class GlobalSymbolTable:
 
     def all_qualified_names(self) -> list[str]:
         return list(self._symbols.keys())
+
+    def candidates_for_simple_name(self, simple_name: str) -> list[SymbolInfo]:
+        """Every function/method in the repo whose bare trailing name is
+        `simple_name` - the candidate set a Polysemy Disambiguation decision
+        scores over. Two or more entries is what makes a call to that bare
+        name genuinely ambiguous (see `score_candidate`); zero or one is not
+        this module's concern (an unresolved call with zero repo-local
+        candidates is an ordinary external/builtin reference, and exactly
+        one is a plain resolution gap, not polysemy).
+        """
+        return [self._symbols[q] for q in self._simple_name_index.get(simple_name, [])]
+
+
+# --------------------------------------------------------------------- #
+# Polysemy Disambiguation via Context Scoring.
+#
+# When a call site's bare identifier (`validate()`, `obj.Close()`) can't be
+# bound by the normal import-map/instance-map/same-module rules
+# (`ConcreteGraphBuilder._resolve_segments`), and more than one function or
+# method in the repo shares that same simple name, guessing which one the
+# call actually meant - or silently dropping the edge, the prior behavior -
+# both destroy information. This scores every same-named candidate
+# deterministically and either binds the clear winner or emits an explicit
+# `UnresolvedPolymorphicNode` sentinel so the ambiguity itself becomes part
+# of the graph, not a silent gap in it.
+# --------------------------------------------------------------------- #
+POLYSEMY_THRESHOLD = 0.85
+NAMESPACE_MATCH_WEIGHT = 0.50
+ARITY_TYPE_MATCH_WEIGHT = 0.35
+LOCALITY_DISTANCE_WEIGHT = 0.15
+
+LOCALITY_SAME_FILE = 1.0
+LOCALITY_SAME_PACKAGE = 0.6
+LOCALITY_EXTERNAL = 0.2
+
+
+def namespace_match(candidate: SymbolInfo, caller_module: str, import_map: LocalImportMap) -> float:
+    """1.0 if the caller's own file imports `candidate`'s module (or a
+    parent package of it) or shares that module outright; 0.0 otherwise."""
+    if candidate.module == caller_module:
+        return 1.0
+    imported_modules = set(import_map.aliases.values())
+    for target in imported_modules:
+        if target == candidate.module or target.startswith(f"{candidate.module}.") or candidate.module.startswith(f"{target}."):
+            return 1.0
+    if candidate.module in import_map.wildcard_targets:
+        return 1.0
+    return 0.0
+
+
+def locality_distance(candidate: SymbolInfo, caller_file: str, caller_module: str) -> float:
+    """1.0 same file, 0.6 same package/directory, 0.2 external package."""
+    if candidate.file == caller_file:
+        return LOCALITY_SAME_FILE
+    candidate_pkg = candidate.module.rsplit(".", 1)[0] if "." in candidate.module else candidate.module
+    caller_pkg = caller_module.rsplit(".", 1)[0] if "." in caller_module else caller_module
+    if candidate_pkg == caller_pkg:
+        return LOCALITY_SAME_PACKAGE
+    return LOCALITY_EXTERNAL
+
+
+def arity_match(candidate_param_count: int | None, call_args_count: int) -> float:
+    """1.0 if the call site's argument count matches the candidate's own
+    parameter count; 0.0 on a mismatch or when the candidate's own count
+    isn't known (no def_node to read it from) - type alignment beyond bare
+    arity isn't attempted, since this codebase performs no type inference."""
+    if candidate_param_count is None:
+        return 0.0
+    return 1.0 if candidate_param_count == call_args_count else 0.0
+
+
+def score_candidate(namespace: float, arity_type: float, locality: float) -> float:
+    """Score(C) = 0.50*NamespaceMatch + 0.35*ArityAndTypeMatch + 0.15*LocalityDistance."""
+    return (
+        NAMESPACE_MATCH_WEIGHT * namespace
+        + ARITY_TYPE_MATCH_WEIGHT * arity_type
+        + LOCALITY_DISTANCE_WEIGHT * locality
+    )
+
+
+@dataclass(frozen=True)
+class UnresolvedPolymorphicNode:
+    identifier: str
+    candidates: list[str]
+    call_site_file: str
+    call_site_line: int
+
+    def to_dict(self) -> dict:
+        return {
+            "identifier": self.identifier,
+            "candidates": list(self.candidates),
+            "call_site_file": self.call_site_file,
+            "call_site_line": self.call_site_line,
+        }
+
+
+def unresolved_polymorphic_node_id(identifier: str, call_site_file: str, call_site_line: int) -> str:
+    """A stable, unique graph-node id for one ambiguous call site - distinct
+    from every real qualified name (which never contains `<`/`>`), and
+    distinct per call site (not per identifier) so two different ambiguous
+    calls to the same bare name don't collapse into one sentinel node."""
+    return f"<ambiguous:{identifier}@{call_site_file}:{call_site_line}>"
 
 
 @dataclass

@@ -33,12 +33,28 @@ from prism.parser.tree_sitter_loader import LanguageID
 #: pruning (spec: "Fallibility-Based Knapsack Pruning").
 INFALLIBLE_SIGNATURE_RESOLUTION = -1
 
+#: `PackedItem.resolution` sentinels for the two Task-1/Task-2 sentinel
+#: node kinds - `UnresolvedPolymorphicNode` and `DynamicEdgeSentinel` (see
+#: `prism.graph.symbol_table`/`prism.graph.call_site`). Distinct negative
+#: values from `INFALLIBLE_SIGNATURE_RESOLUTION` and from each other so a
+#: reader can always tell which kind of non-source item it's looking at;
+#: both are exempt from normal L0-L3 tier demotion in the same way an
+#: infallible-leaf signature is (see
+#: `prism.slicer.knapsack.ContextKnapsackPacker.pack`'s sentinel branch).
+UNRESOLVED_POLYMORPHIC_RESOLUTION = -2
+DYNAMIC_EDGE_SENTINEL_RESOLUTION = -3
+
 #: `#io_boundary` is this benchmark-optimization spec's own name for the
 #: role tag; the existing tagging engine's real equivalent boundary tags
 #: (`#external_io`, `#db_write`, `#db_read`) are included too so this
 #: reads real tag data rather than a tag name that doesn't otherwise exist
-#: anywhere in the tagger's vocabulary.
-_IO_BOUNDARY_TAGS = frozenset({"#io_boundary", "#external_io", "#db_write", "#db_read"})
+#: anywhere in the tagger's vocabulary. `DYNAMIC_HAZARD_TAG` (Task 2) is
+#: included for the same "belt-and-suspenders" reason `is_infallible`'s own
+#: docstring already gives for the others - purity is already forced
+#: `"impure"` for any function carrying it (see
+#: `prism.graph.contracts.ContractExtractor.extract_symbol`), so this is
+#: defense in depth, not the only thing enforcing it.
+_IO_BOUNDARY_TAGS = frozenset({"#io_boundary", "#external_io", "#db_write", "#db_read", "#dynamic_hazard"})
 
 #: Complexity threshold above which a node is Fallible regardless of any
 #: other signal - the spec's own explicit "cyclomatic complexity >= 3"
@@ -83,6 +99,33 @@ def render_infallible_signature(name: str, return_type: str | None) -> str:
     a node already proven to have nothing that could go wrong."""
     type_repr = return_type if return_type else "None"
     return f"- callee: {name} [infallible_pure_leaf, returns: {type_repr}]"
+
+
+def render_unresolved_polymorphic(identifier: str, line: int, candidates: list[tuple[str, set[str]]]) -> str:
+    """The compact diagnostic an `UnresolvedPolymorphicNode` renders as
+    (Task 3.2) instead of ever going through normal L0-L3 tier demotion -
+    a single short warning block naming every candidate the scorer
+    considered and couldn't clear `POLYSEMY_THRESHOLD` on, plus each
+    candidate's own tags (so a reader can immediately see, e.g., that one
+    candidate is `#state_mutation` and another is not, without a second
+    lookup)."""
+    lines = [f"[!] AMBIGUOUS CALL at line {line}: '{identifier}'", "    Candidates:"]
+    for name, tags in candidates:
+        tag_repr = ", ".join(sorted(tags)) if tags else "no tags"
+        lines.append(f"    - {name} ({tag_repr})")
+    return "\n".join(lines)
+
+
+def render_dynamic_edge_sentinel(expr: str, line: int, hazard_type: str, target_object: str | None) -> str:
+    """The compact diagnostic a `DynamicEdgeSentinel` renders as (Task
+    3.2) - a runtime-only dispatch target that this static pass cannot
+    resolve, and whose blast radius therefore terminates right here."""
+    target = target_object if target_object else "unknown"
+    return (
+        f"[!] DYNAMIC BOUNDARY at line {line}: '{expr}'\n"
+        f"    Hazard: {hazard_type} (Target: {target})\n"
+        f"    Blast radius stops at this boundary."
+    )
 
 
 @dataclass

@@ -47,7 +47,7 @@ from prism.parser.lang_config import (
     iter_scoped_nodes,
 )
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
-from prism.graph.call_site import HofCallbackContract, detect_hof_callback_params
+from prism.graph.call_site import HofCallbackContract, detect_hof_callback_params, has_dynamic_hazard_construct
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.effects_rules import classify_effects
 
@@ -182,7 +182,13 @@ class ContractExtractor:
 
         has_mutation = bool(state_mutations)
         has_global = self._has_global_nonlocal(def_node, lang)
-        purity = "impure" if (has_mutation or has_global or (_IO_EFFECTS & set(effects))) else "pure"
+        # Dynamic Dispatch Sentinel & Hazard Tagging (Task 2.2): a function
+        # containing a reflection/eval/subscript-dispatch call or a Go
+        # interface type switch can never be proven `pure` by a static,
+        # no-type-inference pass - its real behavior depends on a runtime
+        # string/value this pass cannot see.
+        has_dynamic_hazard = has_dynamic_hazard_construct(def_node, parsed)
+        purity = "impure" if (has_mutation or has_global or has_dynamic_hazard or (_IO_EFFECTS & set(effects))) else "pure"
         hof_callbacks = detect_hof_callback_params(def_node, parsed)
 
         return BehavioralContract(

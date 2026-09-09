@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from tree_sitter import Node
 
+from prism.graph.call_site import has_dynamic_hazard_construct
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
@@ -26,6 +27,7 @@ from prism.tagger.rules import (
     AUTH_GUARD_RULE,
     CALL_SINK_RULES,
     DECORATOR_RULES,
+    DYNAMIC_HAZARD_TAG,
     STATE_MUTATION_TAG,
     import_roots,
 )
@@ -77,6 +79,9 @@ class TaggingEngine:
                 if segments and len(segments) >= 2 and segments[0] in self_tokens:
                     tags.add(STATE_MUTATION_TAG)
 
+        if has_dynamic_hazard_construct(def_node, parsed):
+            tags.add(DYNAMIC_HAZARD_TAG)
+
         return tags
 
     def tag_graph(self, builder: ConcreteGraphBuilder) -> dict[str, set[str]]:
@@ -93,7 +98,31 @@ class TaggingEngine:
             matrix[symbol.qualified_name] = tags
             if symbol.qualified_name in builder.graph:
                 builder.graph.nodes[symbol.qualified_name]["tags"] = tags
+        self._tag_sentinel_nodes(builder, matrix)
         return matrix
+
+    def _tag_sentinel_nodes(self, builder: ConcreteGraphBuilder, matrix: dict[str, set[str]]) -> None:
+        """Conservative Tag Unioning (Task 1.3): an `UnresolvedPolymorphicNode`
+        is not itself a real symbol - `tag_graph`'s main loop above (which
+        only ever walks `builder.symbol_table`) never reaches it - so its
+        own tag set is computed here instead, as the union of every
+        candidate's already-computed tags: Tags(Unresolved) = union over
+        C in Candidates of Tags(C). A `DynamicEdgeSentinel` has no
+        candidates to union at all - it always carries exactly
+        `DYNAMIC_HAZARD_TAG`, the same conservative-worst-case signal.
+        """
+        for node, data in builder.graph.nodes(data=True):
+            sentinel_type = data.get("sentinel_type")
+            if sentinel_type == "unresolved_polymorphic":
+                union: set[str] = set()
+                for candidate in data.get("candidates", []):
+                    union |= matrix.get(candidate, set())
+            elif sentinel_type == "dynamic_edge":
+                union = {DYNAMIC_HAZARD_TAG}
+            else:
+                continue
+            matrix[node] = union
+            builder.graph.nodes[node]["tags"] = union
 
     # -- helpers ---------------------------------------------------------- #
     _ANNOTATION_CONTAINER_TYPES = {"modifiers", "attribute_list"}
