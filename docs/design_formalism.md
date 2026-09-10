@@ -729,3 +729,250 @@ old linear framing's intuition:
 coarse three-value label from this table (`--language-tier tier1-only`
 needs a simple predicate, not the full matrix), but the table above is
 the actual source of truth it summarizes.
+
+## 8. Causal Coupling & Four-Axis Semantic Model (Prism v1.1)
+
+A separate, additive layer (`prism.semantics`, `prism.traversal`,
+`prism.packer.submodular_knapsack`) on top of everything above - it does
+not replace `D_hybrid` (Section 2) or the 0/1 knapsack (Section 4), which
+remain the production `prism query` path unchanged. v1.1 is wired into
+its own parallel path (`prism causal-query`, `pack_symbol_context`) so it
+can be exercised, tested, and iterated on without risking the existing
+pipeline.
+
+### 8.1 The Four-Axis Coordinate Space
+
+Every symbol `v` gets a coordinate `Phi(v) = (S(v), F(v), O(v), R(v))` -
+Substance, Form, Output, Role - packed into one unsigned 64-bit integer
+(`prism.semantics.bitmask.FeatureBit`, an `IntFlag`) so the knapsack's
+marginal-coverage comparisons reduce to `&`/`|`/`int.bit_count()`:
+
+    Bits  0- 9  Substance (bits 0-6 used; 7-9 reserved)
+    Bits 10-24  Form (motifs)
+    Bits 25-34  Output (return contract)
+    Bits 35-44  Role (topological neighborhood)
+    Bits 45-63  Reserved for v1.2 extension tags
+
+- **Substance `S(v)`** (`prism.semantics.substance`): which behavioral
+  I/O sinks `v`'s own body touches - `SINK_NETWORK_IO`,
+  `SINK_DATABASE_IO`, `SINK_FILESYSTEM_IO`, `SINK_PROCESS_IO`,
+  `SINK_TIME_IO`, `SINK_RANDOMNESS`, or `SINK_PURE_COMPUTE` when none of
+  the above apply and no state mutation is detected (reusing
+  `ContractExtractor._state_mutations`, Section 3's own purity check).
+  Two-tier: `S_direct` matches call sites against the literal
+  `CANONICAL_SINKS` registry per language, resolved through the same
+  `LocalImportMap` Pass 2 already builds
+  (`ConcreteGraphBuilder._build_import_map`); `S_transitive` folds a
+  direct sink bit one hop upward through a thin (<=2 statement) wrapper
+  callee, so `def send(p): requests.post(url, p)` doesn't force every
+  caller to re-spell `requests.post` to be recognized as network-facing.
+  Go's registry mixes two shapes matched two different ways: slash-
+  containing entries (`net/http`, `database/sql`, `os/exec`, ...) are
+  import paths matched against the call's import-resolved root; dot-
+  containing entries with no slash (`time.Sleep`) are literal call-chain
+  shapes matched against the call's own dotted chain text - conflating
+  the two was a real bug fixed during this layer's own test-writing (see
+  `substance.py`'s `_match_sink_bits_for_call` docstring).
+- **Form `F(v)`** (`prism.semantics.form`): the syntactic motif of `v`'s
+  own body - `FORM_RETRY_LOOP`, `FORM_BRANCH_DISPATCH`,
+  `FORM_GUARD_EARLY_EXIT`, `FORM_PIPELINE`, `FORM_VALIDATOR`,
+  `FORM_BATCH_LOOP`, `FORM_WRAPPED_TRY`, `FORM_RECURSIVE`,
+  `FORM_ASYNC_CONCURRENT`, or `FORM_LINEAR` as the fallback. Classified
+  by a priority cascade checked strongest-signal-first, which is *not*
+  the spec's own implied top-to-bottom reading order: a branch-dispatch
+  function's first arm is itself shaped like an early-return guard
+  clause, so `_has_branch_dispatch_shape` must be checked *before*
+  `_first_statement_is_guard` or dispatch functions are silently
+  misclassified as guards.
+- **Output `O(v)`** (`prism.semantics.output`): what `v`'s own return
+  expression's shape says about its contract - `OUTPUT_PREDICATE`
+  (bool), `OUTPUT_COMMAND` (void), `OUTPUT_QUERY`, `OUTPUT_FACTORY`,
+  `OUTPUT_TRANSFORMER`, `OUTPUT_AGGREGATOR`, `OUTPUT_FLUENT`,
+  `OUTPUT_ASYNC_DEFERRED`, `OUTPUT_GUARD`. `return_statement` has no
+  `"value"` field in any of this codebase's four tree-sitter grammars
+  (Python/JS/TS/Go) - `_return_value_node` takes the first named child
+  positionally instead, with `_strip_error_slot` discarding Python/Go's
+  own `(result, err)`/`(v, ok)` tuple-slot idiom before classifying the
+  real value.
+- **Role `R(v)`** (`prism.semantics.role`): `v`'s position in
+  `builder.calls_graph`'s fan-in/fan-out shape - `ROLE_ENTRYPOINT`,
+  `ROLE_ORCHESTRATOR`, `ROLE_ADAPTER` (bridges two distinct Substance
+  domains between caller and callee), `ROLE_LEAF_UTILITY`,
+  `ROLE_BRIDGE`, `ROLE_PUBLIC_API`, `ROLE_LEAF_SERVICE` - computed last,
+  since `ROLE_ADAPTER` needs every other symbol's already-computed
+  `S(v)` to detect a domain mismatch.
+
+`prism.semantics.extractor.compute_feature_masks(builder)` composes all
+four axes per symbol via `compose_mask`; the `_cached` variant
+additionally reads/writes the file-local axes through
+`prism.cache.sqlite_cache` (Section 8.4).
+
+### 8.2 Pairwise Causal Edge Weights
+
+    W(u, v) = w_base(relation) * (1 + lambda_1 * I_dataflow(u, v) + lambda_2 * I_guard(u, v))
+    c(e) = 1 / W(u, v)
+    lambda_1 = 0.25, lambda_2 = 0.15
+
+`w_base` (`prism.traversal.causal_weights.BASE_RELATION_WEIGHT`):
+`CALLS`/`INSTANTIATES` = 1.00, `OVERRIDES` = 0.90, `EXTENDS`/`EMBEDS` =
+0.85, `IMPLEMENTS` = 0.80 - the spec's own literal values, kept separate
+from `prism.slicer.distance.RELATION_STRUCTURAL_WEIGHT` (Section 2)
+rather than imported, since the two scoring systems are independent by
+design. `I_dataflow`/`I_guard` are confidence values in `[0.0, 1.0]`:
+
+- **`I_dataflow`** (`prism.traversal.data_flow_py`/`data_flow_go`/
+  `data_flow_ts`): local data-flow extraction within one caller's own
+  body - a nested call argument (`store(clean(raw))`, confidence 1.0), a
+  variable assigned from one call then passed to another
+  (`x = clean(raw); store(x)`, confidence 0.9), or an attribute/field
+  access passed onward (confidence 0.7). Implemented against each
+  language's own declaration-node shape (Python assignment, Go
+  short-variable-declaration with `err`/`_`/`ctx` filtered out, TS/JS
+  `variable_declarator`), sharing one core algorithm
+  (`prism.traversal._data_flow_common.extract_data_flow`) parameterized
+  per language by `lang_config.py`'s shared node-type tables. A real
+  cross-language gotcha: `id(node)` is **not** stable across different
+  tree-sitter access paths to what `==` confirms is the same underlying
+  node (unlike CPython's native `ast` module, which the spec's own
+  reference implementation targets) - `_node_key(node) = (start_byte,
+  end_byte)` is used as the stable identity everywhere a lookup dict
+  keys on node identity.
+- **`I_guard`** (`causal_weights.extract_guard_indicators`): a
+  Predicate Gate (an `if` guarding the downstream call, confidence 1.0),
+  an Exception Gate (the downstream call wrapped in `try`/`except`,
+  confidence 0.9), or an Early-Return Gate (confidence 0.9).
+
+**Synthetic edges - the architectural fix that makes causal coupling
+actually shorten anything**: a data-flow/guard-coupled pair is almost
+always *siblings* under a shared orchestrator caller
+(`data = parse(raw); result = store(data)`), not caller/callee of each
+other - there is usually no real structural edge between `parse` and
+`store` at all. `compute_causal_edges(builder)` therefore returns the
+union of (a) every real `builder.graph` edge, priced by its own
+relation's `w_base`, and (b) a **synthetic** edge for every
+(producer, consumer) pair with data-flow or guard evidence and *no*
+existing structural edge, priced at `w_base("CALLS")` with the same
+formula. Without this, "causally coupled edges shorten graph distance"
+(Section 8.3) would have nothing to shorten -
+`tests/test_pipeline_preservation.py` proves the synthetic edge exists
+and is strictly shorter than an unrelated real 1-hop edge.
+
+### 8.3 Continuous Dijkstra & the Submodular Knapsack
+
+`prism.traversal.continuous_dijkstra.build_causal_graph(builder)` builds
+one **directed** `nx.DiGraph` (matching the packer's own
+`graph.successors()`-based frontier expansion) from `compute_causal_edges`'s
+real+synthetic union, edge-costed by `c(e) = 1/W(u,v)`; `compute_
+topological_distances(builder, seed)` runs Dijkstra from a seed symbol
+once, before the knapsack loop starts (an architectural invariant - the
+distance field never changes mid-selection).
+
+`prism.packer.submodular_knapsack.select_submodular_context` then greedily
+admits candidates by density (value/cost), where
+
+    V(v) = TopologicalDecay(dist_w(seed, v)) * (1 + beta * delta_feat(v))
+    TopologicalDecay(d) = 1 / (1 + d)**2
+    delta_feat(v) = min(popcount(mask(v) & ~covered_mask), delta_max)
+    beta = 0.10, delta_max = 10
+
+exactly the spec's own pseudocode (`compute_candidate_value`, extracted
+for direct testability), with a `graph.successors`-based frontier
+(precedence-constrained: a node can only become a candidate once
+something already-admitted reaches it) and `covered_mask` growing by
+bitwise `|=` after each admission - the mechanism Property 2 (below)
+calls submodular diminishing returns.
+
+**The `beta * delta_max < 1.25` dominance bound, verified honestly, not
+asserted**: the spec's own worked example is a 1-hop candidate with zero
+novel features against a 2-hop candidate with maximal novel-feature
+boost:
+
+    V(1-hop, 0 novel)    = TopologicalDecay(1) * 1          = 0.25
+    V(2-hop, max novel)  = TopologicalDecay(2) * (1+beta*delta_max)
+
+`V(1-hop) > V(2-hop)` requires `1 + beta*delta_max < 2.25`, i.e.
+`beta*delta_max < 1.25` (`DOMINANCE_SAFETY_BOUND`) - true at the
+defaults (`0.10*10 = 1.00`), and `select_submodular_context` raises
+`ValueError` at call time if a caller ever passes a `(beta, delta_max)`
+pair that violates it.
+
+**This specific 1-vs-2-hop comparison does not generalize to every seed
+distance** - the general worst case at integer hop `d` vs `d+1` is
+`((2+d)/(1+d))**2 > 1 + beta*delta_max`. At the defaults (threshold
+`2.0`), solving gives `d < sqrt(2) - 1 ~= 0.414`: the *guaranteed*
+dominance range is only `d in {0, 1}`
+(`MAX_DOMINANT_SEED_DISTANCE = 1`, computed from the formula, not
+hand-copied) and **fails starting at `d = 2`** -
+`TopologicalDecay(2) = 1/9 ~= 0.1111` while
+`TopologicalDecay(3) * 2.0 = 0.125`, so a 3-hop candidate with maximal
+novel coverage genuinely outscores a 2-hop candidate with none at these
+exact constants. This is the same "verify the spec's own illustrative
+example against the actual configured parameters rather than trust that
+it generalizes" finding Section 2.4 (Item 21) already made for the
+structurally-identical `1/(1+d)**2` decay in
+`prism.slicer.semantic_topology_score` - not a bug in this
+implementation (which computes the literal formula exactly), but a
+property of the formula itself, stated plainly rather than hidden.
+`tests/test_v11_invariants.py`'s Property 1 proves dominance across the
+real, narrower `d in {0, 1}` range via `hypothesis`, and directly
+demonstrates the `d = 2` counterexample rather than asserting the wider
+claim.
+
+### 8.4 SQLite Cache Schema v2 (`file_cache_v2`)
+
+`prism.cache.sqlite_cache` adds a second, narrower per-file cache
+alongside `prism.runtime.index_cache` (Section 5.6 / Item 12) - not a
+competing whole-repository index, and scoped honestly to what is
+actually file-local:
+
+    CREATE TABLE IF NOT EXISTS file_cache_v2 (
+        relative_path TEXT PRIMARY KEY,
+        content_hash TEXT NOT NULL,
+        mtime REAL NOT NULL,
+        serialized_symbols TEXT NOT NULL,
+        feature_bitmasks TEXT NOT NULL,
+        local_data_flow TEXT NOT NULL,
+        schema_version INTEGER NOT NULL
+    )
+
+`feature_bitmasks` (Substance-direct, Form, Output - computed purely
+from one function's own AST body plus its own file's import map) is
+genuinely file-local and always safe to reuse on an unchanged
+`content_hash`. `local_data_flow` is *conditionally* safe: it depends on
+`G_C`'s own cross-file call linking, which an unrelated file's change
+could in principle shift, so `load_file_cache_entry` only trusts it when
+`require_whole_repo_cache_hit` also holds for the run (i.e.
+`prism.runtime.index_cache` itself was a hit - nothing anywhere in the
+repository changed). Substance's *transitive* one-hop wrapper
+propagation and Role's fan-in/fan-out bits are graph-shaped, not
+file-shaped, and are **never** persisted here - they're cheap enough to
+recompute fresh from the cached direct bits on every run
+(`prism.semantics.extractor.compute_feature_masks_cached`), the same
+"don't cache what genuinely depends on the whole graph" reasoning
+`index_cache.py`'s own module docstring already established for Pass 2.
+
+### 8.5 Property Summary
+
+Formal properties this layer guarantees, proven in
+`tests/test_v11_invariants.py`:
+
+1. **Absolute Hop Primacy (Property 1)** - within `dist_a in
+   {0, .., MAX_DOMINANT_SEED_DISTANCE}`, a strictly closer candidate
+   with zero novel bitmask coverage always outscores a farther one with
+   maximal novel coverage; `test_honest_counterexample_at_seed_distance_two`
+   documents where this stops holding, per Section 8.3 above.
+2. **Submodularity of Bitmask Coverage (Property 2)** - for any covered
+   sets `S1 subseteq S2`, a candidate's marginal value against `S2` is
+   never greater than against `S1` (`popcount(mask & ~S2) <=
+   popcount(mask & ~S1)` for any `S2 = S1 | extra`) - the mechanism
+   `tests/test_redundancy_elimination.py` exercises end to end: five
+   textually-identical logger functions (identical `Phi(v)`) yield only
+   one admission before a feature-distinct database-store function.
+3. **Positive Distance Monotonicity (Property 3)** - adding real
+   data-flow evidence (`I_dataflow > 0`) to an edge strictly increases
+   `W(u, v)` over the bare `w_base`, and therefore strictly decreases
+   `c(e) = 1/W(u, v)` - causal evidence must never make a path look
+   *farther* than the plain structural relation alone;
+   `tests/test_pipeline_preservation.py` proves the strongest form of
+   this end to end (a synthetic edge making a sibling function reachable
+   at all, where no structural path existed).
