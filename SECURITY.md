@@ -104,6 +104,25 @@ codebase has an explicit depth cap - see `tests/test_recursion_safeguards.py`
 for the regression coverage proving each of the three above degrades
 rather than crashes.
 
+**Item 4 (second post-implementation audit)** adds a second, independent
+layer on top of those per-call fixes: `ConcreteGraphBuilder.
+pass1_collect_definitions`/`pass2_resolve_calls` now wrap each source
+file's own indexing in a per-file error boundary, catching
+`RecursionError` and `UnicodeDecodeError` specifically (a narrow catch,
+deliberately - an unrelated bug should still surface as one, not be
+silently absorbed here). A file that raises either is recorded in
+`ConcreteGraphBuilder.index_errors` (file path, error category, message,
+and which pass caught it - surfaced in `prism index`'s own CLI output
+and in `--debug-json`) and skipped; every other file in the repository
+is still indexed and call-resolved normally. This is defense-in-depth
+alongside the per-call fixes above, not a replacement for them - a
+malformed file that reaches neither of the specific guarded call sites
+above but crashes some other recursive walk during indexing is now
+caught at the file boundary instead of aborting the whole run. See
+`tests/test_parser_resilience.py` for both real adversarial-input
+regression coverage and direct fault-injection tests proving the
+boundary itself catches, records, and continues.
+
 ## Reporting a vulnerability
 
 If you find a security issue in Prism, please open a private security

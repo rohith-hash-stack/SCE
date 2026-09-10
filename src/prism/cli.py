@@ -148,6 +148,14 @@ def index(repo_path: str, debug_json: bool, language_tier: str) -> None:
         click.echo("  (none)")
     for tag, count in sorted(tag_counts.items(), key=lambda kv: (-kv[1], kv[0])):
         click.echo(f"  {tag}: {count}")
+    if builder.index_errors:
+        # Item 4 (second post-implementation audit): a file an error
+        # boundary caught and skipped (INDEX_ERROR_SKIPPED) during
+        # indexing - visible here rather than only in whatever `logging`
+        # configuration (if any) the caller happens to have.
+        click.echo(f"Skipped files (indexing errors): {len(builder.index_errors)}")
+        for entry in builder.index_errors:
+            click.echo(f"  {entry['file']} [{entry['stage']}] {entry['category']}: {entry['message']}")
 
 
 @main.command()

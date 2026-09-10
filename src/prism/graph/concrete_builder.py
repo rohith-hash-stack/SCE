@@ -21,6 +21,7 @@ rather than silently pretending to be exact.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 import networkx as nx
@@ -126,11 +127,28 @@ TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMEN
 #     untested; see `README.md`'s Language Capability Matrix.
 
 
+#: Item 4 (second post-implementation audit): logger for per-file
+#: indexing failures caught by `pass1_collect_definitions`/
+#: `pass2_resolve_calls`'s error boundaries - a caller that configures
+#: Python's `logging` module sees these; `ConcreteGraphBuilder.
+#: index_errors` (populated regardless of whether logging is configured)
+#: is what `prism index`'s own CLI output actually reads.
+_LOGGER = logging.getLogger(__name__)
+
+
 class ConcreteGraphBuilder:
     """Builds `G_C` from a set of source files via the two-pass linker."""
 
     def __init__(self, repo_root: str, symbol_table: GlobalSymbolTable | None = None) -> None:
         self.repo_root = repo_root
+        #: Item 4: `[{"file": path, "category": "RecursionError" | ...,
+        #: "message": str, "stage": "pass1" | "pass2"}, ...]` - one entry
+        #: per file an error boundary caught and skipped, in the order
+        #: encountered. A file appearing here was NOT indexed (Pass 1) or
+        #: was partially indexed but not call-resolved (Pass 2) - its
+        #: definitions/calls are simply absent from the graph, not
+        #: present-but-wrong.
+        self.index_errors: list[dict[str, str]] = []
         self.symbol_table = symbol_table if symbol_table is not None else GlobalSymbolTable()
         self.graph = nx.DiGraph()
         self._parsed_files: dict[str, ParsedFile] = {}
@@ -291,12 +309,43 @@ class ConcreteGraphBuilder:
     # ------------------------------------------------------------------ #
     def pass1_collect_definitions(self, files: list[str]) -> None:
         for path in sorted(files):
-            parsed = parse_file(path)
-            if parsed is None:
-                continue
-            self._parsed_files[path] = parsed
-            module = self._module_for_file(parsed)
-            self._collect_definitions_in_file(parsed, module)
+            # Item 4 (second post-implementation audit): a per-file error
+            # boundary. Prism indexes arbitrary, potentially adversarial
+            # or merely pathological repositories - a single malformed or
+            # maliciously-deep file must not abort the whole `index`/
+            # `query` run for every other file in the repo. Catches
+            # RecursionError (a Tree-sitter-parseable but pathologically
+            # nested file defeating this class's own Python-level
+            # recursive walks - see `iter_scoped_nodes`'s own
+            # MAX_SCOPED_NODE_DEPTH guard for the narrower, already-fixed
+            # case this is defense-in-depth for at the whole-file level)
+            # and UnicodeDecodeError (a non-UTF-8-decodable file reaching
+            # a decode call this deep that isn't already guarded by
+            # `errors="replace"` - `open(path, "rb")` itself never raises
+            # this, but a downstream `.decode()` without that guard
+            # could). Deliberately narrow (not a blanket `except
+            # Exception`) - an unexpected error class should still
+            # surface as a real bug, not be silently swallowed here.
+            try:
+                parsed = parse_file(path)
+                if parsed is None:
+                    continue
+                self._parsed_files[path] = parsed
+                module = self._module_for_file(parsed)
+                self._collect_definitions_in_file(parsed, module)
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass1")
+
+    def _record_index_error(self, path: str, exc: Exception, stage: str) -> None:
+        category = exc.__class__.__name__
+        message = str(exc) or category
+        _LOGGER.error("INDEX_ERROR_SKIPPED [%s] %s (%s): %s", stage, path, category, message)
+        self.index_errors.append({"file": path, "category": category, "message": message, "stage": stage})
+        # A file that failed pass1 may have partially registered
+        # definitions/parsed state - remove it so pass2 (which iterates
+        # `self._parsed_files`, not the original file list) doesn't then
+        # try to link calls against a half-indexed file.
+        self._parsed_files.pop(path, None)
 
     def _module_for_file(self, parsed: ParsedFile) -> str:
         """The dotted "module" every symbol in this file is qualified
@@ -528,12 +577,20 @@ class ConcreteGraphBuilder:
             parsed = self._parsed_files.get(path)
             if parsed is None:
                 continue
-            module = self._module_for_file(parsed)
-            import_map = self._build_import_map(parsed, module)
-            import_maps[path] = import_map
-            self._register_exports(parsed, module, import_map)
-            self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
-            self._link_go_embeds(classes_by_file.get(path, []), parsed, module)
+            # Item 4: same per-file error boundary as Pass 1 (see that
+            # method's own comment) - a file that crashes here is popped
+            # from `self._parsed_files` so sub-pass 2b's own lookup
+            # (`import_maps[path]`, which would otherwise KeyError on a
+            # file this loop failed to populate) naturally skips it too.
+            try:
+                module = self._module_for_file(parsed)
+                import_map = self._build_import_map(parsed, module)
+                import_maps[path] = import_map
+                self._register_exports(parsed, module, import_map)
+                self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
+                self._link_go_embeds(classes_by_file.get(path, []), parsed, module)
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass2a")
 
         # Sub-pass 2a-ter: OVERRIDES detection (Issue #9) needs every
         # class's own EXTENDS edge already in place - a subclass and its
@@ -548,42 +605,57 @@ class ConcreteGraphBuilder:
         # OVERRIDES) are both complete.
         for path in sorted(files):
             parsed = self._parsed_files.get(path)
-            if parsed is None:
+            if parsed is None or path not in import_maps:
                 continue
-            module = self._module_for_file(parsed)
-            import_map = import_maps[path]
-            file_symbols = [
-                qname
-                for qname in self._def_nodes
-                if (symbol := self.symbol_table.get(qname)) is not None
-                and symbol.file == path
-                and symbol.kind in ("function", "method")
-            ]
-            # Issue B1 follow-through: Go joined this tuple once receiver/
-            # parameter-typed binding (`_build_function_instance_map`'s
-            # Go-specific block, below `_bind_go_typed_parameters`) gave
-            # it a real (if narrower - same-package bare types only, no
-            # constructor-call tracking) instance-binding mechanism of
-            # its own. `_build_class_instance_map` (the other consumer
-            # gated by this tuple) stays a safe no-op for Go regardless -
-            # `ASSIGNMENT_NODE_TYPE` has no Go entry, so it returns an
-            # empty map immediately.
-            instance_binding_langs = (LanguageID.PYTHON, LanguageID.JAVA, LanguageID.CSHARP, LanguageID.GO)
-            for qualified_name in file_symbols:
-                symbol = self.symbol_table.get(qualified_name)
-                def_node = self._def_nodes[qualified_name]
-                class_instance_map = InstanceTypeMap()
-                if symbol.enclosing_class and parsed.language_id in instance_binding_langs:
-                    class_instance_map = self._build_class_instance_map(
-                        symbol.enclosing_class, parsed, module, import_map
-                    )
-                func_instance_map = InstanceTypeMap()
-                if parsed.language_id in instance_binding_langs:
-                    func_instance_map = self._build_function_instance_map(def_node, parsed, module, import_map)
-                self._resolve_calls_in_function(
-                    qualified_name, def_node, parsed, module, symbol.enclosing_class,
-                    import_map, class_instance_map, func_instance_map,
+            # Item 4: same per-file error boundary, one file's crash here
+            # (resolving its own calls) skips only that file's call
+            # resolution - its Pass 1 definitions and any EXTENDS/EMBEDS/
+            # OVERRIDES edges already linked in sub-pass 2a above are
+            # unaffected, so the rest of the repo (including code that
+            # calls *into* this file's own symbols) still resolves
+            # normally.
+            try:
+                module = self._module_for_file(parsed)
+                import_map = import_maps[path]
+                file_symbols = [
+                    qname
+                    for qname in self._def_nodes
+                    if (symbol := self.symbol_table.get(qname)) is not None
+                    and symbol.file == path
+                    and symbol.kind in ("function", "method")
+                ]
+                self._resolve_calls_for_file_symbols(file_symbols, parsed, module, import_map)
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass2b")
+
+    def _resolve_calls_for_file_symbols(
+        self, file_symbols: list[str], parsed: ParsedFile, module: str, import_map: LocalImportMap
+    ) -> None:
+        # Issue B1 follow-through: Go joined this tuple once receiver/
+        # parameter-typed binding (`_build_function_instance_map`'s
+        # Go-specific block, below `_bind_go_typed_parameters`) gave
+        # it a real (if narrower - same-package bare types only, no
+        # constructor-call tracking) instance-binding mechanism of
+        # its own. `_build_class_instance_map` (the other consumer
+        # gated by this tuple) stays a safe no-op for Go regardless -
+        # `ASSIGNMENT_NODE_TYPE` has no Go entry, so it returns an
+        # empty map immediately.
+        instance_binding_langs = (LanguageID.PYTHON, LanguageID.JAVA, LanguageID.CSHARP, LanguageID.GO)
+        for qualified_name in file_symbols:
+            symbol = self.symbol_table.get(qualified_name)
+            def_node = self._def_nodes[qualified_name]
+            class_instance_map = InstanceTypeMap()
+            if symbol.enclosing_class and parsed.language_id in instance_binding_langs:
+                class_instance_map = self._build_class_instance_map(
+                    symbol.enclosing_class, parsed, module, import_map
                 )
+            func_instance_map = InstanceTypeMap()
+            if parsed.language_id in instance_binding_langs:
+                func_instance_map = self._build_function_instance_map(def_node, parsed, module, import_map)
+            self._resolve_calls_in_function(
+                qualified_name, def_node, parsed, module, symbol.enclosing_class,
+                import_map, class_instance_map, func_instance_map,
+            )
 
     # -- Import maps ---------------------------------------------------- #
     def _build_import_map(self, parsed: ParsedFile, module: str) -> LocalImportMap:

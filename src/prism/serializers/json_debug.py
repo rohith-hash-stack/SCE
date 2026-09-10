@@ -33,7 +33,15 @@ def build_debug_dict(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[st
     # Go-only check the way the plain-text `prism index` output is
     # (that one skips printing it entirely for a non-Go repo; this
     # debug/programmatic surface always includes it for a stable schema).
-    return {"nodes": nodes, "edges": edges, "go_call_resolution_ratio": builder.go_call_resolution_ratio}
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "go_call_resolution_ratio": builder.go_call_resolution_ratio,
+        # Item 4: files an error boundary caught and skipped
+        # (INDEX_ERROR_SKIPPED) during indexing - empty for the common
+        # case (no adversarial/pathological files encountered).
+        "index_errors": builder.index_errors,
+    }
 
 
 def render_json_debug(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]]) -> str:
