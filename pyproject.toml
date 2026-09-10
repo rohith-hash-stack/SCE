@@ -32,10 +32,21 @@ dependencies = [
     # MCP-specific import cost - but the dependency itself is no longer
     # conditional on an extra.
     "mcp[cli]>=2.0,<3.0",
+    # Core, not dev-only, as of Issues #11/#13: `prism.slicer.knapsack`'s
+    # token-budget gating now uses real BPE token counts
+    # (`prism.slicer.tokenizer`) instead of a flat word-count heuristic
+    # that measurably drifted +-25%-class against a real tokenizer across
+    # languages. `prism.slicer.tokenizer` still degrades to a
+    # deterministic regex approximation (never raises) if the encoding
+    # table can't be loaded at runtime (a genuinely air-gapped environment
+    # with tiktoken's remote blob host unreachable), so this is a real
+    # accuracy upgrade for the overwhelming common case, not a hard
+    # requirement for the engine to run at all.
+    "tiktoken>=0.7,<1.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "tiktoken>=0.7,<1.0", "openai>=1.0", "python-dotenv>=1.0,<2.0", "sqlalchemy>=2.0,<3.0"]
+dev = ["pytest>=7.0", "hypothesis>=6.0,<7.0", "openai>=1.0", "python-dotenv>=1.0,<2.0", "sqlalchemy>=2.0,<3.0"]
 
 [project.scripts]
 prism = "prism.cli:main"

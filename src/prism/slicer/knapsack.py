@@ -33,6 +33,7 @@ from prism.slicer.compressor import (
     render_unresolved_polymorphic,
 )
 from prism.slicer.distance import DistanceEngine, architectural_path
+from prism.slicer.tokenizer import count_tokens
 
 #: `--query-type` values `prism.cli`'s `query` command accepts (see that
 #: module). Fallibility-based pruning (below) is active unconditionally -
@@ -53,47 +54,58 @@ QUERY_TYPE_BUG_LOCALIZATION = "bug_localization"
 # objective - purely a reporting metric for the serialized output.
 RESOLUTION_WEIGHT = {0: 1.0, 1: 0.7, 2: 0.4, 3: 0.15}
 
-# Whitespace-word count is the only offline, dependency-free token proxy
-# available to the core engine (a real BPE tokenizer needs a model-specific
-# vocabulary; see benchmarks/tokenizer.py, which uses tiktoken - with a
-# fallback of its own - purely for *reporting*, not for gating this budget).
-# Source code tokenizes far denser than prose (BPE splits most punctuation,
-# brackets, and operators into their own tokens), so a prose-appropriate
-# ~1.3 systematically undercounts it. Measured against a punctuation-aware
-# tokenizer across four different packed contexts - two hand-built
-# fixtures, one synthetic stress repo, and a real clone of encode/starlette
-# - the true-to-word-estimate ratio was consistently ~2.0-2.9x, never
-# close to 1.3x. 2.6 is that sample's mean, biased slightly conservative
-# (better to underpack against a hard budget than overshoot it).
-TOKENS_PER_WORD = 2.6
-
-
+# Issues #11/#13: real BPE token counts (`prism.slicer.tokenizer`,
+# preferring tiktoken's cl100k_base encoding, degrading to a deterministic
+# regex approximation only if that encoding table can't be loaded) instead
+# of a flat word-count heuristic. The heuristic this replaced
+# (`len(text.split()) * 2.6`) was measured against a real punctuation-aware
+# tokenizer across four different packed contexts and still drifted
+# systematically - source code tokenizes far denser than prose (BPE splits
+# most punctuation, brackets, and operators into their own tokens), and
+# that density itself varies by language (Python vs. Go vs. near-binary
+# formats like minified JSON), so no single fixed per-word ratio could
+# ever track it closely. `estimate_tokens` keeps its name (every call site
+# across this module, `serializers.markdown`, and `slicer.blueprint`
+# already calls it) but its body is now real, not proxy, token counting.
 def estimate_tokens(text: str) -> float:
-    return len(text.split()) * TOKENS_PER_WORD
+    return float(count_tokens(text))
 
 
-def _wrapping_overhead_tokens(symbol: str, relative_path: str) -> float:
-    """Estimated cost of the Markdown a serializer wraps around one packed
-    item's bare `content`: a `### <symbol> (<label>)` heading plus a fenced
+_RESOLUTION_LABELS_FOR_WRAPPING = {0: "L0", 1: "L1", 2: "L2", 3: "L3"}
+
+
+def _wrapping_overhead_tokens(
+    symbol: str, relative_path: str, resolution: int = 0, line_range: tuple[int, int] = (0, 0), is_seed: bool = False
+) -> float:
+    """Real (not approximated) token cost of the Markdown heading +
+    fenced-code-block wrapper `serializers.markdown.render_markdown` puts
+    around one packed item's bare `content` - a `### <symbol>
+    (<label>)`/`### [TARGET] <symbol> (<label>)` heading plus a fenced
     code block. Without this, the packer's running total only ever counts
-    the code itself and silently diverges from the size of the document it
-    is actually producing - a gap that is tiny for one item but compounds
-    badly once dozens or hundreds of small (L2/L3) items are packed, which
-    is exactly what happens against a real, densely-connected repository.
+    the code itself and silently diverges from the size of the document
+    it's actually producing - a gap that's tiny for one item but compounds
+    badly once dozens or hundreds of small (L2/L3) items are packed,
+    exactly what happens against a real, densely-connected repository.
 
-    This lives in the slicer layer and stays deliberately approximate
-    rather than byte-exact, since `prism.serializers.markdown` imports
-    `PackResult` from this module - importing it back here to render the
-    real wrapping would be circular. "99999-99999" is used as a stand-in
-    line range (a 5-digit line number comfortably covers any real file),
-    which biases the estimate slightly conservative (better to underpack
-    than to blow the budget) now that the real heading also carries the
-    symbol's original line range and relative file path (see
-    `serializers.markdown.render_markdown`); the resolution label itself
-    ("L0"/"L1"/"L2"/"L3") no longer varies in length, so no stand-in is
-    needed for it.
+    Every field this needs (the item's own real `line_range`/
+    `relative_path`/resolution/seed-ness) is already known at every call
+    site below by the time cost is computed, so - unlike the word-count-
+    heuristic version this replaces, which used a "99999-99999" stand-in
+    line range purely because it was cheaper to write - there's no reason
+    left not to render the *real* heading text and count its *real* BPE
+    tokens. This still doesn't attempt the YAML-contract-block-vs-code-
+    fence branching `render_markdown` itself does (importing that logic
+    back here would be circular - `serializers.markdown` already imports
+    `PackResult` from this module) - a code fence is assumed, which is the
+    larger of the two wrapper shapes, keeping this a conservative
+    (never-under-counts-the-wrapper) approximation of that one remaining
+    piece rather than a byte-exact one.
     """
-    heading = f"### {symbol} (L0 - lines 99999-99999 in {relative_path})"
+    label = _RESOLUTION_LABELS_FOR_WRAPPING.get(resolution, "L0")
+    start, end = line_range
+    full_label = f"{label} - lines {start}-{end} in {relative_path}"
+    prefix = "[TARGET] " if is_seed else ""
+    heading = f"### {prefix}{symbol} ({full_label})"
     return estimate_tokens(f"{heading}\n```python\n```\n")
 
 
@@ -237,7 +249,9 @@ class ContextKnapsackPacker:
         seed_symbol = builder.symbol_table.get(seed)
         seed_path = self._relative_path(builder, seed_symbol.file)
         items = [PackedItem(seed, 0, seed_content, seed_symbol.language_id, seed_symbol.line_range, seed_path)]
-        total_tokens = estimate_tokens(seed_content) + _wrapping_overhead_tokens(seed, seed_path)
+        total_tokens = estimate_tokens(seed_content) + _wrapping_overhead_tokens(
+            seed, seed_path, 0, seed_symbol.line_range, is_seed=True
+        )
         packed: set[str] = {seed}
 
         # A "requires" hop in the architectural path names a confirmed
@@ -262,7 +276,7 @@ class ContextKnapsackPacker:
             if content is None:
                 continue
             node_path = self._relative_path(builder, symbol.file)
-            cost = estimate_tokens(content) + _wrapping_overhead_tokens(node, node_path)
+            cost = estimate_tokens(content) + _wrapping_overhead_tokens(node, node_path, 2, symbol.line_range)
             if total_tokens + cost > self._admission_budget:
                 continue
             items.append(PackedItem(node, 2, content, symbol.language_id, symbol.line_range, node_path))
@@ -378,7 +392,11 @@ class ContextKnapsackPacker:
             content = self._render(builder, tag_matrix, node, target_res, compact)
             if content is None:
                 continue
-            overhead = _wrapping_overhead_tokens(node, node_path)
+            # Resolution-invariant: L0-L3's label text is always the same
+            # length ("L0".."L3"), so the wrapper's own token cost doesn't
+            # actually change as `target_res` steps up in the downgrade
+            # loop below - computed once, not recomputed per iteration.
+            overhead = _wrapping_overhead_tokens(node, node_path, target_res, node_symbol.line_range)
             cost = estimate_tokens(content) + overhead
             while total_tokens + cost > self._admission_budget and target_res < 3:
                 target_res += 1
