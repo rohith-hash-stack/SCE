@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 
 import networkx as nx
 from tree_sitter import Node
@@ -164,6 +165,24 @@ class ConcreteGraphBuilder:
         #: Item 5 follow-through: lazily built, memoized by
         #: `_go_class_registry`.
         self._go_class_registry_cache: dict[str, list[str]] | None = None
+        #: Item 14 (second post-implementation audit): guards the three
+        #: lazy-memoization caches above (`_calls_graph_cache`,
+        #: `_go_method_registry_cache`, `_go_class_registry_cache`) - the
+        #: only mutable state this builder's read path (distance engine,
+        #: knapsack packer, compressor, blueprint miner) can still touch
+        #: once indexing has completed (see `calls_graph`'s own docstring:
+        #: "this builder is only ever fully rebuilt, never incrementally
+        #: mutated after indexing completes"). Without a lock, two threads
+        #: racing to compute one of these caches for the first time would
+        #: each independently build an equivalent (same-content) object
+        #: and harmlessly clobber each other's assignment - not a
+        #: correctness bug in CPython today, but not a guarantee either;
+        #: this makes "first concurrent access is safe and deterministic"
+        #: an explicit, tested property instead of an implicit accident of
+        #: the GIL. One lock for all three: they're cheap to build and
+        #: never contended after warmup, so a single lock is simpler than
+        #: three without a measurable cost.
+        self._lazy_cache_lock = threading.Lock()
         #: Item 3: set by `_resolve_segments` immediately before it
         #: returns via the Go-only Stage-2 "codebase-unique receiver"
         #: fallback, read by its one caller (`_resolve_calls_in_function`)
@@ -218,14 +237,22 @@ class ConcreteGraphBuilder:
         time this builder's `graph` identity changes is NOT handled here
         (this builder is only ever fully rebuilt, never incrementally
         mutated after indexing completes, so a one-shot cache is safe).
+
+        Item 14 (second post-implementation audit): double-checked
+        locking against `_lazy_cache_lock` - the fast path (already
+        warm, the overwhelmingly common case once any query has run) never
+        takes the lock at all; only the first, one-time build under
+        concurrent first access does.
         """
         if self._calls_graph_cache is None:
-            view = nx.DiGraph()
-            view.add_nodes_from(self.graph.nodes(data=True))
-            for u, v, data in self.graph.edges(data=True):
-                if data.get("relation", "CALLS") in TRAVERSABLE_RELATIONS:
-                    view.add_edge(u, v, **data)
-            self._calls_graph_cache = view
+            with self._lazy_cache_lock:
+                if self._calls_graph_cache is None:
+                    view = nx.DiGraph()
+                    view.add_nodes_from(self.graph.nodes(data=True))
+                    for u, v, data in self.graph.edges(data=True):
+                        if data.get("relation", "CALLS") in TRAVERSABLE_RELATIONS:
+                            view.add_edge(u, v, **data)
+                    self._calls_graph_cache = view
         return self._calls_graph_cache
 
     def apply_runtime_overlay(
@@ -1118,15 +1145,18 @@ class ConcreteGraphBuilder:
         """Simple Go struct/class name -> every qualified class of that
         name anywhere in the repo - the type-level counterpart to
         `_go_method_registry`, backing `_resolve_go_type_name`'s
-        cross-file fallback. Built once, lazily, and cached.
+        cross-file fallback. Built once, lazily, and cached - Item 14:
+        double-checked against `_lazy_cache_lock`, same as `calls_graph`.
         """
         if self._go_class_registry_cache is None:
-            registry: dict[str, list[str]] = {}
-            for symbol in self.symbol_table:
-                if symbol.kind == "class" and symbol.language_id == LanguageID.GO:
-                    simple_name = symbol.qualified_name.rsplit(".", 1)[-1]
-                    registry.setdefault(simple_name, []).append(symbol.qualified_name)
-            self._go_class_registry_cache = registry
+            with self._lazy_cache_lock:
+                if self._go_class_registry_cache is None:
+                    registry: dict[str, list[str]] = {}
+                    for symbol in self.symbol_table:
+                        if symbol.kind == "class" and symbol.language_id == LanguageID.GO:
+                            simple_name = symbol.qualified_name.rsplit(".", 1)[-1]
+                            registry.setdefault(simple_name, []).append(symbol.qualified_name)
+                    self._go_class_registry_cache = registry
         return self._go_class_registry_cache
 
     # -- EXTENDS / IMPLEMENTS ---------------------------------------------- #
@@ -1868,15 +1898,18 @@ class ConcreteGraphBuilder:
         define a `JSON` method) - built once, lazily, and cached; Pass 1
         (global definition collection) must be complete before this is
         ever called, which it always is by the time Pass 2 call
-        resolution runs.
+        resolution runs. Item 14: double-checked against
+        `_lazy_cache_lock`, same as `calls_graph`.
         """
         if self._go_method_registry_cache is None:
-            registry: dict[str, list[str]] = {}
-            for symbol in self.symbol_table:
-                if symbol.kind == "method" and symbol.language_id == LanguageID.GO:
-                    simple_name = symbol.qualified_name.rsplit(".", 1)[-1]
-                    registry.setdefault(simple_name, []).append(symbol.qualified_name)
-            self._go_method_registry_cache = registry
+            with self._lazy_cache_lock:
+                if self._go_method_registry_cache is None:
+                    registry: dict[str, list[str]] = {}
+                    for symbol in self.symbol_table:
+                        if symbol.kind == "method" and symbol.language_id == LanguageID.GO:
+                            simple_name = symbol.qualified_name.rsplit(".", 1)[-1]
+                            registry.setdefault(simple_name, []).append(symbol.qualified_name)
+                    self._go_method_registry_cache = registry
         return self._go_method_registry_cache
 
 

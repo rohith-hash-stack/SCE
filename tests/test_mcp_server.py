@@ -359,6 +359,39 @@ def test_reindex_repo_rejects_repo_path_escaping_a_pinned_server(tmp_path, monke
     assert "escapes the sandboxed repository root" in result.content[0].text
 
 
+def test_concurrent_get_symbol_context_calls_against_the_same_repo_are_all_correct(tmp_path):
+    """Item 14 (second post-implementation audit): several overlapping
+    `get_symbol_context` calls against the same cached `RepoContext`
+    (`asyncio.gather`, one shared `Client` session so all of them race
+    against the *same* already-cached index) must each return the exact
+    same, correct result - not a garbled or cross-contaminated one."""
+    repo = _order_repo(tmp_path)
+
+    async def go():
+        async with Client(mcp_server.server) as client:
+            # Prime the cache first so every concurrent call below is a
+            # cache hit racing purely on the shared, already-built
+            # RepoContext - the scenario this item is actually about.
+            await client.call_tool(
+                "get_symbol_context",
+                {"target_symbol": "orders.OrderService.create_order", "repo_path": str(repo)},
+            )
+            calls = [
+                client.call_tool(
+                    "get_symbol_context",
+                    {"target_symbol": "orders.OrderService.create_order", "repo_path": str(repo)},
+                )
+                for _ in range(10)
+            ]
+            return await asyncio.gather(*calls)
+
+    results = _run(go())
+    assert all(not r.is_error for r in results)
+    texts = {r.content[0].text for r in results}
+    assert len(texts) == 1  # every concurrent call rendered byte-identical output
+    assert "create_order" in next(iter(texts))
+
+
 def test_get_symbol_context_still_works_within_a_pinned_server(tmp_path, monkeypatch):
     repo = _order_repo(tmp_path)
     monkeypatch.setenv("PRISM_MCP_DEFAULT_REPO", str(repo))

@@ -562,6 +562,39 @@ index takes ~3.8s; a warm (cache-hit) re-index takes ~0.14s - comfortably
 under the <500ms target, and correct (identical symbol/edge sets) by
 construction of the hash-match precondition above.
 
+### 5.7 Server Concurrency & Thread-Safe Stateless Slicing (Item 14)
+
+`prism mcp` caches one `RepoContext` per repository
+(`prism.mcp.cache.GraphCache`) and reuses it across every subsequent tool
+call - a long-lived server can receive genuinely overlapping tool calls
+against the *same* cached context (concurrent agent sessions, or a client
+that doesn't serialize its own calls). "Stateless slicing" is the
+property that makes this safe: once `ConcreteGraphBuilder.
+pass1_collect_definitions`/`pass2_resolve_calls`/`TaggingEngine.tag_graph`
+complete, nothing on the read path (`DistanceEngine.compute_all`,
+`ContextKnapsackPacker.pack`, `ASTCompressor`, `mine_sibling_blueprint`,
+`render_markdown`) mutates `builder.graph`, `symbol_table`, `tag_matrix`,
+or `contracts` in place - each of those is read-only input from every
+query's point of view, and `DistanceEngine._weighted_undirected` builds
+its own private `to_undirected()` copy per call rather than annotating
+the shared graph (networkx's `to_undirected()`/`add_edge(**data)` deep-
+copy attribute dicts, confirmed directly - not shared references with
+the original).
+
+The one exception - the one piece of genuinely mutable *shared* state the
+read path can still touch - is `ConcreteGraphBuilder`'s three lazy-
+memoization caches (`calls_graph`, `_go_method_registry`,
+`_go_class_registry`): each is built once, on first access, and cached
+for the builder's lifetime. Before this item, two threads racing to
+compute one of these for the first time would each independently build
+an equivalent (same-content) object and harmlessly clobber the other's
+assignment - not a correctness bug under CPython's GIL in practice, but
+an implicit accident rather than a guarantee. `ConcreteGraphBuilder.
+_lazy_cache_lock` (one `threading.Lock` for all three - they're cheap to
+build and never contended after warmup) makes first-access-under-
+concurrency an explicit, tested, double-checked-locked property instead:
+the warm-cache fast path never takes the lock at all.
+
 ## 6. Invariant Summary
 
 The six formal invariants this design guarantees, and where each is proven
