@@ -5,7 +5,14 @@
 from __future__ import annotations
 
 from prism.slicer.knapsack import _wrapping_overhead_tokens, estimate_tokens
-from prism.slicer.tokenizer import active_backend, count_tokens, is_exact
+from prism.slicer.tokenizer import (
+    FALLBACK_SAFETY_MULTIPLIER,
+    _fallback_count_tokens,
+    _subword_token_count,
+    active_backend,
+    count_tokens,
+    is_exact,
+)
 
 
 def test_count_tokens_empty_string_is_zero() -> None:
@@ -73,3 +80,60 @@ def test_wrapping_overhead_resolution_invariant_across_l0_l3() -> None:
     cost shouldn't vary by resolution alone at a fixed line range/path."""
     costs = {r: _wrapping_overhead_tokens("pkg.mod.f", "pkg/mod.py", r, (10, 20)) for r in range(4)}
     assert len(set(costs.values())) == 1
+
+
+# --------------------------------------------------------------------- #
+# Issue A1: fail-closed fallback subword splitting
+# --------------------------------------------------------------------- #
+def test_subword_split_camel_case() -> None:
+    assert _subword_token_count("calculateTotalOffset") == 3
+    assert _subword_token_count("HTTPServer") == 2
+
+
+def test_subword_split_snake_case() -> None:
+    assert _subword_token_count("order_processing_handler") == 3
+
+
+def test_subword_split_mixed_snake_and_camel() -> None:
+    assert _subword_token_count("parse_HTTPServerConfig") == 1 + 3
+
+
+def test_subword_split_multidigit_number() -> None:
+    assert _subword_token_count("12345") == (5 + 2) // 3
+    assert _subword_token_count("7") == 1
+
+
+def test_subword_split_short_common_word_is_one_token() -> None:
+    # A short, non-compound word shouldn't be over-fragmented - only
+    # actual case/underscore/digit boundaries trigger a split.
+    assert _subword_token_count("return") == 1
+    assert _subword_token_count("x") == 1
+
+
+def test_fallback_never_undercounts_a_flat_word_count() -> None:
+    """The pre-A1 fallback counted every `\\w+` run as exactly one token.
+    Issue A1 requires the new fallback to never count *fewer* tokens than
+    that for any input - it only ever adds subword granularity plus the
+    safety multiplier, never removes counted tokens."""
+    samples = [
+        "def calculateTotalOffset(order_processing_handler, x12345): pass",
+        "class HTTPServerConfig: ...",
+        "the quick brown fox jumps over the lazy dog",
+    ]
+    for text in samples:
+        flat_word_count = len(__import__("re").findall(r"\w+|[^\w\s]", text))
+        assert _fallback_count_tokens(text) >= flat_word_count
+
+
+def test_fallback_applies_safety_multiplier() -> None:
+    # A long compound identifier alone: subword count times the safety
+    # multiplier, ceiling-rounded - not just the raw subword count.
+    import math
+
+    word = "calculateTotalOffsetForShippingAndHandling"
+    raw = _subword_token_count(word)
+    assert _fallback_count_tokens(word) == math.ceil(raw * FALLBACK_SAFETY_MULTIPLIER)
+
+
+def test_fallback_empty_string_is_zero() -> None:
+    assert _fallback_count_tokens("") == 0
