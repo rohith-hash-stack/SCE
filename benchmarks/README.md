@@ -846,3 +846,43 @@ repository actually defines.
 python -m benchmarks.run_comparison_suite --tasks C1-03,C2-01,C2-02,C2-03,C2-04,C2-05,C2-06,C2-07,C3-01,C3-05,C4-03 \
   --report benchmarks/optimization_reverification_report.md --json-out benchmarks/optimization_reverification_report.json
 ```
+
+## v1.1+ Empirical Benchmarking Harness
+
+A separate, larger comparison than everything above: **Task Success
+Rate (TSR)** across four retrieval engines - Baseline A (lexical BM25,
+`engines/baseline_rag.py`), Baseline B (vanilla AST BFS, forward-only and
+bidirectional, `engines/baseline_bfs.py`), Prism v1.1+ (the real causal
+engine - Four-Axis Bitmask Knapsack, Continuous Dijkstra, Canonical
+Sinks, Bidirectional Blast Radius - `engines/prism_engine.py`), and a
+hand-curated Oracle (`engines/oracle_engine.py`) - against real,
+pinned-commit corpora (Django, Gin, tRPC; `corpora/resolver.py`), scored
+by an LLM against double-blind, Cohen's-kappa-gated ground truth
+(`ground_truth/`), with diagnostic metrics (`metrics/`: Causal Pipeline
+Integrity, Semantic Redundancy Coefficient, Blast-Radius Caller Capture
+Rate, IDF-weighted Feature Coverage Density, False Positive Rate) and
+bootstrap-CI reporting (`reporting/`) alongside it. Every engine's output
+is serialized through the one canonical renderer
+(`prism.surface.renderer.render`) before it ever reaches an LLM prompt,
+so TSR differences measure retrieval quality, not prompt formatting.
+
+```bash
+pip install -e '.[dev,bench]'   # openai (dev) + rank-bm25/pyyaml/numpy (bench)
+export OPENAI_API_KEY=sk-...    # only needed for a real TSR sweep - omitted/--dry-run skips LLM calls
+
+python -m benchmarks.runner --repo=django --budget=4000 --runs=5 --output=reports/
+python -m benchmarks.runner --mode=ablation --repo=django --output=reports/
+```
+
+**Stated honestly**: the retrieval engines, diagnostic metrics, LLM
+client, scorers, bootstrap CI, and reporting are all real, tested code
+(`tests/benchmarks/test_harness_metrics.py`) with no network/API
+dependency of their own. Two things this repository does *not* ship,
+because fabricating them would be dishonest, not merely incomplete:
+real double-blind human-annotated ground-truth tasks for Django/Gin/tRPC
+(`ground_truth/`'s schema and Cohen's-kappa-gated loader are real; the
+actual annotations need two real human annotators), and a hand-curated
+"optimal" Oracle package set for those same tasks (`oracle_engine.py`'s
+loader is real; the curated answers need a domain expert). Both are
+designed to be supplied by an operator - `--tasks-dir`/`--oracle-packages`
+point at whatever real files exist.

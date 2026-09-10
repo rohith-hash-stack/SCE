@@ -102,6 +102,7 @@ class CallResult:
     total_tokens: int
     cost_usd: float | None
     latency_seconds: float
+    seed: int | None = None
 
 
 class LLMClient:
@@ -128,12 +129,14 @@ class LLMClient:
         user: str,
         temperature: float = 0.0,
         max_tokens: int | None = None,
+        seed: int | None = None,
     ) -> CallResult:
         return self.complete_conversation(
             model,
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
             temperature=temperature,
             max_tokens=max_tokens,
+            seed=seed,
         )
 
     def complete_conversation(
@@ -142,12 +145,21 @@ class LLMClient:
         messages: list[dict[str, str]],
         temperature: float = 0.0,
         max_tokens: int | None = None,
+        seed: int | None = None,
     ) -> CallResult:
         """Like `complete()`, but for multi-turn callers (follow-up
         questions, prompt-chaining) that need to send a full prior
         conversation - a system message plus alternating user/assistant
         turns - rather than a single system+user pair. `complete()` is just
         the one-turn special case of this.
+
+        `seed`: OpenAI's own `seed` request parameter - "best effort"
+        determinism per OpenAI's own documentation (not a hard guarantee
+        across model updates), which is exactly what `benchmarks.tsr.
+        client`'s 5-seed TSR protocol (`seed=42, 43, 44, 45, 46`) needs:
+        repeatable runs to bootstrap a confidence interval over, not
+        bit-identical output. Omitted entirely from the request when
+        `None` (every existing caller of this method is unaffected).
         """
         import openai as openai_module
 
@@ -158,6 +170,7 @@ class LLMClient:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                **({"seed": seed} if seed is not None else {}),
             )
         except openai_module.AuthenticationError as exc:
             raise LLMCallError(
@@ -193,4 +206,5 @@ class LLMClient:
             total_tokens=total_tokens,
             cost_usd=cost,
             latency_seconds=round(latency, 4),
+            seed=seed,
         )

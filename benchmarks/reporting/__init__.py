@@ -1,4 +1,16 @@
-"""Small ASCII-table reporting helpers shared by every benchmark CLI."""
+"""Small ASCII-table reporting helpers shared by every benchmark CLI.
+
+Was a flat `benchmarks/reporting.py` module; promoted to a package (v1.1+
+Empirical Benchmarking Harness) so `benchmarks.reporting.bootstrap`
+(10,000-sample bootstrap confidence intervals) and `benchmarks.reporting.
+report_generator` (`eval_results_v11.json`/`.md`, `ablation_report.md`,
+`failure_analysis.md`) can live alongside it - `shorten`/`format_table`
+stay re-exported here unchanged, so every existing `from benchmarks.
+reporting import format_table, shorten` call site (`run_benchmark.py`,
+`live_eval.py`, `multi_repo_eval.py`, `polyglot_33_matrix.py`,
+`polyglot_prompt_matrix.py`, `large_repo_prompt_matrix.py`,
+`validate_llm_accuracy.py`) is unaffected by the move.
+"""
 from __future__ import annotations
 
 
