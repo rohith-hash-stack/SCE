@@ -11,6 +11,7 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.hierarchy import compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
 from prism.graph.symbol_table import GlobalSymbolTable
+from prism.language_tiers import TIER_1_ONLY_LANGUAGES
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.reconciler import (
@@ -41,20 +42,38 @@ IGNORED_DIRS = {
 }
 
 
-def discover_files(repo_root: str) -> list[str]:
+#: `--language-tier` values (Issues #1/#2/#3): "permissive" (default)
+#: indexes every language Prism supports at whatever precision it
+#: actually has; "tier1-only" restricts indexing to Tier 1 (Semantic &
+#: Instance Precision) languages only - currently just Python - for a
+#: caller that wants to guarantee every symbol in the resulting context
+#: carries Rule A-D/instance-binding-grade resolution, with no
+#: lower-precision (CST-only) language mixed in.
+LANGUAGE_TIER_PERMISSIVE = "permissive"
+LANGUAGE_TIER_TIER1_ONLY = "tier1-only"
+
+
+def discover_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE) -> list[str]:
+    allowed_extensions = (
+        {ext for ext, lang in EXTENSION_LANGUAGE_MAP.items() if lang in TIER_1_ONLY_LANGUAGES}
+        if language_tier == LANGUAGE_TIER_TIER1_ONLY
+        else EXTENSION_LANGUAGE_MAP
+    )
     files: list[str] = []
     for dirpath, dirnames, filenames in os.walk(repo_root):
         dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")]
         for filename in filenames:
-            if any(filename.endswith(ext) for ext in EXTENSION_LANGUAGE_MAP):
+            if any(filename.endswith(ext) for ext in allowed_extensions):
                 files.append(os.path.join(dirpath, filename))
     return sorted(files)
 
 
-def build_pipeline(repo_path: str) -> tuple[ConcreteGraphBuilder, dict[str, set[str]]]:
+def build_pipeline(
+    repo_path: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE
+) -> tuple[ConcreteGraphBuilder, dict[str, set[str]]]:
     """Run Stages 1-3 (parse, link, tag) end to end for one repository."""
     repo_root = os.path.abspath(repo_path)
-    files = discover_files(repo_root)
+    files = discover_files(repo_root, language_tier)
     symbol_table = GlobalSymbolTable()
     builder = ConcreteGraphBuilder(repo_root, symbol_table)
     builder.pass1_collect_definitions(files)
@@ -72,9 +91,16 @@ def main() -> None:
 @main.command()
 @click.argument("repo_path", type=click.Path(exists=True, file_okay=False))
 @click.option("--debug-json", is_flag=True, help="Emit the full dual-layer graph as JSON instead of a summary.")
-def index(repo_path: str, debug_json: bool) -> None:
+@click.option(
+    "--language-tier", "language_tier",
+    type=click.Choice([LANGUAGE_TIER_PERMISSIVE, LANGUAGE_TIER_TIER1_ONLY]),
+    default=LANGUAGE_TIER_PERMISSIVE, show_default=True,
+    help="'permissive' indexes every supported language; 'tier1-only' restricts indexing to Tier 1 "
+    "(Semantic & Instance Precision) languages only - see prism.language_tiers.",
+)
+def index(repo_path: str, debug_json: bool, language_tier: str) -> None:
     """Parse REPO_PATH and summarize the dual-layer semantic graph."""
-    builder, tag_matrix = build_pipeline(repo_path)
+    builder, tag_matrix = build_pipeline(repo_path, language_tier)
 
     if debug_json:
         click.echo(render_json_debug(builder, tag_matrix))
@@ -127,13 +153,21 @@ def index(repo_path: str, debug_json: bool) -> None:
     "(infallible-leaf dependencies are always pruned to a compact signature regardless of this flag, "
     "since packing is always budget-constrained - see prism.slicer.knapsack).",
 )
+@click.option(
+    "--language-tier", "language_tier",
+    type=click.Choice([LANGUAGE_TIER_PERMISSIVE, LANGUAGE_TIER_TIER1_ONLY]),
+    default=LANGUAGE_TIER_PERMISSIVE, show_default=True,
+    help="'permissive' indexes every supported language; 'tier1-only' restricts indexing to Tier 1 "
+    "(Semantic & Instance Precision) languages only - see prism.language_tiers.",
+)
 def query(
     repo_path: str, symbol: str, budget: int, lambda_weight: float, as_json: bool, output: str | None,
     trace_files: tuple[str, ...], runtime_bias: float, strict_trace_validation: bool, query_type: str,
+    language_tier: str,
 ) -> None:
     """Extract a variable-resolution context package for SYMBOL (a fully
     qualified name, e.g. `src.controllers.checkout.process_checkout`)."""
-    builder, tag_matrix = build_pipeline(repo_path)
+    builder, tag_matrix = build_pipeline(repo_path, language_tier)
 
     if symbol not in builder.symbol_table:
         click.echo(f"error: symbol '{symbol}' not found in {repo_path}", err=True)

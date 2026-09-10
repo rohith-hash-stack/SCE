@@ -29,6 +29,23 @@ the extraction pipeline itself. Parsing is done with
 JavaScript, TypeScript/TSX, Go, Java, C#); Python's native `ast` module
 drives some of the L0-L3 compression transforms.
 
+### Precision tiers
+
+Language support is not uniform, and `src/prism/language_tiers.py` is the
+source of truth for exactly what each language gets:
+
+| Tier | Languages | What it means |
+|---|---|---|
+| **Tier 1 - Semantic & Instance Precision** | Python | Full AST instance binding, Rule A-D reference-chain resolution, relative-import/barrel-file resolution. |
+| **Tier 2 - Structural & Lexical** | JavaScript, TypeScript/TSX, Java, C# | CST-based import/export and class-relation (`EXTENDS`/`IMPLEMENTS`) linking where applicable; no instance-based binding precision. |
+| **Tier 3 - Lexical & Package-level** | Go | CST-based package/import resolution and compiler-directive/struct-tag capture; no class-relation edges (Go has no classes), no instance binding. |
+
+A caller that needs every symbol in its context to carry Tier 1-grade
+resolution can pass `--language-tier tier1-only` to `prism index`/`prism
+query`, restricting indexing to Tier 1 languages only (currently Python)
+instead of the default `permissive` behavior (index every supported
+language at whatever precision it actually has).
+
 ## Install
 
 ```bash

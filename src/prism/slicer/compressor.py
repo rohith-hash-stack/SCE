@@ -16,6 +16,7 @@ import ast
 import copy
 import textwrap
 from dataclasses import dataclass, field
+from typing import Protocol, runtime_checkable
 
 from tree_sitter import Node
 
@@ -505,8 +506,38 @@ def compress_universal(source: str, def_node: Node, language_id: str, resolution
     return slicer.extract_contract(source_bytes, def_node, language_id, tags=context.tags, callees=context.callees)
 
 
+@runtime_checkable
+class CompressionProvider(Protocol):
+    """Standardized compression-engine interface (Issues #1/#2/#3): every
+    AST/CST compression driver this codebase has - the native-`ast`-based
+    Python path (`compress_python`) and the Tree-sitter-CST-based
+    `UniversalSlicer` path other languages route through
+    (`compress_universal`/`compress_generic`) - already converges on this
+    exact single-method shape via `ASTCompressor.compress` below; this
+    `Protocol` makes that convergence an explicit, checkable contract
+    instead of an implicit one, so a caller (or a future third
+    compression backend) can depend on `CompressionProvider` rather than
+    on `ASTCompressor` specifically. `ASTCompressor` satisfies this
+    structurally (a `Protocol` needs no explicit inheritance) - see
+    `test_language_tiers.py`'s `isinstance(ASTCompressor(),
+    CompressionProvider)` check.
+    """
+
+    def compress(
+        self,
+        language_id: str,
+        source: str,
+        name: str,
+        line_range: tuple[int, int],
+        resolution: int,
+        context: CompressionContext | None = None,
+        def_node: Node | None = None,
+    ) -> str: ...
+
+
 class ASTCompressor:
-    """Language-dispatching entry point used by the knapsack packer."""
+    """Language-dispatching entry point used by the knapsack packer -
+    implements `CompressionProvider` (see that Protocol's own docstring)."""
 
     def compress(
         self,
