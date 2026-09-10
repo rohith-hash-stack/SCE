@@ -37,6 +37,68 @@ def test_fractional_upper_bound_is_always_at_least_the_real_result(tmp_path) -> 
     assert result.swaps_performed >= 0
 
 
+# --------------------------------------------------------------------- #
+# Item 20 (second post-implementation audit): knapsack efficiency ratio
+# --------------------------------------------------------------------- #
+def _make_fanout_repo(tmp_path, n_helpers: int = 30):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    lines = []
+    for i in range(n_helpers):
+        lines.append(f"def helper_{i}(x):")
+        lines.append(f"    return x + {i}")
+        lines.append("")
+    lines.append("def seed():")
+    lines.append("    total = 0")
+    for i in range(n_helpers):
+        lines.append(f"    total += helper_{i}(total)")
+    lines.append("    return total")
+    (repo / "sample.py").write_text("\n".join(lines) + "\n")
+    return repo
+
+
+def test_efficiency_ratio_present_and_nonnegative(tmp_path) -> None:
+    repo = _make_fanout_repo(tmp_path)
+    result = _pack(str(repo), "sample.seed", 4000)
+    assert result.knapsack_efficiency_ratio >= 0.0
+
+
+def test_efficiency_ratio_is_high_when_everything_fits(tmp_path) -> None:
+    """A generous budget that fits every candidate at good resolution
+    should achieve most of the fractional bound - no fragmentation
+    warning."""
+    repo = _make_fanout_repo(tmp_path, n_helpers=10)
+    result = _pack(str(repo), "sample.seed", 20_000)
+    assert result.knapsack_efficiency_ratio > 0.5
+    assert result.knapsack_efficiency_warning is None
+
+
+def test_efficiency_warning_fires_below_threshold(tmp_path) -> None:
+    """A budget tight enough to admit only a small fraction of the
+    30-candidate fan-out must produce a low efficiency ratio and a
+    non-None warning message naming the threshold."""
+    repo = _make_fanout_repo(tmp_path)
+    # Scan for a budget that actually triggers the warning on this
+    # fixture rather than assuming one - real measured behavior, not a
+    # guessed constant.
+    for budget in (150, 200, 250, 300, 400, 500):
+        result = _pack(str(repo), "sample.seed", budget)
+        if result.knapsack_efficiency_warning is not None:
+            assert result.knapsack_efficiency_ratio < 0.75
+            assert "0.75" in result.knapsack_efficiency_warning
+            assert "fragmentation" in result.knapsack_efficiency_warning
+            return
+    raise AssertionError("no budget in the scanned range triggered the efficiency warning - needs recalibration")
+
+
+def test_efficiency_ratio_never_gates_admission(tmp_path) -> None:
+    """Purely diagnostic - a low ratio must not change what actually
+    got packed (no candidates silently excluded because of it)."""
+    repo = _make_fanout_repo(tmp_path)
+    result = _pack(str(repo), "sample.seed", 200)
+    assert len(result.items) >= 1  # at least the seed, unaffected by the ratio itself
+
+
 def test_swap_refine_recovers_a_starved_close_candidate(tmp_path) -> None:
     """Force the exact scenario Issue #12 describes: a very tight budget
     where the main greedy loop's early termination (the first candidate

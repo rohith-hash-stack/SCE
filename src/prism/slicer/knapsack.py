@@ -186,6 +186,18 @@ class PackResult:
     #: property so both names are visible on a plain dataclass
     #: (`asdict`, JSON serialization, ...) without special-casing.
     fatal_seed_overflow: bool = False
+    #: Item 20: `sum(Score(Selected)) / fractional_upper_bound` - see
+    #: `ContextKnapsackPacker._knapsack_efficiency_ratio`'s own docstring.
+    #: Diagnostic only.
+    knapsack_efficiency_ratio: float = 1.0
+    #: Item 20: set when `knapsack_efficiency_ratio` falls below
+    #: `ContextKnapsackPacker.EFFICIENCY_RATIO_WARNING_THRESHOLD` (0.75) -
+    #: a signal of high item fragmentation (many small, awkwardly-sized
+    #: candidates the greedy/swap-refine passes couldn't pack
+    #: efficiently), surfaced the same way `RuntimeTrust`'s own low-trust
+    #: warning is (`prism.runtime.reconciler`) - a human-readable string
+    #: when the condition holds, `None` otherwise.
+    knapsack_efficiency_warning: str | None = None
     #: Issue A3: True when the final rendered package exceeds `budget` for
     #: any reason - computed independently from `allocated_tokens >
     #: budget` rather than aliased to `budget_exceeded`, even though in
@@ -553,6 +565,15 @@ class ContextKnapsackPacker:
         )
 
         fractional_upper_bound = self._fractional_relaxation_bound(candidates, distances)
+        efficiency_ratio = self._knapsack_efficiency_ratio(items, seed, distances, fractional_upper_bound)
+        efficiency_warning = (
+            f"Knapsack efficiency ratio {efficiency_ratio:.2f} is below the "
+            f"{self.EFFICIENCY_RATIO_WARNING_THRESHOLD:.2f} warning threshold - high item "
+            "fragmentation (many small, awkwardly-sized candidates the greedy/swap-refine "
+            "passes couldn't pack efficiently against the fractional-relaxation upper bound)."
+            if efficiency_ratio < self.EFFICIENCY_RATIO_WARNING_THRESHOLD
+            else None
+        )
 
         preserved = self._preserved_semantics(items, candidates)
         return PackResult(
@@ -570,6 +591,8 @@ class ContextKnapsackPacker:
             truncation_occurred=total_tokens > self.budget,
             seed_compression_level=seed_compression_level,
             fatal_seed_overflow=fatal_seed_overflow,
+            knapsack_efficiency_ratio=efficiency_ratio,
+            knapsack_efficiency_warning=efficiency_warning,
         )
 
     #: Item 18 (third post-implementation audit) / Progressive Seed
@@ -789,6 +812,41 @@ class ContextKnapsackPacker:
                 value += item_value * (remaining / self.APPROX_L3_WEIGHT_TOKENS)
                 remaining = 0.0
         return round(value, 4)
+
+    #: Item 20 (second post-implementation audit): below this
+    #: `knapsack_efficiency_ratio`, the real 0/1 admission achieved
+    #: meaningfully less than the fractional-relaxation upper bound
+    #: predicted was achievable - a signal of high item fragmentation
+    #: (many small, awkwardly-sized candidates the greedy/swap-refine
+    #: passes couldn't pack efficiently), not an error.
+    EFFICIENCY_RATIO_WARNING_THRESHOLD = 0.75
+
+    def _knapsack_efficiency_ratio(
+        self, items: list[PackedItem], seed: str, distances: dict[str, float], fractional_upper_bound: float
+    ) -> float:
+        """Item 20: `EfficiencyRatio = sum(Score(Selected)) / Bound_frac` -
+        how much of `_fractional_relaxation_bound`'s theoretical upper
+        bound the real, integer (0/1, resolution-tiered) admission
+        actually achieved, using the *same* inverse-distance value proxy
+        that bound itself uses so the two numbers are directly
+        comparable. Diagnostic only, like the bound it's computed from -
+        never gates a real admission decision.
+
+        Not a strict `<= 1.0` guarantee: `fractional_upper_bound` prices
+        every candidate at a flat `APPROX_L3_WEIGHT_TOKENS` proxy weight
+        (cheap to compute without rendering every candidate), while real
+        admission costs vary per resolution tier and can occasionally be
+        *cheaper* than that flat proxy - reported as measured, not
+        artificially clamped, since a ratio above 1.0 is itself a real,
+        legitimate signal (the flat-weight model under-estimated how
+        much could actually fit), not a bug to hide.
+        """
+        if fractional_upper_bound <= 0:
+            return 1.0
+        selected_value = sum(
+            1.0 / (1.0 + distances.get(item.symbol, 0.0)) for item in items if item.symbol != seed
+        )
+        return round(selected_value / fractional_upper_bound, 4)
 
     @staticmethod
     def _relative_path(builder: ConcreteGraphBuilder, file_path: str) -> str:
