@@ -528,6 +528,40 @@ didn't) this pass rescued in a given run; `fuzzy_matched_edges` persists
 across runs the same way `unobserved_edges` does, pruned once a later run
 resolves the same pair exactly.
 
+### 5.6 Incremental File Caching (Item 12)
+
+`prism.runtime.index_cache` gives `build_pipeline` (`prism.cli`) a
+whole-repository cache, keyed on a SHA-256 content hash per discovered
+file, persisted to SQLite at `.prism/cache/index.db`. A cache hit
+requires an *exact* match of the full file set and every hash - any
+addition, removal, or content change invalidates the whole cache and
+triggers a full rebuild (which then overwrites the cache for next time).
+
+This is deliberately whole-repository, not per-file incremental: Pass 2's
+cross-file linking (imports, instance binding, Go's repo-wide type
+registries - Section 5 of this document's own Item 5/Issue #7 material)
+means a single changed file can change what an unrelated file's call
+sites resolve to, and nothing in this codebase tracks that dependency
+graph. A cache that tried to re-link only the changed files would risk
+silently stale edges elsewhere; this module refuses that trade and only
+ever serves a snapshot of a repository state it has verified, file for
+file, is bit-for-bit what it indexed last time.
+
+What's cached: the concrete graph (`node_link_data`, with `tags`/
+`line_range` given explicit JSON-safe/restore handling), the symbol
+table, the tag matrix, `index_errors`, and the Go receiver-call
+resolution counters `go_call_resolution_ratio` derives from. What's
+*not* cached, and is cheaply rebuilt on every hit instead: `ParsedFile`
+(the tree-sitter CST + source bytes) - a native, non-serializable object
+`prism.slicer` needs to render real L0-L3 context - reusing the very
+same bytes this module already read to compute the content hash, so a
+cache hit costs exactly one file read per file, not two.
+
+Measured on a real clone of `gin-gonic/gin` (1,474 symbols): a cold
+index takes ~3.8s; a warm (cache-hit) re-index takes ~0.14s - comfortably
+under the <500ms target, and correct (identical symbol/edge sets) by
+construction of the hash-match precondition above.
+
 ## 6. Invariant Summary
 
 The six formal invariants this design guarantees, and where each is proven

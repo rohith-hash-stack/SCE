@@ -14,6 +14,7 @@ from prism.graph.symbol_table import GlobalSymbolTable
 from prism.language_tiers import TIER_1_ONLY_LANGUAGES
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
 from prism.runtime.contract_cache import compute_or_load_contracts
+from prism.runtime.index_cache import load_pipeline_from_cache, save_pipeline_to_cache
 from prism.runtime.reconciler import (
     GraphReconciler,
     heal_and_apply_runtime_state,
@@ -93,16 +94,37 @@ def discover_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE
 
 
 def build_pipeline(
-    repo_path: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE
+    repo_path: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE, use_cache: bool = True
 ) -> tuple[ConcreteGraphBuilder, dict[str, set[str]]]:
-    """Run Stages 1-3 (parse, link, tag) end to end for one repository."""
+    """Run Stages 1-3 (parse, link, tag) end to end for one repository.
+
+    Item 12 (second post-implementation audit): when `use_cache` (default
+    True), a whole-repository content-hash fingerprint match against
+    `.prism/cache/index.db` (`prism.runtime.index_cache`) skips parsing
+    and linking entirely and rehydrates the exact same `(builder,
+    tag_matrix)` shape from the last cached run - see that module's own
+    docstring for why this is a whole-repo fingerprint, not per-file
+    incremental linking. Any cache miss, corruption, or `use_cache=False`
+    falls straight through to the full Stage 1-3 run below, and a fresh
+    result is always cached afterward for next time.
+    """
     repo_root = os.path.abspath(repo_path)
     files = discover_files(repo_root, language_tier)
+
+    if use_cache:
+        cached = load_pipeline_from_cache(repo_root, files, language_tier)
+        if cached is not None:
+            return cached
+
     symbol_table = GlobalSymbolTable()
     builder = ConcreteGraphBuilder(repo_root, symbol_table)
     builder.pass1_collect_definitions(files)
     builder.pass2_resolve_calls(files)
     tag_matrix = TaggingEngine().tag_graph(builder)
+
+    if use_cache:
+        save_pipeline_to_cache(repo_root, files, language_tier, builder, tag_matrix)
+
     return builder, tag_matrix
 
 
