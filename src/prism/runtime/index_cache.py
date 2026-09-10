@@ -54,7 +54,8 @@ from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo
-from prism.parser.tree_sitter_loader import parse_source
+from prism.parser.queries import run_query
+from prism.parser.tree_sitter_loader import ParsedFile, parse_source
 
 try:
     import networkx as nx
@@ -253,6 +254,43 @@ def save_pipeline_to_cache(
         return
 
 
+def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symbols: list) -> None:
+    """Repopulates `builder._def_nodes` for one freshly-re-parsed file's
+    own symbols on a cache hit.
+
+    `_def_nodes` (`ConcreteGraphBuilder.def_node`, a *public* accessor
+    `prism.graph.contracts`/`prism.graph.blueprint`/`prism.semantics`'s
+    four-axis extractors all call on every symbol) is Pass 1's own
+    bookkeeping dict, entirely separate from the cached graph/symbol-table
+    snapshot this module persists - a real gap caught only once
+    `prism.semantics` started exercising `def_node()` against a
+    cache-hit builder for the *second* time a fixture repo was indexed in
+    one process (the first index is always a cold miss, so this was
+    invisible to every test that only builds a repo once).
+
+    Rather than re-deriving each symbol's qualified name from scratch
+    (duplicating `ConcreteGraphBuilder._register_definition`'s own
+    enclosing-class/module logic a second, driftable way), this reuses
+    the *cached* `SymbolInfo.line_range` as the join key: the same
+    `definitions` tree-sitter query Pass 1 itself runs is run again here
+    against the fresh parse tree, and each candidate node is matched back
+    to its cached `SymbolInfo` purely by 1-indexed start line - a symbol
+    whose line moved (the file changed) is definitionally a cache miss
+    already handled upstream, so an exact line match is always available
+    for anything that reaches this function.
+    """
+    if not symbols:
+        return
+    by_start_line = {s.line_range[0]: s for s in symbols}
+    captures = run_query(parsed.language_id, "definitions", parsed.root_node)
+    for key in ("def.class", "def.interface", "def.function"):
+        for node in captures.get(key, []):
+            start_line = node.start_point[0] + 1
+            symbol = by_start_line.get(start_line)
+            if symbol is not None:
+                builder._def_nodes[symbol.qualified_name] = node
+
+
 def load_pipeline_from_cache(
     repo_root: str, files: list[str], language_tier: str
 ) -> tuple[ConcreteGraphBuilder, dict[str, set[str]]] | None:
@@ -328,12 +366,17 @@ def load_pipeline_from_cache(
         # exactly matching what a full rebuild would have left in
         # `_parsed_files`.
         error_files = {e["file"] for e in builder.index_errors}
+        symbols_by_file: dict[str, list] = {}
+        for symbol in symbol_table:
+            symbols_by_file.setdefault(symbol.file, []).append(symbol)
+
         for file_path, (_hash, data) in current_with_bytes.items():
             if file_path in error_files:
                 continue
             parsed = parse_source(file_path, data)
             if parsed is not None:
                 builder._parsed_files[file_path] = parsed
+                _rehydrate_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
 
         tag_matrix = {k: set(v) for k, v in json.loads(tag_matrix_json).items()}
         return builder, tag_matrix

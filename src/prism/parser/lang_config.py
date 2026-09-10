@@ -145,6 +145,23 @@ ASSIGNMENT_NODE_TYPE = {
     LanguageID.JAVA: "assignment_expression",
     LanguageID.CSHARP: "assignment_expression",
 }
+# `self.x += 1` / `this.count += 1` - a real, distinct grammar node from
+# plain `ASSIGNMENT_NODE_TYPE` in every language here (confirmed
+# directly), not merely an `assignment` with a compound operator token -
+# `prism.graph.contracts._state_mutations` previously missed every
+# augmented-assignment mutation entirely (a real, pre-existing gap this
+# table closes: `self.count += 1` silently didn't count as a state
+# mutation, which could under-report impurity). Same `left`/`right` field
+# shape as `ASSIGNMENT_NODE_TYPE`, confirmed directly, so no separate
+# unwrapping logic is needed at any call site.
+AUGMENTED_ASSIGNMENT_NODE_TYPE = {
+    LanguageID.PYTHON: "augmented_assignment",
+    LanguageID.JAVASCRIPT: "augmented_assignment_expression",
+    LanguageID.TYPESCRIPT: "augmented_assignment_expression",
+    LanguageID.TSX: "augmented_assignment_expression",
+    LanguageID.JAVA: "assignment_expression",  # Java has no distinct node - `+=` still parses as `assignment_expression`
+    LanguageID.CSHARP: "assignment_expression",
+}
 # `const x = ...` / `let x = ...` (JS/TS/TSX) and `T x = ...;` (Java) both
 # wrap a single binding in its own `variable_declarator` node (`name`/`value`
 # fields) - distinct from `ASSIGNMENT_NODE_TYPE`'s plain `x = ...`

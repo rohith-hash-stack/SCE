@@ -33,6 +33,7 @@ from tree_sitter import Node
 from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
     ASYNC_KEYWORD_NODE_TYPES,
+    AUGMENTED_ASSIGNMENT_NODE_TYPE,
     CALL_NODE_TYPE,
     CATCH_NODE_TYPES,
     CONDITIONAL_NODE_TYPES,
@@ -320,11 +321,21 @@ class ContractExtractor:
     def _state_mutations(self, def_node: Node, parsed: ParsedFile) -> list[str]:
         lang = parsed.language_id
         assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+        augmented_assign_type = AUGMENTED_ASSIGNMENT_NODE_TYPE.get(lang)
         self_tokens = SELF_TOKEN_TEXT.get(lang, set())
         mutations: set[str] = set()
 
-        if assign_type:
-            for assign in iter_scoped_nodes(def_node, {assign_type}, lang):
+        assign_types = {t for t in (assign_type, augmented_assign_type) if t}
+        if assign_types:
+            # `self.count += 1` (Item v1.1 finding: a real, pre-existing
+            # gap - augmented assignment is a distinct grammar node from
+            # plain `=` assignment in every language here, confirmed
+            # directly, and was previously invisible to this check
+            # entirely, silently under-reporting impurity) shares the
+            # exact same `left`/`right` field shape as plain assignment,
+            # so both node types are scanned together with no separate
+            # unwrapping logic needed.
+            for assign in iter_scoped_nodes(def_node, assign_types, lang):
                 target = assign.child_by_field_name("left")
                 if target is None:
                     continue

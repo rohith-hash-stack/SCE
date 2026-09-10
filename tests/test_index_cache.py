@@ -225,3 +225,34 @@ def test_index_cache_module_functions_are_directly_usable(tmp_path):
     loaded_builder, loaded_tag_matrix = loaded
     assert sorted(loaded_builder.symbol_table.all_qualified_names()) == sorted(builder.symbol_table.all_qualified_names())
     assert loaded_tag_matrix == tag_matrix
+
+
+def test_cache_hit_rehydrates_def_node_for_every_symbol(tmp_path):
+    """Real bug caught during v1.1 development: a cache-hydrated builder
+    never repopulated `_def_nodes` at all (only `.graph`/`.symbol_table`/
+    `._parsed_files`) - `builder.def_node(...)` silently returned `None`
+    for every symbol on the *second* `build_pipeline` call against an
+    unchanged repo within one process. Invisible to this suite until
+    `prism.semantics`'s four-axis extractors started calling `def_node()`
+    against a cache-hit builder for the first time, since every other
+    caller up to that point either only ever indexed a given repo once
+    per process (most tests, unique `tmp_path` each) or never happened to
+    call `def_node()` on a *second*, cache-hit build. `contracts.py`'s
+    `compute_or_load_contracts`/`prism.graph.blueprint.
+    mine_sibling_blueprint` both depend on this same accessor for every
+    symbol, so this was a real, silent latent correctness gap for any
+    caller (the MCP server's `GraphCache`, in particular) that re-indexes
+    an already-cached repo within one long-lived process.
+    """
+    repo = _order_repo(tmp_path)
+    build_pipeline(str(repo))  # populates the cache
+    builder, _tag_matrix = build_pipeline(str(repo))  # cache hit
+
+    for symbol in builder.symbol_table:
+        if symbol.kind not in ("function", "method", "class"):
+            continue
+        def_node = builder.def_node(symbol.qualified_name)
+        assert def_node is not None, f"def_node() returned None for {symbol.qualified_name} after a cache hit"
+        name_node = def_node.child_by_field_name("name")
+        assert name_node is not None
+        assert name_node.text.decode("utf-8") == symbol.qualified_name.rsplit(".", 1)[-1]
