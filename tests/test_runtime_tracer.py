@@ -299,14 +299,14 @@ def test_knapsack_prioritizes_confirmed_runtime_path_under_constrained_budget(tm
 
     # A tight budget (empirically: room for the seed plus exactly one more
     # candidate at this fixture's exact token cost) must admit the
-    # runtime-confirmed helper_a, not the unconfirmed helper_b. 150, not
-    # 100 - Issue A1 made the regex-fallback tokenizer deliberately
-    # fail-closed (conservatively over-count short identifiers like
-    # `helper_a`/`create_order` rather than under-count), so the same
-    # "room for exactly one extra candidate" window now sits higher than
-    # it did under the pre-A1 fallback; re-measured directly against this
-    # fixture, not guessed.
-    tight = ContextKnapsackPacker(token_budget=150).pack(seed, builder, tag_matrix, engine)
+    # runtime-confirmed helper_a, not the unconfirmed helper_b. 120, not
+    # 150 - the second post-implementation audit's Item 2 (compound-
+    # operator recognition in the fallback tokenizer, e.g. counting `->`
+    # as one token instead of two) lowered fallback counts slightly
+    # relative to Issue A1's own earlier-calibrated 150, so the "room for
+    # exactly one extra candidate" window shifted again; re-measured
+    # directly against this fixture, not guessed.
+    tight = ContextKnapsackPacker(token_budget=120).pack(seed, builder, tag_matrix, engine)
     packed_symbols = {item.symbol for item in tight.items}
     assert "orders.helper_a" in packed_symbols
     assert "orders.helper_b" not in packed_symbols

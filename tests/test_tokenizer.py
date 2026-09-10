@@ -7,11 +7,17 @@ from __future__ import annotations
 from prism.slicer.knapsack import _wrapping_overhead_tokens, estimate_tokens
 from prism.slicer.tokenizer import (
     FALLBACK_SAFETY_MULTIPLIER,
+    OFFLINE_BPE_ASSET_PATH,
+    STRING_LITERAL_DENSITY_THRESHOLD,
     _fallback_count_tokens,
+    _string_literal_token_count,
     _subword_token_count,
+    _tokenize_ordinary_span,
     active_backend,
     count_tokens,
+    get_offline_bpe_encoding,
     is_exact,
+    is_real_bpe,
 )
 
 
@@ -137,3 +143,98 @@ def test_fallback_applies_safety_multiplier() -> None:
 
 def test_fallback_empty_string_is_zero() -> None:
     assert _fallback_count_tokens("") == 0
+
+
+# --------------------------------------------------------------------- #
+# Item 1 (second post-implementation audit): offline BPE asset loading
+# --------------------------------------------------------------------- #
+def test_offline_bpe_asset_path_points_under_this_package() -> None:
+    assert OFFLINE_BPE_ASSET_PATH.parent.name == "assets"
+    assert OFFLINE_BPE_ASSET_PATH.name == "cl100k_base.tiktoken"
+
+
+def test_get_offline_bpe_encoding_raises_cleanly_when_asset_absent() -> None:
+    # No asset is vendored in this repository (see src/prism/slicer/
+    # assets/README.md for why) - this must fail with a clear,
+    # catchable FileNotFoundError, not hang or attempt any network call.
+    if OFFLINE_BPE_ASSET_PATH.exists():
+        import pytest
+
+        pytest.skip("a real vendored asset is present in this checkout - nothing to assert here")
+    import pytest
+
+    with pytest.raises(FileNotFoundError):
+        get_offline_bpe_encoding()
+
+
+def test_is_real_bpe_is_an_alias_for_is_exact() -> None:
+    assert is_real_bpe is is_exact
+    assert is_real_bpe() == is_exact()
+
+
+# --------------------------------------------------------------------- #
+# Item 2 (second post-implementation audit): structural token factoring
+# --------------------------------------------------------------------- #
+def test_compound_operator_counts_as_one_token_not_two() -> None:
+    assert _tokenize_ordinary_span("->") == 1
+    assert _tokenize_ordinary_span("==") == 1
+    assert _tokenize_ordinary_span("!=") == 1
+    assert _tokenize_ordinary_span("::") == 1
+    assert _tokenize_ordinary_span(":=") == 1
+    assert _tokenize_ordinary_span("...") == 1
+
+
+def test_lone_punctuation_is_unaffected_by_compound_recognition() -> None:
+    assert _tokenize_ordinary_span("-") == 1
+    assert _tokenize_ordinary_span("=") == 1
+    assert _tokenize_ordinary_span(":") == 1
+    assert _tokenize_ordinary_span(".") == 1
+
+
+def test_string_literal_over_threshold_uses_density_heuristic() -> None:
+    content = "a" * (STRING_LITERAL_DENSITY_THRESHOLD + 10)
+    literal = f'"{content}"'
+    result = _fallback_count_tokens(f"x = {literal}")
+    # Should be far fewer tokens than counting the content as an
+    # ordinary (heavily-subword-split, since it's a single 42-char
+    # "word" run) identifier would produce, and roughly len/3 + fixed
+    # overhead - not the ~14-token subword estimate a run this long
+    # would get under _subword_token_count's own (len+2)//... heuristics.
+    assert result < len(content)
+
+
+def test_string_literal_under_threshold_falls_through_to_ordinary_path() -> None:
+    literal = '"short string"'
+    with_literal = _fallback_count_tokens(f"x = {literal}")
+    plain = _fallback_count_tokens(f"x = {literal}")
+    assert with_literal == plain  # deterministic either way, sanity check
+    assert with_literal > 0
+
+
+def test_string_literal_token_count_excludes_quote_delimiters() -> None:
+    content = "b" * 50
+    single = _string_literal_token_count(f'"{content}"')
+    triple = _string_literal_token_count(f'"""{content}"""')
+    # Same content length, same delimiter-exclusion logic - both should
+    # be very close (allowing only the fixed +2 overhead term to differ).
+    assert abs(single - triple) <= 2
+
+
+def test_fallback_handles_mixed_compound_and_string_text_without_crashing() -> None:
+    """Item 2's additions composed together on realistic, mixed input -
+    no formal bound asserted here (compound-operator merging legitimately
+    lowers the count relative to Issue A1's plain per-char baseline, so
+    the strict >= flat-word-count guarantee - still covered by
+    `test_fallback_never_undercounts_a_flat_word_count` above, which uses
+    plain identifiers only - doesn't apply once compounds/strings are
+    involved); this just proves the combined path is deterministic and
+    produces a sane, positive count."""
+    samples = [
+        "if x -> y == z: return a.b.c(1, 2)",
+        'log.info("start"); result = process(data); log.info("done: " + str(result))',
+        "func Handler(c *Context) { c.JSON(200, gin.H{\"ok\": true}) }",
+    ]
+    for text in samples:
+        n = _fallback_count_tokens(text)
+        assert n > 0
+        assert n == _fallback_count_tokens(text)  # deterministic

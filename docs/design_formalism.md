@@ -204,6 +204,32 @@ if DataFlowCentrality(v) >= DATA_FLOW_CENTRALITY_THRESHOLD (2):
 encoding, falling back to a deterministic regex approximation only if that
 encoding table can't be loaded).
 
+`prism.slicer.tokenizer` tries, in order: (1) a vendored, offline copy of
+`cl100k_base`'s merge-rank table at `src/prism/slicer/assets/
+cl100k_base.tiktoken`, if present (`get_offline_bpe_encoding`, Item 1 -
+zero network calls, this repository does not currently ship the ~1.6MB
+asset itself, see that directory's own README); (2) `tiktoken.get_encoding`'s
+normal network-fetching path; (3) the regex fallback. That fallback is
+deliberately fail-*closed* (Issue A1, refined by Item 2): a `\w+`
+identifier run is split into a conservative subword-piece estimate
+(snake_case/camelCase boundaries, `(len(digits)+2)//3` for multi-digit
+numbers) rather than counted as one flat token; a recognized multi-char
+compound operator (`->`, `==`, `::`, `:=`, `...`, ...) counts as one
+token, matching how a real BPE vocabulary trained on code typically
+merges these, rather than one token per character; a quoted string
+literal over `STRING_LITERAL_DENSITY_THRESHOLD` (32) characters is
+counted by byte density (`len(content)//3`) instead of run through
+identifier-splitting logic calibrated for code, not prose/blob content;
+a fixed 1.08x ceiling multiplier is applied to the summed total as an
+explicit buffer. This fallback's `>= real_bpe_count` guarantee is proven
+directly for plain identifiers (`tests/test_tokenizer.py`'s flat-word-
+count regression) but has **not** been empirically validated against a
+real BPE encoding across a broad corpus in this project's own
+development environment - see `tests/test_bpe_vs_fallback.py`'s own
+honest-skip behavior and that file's docstring for why (no network path
+to a real encoding exists in this sandbox, and no offline asset is
+vendored here for the same reason `assets/README.md` explains).
+
 ### 4.1 The 0/1 formulation
 
 For candidate `i` with tier set `J_i subseteq {L0, L1, L2, L3}`, weight
