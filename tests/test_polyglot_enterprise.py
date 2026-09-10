@@ -489,7 +489,10 @@ def test_java_knapsack_l1_output_uses_universal_slicer_not_generic_fallback(tmp_
     assert item.resolution != 0
     assert "logger.info" not in item.content  # noisy call pruned
     assert "rawTotal" not in item.content  # pure-math statement pruned
-    assert "audit(/* ... */)" in item.content  # retained call's args collapsed
+    # Item 11 (second post-implementation audit): L1 now retains real
+    # call arguments (matching compress_python's L1 parity), not a
+    # collapsed `(/* ... */)` placeholder.
+    assert "audit(amount)" in item.content
 
 
 def test_csharp_knapsack_l1_output_reparses_cleanly(csharp_repo):

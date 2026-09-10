@@ -49,6 +49,22 @@ _BLOCK_NODE_TYPES: dict[str, frozenset[str]] = {
     LanguageID.CSHARP: frozenset({"block"}),
 }
 
+# Item 11 (second post-implementation audit): comment/doc-block node
+# types, stripped at L1 (`_classify` below) the same way
+# `compress_python`'s L1 already strips Python docstrings - confirmed
+# directly that every supported grammar but Java's names its comment
+# node(s) `"comment"` uniformly; Java's grammar splits line vs. block
+# comments into two distinct node types instead.
+_COMMENT_NODE_TYPES: dict[str, frozenset[str]] = {
+    LanguageID.PYTHON: frozenset({"comment"}),
+    LanguageID.JAVASCRIPT: frozenset({"comment"}),
+    LanguageID.TYPESCRIPT: frozenset({"comment"}),
+    LanguageID.TSX: frozenset({"comment"}),
+    LanguageID.GO: frozenset({"comment"}),
+    LanguageID.JAVA: frozenset({"line_comment", "block_comment"}),
+    LanguageID.CSHARP: frozenset({"comment"}),
+}
+
 # Nodes that are not themselves a statement-list, but may contain one
 # (possibly nested inside further compound/clause children of their own) -
 # recursed through to find every nested block, without being pruned as a
@@ -156,21 +172,6 @@ _EMPTY_BLOCK_PLACEHOLDER: dict[str, bytes] = {
 
 # A collapsed call's replacement argument list. Python's bare `...` is a
 # real, valid standalone expression (the `Ellipsis` literal), so `(...)`
-# alone is syntactically fine there - but in JS/TS/Go, `...` is *only*
-# valid as a spread/rest prefix to another expression (`...x`), never on
-# its own; a bare `(...)` is a genuine syntax error in those three
-# grammars (confirmed the hard way: it reparsed with 5 ERROR nodes). An
-# empty argument list with a comment inside is valid everywhere else.
-_ARG_COLLAPSE_PLACEHOLDER: dict[str, bytes] = {
-    LanguageID.PYTHON: b"(...)",
-    LanguageID.JAVASCRIPT: b"(/* ... */)",
-    LanguageID.TYPESCRIPT: b"(/* ... */)",
-    LanguageID.TSX: b"(/* ... */)",
-    LanguageID.GO: b"(/* ... */)",
-    LanguageID.JAVA: b"(/* ... */)",
-    LanguageID.CSHARP: b"(/* ... */)",
-}
-
 # The exception-raising statement type per language - Go has none of its
 # own (see _ALWAYS_RETAIN_TYPES above), so it's simply absent here.
 _RAISE_LIKE_TYPES: dict[str, str] = {
@@ -305,28 +306,14 @@ def _csharp_declarator_value(declarator: Node) -> Node | None:
     return named[1] if len(named) > 1 else None
 
 
-def _find_collapsible_call(node: Node, language_id: str) -> Node | None:
-    """The call (or JS/TS `new` expression) whose *arguments* should be
-    collapsed to `(...)` for a retained statement - preserving call
-    *shape* without the literal argument data, matching the legacy
-    AST-based L1 compressor's own `_strip_call_args` behavior. Covers a
-    bare call/assignment statement (via `_find_call_in_simple_statement`)
-    and a return/raise/throw whose value is directly a call.
-    """
-    if node.type == "return_statement" or node.type == _RAISE_LIKE_TYPES.get(language_id):
-        value = _unwrap_await(node.named_children[0] if node.named_children else None)
-        # "new_expression" is JS/TS's constructor-call shape;
-        # "object_creation_expression" is Java/C#'s (`throw new
-        # X("msg");` / `return new X();`) - both name a constructor call
-        # whose arguments should collapse the same way a plain call's do.
-        if value is not None and value.type in (CALL_NODE_TYPE.get(language_id), "new_expression", "object_creation_expression"):
-            return value
-        return None
-    return _find_call_in_simple_statement(node, language_id)
-
-
 def _classify(node: Node, language_id: str, source: bytes) -> str:
     """Returns "retain" or "prune" for one direct statement of a block."""
+    if node.type in _COMMENT_NODE_TYPES.get(language_id, frozenset()):
+        # Item 11: stripped at L1 the same way compress_python's L1
+        # already strips Python docstrings - a comment carries no
+        # structural/behavioral information this tier is meant to
+        # preserve.
+        return "prune"
     if node.type in _ALWAYS_RETAIN_TYPES.get(language_id, frozenset()):
         return "retain"
     if node.type in _COMPOUND_NODE_TYPES.get(language_id, frozenset()):
@@ -354,13 +341,32 @@ def _collect_edits(node: Node, language_id: str, source: bytes, edits: list[tupl
     within, without crossing into a nested function/class definition (that
     is a separate symbol with its own line_range, rendered independently -
     not something a parent's skeletonization pass should rewrite).
+
+    Item 11 (second post-implementation audit): real call arguments are
+    always retained here now (`doit(1, 2, 3)` stays `doit(1, 2, 3)`, not
+    `doit(...)`) - matching `compress_python`'s L1
+    (`ArgPreservingSkeletonizer`, Issue #10) parity. L2 (`extract_contract`)
+    already renders its own arg-free placeholder body
+    (`{ /* contract */ }`) independently of this L1-only pass.
     """
     function_types = FUNCTION_NODE_TYPES.get(language_id, frozenset())
     class_types = CLASS_NODE_TYPES.get(language_id, frozenset())
     for child in node.named_children:
         if child.type in function_types or child.type in class_types:
             continue
-        if child.type in _BLOCK_NODE_TYPES.get(language_id, frozenset()):
+        if child.type in _COMMENT_NODE_TYPES.get(language_id, frozenset()):
+            # Item 11: a comment can appear as a *sibling* of the real
+            # statement container, not only as one of its own named
+            # children - confirmed directly for Go, whose `block` wrapper
+            # (this function's own def_node "body" field) parses a
+            # leading comment as `{ comment statement_list }`, a direct
+            # child of `block` itself, structurally outside the nested
+            # `statement_list` node `_process_block` below actually
+            # iterates. `_classify`'s own comment-pruning inside
+            # `_process_block` never reaches a comment at this level, so
+            # it needs its own prune edit here too.
+            edits.append((child.start_byte, child.end_byte, b""))
+        elif child.type in _BLOCK_NODE_TYPES.get(language_id, frozenset()):
             _process_block(child, language_id, source, edits)
         elif child.type in _COMPOUND_NODE_TYPES.get(language_id, frozenset()):
             _collect_edits(child, language_id, source, edits)
@@ -381,14 +387,6 @@ def _process_block(block_node: Node, language_id: str, source: bytes, edits: lis
             # only pins its own condition line - what's inside still needs
             # its own decision).
             _collect_edits(stmt, language_id, source, edits)
-            continue
-        # A retained leaf statement's own call keeps its shape but not its
-        # argument data - `doit(1, 2, 3)` becomes `doit(...)`.
-        call_node = _find_collapsible_call(stmt, language_id)
-        if call_node is not None:
-            args = call_node.child_by_field_name("arguments")
-            if args is not None and args.start_byte < args.end_byte:
-                edits.append((args.start_byte, args.end_byte, _ARG_COLLAPSE_PLACEHOLDER[language_id]))
 
     runs: list[tuple[int, int]] = []
     i, n = 0, len(statements)

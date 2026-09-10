@@ -105,13 +105,16 @@ def test_typescript_handler_balances_braces():
 
 
 def test_typescript_handler_retains_call_sinks_and_error_handling():
-    # Retained calls keep their shape but not their argument data - see
-    # the Python-parity suite below for why (matching the legacy AST
-    # compressor's own `_strip_call_args` behavior).
+    # Item 11 (second post-implementation audit): L1 now retains real
+    # call arguments, matching compress_python's L1
+    # (ArgPreservingSkeletonizer, Issue #10) parity - a retained call's
+    # shape *and* its real argument data both survive, not just the
+    # shape with args collapsed to a placeholder the way this asserted
+    # before this fix.
     skeleton = slicer.skeletonize(TS_HANDLER_SOURCE, _ts_handler_node(), LanguageID.TYPESCRIPT)
-    assert "res.status(201).json(/* ... */)" in skeleton
-    assert "res.status(400).json(/* ... */)" in skeleton
-    assert "res.status(500).json(/* ... */)" in skeleton
+    assert "res.status(201).json(order)" in skeleton
+    assert "res.status(400).json({ error: err.message })" in skeleton
+    assert "res.status(500).json({ error: 'internal error' })" in skeleton
     assert "if (err instanceof ValidationError)" in skeleton
     assert "catch (err)" in skeleton
     # The bare noise is gone.
@@ -172,17 +175,20 @@ def test_go_handler_balances_braces():
 
 
 def test_go_handler_retains_error_handling_and_call_sinks():
-    # Retained calls keep their shape but not their argument data - see
-    # the Python-parity suite below for why.
+    # Item 11 (second post-implementation audit): L1 now retains real
+    # call arguments (matching compress_python's L1 parity) - both
+    # `c.JSON(...)` calls below keep their real arguments, not a
+    # collapsed placeholder.
     skeleton = slicer.skeletonize(GO_HANDLER_SOURCE, _go_handler_node(), LanguageID.GO)
     # The if-statement's own init/condition clause is never touched (only
     # its nested body blocks are) - `c.BindJSON(&payload)` here keeps its
     # real argument, unlike calls inside a block.
     assert "if err := c.BindJSON(&payload); err != nil {" in skeleton
-    assert "c.JSON(/* ... */)" in skeleton
-    assert "order, err := h.service.Create(/* ... */)" in skeleton
+    assert 'c.JSON(400, gin.H{"error": err.Error()})' in skeleton
+    assert "order, err := h.service.Create(payload)" in skeleton
     assert "if err != nil {" in skeleton
     assert "return" in skeleton
+    assert "c.JSON(201, order)" in skeleton
     # The bare noise is gone.
     assert "fmt.Println" not in skeleton
     assert "log.Printf" not in skeleton
