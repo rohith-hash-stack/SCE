@@ -2,6 +2,17 @@
 parity levels across the languages Prism indexes, replacing the informal
 README claim of uniform support with an accurate, checkable classification.
 
+Issue B2 (post-implementation audit): a single linear Tier 1/2/3 ranking
+implies one monotonic degradation axis, which is not literally true per
+feature - see README.md's Language Capability Matrix for the precise,
+per-feature picture this module's three tiers are a coarse summary of
+(useful as a quick `--language-tier` filter, not a substitute for that
+table). In particular, Go gained a real receiver/parameter-typed call-
+resolution mechanism of its own with Issue B1 (narrower than Python's
+constructor-based instance binding, but real) while still correctly
+sitting in Tier 3 here - it still has zero inheritance-relation edges
+and no barrel/re-export resolution (Go has no re-export syntax at all).
+
 Python gets full AST instance binding, Rule A-D reference-chain
 resolution, and relative-import/barrel-file resolution
 (`prism.graph.concrete_builder`/`prism.graph.symbol_table`) - a
@@ -12,9 +23,9 @@ import/export parsing including barrel re-exports, `EXTENDS`/
 instance-based binding. Go gets CST-based package-level linking (own
 import/package resolution, `//go:...` compiler-directive and struct-tag
 capture - see `prism.parser.queries.GO_QUERIES["decorators"]`) without
-class-relation edges (Go has no classes) or instance binding. Java/C# sit
-between Tier 2 and Tier 1 in practice (they do get instance-based
-constructor binding - see `concrete_builder.py`'s own
+class-relation edges (Go has no classes) or constructor-based instance
+binding. Java/C# sit between Tier 2 and Tier 1 in practice (they do get
+instance-based constructor binding - see `concrete_builder.py`'s own
 `instance_binding_langs` - but not `EXTENDS`/`IMPLEMENTS` linking or
 barrel-file resolution) - classified as Tier 2 here since that gap is
 real and worth surfacing, not because their support is identical to

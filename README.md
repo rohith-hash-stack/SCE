@@ -29,22 +29,34 @@ the extraction pipeline itself. Parsing is done with
 JavaScript, TypeScript/TSX, Go, Java, C#); Python's native `ast` module
 drives some of the L0-L3 compression transforms.
 
-### Precision tiers
+### Language Capability Matrix
 
-Language support is not uniform, and `src/prism/language_tiers.py` is the
-source of truth for exactly what each language gets:
+Language support is not uniform, and it is not a single linear ranking
+either - a "Tier 1/2/3" framing this project used earlier implied one
+monotonic degradation axis, which doesn't hold up: Go gets real
+package/directive-level resolution Python doesn't need, and (as of the
+B1 fix below) real receiver/parameter-typed call resolution, while still
+having zero inheritance-relation edges of any kind. The precise,
+per-feature picture (`src/prism/language_tiers.py`, `src/prism/graph/
+concrete_builder.py`, `src/prism/slicer/compressor.py` are the source of
+truth):
 
-| Tier | Languages | What it means |
-|---|---|---|
-| **Tier 1 - Semantic & Instance Precision** | Python | Full AST instance binding, Rule A-D reference-chain resolution, relative-import/barrel-file resolution. |
-| **Tier 2 - Structural & Lexical** | JavaScript, TypeScript/TSX, Java, C# | CST-based import/export and class-relation (`EXTENDS`/`IMPLEMENTS`) linking where applicable; no instance-based binding precision. |
-| **Tier 3 - Lexical & Package-level** | Go | CST-based package/import resolution and compiler-directive/struct-tag capture; no class-relation edges (Go has no classes), no instance binding. |
+| Feature | Python | TypeScript / JavaScript | Go |
+|---|---|---|---|
+| **Parser frontend** | Tree-sitter CST (structure) + native `ast` module (L0-L3 compression transforms) | Tree-sitter CST only | Tree-sitter CST only |
+| **Symbol registration** | Functions, classes, methods (class-body ancestor walk) | Functions, classes, methods (same ancestor walk) | Functions, structs (`kind="class"`), receiver methods - receiver-qualified (`Type.Method`) as of Issue B1; previously registered as bare top-level functions with zero receiver association |
+| **Re-export resolution** | Recursive `ExportRegistry` walk (depth <=5, cycle-safe): relative imports, package `__init__.py` barrels, static `__all__` whitelist with a `PARTIAL_EXPORT_MAP` fallback flag for dynamic `__all__` | Same `ExportRegistry`: `export {x} from`/`export * from` re-export chasing | Package-level import resolution only - Go has no re-export syntax to chase (exported-ness is a capitalization convention, not a statement), so `ExportRegistry` doesn't apply here, not merely unimplemented |
+| **Call resolution** | Full Rules A-D: constructor-call instance binding (`x = Foo()`), `self.<attr>` binding, lexical reference-chain resolution | Rules B/C/D lexical reference-chain resolution only - no instance binding of any kind (no `x = new Foo()`-shaped tracking) | Receiver/parameter type-signature binding (Issue B1 follow-through) - resolves `c.Method()` where `c`'s type is declared in a function/method signature; does *not* track local composite-literal construction (`x := &Foo{}`) the way Python's constructor tracking does |
+| **Inheritance traversal** | EXTENDS-walk approximating C3 MRO (exact for single and ordinary multiple inheritance) + OVERRIDES detection | Same EXTENDS/IMPLEMENTS walk over class-heritage clauses (JS/TS class chains are single-parent in practice, so this is prototype-chain resolution, not literal multi-parent C3) | None - no EXTENDS/IMPLEMENTS edges are ever built; Go's real mechanism (struct embedding, interface satisfaction) is not modeled as a graph relation |
+| **Compression fidelity** | Native-`ast`-driven 4-tier L0-L3: L1 preserves real call arguments (`ArgPreservingSkeletonizer`), with a Data-Flow Centrality floor pinning high-centrality nodes at L1 regardless of distance | `UniversalSlicer` CST byte-range L0/L1/L2/L3 - L1 is generic statement pruning, no argument-preservation distinction and no centrality floor | Same `UniversalSlicer` CST byte-range pipeline as JS/TS - identical fidelity tier, not lower |
 
-A caller that needs every symbol in its context to carry Tier 1-grade
-resolution can pass `--language-tier tier1-only` to `prism index`/`prism
-query`, restricting indexing to Tier 1 languages only (currently Python)
-instead of the default `permissive` behavior (index every supported
-language at whatever precision it actually has).
+`src/prism/language_tiers.py` still derives a coarse `PrecisionTier`
+label per language from this same matrix (useful as a quick filter, not
+a substitute for the table above): `--language-tier tier1-only` on
+`prism index`/`prism query` restricts indexing to languages with full
+instance-binding call resolution (currently Python only) instead of the
+default `permissive` behavior (index every supported language at
+whatever precision it actually has, per the table).
 
 ## Install
 

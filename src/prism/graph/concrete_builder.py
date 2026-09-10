@@ -90,6 +90,33 @@ from prism.graph.symbol_table import (
 # without it" failure mode to justify the same trade.
 TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMENTS", "OVERRIDES"})
 
+# Issue A5 (post-implementation audit): inheritance-graph resolution -
+# EXTENDS/IMPLEMENTS edges above, `_mro_ancestors`/`_link_overrides`
+# below - is not one uniform capability across languages. Stated
+# precisely, per language, so "MRO" is never read as a blanket claim:
+#
+#   - Python: `_mro_ancestors` walks EXTENDS edges depth-first in
+#     declared base order - an approximation of real C3 linearization,
+#     exact for single inheritance and ordinary (non-diamond) multiple
+#     inheritance, not guaranteed exact for a genuine diamond (see that
+#     method's own docstring).
+#   - JavaScript/TypeScript/TSX: `_link_ts_heritage` builds the same
+#     EXTENDS/IMPLEMENTS edges from `class_heritage` nodes, so the same
+#     `_mro_ancestors` walk applies - this is JS/TS *prototype-chain*
+#     resolution (a class's `extends` clause), not literal C3 MRO, but
+#     structurally single-chain in JS (no multiple inheritance to
+#     linearize) so the distinction rarely matters in practice.
+#   - Go: no EXTENDS/IMPLEMENTS edges are ever built (`_link_class_relations`
+#     returns immediately for Go - Go has no class/inheritance syntax at
+#     all, only struct embedding, which this builder does not currently
+#     model as a graph relation). Go method resolution is therefore
+#     receiver-qualified structural lookup only (Issue B1), with no MRO
+#     or ancestor walk of any kind.
+#   - Java/C#: also excluded by the same early return, despite being
+#     single-inheritance languages where a real (simpler-than-Python's)
+#     MRO would be well-defined - genuinely unimplemented, not merely
+#     untested; see `README.md`'s Language Capability Matrix.
+
 
 class ConcreteGraphBuilder:
     """Builds `G_C` from a set of source files via the two-pass linker."""
@@ -256,14 +283,27 @@ class ConcreteGraphBuilder:
         class_types = CLASS_NODE_TYPES[lang]
 
         enclosing_class: str | None = None
-        cursor = node.parent
-        while cursor is not None:
-            if cursor.type in class_types:
-                cls_name_node = cursor.child_by_field_name("name")
-                if cls_name_node is not None:
-                    enclosing_class = f"{module}.{node_text(cls_name_node, parsed.source)}"
-                break
-            cursor = cursor.parent
+        if lang == LanguageID.GO and node.type == "method_declaration":
+            # Issue B1: a Go method has no enclosing class *node* to walk
+            # up to at all - `func (c *Context) JSON(...)` is a top-level
+            # package declaration with a receiver clause, structurally
+            # nothing like Python/JS's nested class body (this is exactly
+            # why the ancestor walk below, which every other language
+            # relies on, silently registered every Go method as a bare
+            # top-level function prior to this fix). The receiver type
+            # is read directly from the `receiver:` field instead.
+            receiver_type = _go_receiver_type(node, parsed)
+            if receiver_type is not None:
+                enclosing_class = f"{module}.{receiver_type}"
+        else:
+            cursor = node.parent
+            while cursor is not None:
+                if cursor.type in class_types:
+                    cls_name_node = cursor.child_by_field_name("name")
+                    if cls_name_node is not None:
+                        enclosing_class = f"{module}.{node_text(cls_name_node, parsed.source)}"
+                    break
+                cursor = cursor.parent
 
         if enclosing_class is not None:
             qualified_name = f"{enclosing_class}.{name}"
@@ -464,7 +504,16 @@ class ConcreteGraphBuilder:
                 and symbol.file == path
                 and symbol.kind in ("function", "method")
             ]
-            instance_binding_langs = (LanguageID.PYTHON, LanguageID.JAVA, LanguageID.CSHARP)
+            # Issue B1 follow-through: Go joined this tuple once receiver/
+            # parameter-typed binding (`_build_function_instance_map`'s
+            # Go-specific block, below `_bind_go_typed_parameters`) gave
+            # it a real (if narrower - same-package bare types only, no
+            # constructor-call tracking) instance-binding mechanism of
+            # its own. `_build_class_instance_map` (the other consumer
+            # gated by this tuple) stays a safe no-op for Go regardless -
+            # `ASSIGNMENT_NODE_TYPE` has no Go entry, so it returns an
+            # empty map immediately.
+            instance_binding_langs = (LanguageID.PYTHON, LanguageID.JAVA, LanguageID.CSHARP, LanguageID.GO)
             for qualified_name in file_symbols:
                 symbol = self.symbol_table.get(qualified_name)
                 def_node = self._def_nodes[qualified_name]
@@ -945,16 +994,29 @@ class ConcreteGraphBuilder:
         """
         ordered: list[str] = []
         seen: set[str] = {class_qname}
+        # Issue C2 (security audit): `seen` already guarantees termination
+        # (bounded by the repo's total class count) against a cyclic
+        # EXTENDS graph, but not against a stack overflow from a
+        # genuinely very long *linear* chain (`class C600(C599): ...`
+        # 600 levels deep) - confirmed this class of recursive walk can
+        # raise a real `RecursionError` elsewhere in this module
+        # (`iter_scoped_nodes`, `src/prism/parser/lang_config.py`) well
+        # before Python's default stack limit in a real call-stack
+        # context. An explicit cap here, matching that same
+        # `MAX_SCOPED_NODE_DEPTH`, stops walking rather than crashing.
+        max_depth = 300
 
-        def visit(node: str) -> None:
+        def visit(node: str, depth: int) -> None:
+            if depth >= max_depth:
+                return
             for _source, target, data in self.graph.out_edges(node, data=True):
                 if data.get("relation") != "EXTENDS" or target in seen:
                     continue
                 seen.add(target)
                 ordered.append(target)
-                visit(target)
+                visit(target, depth + 1)
 
-        visit(class_qname)
+        visit(class_qname, 0)
         return ordered
 
     def _link_overrides(self) -> None:
@@ -1015,7 +1077,49 @@ class ConcreteGraphBuilder:
                 resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
                 if self._is_known_class(resolved_class):
                     instance_map.bind(node_text(name_node, parsed.source), resolved_class)
+
+        if lang == LanguageID.GO:
+            self._bind_go_typed_parameters(def_node, parsed, module, instance_map)
         return instance_map
+
+    def _bind_go_typed_parameters(
+        self, def_node: Node, parsed: ParsedFile, module: str, instance_map: InstanceTypeMap
+    ) -> None:
+        """Issue B1 follow-through: receiver-qualified method registration
+        alone doesn't make an ordinary Go method call resolve - `c.JSON(...)`
+        still needs to know `c`'s type. Go has no constructor-call-based
+        local-binding idiom (`x = NewFoo()`) to reuse the two blocks above
+        for; a receiver/parameter's type is declared directly in the
+        signature instead (`func (c *Context) JSON(...)`, `func
+        handler(c *Context)`), so both the `receiver` and `parameters`
+        fields of `def_node` (a `method_declaration` has both; a plain
+        `function_declaration` has only `parameters`) are scanned
+        directly here. Same-package bare types only (`_go_type_identifier_
+        text` returns `None` for an imported `pkg.Type`, a generic, or a
+        slice/map/interface type) - out of scope, not silently guessed.
+        """
+        param_lists = [
+            p for p in (def_node.child_by_field_name("receiver"), def_node.child_by_field_name("parameters"))
+            if p is not None
+        ]
+        for param_list in param_lists:
+            for param_decl in param_list.named_children:
+                if param_decl.type != "parameter_declaration":
+                    continue
+                type_name = _go_type_identifier_text(param_decl.child_by_field_name("type"), parsed.source)
+                if type_name is None:
+                    continue
+                resolved_class = f"{module}.{type_name}"
+                if not self._is_known_class(resolved_class):
+                    continue
+                # A `parameter_declaration` can name more than one
+                # parameter sharing a single trailing type (`a, b
+                # *Context`) - every `identifier` child preceding the
+                # `type` field is a bound name, not just the one field
+                # tree-sitter's grammar happens to expose via `name`.
+                for child in param_decl.children:
+                    if child.type == "identifier":
+                        instance_map.bind(node_text(child, parsed.source), resolved_class)
 
     # -- Call resolution -------------------------------------------------- #
     def _resolve_calls_in_function(
@@ -1346,6 +1450,43 @@ def _declarator_value_node(declarator: Node) -> Node | None:
         return value
     named = [c for c in declarator.children if c.is_named]
     return named[1] if len(named) > 1 else None
+
+
+def _go_type_identifier_text(type_node: Node | None, source: bytes) -> str | None:
+    """The bare `type_identifier` text of a Go parameter/receiver `type`
+    field, unwrapping one level of `pointer_type` if present (`*Context`
+    and `Context` both resolve to `"Context"` - Go's method-set rules
+    treat a pointer and value receiver of the same named type as
+    methods of that one type, so the qualified name this feeds into
+    (Issue B1) should not fork on the pointer sigil). Returns `None` for
+    anything else this doesn't model - a qualified type from another
+    package (`pkg.Context`), a generic instantiation, a slice/map/
+    interface type - rather than guessing.
+    """
+    if type_node is None:
+        return None
+    if type_node.type == "pointer_type":
+        type_node = type_node.named_children[0] if type_node.named_children else None
+    if type_node is None or type_node.type != "type_identifier":
+        return None
+    return node_text(type_node, source)
+
+
+def _go_receiver_type(method_node: Node, parsed: ParsedFile) -> str | None:
+    """The base type name a Go `method_declaration`'s receiver clause
+    names (Issue B1) - e.g. `"Context"` for both `func (c *Context)
+    M()` (pointer receiver) and `func (c Context) M()` (value
+    receiver). `None` for a receiver this doesn't recognize (an
+    anonymous/unnamed receiver's type still resolves fine since only the
+    `type` field is read; a generic receiver type parameter does not).
+    """
+    receiver = method_node.child_by_field_name("receiver")
+    if receiver is None:
+        return None
+    param_decl = next((c for c in receiver.named_children if c.type == "parameter_declaration"), None)
+    if param_decl is None:
+        return None
+    return _go_type_identifier_text(param_decl.child_by_field_name("type"), parsed.source)
 
 
 def _constructor_call_segments(value: Node, lang: str, source: bytes) -> list[str] | None:

@@ -64,7 +64,7 @@ TYPESCRIPT_QUERIES = {
 
 GO_QUERIES = {
     "definitions": """
-        (type_declaration (type_spec name: (type_identifier) @def.name (struct_type))) @def.class
+        (type_declaration (type_spec name: (type_identifier) @def.name (struct_type)) @def.class)
         (function_declaration name: (identifier) @def.name) @def.function
         (method_declaration name: (field_identifier) @def.name) @def.function
     """,

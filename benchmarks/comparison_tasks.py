@@ -78,7 +78,7 @@ TASKS: list[ComparisonTask] = [
         "the `GetXxx`-family Context methods that calls it and would need updating.",
     ),
     ComparisonTask(
-        "C1-03", CATEGORY_BLAST_RADIUS, GIN, "routergroup.Use",
+        "C1-03", CATEGORY_BLAST_RADIUS, GIN, "routergroup.RouterGroup.Use",
         "We need to change `Engine.Use` so middleware added after `Run()` has been called returns "
         "an error instead of panicking. Identify every internal call site and registration path "
         "that currently calls `Use` and would be affected by this behavioral change.",
@@ -123,7 +123,7 @@ TASKS: list[ComparisonTask] = [
         "(`setSlice`/`setArray`) to find where this silent data loss could originate.",
     ),
     ComparisonTask(
-        "C2-03", CATEGORY_BUG_LOCALIZATION, GIN, "context.MustBindWith",
+        "C2-03", CATEGORY_BUG_LOCALIZATION, GIN, "context.Context.MustBindWith",
         "A production handler is reported to occasionally proceed with a zero-valued struct instead "
         "of returning a 400 when the request body is malformed. Trace `MustBindWith` and the "
         "specific `BindXxx` wrapper methods to find where the error could be getting swallowed.",
@@ -162,7 +162,7 @@ TASKS: list[ComparisonTask] = [
         "and `logger.go`) for how a middleware constructor is shaped and how it calls `c.Next()`.",
     ),
     ComparisonTask(
-        "C3-02", CATEGORY_CODEGEN, GIN, "context.GetInt64",
+        "C3-02", CATEGORY_CODEGEN, GIN, "context.Context.GetInt64",
         "Add a new `Context.GetUint(key any) uint` helper method. Follow the exact existing idiom "
         "the `GetXxx` family in `context.go` already uses (including how it delegates to the "
         "underlying typed-get helper).",
@@ -242,7 +242,7 @@ TASKS: list[ComparisonTask] = [
     # Category 5 - Concurrency, Transactional & State Invariant Audits (6)
     # ------------------------------------------------------------- #
     ComparisonTask(
-        "C5-01", CATEGORY_INVARIANT_AUDIT, GIN, "context.Set",
+        "C5-01", CATEGORY_INVARIANT_AUDIT, GIN, "context.Context.Set",
         "Audit `Context.Set`/`Get`/`MustGet` and the underlying `Keys map[string]any` they share. "
         "Under what circumstances (if any) could concurrent goroutines spawned from the same "
         "request handler race on this map, and does the current implementation guard against it?",

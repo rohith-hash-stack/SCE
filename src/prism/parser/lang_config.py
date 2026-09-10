@@ -68,6 +68,17 @@ SELF_NODE_EXTRA_TYPES = {
     LanguageID.JAVA: {"this"},
     LanguageID.CSHARP: {"this_expression"},
 }
+# Issue C1: Go specifies its receiver explicitly in a method's own
+# parameter list (`func (c *Context) JSON(...)`) and has no lexical
+# `self`/`this` keyword the way Python/JS/Java/C# do - an empty set here
+# is intentional, not a missing entry. `ConcreteGraphBuilder._resolve_
+# segments`' self/this-fallback branch (gated on `receiver_segments[0]
+# in self_tokens`) is therefore always skipped for Go; a Go method call
+# like `c.JSON(...)` instead resolves through the ordinary
+# `func_instance_map`/`class_instance_map` path, the same one every
+# other language's *non*-self-prefixed local variable uses - populated
+# for Go by `_bind_go_typed_parameters` (Issue B1's receiver/parameter
+# type-signature binding), not by any self-token mechanism.
 SELF_TOKEN_TEXT = {
     LanguageID.PYTHON: {"self"},
     LanguageID.JAVASCRIPT: {"this"},
@@ -267,10 +278,34 @@ def find_all(node: Node, types: set[str]) -> list[Node]:
     return found
 
 
-def iter_scoped_nodes(node: Node, target_types: set[str], lang: str, is_root: bool = True) -> list[Node]:
+#: Issue C2 (security audit): `iter_scoped_nodes` recurses once per CST
+#: nesting level, pure Python - confirmed directly to raise a real,
+#: uncaught `RecursionError` on an adversarial ~600-deep nested-`if`
+#: source file well before tree-sitter's own C-level parser rejects
+#: anything (unlike CPython's `ast.parse`, tree-sitter's grammar has no
+#: comparable nesting-depth guard of its own for this shape). Prism
+#: indexes arbitrary, potentially adversarial repositories, so this
+#: needs its own explicit floor rather than relying on
+#: `sys.getrecursionlimit()` (1000 by default) to fail safely - by the
+#: time that limit is hit, the caller's own stack frames (this function
+#: is invoked from deep inside pass-2 call resolution) have already
+#: consumed an unknown, non-portable amount of the budget. 300 leaves
+#: comfortable headroom below that default limit for every real-world
+#: nesting depth this has been measured against (single digits to low
+#: tens for ordinary code) while still failing well short of a crash.
+MAX_SCOPED_NODE_DEPTH = 300
+
+
+def iter_scoped_nodes(
+    node: Node, target_types: set[str], lang: str, is_root: bool = True, _depth: int = 0
+) -> list[Node]:
     """Descendants of `node` matching `target_types`, without crossing into
     nested function/class definitions (those are their own symbols/scopes).
+    Stops descending (rather than raising) past `MAX_SCOPED_NODE_DEPTH` -
+    see that constant's own comment.
     """
+    if _depth >= MAX_SCOPED_NODE_DEPTH:
+        return []
     skip_types = (
         CLASS_NODE_TYPES.get(lang, set())
         | FUNCTION_NODE_TYPES.get(lang, set())
@@ -282,7 +317,7 @@ def iter_scoped_nodes(node: Node, target_types: set[str], lang: str, is_root: bo
             continue
         if child.type in target_types:
             results.append(child)
-        results.extend(iter_scoped_nodes(child, target_types, lang, is_root=False))
+        results.extend(iter_scoped_nodes(child, target_types, lang, is_root=False, _depth=_depth + 1))
     return results
 
 

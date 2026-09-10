@@ -581,6 +581,42 @@ class ContextKnapsackPacker:
         the point of this pass is recovering candidates the main loop
         starved out entirely, not re-litigating resolution tiers for ones
         it already admitted.
+
+        Issue A4 (post-implementation audit) - complexity and scope,
+        stated precisely rather than left implicit:
+
+        Complexity: let W = MAX_SWAP_ATTEMPTS = 20 (the number of closest
+        unselected candidates considered - see that constant's own
+        comment for the 11-second regression bounding it fixed) and let
+        I = the number of currently-packed items. Each of the W
+        candidates first pays an O(I) no-render distance pre-check; only
+        a candidate that clears it pays for one real `_render()` call, so
+        real rendering work is bounded by O(W) renders total, never more.
+        A candidate that clears the pre-check then sorts the packed,
+        swappable items by distance (O(I log I)) to find the single
+        farthest evictable occupant. Total worst case is therefore
+        O(W * I log I) plus at most W renders - **not** O(W * K): `K =
+        MAX_SWAPS = 5` only caps how many of those W attempts are allowed
+        to actually *succeed* (mutate `items`/`packed`), it does not
+        reduce how many are attempted, pre-checked, or rendered.
+
+        What this pass fixes vs. what it structurally cannot: it repairs
+        the single most common greedy-knapsack failure mode - one close,
+        clearly-more-relevant candidate starved out because the main
+        loop's distance-ordered pass hit an earlier, farther, lower-value
+        item that happened to fit and stopped there. It is a bounded,
+        single-item local-search heuristic, not a restoration of
+        knapsack optimality (that would require the NP-hard 0/1 exact
+        solve this class deliberately avoids - see
+        `_fractional_relaxation_bound`'s own docstring for the LP
+        relaxation used instead as a diagnostic-only upper bound). It
+        does **not**: perform multi-item swaps (evicting two or more
+        lower-priority occupants to admit one better candidate);
+        consider candidates beyond the closest W by distance, however
+        much better they might be than a poorly-fit packed item; upgrade
+        a successfully swapped-in candidate above its cheapest L3
+        representation even if budget allows; or ever touch the
+        resolution tier of an already-packed item that wasn't evicted.
         """
         # `candidates` is already distance-sorted, so the unselected
         # prefix most likely to actually beat something already packed is

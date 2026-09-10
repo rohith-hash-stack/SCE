@@ -395,3 +395,41 @@ or enforced:
 6. **Zero Silent Orphans** - Section 5.2; every unresolved event passes
    through `classify_orphan`, which always returns a member of
    `OrphanReason` (never `None`).
+
+## 7. Language Capability Matrix (Issue B2)
+
+Every formula and invariant above is stated for `G_C` in the abstract,
+but how precisely each node/edge in `G_C` was actually *derived* differs
+per source language - not along one linear "better/worse" axis, but per
+feature, independently. An earlier "Precision Tier 1/2/3" framing
+implied the former; this section (and `README.md`'s own copy, kept in
+sync) states the latter explicitly, sourced from
+`src/prism/graph/concrete_builder.py` and `src/prism/slicer/
+compressor.py` directly rather than summarized from memory:
+
+| Feature | Python | TypeScript / JavaScript | Go |
+|---|---|---|---|
+| Parser frontend | Tree-sitter CST + native `ast` (compression transforms) | Tree-sitter CST only | Tree-sitter CST only |
+| Symbol registration | Functions, classes, methods | Functions, classes, methods | Functions, structs, receiver methods (receiver-qualified as of Issue B1) |
+| Re-export resolution | Recursive `ExportRegistry` (depth <=5, `__all__` whitelist) | Recursive `ExportRegistry` (`export {x} from`/`export * from`) | Package-level import resolution only - no re-export syntax exists in Go |
+| Call resolution | Rules A-D: constructor-based instance binding + lexical resolution | Rules B/C/D: lexical resolution only, no instance binding | Receiver/parameter type-signature binding (Issue B1) - not constructor-call tracking |
+| Inheritance traversal | EXTENDS walk approximating C3 MRO + OVERRIDES | Same EXTENDS/IMPLEMENTS walk (single-parent in practice) | None - no EXTENDS/IMPLEMENTS edges built at all |
+| Compression fidelity (Section 3) | 4-tier L0-L3, L1 preserves real call arguments, Data-Flow Centrality floor | `UniversalSlicer` CST byte-range L0-L3, generic L1 pruning | Same `UniversalSlicer` pipeline as JS/TS |
+
+Two consequences worth stating explicitly, since they run against the
+old linear framing's intuition:
+
+- Go's Compression Fidelity row is identical to JS/TS's, not lower -
+  the byte-range `UniversalSlicer` path is shared code, not a
+  Go-specific degradation.
+- Go's Call Resolution row is a real, if narrower, mechanism - not the
+  complete absence a "Tier 3, lexical only" label might suggest - added
+  by Issue B1 specifically so a receiver-heavy Go codebase (the
+  dominant idiom in most real Go APIs) produces real `CALLS` edges to
+  its own receiver methods instead of the definition existing in the
+  graph with zero incoming edges.
+
+`src/prism/language_tiers.py`'s `PrecisionTier` enum still derives a
+coarse three-value label from this table (`--language-tier tier1-only`
+needs a simple predicate, not the full matrix), but the table above is
+the actual source of truth it summarizes.

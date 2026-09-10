@@ -393,6 +393,20 @@ def compress_python(source: str, name: str, line_range: tuple[int, int], resolut
         # just below when a definition can't be relocated post-parse,
         # rather than crashing the whole pack.
         return _raw_slice(source, line_range)
+    except RecursionError:
+        # Issue C2 (security audit): CPython's own parser already rejects
+        # some pathologically deep shapes with a clean `SyntaxError`
+        # (excess parenthesis/indentation nesting - both already covered
+        # above), but not all of them - a long chain of unary operators
+        # (`not not not ... True`) parses past those checks and then
+        # blows the interpreter's call stack while `ast.parse` builds the
+        # tree, confirmed directly (`RecursionError('maximum recursion
+        # depth exceeded during ast construction')` on a 3000-deep chain).
+        # Prism indexes arbitrary, potentially adversarial repositories,
+        # so a single such file must degrade this one compression call,
+        # not crash the whole `prism query`/`index` run - the same
+        # contract `SyntaxError` above already gets.
+        return _raw_slice(source, line_range)
     node = locate_python_definition(tree, name, line_range)
     if node is None:
         # Definition couldn't be relocated (e.g. syntax quirk) - degrade to raw slice.
@@ -407,16 +421,27 @@ def compress_python(source: str, name: str, line_range: tuple[int, int], resolut
             return f"{header} ..."
         return "\n".join([f"{header} ...", _render_contract_block(context.tags, [], context.callees, [], context.compact)])
 
+    # Issue C2 (security audit): `copy.deepcopy`, `NodeTransformer.visit`,
+    # and `ast.unparse` are all pure-Python recursive walks - a
+    # meaningfully *shallower* AST than the one that can defeat
+    # `ast.parse` itself already crashes here (confirmed directly: a
+    # 400-deep `not` chain parses fine but blows the stack in `.visit()`,
+    # well below the ~3000 depth needed to make `ast.parse` itself raise).
+    # Both tiers below share the same degrade-don't-crash contract as the
+    # `ast.parse`/`SyntaxError` handling above.
     if resolution == 1:
         # Level 1 (Pruned): control flow, call expressions *with* their
         # real arguments, and assignments retained; docstrings/logging
         # stripped. See `ArgPreservingSkeletonizer`'s own docstring for
         # why this must never fall back to the arg-stripped Level 2 shape
         # (Issue #10).
-        working = copy.deepcopy(node)
-        skeleton = ArgPreservingSkeletonizer().visit(working)
-        ast.fix_missing_locations(skeleton)
-        return ast.unparse(skeleton)
+        try:
+            working = copy.deepcopy(node)
+            skeleton = ArgPreservingSkeletonizer().visit(working)
+            ast.fix_missing_locations(skeleton)
+            return ast.unparse(skeleton)
+        except RecursionError:
+            return _raw_slice(source, line_range)
 
     if resolution == 2:
         # Level 2 (Skeleton): signature + control-flow boundaries only;
@@ -426,10 +451,13 @@ def compress_python(source: str, name: str, line_range: tuple[int, int], resolut
         # enough to matter for root-causing a bug still shows its real
         # invocation data (now at Level 1) while a 3+ hop one keeps
         # paying only for the control-flow *shape*, not real values.
-        working = copy.deepcopy(node)
-        skeleton = ControlFlowSkeletonizer().visit(working)
-        ast.fix_missing_locations(skeleton)
-        body = ast.unparse(skeleton)
+        try:
+            working = copy.deepcopy(node)
+            skeleton = ControlFlowSkeletonizer().visit(working)
+            ast.fix_missing_locations(skeleton)
+            body = ast.unparse(skeleton)
+        except RecursionError:
+            return _raw_slice(source, line_range)
         # A `BehavioralContract` (when available) still fully supersedes
         # this at the serializer level (`markdown._CONTRACT_RESOLUTIONS`);
         # the tags/raises/calls annotation is appended here as trailing
