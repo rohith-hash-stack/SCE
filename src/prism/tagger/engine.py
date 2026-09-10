@@ -7,6 +7,8 @@ matrix `M` (as a `qualified_name -> set[tag]` mapping, and mirrored onto the
 """
 from __future__ import annotations
 
+import os
+
 from tree_sitter import Node
 
 from prism.graph.call_site import has_dynamic_hazard_construct
@@ -14,9 +16,12 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
     CALL_NODE_TYPE,
+    CATCH_NODE_TYPES,
     DECORATED_WRAPPER_TYPES,
     RAISE_NODE_TYPE,
+    RETURN_STATEMENT_NODE_TYPE,
     SELF_TOKEN_TEXT,
+    TRY_NODE_TYPES,
     call_callee_segments,
     find_all,
     flatten_reference_chain,
@@ -29,8 +34,16 @@ from prism.tagger.rules import (
     DECORATOR_RULES,
     DYNAMIC_ATTRIBUTE_TAG,
     DYNAMIC_HAZARD_TAG,
+    ENTRYPOINT_FILENAMES,
+    ENTRYPOINT_PATH_SEGMENTS,
+    ENTRYPOINT_TAG,
+    ERROR_HANDLER_TAG,
+    GO_ERROR_CHECK_PATTERN,
+    IO_SINK_TAG,
+    IO_SINK_TEXT_PATTERNS,
     PROPERTY_DECORATOR_PATTERNS,
     PROPERTY_TAG,
+    PURE_TRANSFORM_TAG,
     STATE_MUTATION_TAG,
     import_roots,
 )
@@ -142,7 +155,88 @@ class TaggingEngine:
             if symbol.qualified_name in builder.graph:
                 builder.graph.nodes[symbol.qualified_name]["tags"] = tags
         self._tag_sentinel_nodes(builder, matrix)
+        self._apply_topological_role_tags(builder, matrix)
         return matrix
+
+    def _apply_topological_role_tags(self, builder: ConcreteGraphBuilder, matrix: dict[str, set[str]]) -> None:
+        """Item 8 (second post-implementation audit): Topological Graph
+        Role Inference - supplements the static, per-symbol rules above
+        (decorator text, call-sink method names, ...) with signals from
+        the symbol's *position in the call graph* and a lightweight
+        source-text scan, purely additive (never removes a tag the rules
+        above already assigned).
+        """
+        g_c = builder.calls_graph
+        for symbol in builder.symbol_table:
+            if symbol.kind not in ("function", "method") or symbol.qualified_name not in g_c:
+                continue
+            qname = symbol.qualified_name
+            def_node = builder.def_node(qname)
+            parsed = builder.parsed_file(symbol.file)
+            if def_node is None or parsed is None:
+                continue
+            in_degree = g_c.in_degree(qname)
+            out_degree = g_c.out_degree(qname)
+            new_tags: set[str] = set()
+
+            if in_degree == 0 and out_degree > 0 and self._is_entrypoint_module(symbol.file):
+                new_tags.add(ENTRYPOINT_TAG)
+
+            if in_degree > 0 and out_degree == 0 and self._has_value_return(def_node):
+                new_tags.add(PURE_TRANSFORM_TAG)
+
+            source_text = self._node_source_text(def_node, parsed)
+            if any(pattern in source_text for pattern in IO_SINK_TEXT_PATTERNS):
+                new_tags.add(IO_SINK_TAG)
+
+            if self._is_error_handler(def_node, parsed, source_text):
+                new_tags.add(ERROR_HANDLER_TAG)
+
+            if not new_tags:
+                continue
+            tags = matrix.setdefault(qname, set())
+            tags |= new_tags
+            matrix[qname] = tags
+            if qname in builder.graph:
+                builder.graph.nodes[qname]["tags"] = tags
+
+    @staticmethod
+    def _is_entrypoint_module(file_path: str) -> bool:
+        filename = os.path.basename(file_path)
+        if filename in ENTRYPOINT_FILENAMES:
+            return True
+        parts = os.path.normpath(file_path).split(os.sep)
+        return any(segment in ENTRYPOINT_PATH_SEGMENTS for segment in parts)
+
+    @staticmethod
+    def _node_source_text(def_node: Node, parsed: ParsedFile) -> str:
+        return node_text(def_node, parsed.source)
+
+    @staticmethod
+    def _has_value_return(def_node: Node) -> bool:
+        """At least one `return <expr>` (not a bare `return`/implicit
+        end-of-function fall-through) anywhere in `def_node`'s own body -
+        `RETURN_STATEMENT_NODE_TYPE` is identical across every supported
+        grammar, so this needs no per-language branching."""
+        for ret in find_all(def_node, {RETURN_STATEMENT_NODE_TYPE}):
+            if ret.named_child_count > 0:
+                return True
+        return False
+
+    @staticmethod
+    def _is_error_handler(def_node: Node, parsed: ParsedFile, source_text: str) -> bool:
+        lang = parsed.language_id
+        has_try = bool(find_all(def_node, TRY_NODE_TYPES.get(lang, set()) | CATCH_NODE_TYPES.get(lang, set())))
+        has_go_err_check = lang == LanguageID.GO and GO_ERROR_CHECK_PATTERN in source_text
+        if not (has_try or has_go_err_check):
+            return False
+        # "logs and returns early, or re-raises" - a real error-handling
+        # shape, not merely a try/except-shaped block with an empty or
+        # unrelated body (a bare `except: pass` swallow, for instance).
+        has_return = bool(find_all(def_node, {RETURN_STATEMENT_NODE_TYPE}))
+        raise_type = RAISE_NODE_TYPE.get(lang)
+        has_raise = raise_type is not None and bool(find_all(def_node, {raise_type}))
+        return has_return or has_raise
 
     def _tag_sentinel_nodes(self, builder: ConcreteGraphBuilder, matrix: dict[str, set[str]]) -> None:
         """Conservative Tag Unioning (Task 1.3): an `UnresolvedPolymorphicNode`

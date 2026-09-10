@@ -150,6 +150,43 @@ PROPERTY_DECORATOR_PATTERNS = ("property", "cached_property")
 # attribute symbol at all.
 DYNAMIC_ATTRIBUTE_TAG = "#dynamic_attribute"
 
+# Item 8 (second post-implementation audit): Topological Graph Role
+# Inference tags - supplement the static decorator/prefix-matching rules
+# above with graph-shape + lightweight textual signals
+# (`TaggingEngine._apply_topological_role_tags`), so an unconventional or
+# un-annotated function can still earn a role tag from its position/
+# behavior in the call graph alone, not just its own source's naming
+# conventions or imports.
+ENTRYPOINT_TAG = "#entrypoint"
+IO_SINK_TAG = "#io_sink"
+PURE_TRANSFORM_TAG = "#pure_transform"
+ERROR_HANDLER_TAG = "#error_handler"
+
+#: `#entrypoint`: a function/method with in-degree 0 (nothing in this
+#: repo's own call graph calls it) and out-degree > 0 (it isn't a dead,
+#: never-called leaf either), declared in a file this project treats as
+#: an entrypoint module - a conventional main-file name, or a directory
+#: segment real routing/API code almost always lives under.
+ENTRYPOINT_FILENAMES = frozenset({"main.go", "app.py", "main.py", "index.ts", "index.js", "index.tsx"})
+ENTRYPOINT_PATH_SEGMENTS = ("routes", "api")
+
+#: `#io_sink`: a function/method whose own source text directly names one
+#: of these standard-library-ish network/filesystem/database call
+#: prefixes - deliberately a lightweight textual scan (the same
+#: "textual approximation" precedent `compress_generic`/`CALL_SINK_RULES`
+#: already establish elsewhere in this codebase) rather than a full
+#: per-language call-target-resolution pass, so it fires regardless of
+#: which language or exact import alias is in play.
+IO_SINK_TEXT_PATTERNS = ("requests.", "http.", "os.", "sql.", "net/http", "net.Dial", "fmt.Fprint")
+
+#: `#error_handler`: a function/method containing a try/except-shaped
+#: block (Python/JS/TS/Java/C#) or Go's idiomatic `if err != nil` check,
+#: paired with a return or a re-raise/throw - real error-handling shape,
+#: not merely code that happens to mention an exception type by name
+#: (already covered by `AUTH_GUARD_RULE`'s own, narrower exception-name
+#: matching for a different tag).
+GO_ERROR_CHECK_PATTERN = "err != nil"
+
 
 def import_roots(import_module_texts: set[str]) -> set[str]:
     """Reduce a set of raw import specifiers to their top-level package
