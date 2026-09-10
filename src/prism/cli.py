@@ -365,6 +365,8 @@ def trace(repo_path: str, otel_path: str | None, command: tuple[str, ...]) -> No
         click.echo(f"  warning: {result.trust_warning}", err=True)
     if result.dynamic_tagged_symbols:
         click.echo(f"  Symbols newly tagged #dynamic:       {len(result.dynamic_tagged_symbols)}")
+    if result.non_observed_edges:
+        click.echo(f"  Static edges flagged unobserved (this run): {len(result.non_observed_edges)}")
     click.echo(f"Runtime state saved to {runtime_state_path(repo_root)}")
 
 
@@ -398,6 +400,8 @@ def status(repo_path: str) -> None:
         for reason, count in sorted(state["orphan_reasons"].items()):
             click.echo(f"  {reason}: {count}")
     click.echo(f"RuntimeTrust (latest run):    {state.get('trust_score', 1.0):.0%}")
+    if state.get("unobserved_edges"):
+        click.echo(f"Edges flagged unobserved:     {len(state['unobserved_edges'])}")
     click.echo(f"Trace files ingested:         {len(state['trace_files'])}")
     if state["last_updated"]:
         click.echo(f"Last updated:                 {state['last_updated']}")

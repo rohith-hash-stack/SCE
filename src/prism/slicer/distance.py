@@ -114,6 +114,26 @@ RELATION_STRUCTURAL_WEIGHT: dict[str, float] = {
 # hard-coding a combined constant.
 RELATION_TENTATIVE_CALL_WEIGHT = 0.60
 
+# Item 9 (second post-implementation audit): Bayesian Confidence
+# Degradation for Static False Positives. `prism.runtime.reconciler`
+# marks `unobserved_in_traces=True` on a static `CALLS` edge whose caller
+# executed often in a recorded trace (>= `NON_OBSERVATION_EXECUTION_
+# THRESHOLD`) but never once traversed that specific statically-resolved
+# edge - real evidence the static resolver over-linked, not merely "no
+# trace has covered this yet" (the threshold on the caller's own execution
+# count is what tells the two apart). Composes with
+# `RELATION_TENTATIVE_CALL_WEIGHT` and the `CONFIRMED_RUNTIME` discount
+# below exactly the way that pair already composes - multiplied into
+# `structural_weight`, never replacing it - though in practice an edge
+# can't be both `unobserved_in_traces` and `CONFIRMED_RUNTIME` at once
+# (the first means "never traced", the second means "traced"); it *can*
+# co-occur with `kind="TENTATIVE_CALL"` (a Go Stage 2 guess whose target
+# a frequently-executing caller never actually traced a call to). The
+# edge is never deleted - `gamma_unobserved` only prices it as less
+# certain, so a cold error path a test suite doesn't happen to exercise
+# stays fully reachable, just ranked behind evidence-backed neighbors.
+GAMMA_UNOBSERVED = 0.50
+
 
 @dataclass(frozen=True)
 class DistanceConfig:
@@ -192,6 +212,8 @@ class DistanceEngine:
             structural_weight = RELATION_STRUCTURAL_WEIGHT.get(data.get("relation", "CALLS"), 1.0)
             if data.get("kind") == "TENTATIVE_CALL":
                 structural_weight *= RELATION_TENTATIVE_CALL_WEIGHT
+            if data.get("unobserved_in_traces"):
+                structural_weight *= GAMMA_UNOBSERVED
             base_cost = 1.0 / structural_weight if structural_weight else 1.0
             if data.get("confidence") != "CONFIRMED_RUNTIME":
                 data["weight"] = base_cost

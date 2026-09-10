@@ -132,6 +132,21 @@ def classify_orphan(event: TraceRecord, builder: ConcreteGraphBuilder) -> Orphan
 RUNTIME_TRUST_LOW_THRESHOLD = 0.5
 RUNTIME_TRUST_HIGH_THRESHOLD = 0.9
 
+# Item 9 (second post-implementation audit): Bayesian Confidence
+# Degradation for Static False Positives. A `caller` this reconciliation
+# saw issue at least this many traced call/sink events is trusted to have
+# genuinely executed - not just "the tracer happened to catch it once" -
+# so a *static* CALLS edge out of it that never once appeared among the
+# traced events is real evidence the static resolver over-linked
+# (an overload branch never taken, a dead-code path, a mis-resolved
+# reference-chain guess), not merely "the trace didn't cover this yet".
+# Below this count, a caller's silence about an edge is far more likely to
+# just mean "this trace didn't happen to exercise that caller much at
+# all", so no penalty is applied - the same asymmetry `RuntimeTrust`
+# itself already encodes (a handful of events can't safely indict
+# anything).
+NON_OBSERVATION_EXECUTION_THRESHOLD = 10
+
 #: The tag `DYNAMIC_DISPATCH` orphans feed back onto their (statically
 #: resolvable) caller - Issue #15.4's "dynamically tag candidate symbols
 #: with #dynamic". Distinct from `prism.tagger.rules.DYNAMIC_HAZARD_TAG`
@@ -352,6 +367,12 @@ class ReconciliationResult:
     #: Callers of a `DYNAMIC_DISPATCH` orphan that got `RUNTIME_DYNAMIC_TAG`
     #: fed back onto them (Issue #15.4).
     dynamic_tagged_symbols: set[str] = dataclasses.field(default_factory=set)
+    #: Item 9: static `CALLS` edges `metadata["unobserved_in_traces"]` was
+    #: just set on - a frequently-executing caller (per
+    #: `NON_OBSERVATION_EXECUTION_THRESHOLD`) that never once traced a call
+    #: down this particular statically-resolved edge. Kept, never deleted -
+    #: see `GraphReconciler._apply_non_observation_penalty`.
+    non_observed_edges: list[tuple[str, str]] = dataclasses.field(default_factory=list)
 
 
 class GraphReconciler:
@@ -381,6 +402,11 @@ class GraphReconciler:
         for edge in confirmed:
             self.builder.graph.edges[edge]["confidence"] = "CONFIRMED_RUNTIME"
             self.builder.graph.edges[edge]["runtime_invocation_count"] = counts.get(edge, 0)
+            # Item 9: an edge a *previous* reconcile() call on this same
+            # builder flagged unobserved is now proven observed - clear the
+            # stale flag rather than leaving a penalized weight on an edge
+            # this very run just confirmed.
+            self.builder.graph.edges[edge].pop("unobserved_in_traces", None)
 
         for edge in discovered:
             self.builder.graph.add_edge(
@@ -429,6 +455,19 @@ class GraphReconciler:
             for edge in confirmed | discovered:
                 self.builder.graph.edges[edge]["high_trust_runtime"] = True
 
+        # Item 9: Bayesian Confidence Degradation for Static False
+        # Positives - computed from this run's own events only (the same
+        # per-run scope `trust_score` already uses, per
+        # `merge_result_into_state`'s "most recently observed, not
+        # averaged" comment above - a caller's execution volume is a
+        # property of *this* trace, not an all-time total this module
+        # doesn't otherwise track).
+        symbol_execution_count: dict[str, int] = {}
+        for event in events:
+            if event.caller is not None:
+                symbol_execution_count[event.caller] = symbol_execution_count.get(event.caller, 0) + 1
+        non_observed = self._apply_non_observation_penalty(symbol_execution_count, confirmed)
+
         return ReconciliationResult(
             confirmed_edges=sorted(confirmed),
             discovered_edges=sorted(discovered),
@@ -439,7 +478,37 @@ class GraphReconciler:
             trust_score=round(trust_score, 4),
             trust_warning=trust_warning,
             dynamic_tagged_symbols=dynamic_tagged,
+            non_observed_edges=sorted(non_observed),
         )
+
+    def _apply_non_observation_penalty(
+        self, symbol_execution_count: dict[str, int], confirmed: set[tuple[str, str]]
+    ) -> set[tuple[str, str]]:
+        """Item 9: for every *static* (`provenance` unset -
+        `RUNTIME_DISCOVERED` edges are runtime evidence themselves and
+        can't be "unobserved") `CALLS` edge `(u, v)` where `u` executed at
+        least `NON_OBSERVATION_EXECUTION_THRESHOLD` times in this trace
+        but `(u, v)` itself was never among the confirmed edges above,
+        marks `metadata["unobserved_in_traces"] = True` on the existing
+        graph edge - never deletes it, so a cold error path a test suite
+        simply doesn't exercise stays fully visible to `prism query`, just
+        priced as less certain (see `prism.slicer.distance`'s
+        `GAMMA_UNOBSERVED` multiplier, which is what actually turns this
+        flag into a distance/ranking effect).
+        """
+        non_observed: set[tuple[str, str]] = set()
+        for u, v, data in self.builder.graph.edges(data=True):
+            if data.get("relation", "CALLS") != "CALLS":
+                continue
+            if data.get("provenance") == "RUNTIME_DISCOVERED":
+                continue
+            if symbol_execution_count.get(u, 0) < NON_OBSERVATION_EXECUTION_THRESHOLD:
+                continue
+            if (u, v) in confirmed:
+                continue
+            data["unobserved_in_traces"] = True
+            non_observed.add((u, v))
+        return non_observed
 
     def _reconcile_call(
         self,
@@ -505,6 +574,11 @@ def _empty_state() -> dict:
         "orphan_reasons": {},
         "trust_score": 1.0,
         "dynamic_tagged_symbols": [],
+        # Item 9: [caller, callee] pairs cumulatively flagged
+        # `unobserved_in_traces` across every `prism trace` run recorded so
+        # far, minus any pair a later run did confirm (see
+        # `merge_result_into_state`).
+        "unobserved_edges": [],
         "last_updated": None,
     }
 
@@ -586,6 +660,17 @@ def merge_result_into_state(state: dict, result: ReconciliationResult, trace_fil
     dynamic_tagged.update(result.dynamic_tagged_symbols)
     merged["dynamic_tagged_symbols"] = sorted(dynamic_tagged)
 
+    # Item 9: accumulate flagged pairs across runs, same as
+    # `discovered -= confirmed` above - a pair a *later* run did confirm is
+    # real evidence the earlier non-observation was just incomplete trace
+    # coverage, not a genuine static false positive, so it comes back off
+    # the list rather than staying flagged forever.
+    unobserved = {tuple(e) for e in merged.get("unobserved_edges", [])}
+    unobserved.update(result.non_observed_edges)
+    unobserved -= confirmed
+    unobserved -= discovered
+    merged["unobserved_edges"] = [list(edge) for edge in sorted(unobserved)]
+
     merged["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     return merged
 
@@ -639,6 +724,14 @@ def apply_runtime_state(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set
         merged_tags.add(RUNTIME_DYNAMIC_TAG)
         if symbol in builder.graph:
             builder.graph.nodes[symbol]["tags"] = merged_tags
+
+    # Item 9: re-validated against the fresh static graph exactly like
+    # `discovered_edges` above - a pair the current static pass no longer
+    # even has an edge for (the code changed since the trace) has nothing
+    # to flag.
+    for caller, callee in state.get("unobserved_edges", []):
+        if builder.graph.has_edge(caller, callee):
+            builder.graph.edges[caller, callee]["unobserved_in_traces"] = True
 
     # RuntimeTrust boost (Issue #15.3), re-derived from the persisted
     # trust_score rather than a separately-persisted edge list - the most

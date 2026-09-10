@@ -439,6 +439,56 @@ see, distinct from the static-only `#dynamic_hazard` tag
 (`prism.tagger.rules.DYNAMIC_HAZARD_TAG`) a `getattr`/`setattr`/subscript-
 dispatch/eval construct earns purely from its AST shape.
 
+### 5.4 Bayesian Confidence Degradation for Static False Positives (Item 9)
+
+The confidence promotions above are all *positive* evidence (a trace
+confirmed or discovered an edge); this is the one *negative* signal a
+trace can carry against a static edge, and it is deliberately weak -
+degrading, never deleting.
+
+For a static `CALLS` edge `e = (u, v)`, with `symbol_execution_count[u]`
+the number of traced events this reconciliation run recorded with `u` as
+the caller:
+
+```
+if symbol_execution_count[u] >= NON_OBSERVATION_EXECUTION_THRESHOLD (10)
+   and e was not among this run's confirmed edges:
+       metadata["unobserved_in_traces"] = True      # edge kept, never removed
+```
+
+`u` executing at least ten times in the recorded trace is the load-bearing
+condition: it is what separates "the static resolver over-linked" from
+merely "this particular trace happened not to cover `u` much" - the same
+asymmetry `RuntimeTrust` (Section 5.3) already encodes, just applied
+edge-by-edge instead of trace-wide. A caller invoked only once or twice
+tells you almost nothing about its *other* edges; a caller invoked ten-plus
+times that never once took a specific statically-inferred branch is real
+evidence.
+
+The flag is purely additive metadata on an existing `G_C` edge - it is
+never deleted, precisely so a cold error path (`except`/`if err != nil`)
+a test suite doesn't happen to exercise stays fully visible to `prism
+query`, just re-priced. `DistanceEngine._weighted_undirected`
+(`prism.slicer.distance`) is where the flag actually changes behavior:
+`structural_weight` for such an edge is multiplied by
+`GAMMA_UNOBSERVED = 0.50`, composing independently with the
+`kind="TENTATIVE_CALL"` discount (Item 3) and the `CONFIRMED_RUNTIME`
+discount above (mutually exclusive with this one in practice, since
+"confirmed" and "unobserved" cannot both describe the same edge from the
+same run) exactly the way those two already compose with each other. A
+`RUNTIME_DISCOVERED` edge is never eligible - it is itself trace evidence,
+so it cannot simultaneously be "never observed".
+
+The flag persists across `prism trace` runs the same way
+`confirmed_edges`/`discovered_edges` do
+(`ReconciliationResult.non_observed_edges` -> `merge_result_into_state`'s
+`state["unobserved_edges"]`), with one difference from those two: a pair
+that a *later* run does confirm is removed from the accumulated list
+(`unobserved -= confirmed`, mirroring the pre-existing `discovered -=
+confirmed` line just above it) rather than staying flagged forever, since
+a later confirmation is direct proof the earlier non-observation was
+incomplete coverage, not a genuine static false positive.
+
 ## 6. Invariant Summary
 
 The six formal invariants this design guarantees, and where each is proven
