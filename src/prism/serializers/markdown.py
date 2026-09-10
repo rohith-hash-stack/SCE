@@ -65,8 +65,15 @@ _FENCE_LANGUAGE = {
 # Resolutions that render as a compact contract block, when one is
 # available, instead of a code fence - L0 (the seed, always full source)
 # and L3 (already a one-line alias, nothing left to compact further) are
-# untouched either way.
-_CONTRACT_RESOLUTIONS = frozenset({1, 2})
+# untouched either way. L1 (Pruned - Issue #10) was removed from this set:
+# it exists specifically to show a nearby dependency's *real* body with
+# real call arguments, and letting the compact YAML contract block
+# (interface/tags only, no argument values at all) supersede it would
+# defeat that purpose for exactly the callees it matters most for. L2
+# (Skeleton) keeps the override - its own compressor output already
+# degrades to an arg-stripped body, so the richer contract block is
+# strictly more useful when one is available.
+_CONTRACT_RESOLUTIONS = frozenset({2})
 
 
 def render_markdown(

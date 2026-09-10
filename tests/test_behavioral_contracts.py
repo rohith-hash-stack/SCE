@@ -363,7 +363,12 @@ def test_only_traversable_relations_appear_in_calls_graph(python_repo):
 # --------------------------------------------------------------------- #
 # Serializer: compact contracts for L1/L2, dependencies for the seed
 # --------------------------------------------------------------------- #
-def test_render_markdown_renders_yaml_contract_for_non_seed_callee(python_repo):
+def test_render_markdown_renders_real_code_with_arguments_for_l1_callee(python_repo):
+    """Issue #10: Level 1 (Pruned) - the tier a close, directly-relevant
+    non-seed callee like `sample.Repository.save` actually lands at here -
+    now shows real code (with real call arguments) instead of the compact
+    YAML contract block, precisely so a debugging agent can see what a
+    nearby dependency actually does, not just its bare interface."""
     builder, tag_matrix = build_pipeline(python_repo)
     contracts = compute_contracts(builder)
     metamodel = SemanticMetamodel()
@@ -372,10 +377,37 @@ def test_render_markdown_renders_yaml_contract_for_non_seed_callee(python_repo):
         "sample.OrderService.process_order", builder, tag_matrix, distance_engine
     )
     text = render_markdown(result, tag_matrix, contracts=contracts, graph=builder.graph)
-    assert "### sample.Repository.save (L1)" in text or "### sample.Repository.save (L2)" in text
-    assert "Purity: pure" in text
+    assert "### sample.Repository.save (L1)" in text
+    assert "def save(self, item):" in text
+    assert "Purity: pure" not in text
     assert "Outgoing Dependencies:" in text
     assert "target: sample.Repository.save" in text
+
+
+def test_render_markdown_still_renders_yaml_contract_at_l2(python_repo):
+    """L2 (Skeleton) is the one resolution the compact YAML contract block
+    still supersedes (`markdown._CONTRACT_RESOLUTIONS`) - checked directly
+    against a manually-forced L2 PackedItem rather than hunting for a real
+    seed/callee pair that happens to land there, since Issue #10's whole
+    point was moving *most* nearby callees off L2 and onto L1 instead."""
+    from prism.slicer.knapsack import PackedItem, PackResult
+
+    builder, tag_matrix = build_pipeline(python_repo)
+    contracts = compute_contracts(builder)
+    symbol = builder.symbol_table.get("sample.Repository.save")
+    content = "def save(self, item): ..."
+    result = PackResult(
+        seed="sample.OrderService.process_order",
+        budget=2000,
+        allocated_tokens=50,
+        items=[
+            PackedItem("sample.OrderService.process_order", 0, "def process_order(self): ...", "python", (1, 1), "sample.py"),
+            PackedItem("sample.Repository.save", 2, content, "python", symbol.line_range, "sample.py"),
+        ],
+    )
+    text = render_markdown(result, tag_matrix, contracts=contracts, graph=builder.graph)
+    assert "### sample.Repository.save (L2" in text
+    assert "Purity: pure" in text
 
 
 def test_render_markdown_backward_compatible_without_contracts(python_repo):

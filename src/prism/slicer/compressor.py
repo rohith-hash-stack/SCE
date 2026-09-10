@@ -269,6 +269,28 @@ class ControlFlowSkeletonizer(ast.NodeTransformer):
         return node
 
 
+class ArgPreservingSkeletonizer(ControlFlowSkeletonizer):
+    """Level 1 (Pruned) of the 4-tier compression model (Issue #10):
+    identical control-flow/logging/docstring pruning to
+    `ControlFlowSkeletonizer`, but never collapses a call's real
+    arguments to a bare `...`.
+
+    `ControlFlowSkeletonizer` (renamed Level 2 - Skeleton, below) erasing
+    *every* call argument uniformly - loop bounds, off-by-one-prone index
+    arithmetic, retry counts, status codes, literal flags - was a real,
+    measured failure mode for LLM debugging agents: a 1-2 hop dependency
+    close enough to matter for root-causing a bug still had its actual
+    invocation data hidden, indistinguishable from a distant, irrelevant
+    one. Only the argument-stripping behavior is overridden; every other
+    pruning rule (docstrings, `LOG_TOKENS`-matched logging/print/metric
+    calls, empty-suite `pass` synthesis) is inherited unchanged.
+    """
+
+    @staticmethod
+    def _strip_call_args(call_node: ast.Call) -> None:
+        return None  # no-op: arguments are preserved at this tier
+
+
 def locate_python_definition(tree: ast.Module, name: str, line_range: tuple[int, int]) -> ast.AST | None:
     """Find the FunctionDef/AsyncFunctionDef/ClassDef matching `name` whose
     header line falls inside the tree-sitter-derived `line_range`.
@@ -385,18 +407,40 @@ def compress_python(source: str, name: str, line_range: tuple[int, int], resolut
         return "\n".join([f"{header} ...", _render_contract_block(context.tags, [], context.callees, [], context.compact)])
 
     if resolution == 1:
+        # Level 1 (Pruned): control flow, call expressions *with* their
+        # real arguments, and assignments retained; docstrings/logging
+        # stripped. See `ArgPreservingSkeletonizer`'s own docstring for
+        # why this must never fall back to the arg-stripped Level 2 shape
+        # (Issue #10).
         working = copy.deepcopy(node)
-        skeleton = ControlFlowSkeletonizer().visit(working)
+        skeleton = ArgPreservingSkeletonizer().visit(working)
         ast.fix_missing_locations(skeleton)
         return ast.unparse(skeleton)
 
-    signature = _stub_signature(node)
-    if resolution == 3:
-        return signature
+    if resolution == 2:
+        # Level 2 (Skeleton): signature + control-flow boundaries only;
+        # call arguments collapsed to `...`. This is what Level 1 itself
+        # rendered before Issue #10 - moved here, one tier further out,
+        # rather than changed in place, so a 1-2 hop dependency close
+        # enough to matter for root-causing a bug still shows its real
+        # invocation data (now at Level 1) while a 3+ hop one keeps
+        # paying only for the control-flow *shape*, not real values.
+        working = copy.deepcopy(node)
+        skeleton = ControlFlowSkeletonizer().visit(working)
+        ast.fix_missing_locations(skeleton)
+        body = ast.unparse(skeleton)
+        # A `BehavioralContract` (when available) still fully supersedes
+        # this at the serializer level (`markdown._CONTRACT_RESOLUTIONS`);
+        # the tags/raises/calls annotation is appended here as trailing
+        # comments purely for the no-contract fallback path (a language
+        # without full contract support, or a caller that never computed
+        # one), so that information isn't lost outright in that case.
+        raises = _extract_raises(node)
+        mutates = _extract_mutates(node) if "#state_mutation" in context.tags else []
+        annotation = _render_contract_block(context.tags, raises, context.callees, mutates, context.compact)
+        return f"{body}\n{annotation}"
 
-    raises = _extract_raises(node)
-    mutates = _extract_mutates(node) if "#state_mutation" in context.tags else []
-    return "\n".join([signature, _render_contract_block(context.tags, raises, context.callees, mutates, context.compact)])
+    return _stub_signature(node)  # resolution == 3
 
 
 # ---------------------------------------------------------------------- #

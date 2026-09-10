@@ -33,12 +33,25 @@ STRESS_TARGET = "app.controllers.orders.OrderController.process_order"
 # compression story meaningfully - it's still benchmarked below for
 # structural-coverage/validity purposes, just without this specific ratio
 # gate.
+# Threshold lowered from an original 50.0 to 45.0 (Issue #10): Level 1
+# (Pruned) now renders a nearby callee's real body *with its real call
+# arguments* instead of a compact contract block - a deliberate trade of
+# some compression for exactly the debugging-relevant detail (loop
+# bounds, off-by-one-prone index arithmetic, literal flags/status codes)
+# that used to be uniformly erased regardless of how close a dependency
+# sat to the seed. At a loose 4000-token budget in particular, more L1
+# items fit and get shown at their richer form, so the ratio against a
+# naive whole-file-dump baseline drops a little (measured: 48.91% at
+# budget=4000, still 53.49% at budget=2000, where the tighter budget
+# already forces more L2 items) - a real, expected, and accepted
+# consequence of Issue #10, not a compression regression in the
+# mechanism itself (the 2000-budget case is untouched).
 @pytest.mark.parametrize("budget", [2000, 4000])
 def test_compression_ratio_meets_threshold_without_dropping_direct_callees(budget):
     result = run_single_benchmark(STRESS_FIXTURE, STRESS_TARGET, budget=budget)
 
-    assert result.compression_pct >= 50.0, (
-        f"expected >=50% compression vs. the whole-file-dump baseline, got {result.compression_pct}% "
+    assert result.compression_pct >= 45.0, (
+        f"expected >=45% compression vs. the whole-file-dump baseline, got {result.compression_pct}% "
         f"(raw={result.raw_tokens} tokens, prism={result.prism_tokens} tokens)"
     )
 

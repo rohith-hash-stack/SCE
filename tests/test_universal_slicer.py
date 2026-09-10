@@ -28,7 +28,7 @@ from tree_sitter import Node
 
 from prism.parser.queries import run_query
 from prism.parser.tree_sitter_loader import LanguageID, get_parser
-from prism.slicer.compressor import ASTCompressor, CompressionContext, compress_python
+from prism.slicer.compressor import ASTCompressor, CompressionContext, ControlFlowSkeletonizer, compress_python
 from prism.slicer.universal_slicer import UniversalSlicer
 
 slicer = UniversalSlicer()
@@ -242,11 +242,20 @@ PY_PARITY_SNIPPETS: tuple[str, ...] = (
 
 
 def _legacy_ast_skeleton(source: str) -> str:
-    tree = ast.parse(source)
-    func = tree.body[0]
-    line_range = (func.lineno, func.end_lineno)
-    context = CompressionContext(tags=set(), callees=[])
-    return compress_python(source, func.name, line_range, 1, context)
+    # `ControlFlowSkeletonizer` directly, not `compress_python(..., 2,
+    # ...)`: that resolution now also appends a trailing "# Tags: [...]"
+    # contract-annotation comment as of Issue #10 (Python's 4-tier
+    # compression model - see that module), which `UniversalSlicer.
+    # skeletonize` below has no equivalent for and would otherwise unfairly
+    # skew this specific shape-vs-shape comparison. `ControlFlowSkeletonizer`
+    # is still the exact argument-stripping transform Python's resolution 2
+    # (Skeleton) uses - `UniversalSlicer.skeletonize`'s own docstring still
+    # calls itself "L1", from before that split; it's still the CST-based
+    # skeletonizer's argument-stripping shape, structurally the same tier.
+    working = ast.parse(source).body[0]
+    skeleton = ControlFlowSkeletonizer().visit(working)
+    ast.fix_missing_locations(skeleton)
+    return ast.unparse(skeleton)
 
 
 def _universal_cst_skeleton(source: str) -> str:

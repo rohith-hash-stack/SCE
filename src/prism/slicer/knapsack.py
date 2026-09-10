@@ -199,6 +199,20 @@ class ContextKnapsackPacker:
     #: comment where it's used, in the candidate-packing loop below.
     SHALLOW_OUT_DEGREE = 2
 
+    #: Data-Flow Centrality threshold (Issue #10.2):
+    #: DataFlowCentrality(v) = |{(u,v) in E | v is an argument or return
+    #: value of u}| - proxied here by how many distinct incoming CALLS
+    #: edges captured `v`'s own return value into a variable
+    #: (`bound_to is not None` on the edge's own CallSiteContext - a real,
+    #: already-tracked data-flow-significant use, as opposed to a bare
+    #: fire-and-forget call whose result nothing downstream touches). A
+    #: node this many callers depend on for real data (not just control
+    #: flow) is never compressed below Level 1 (Pruned) regardless of how
+    #: far it sits from the seed - a distant node whose actual return
+    #: value threads through several call sites is exactly the kind of
+    #: thing a debugging agent needs to see the real arguments/values of.
+    DATA_FLOW_CENTRALITY_THRESHOLD = 2
+
     def __init__(
         self,
         token_budget: int,
@@ -420,6 +434,19 @@ class ContextKnapsackPacker:
                 continue
 
             target_res = distance_engine.resolution_for_distance(distances[node])
+            # Data-Flow Centrality (Issue #10.2): a node enough distinct
+            # callers actually depend on for its *return value* (not just
+            # a control-flow hop) is never compressed below Level 1
+            # (Pruned) - a hard floor on the downgrade loop just below,
+            # not merely a starting point it can still slide past under
+            # budget pressure. If even Level 1 doesn't fit, such a node is
+            # excluded entirely rather than further degraded - matching
+            # the audit's own "never compressed below Level 1" wording
+            # literally, not just "prefer not to".
+            min_resolution = (
+                1 if self._data_flow_centrality(g_c, node) >= self.DATA_FLOW_CENTRALITY_THRESHOLD else 3
+            )
+            target_res = min(target_res, min_resolution) if min_resolution == 1 else target_res
             content = self._render(builder, tag_matrix, node, target_res, compact)
             if content is None:
                 continue
@@ -429,7 +456,7 @@ class ContextKnapsackPacker:
             # loop below - computed once, not recomputed per iteration.
             overhead = _wrapping_overhead_tokens(node, node_path, target_res, node_symbol.line_range)
             cost = estimate_tokens(content) + overhead
-            while total_tokens + cost > self._admission_budget and target_res < 3:
+            while total_tokens + cost > self._admission_budget and target_res < min_resolution:
                 target_res += 1
                 content = self._render(builder, tag_matrix, node, target_res, compact)
                 cost = estimate_tokens(content) + overhead
@@ -437,6 +464,12 @@ class ContextKnapsackPacker:
                 items.append(PackedItem(node, target_res, content, node_symbol.language_id, node_symbol.line_range, node_path))
                 total_tokens += cost
                 packed.add(node)
+            elif min_resolution == 1:
+                # A high-data-flow-centrality node that doesn't even fit
+                # at its Level 1 floor is skipped, not further degraded -
+                # continue to the next (lower-priority) candidate instead
+                # of aborting the whole remaining pass over it alone.
+                continue
             else:
                 break
 
@@ -625,6 +658,22 @@ class ContextKnapsackPacker:
         return render_dynamic_edge_sentinel(
             data.get("call_site_expr", ""), line, data.get("hazard_type", ""), data.get("target_object")
         )
+
+    @staticmethod
+    def _data_flow_centrality(g_c, node: str) -> int:
+        """DataFlowCentrality(v) = |{(u,v) in E | v is an argument or
+        return value of u}| (Issue #10.2) - proxied by how many distinct
+        incoming CALLS edges captured `node`'s own return value into a
+        variable (`bound_to is not None` on that edge's own
+        `CallSiteContext`, already computed by
+        `prism.graph.call_site.compute_call_site_context` for every
+        resolved call). A bare fire-and-forget call (`node()` with its
+        result discarded) doesn't count - only a use where the caller's
+        own downstream logic actually depends on what `node` returned.
+        """
+        if node not in g_c:
+            return 0
+        return sum(1 for _u, _v, data in g_c.in_edges(node, data=True) if data.get("bound_to") is not None)
 
     def _render(
         self, builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]], qname: str, resolution: int, compact: bool = False
