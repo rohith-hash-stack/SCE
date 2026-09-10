@@ -107,19 +107,23 @@ def _match_sink_bits_for_call(segments: list[str], import_map, lang: str, regist
     `db.http_export()` - though no entry in the literal registry actually
     does today):
 
-      1. Full dotted chain (`os.path.join` -> `"os.path"`) against a
-         multi-segment registry entry (`time.sleep`, `os.path`,
-         `Math.random`, `time.Sleep`) - checked as a *prefix* match on
-         the joined chain, since `os.path.join(...)`'s chain is
-         `["os", "path", "join"]`, three segments, against a two-segment
-         registry entry.
-      2. The call's root segment, resolved through the file's own
-         `LocalImportMap` to its fully-qualified import target, against
-         a plain package/module registry entry (`requests`, `fs`,
-         `net/http` normalized to `net.http`).
-      3. The bare root segment itself (no import needed - Python
-         builtins like `open`, or a single-segment registry entry that
-         happens to equal an unimported global like JS's `fetch`).
+      1. A registry entry containing a literal `/` (Go import paths only
+         - `net/http`, `database/sql`, `os/exec`, ...) names a *module*,
+         not a call-chain shape - matched against `resolved_root` (the
+         call's root identifier, resolved through the file's own Go
+         import map, e.g. `sql.Open(...)`'s root `sql` resolving to
+         `database.sql`), never against the call's own joined text.
+      2. A registry entry containing a literal `.` but no `/`
+         (`time.sleep`, `os.path`, `Math.random`, Go's own `time.Sleep`)
+         *is* a real dotted call-chain shape - matched as a *prefix*
+         against the call's full joined chain (`os.path.join(...)`'s
+         chain is `["os", "path", "join"]`, three segments, against the
+         two-segment registry entry `os.path`).
+      3. A bare single-segment entry (`requests`, `fs`, `random`) is
+         matched against the call's root segment directly (Python
+         builtins like `open` need no import at all) or, failing that,
+         through the file's own `LocalImportMap` resolution (an aliased
+         import, `import psycopg2 as pg` -> `pg.connect()`).
     """
     if not segments:
         return FeatureBit(0)
@@ -131,18 +135,19 @@ def _match_sink_bits_for_call(segments: list[str], import_map, lang: str, regist
     for category, entries in registry.items():
         bit = _CATEGORY_BIT[category]
         for entry in entries:
-            normalized_entry = _normalize_go(entry) if lang == LanguageID.GO else entry
-            if "." in normalized_entry:
-                if joined == normalized_entry or joined.startswith(normalized_entry + "."):
-                    bits |= bit
-                    break
-            else:
-                if root == normalized_entry or resolved_root == normalized_entry:
-                    bits |= bit
-                    break
+            if "/" in entry:
+                normalized_entry = _normalize_go(entry)
                 if resolved_root is not None and (
                     resolved_root == normalized_entry or resolved_root.startswith(normalized_entry + ".")
                 ):
+                    bits |= bit
+                    break
+            elif "." in entry:
+                if joined == entry or joined.startswith(entry + "."):
+                    bits |= bit
+                    break
+            else:
+                if root == entry or resolved_root == entry:
                     bits |= bit
                     break
     return bits

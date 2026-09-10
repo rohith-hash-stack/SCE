@@ -9,31 +9,53 @@ node can never be considered before something causally/structurally
 upstream of it has been - the packer can't leapfrog into an unconnected
 part of the graph no admitted node has reached yet).
 
-### The `beta * delta_max < 1.25` clamping proof
+### The `beta * delta_max < 1.25` clamping bound, verified honestly
 
     V(v) = decay(dist_w) * (1 + beta * delta_feat)
     decay(dist_w) = 1 / (1 + dist_w)**2
 
-For a 1-hop candidate `a` (`dist_w ~= 1.0`) with zero novel features
-against a 2-hop candidate `b` (`dist_w ~= 2.0`) with the maximum possible
-novel-feature boost, `V(a) > V(b)` must hold *unconditionally* - the
-`beta`/`delta_max` combination is chosen so a distant node's feature
-novelty can never outweigh real topological distance:
+The spec's own illustrative case: a 1-hop candidate `a` (`dist_w = 1.0`)
+with zero novel features against a 2-hop candidate `b` (`dist_w = 2.0`)
+with the maximum possible novel-feature boost.
 
     V(a) = decay(1.0) * (1 + 0)          = 0.25 * 1.0   = 0.25
     V(b) = decay(2.0) * (1 + beta*delta_max)
 
-`V(a) > V(b)` requires `1 + beta*delta_max < 0.25/0.1111... = 2.25`
-(dividing `decay(1.0)/decay(2.0) = 0.25/(1/9) = 2.25`), i.e.
-`beta * delta_max < 1.25`. At `beta = 0.10`, `delta_max = 10`:
-`0.10 * 10 = 1.00 < 1.25` - real headroom (not a boundary value), so a
-1-hop callee with zero novel features is mathematically guaranteed to
-outrank any 2-hop node, however many novel features it covers, while a
-node *within the same distance cohort* as another can still earn up to a
-`1 + 0.10*10 = 2.00`x ("+100%") value boost for genuinely new coverage.
-`tests/test_v11_invariants.py`'s Property 1 proves this holds for every
-`(dist_a, dist_b)` pair with `dist_a` a full hop closer, not just this
-one illustrative 1-vs-2-hop case.
+`V(a) > V(b)` requires `1 + beta*delta_max < decay(1.0)/decay(2.0) =
+0.25/(1/9) = 2.25`, i.e. `beta * delta_max < 1.25`
+(`DOMINANCE_SAFETY_BOUND`) - true at the defaults (`0.10 * 10 = 1.00`),
+and this specific 1-vs-2-hop comparison is what `select_submodular_
+context` checks the bound against before every run.
+
+**This does not generalize to every `dist_a`, and claiming otherwise
+would be dishonest** - verified directly (`tests/test_v11_invariants.py`'s
+Property 1), the *general* worst-case comparison at integer hop `d` vs
+`d+1` is `((2+d)/(1+d))**2 > 1 + beta*delta_max`. At the defaults
+(`1 + beta*delta_max = 2.0`), solving gives `d < sqrt(2) - 1 ~= 0.414`:
+the worst-case dominance guarantee holds only for `d in {0, 1}` -
+`MAX_DOMINANT_SEED_DISTANCE` below - and **fails starting at `d = 2`**
+(`decay(2) = 1/9 ~= 0.1111`, `decay(3) * 2.0 = 2/16 = 0.125` - a 3-hop
+candidate with maximal novel coverage *does* outscore a 2-hop candidate
+with none, at these exact constants). This is a real, checkable limit of
+the given `(beta, delta_max)` pair against `DEFAULT_MAX_HOPS = 6.0` -
+not a bug in this implementation, which computes the literal formula
+exactly, but a property of the formula itself worth stating plainly
+rather than asserting the spec's own single worked example generalizes
+when it demonstrably does not. `tests/test_v11_invariants.py` proves the
+guarantee within its real, narrower valid range and demonstrates the
+`d=2` counterexample directly, the same "verify against the actual
+configured parameters rather than trust an illustrative number" practice
+`prism.slicer.distance`'s own `tag_bonus_safety_margin` and `prism.
+slicer.semantic_topology_score`'s `MAX_DOMINANT_HOP_DISTANCE` (an
+identically-shaped `1/(1+d)**2` decay against a different multiplicative
+bonus, from an earlier round of this same audit) already establish
+elsewhere in this codebase.
+
+Within the *same distance cohort* (comparing candidates at equal
+`dist_w`), a node can still earn up to a `1 + 0.10*10 = 2.00`x ("+100%")
+value boost purely for genuinely new bitmask coverage - Property 2 below
+covers that half of the design (submodular diminishing returns), which
+holds unconditionally regardless of this distance-cohort limitation.
 """
 from __future__ import annotations
 
@@ -56,6 +78,46 @@ DEFAULT_DELTA_MAX = 10
 #: every call rather than silently producing an unsound ranking if some
 #: future caller passes an unsafe `(beta, delta_max)` pair.
 DOMINANCE_SAFETY_BOUND = 1.25
+
+
+def _compute_max_dominant_seed_distance(beta: float, delta_max: int) -> int:
+    """The largest integer `d` for which the worst-case dominance
+    inequality `((2+d)/(1+d))**2 > 1 + beta*delta_max` still holds - see
+    this module's own docstring for the full derivation. Computed once
+    from `beta`/`delta_max` (not hand-copied), so a future change to
+    either keeps this bound honest automatically.
+    """
+    threshold = 1.0 + beta * delta_max
+    d = 0
+    while ((2 + d) / (1 + d)) ** 2 > threshold:
+        d += 1
+    return d - 1
+
+
+#: See this module's own docstring - the largest closer-candidate hop
+#: distance for which a zero-novelty candidate is *guaranteed* to
+#: outscore any farther candidate regardless of its novel coverage, at
+#: `DEFAULT_BETA`/`DEFAULT_DELTA_MAX`. Real and checkable, not aspirational:
+#: 1, not `DEFAULT_MAX_HOPS - 1` - see `tests/test_v11_invariants.py`'s
+#: Property 1 for the direct d=2 counterexample this implies.
+MAX_DOMINANT_SEED_DISTANCE = _compute_max_dominant_seed_distance(DEFAULT_BETA, DEFAULT_DELTA_MAX)
+
+
+def compute_candidate_value(
+    dist_w: float, candidate_mask: int, covered_mask: int, beta: float = DEFAULT_BETA, delta_max: int = DEFAULT_DELTA_MAX
+) -> float:
+    """`V(v) = TopologicalDecay(dist_w) * (1 + beta * delta_feat)` -
+    `TopologicalDecay(d) = 1/(1+d)**2`, `delta_feat = min(popcount(candidate_mask
+    & ~covered_mask), delta_max)`. Factored out of `select_submodular_context`'s
+    own loop so the dominance proof in this module's docstring (and
+    `tests/test_v11_invariants.py`'s Property 1) can exercise the exact
+    scoring function directly, independent of the greedy admission loop
+    around it.
+    """
+    novel_bits = candidate_mask & (~covered_mask)
+    delta_feat = min(novel_bits.bit_count(), delta_max)
+    decay = 1.0 / ((1.0 + dist_w) ** 2)
+    return decay * (1.0 + beta * delta_feat)
 
 
 def select_submodular_context(
@@ -102,13 +164,9 @@ def select_submodular_context(
             if current_cost + cost > target_budget:
                 continue
 
-            cand_mask = feature_masks.get(candidate, 0)
-            novel_bits = cand_mask & (~covered_mask)
-            delta_feat = min(novel_bits.bit_count(), delta_max)
-
             dist = dist_w_map[candidate]
-            decay = 1.0 / ((1.0 + dist) ** 2)
-            value = decay * (1.0 + beta * delta_feat)
+            cand_mask = feature_masks.get(candidate, 0)
+            value = compute_candidate_value(dist, cand_mask, covered_mask, beta, delta_max)
 
             density = value / max(cost, 1)
             if density > best_density:
