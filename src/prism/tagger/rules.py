@@ -131,6 +131,25 @@ STATE_MUTATION_TAG = "#state_mutation"
 # `prism.graph.contracts.ContractExtractor`).
 DYNAMIC_HAZARD_TAG = "#dynamic_hazard"
 
+# Descriptor-style attribute access (Issue #16): `@property`/
+# `@cached_property`/`@functools.cached_property` - a method invoked via
+# plain `obj.name`, never `obj.name()`. Distinct from a normal method tag
+# so a context-serialization consumer (`prism.serializers.markdown`) can
+# warn against rendering it with call-parens in a generated snippet - a
+# real, observed LLM failure mode on property-heavy codebases (Django's
+# `QuerySet`/`Model` make heavy use of `@cached_property`).
+PROPERTY_TAG = "#property"
+PROPERTY_DECORATOR_PATTERNS = ("property", "cached_property")
+
+# A method that dynamically names an attribute of `self`/`this`
+# (`setattr(self, name, value)`, `self.__dict__[key] = value`) rather than
+# a literal `self.<name> = ...` - the exact case
+# `ConcreteGraphBuilder._collect_attribute_definitions`'s literal-chain
+# match can never index (there is no fixed name to register), so it must
+# be surfaced explicitly instead of just silently not appearing as an
+# attribute symbol at all.
+DYNAMIC_ATTRIBUTE_TAG = "#dynamic_attribute"
+
 
 def import_roots(import_module_texts: set[str]) -> set[str]:
     """Reduce a set of raw import specifiers to their top-level package

@@ -34,12 +34,27 @@ DEFAULT_MAX_HOPS = 10.0
 # runtime trace.
 DEFAULT_RUNTIME_CONFIDENCE_WEIGHT = 0.5
 
+# Extra discount multiplier applied on top of `runtime_confidence_weight`
+# for an edge `prism.runtime.reconciler` marked `high_trust_runtime=True` -
+# only ever set when that reconciliation's own RuntimeTrust (Matched
+# Events / Total Events) was >= `RUNTIME_TRUST_HIGH_THRESHOLD` (Issue
+# #15.3: "If RuntimeTrust >= 0.9, boost confidence weights on
+# runtime-confirmed edges"). A normal confirmed edge already costs
+# `runtime_confidence_weight` (0.5 by default); a high-trust one costs
+# `runtime_confidence_weight * HIGH_TRUST_EXTRA_DISCOUNT` (0.25 by
+# default) - strictly less, so a trace whose reconciliation was almost
+# entirely clean earns its edges an even lower hop cost than one with
+# many orphans, without ever letting an untrusted trace's edges masquerade
+# at the same confidence.
+DEFAULT_HIGH_TRUST_EXTRA_DISCOUNT = 0.5
+
 
 @dataclass(frozen=True)
 class DistanceConfig:
     lambda_weight: float = DEFAULT_LAMBDA
     max_hops: float = DEFAULT_MAX_HOPS
     runtime_confidence_weight: float = DEFAULT_RUNTIME_CONFIDENCE_WEIGHT
+    high_trust_extra_discount: float = DEFAULT_HIGH_TRUST_EXTRA_DISCOUNT
 
 
 class DistanceEngine:
@@ -101,9 +116,12 @@ class DistanceEngine:
         """
         undirected = g_c.to_undirected()
         for _u, _v, data in undirected.edges(data=True):
-            data["weight"] = (
-                self.config.runtime_confidence_weight if data.get("confidence") == "CONFIRMED_RUNTIME" else 1.0
-            )
+            if data.get("confidence") != "CONFIRMED_RUNTIME":
+                data["weight"] = 1.0
+            elif data.get("high_trust_runtime"):
+                data["weight"] = self.config.runtime_confidence_weight * self.config.high_trust_extra_discount
+            else:
+                data["weight"] = self.config.runtime_confidence_weight
         return undirected
 
     def _d_hybrid(self, hops: float, seed_tags: set[str], node_tags: set[str]) -> float:

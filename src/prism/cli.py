@@ -263,6 +263,14 @@ def trace(repo_path: str, otel_path: str | None, command: tuple[str, ...]) -> No
     click.echo(f"  Newly discovered edges (this run):   {len(result.discovered_edges)}")
     click.echo(f"  Sink-tagged symbols (this run):      {len(result.sink_symbols)}")
     click.echo(f"  Unresolved events (this run):        {len(result.unresolved_events)}")
+    if result.orphan_reasons:
+        for reason, count in sorted(result.orphan_reasons.items()):
+            click.echo(f"    {reason}: {count}")
+    click.echo(f"  RuntimeTrust (this run):             {result.trust_score:.0%}")
+    if result.trust_warning:
+        click.echo(f"  warning: {result.trust_warning}", err=True)
+    if result.dynamic_tagged_symbols:
+        click.echo(f"  Symbols newly tagged #dynamic:       {len(result.dynamic_tagged_symbols)}")
     click.echo(f"Runtime state saved to {runtime_state_path(repo_root)}")
 
 
@@ -292,6 +300,10 @@ def status(repo_path: str) -> None:
     click.echo(f"Dynamically discovered edges: {len(state['discovered_edges'])}")
     click.echo(f"Sink-tagged symbols (runtime):{len(state['sink_symbols']):>2}")
     click.echo(f"Unresolved runtime events:    {state['unresolved_event_count']}")
+    if state.get("orphan_reasons"):
+        for reason, count in sorted(state["orphan_reasons"].items()):
+            click.echo(f"  {reason}: {count}")
+    click.echo(f"RuntimeTrust (latest run):    {state.get('trust_score', 1.0):.0%}")
     click.echo(f"Trace files ingested:         {len(state['trace_files'])}")
     if state["last_updated"]:
         click.echo(f"Last updated:                 {state['last_updated']}")

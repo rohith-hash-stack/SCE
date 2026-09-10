@@ -30,6 +30,7 @@ than silently discarding evidence that doesn't fit the graph.
 from __future__ import annotations
 
 import dataclasses
+import enum
 import json
 import time
 from pathlib import Path
@@ -44,6 +45,99 @@ from prism.graph.guard import (
     save_fingerprints,
 )
 from prism.runtime.tracer import TraceRecord
+
+# --------------------------------------------------------------------- #
+# Orphan Event Classification Pipeline (Issue #15): every runtime event
+# that fails to match a static symbol gets an explicit reason instead of
+# collapsing into one undifferentiated `unresolved_events` bucket - see
+# `classify_orphan`.
+# --------------------------------------------------------------------- #
+class OrphanReason(str, enum.Enum):
+    #: No symbol identity at all to work with - the event's `caller` (and,
+    #: for a sink event, therefore its whole classification anchor) never
+    #: resolved to anything, e.g. an OTel span missing the
+    #: `code.namespace`/`code.function` semantic-convention attributes.
+    NO_STATIC_MATCH = "NO_STATIC_MATCH"
+    #: A real, named symbol Prism's static indexer never saw at all - the
+    #: closest available signal to "this callee was constructed/injected
+    #: at runtime" (`eval`/`exec`, a metaclass-synthesized method,
+    #: `getattr`-obtained dispatch) rather than merely mis-tracked.
+    DYNAMIC_DISPATCH = "DYNAMIC_DISPATCH"
+    #: The callee's bare simple name *does* match one or more real,
+    #: differently-qualified static symbols (see
+    #: `GlobalSymbolTable.candidates_for_simple_name`) - most consistent
+    #: with file-version drift or a decorator (`functools.wraps`, a class
+    #: decorator) shifting the runtime frame's qualname away from what
+    #: Pass 1 registered, not a genuinely novel symbol.
+    AMBIGUOUS_SIGNATURE = "AMBIGUOUS_SIGNATURE"
+    #: An OTel-sourced event naming a real-looking symbol with no
+    #: corresponding Python source Prism indexed - this project's own
+    #: `sys.settrace`-based tracer never even produces a frame for a C
+    #: extension/native call in the first place (no Python frame exists to
+    #: trace), so this reason is reachable only via externally-instrumented
+    #: (`source == "otel"`) events.
+    NATIVE_OR_C_EXTENSION = "NATIVE_OR_C_EXTENSION"
+    #: An unnamed lambda/comprehension frame - this project's own tracer
+    #: filters these before ever emitting a `TraceRecord` (see
+    #: `tracer._SKIP_CO_NAMES`), so this is reachable only from an
+    #: externally-supplied trace source that doesn't apply the same filter.
+    ANONYMOUS_CLOSURE = "ANONYMOUS_CLOSURE"
+
+
+#: Frame/symbol name fragments tree-sitter's own definitions query would
+#: never capture as a real function/method - mirrors `tracer._SKIP_CO_NAMES`
+#: (kept as a separate copy rather than importing it, since this module
+#: must also classify OTel-sourced names `tracer.py` never touches).
+_ANONYMOUS_NAME_MARKERS = ("<lambda>", "<listcomp>", "<setcomp>", "<dictcomp>", "<genexpr>")
+
+
+def _looks_anonymous(qualified_name: str) -> bool:
+    return any(marker in qualified_name for marker in _ANONYMOUS_NAME_MARKERS)
+
+
+def classify_orphan(event: TraceRecord, builder: ConcreteGraphBuilder) -> OrphanReason:
+    """Deterministic, best-effort classification of one event that
+    `GraphReconciler` couldn't attach to a real static symbol - built
+    entirely from the signal a `TraceRecord` actually carries (no line
+    numbers or source snippets are available), so this is necessarily a
+    heuristic rather than a proof, the same "AST-only, no type inference"
+    honesty this codebase's other heuristic classifiers already carry.
+    """
+    if event.callee is None:
+        # A pure sink event (`_reconcile_sink`) reaches this path only when
+        # its own `caller` didn't resolve - there's no other symbol
+        # identity on a sink-only record to classify from.
+        return OrphanReason.NO_STATIC_MATCH
+
+    if _looks_anonymous(event.callee) or (event.caller is not None and _looks_anonymous(event.caller)):
+        return OrphanReason.ANONYMOUS_CLOSURE
+
+    if event.caller is None:
+        return OrphanReason.NO_STATIC_MATCH
+
+    simple_name = event.callee.rsplit(".", 1)[-1]
+    if builder.symbol_table.candidates_for_simple_name(simple_name):
+        return OrphanReason.AMBIGUOUS_SIGNATURE
+
+    if event.source == "otel":
+        return OrphanReason.NATIVE_OR_C_EXTENSION
+
+    return OrphanReason.DYNAMIC_DISPATCH
+
+
+#: `RuntimeTrust` thresholds (Issue #15.3) - below LOW, static analysis is
+#: the primary ground truth and the trace should be treated as
+#: supplementary evidence only; at/above HIGH, runtime-confirmed edges earn
+#: an extra distance discount (see `prism.slicer.distance.DistanceConfig`).
+RUNTIME_TRUST_LOW_THRESHOLD = 0.5
+RUNTIME_TRUST_HIGH_THRESHOLD = 0.9
+
+#: The tag `DYNAMIC_DISPATCH` orphans feed back onto their (statically
+#: resolvable) caller - Issue #15.4's "dynamically tag candidate symbols
+#: with #dynamic". Distinct from `prism.tagger.rules.DYNAMIC_HAZARD_TAG`
+#: (a *static* AST-shape signal): this one is asserted only once a real
+#: execution actually dispatched somewhere the static indexer couldn't see.
+RUNTIME_DYNAMIC_TAG = "#dynamic"
 
 # --------------------------------------------------------------------- #
 # Trace file I/O
@@ -243,6 +337,21 @@ class ReconciliationResult:
     sink_symbols: dict[str, set[str]]
     unresolved_events: list[TraceRecord]
     invocation_counts: dict[tuple[str, str], int]
+    #: `OrphanReason.value -> count` - every entry in `unresolved_events`
+    #: accounted for under exactly one reason (Issue #15's "zero silent
+    #: orphans" invariant), keyed by string rather than the enum itself so
+    #: this stays trivially JSON-serializable for `merge_result_into_state`.
+    orphan_reasons: dict[str, int] = dataclasses.field(default_factory=dict)
+    #: RuntimeTrust = Matched Events / Total Events (1.0 when there were no
+    #: events at all - vacuously trustworthy, nothing to distrust).
+    trust_score: float = 1.0
+    #: Non-`None` iff `trust_score < RUNTIME_TRUST_LOW_THRESHOLD` - a
+    #: human-readable diagnostic `prism trace`/`prism status` surfaces
+    #: directly, per Issue #15.3.
+    trust_warning: str | None = None
+    #: Callers of a `DYNAMIC_DISPATCH` orphan that got `RUNTIME_DYNAMIC_TAG`
+    #: fed back onto them (Issue #15.4).
+    dynamic_tagged_symbols: set[str] = dataclasses.field(default_factory=set)
 
 
 class GraphReconciler:
@@ -288,12 +397,48 @@ class GraphReconciler:
             if symbol in self.builder.graph:
                 self.builder.graph.nodes[symbol]["tags"] = merged
 
+        # Orphan Event Classification Pipeline (Issue #15): every
+        # unresolved event gets exactly one OrphanReason - "zero silent
+        # orphans" - and a DYNAMIC_DISPATCH orphan whose *caller* did
+        # resolve statically feeds RUNTIME_DYNAMIC_TAG back onto it.
+        orphan_reasons: dict[str, int] = {}
+        dynamic_tagged: set[str] = set()
+        for event in unresolved:
+            reason = classify_orphan(event, self.builder)
+            orphan_reasons[reason.value] = orphan_reasons.get(reason.value, 0) + 1
+            if reason is OrphanReason.DYNAMIC_DISPATCH and event.caller in self.builder.symbol_table:
+                dynamic_tagged.add(event.caller)
+
+        for symbol in dynamic_tagged:
+            merged = self.tag_matrix.setdefault(symbol, set())
+            merged.add(RUNTIME_DYNAMIC_TAG)
+            if symbol in self.builder.graph:
+                self.builder.graph.nodes[symbol]["tags"] = merged
+
+        total_events = len(events)
+        matched_events = total_events - len(unresolved)
+        trust_score = (matched_events / total_events) if total_events else 1.0
+        trust_warning = None
+        if total_events and trust_score < RUNTIME_TRUST_LOW_THRESHOLD:
+            trust_warning = (
+                f"RuntimeTrust is low ({trust_score:.0%} of {total_events} events matched a static symbol) - "
+                "treat this trace as supplementary evidence only; static analysis remains the primary ground truth."
+            )
+
+        if trust_score >= RUNTIME_TRUST_HIGH_THRESHOLD:
+            for edge in confirmed | discovered:
+                self.builder.graph.edges[edge]["high_trust_runtime"] = True
+
         return ReconciliationResult(
             confirmed_edges=sorted(confirmed),
             discovered_edges=sorted(discovered),
             sink_symbols={k: set(v) for k, v in sink_symbols.items()},
             unresolved_events=unresolved,
             invocation_counts=counts,
+            orphan_reasons=orphan_reasons,
+            trust_score=round(trust_score, 4),
+            trust_warning=trust_warning,
+            dynamic_tagged_symbols=dynamic_tagged,
         )
 
     def _reconcile_call(
@@ -357,6 +502,9 @@ def _empty_state() -> dict:
         # and hoping).
         "edge_invocation_counts": [],
         "unresolved_event_count": 0,
+        "orphan_reasons": {},
+        "trust_score": 1.0,
+        "dynamic_tagged_symbols": [],
         "last_updated": None,
     }
 
@@ -422,6 +570,22 @@ def merge_result_into_state(state: dict, result: ReconciliationResult, trace_fil
     merged["edge_invocation_counts"] = [[caller, callee, count] for (caller, callee), count in sorted(counts.items())]
 
     merged["unresolved_event_count"] = merged.get("unresolved_event_count", 0) + len(result.unresolved_events)
+
+    orphan_reasons = dict(merged.get("orphan_reasons", {}))
+    for reason, count in result.orphan_reasons.items():
+        orphan_reasons[reason] = orphan_reasons.get(reason, 0) + count
+    merged["orphan_reasons"] = orphan_reasons
+
+    # The most recently observed trust score, not an average across every
+    # run ever recorded - a stale, high-trust trace from months ago
+    # shouldn't mask a newly-introduced reconciliation problem the latest
+    # run just surfaced.
+    merged["trust_score"] = result.trust_score
+
+    dynamic_tagged = set(merged.get("dynamic_tagged_symbols", []))
+    dynamic_tagged.update(result.dynamic_tagged_symbols)
+    merged["dynamic_tagged_symbols"] = sorted(dynamic_tagged)
+
     merged["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     return merged
 
@@ -467,6 +631,24 @@ def apply_runtime_state(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set
         merged_tags.update(tags)
         if symbol in builder.graph:
             builder.graph.nodes[symbol]["tags"] = merged_tags
+
+    for symbol in state.get("dynamic_tagged_symbols", []):
+        if symbol not in builder.symbol_table:
+            continue
+        merged_tags = tag_matrix.setdefault(symbol, set())
+        merged_tags.add(RUNTIME_DYNAMIC_TAG)
+        if symbol in builder.graph:
+            builder.graph.nodes[symbol]["tags"] = merged_tags
+
+    # RuntimeTrust boost (Issue #15.3), re-derived from the persisted
+    # trust_score rather than a separately-persisted edge list - the most
+    # recent run's trust level is what should govern every currently-live
+    # confirmed/discovered edge, consistent with `merge_result_into_state`
+    # only ever keeping the latest trust_score, not an average.
+    if state.get("trust_score", 1.0) >= RUNTIME_TRUST_HIGH_THRESHOLD:
+        for caller, callee in [*state.get("confirmed_edges", []), *state.get("discovered_edges", [])]:
+            if builder.graph.has_edge(caller, callee):
+                builder.graph.edges[caller, callee]["high_trust_runtime"] = True
 
 
 def heal_and_apply_runtime_state(

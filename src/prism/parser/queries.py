@@ -75,8 +75,27 @@ GO_QUERIES = {
         (call_expression function: (identifier) @call.name) @call.expr
         (call_expression function: (selector_expression) @call.attribute) @call.expr
     """,
+    # Go has no decorator/annotation syntax at all - `tree-sitter-go`'s
+    # grammar has no `decorator` node type, so a literal `(decorator)
+    # @decorator` (a straight copy-paste of the Python query) fails query
+    # compilation outright, and the wildcard `(_) @decorator` this had been
+    # replaced with instead (to silence that) matched *every* node in the
+    # tree, which is worse: it isn't wrong in a way that fails loudly, it's
+    # wrong in a way that silently returns garbage to any caller that ever
+    # starts using it. Go's own nearest equivalents to a decorator/
+    # annotation are (1) `//go:...` compiler directive comments
+    # (`go:generate`, `go:embed`, `go:build`, ...) and (2) a struct field's
+    # backtick-quoted tag string (`json:"name,omitempty"`) - captured here
+    # under the same `@decorator` name so a caller that previously matched
+    # nothing (or garbage) now gets Go's real, idiomatic annotation
+    # mechanisms instead. This installed `tree-sitter-go` grammar has no
+    # distinct `field_tag` node type at all (verified directly - a struct
+    # field's backtick-quoted tag parses as a plain `raw_string_literal`,
+    # the third child of `field_declaration`); matched via that structural
+    # position instead of a node type that doesn't exist in this grammar.
     "decorators": """
-        (_) @decorator
+        ((comment) @decorator (#match? @decorator "^//go:"))
+        (field_declaration (raw_string_literal) @decorator)
     """,
 }
 

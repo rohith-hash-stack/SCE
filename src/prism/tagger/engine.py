@@ -27,10 +27,15 @@ from prism.tagger.rules import (
     AUTH_GUARD_RULE,
     CALL_SINK_RULES,
     DECORATOR_RULES,
+    DYNAMIC_ATTRIBUTE_TAG,
     DYNAMIC_HAZARD_TAG,
+    PROPERTY_DECORATOR_PATTERNS,
+    PROPERTY_TAG,
     STATE_MUTATION_TAG,
     import_roots,
 )
+
+_DUNDER_DICT_ATTR = "__dict__"
 
 
 class TaggingEngine:
@@ -44,8 +49,11 @@ class TaggingEngine:
         for rule in DECORATOR_RULES:
             if any(pattern in text for text in decorator_texts for pattern in rule.decorator_patterns):
                 tags.add(rule.tag)
+        if any(pattern in text for text in decorator_texts for pattern in PROPERTY_DECORATOR_PATTERNS):
+            tags.add(PROPERTY_TAG)
 
         roots = import_roots(self._collect_import_texts(parsed))
+        self_tokens = SELF_TOKEN_TEXT[lang]
 
         call_type = CALL_NODE_TYPE[lang]
         for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
@@ -60,6 +68,15 @@ class TaggingEngine:
                     tags.add(rule.tag)
             if method_name in AUTH_GUARD_RULE.call_name_patterns:
                 tags.add(AUTH_GUARD_RULE.tag)
+            # `setattr(self, name, value)` - a dynamically-named attribute
+            # `ConcreteGraphBuilder._collect_attribute_definitions`'s
+            # literal `self.<name> = ...` match can never index (Issue #16).
+            if (
+                method_name == "setattr"
+                and len(segments) == 1
+                and self._first_call_arg_is_self(call_node, parsed, self_tokens)
+            ):
+                tags.add(DYNAMIC_ATTRIBUTE_TAG)
 
         raise_type = RAISE_NODE_TYPE.get(lang)
         if raise_type:
@@ -70,7 +87,6 @@ class TaggingEngine:
 
         assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
         if assign_type:
-            self_tokens = SELF_TOKEN_TEXT[lang]
             for assign in iter_scoped_nodes(def_node, {assign_type}, lang):
                 target = assign.child_by_field_name("left")
                 if target is None:
@@ -78,11 +94,38 @@ class TaggingEngine:
                 segments = flatten_reference_chain(target, parsed.source, lang)
                 if segments and len(segments) >= 2 and segments[0] in self_tokens:
                     tags.add(STATE_MUTATION_TAG)
+                elif self._is_dunder_dict_subscript_target(target, parsed, lang, self_tokens):
+                    # `self.__dict__[key] = value` - the other common
+                    # dynamically-named-attribute idiom (Issue #16),
+                    # structurally a subscript assignment rather than a
+                    # `self.<name> = ...` chain, so it needs its own check
+                    # (`flatten_reference_chain` above only ever matches a
+                    # literal attribute chain, never a subscript target).
+                    tags.add(DYNAMIC_ATTRIBUTE_TAG)
 
         if has_dynamic_hazard_construct(def_node, parsed):
             tags.add(DYNAMIC_HAZARD_TAG)
 
         return tags
+
+    @staticmethod
+    def _first_call_arg_is_self(call_node: Node, parsed: ParsedFile, self_tokens: set[str]) -> bool:
+        args_node = call_node.child_by_field_name("arguments") or call_node.child_by_field_name("argument_list")
+        if args_node is None or not args_node.named_children:
+            return False
+        first_arg = args_node.named_children[0]
+        return node_text(first_arg, parsed.source) in self_tokens
+
+    @staticmethod
+    def _is_dunder_dict_subscript_target(target: Node, parsed: ParsedFile, lang: str, self_tokens: set[str]) -> bool:
+        # `__dict__` is a Python-only concept.
+        if lang != LanguageID.PYTHON or target.type != "subscript":
+            return False
+        base = target.child_by_field_name("value")
+        if base is None:
+            return False
+        base_segments = flatten_reference_chain(base, parsed.source, lang)
+        return bool(base_segments) and len(base_segments) == 2 and base_segments[0] in self_tokens and base_segments[1] == _DUNDER_DICT_ATTR
 
     def tag_graph(self, builder: ConcreteGraphBuilder) -> dict[str, set[str]]:
         """Populate `M` for every function/method the builder discovered."""
