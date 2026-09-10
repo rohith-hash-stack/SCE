@@ -10,6 +10,33 @@ Remediation of gaps found by a post-implementation verification audit of
 the `feat/benchmark-optimizations` branch (Category A/B/C, referred to
 below by their issue codes).
 
+### Benchmark Calibration Baseline Break
+
+Issue B1 changed Go method registration from a bare simple name
+(`kind="function"`, name `JSON`) to receiver-qualified
+(`kind="method"`, name `<Module>.<ReceiverType>.<JSON>`) - a real,
+necessary, deliberate fix (Go structs were previously never registered
+as classes at all, and every Go method registered as an unassociated
+top-level function - see the earlier "Fixed" entry for Issue B1 above).
+This is **not** backward compatible with anything - a saved query, a
+script, a benchmark task definition - that named a Go seed by its old,
+bare, unqualified name. `benchmarks/comparison_tasks.py`'s own four Gin
+seed symbols (`routergroup.Use`, `context.MustBindWith`,
+`context.GetInt64`, `context.Set`) needed exactly this update at the
+time (see that commit's own message), which is what surfaced the
+breaking-change risk in the first place for anyone else's saved queries.
+
+Item 16 (second post-implementation audit) adds a compatibility path
+for exactly this case: `prism query <repo> JSON` (a bare, unqualified
+seed name) against a Go codebase where exactly one receiver method
+named `JSON` exists resolves to it automatically, with a visible
+warning (`seed 'JSON' resolved to receiver method 'Context.JSON'.
+Update seed to fully-qualified name.`) rather than failing outright -
+see `prism.cli._resolve_legacy_go_bare_seed`. An ambiguous bare name
+(more than one same-named receiver method anywhere in the repo) is
+never guessed, even for this compatibility path - the caller must use
+the fully-qualified name in that case.
+
 ### Fixed
 
 - **Issue A1** - the regex-based fallback tokenizer (used only when

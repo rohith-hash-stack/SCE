@@ -53,6 +53,30 @@ LANGUAGE_TIER_PERMISSIVE = "permissive"
 LANGUAGE_TIER_TIER1_ONLY = "tier1-only"
 
 
+def _resolve_legacy_go_bare_seed(builder: ConcreteGraphBuilder, symbol: str) -> str | None:
+    """Item 16 (second post-implementation audit): backward-compatible
+    seed resolution for a bare Go method name (`"JSON"`) against Issue
+    B1's receiver-qualified registration (`"Context.JSON"`) - a qualified
+    name always contains at least one `.`, so a bare `symbol` here can
+    only ever have meant the old flat naming. Reuses
+    `ConcreteGraphBuilder._go_method_registry` (Item 3), which already
+    indexes every Go method by its own simple name for exactly this kind
+    of "is there exactly one match" lookup. Returns `None` (never
+    guesses) for a qualified-looking symbol, zero matches, or - unlike
+    Item 3 Stage 2's own tentative-call fallback, which still binds a
+    lower-confidence edge in that case - more than one match, since
+    silently picking one of several same-named receiver methods for a
+    query's own *seed* (not a mid-graph call edge) would be misleading
+    about which symbol the returned context is actually for.
+    """
+    if "." in symbol:
+        return None
+    candidates = builder._go_method_registry().get(symbol)
+    if candidates is None or len(candidates) != 1:
+        return None
+    return candidates[0]
+
+
 def discover_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE) -> list[str]:
     allowed_extensions = (
         {ext for ext, lang in EXTENSION_LANGUAGE_MAP.items() if lang in TIER_1_ONLY_LANGUAGES}
@@ -175,9 +199,30 @@ def query(
     builder, tag_matrix = build_pipeline(repo_path, language_tier)
 
     if symbol not in builder.symbol_table:
-        click.echo(f"error: symbol '{symbol}' not found in {repo_path}", err=True)
-        click.echo("hint: run `prism index REPO_PATH --debug-json` to list known symbols.", err=True)
-        raise SystemExit(1)
+        # Item 16 (second post-implementation audit) - Benchmark
+        # Calibration Baseline Break: Issue B1 changed Go method
+        # registration from a bare simple name (`JSON`) to receiver-
+        # qualified (`Context.JSON`) - a real, deliberate, necessary fix
+        # (see CHANGELOG.md's own "Benchmark Calibration Baseline Break"
+        # entry), but it silently breaks any caller (a saved query, a
+        # script, a benchmark task definition written against the old
+        # naming) still passing the old bare name. A bare `symbol` (no
+        # `.` in it - a qualified name always has at least one) that
+        # matches exactly one Go receiver method's own simple name
+        # resolves to it, with a visible deprecation warning, rather
+        # than failing outright.
+        resolved = _resolve_legacy_go_bare_seed(builder, symbol)
+        if resolved is not None:
+            click.echo(
+                f"warning: seed '{symbol}' resolved to receiver method '{resolved}'. "
+                "Update seed to fully-qualified name.",
+                err=True,
+            )
+            symbol = resolved
+        else:
+            click.echo(f"error: symbol '{symbol}' not found in {repo_path}", err=True)
+            click.echo("hint: run `prism index REPO_PATH --debug-json` to list known symbols.", err=True)
+            raise SystemExit(1)
     if not 0.0 <= runtime_bias <= 1.0:
         click.echo(f"error: --runtime-bias must be between 0.0 and 1.0, got {runtime_bias}", err=True)
         raise SystemExit(1)
