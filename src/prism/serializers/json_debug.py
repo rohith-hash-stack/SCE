@@ -27,7 +27,13 @@ def build_debug_dict(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[st
         {"from": u, "to": v, "relation": data.get("relation", "CALLS")}
         for u, v, data in sorted(builder.graph.edges(data=True), key=lambda e: (e[0], e[1]))
     ]
-    return {"nodes": nodes, "edges": edges}
+    # Item 3 (second post-implementation audit): repository index
+    # metadata - always present (1.0 for a repo with no Go receiver-
+    # shaped call sites at all, not an error/None), not gated behind a
+    # Go-only check the way the plain-text `prism index` output is
+    # (that one skips printing it entirely for a non-Go repo; this
+    # debug/programmatic surface always includes it for a stable schema).
+    return {"nodes": nodes, "edges": edges, "go_call_resolution_ratio": builder.go_call_resolution_ratio}
 
 
 def render_json_debug(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set[str]]) -> str:

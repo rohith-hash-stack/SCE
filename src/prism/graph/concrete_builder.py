@@ -87,8 +87,11 @@ from prism.graph.symbol_table import (
 # outranks a same-or-fewer-hop behavioral neighbor for a scarce token
 # budget. `READS_STATE` stays excluded - a bare attribute read pulls in
 # unrelated attribute nodes with no comparable "this is now unreachable
-# without it" failure mode to justify the same trade.
-TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMENTS", "OVERRIDES"})
+# without it" failure mode to justify the same trade. `EMBEDS` (Item 5)
+# is Go's own equivalent addition - anonymous struct embedding, the real
+# mechanism Go composition/"inheritance" uses in place of EXTENDS syntax
+# it doesn't have - weighted identically to EXTENDS for the same reason.
+TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMENTS", "OVERRIDES", "EMBEDS"})
 
 # Issue A5 (post-implementation audit): inheritance-graph resolution -
 # EXTENDS/IMPLEMENTS edges above, `_mro_ancestors`/`_link_overrides`
@@ -108,10 +111,15 @@ TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMEN
 #     linearize) so the distinction rarely matters in practice.
 #   - Go: no EXTENDS/IMPLEMENTS edges are ever built (`_link_class_relations`
 #     returns immediately for Go - Go has no class/inheritance syntax at
-#     all, only struct embedding, which this builder does not currently
-#     model as a graph relation). Go method resolution is therefore
-#     receiver-qualified structural lookup only (Issue B1), with no MRO
-#     or ancestor walk of any kind.
+#     all). Item 5 adds Go's real equivalent instead: anonymous struct
+#     embedding, modeled as its own `EMBEDS` relation (`_link_go_embeds`),
+#     with Item 7's BFS-with-depth-tracking method promotion
+#     (`_go_promoted_method`) enforcing Go's actual compile-time shadowing
+#     rules (nearest-embedding-depth wins; a same-depth collision across
+#     two embedded types is `AMBIGUOUS_EMBEDDED_COLLISION`, never
+#     guessed) - deliberately not called "Go MRO" anywhere in this
+#     codebase's documentation, since Go's real rules are shadowing-by-
+#     depth, not C3 linearization.
 #   - Java/C#: also excluded by the same early return, despite being
 #     single-inheritance languages where a real (simpler-than-Python's)
 #     MRO would be well-defined - genuinely unimplemented, not merely
@@ -135,6 +143,9 @@ class ConcreteGraphBuilder:
         #: Item 3 Stage 2 (second post-implementation audit): lazily
         #: built, memoized by `_go_method_registry`.
         self._go_method_registry_cache: dict[str, list[str]] | None = None
+        #: Item 5 follow-through: lazily built, memoized by
+        #: `_go_class_registry`.
+        self._go_class_registry_cache: dict[str, list[str]] | None = None
         #: Item 3: set by `_resolve_segments` immediately before it
         #: returns via the Go-only Stage-2 "codebase-unique receiver"
         #: fallback, read by its one caller (`_resolve_calls_in_function`)
@@ -149,6 +160,12 @@ class ConcreteGraphBuilder:
         #: denominator - see that property's own docstring.
         self._go_receiver_call_sites_total = 0
         self._go_receiver_call_sites_resolved = 0
+        #: Item 7: set by `_go_promoted_method` when it finds a same-
+        #: embedding-depth name collision (ambiguous, never guessed) -
+        #: `None` otherwise, including "no promoted method found at
+        #: all". Same single-threaded/sequential caveat as
+        #: `_last_resolution_was_tentative` above.
+        self._last_go_embedded_collision: str | None = None
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
@@ -516,6 +533,7 @@ class ConcreteGraphBuilder:
             import_maps[path] = import_map
             self._register_exports(parsed, module, import_map)
             self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
+            self._link_go_embeds(classes_by_file.get(path, []), parsed, module)
 
         # Sub-pass 2a-ter: OVERRIDES detection (Issue #9) needs every
         # class's own EXTENDS edge already in place - a subclass and its
@@ -955,6 +973,57 @@ class ConcreteGraphBuilder:
         symbol = self.symbol_table.get(qualified_name)
         return symbol is not None and symbol.kind == "class"
 
+    def _resolve_go_type_name(self, local_module: str, type_name: str) -> str | None:
+        """Item 5 follow-through (second post-implementation audit):
+        resolves a bare Go type name (a struct-embedding field, a
+        parameter type, a `:=` composite-literal type) to its real
+        qualified class - trying the same-file-derived module first
+        (`f"{local_module}.{type_name}"`, cheap and unambiguous when it
+        hits), then falling back to a repo-wide search by simple name.
+
+        The fallback exists because of a real, structural fact about how
+        this builder derives Go "modules": `_module_for_file` names a Go
+        module after the *file's own path* (`path_to_module`), not its
+        `package` declaration - correct for Python's real per-file
+        module semantics, but Go packages routinely span many files in
+        one directory (`gin.go` and `routergroup.go` are both `package
+        gin`, yet register as modules `"gin"` and `"routergroup"`
+        respectively - confirmed directly: real gin-gonic/gin's own
+        `Engine` embeds `RouterGroup` from a different file in the same
+        package, and the naive same-module lookup alone never finds it).
+        Reworking Go's module derivation to be package-based instead
+        (matching Java/C#'s already-different treatment) would be a much
+        larger, riskier change than this fallback - out of scope here.
+
+        Like `_go_unique_receiver_for_method`, only ever returns a
+        result when the repo-wide search finds *exactly one* same-named
+        Go class - a genuine cross-package name collision (rare, but
+        real) is left unresolved rather than guessed.
+        """
+        same_module = f"{local_module}.{type_name}"
+        if self._is_known_class(same_module):
+            return same_module
+        registry = self._go_class_registry()
+        candidates = registry.get(type_name)
+        if candidates is not None and len(candidates) == 1:
+            return candidates[0]
+        return None
+
+    def _go_class_registry(self) -> dict[str, list[str]]:
+        """Simple Go struct/class name -> every qualified class of that
+        name anywhere in the repo - the type-level counterpart to
+        `_go_method_registry`, backing `_resolve_go_type_name`'s
+        cross-file fallback. Built once, lazily, and cached.
+        """
+        if self._go_class_registry_cache is None:
+            registry: dict[str, list[str]] = {}
+            for symbol in self.symbol_table:
+                if symbol.kind == "class" and symbol.language_id == LanguageID.GO:
+                    simple_name = symbol.qualified_name.rsplit(".", 1)[-1]
+                    registry.setdefault(simple_name, []).append(symbol.qualified_name)
+            self._go_class_registry_cache = registry
+        return self._go_class_registry_cache
+
     # -- EXTENDS / IMPLEMENTS ---------------------------------------------- #
     def _link_class_relations(self, class_qnames: list[str], parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
         """`class Foo(Base): ...` / `class Foo extends Base implements
@@ -964,8 +1033,10 @@ class ConcreteGraphBuilder:
         `extends_clause`/`implements_clause` children - JS's grammar never
         produces an `implements_clause` at all, so that half degrades
         cleanly to "no interfaces" there rather than needing its own
-        branch). Not yet implemented for Go/Java/C# - out of scope for this
-        pass, not silently claimed.
+        branch). Not implemented for Go (which has no EXTENDS/IMPLEMENTS
+        syntax at all - see `_link_go_embeds` for its real mechanism,
+        struct embedding, a distinct relation: `EMBEDS`, Item 5) or
+        Java/C# - out of scope for this pass, not silently claimed.
         """
         lang = parsed.language_id
         if lang not in (LanguageID.PYTHON, LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
@@ -978,6 +1049,50 @@ class ConcreteGraphBuilder:
                 self._link_python_bases(class_qname, class_node, parsed, module, import_map)
             else:
                 self._link_ts_heritage(class_qname, class_node, parsed, module, import_map)
+
+    def _link_go_embeds(self, class_qnames: list[str], parsed: ParsedFile, module: str) -> None:
+        """Item 5 (second post-implementation audit): Go achieves
+        composition/"inheritance" via anonymous struct embedding
+        (`type Engine struct { RouterGroup; ... }`), not EXTENDS/
+        IMPLEMENTS syntax - a genuinely different relation
+        (`EMBEDS`), same structural edge weight as EXTENDS
+        (`RELATION_STRUCTURAL_WEIGHT["EMBEDS"] = 0.85` in
+        `prism.slicer.distance`) since both represent the same kind of
+        "this node's own methods aren't the whole story" traversal need.
+        An embedded field is a `field_declaration` with no `name` field
+        (Go's grammar - a named field always has one, an anonymous/
+        embedded one never does) whose `type` field is a bare
+        `type_identifier` (same-package - `pkg.Other`-shaped cross-
+        package embeds are out of scope, same boundary every other
+        same-package-only Go resolution in this class already has) or a
+        pointer to one (`*Pool` - `type` already unwraps this in Go's
+        grammar, unlike a parameter's `pointer_type` wrapper, confirmed
+        directly).
+        """
+        if parsed.language_id != LanguageID.GO:
+            return
+        for class_qname in class_qnames:
+            type_spec = self._def_nodes.get(class_qname)
+            if type_spec is None:
+                continue
+            struct_type = type_spec.child_by_field_name("type")
+            if struct_type is None or struct_type.type != "struct_type":
+                continue
+            # `field_declaration_list` has no field name of its own on
+            # `struct_type` (confirmed directly - just a positional
+            # child, unlike e.g. `type_spec`'s own "type"/"name" fields).
+            field_list = next((c for c in struct_type.children if c.type == "field_declaration_list"), None)
+            if field_list is None:
+                continue
+            for field_decl in field_list.named_children:
+                if field_decl.type != "field_declaration" or field_decl.child_by_field_name("name") is not None:
+                    continue
+                embedded_type = _go_type_identifier_text(field_decl.child_by_field_name("type"), parsed.source)
+                if embedded_type is None:
+                    continue
+                target = self._resolve_go_type_name(module, embedded_type)
+                if target is not None:
+                    self._add_relation_edge(class_qname, target, "EMBEDS")
 
     def _link_python_bases(self, class_qname: str, class_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
         superclasses = class_node.child_by_field_name("superclasses")
@@ -1146,8 +1261,8 @@ class ConcreteGraphBuilder:
                 type_name = _go_composite_literal_type(value_node, parsed.source)
                 if type_name is None:
                     continue
-                resolved_class = f"{module}.{type_name}"
-                if self._is_known_class(resolved_class):
+                resolved_class = self._resolve_go_type_name(module, type_name)
+                if resolved_class is not None:
                     instance_map.bind(node_text(name_node, parsed.source), resolved_class)
 
     def _bind_go_typed_parameters(
@@ -1177,8 +1292,8 @@ class ConcreteGraphBuilder:
                 type_name = _go_type_identifier_text(param_decl.child_by_field_name("type"), parsed.source)
                 if type_name is None:
                     continue
-                resolved_class = f"{module}.{type_name}"
-                if not self._is_known_class(resolved_class):
+                resolved_class = self._resolve_go_type_name(module, type_name)
+                if resolved_class is None:
                     continue
                 # A `parameter_declaration` can name more than one
                 # parameter sharing a single trailing type (`a, b
@@ -1508,7 +1623,22 @@ class ConcreteGraphBuilder:
 
         candidate = func_instance_map.resolve(receiver_key) or class_instance_map.resolve(receiver_key)
         if candidate:
-            return f"{candidate}.{method}"
+            direct_candidate = f"{candidate}.{method}"
+            # Item 5/7 (second post-implementation audit): a Go struct's
+            # own type is known here (Item 3 Stage 1's parameter/short-
+            # var-decl binding), but the method called isn't declared
+            # directly on it - exactly the "promoted method via struct
+            # embedding" case, resolved before falling back to this
+            # function's pre-existing (every-language) behavior of
+            # returning the direct-candidate name regardless of whether
+            # it actually exists (the caller registers it as an
+            # `external` node when it doesn't - unchanged for every
+            # other language, and for Go too when promotion also fails).
+            if lang == LanguageID.GO and direct_candidate not in self.symbol_table:
+                promoted = self._go_promoted_method(candidate, method)
+                if promoted is not None:
+                    return promoted
+            return direct_candidate
 
         resolved_receiver = self._resolve_reference_chain(receiver_segments, module, import_map)
         if resolved_receiver:
@@ -1533,6 +1663,52 @@ class ConcreteGraphBuilder:
             if unique is not None:
                 self._last_resolution_was_tentative = True
                 return unique
+        return None
+
+    def _go_promoted_method(self, struct_qname: str, method: str) -> str | None:
+        """Item 7 (second post-implementation audit): Go's real method-
+        resolution shadowing rules, via breadth-first search over
+        `EMBEDS` edges with explicit depth tracking - deliberately not
+        called MRO anywhere (Go's rules are shadowing-by-depth, not C3
+        linearization):
+
+        - A method declared directly on `struct_qname` itself always
+          wins (checked by this function's one caller *before* calling
+          it, via `direct_candidate in self.symbol_table` - not
+          re-checked here).
+        - Among embedded types, the *nearest* embedding depth wins -
+          `type T struct { A; B }` where only `A` (depth 1) defines
+          `M()` resolves `t.M()` to `A.M`, even if `A` itself embeds
+          another type at depth 2 that also defines `M()`.
+        - A collision *at the same depth* (two directly-embedded types
+          both defining the same method name) is ambiguous and is never
+          guessed - real Go itself refuses to compile `t.M()` in that
+          shape without explicit qualification
+          (`self._last_go_embedded_collision` is set to `method` for
+          this case specifically, so a caller/test can distinguish "no
+          promoted method exists at all" from "found, but ambiguous",
+          both of which return `None` here).
+        """
+        self._last_go_embedded_collision = None
+        visited = {struct_qname}
+        queue = [(struct_qname, 0)]
+        by_depth: dict[int, list[str]] = {}
+        while queue:
+            node, depth = queue.pop(0)
+            for _source, target, data in self.graph.out_edges(node, data=True):
+                if data.get("relation") != "EMBEDS" or target in visited:
+                    continue
+                visited.add(target)
+                candidate = f"{target}.{method}"
+                if candidate in self.symbol_table:
+                    by_depth.setdefault(depth + 1, []).append(candidate)
+                queue.append((target, depth + 1))
+        if not by_depth:
+            return None
+        nearest = by_depth[min(by_depth)]
+        if len(nearest) == 1:
+            return nearest[0]
+        self._last_go_embedded_collision = method
         return None
 
     def _go_unique_receiver_for_method(self, method: str) -> str | None:

@@ -89,6 +89,14 @@ RELATION_STRUCTURAL_WEIGHT: dict[str, float] = {
     "INSTANTIATES": 1.0,
     "OVERRIDES": 0.90,
     "EXTENDS": 0.85,
+    # Item 5 (second post-implementation audit): Go struct embedding -
+    # the real mechanism Go composition uses in place of EXTENDS syntax
+    # it doesn't have (`ConcreteGraphBuilder._link_go_embeds`) - weighted
+    # identically to EXTENDS, for the same reason (a promoted/embedded
+    # method is reachable and correctly resolvable, but should never
+    # outrank a same-or-fewer-hop behavioral neighbor for a scarce token
+    # budget).
+    "EMBEDS": 0.85,
     "IMPLEMENTS": 0.80,
 }
 

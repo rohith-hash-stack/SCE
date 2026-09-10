@@ -231,8 +231,27 @@ func setup() {
 def test_go_call_resolution_ratio_on_real_gin_repo() -> None:
     """Corroborated against the real gin-gonic/gin clone this branch's
     own verification work has used throughout - reports the real,
-    measured ratio (honest, not asserted against an unverified target
-    number)."""
+    measured ratio rather than asserting against an unverified target.
+
+    Measured directly at each stage of this audit's Go work: 47.45%
+    (1445/3045) after Item 3 (local parameter/short-var-decl type
+    tracking + codebase-unique receiver fallback) alone; 49.75%
+    (1515/3045) after Item 5/7 (struct embedding + promoted-method BFS)
+    on top of that - real, meaningful progress, but short of the
+    audit's own aspirational >=60% target. The dominant remaining gap is
+    a different, larger problem neither item asked for: arbitrary
+    struct-*field* type tracking (`type Foo struct { ctx *Context }`
+    then `f.ctx.Method()`) - this class tracks parameter/receiver/
+    short-var-declaration types, not general field types, which would
+    need a much larger type-propagation pass (bordering on a real Go
+    type-checker) to close. Asserting a hard >=0.60 floor here would
+    either be false today or brittle against exactly the kind of
+    ordinary refactor (a new file, a new struct) that shouldn't break a
+    resolution-ratio regression test - so this only pins a sane range
+    and a floor comfortably below what's actually been measured, to
+    catch a real regression without being a tripwire for unrelated
+    changes.
+    """
     import os
 
     repo_path = "/home/user/gin-gonic/gin"
@@ -242,5 +261,5 @@ def test_go_call_resolution_ratio_on_real_gin_repo() -> None:
         pytest.skip(f"real gin-gonic/gin clone not present at {repo_path} in this environment")
     builder, _tag_matrix = build_pipeline(repo_path)
     ratio = builder.go_call_resolution_ratio
-    assert 0.0 <= ratio <= 1.0
+    assert 0.40 <= ratio <= 1.0
     assert builder._go_receiver_call_sites_total > 0  # sanity: gin has plenty of receiver calls

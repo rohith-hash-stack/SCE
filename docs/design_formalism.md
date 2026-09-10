@@ -44,6 +44,7 @@ counterparts for ambiguity/dynamism):
 | `EXTENDS` | Class inheritance. | Yes (Issue #9) |
 | `IMPLEMENTS` | Interface implementation. | Yes (Issue #9) |
 | `OVERRIDES` | A subclass method shadowing an MRO ancestor's same-named method. | Yes (Issue #9) |
+| `EMBEDS` | Go anonymous struct embedding - the real mechanism Go composition uses in place of EXTENDS syntax it doesn't have. | Yes (Item 5) |
 | `READS_STATE` | A bare attribute read (`self.x`, not a write or call). | No |
 
 "Traversable" (`prism.graph.concrete_builder.TRAVERSABLE_RELATIONS`) defines
@@ -96,12 +97,22 @@ Defaults (`DistanceConfig`): `lambda_weight = 0.7`, `max_hops = 10.0`,
 |---|---|---|
 | `CALLS` / `INSTANTIATES` | 1.00 | 1.00 |
 | `OVERRIDES` | 0.90 | ~1.11 |
-| `EXTENDS` | 0.85 | ~1.18 |
+| `EXTENDS` / `EMBEDS` | 0.85 | ~1.18 |
 | `IMPLEMENTS` | 0.80 | 1.25 |
 
 A `confidence="CONFIRMED_RUNTIME"` edge (Section 5) additionally multiplies
 its cost by `runtime_confidence_weight` (0.5 default), and by a further
 `high_trust_extra_discount` (0.5 default) when RuntimeTrust >= 0.9.
+
+**Item 3 (second post-implementation audit)** adds a second,
+independent multiplier: a Go `CALLS` edge produced only by the
+codebase-unique-receiver fallback (`kind="TENTATIVE_CALL"` -
+`ConcreteGraphBuilder._go_unique_receiver_for_method`, Item 3 Stage 2)
+has its structural weight further multiplied by
+`RELATION_TENTATIVE_CALL_WEIGHT` (0.60, effective hop cost `~1.67`) -
+strictly more expensive than a normal CALLS hop, but still reachable and
+usable, since it's a best-effort guess (exactly one struct in the whole
+repo defines the called method) rather than a confidently-linked call.
 
 ### 2.2 Topological Monotonicity (Issue #8, Invariant #1)
 
@@ -460,8 +471,8 @@ compressor.py` directly rather than summarized from memory:
 | Parser frontend | Tree-sitter CST + native `ast` (compression transforms) | Tree-sitter CST only | Tree-sitter CST only |
 | Symbol registration | Functions, classes, methods | Functions, classes, methods | Functions, structs, receiver methods (receiver-qualified as of Issue B1) |
 | Re-export resolution | Recursive `ExportRegistry` (depth <=5, `__all__` whitelist) | Recursive `ExportRegistry` (`export {x} from`/`export * from`) | Package-level import resolution only - no re-export syntax exists in Go |
-| Call resolution | Rules A-D: constructor-based instance binding + lexical resolution | Rules B/C/D: lexical resolution only, no instance binding | Receiver/parameter type-signature binding (Issue B1) - not constructor-call tracking |
-| Inheritance traversal | EXTENDS walk approximating C3 MRO + OVERRIDES | Same EXTENDS/IMPLEMENTS walk (single-parent in practice) | None - no EXTENDS/IMPLEMENTS edges built at all |
+| Call resolution | Rules A-D: constructor-based instance binding + lexical resolution | Rules B/C/D: lexical resolution only, no instance binding | Receiver/parameter/short-var-decl type-signature binding (Issue B1, Item 3) + codebase-unique-receiver fallback (Item 3 Stage 2, tentative) - not constructor-*function*-call tracking; measured 49.75% receiver-call resolution on gin-gonic/gin |
+| Inheritance traversal | EXTENDS walk approximating C3 MRO + OVERRIDES | Same EXTENDS/IMPLEMENTS walk (single-parent in practice) | `EMBEDS` walk (Item 5) with BFS depth-based shadowing (Item 7) - Go's real mechanism (struct embedding), not EXTENDS/IMPLEMENTS, which Go has no syntax for at all |
 | Compression fidelity (Section 3) | 4-tier L0-L3, L1 preserves real call arguments, Data-Flow Centrality floor | `UniversalSlicer` CST byte-range L0-L3, generic L1 pruning | Same `UniversalSlicer` pipeline as JS/TS |
 
 Two consequences worth stating explicitly, since they run against the

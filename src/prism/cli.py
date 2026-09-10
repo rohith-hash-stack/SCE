@@ -114,6 +114,11 @@ def index(repo_path: str, debug_json: bool, language_tier: str) -> None:
     click.echo(f"Repository: {os.path.abspath(repo_path)}")
     click.echo(f"Symbols indexed: {len(builder.symbol_table)}")
     click.echo(f"CALLS edges: {builder.graph.number_of_edges()}")
+    if builder._go_receiver_call_sites_total > 0:
+        # Item 3: only shown when the repo actually has Go receiver-shaped
+        # call sites to report on - silent (not a misleading "1.0") for
+        # a repo with no Go at all.
+        click.echo(f"Go call resolution ratio: {builder.go_call_resolution_ratio:.2%}")
     click.echo("Tag distribution:")
     if not tag_counts:
         click.echo("  (none)")
