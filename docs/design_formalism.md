@@ -294,41 +294,68 @@ incrementally - see the module docstring's "not byte-exact" note on
 `_wrapping_overhead_tokens`).
 
 **One deliberate, unconditional exception:** the seed itself is always
-packed at L0 regardless of budget (Section 4/Seed Dominance, Invariant
-#4 - a query response must always show its own target). If the seed's
-own rendered size alone exceeds `B_token`, `allocated_tokens` will
-exceed the nominal budget with zero candidates admitted - confirmed
-directly (a 100-token budget against an ~188-token seed body allocates
-188 tokens, all from the mandatory seed). This is intentional, not a gap
-in the guarantee: Strict Budget Compliance governs *candidate selection*
-beyond the seed, which is the only part of packing that is actually a
-choice. `tests/test_invariants_hypothesis.py`'s property test bounds its
-own budget range above the fixture's seed size for exactly this reason.
+packed - nothing ever excludes it outright (Section 4/Seed Dominance,
+Invariant #4 - a query response must always show its own target) - but,
+as of Item 18 below, it is no longer always packed *at full L0 cost*
+regardless of budget.
 
-Formally, the invariant this section proves is therefore the disjunction:
+Formally, the invariant this section proves is the disjunction:
 
-$$\text{Tokens}(\text{Rendered}) \le \text{Budget} \quad \lor \quad \text{Tokens}(\text{Seed}_{L0}) > \text{Budget}$$
+$$\text{Tokens}(\text{Rendered}) \le \text{Budget} \quad \lor \quad \text{Tokens}(\text{Seed}_{L3}) > \text{Budget}$$
 
 The left disjunct is the ordinary case, proved above by construction over
 every admission check the candidate-selection loop and the
 Swap-Refinement Pass perform. The right disjunct is the seed-dominance
 exception: whenever it holds, the left disjunct is permitted to fail, and
-does so for exactly one reason (the seed's own unconditional L0 pack),
-never silently for any other.
+does so for exactly one reason (even the seed's own minimal L3 stub - the
+smallest representation this class ever renders - doesn't fit), never
+silently for any other.
 
-**Issue A3 (post-implementation audit):** the exception above was real
-and tested from the moment Issue #10 shipped, but nothing in
-`PackResult` let a caller (the CLI's `--json` output, the MCP server, any
-other downstream consumer) *observe* that the right disjunct - not the
-left - was the reason a response came back over budget, short of
-independently comparing `allocated_tokens` against `budget` themselves.
-`PackResult` now exposes this directly:
+**Issue A3 (post-implementation audit):** nothing in `PackResult` let a
+caller (the CLI's `--json` output, the MCP server, any other downstream
+consumer) *observe* that the right disjunct - not the left - was the
+reason a response came back over budget, short of independently
+comparing `allocated_tokens` against `budget` themselves. `PackResult`
+now exposes this directly via `seed_cost`/`budget_exceeded`/
+`truncation_occurred` (see below), rendered in `prism.serializers.
+render_markdown` as an explicit `[!] Budget exceeded: ...` line and
+included in `prism.cli`'s `--json` output.
 
-- `seed_cost: float` - the seed's own real L0 token cost (content +
-  Markdown wrapper), computed once and reused for both the unconditional
-  pack and this diagnostic.
-- `budget_exceeded: bool` - `seed_cost > budget`, i.e. "the right
-  disjunct above holds for this call."
+**Item 18 (third post-implementation audit), Progressive Seed
+Degradation:** Issue A3 fixed the *visibility* gap but not the
+underlying one - a seed that didn't fit at L0 was still packed at full
+L0 cost regardless, guaranteeing a response that would fail hard at a
+downstream LLM's own context-window boundary rather than degrading like
+every other candidate in the pack already does. `ContextKnapsackPacker.
+_degrade_seed_to_fit` now tries L0, then L1 (pruned - real call
+arguments retained, docstrings/logging stripped), then L2 (skeleton -
+arguments collapsed to `...`), then L3 (minimal stub), in that fixed
+order, stopping at the first tier whose real token cost fits `budget`
+(the raw nominal budget, not the reduced `_admission_budget` ordinary
+candidates are checked against - the seed's own admission has never gone
+through that safety-margin reduction, before or after Item 18). Every
+tier past L0 prepends an explicit `/* Warning: Seed compressed to ... */`
+comment directly into the rendered content, visible to a downstream
+reader/LLM without needing to inspect `PackResult`'s own metadata. L3 is
+always accepted regardless of whether it actually fits - nothing smaller
+exists to try, and the seed must always be shown even when doing so
+unavoidably exceeds the budget; that residual case is exactly what
+`budget_exceeded`/`fatal_seed_overflow` now report, and it is
+substantially rarer than before (only a seed whose bare one-line
+signature stub alone exceeds the budget, not any seed whose full source
+does).
+
+`PackResult` exposes:
+
+- `seed_cost: float` - the seed's real token cost *at whatever tier it
+  was actually packed at* (not always L0 anymore).
+- `seed_compression_level: int` - which of L0/L1/L2/L3 the seed ended up
+  at (0 is the common case).
+- `budget_exceeded` / `fatal_seed_overflow: bool` - two names for the
+  same condition (`seed_cost > budget` at the final, L3-or-fitting,
+  tier) - `fatal_seed_overflow` is kept as an explicit separate field
+  (not a property) so it round-trips through plain-dataclass
+  serialization (`asdict`, JSON, ...) alongside `budget_exceeded`.
 - `truncation_occurred: bool` - `allocated_tokens > budget` at the end of
   `pack()`, computed independently from `budget_exceeded` rather than
   aliased to it (in the current architecture every non-seed candidate is
@@ -338,11 +365,6 @@ independently comparing `allocated_tokens` against `budget` themselves.
   seed alone not fit" vs. "did the final document not fit," are
   conceptually distinct and a future non-seed-only overflow source
   should not need to retrofit either flag's meaning).
-
-`prism.serializers.render_markdown` renders an explicit `[!] Budget
-exceeded: ...` line when `budget_exceeded` is set, and `prism.cli`'s
-`--json` output includes both fields, so this is no longer something a
-caller has to infer.
 
 ## 5. Dynamic Reconciliation Model
 

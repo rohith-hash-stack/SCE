@@ -148,24 +148,44 @@ class PackResult:
     #: fired - a more-relevant candidate the main greedy pass left
     #: unselected displacing a less-relevant one it had already packed.
     swaps_performed: int = 0
-    #: Issue A3: real token cost of the seed's own L0 rendering (content +
-    #: Markdown wrapper) - the one quantity `budget_exceeded` below is
-    #: computed from. Always populated (never 0 unless the seed genuinely
-    #: renders to nothing), independent of whether it actually exceeds
-    #: `budget`.
+    #: Issue A3, updated by Item 18 (Progressive Seed Degradation): real
+    #: token cost of the seed's own rendering *at whatever compression
+    #: level it was actually packed at* - see `seed_compression_level`
+    #: below - not always its L0 cost anymore. The one quantity
+    #: `budget_exceeded` below is computed from. Always populated (never
+    #: 0 unless the seed genuinely renders to nothing), independent of
+    #: whether it actually exceeds `budget`.
     seed_cost: float = 0.0
-    #: Issue A3: True exactly when `seed_cost > budget` - the seed alone,
-    #: pinned at L0 with no admission check (see the comment above its
-    #: unconditional pack in `ContextKnapsackPacker.pack`), already
-    #: exceeds what the caller asked for before a single candidate is
-    #: considered. `docs/design_formalism.md` SS4.4 documents this as the
-    #: one deliberate, unconditional exception to Strict Budget
-    #: Compliance: Tokens(Rendered) <= Budget OR Tokens(Seed_L0) > Budget.
-    #: A caller (the MCP server, the CLI, any downstream consumer) should
-    #: surface this explicitly rather than silently accept an
-    #: over-budget response - the whole reason this flag exists instead
-    #: of leaving the overflow implicit in `allocated_tokens > budget`.
+    #: Item 18: which of L0/L1/L2/L3 the seed actually ended up packed
+    #: at, after `ContextKnapsackPacker._degrade_seed_to_fit` tries each
+    #: tier in order and stops at the first that fits `budget` (or L3,
+    #: the last resort, regardless of fit). 0 (L0, full source) is the
+    #: common case; > 0 means the rendered `PackedItem` for the seed
+    #: carries an explicit `/* Warning: ... */` notice a reader can see
+    #: directly, in addition to this metadata field.
+    seed_compression_level: int = 0
+    #: Issue A3, redefined by Item 18: True exactly when even the
+    #: seed's minimal L3 stub - the smallest representation this class
+    #: ever renders, and the last tier `_degrade_seed_to_fit` tries -
+    #: still exceeds `budget`. Before Item 18 this fired at L0 alone
+    #: (the seed was never compressed to fit); now it is the genuinely
+    #: last-resort case, since L1/L2/L3 degradation absorbs everything
+    #: short of that. `docs/design_formalism.md` SS4.4 documents this as
+    #: the one deliberate, unconditional exception to Strict Budget
+    #: Compliance: Tokens(Rendered) <= Budget OR Tokens(Seed_L3) >
+    #: Budget. A caller (the MCP server, the CLI, any downstream
+    #: consumer) should surface this explicitly rather than silently
+    #: accept an over-budget response - the whole reason this flag
+    #: exists instead of leaving the overflow implicit in
+    #: `allocated_tokens > budget`.
     budget_exceeded: bool = False
+    #: Item 18: alias for `budget_exceeded`, matching the audit's own
+    #: naming for this specific (now genuinely rare - only when even an
+    #: L3 stub doesn't fit) last-resort case. Always equal to
+    #: `budget_exceeded` - kept as a separate field rather than a
+    #: property so both names are visible on a plain dataclass
+    #: (`asdict`, JSON serialization, ...) without special-casing.
+    fatal_seed_overflow: bool = False
     #: Issue A3: True when the final rendered package exceeds `budget` for
     #: any reason - computed independently from `allocated_tokens >
     #: budget` rather than aliased to `budget_exceeded`, even though in
@@ -296,33 +316,30 @@ class ContextKnapsackPacker:
         reachable = self._directed_reachable(g_c, seed)
         compact = self._is_compact_mode(builder, reachable)
 
-        seed_content = self._render(builder, tag_matrix, seed, 0, compact)
-        if seed_content is None:
-            raise ValueError(f"Seed symbol '{seed}' was not found in the concrete graph (unknown or external symbol)")
-
         seed_symbol = builder.symbol_table.get(seed)
+        if seed_symbol is None:
+            raise ValueError(f"Seed symbol '{seed}' was not found in the concrete graph (unknown or external symbol)")
         seed_path = self._relative_path(builder, seed_symbol.file)
-        items = [PackedItem(seed, 0, seed_content, seed_symbol.language_id, seed_symbol.line_range, seed_path)]
-        # Issue A3 / the seed budget exception: the seed is pinned at L0
-        # and packed *unconditionally* below (see `total_tokens =
-        # seed_cost` right after) - there is deliberately no `if
-        # seed_cost > self._admission_budget: ...` guard here. A context
-        # slice without its own target symbol is meaningless (Invariant
-        # #4, Seed Dominance - the seed must always be shown), so Strict
-        # Budget Compliance (Invariant #2) is stated as governing
-        # *candidate selection beyond the seed*, not the seed itself; see
-        # docs/design_formalism.md SS4.4 for the formal statement:
-        # Tokens(Rendered) <= Budget  OR  Tokens(Seed_L0) > Budget. What
-        # was missing before Issue A3 wasn't the behavior (it was already
-        # correct and tested) but a way for a caller to *know* this
-        # exception fired instead of silently absorbing an over-budget
-        # response - `budget_exceeded`/`truncation_occurred` below make
-        # that explicit.
-        seed_cost = estimate_tokens(seed_content) + _wrapping_overhead_tokens(
-            seed, seed_path, 0, seed_symbol.line_range, is_seed=True
+        # Item 18 (third post-implementation audit) / Progressive Seed
+        # Degradation: the seed is still always packed *unconditionally*
+        # (never excluded outright - Invariant #4, Seed Dominance; no `if
+        # cost > self._admission_budget: ...` guard, checked against the
+        # raw `self.budget` rather than the reduced `_admission_budget`,
+        # same as Issue A3's original treatment), but is no longer always
+        # rendered at L0 regardless of budget - see `_degrade_seed_to_fit`.
+        seed_compression_level, seed_content, seed_cost = self._degrade_seed_to_fit(
+            builder, tag_matrix, seed, seed_symbol, seed_path, compact
         )
+        items = [PackedItem(seed, seed_compression_level, seed_content, seed_symbol.language_id, seed_symbol.line_range, seed_path)]
+        # `budget_exceeded`/`fatal_seed_overflow` (Item 18 renames Issue
+        # A3's single `budget_exceeded` meaning) are now True only in the
+        # truly last-resort case: even the minimal L3 stub - the smallest
+        # representation this class ever renders - doesn't fit `budget`.
+        # See docs/design_formalism.md SS4.4 for the updated formal
+        # statement of Strict Budget Compliance's seed exception.
+        fatal_seed_overflow = seed_cost > self.budget
+        budget_exceeded = fatal_seed_overflow
         total_tokens = seed_cost
-        budget_exceeded = seed_cost > self.budget
         packed: set[str] = {seed}
         # Swap-Refinement Pass (Issue #12) only ever displaces an
         # ordinary, distance-ranked candidate - the seed, an
@@ -551,7 +568,57 @@ class ContextKnapsackPacker:
             seed_cost=seed_cost,
             budget_exceeded=budget_exceeded,
             truncation_occurred=total_tokens > self.budget,
+            seed_compression_level=seed_compression_level,
+            fatal_seed_overflow=fatal_seed_overflow,
         )
+
+    #: Item 18 (third post-implementation audit) / Progressive Seed
+    #: Degradation: the warning comment prepended to a seed's own
+    #: rendered content when it had to be compressed below L0 to fit the
+    #: budget - visible to a downstream reader/LLM in the rendered
+    #: content itself, not just in `PackResult`'s own metadata fields.
+    _SEED_DEGRADATION_NOTICES = {
+        1: "/* Warning: Seed compressed to L1 due to budget constraint */\n",
+        2: "/* Warning: Seed compressed to L2 skeleton due to severe budget constraint */\n",
+        3: "/* Warning: Seed compressed to minimal stub - budget insufficient even for a skeleton */\n",
+    }
+
+    def _degrade_seed_to_fit(
+        self,
+        builder: ConcreteGraphBuilder,
+        tag_matrix: dict[str, set[str]],
+        seed: str,
+        seed_symbol,
+        seed_path: str,
+        compact: bool,
+    ) -> tuple[int, str, float]:
+        """Item 18: try L0, then L1, then L2, then (last resort) L3,
+        stopping at the first tier whose real token cost fits
+        `self.budget` - the seed is still always packed unconditionally
+        (Invariant #4, Seed Dominance - nothing here can ever exclude
+        it), it just no longer has to be the full, most expensive L0
+        rendering to satisfy that. Checked against `self.budget` (the
+        raw nominal budget), not the reduced `_admission_budget` - the
+        seed's own admission has never gone through that safety-margin
+        reduction (see Issue A3's original comment, carried forward
+        here), only ordinary candidates do. L3 is always accepted
+        regardless of whether it fits - nothing smaller exists to try,
+        and the seed must always be shown (Invariant #4) even when doing
+        so unavoidably exceeds the budget; that residual case is exactly
+        what `fatal_seed_overflow`/`budget_exceeded` report.
+        """
+        for resolution in (0, 1, 2, 3):
+            content = self._render(builder, tag_matrix, seed, resolution, compact)
+            if content is None:
+                raise ValueError(f"Seed symbol '{seed}' was not found in the concrete graph (unknown or external symbol)")
+            notice = self._SEED_DEGRADATION_NOTICES.get(resolution)
+            rendered = f"{notice}{content}" if notice else content
+            cost = estimate_tokens(rendered) + _wrapping_overhead_tokens(
+                seed, seed_path, resolution, seed_symbol.line_range, is_seed=True
+            )
+            if cost <= self.budget or resolution == 3:
+                return resolution, rendered, cost
+        raise AssertionError("unreachable: the resolution==3 branch above always returns")
 
     #: Swap-Refinement Pass hard cap (Issue #12.2) - bounds the pass's own
     #: worst-case work (one rendering attempt per unselected candidate,

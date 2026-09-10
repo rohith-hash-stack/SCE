@@ -161,17 +161,33 @@ def test_invariant_2_strict_budget_compliance(budget, tmp_path_factory):
     deliberately large enough that packing decisions (not just "everything
     trivially fits") are actually exercised.
 
-    `budget` is bounded below at 1000 tokens deliberately: the seed itself
-    is always packed unconditionally at L0 (Invariant #4, Seed Dominance -
-    a query response must always show its own target), so a budget
-    *smaller than the seed's own rendered size* cannot be honored no
-    matter what candidate-selection logic runs - confirmed directly (a
-    budget=100 run against this fixture's ~188-token seed body allocates
-    188 tokens against a 92-token admission budget, entirely from the
-    unconditional seed, zero candidates). That's a real, intentional
-    design property, not a violation of Strict Budget Compliance's actual
-    intent (bounding *candidate selection*, not the mandatory seed) -
-    documented explicitly in docs/design_formalism.md Section 4.4."""
+    `budget` is bounded below at 1000 tokens - a range this fixture's
+    seed (~204 tokens at L0) fits at L0 throughout, so this property
+    test's own assertion (checked against the *reduced*
+    `_admission_budget`, not the raw `budget`) stays exactly as strict as
+    it always was.
+
+    Item 18 (third post-implementation audit), Progressive Seed
+    Degradation, means the seed is no longer *always* pinned at L0
+    regardless of budget - it degrades L0 -> L1 -> L2 -> L3, stopping at
+    the first tier that fits the raw `budget` (not `_admission_budget`;
+    checked directly: at `budget=100` against this exact fixture the
+    seed degrades to L3, 57 tokens, which fits the 92-token admission
+    budget too, `fits_admission=True`) - so a budget below 1000 is no
+    longer guaranteed to violate this assertion the way it did before
+    Item 18. The seed is still always packed unconditionally in the
+    sense that nothing ever excludes it outright (Invariant #4, Seed
+    Dominance - a query response must always show its own target); what
+    changed is that "unconditionally" no longer means "always at full
+    L0 cost". The one residual case this assertion can still legitimately
+    fail on is `fatal_seed_overflow` (even the minimal L3 stub doesn't
+    fit `budget`) - `min_value=1000` is kept here (rather than lowered
+    now that it's no longer strictly required for this specific fixture)
+    to keep this property test focused on ordinary candidate-selection
+    packing rather than the seed-degradation edge case, which
+    `tests/test_budget_exceeded.py` covers directly and explicitly
+    instead. See docs/design_formalism.md Section 4.4 for the updated
+    formal statement."""
     repo = tmp_path_factory.mktemp("invariant2") / "repo"
     repo.mkdir()
     lines = []
