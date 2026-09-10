@@ -1,5 +1,14 @@
 # Prism: Mathematical Design Formalism
 
+> **Core Epistemological Premise** (Item 23, second post-implementation
+> audit): Prism relies on static AST/CST structural causality. In
+> codebases heavily reliant on dynamic metaprogramming (`eval`,
+> `setattr`, dynamic class construction, runtime reflection), static
+> analysis will index declarations but cannot resolve dynamic call
+> chains. Dynamic trace reconciliation (Section 5) augments static gaps
+> when traces are provided, but Prism does not perform symbolic runtime
+> execution.
+
 This document is the formal counterpart to the README's prose description -
 the exact graph model, scoring functions, compression taxonomy, knapsack
 formulation, and dynamic-reconciliation model Prism's engine implements, with

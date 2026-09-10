@@ -1,5 +1,14 @@
 # Prism
 
+> **Core Epistemological Premise** (Item 23, second post-implementation
+> audit): Prism relies on static AST/CST structural causality. In
+> codebases heavily reliant on dynamic metaprogramming (`eval`,
+> `setattr`, dynamic class construction, runtime reflection), static
+> analysis will index declarations but cannot resolve dynamic call
+> chains. Dynamic trace reconciliation (`prism trace`, see below)
+> augments static gaps when traces are provided, but Prism does not
+> perform symbolic runtime execution.
+
 Prism parses an uncompiled, cloned Git repository and constructs a **Dual-Layer
 Coupled Semantic Graph**: a concrete call graph (`G_C`) of real functions and
 methods, coupled through a bipartite tag matrix (`M`) to a small semantic
