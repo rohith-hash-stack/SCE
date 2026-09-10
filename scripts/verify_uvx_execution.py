@@ -20,10 +20,11 @@ Checks, in order (see the corresponding `run_check` calls in `main()`):
      and `--repo`.
   3. A real MCP JSON-RPC stdio handshake (`initialize` ->
      `notifications/initialized` -> `tools/list`) against
-     `uvx --from . prism mcp --transport stdio --repo .` returns exactly the
-     5 tools `prism.mcp.server` registers: `get_symbol_context`,
+     `uvx --from . prism mcp --transport stdio --repo .` returns every
+     tool `prism.mcp.server` registers: `get_symbol_context`,
      `get_architectural_invariants`, `find_symbols_by_tag`,
-     `get_graph_status`, `reindex_repo`.
+     `get_graph_status`, `reindex_repo`, and (v1.1+ Agent Surface)
+     `prism.slice`, `prism.explain`.
 
 Usage:
     python scripts/verify_uvx_execution.py
@@ -42,7 +43,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MCP_PROTOCOL_VERSION = "2025-03-26"
 EXPECTED_TOOL_NAMES = frozenset(
-    {"get_symbol_context", "get_architectural_invariants", "find_symbols_by_tag", "get_graph_status", "reindex_repo"}
+    {
+        "get_symbol_context", "get_architectural_invariants", "find_symbols_by_tag", "get_graph_status", "reindex_repo",
+        "prism.slice", "prism.explain",
+    }
 )
 SUBPROCESS_TIMEOUT_SECONDS = 120
 
@@ -179,7 +183,7 @@ def main() -> int:
     checks = [
         ("uvx --from . prism --help", check_cli_help),
         ("uvx --from . prism mcp --help (documents stdio/sse/--repo)", check_mcp_help),
-        ("MCP stdio handshake returns all 5 tools", check_mcp_stdio_tool_discovery),
+        ("MCP stdio handshake returns all 7 tools", check_mcp_stdio_tool_discovery),
     ]
     results = [run_check(name, fn) for name, fn in checks]
 

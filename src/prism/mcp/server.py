@@ -28,21 +28,38 @@ All five raise `ToolError` (never a bare, opaque crash) for the two
 foreseeable failure modes - an unknown repository path and an unknown
 symbol/tag - which the SDK turns into a graceful `isError` tool result
 for the calling agent rather than a transport-level failure.
+
+Two more tools, `prism.slice`/`prism.explain` (v1.1+ Agent Surface), wrap
+the causal engine (`prism.packer.submodular_knapsack.pack_symbol_context`)
+in the standardized `<prism_context>` envelope (`prism.surface`) instead
+of `get_symbol_context`'s own Markdown package - see `prism.surface.
+build`'s own module docstring for why the two tool families deliberately
+target different engines rather than one replacing the other. These two
+raise a real protocol-level `MCPError` (not `ToolError`) with the spec's
+own numeric codes for every anticipated failure - see each tool's own
+docstring.
 """
 from __future__ import annotations
 
+import difflib
 import os
 from typing import Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.shared.exceptions import MCPError
 
 from prism.graph.metamodel import TagRelation
+from prism.language_tiers import precision_tier_for
+from prism.mcp.auth import enforce as enforce_auth
 from prism.mcp.cache import GraphCache, RepoNotFoundError
 from prism.mcp.security import SecurityError, validate_symbol_name, validate_tag, validate_token_budget
 from prism.serializers.markdown import render_markdown
 from prism.slicer.blueprint import mine_sibling_blueprint
 from prism.slicer.knapsack import ContextKnapsackPacker
+from prism.slicer.tokenizer import count_tokens
+from prism.surface.build import _node_body, build_context_package
+from prism.surface.renderer import RenderOptions, render
 
 DEFAULT_TOKEN_BUDGET = 2000
 
@@ -304,6 +321,205 @@ def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
         "trace_files_ingested": len(ctx.runtime_state.get("trace_files", [])),
         "indexed_at": ctx.indexed_at,
     }
+
+
+# --------------------------------------------------------------------- #
+# v1.1+ Agent Surface: prism.slice / prism.explain
+# --------------------------------------------------------------------- #
+def _validate_repo_path_for_surface(repo_path: str) -> None:
+    """-32001: a `..` path-traversal segment, or (when the server is
+    pinned via `--repo`) a path outside that sandbox - reuses `GraphCache.
+    canonical_path`'s own `SecurityError`, the same check the five
+    original tools already depend on, rather than a second, possibly-
+    drifting implementation.
+    """
+    normalized = repo_path.replace("\\", "/")
+    if any(part == ".." for part in normalized.split("/")):
+        raise MCPError(code=-32001, message=f"repo_path {repo_path!r} contains a '..' path-traversal segment")
+    try:
+        GraphCache.canonical_path(repo_path)
+    except SecurityError as exc:
+        raise MCPError(code=-32001, message=str(exc)) from exc
+
+
+def _repo_context_for_surface(repo_path: str):
+    _validate_repo_path_for_surface(repo_path)
+    try:
+        return _cache.get_or_index(repo_path)
+    except (RepoNotFoundError, SecurityError) as exc:
+        raise MCPError(code=-32001, message=str(exc)) from exc
+
+
+def _resolve_seed_or_raise(repo_ctx, seed_symbol: str) -> None:
+    """-32002, with a fuzzy-matched `candidates` list in `data` when one
+    exists - `difflib.get_close_matches` against every indexed qualified
+    name, the same "did you mean" a human would want typing a symbol name
+    from memory."""
+    if seed_symbol in repo_ctx.symbol_table:
+        return
+    all_names = [s.qualified_name for s in repo_ctx.symbol_table]
+    candidates = difflib.get_close_matches(seed_symbol, all_names, n=5, cutoff=0.5)
+    raise MCPError(
+        code=-32002,
+        message=f"symbol '{seed_symbol}' was not found in '{repo_ctx.repo_root}'",
+        data={"candidates": candidates} if candidates else None,
+    )
+
+
+def _filter_by_language_tier(pkg, language_tier: str):
+    """`language_tier != "auto"` restricts `<nodes>`/`<edges>` to symbols
+    at that precision tier (`prism.language_tiers.precision_tier_for`) -
+    the seed itself is always kept regardless (a caller filtering out
+    their own seed's language would get a package with no seed at all,
+    which is never useful)."""
+    if language_tier == "auto":
+        return pkg
+    keep_ids = set()
+    for node in pkg.nodes:
+        if node.role == "seed":
+            keep_ids.add(node.id)
+            continue
+        tier = precision_tier_for(node.language)
+        digit = tier.value[-1] if tier is not None else "3"
+        if digit == language_tier:
+            keep_ids.add(node.id)
+    filtered_nodes = [n for n in pkg.nodes if n.id in keep_ids]
+    filtered_edges = [e for e in pkg.edges if e.from_node in keep_ids and e.to_node in keep_ids]
+    return pkg.model_copy(update={"nodes": filtered_nodes, "edges": filtered_edges})
+
+
+def _apply_detail_level(pkg, detail_level: str):
+    """`prism.explain`'s own two reduced views - "summary" drops
+    `<nodes>`/`<edges>` entirely (manifest/coverage/metadata only);
+    "manifest" keeps every node but blanks its `body` (signature/
+    features/contract stay). Applied at the `ContextPackage` level (not
+    via `RenderOptions`) so both `format="xml"` and `format="json"` see
+    the same reduced content, not just the XML rendering."""
+    if detail_level == "summary":
+        return pkg.model_copy(update={"nodes": [], "edges": []})
+    if detail_level == "manifest":
+        blanked = [n.model_copy(update={"body": ""}) for n in pkg.nodes]
+        return pkg.model_copy(update={"nodes": blanked})
+    return pkg
+
+
+def _authorization_header(ctx: Context | None) -> str | None:
+    if ctx is None:
+        return None
+    headers = ctx.headers
+    if not headers:
+        return None
+    return headers.get("authorization") or headers.get("Authorization")
+
+
+def _build_envelope_response(
+    repo_path: str,
+    seed_symbol: str,
+    budget_tokens: int,
+    language_tier: str,
+    format: str,
+    include_warnings: bool,
+    api_key: str | None,
+    ctx: Context | None,
+    detail_level: str = "full",
+) -> dict[str, Any]:
+    if not (500 <= budget_tokens <= 128_000):
+        raise MCPError(code=-32602, message=f"budget_tokens must be between 500 and 128000, got {budget_tokens}")
+    if language_tier not in ("auto", "1", "2", "3"):
+        raise MCPError(code=-32602, message=f"language_tier must be one of 'auto', '1', '2', '3' - got {language_tier!r}")
+    if format not in ("xml", "json"):
+        raise MCPError(code=-32602, message=f"format must be 'xml' or 'json' - got {format!r}")
+    if detail_level not in ("summary", "manifest", "full"):
+        raise MCPError(code=-32602, message=f"detail_level must be 'summary', 'manifest', or 'full' - got {detail_level!r}")
+
+    enforce_auth(_authorization_header(ctx), api_key)
+
+    repo_ctx = _repo_context_for_surface(repo_path)
+    _resolve_seed_or_raise(repo_ctx, seed_symbol)
+
+    seed_cost = count_tokens(_node_body(repo_ctx.builder, seed_symbol))
+    if seed_cost > budget_tokens:
+        raise MCPError(
+            code=-32003,
+            message=f"seed '{seed_symbol}' alone costs {seed_cost} tokens, exceeding budget_tokens={budget_tokens}",
+        )
+
+    pkg = build_context_package(repo_ctx.builder, seed_symbol, repo_ctx.repo_root, budget_tokens, contracts=repo_ctx.contracts)
+    pkg = _filter_by_language_tier(pkg, language_tier)
+    pkg = _apply_detail_level(pkg, detail_level)
+    if not include_warnings:
+        pkg = pkg.model_copy(update={"warnings": []})
+
+    envelope = pkg.model_dump_json(indent=2) if format == "json" else render(pkg, RenderOptions())
+    token_count = count_tokens(envelope)
+    return {"envelope": envelope, "token_count": token_count, "truncated": token_count > budget_tokens}
+
+
+@server.tool(name="prism.slice")
+def prism_slice(
+    repo_path: str,
+    seed_symbol: str,
+    budget_tokens: int = 4000,
+    language_tier: str = "auto",
+    format: str = "xml",
+    include_warnings: bool = True,
+    api_key: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Return a `<prism_context>` envelope (v1.1+ Agent Surface, `prism.
+    surface`) packing `seed_symbol`'s causally-coupled context - both
+    downstream dependencies and upstream blast-radius callers (`prism.
+    packer.submodular_knapsack.pack_symbol_context`) - deterministically
+    serialized (`prism.surface.renderer.render`) or as an equivalent JSON
+    document (`format="json"`).
+
+    Args:
+        repo_path: Absolute path to the repository root. Rejected
+            (`-32001`) if it contains a `..` segment or - when this
+            server is pinned via `prism mcp --repo` - escapes that
+            sandbox.
+        seed_symbol: Fully qualified symbol name, exactly as indexed.
+            Unknown names return `-32002` with fuzzy-matched candidates.
+        budget_tokens: 500-128000. A seed whose own body alone exceeds
+            this returns `-32003`.
+        language_tier: "auto", or restrict `<nodes>`/`<edges>` to one
+            precision tier ("1"/"2"/"3") - the seed is always kept.
+        format: "xml" (the canonical envelope) or "json" (the same
+            `ContextPackage`, JSON-serialized).
+        include_warnings: When `False`, drops this package's own derived
+            warnings before rendering - a genuine `BUDGET_OVERFLOW`
+            (computed at render time) is never suppressed.
+        api_key: Bearer credential, when `PRISM_MCP_API_KEYS` is
+            configured - see `prism.mcp.auth`'s own module docstring for
+            why this exists as a tool argument, not only a header.
+    """
+    return _build_envelope_response(repo_path, seed_symbol, budget_tokens, language_tier, format, include_warnings, api_key, ctx)
+
+
+@server.tool(name="prism.explain")
+def prism_explain(
+    repo_path: str,
+    seed_symbol: str,
+    budget_tokens: int = 4000,
+    language_tier: str = "auto",
+    format: str = "xml",
+    include_warnings: bool = True,
+    detail_level: str = "full",
+    api_key: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Same envelope as `prism.slice`, at a reduced level of detail:
+
+    Args:
+        detail_level: "full" (identical to `prism.slice`), "manifest"
+            (every packed node listed, `body` blanked), or "summary"
+            (`<nodes>`/`<edges>` omitted entirely - metadata/manifest/
+            coverage only).
+        (all other arguments: see `prism.slice`.)
+    """
+    return _build_envelope_response(
+        repo_path, seed_symbol, budget_tokens, language_tier, format, include_warnings, api_key, ctx, detail_level=detail_level
+    )
 
 
 def run_server(transport: str = "stdio", repo_path: str | None = None) -> None:

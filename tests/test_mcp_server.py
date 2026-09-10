@@ -77,7 +77,7 @@ async def _call(name: str, arguments: dict):
 # --------------------------------------------------------------------- #
 # Server startup and tool listing
 # --------------------------------------------------------------------- #
-def test_server_lists_all_five_tools():
+def test_server_lists_all_seven_tools():
     async def go():
         async with Client(mcp_server.server) as client:
             return await client.list_tools()
@@ -90,6 +90,9 @@ def test_server_lists_all_five_tools():
         "find_symbols_by_tag",
         "get_graph_status",
         "reindex_repo",
+        # v1.1+ Agent Surface (prism.surface) - see tests/surface/test_mcp_surface.py
+        "prism.slice",
+        "prism.explain",
     }
 
 

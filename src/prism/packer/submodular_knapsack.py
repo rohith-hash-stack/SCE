@@ -263,12 +263,43 @@ def select_submodular_context(
     return s_pack
 
 
+#: `SubmodularPackedItem.role` values - the same four-way split `prism.
+#: surface.models.NodeEntry.role` uses, computed once here (the one place
+#: that already has both the downstream and upstream distance maps and
+#: the causal graph's own direct-successor set in scope) so a consumer
+#: like `prism.surface.build` never has to re-derive graph membership
+#: independently.
+ROLE_SEED = "seed"
+ROLE_CALLEE = "callee"
+ROLE_CALLER = "caller"
+ROLE_TRANSITIVE = "transitive"
+
+
+def _classify_role(
+    qname: str, seed_id: str, direct_successors: set[str], dist_w_map: dict[str, float], dist_w_upstream_map: dict[str, float]
+) -> str:
+    if qname == seed_id:
+        return ROLE_SEED
+    # A node reached (even partially) via the upstream blast-radius
+    # mechanism is classified "caller" whenever that's at least as good
+    # an explanation for its presence as any downstream distance it might
+    # *also* have (the seed's own direct callee and direct caller sets
+    # are disjoint in practice, but nothing prevents a pathological graph
+    # where the same symbol is reachable both ways).
+    if qname in dist_w_upstream_map and dist_w_upstream_map[qname] <= dist_w_map.get(qname, float("inf")):
+        return ROLE_CALLER
+    if qname in direct_successors:
+        return ROLE_CALLEE
+    return ROLE_TRANSITIVE
+
+
 @dataclass
 class SubmodularPackedItem:
     symbol: str
     cost: int
     feature_mask: int
     dist_w: float
+    role: str = ROLE_TRANSITIVE
 
 
 @dataclass
@@ -347,12 +378,14 @@ def pack_symbol_context(
         upstream_max_hops=upstream_max_hops,
     )
 
+    direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
     items = [
         SubmodularPackedItem(
             symbol=qname,
             cost=costs.get(qname, 0),
             feature_mask=feature_masks.get(qname, 0),
             dist_w=0.0 if qname == seed_id else dist_w_map.get(qname, dist_w_upstream_map.get(qname, 0.0)),
+            role=_classify_role(qname, seed_id, direct_successors, dist_w_map, dist_w_upstream_map),
         )
         for qname in selected
     ]
