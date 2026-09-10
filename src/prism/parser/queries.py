@@ -54,6 +54,7 @@ JAVASCRIPT_QUERIES = {
 TYPESCRIPT_QUERIES = {
     "definitions": """
         (class_declaration name: (type_identifier) @def.name) @def.class
+        (interface_declaration name: (type_identifier) @def.name) @def.interface
         (function_declaration name: (identifier) @def.name) @def.function
         (method_definition name: (property_identifier) @def.name) @def.function
     """,

@@ -366,18 +366,31 @@ class ConcreteGraphBuilder:
     def _collect_definitions_in_file(self, parsed: ParsedFile, module: str) -> None:
         lang = parsed.language_id
         captures = run_query(lang, "definitions", parsed.root_node)
-        def_nodes: list[tuple[Node, bool]] = []
+        def_nodes: list[tuple[Node, bool, str | None]] = []
         for n in captures.get("def.class", []):
-            def_nodes.append((n, True))
+            def_nodes.append((n, True, None))
+        # Item 17 (second post-implementation audit): TypeScript's
+        # `interface_declaration` - previously not captured by this query
+        # at all, so a TS interface was never registered as a symbol -
+        # gets its own `kind="interface"`, distinct from `"class"`
+        # (TS distinguishes the two at the type-checker level; an
+        # interface has no runtime body, can't be `new`'d, and can only
+        # ever appear on the right of `implements`, never `extends`, from
+        # a class's own perspective - real, checkable differences worth
+        # keeping visible rather than flattening both into "class").
+        for n in captures.get("def.interface", []):
+            def_nodes.append((n, True, "interface"))
         for n in captures.get("def.function", []):
-            def_nodes.append((n, False))
+            def_nodes.append((n, False, None))
         def_nodes.sort(key=lambda t: t[0].start_byte)
-        for node, is_class in def_nodes:
-            self._register_definition(node, is_class, parsed, module)
+        for node, is_class, force_kind in def_nodes:
+            self._register_definition(node, is_class, parsed, module, force_kind=force_kind)
         if lang == LanguageID.PYTHON:
             self._collect_attribute_definitions(parsed, module)
 
-    def _register_definition(self, node: Node, is_class: bool, parsed: ParsedFile, module: str) -> None:
+    def _register_definition(
+        self, node: Node, is_class: bool, parsed: ParsedFile, module: str, force_kind: str | None = None
+    ) -> None:
         name_node = node.child_by_field_name("name")
         if name_node is None:
             return
@@ -413,7 +426,7 @@ class ConcreteGraphBuilder:
             kind = "method"
         else:
             qualified_name = f"{module}.{name}"
-            kind = "class" if is_class else "function"
+            kind = force_kind if force_kind is not None else ("class" if is_class else "function")
 
         outer = node
         wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
@@ -561,7 +574,12 @@ class ConcreteGraphBuilder:
     def pass2_resolve_calls(self, files: list[str]) -> None:
         classes_by_file: dict[str, list[str]] = {}
         for symbol in self.symbol_table:
-            if symbol.kind == "class":
+            # Item 17: "interface" joined this collection so
+            # _link_class_relations/_link_go_embeds's per-file loops
+            # process TS interfaces too (an interface can itself
+            # `extends` another interface - see _link_ts_heritage's own
+            # extends_type_clause handling).
+            if symbol.kind in ("class", "interface"):
                 classes_by_file.setdefault(symbol.file, []).append(symbol.qualified_name)
 
         # Sub-pass 2a: build every file's own import map and register its
@@ -1045,6 +1063,21 @@ class ConcreteGraphBuilder:
         symbol = self.symbol_table.get(qualified_name)
         return symbol is not None and symbol.kind == "class"
 
+    def _is_known_type(self, qualified_name: str | None) -> bool:
+        """Item 17: like `_is_known_class`, but also accepts
+        `kind="interface"` - used specifically by `_link_ts_heritage`'s
+        target-existence check, since both a class's `extends`/
+        `implements` clause and an interface's own `extends` clause can
+        legitimately name either a class or another interface. Kept
+        separate from `_is_known_class` (not widened in place) so every
+        other, non-TS-heritage caller of that check keeps its existing,
+        narrower "class" semantics unchanged.
+        """
+        if not qualified_name:
+            return False
+        symbol = self.symbol_table.get(qualified_name)
+        return symbol is not None and symbol.kind in ("class", "interface")
+
     def _resolve_go_type_name(self, local_module: str, type_name: str) -> str | None:
         """Item 5 follow-through (second post-implementation audit):
         resolves a bare Go type name (a struct-embedding field, a
@@ -1181,6 +1214,21 @@ class ConcreteGraphBuilder:
                 self._add_relation_edge(class_qname, target, "EXTENDS")
 
     def _link_ts_heritage(self, class_qname: str, class_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
+        # Item 17 (second post-implementation audit): a TS `interface`'s
+        # own `extends` is a structurally different grammar shape from a
+        # class's (`extends_type_clause`, not `class_heritage` ->
+        # `extends_clause`/`implements_clause` - confirmed directly; a
+        # class's own `implements OrderService` still goes through the
+        # ordinary `class_heritage` path below unchanged, since it's the
+        # implementing *class* being processed there, not the interface).
+        if class_node.type == "interface_declaration":
+            extends_clause = next((c for c in class_node.children if c.type == "extends_type_clause"), None)
+            if extends_clause is None:
+                return
+            for type_node in extends_clause.named_children:
+                self._link_ts_heritage_target(class_qname, type_node, parsed, module, import_map, "EXTENDS")
+            return
+
         heritage = next((c for c in class_node.children if c.type == "class_heritage"), None)
         if heritage is None:
             return
@@ -1192,12 +1240,27 @@ class ConcreteGraphBuilder:
             else:
                 continue
             for name_node in clause.named_children:
-                segments = flatten_reference_chain(name_node, parsed.source, parsed.language_id)
-                if not segments:
-                    continue
-                target = self._resolve_reference_chain(segments, module, import_map)
-                if self._is_known_class(target):
-                    self._add_relation_edge(class_qname, target, relation)
+                self._link_ts_heritage_target(class_qname, name_node, parsed, module, import_map, relation)
+
+    def _link_ts_heritage_target(
+        self, class_qname: str, type_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap, relation: str
+    ) -> None:
+        # A generic type reference (`BaseService<Order>`) names its own
+        # base type via a "name" field - flatten_reference_chain's
+        # identifier/attribute-chain walk doesn't recognize
+        # `generic_type` itself, so unwrap it first; a plain
+        # (non-generic) reference is passed through unchanged.
+        if type_node.type == "generic_type":
+            name_node = type_node.child_by_field_name("name")
+            if name_node is None:
+                return
+            type_node = name_node
+        segments = flatten_reference_chain(type_node, parsed.source, parsed.language_id)
+        if not segments:
+            return
+        target = self._resolve_reference_chain(segments, module, import_map)
+        if self._is_known_type(target):
+            self._add_relation_edge(class_qname, target, relation)
 
     def _add_relation_edge(self, source: str, target: str, relation: str) -> None:
         if target not in self.graph:

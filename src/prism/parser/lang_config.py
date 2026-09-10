@@ -50,8 +50,21 @@ ATTR_PROPERTY_FIELD = {
 IDENTIFIER_NODE_TYPES = {
     LanguageID.PYTHON: {"identifier"},
     LanguageID.JAVASCRIPT: {"identifier"},
-    LanguageID.TYPESCRIPT: {"identifier"},
-    LanguageID.TSX: {"identifier"},
+    # Item 17 (second post-implementation audit): TypeScript's grammar
+    # gives a *type-position* reference its own node type
+    # (`type_identifier`), distinct from `identifier` (a value-position
+    # reference) - confirmed directly: `class Foo extends Bar` (`Bar` is
+    # a value/expression position, plain `identifier`) vs. `class Foo
+    # implements Baz` / `interface X extends Y` (both type positions,
+    # `type_identifier`). Without this, `flatten_reference_chain` could
+    # never resolve an `implements` clause or an interface's own
+    # `extends` at all - confirmed directly, both silently produced no
+    # edge before this fix. `type_identifier` only ever appears in a
+    # type position, never in expression/call-target position, so this
+    # is a pure addition with no effect on ordinary call/reference
+    # resolution elsewhere.
+    LanguageID.TYPESCRIPT: {"identifier", "type_identifier"},
+    LanguageID.TSX: {"identifier", "type_identifier"},
     LanguageID.GO: {"identifier"},
     LanguageID.JAVA: {"identifier"},
     LanguageID.CSHARP: {"identifier"},

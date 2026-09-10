@@ -469,7 +469,7 @@ compressor.py` directly rather than summarized from memory:
 | Feature | Python | TypeScript / JavaScript | Go |
 |---|---|---|---|
 | Parser frontend | Tree-sitter CST + native `ast` (compression transforms) | Tree-sitter CST only | Tree-sitter CST only |
-| Symbol registration | Functions, classes, methods | Functions, classes, methods | Functions, structs, receiver methods (receiver-qualified as of Issue B1) |
+| Symbol registration | Functions, classes, methods | Functions, classes, methods, interfaces (`kind="interface"`, Item 17) | Functions, structs, receiver methods (receiver-qualified as of Issue B1) |
 | Re-export resolution | Recursive `ExportRegistry` (depth <=5, `__all__` whitelist) | Recursive `ExportRegistry` (`export {x} from`/`export * from`) | Package-level import resolution only - no re-export syntax exists in Go |
 | Call resolution | Rules A-D: constructor-based instance binding + lexical resolution | Rules B/C/D: lexical resolution only, no instance binding | Receiver/parameter/short-var-decl type-signature binding (Issue B1, Item 3) + codebase-unique-receiver fallback (Item 3 Stage 2, tentative) - not constructor-*function*-call tracking; measured 49.75% receiver-call resolution on gin-gonic/gin |
 | Inheritance traversal | EXTENDS walk approximating C3 MRO + OVERRIDES | Same EXTENDS/IMPLEMENTS walk (single-parent in practice) | `EMBEDS` walk (Item 5) with BFS depth-based shadowing (Item 7) - Go's real mechanism (struct embedding), not EXTENDS/IMPLEMENTS, which Go has no syntax for at all |
