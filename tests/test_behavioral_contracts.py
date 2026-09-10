@@ -345,14 +345,19 @@ def test_new_expression_instantiates_edge_for_typescript(tmp_path):
     assert ("sample.Repository", "INSTANTIATES") in relations
 
 
-def test_only_calls_and_instantiates_are_traversable(python_repo):
+def test_only_traversable_relations_appear_in_calls_graph(python_repo):
+    """`calls_graph` (Issue #9) now includes CALLS/INSTANTIATES/EXTENDS/
+    IMPLEMENTS/OVERRIDES - a base-class method must stay reachable for
+    self.<inherited_method>() resolution - but still excludes READS_STATE,
+    which pulls in unrelated attribute nodes with no comparable
+    reachability requirement to justify it."""
     builder, _ = build_pipeline(python_repo)
     for _u, _v, data in builder.calls_graph.edges(data=True):
         assert data.get("relation", "CALLS") in TRAVERSABLE_RELATIONS
-    # EXTENDS/READS_STATE edges exist on the full graph but not the
-    # traversal-scoped one - the whole point of `calls_graph`.
     assert any(d.get("relation") == "EXTENDS" for _u, _v, d in builder.graph.edges(data=True))
-    assert not any(d.get("relation") == "EXTENDS" for _u, _v, d in builder.calls_graph.edges(data=True))
+    assert any(d.get("relation") == "EXTENDS" for _u, _v, d in builder.calls_graph.edges(data=True))
+    if any(d.get("relation") == "READS_STATE" for _u, _v, d in builder.graph.edges(data=True)):
+        assert not any(d.get("relation") == "READS_STATE" for _u, _v, d in builder.calls_graph.edges(data=True))
 
 
 # --------------------------------------------------------------------- #

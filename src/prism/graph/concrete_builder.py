@@ -68,18 +68,27 @@ from prism.graph.symbol_table import (
 # `CALLS` (plus, now, `INSTANTIATES` - a bare `Foo()`/`new Foo()`
 # constructor invocation was always folded into a plain `CALLS` edge
 # before the behavioral-contract work split it into its own relation) was
-# the only relation `G_C` had. `EXTENDS`/`IMPLEMENTS`/`READS_STATE` are
-# real, useful edges for a consumer that wants to inspect the graph
-# directly (see `get_architectural_invariants`, `sce status`) but were
-# never part of that traversal and must stay excluded from it: including
-# them would silently inflate every seed's reachable neighborhood (an
-# EXTENDS edge to a base class pulls in that base's entire own call
-# graph, a READS_STATE edge pulls in unrelated attribute nodes, ...),
-# which is exactly what happened - measured directly - before this
-# constant existed: two real regression-test budget assertions broke,
-# real-tokenizer-measured packed output overshot its budget once these
-# richer relations started reaching further than `CALLS` alone ever did.
-TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES"})
+# the only relation `G_C` had.
+#
+# `EXTENDS`/`IMPLEMENTS`/`OVERRIDES` (Issue #9) are included as of this
+# change - excluding them entirely caused a real "phantom method" failure
+# mode of its own: `self.validate()` calling a method only ever defined on
+# a base class had no reachable definition at all, since the traversal a
+# seed's own blast radius is computed over never crossed an inheritance
+# edge to find it. The original exclusion (still true, and still the
+# reason `READS_STATE` stays excluded) was a real, measured regression -
+# a base class's *entire* call graph flooding in at full priority
+# alongside the seed's own direct callees, which blew two real
+# regression-test budget assertions. `DistanceEngine._weighted_undirected`
+# is what actually protects against a repeat of that this time: an
+# EXTENDS/IMPLEMENTS/OVERRIDES hop costs strictly more than a normal
+# CALLS/INSTANTIATES hop (see that method's own relation-weight table),
+# so an inherited method is reachable and correctly resolvable, but never
+# outranks a same-or-fewer-hop behavioral neighbor for a scarce token
+# budget. `READS_STATE` stays excluded - a bare attribute read pulls in
+# unrelated attribute nodes with no comparable "this is now unreachable
+# without it" failure mode to justify the same trade.
+TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMENTS", "OVERRIDES"})
 
 
 class ConcreteGraphBuilder:
@@ -429,16 +438,25 @@ class ConcreteGraphBuilder:
             import_map = self._build_import_map(parsed, module)
             import_maps[path] = import_map
             self._register_exports(parsed, module, import_map)
+            self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
+
+        # Sub-pass 2a-ter: OVERRIDES detection (Issue #9) needs every
+        # class's own EXTENDS edge already in place - a subclass and its
+        # base can live in different files processed in either order, so
+        # this can only safely run once every file's own `_link_class_
+        # relations` call above has finished, exactly the same ordering
+        # requirement `_register_exports` has for barrel files.
+        self._link_overrides()
 
         # Sub-pass 2b: resolve every call site, now that the whole repo's
-        # export registry is complete.
+        # export registry and class-relation graph (EXTENDS/IMPLEMENTS/
+        # OVERRIDES) are both complete.
         for path in sorted(files):
             parsed = self._parsed_files.get(path)
             if parsed is None:
                 continue
             module = self._module_for_file(parsed)
             import_map = import_maps[path]
-            self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
             file_symbols = [
                 qname
                 for qname in self._def_nodes
@@ -913,6 +931,53 @@ class ConcreteGraphBuilder:
             self.graph.add_node(target, external=False)
         self.graph.add_edge(source, target, relation=relation)
 
+    # -- OVERRIDES + Python C3-ish MRO (Issue #9) ------------------------- #
+    def _mro_ancestors(self, class_qname: str) -> list[str]:
+        """`class_qname`'s own ancestor chain via its `EXTENDS` edges,
+        nearest-first, depth-first, left-to-right in declared base order,
+        each visited at most once - a practical approximation of Python's
+        real C3 linearization: exact for single inheritance and for
+        ordinary (non-diamond) multiple inheritance, which is the
+        overwhelming majority of real code; a genuine diamond
+        (`class D(B, C)` where both `B` and `C` extend `A`) may order
+        differently from true C3's consistency-corrected linearization -
+        out of scope for this pass, not silently claimed as exact.
+        """
+        ordered: list[str] = []
+        seen: set[str] = {class_qname}
+
+        def visit(node: str) -> None:
+            for _source, target, data in self.graph.out_edges(node, data=True):
+                if data.get("relation") != "EXTENDS" or target in seen:
+                    continue
+                seen.add(target)
+                ordered.append(target)
+                visit(target)
+
+        visit(class_qname)
+        return ordered
+
+    def _link_overrides(self) -> None:
+        """For every class with at least one `EXTENDS` ancestor, an
+        `OVERRIDES` edge from each of its own directly-declared methods to
+        the *nearest* MRO ancestor that also defines a method of the same
+        simple name (Issue #9) - the same shadowing semantics Python's
+        real attribute lookup uses, computed once the whole repo's
+        `EXTENDS`/`IMPLEMENTS` graph is fully built (see the sub-pass
+        ordering note in `pass2_resolve_calls`).
+        """
+        for class_qname, method_qnames in list(self._methods_by_class.items()):
+            ancestors = self._mro_ancestors(class_qname)
+            if not ancestors:
+                continue
+            for method_qname in method_qnames:
+                simple_name = method_qname.rsplit(".", 1)[-1]
+                for ancestor in ancestors:
+                    base_method = f"{ancestor}.{simple_name}"
+                    if base_method in self.symbol_table:
+                        self._add_relation_edge(method_qname, base_method, "OVERRIDES")
+                        break
+
     def _build_function_instance_map(
         self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap
     ) -> InstanceTypeMap:
@@ -1232,7 +1297,22 @@ class ConcreteGraphBuilder:
             if candidate:
                 return f"{candidate}.{method}"
             if len(receiver_segments) == 1 and enclosing_class:
-                return f"{enclosing_class}.{method}"
+                direct = f"{enclosing_class}.{method}"
+                if direct in self.symbol_table:
+                    return direct
+                # `self.<method>()` where `<method>` isn't declared
+                # directly on `enclosing_class` itself - a real, common
+                # case for an inherited (and not overridden) method
+                # (Issue #9's "phantom method" failure: `self.validate()`
+                # calling a base class's `validate` had no reachable
+                # definition). Walk the MRO ancestor chain for the
+                # nearest real definition rather than returning a guessed
+                # name that isn't actually in the symbol table.
+                for ancestor in self._mro_ancestors(enclosing_class):
+                    inherited = f"{ancestor}.{method}"
+                    if inherited in self.symbol_table:
+                        return inherited
+                return direct
             return None
 
         candidate = func_instance_map.resolve(receiver_key) or class_instance_map.resolve(receiver_key)
