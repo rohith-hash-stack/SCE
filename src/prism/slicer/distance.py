@@ -92,6 +92,20 @@ RELATION_STRUCTURAL_WEIGHT: dict[str, float] = {
     "IMPLEMENTS": 0.80,
 }
 
+# Item 3 (second post-implementation audit) Stage 2: a CALLS edge
+# `ConcreteGraphBuilder`'s Go-only "codebase-unique receiver" fallback
+# produced - a best-effort guess (exactly one struct in the whole repo
+# defines a method of this name), not a confidently-linked call - is
+# marked `kind="TENTATIVE_CALL"` and priced at this weight (Dijkstra hop
+# cost `1/0.60 ~= 1.67`), strictly more expensive than a normal CALLS hop
+# (1.0) but still cheaper than EXTENDS/IMPLEMENTS - reachable and usable,
+# never able to outrank a confidently-resolved same-or-fewer-hop
+# neighbor. Multiplies (not replaces) `RELATION_STRUCTURAL_WEIGHT`'s own
+# "CALLS" entry, the same way a `confidence="CONFIRMED_RUNTIME"` edge's
+# discount multiplies on top of its base structural weight rather than
+# hard-coding a combined constant.
+RELATION_TENTATIVE_CALL_WEIGHT = 0.60
+
 
 @dataclass(frozen=True)
 class DistanceConfig:
@@ -157,11 +171,19 @@ class DistanceEngine:
         below reduces to plain unweighted hop counting whenever a graph
         carries no runtime confidence data at all (every edge then weighs
         exactly 1.0), and only diverges from that once a `prism trace` run
-        has actually confirmed some of its edges.
+        has actually confirmed some of its edges. Independently, an edge
+        marked `kind="TENTATIVE_CALL"` (Item 3 Stage 2's Go codebase-
+        unique-receiver fallback) has its structural weight further
+        multiplied by `RELATION_TENTATIVE_CALL_WEIGHT` (0.60) - the two
+        adjustments compose (a tentative call could in principle also be
+        runtime-confirmed later), each applied independently to
+        `structural_weight` before the confidence branch below.
         """
         undirected = g_c.to_undirected()
         for _u, _v, data in undirected.edges(data=True):
             structural_weight = RELATION_STRUCTURAL_WEIGHT.get(data.get("relation", "CALLS"), 1.0)
+            if data.get("kind") == "TENTATIVE_CALL":
+                structural_weight *= RELATION_TENTATIVE_CALL_WEIGHT
             base_cost = 1.0 / structural_weight if structural_weight else 1.0
             if data.get("confidence") != "CONFIRMED_RUNTIME":
                 data["weight"] = base_cost

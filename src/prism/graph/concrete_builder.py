@@ -132,9 +132,46 @@ class ConcreteGraphBuilder:
         #: Barrel-file / re-export tracking (Issues #6/#7) - see
         #: `prism.graph.symbol_table.ExportRegistry`.
         self.export_registry = ExportRegistry()
+        #: Item 3 Stage 2 (second post-implementation audit): lazily
+        #: built, memoized by `_go_method_registry`.
+        self._go_method_registry_cache: dict[str, list[str]] | None = None
+        #: Item 3: set by `_resolve_segments` immediately before it
+        #: returns via the Go-only Stage-2 "codebase-unique receiver"
+        #: fallback, read by its one caller (`_resolve_calls_in_function`)
+        #: right after the call to decide whether to mark the resulting
+        #: edge `kind="TENTATIVE_CALL"`. A plain instance flag rather
+        #: than a richer return type change is safe here specifically
+        #: because call resolution is single-threaded and strictly
+        #: sequential (one call-node fully resolved before the next
+        #: starts) throughout this class - not a general-purpose pattern.
+        self._last_resolution_was_tentative = False
+        #: Item 3: `go_call_resolution_ratio` diagnostic numerator/
+        #: denominator - see that property's own docstring.
+        self._go_receiver_call_sites_total = 0
+        self._go_receiver_call_sites_resolved = 0
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
+
+    @property
+    def go_call_resolution_ratio(self) -> float:
+        """Item 3: `Resolved Go Method Calls / Total Identified Go Method
+        Call Expressions` - counted during `_resolve_calls_in_function`'s
+        Go path over every "receiver-shaped" call site (>= 2 segments,
+        base identifier not a known import alias, so `gin.Default()`-
+        style package calls are excluded from both numerator and
+        denominator - this metric is about receiver method resolution
+        specifically, not overall Go call resolution). `1.0` (not an
+        error/NaN) when the repository has no such call sites at all.
+        Includes Stage 2's tentative resolutions in the numerator (a
+        best-effort match still counts as "resolved" for this ratio,
+        distinct from - and looser than - a genuinely confident CALLS
+        edge; see `kind="TENTATIVE_CALL"` on the edge itself for that
+        distinction).
+        """
+        if self._go_receiver_call_sites_total == 0:
+            return 1.0
+        return round(self._go_receiver_call_sites_resolved / self._go_receiver_call_sites_total, 4)
 
     @property
     def calls_graph(self) -> nx.DiGraph:
@@ -1080,7 +1117,38 @@ class ConcreteGraphBuilder:
 
         if lang == LanguageID.GO:
             self._bind_go_typed_parameters(def_node, parsed, module, instance_map)
+            self._bind_go_short_var_declarations(def_node, parsed, module, instance_map)
         return instance_map
+
+    def _bind_go_short_var_declarations(
+        self, def_node: Node, parsed: ParsedFile, module: str, instance_map: InstanceTypeMap
+    ) -> None:
+        """Item 3 (second post-implementation audit) Stage 1: Go's
+        idiomatic local-variable construction is a short variable
+        declaration (`r := &Router{}`, `c := Context{}`), not a bare call
+        assignment the way Python/JS's `x = Foo()` is - `gin.Default()`-
+        shaped constructor-*function* calls are deliberately NOT resolved
+        here (their return type isn't visible at the call site without
+        real Go type inference, which this textual/CST-based linker does
+        not do), only the two composite-literal shapes a Go value/pointer
+        struct literal actually parses as. `e, f := Context{}, 1` (a
+        multi-value declaration) binds each left identifier to its
+        positionally-corresponding right expression independently.
+        """
+        for decl in iter_scoped_nodes(def_node, {"short_var_declaration"}, LanguageID.GO):
+            left = decl.child_by_field_name("left")
+            right = decl.child_by_field_name("right")
+            if left is None or right is None:
+                continue
+            names = [c for c in left.named_children if c.type == "identifier"]
+            values = list(right.named_children)
+            for name_node, value_node in zip(names, values):
+                type_name = _go_composite_literal_type(value_node, parsed.source)
+                if type_name is None:
+                    continue
+                resolved_class = f"{module}.{type_name}"
+                if self._is_known_class(resolved_class):
+                    instance_map.bind(node_text(name_node, parsed.source), resolved_class)
 
     def _bind_go_typed_parameters(
         self, def_node: Node, parsed: ParsedFile, module: str, instance_map: InstanceTypeMap
@@ -1153,12 +1221,22 @@ class ConcreteGraphBuilder:
             segments = call_callee_segments(call_node, parsed.source, lang)
             if not segments:
                 continue
+            # Item 3: go_call_resolution_ratio's denominator - a Go call
+            # is "receiver-shaped" (as opposed to a bare function call or
+            # a package-qualified one like `gin.Default()`) when it has
+            # >= 2 segments and its base identifier isn't a known import
+            # alias, the same test `_resolve_segments`' own Stage 2
+            # fallback uses.
+            if lang == LanguageID.GO and len(segments) >= 2 and import_map.resolve(segments[0]) is None:
+                self._go_receiver_call_sites_total += 1
             target = self._resolve_segments(
-                segments, module, enclosing_class, import_map, class_instance_map, func_instance_map, self_tokens
+                segments, module, enclosing_class, import_map, class_instance_map, func_instance_map, self_tokens, lang
             )
             if target is None:
                 self._resolve_ambiguous_call(caller_qname, call_node, parsed, module, import_map, segments)
                 continue
+            if lang == LanguageID.GO and len(segments) >= 2 and import_map.resolve(segments[0]) is None:
+                self._go_receiver_call_sites_resolved += 1
             if target not in self.graph:
                 self.graph.add_node(target, external=target not in self.symbol_table)
             target_symbol = self.symbol_table.get(target)
@@ -1172,6 +1250,13 @@ class ConcreteGraphBuilder:
             edge_kwargs = {"relation": relation}
             if relation == "CALLS":
                 edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
+                # Item 3 Stage 2: a call resolved only via the Go
+                # codebase-unique-receiver fallback is a best-effort
+                # guess, not a confidently-linked call - marked so
+                # `prism.slicer.distance` prices the hop more expensively
+                # (never as cheap as a normal CALLS edge).
+                if self._last_resolution_was_tentative:
+                    edge_kwargs["kind"] = "TENTATIVE_CALL"
             self.graph.add_edge(caller_qname, target, **edge_kwargs)
 
         self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
@@ -1388,7 +1473,9 @@ class ConcreteGraphBuilder:
         class_instance_map: InstanceTypeMap,
         func_instance_map: InstanceTypeMap,
         self_tokens: set[str],
+        lang: str | None = None,
     ) -> str | None:
+        self._last_resolution_was_tentative = False
         if len(segments) == 1:
             return self._resolve_reference_chain(segments, module, import_map)
 
@@ -1426,7 +1513,60 @@ class ConcreteGraphBuilder:
         resolved_receiver = self._resolve_reference_chain(receiver_segments, module, import_map)
         if resolved_receiver:
             return f"{resolved_receiver}.{method}"
+
+        # Item 3 (second post-implementation audit) Stage 2: Go-only
+        # Codebase-Unique Receiver Fallback. Reached only when Stage 1
+        # (parameter/short-var-declaration type tracking) couldn't
+        # resolve `receiver_key`'s type locally - if the call site is
+        # still receiver-shaped (`receiver_segments[0]` isn't a known
+        # import alias, ruling out a package-qualified call like
+        # `gin.Default()`) and *exactly one* struct type anywhere in the
+        # repository defines a method of this exact simple name, bind to
+        # it as a best-effort guess rather than dropping the call
+        # entirely - flagged as tentative (lower structural weight, see
+        # `RELATION_TENTATIVE_CALL_WEIGHT` in `prism.slicer.distance`) so
+        # it never outranks a confidently-resolved neighbor. Multiple
+        # same-named methods on different structs is exactly the
+        # ambiguous case this does *not* guess through.
+        if lang == LanguageID.GO and import_map.resolve(receiver_segments[0]) is None:
+            unique = self._go_unique_receiver_for_method(method)
+            if unique is not None:
+                self._last_resolution_was_tentative = True
+                return unique
         return None
+
+    def _go_unique_receiver_for_method(self, method: str) -> str | None:
+        """The single qualified Go method `<Module>.<Type>.<method>` if
+        exactly one such method exists anywhere in the whole repository's
+        symbol table, else `None` (zero or multiple candidates - never
+        guessed). Backs Item 3 Stage 2's tentative-call fallback; marked
+        specially by the caller (`_resolve_calls_in_function`) so the
+        resulting edge carries `kind="TENTATIVE_CALL"`, not treated the
+        same as a normal resolved call.
+        """
+        registry = self._go_method_registry()
+        candidates = registry.get(method)
+        if candidates is None or len(candidates) != 1:
+            return None
+        return candidates[0]
+
+    def _go_method_registry(self) -> dict[str, list[str]]:
+        """Simple method name -> every qualified Go method of that name
+        anywhere in the repo (`Context.JSON` -> `["main.Context.JSON",
+        "otherpkg.Handler.JSON"]` if two unrelated structs both happen to
+        define a `JSON` method) - built once, lazily, and cached; Pass 1
+        (global definition collection) must be complete before this is
+        ever called, which it always is by the time Pass 2 call
+        resolution runs.
+        """
+        if self._go_method_registry_cache is None:
+            registry: dict[str, list[str]] = {}
+            for symbol in self.symbol_table:
+                if symbol.kind == "method" and symbol.language_id == LanguageID.GO:
+                    simple_name = symbol.qualified_name.rsplit(".", 1)[-1]
+                    registry.setdefault(simple_name, []).append(symbol.qualified_name)
+            self._go_method_registry_cache = registry
+        return self._go_method_registry_cache
 
 
 _LOCAL_VAR_DECLARATOR_TYPE: dict[str, str] = {
@@ -1487,6 +1627,21 @@ def _go_receiver_type(method_node: Node, parsed: ParsedFile) -> str | None:
     if param_decl is None:
         return None
     return _go_type_identifier_text(param_decl.child_by_field_name("type"), parsed.source)
+
+
+def _go_composite_literal_type(value_node: Node, source: bytes) -> str | None:
+    """The bare type name of a Go composite-literal construction (`Type{}`
+    or, unwrapping one level of `&`, `&Type{}`) - Item 3's local
+    short-var-declaration binding. `None` for anything else (a bare
+    call like `gin.Default()`, a qualified `pkg.Type{}` literal, a
+    slice/map literal, ...) - deliberately narrow, not guessed.
+    """
+    node = value_node
+    if node.type == "unary_expression":
+        node = node.child_by_field_name("operand")
+    if node is None or node.type != "composite_literal":
+        return None
+    return _go_type_identifier_text(node.child_by_field_name("type"), source)
 
 
 def _constructor_call_segments(value: Node, lang: str, source: bytes) -> list[str] | None:
