@@ -138,6 +138,16 @@ class PackResult:
     # see `ContextKnapsackPacker._detect_compact_mode`. The serializer
     # (`prism.serializers.markdown`) reads this to render a denser document.
     compact: bool = False
+    #: Fractional-knapsack LP relaxation upper bound (Issue #12.3) - a
+    #: diagnostic-only estimate of the best achievable "preserved
+    #: semantics" value under this budget, for comparison against the
+    #: real (integer 0/1, resolution-tiered) result above. Never used to
+    #: gate admission itself.
+    fractional_upper_bound: float = 0.0
+    #: How many Swap-Refinement Pass substitutions (Issue #12.2) actually
+    #: fired - a more-relevant candidate the main greedy pass left
+    #: unselected displacing a less-relevant one it had already packed.
+    swaps_performed: int = 0
 
 
 class ContextKnapsackPacker:
@@ -253,6 +263,16 @@ class ContextKnapsackPacker:
             seed, seed_path, 0, seed_symbol.line_range, is_seed=True
         )
         packed: set[str] = {seed}
+        # Swap-Refinement Pass (Issue #12) only ever displaces an
+        # ordinary, distance-ranked candidate - the seed, an
+        # architectural-path "requires" obligation, and an already-minimal
+        # infallible-leaf/sentinel item are exempt, each for its own
+        # already-established reason (the seed always stays at L0; a
+        # "requires" item is a confirmed metamodel obligation, not merely
+        # distance-ranked; an infallible-leaf/sentinel item is already at
+        # (near-)zero cost, so displacing it saves little and destroys a
+        # deliberately-cheap signal).
+        protected: set[str] = {seed}
 
         # A "requires" hop in the architectural path names a confirmed
         # metamodel obligation (e.g. "this #db_write requires an
@@ -282,6 +302,7 @@ class ContextKnapsackPacker:
             items.append(PackedItem(node, 2, content, symbol.language_id, symbol.line_range, node_path))
             total_tokens += cost
             packed.add(node)
+            protected.add(node)
 
         # Exception/data classes are surfaced inline via a function's own
         # "Raises:"/signature contract; packing them as separate context
@@ -343,6 +364,7 @@ class ContextKnapsackPacker:
                 ))
                 total_tokens += cost
                 packed.add(node)
+                protected.add(node)
                 continue
 
             node_symbol = builder.symbol_table.get(node)
@@ -386,6 +408,15 @@ class ContextKnapsackPacker:
                     node_symbol.language_id, node_symbol.line_range, node_path,
                 ))
                 total_tokens += cost
+                # `packed`/`protected` were previously never updated here -
+                # harmless on its own (this loop never revisits the same
+                # `node` twice within one `pack()` call regardless), but a
+                # real latent gap once the Swap-Refinement Pass (Issue #12)
+                # started treating "not in packed" as "eligible to (re-)pack"
+                # - without this, an already-packed infallible-leaf node
+                # could get packed a *second* time as a swap-in candidate.
+                packed.add(node)
+                protected.add(node)
                 continue
 
             target_res = distance_engine.resolution_for_distance(distances[node])
@@ -405,8 +436,26 @@ class ContextKnapsackPacker:
             if total_tokens + cost <= self._admission_budget:
                 items.append(PackedItem(node, target_res, content, node_symbol.language_id, node_symbol.line_range, node_path))
                 total_tokens += cost
+                packed.add(node)
             else:
                 break
+
+        # Swap-Refinement Pass (Issue #12): the main greedy loop above
+        # admits candidates strictly in distance order and stops the
+        # instant one doesn't fit even at L3 - which can leave a
+        # still-unselected, more-relevant candidate further down the
+        # (sorted) list starved out entirely, while a less-relevant one
+        # that happened to fit earlier keeps its slot. This is a bounded
+        # cleanup pass, not a second admission loop: it only ever
+        # displaces an ordinary candidate (never the seed, a "requires"
+        # obligation, or an already-minimal infallible-leaf/sentinel item
+        # - see `protected`), and only when the incoming candidate is
+        # strictly closer than the outgoing one.
+        items, total_tokens, swaps_performed = self._swap_refine(
+            items, total_tokens, candidates, packed, protected, distances, builder, tag_matrix, compact,
+        )
+
+        fractional_upper_bound = self._fractional_relaxation_bound(candidates, distances)
 
         preserved = self._preserved_semantics(items, candidates)
         return PackResult(
@@ -417,7 +466,143 @@ class ContextKnapsackPacker:
             architectural_path=path,
             preserved_semantics=preserved,
             compact=compact,
+            fractional_upper_bound=fractional_upper_bound,
+            swaps_performed=swaps_performed,
         )
+
+    #: Swap-Refinement Pass hard cap (Issue #12.2) - bounds the pass's own
+    #: worst-case work (one rendering attempt per unselected candidate,
+    #: independent of how many actually swap) and keeps the number of
+    #: post-hoc mutations to the packed set small and auditable rather
+    #: than open-ended.
+    MAX_SWAPS = 5
+
+    def _swap_refine(
+        self,
+        items: list[PackedItem],
+        total_tokens: float,
+        candidates: list[str],
+        packed: set[str],
+        protected: set[str],
+        distances: dict[str, float],
+        builder: ConcreteGraphBuilder,
+        tag_matrix: dict[str, set[str]],
+        compact: bool,
+    ) -> tuple[list[PackedItem], float, int]:
+        """Issue #12.2: after the main greedy pass settles, check whether
+        any still-unselected candidate - necessarily *more* relevant than
+        anything sorted after it, since `candidates` is itself distance-
+        sorted - can displace an already-packed, strictly *less* relevant
+        ordinary candidate without exceeding the budget. Tries each
+        unselected candidate at its cheapest (L3) representation only:
+        the point of this pass is recovering candidates the main loop
+        starved out entirely, not re-litigating resolution tiers for ones
+        it already admitted.
+        """
+        # `candidates` is already distance-sorted, so the unselected
+        # prefix most likely to actually beat something already packed is
+        # the *closest* unselected candidates - only those are worth
+        # attempting. Bounding by attempts (not just successful swaps) is
+        # essential, not cosmetic: against a real, densely-connected
+        # repository `unselected` can run into the hundreds, and without
+        # this cap a mostly-fruitless sweep (checking, then discarding)
+        # was measured taking upwards of 10 real seconds per `pack()` call
+        # purely from rendering an L3 candidate that never ends up used.
+        MAX_SWAP_ATTEMPTS = 20
+        unselected = [n for n in candidates if n not in packed][:MAX_SWAP_ATTEMPTS]
+        if not unselected:
+            return items, total_tokens, 0
+
+        swaps_performed = 0
+        for candidate_node in unselected:
+            if swaps_performed >= self.MAX_SWAPS:
+                break
+            candidate_distance = distances[candidate_node]
+
+            # Cheap pre-check using only already-computed distances - no
+            # rendering at all - before paying for an L3 render that can
+            # only ever be wasted work if no packed, unprotected item is
+            # even farther than this candidate to begin with.
+            if not any(
+                item.symbol not in protected and distances.get(item.symbol, -1.0) > candidate_distance
+                for item in items
+            ):
+                continue
+
+            candidate_symbol = builder.symbol_table.get(candidate_node)
+            if candidate_symbol is None:
+                continue
+            candidate_path = self._relative_path(builder, candidate_symbol.file)
+            content = self._render(builder, tag_matrix, candidate_node, 3, compact)
+            if content is None:
+                continue
+            overhead = _wrapping_overhead_tokens(candidate_node, candidate_path, 3, candidate_symbol.line_range)
+            candidate_cost = estimate_tokens(content) + overhead
+
+            # Least-relevant (farthest) swappable packed item first, so a
+            # swap - when one fires - displaces the worst available
+            # occupant rather than an arbitrary one.
+            swap_pool = sorted(
+                (
+                    item for item in items
+                    if item.symbol not in protected and distances.get(item.symbol, -1.0) > candidate_distance
+                ),
+                key=lambda it: distances.get(it.symbol, -1.0),
+                reverse=True,
+            )
+            for outgoing in swap_pool:
+                outgoing_overhead = _wrapping_overhead_tokens(
+                    outgoing.symbol, outgoing.relative_path, outgoing.resolution, outgoing.line_range
+                )
+                outgoing_cost = estimate_tokens(outgoing.content) + outgoing_overhead
+                if total_tokens - outgoing_cost + candidate_cost > self._admission_budget:
+                    continue
+                items.remove(outgoing)
+                items.append(PackedItem(
+                    candidate_node, 3, content, candidate_symbol.language_id, candidate_symbol.line_range, candidate_path,
+                ))
+                total_tokens = total_tokens - outgoing_cost + candidate_cost
+                packed.discard(outgoing.symbol)
+                packed.add(candidate_node)
+                swaps_performed += 1
+                break
+
+        return items, total_tokens, swaps_performed
+
+    #: Fractional-relaxation diagnostic's flat per-candidate weight proxy
+    #: (Issue #12.3) - a typical one-line L3 signature stub's token cost,
+    #: cheap enough to use for every candidate without actually rendering
+    #: each one (this bound only needs to be directionally honest, not
+    #: exact - see `_fractional_relaxation_bound`'s own docstring).
+    APPROX_L3_WEIGHT_TOKENS = 15.0
+
+    def _fractional_relaxation_bound(self, candidates: list[str], distances: dict[str, float]) -> float:
+        """Classic fractional-knapsack LP relaxation (Issue #12.3): the
+        best achievable value if candidates could be packed in
+        arbitrarily divisible fractions instead of the real all-or-
+        nothing (0/1, resolution-tiered) constraint this class actually
+        packs under - a theoretical upper bound reported for comparison,
+        never used to gate a real admission decision. Value is proxied by
+        inverse distance (closer = more valuable, matching this class's
+        own distance-first candidate ordering); weight by a flat,
+        conservative per-candidate footprint (`APPROX_L3_WEIGHT_TOKENS`)
+        rather than this bound rendering every candidate just to report a
+        diagnostic number.
+        """
+        ranked = sorted(candidates, key=lambda n: distances.get(n, float("inf")))
+        remaining = self._admission_budget
+        value = 0.0
+        for node in ranked:
+            if remaining <= 0:
+                break
+            item_value = 1.0 / (1.0 + distances.get(node, 0.0))
+            if self.APPROX_L3_WEIGHT_TOKENS <= remaining:
+                value += item_value
+                remaining -= self.APPROX_L3_WEIGHT_TOKENS
+            else:
+                value += item_value * (remaining / self.APPROX_L3_WEIGHT_TOKENS)
+                remaining = 0.0
+        return round(value, 4)
 
     @staticmethod
     def _relative_path(builder: ConcreteGraphBuilder, file_path: str) -> str:
