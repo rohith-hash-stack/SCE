@@ -20,6 +20,7 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.graph.hierarchy import HierarchicalIntentProfile, compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
+from prism.mcp.security import assert_path_in_repo
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.reconciler import heal_and_apply_runtime_state, load_runtime_state
 from prism.slicer.distance import DistanceConfig, DistanceEngine
@@ -73,13 +74,41 @@ class GraphCache:
         self._entries: dict[str, RepoContext] = {}
 
     @staticmethod
+    def sandbox_root() -> str | None:
+        """Item 13 (second post-implementation audit): the boundary every
+        `repo_path` override must resolve inside of, when one is
+        configured - `PRISM_MCP_DEFAULT_REPO` (`prism mcp --repo PATH`),
+        i.e. only once a server operator has actually pinned this process
+        to one repository. `None` when it isn't set: a bare `prism mcp`
+        with no `--repo` keeps this server's original, documented,
+        deliberate design (`get_symbol_context`'s own docstring: "Defaults
+        to the server's current working directory") of being able to
+        index/query whatever `repo_path` an agent hands it, on demand,
+        with no configured boundary to enforce - the same "nothing to
+        sandbox against" shape a plain `prism index <path>` CLI
+        invocation already has for any path the caller names. Sandboxing
+        an *unpinned* server would silently break that documented
+        flexibility for a boundary nobody asked for.
+        """
+        configured = os.environ.get("PRISM_MCP_DEFAULT_REPO")
+        return os.path.abspath(configured) if configured else None
+
+    @staticmethod
     def canonical_path(repo_path: str | None) -> str:
-        # `PRISM_MCP_DEFAULT_REPO` is `prism mcp --repo PATH`'s own mechanism
-        # (see prism.mcp.server.run_server) for setting a server-wide default
-        # without mutating this process's actual working directory - the
-        # same env-var-based-default pattern `prism.runtime.tracer`'s pytest
-        # plugin already uses for its own repo root.
-        return os.path.abspath(repo_path or os.environ.get("PRISM_MCP_DEFAULT_REPO") or os.getcwd())
+        # Item 13: once `prism mcp --repo PATH` has pinned this server to
+        # one repository (`sandbox_root()` returns non-None), every
+        # `repo_path` - explicit override or the same default as before -
+        # must resolve inside that root (`assert_path_in_repo`, raises
+        # `SecurityError` otherwise). The no-override case trivially
+        # satisfies this (the root always contains itself), so a pinned
+        # server's own default call shape is unaffected - this only
+        # closes the override path an untrusted agent-supplied argument
+        # could otherwise use to walk outside the intended repository.
+        root = GraphCache.sandbox_root()
+        if root is None:
+            return os.path.abspath(repo_path or os.getcwd())
+        requested = repo_path if repo_path is not None else root
+        return assert_path_in_repo(requested, root)
 
     def get_or_index(self, repo_path: str | None) -> RepoContext:
         key = self.canonical_path(repo_path)

@@ -297,3 +297,77 @@ def test_relative_and_absolute_repo_path_share_one_cache_entry(tmp_path, monkeyp
     absolute = _run(_call("get_graph_status", {"repo_path": str(repo)}))
     relative = _run(_call("get_graph_status", {"repo_path": "."}))
     assert absolute.structured_content["indexed_at"] == relative.structured_content["indexed_at"]
+
+
+# --------------------------------------------------------------------- #
+# Item 13 (second post-implementation audit): input validation / path
+# sandboxing, exercised through the real tool-call surface (unit-level
+# coverage for the validators themselves lives in test_mcp_security.py).
+# --------------------------------------------------------------------- #
+def test_get_symbol_context_rejects_a_malformed_target_symbol(tmp_path):
+    repo = _order_repo(tmp_path)
+    result = _run(_call("get_symbol_context", {"target_symbol": "../../etc/passwd", "repo_path": str(repo)}))
+    assert result.is_error
+    assert "invalid symbol name" in result.content[0].text
+
+
+def test_get_symbol_context_rejects_a_token_budget_over_the_cap(tmp_path):
+    repo = _order_repo(tmp_path)
+    result = _run(_call(
+        "get_symbol_context",
+        {"target_symbol": "orders.OrderService.create_order", "repo_path": str(repo), "token_budget": 999_999_999},
+    ))
+    assert result.is_error
+    assert "token_budget" in result.content[0].text
+
+
+def test_find_symbols_by_tag_rejects_a_malformed_tag(tmp_path):
+    repo = _order_repo(tmp_path)
+    result = _run(_call("find_symbols_by_tag", {"tag": "#auth; DROP TABLE", "repo_path": str(repo)}))
+    assert result.is_error
+    assert "invalid tag" in result.content[0].text
+
+
+def test_get_architectural_invariants_rejects_a_malformed_target_symbol(tmp_path):
+    repo = _order_repo(tmp_path)
+    result = _run(_call("get_architectural_invariants", {"target_symbol": "a/../../b", "repo_path": str(repo)}))
+    assert result.is_error
+    assert "invalid symbol name" in result.content[0].text
+
+
+def test_get_symbol_context_rejects_repo_path_escaping_a_pinned_server(tmp_path, monkeypatch):
+    repo = _order_repo(tmp_path)
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    monkeypatch.setenv("PRISM_MCP_DEFAULT_REPO", str(repo))
+
+    result = _run(_call(
+        "get_symbol_context", {"target_symbol": "orders.OrderService.create_order", "repo_path": str(outside)}
+    ))
+    assert result.is_error
+    assert "escapes the sandboxed repository root" in result.content[0].text
+
+
+def test_reindex_repo_rejects_repo_path_escaping_a_pinned_server(tmp_path, monkeypatch):
+    repo = _order_repo(tmp_path)
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    monkeypatch.setenv("PRISM_MCP_DEFAULT_REPO", str(repo))
+
+    result = _run(_call("reindex_repo", {"repo_path": str(outside)}))
+    assert result.is_error
+    assert "escapes the sandboxed repository root" in result.content[0].text
+
+
+def test_get_symbol_context_still_works_within_a_pinned_server(tmp_path, monkeypatch):
+    repo = _order_repo(tmp_path)
+    monkeypatch.setenv("PRISM_MCP_DEFAULT_REPO", str(repo))
+
+    result = _run(_call(
+        "get_symbol_context", {"target_symbol": "orders.OrderService.create_order", "repo_path": str(repo)}
+    ))
+    assert not result.is_error
+
+    # And the no-override default call shape keeps working too.
+    result_default = _run(_call("get_symbol_context", {"target_symbol": "orders.OrderService.create_order"}))
+    assert not result_default.is_error

@@ -60,12 +60,41 @@ integration (`docs/mcp_setup.md`: Claude Desktop, Cursor, VS Code) uses.
 bind a local HTTP server, standard MCP practice for that use case; a
 deployment choosing either of those opt-in transports is responsible for
 its own network exposure (binding address, auth in front of it, etc.) -
-Prism itself adds no authentication layer at that transport level. The
-MCP tools themselves (`get_symbol_context`, `get_architectural_invariants`,
-`find_symbols_by_tag`, `get_graph_status`, `reindex_repo`) only ever read
-and index the one repository path the server was started against - none
-of them accept an arbitrary filesystem path or URL from the calling
-agent.
+Prism itself adds no authentication layer at that transport level.
+
+Every tool (`get_symbol_context`, `get_architectural_invariants`,
+`find_symbols_by_tag`, `get_graph_status`, `reindex_repo`) accepts an
+optional `repo_path` argument the *calling agent* supplies - and an
+MCP-driven agent's tool-call arguments are untrusted input in the same
+sense any LLM-in-the-loop system's are (prompt injection from a fetched
+file/page can shape what the agent "decides" to call a tool with).
+**Item 13 (second post-implementation audit)** closes the concrete gap
+this created: `repo_path` used to go straight into `os.path.abspath` and
+`os.walk` with no boundary check, so a value like `/etc` or a `../../`
+sequence would have Prism parse and return the contents of whatever
+source-looking files it finds there back to the agent. `prism mcp --repo
+PATH` now pins the server to a **sandbox root**
+(`prism.mcp.cache.GraphCache.sandbox_root`/`assert_path_in_repo`,
+`prism.mcp.security`): every `repo_path` override must resolve, through
+`os.path.realpath` (so a symlink can't be used to step outside either),
+to that root itself or a real subdirectory of it, or the tool call fails
+with a `SecurityError` surfaced as an ordinary MCP tool error - never a
+silent truncation or a raw traceback. A server started *without*
+`--repo` keeps its original, documented "index whatever `repo_path` an
+agent names, on demand" design (there is no operator-configured boundary
+to enforce in that shape); pin the server with `--repo` for the common
+IDE-integration deployment where sandboxing actually matters.
+
+`target_symbol`/`tag` arguments are validated against a conservative
+character allowlist (matching every real qualified-name/tag shape this
+codebase actually produces - `prism.mcp.security.validate_symbol_name`/
+`validate_tag`) and a length cap before ever reaching a symbol-table
+lookup; `token_budget` is bounds-checked (`1..128000`, `pydantic.Field`)
+against `ContextKnapsackPacker` attempting to pack an unreasonably large
+context. Neither string is used to construct a filesystem path or reach
+a shell/subprocess anywhere in this codebase today, so this is framed
+honestly as input hygiene / defense-in-depth, not "closes an RCE" - see
+`prism.mcp.security`'s own module docstring.
 
 ## Parser safeguards against adversarial input
 

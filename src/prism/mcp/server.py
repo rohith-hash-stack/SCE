@@ -39,6 +39,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from prism.graph.metamodel import TagRelation
 from prism.mcp.cache import GraphCache, RepoNotFoundError
+from prism.mcp.security import SecurityError, validate_symbol_name, validate_tag, validate_token_budget
 from prism.serializers.markdown import render_markdown
 from prism.slicer.blueprint import mine_sibling_blueprint
 from prism.slicer.knapsack import ContextKnapsackPacker
@@ -69,7 +70,7 @@ _cache = GraphCache()
 def _repo_context(repo_path: str | None):
     try:
         return _cache.get_or_index(repo_path)
-    except RepoNotFoundError as exc:
+    except (RepoNotFoundError, SecurityError) as exc:
         raise ToolError(str(exc)) from exc
 
 
@@ -99,6 +100,11 @@ def get_symbol_context(target_symbol: str, repo_path: str | None = None, token_b
         token_budget: Approximate token budget for the packed context
             (default 2000).
     """
+    try:
+        target_symbol = validate_symbol_name(target_symbol)
+        token_budget = validate_token_budget(token_budget)
+    except SecurityError as exc:
+        raise ToolError(str(exc)) from exc
     ctx = _repo_context(repo_path)
     if target_symbol not in ctx.symbol_table:
         raise ToolError(
@@ -131,6 +137,10 @@ def get_architectural_invariants(target_symbol: str, repo_path: str | None = Non
         repo_path: Absolute path to the repository root. Defaults to the
             server's current working directory.
     """
+    try:
+        target_symbol = validate_symbol_name(target_symbol)
+    except SecurityError as exc:
+        raise ToolError(str(exc)) from exc
     ctx = _repo_context(repo_path)
     if target_symbol not in ctx.symbol_table:
         raise ToolError(f"symbol '{target_symbol}' was not found in '{ctx.repo_root}'")
@@ -199,6 +209,10 @@ def find_symbols_by_tag(tag: str, repo_path: str | None = None) -> dict[str, Any
         repo_path: Absolute path to the repository root. Defaults to the
             server's current working directory.
     """
+    try:
+        tag = validate_tag(tag)
+    except SecurityError as exc:
+        raise ToolError(str(exc)) from exc
     ctx = _repo_context(repo_path)
     known_tags = set(ctx.metamodel.tags())
     if tag not in known_tags:
@@ -281,7 +295,7 @@ def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
     """
     try:
         ctx = _cache.reindex(repo_path)
-    except RepoNotFoundError as exc:
+    except (RepoNotFoundError, SecurityError) as exc:
         raise ToolError(str(exc)) from exc
     return {
         "repo_path": ctx.repo_root,
