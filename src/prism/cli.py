@@ -225,6 +225,8 @@ def query(
             "budget": result.budget,
             "allocated_tokens": result.allocated_tokens,
             "preserved_semantics": result.preserved_semantics,
+            "budget_exceeded": result.budget_exceeded,
+            "seed_cost": result.seed_cost,
             "items": [
                 {"symbol": i.symbol, "resolution": i.resolution, "language": i.language_id, "content": i.content}
                 for i in result.items

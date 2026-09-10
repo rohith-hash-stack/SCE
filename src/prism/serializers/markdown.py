@@ -94,6 +94,16 @@ def render_markdown(
         f"Allocated: {round(result.allocated_tokens)} tokens | "
         f"Preserved Semantics: {result.preserved_semantics}%"
     )
+    if result.budget_exceeded:
+        # Issue A3: the seed itself (pinned at L0, no admission check -
+        # see docs/design_formalism.md SS4.4) already exceeds the
+        # requested budget on its own; surface that explicitly rather
+        # than let a reader infer it from Allocated > Budget above.
+        lines.append(
+            f"[!] Budget exceeded: the seed symbol alone costs "
+            f"{round(result.seed_cost)} tokens, over the {result.budget}-token budget. "
+            "No candidates beyond the seed could be admitted."
+        )
     lines.append("")
     if hierarchy is not None:
         lines.extend(_render_hierarchical_sections(result, hierarchy, contracts or {}, graph))

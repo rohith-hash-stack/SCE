@@ -148,6 +148,36 @@ class PackResult:
     #: fired - a more-relevant candidate the main greedy pass left
     #: unselected displacing a less-relevant one it had already packed.
     swaps_performed: int = 0
+    #: Issue A3: real token cost of the seed's own L0 rendering (content +
+    #: Markdown wrapper) - the one quantity `budget_exceeded` below is
+    #: computed from. Always populated (never 0 unless the seed genuinely
+    #: renders to nothing), independent of whether it actually exceeds
+    #: `budget`.
+    seed_cost: float = 0.0
+    #: Issue A3: True exactly when `seed_cost > budget` - the seed alone,
+    #: pinned at L0 with no admission check (see the comment above its
+    #: unconditional pack in `ContextKnapsackPacker.pack`), already
+    #: exceeds what the caller asked for before a single candidate is
+    #: considered. `docs/design_formalism.md` SS4.4 documents this as the
+    #: one deliberate, unconditional exception to Strict Budget
+    #: Compliance: Tokens(Rendered) <= Budget OR Tokens(Seed_L0) > Budget.
+    #: A caller (the MCP server, the CLI, any downstream consumer) should
+    #: surface this explicitly rather than silently accept an
+    #: over-budget response - the whole reason this flag exists instead
+    #: of leaving the overflow implicit in `allocated_tokens > budget`.
+    budget_exceeded: bool = False
+    #: Issue A3: True when the final rendered package exceeds `budget` for
+    #: any reason - computed independently from `allocated_tokens >
+    #: budget` rather than aliased to `budget_exceeded`, even though in
+    #: this architecture the two are currently always equal (every
+    #: candidate beyond the seed is strictly admission-gated against
+    #: `_admission_budget <= budget`, so the seed is the only possible
+    #: source of overflow today). Kept distinct because the two questions
+    #: are conceptually different ("did the mandatory seed alone not fit"
+    #: vs. "did the document Prism actually produced not fit") and a
+    #: future admission path that isn't seed-only should not need to
+    #: retrofit this flag's meaning.
+    truncation_occurred: bool = False
 
 
 class ContextKnapsackPacker:
@@ -273,9 +303,26 @@ class ContextKnapsackPacker:
         seed_symbol = builder.symbol_table.get(seed)
         seed_path = self._relative_path(builder, seed_symbol.file)
         items = [PackedItem(seed, 0, seed_content, seed_symbol.language_id, seed_symbol.line_range, seed_path)]
-        total_tokens = estimate_tokens(seed_content) + _wrapping_overhead_tokens(
+        # Issue A3 / the seed budget exception: the seed is pinned at L0
+        # and packed *unconditionally* below (see `total_tokens =
+        # seed_cost` right after) - there is deliberately no `if
+        # seed_cost > self._admission_budget: ...` guard here. A context
+        # slice without its own target symbol is meaningless (Invariant
+        # #4, Seed Dominance - the seed must always be shown), so Strict
+        # Budget Compliance (Invariant #2) is stated as governing
+        # *candidate selection beyond the seed*, not the seed itself; see
+        # docs/design_formalism.md SS4.4 for the formal statement:
+        # Tokens(Rendered) <= Budget  OR  Tokens(Seed_L0) > Budget. What
+        # was missing before Issue A3 wasn't the behavior (it was already
+        # correct and tested) but a way for a caller to *know* this
+        # exception fired instead of silently absorbing an over-budget
+        # response - `budget_exceeded`/`truncation_occurred` below make
+        # that explicit.
+        seed_cost = estimate_tokens(seed_content) + _wrapping_overhead_tokens(
             seed, seed_path, 0, seed_symbol.line_range, is_seed=True
         )
+        total_tokens = seed_cost
+        budget_exceeded = seed_cost > self.budget
         packed: set[str] = {seed}
         # Swap-Refinement Pass (Issue #12) only ever displaces an
         # ordinary, distance-ranked candidate - the seed, an
@@ -501,6 +548,9 @@ class ContextKnapsackPacker:
             compact=compact,
             fractional_upper_bound=fractional_upper_bound,
             swaps_performed=swaps_performed,
+            seed_cost=seed_cost,
+            budget_exceeded=budget_exceeded,
+            truncation_occurred=total_tokens > self.budget,
         )
 
     #: Swap-Refinement Pass hard cap (Issue #12.2) - bounds the pass's own

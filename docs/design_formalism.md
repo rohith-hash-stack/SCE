@@ -279,6 +279,45 @@ beyond the seed, which is the only part of packing that is actually a
 choice. `tests/test_invariants_hypothesis.py`'s property test bounds its
 own budget range above the fixture's seed size for exactly this reason.
 
+Formally, the invariant this section proves is therefore the disjunction:
+
+$$\text{Tokens}(\text{Rendered}) \le \text{Budget} \quad \lor \quad \text{Tokens}(\text{Seed}_{L0}) > \text{Budget}$$
+
+The left disjunct is the ordinary case, proved above by construction over
+every admission check the candidate-selection loop and the
+Swap-Refinement Pass perform. The right disjunct is the seed-dominance
+exception: whenever it holds, the left disjunct is permitted to fail, and
+does so for exactly one reason (the seed's own unconditional L0 pack),
+never silently for any other.
+
+**Issue A3 (post-implementation audit):** the exception above was real
+and tested from the moment Issue #10 shipped, but nothing in
+`PackResult` let a caller (the CLI's `--json` output, the MCP server, any
+other downstream consumer) *observe* that the right disjunct - not the
+left - was the reason a response came back over budget, short of
+independently comparing `allocated_tokens` against `budget` themselves.
+`PackResult` now exposes this directly:
+
+- `seed_cost: float` - the seed's own real L0 token cost (content +
+  Markdown wrapper), computed once and reused for both the unconditional
+  pack and this diagnostic.
+- `budget_exceeded: bool` - `seed_cost > budget`, i.e. "the right
+  disjunct above holds for this call."
+- `truncation_occurred: bool` - `allocated_tokens > budget` at the end of
+  `pack()`, computed independently from `budget_exceeded` rather than
+  aliased to it (in the current architecture every non-seed candidate is
+  strictly admission-gated, so the seed is the only possible overflow
+  source and the two flags are always equal today - kept as two separate
+  computations because the questions they answer, "did the mandatory
+  seed alone not fit" vs. "did the final document not fit," are
+  conceptually distinct and a future non-seed-only overflow source
+  should not need to retrofit either flag's meaning).
+
+`prism.serializers.render_markdown` renders an explicit `[!] Budget
+exceeded: ...` line when `budget_exceeded` is set, and `prism.cli`'s
+`--json` output includes both fields, so this is no longer something a
+caller has to infer.
+
 ## 5. Dynamic Reconciliation Model
 
 `GraphReconciler.reconcile` (`prism.runtime.reconciler`) merges observed
