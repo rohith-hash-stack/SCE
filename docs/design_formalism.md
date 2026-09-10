@@ -170,6 +170,78 @@ edge to the winner. Otherwise an `UnresolvedPolymorphicNode` sentinel is
 emitted, carrying `Tags(Unresolved) = union_{C in Candidates} Tags(C)` -
 the conservative worst-case tag union across every candidate.
 
+### 2.4 Semantic Tags vs. Topological Distance formalization (Item 21)
+
+`prism.slicer.semantic_topology_score` is a **companion formalization**,
+not a replacement for `D_hybrid` above - it exists because the second
+post-implementation audit asked, in its own literal notation, for exactly
+this scoring function to be formalized and its dominance property proven:
+
+```
+Score(v|s) = TopologicalDecay(dist(s, v)) * (1 + alpha * JaccardSimilarity(tags(s), tags(v)))
+TopologicalDecay(d) = 1 / (1 + d)**2
+alpha = 0.20
+```
+
+`D_hybrid` already has its own proven Topological Monotonicity invariant
+(Section 2.2), backed by a real regression fix, and swapping the live
+ranking function for this multiplicative form would be a materially
+larger change than "formalize this scoring function" asks for - so this
+section proves the audit's own formula on its own terms, as a separate,
+real, tested artifact (`prism.slicer.semantic_topology_score`,
+`tests/test_semantic_topology_score.py`), without touching the packer's
+actual ranking path.
+
+**The dominance claim, precisely stated and proven, honestly**: for
+`dist(u) < dist(v)`, is `Score(u) > Score(v)` guaranteed for *every*
+possible tag overlap? The worst case at a fixed `dist(u) = d` is `u` at
+zero tag similarity (bonus factor 1) against the *nearest* possible `v`
+at perfect tag similarity (bonus factor `1 + alpha`) - `TopologicalDecay`
+is strictly decreasing, so a larger gap only helps, never hurts, the
+claim. That reduces the whole question, at a fixed `d`, to:
+
+```
+TopologicalDecay(d) > TopologicalDecay(d + 1) * (1 + alpha)
+  <=>  ((2 + d) / (1 + d))**2 > 1 + alpha
+```
+
+The left side strictly *decreases* toward 1 as `d -> infinity` - a
+polynomial `1/(1+d)**2` decay eventually loses to *any* fixed
+multiplicative bonus greater than 1, unlike `D_hybrid`'s additive tag
+term, which `tag_bonus_safety_margin` deliberately scales down relative
+to the hop horizon. At `alpha = 0.20`, solving gives `d ~= 9.48`: the
+inequality holds for every integer `d` in `0..9` and **fails starting at
+`d = 10`, and never recovers** (the left side is monotonic, so once it
+drops below `1 + alpha` it stays there) - concretely,
+`TopologicalDecay(10) ~= 0.008264` while
+`TopologicalDecay(11) * 1.2 ~= 0.008333`, so an 11-hop candidate with a
+perfect tag match outscores a 10-hop candidate with zero tag overlap,
+even though the latter is strictly closer.
+
+**So the audit's own "distance strictly dominates" claim, read as an
+unconditional statement over all `d`, is false for its own literal
+`alpha = 0.20`** - this is verified directly
+(`test_honest_counterexample_at_a_ten_hop_closer_distance_alpha_point_two`,
+`test_the_failure_never_recovers_for_larger_closer_distances`), not
+asserted away. What *is* true, and is the property this codebase actually
+needs: whenever the closer candidate's own hop distance is at most
+`MAX_DOMINANT_HOP_DISTANCE` (9, derived from `ALPHA`, not hand-copied),
+it dominates every farther candidate regardless of tags on either side -
+and that covers every comparison `DistanceEngine` would ever need, since
+`DEFAULT_MAX_HOPS = 10` is the same horizon hop counts are normalized
+against everywhere else in this codebase
+(`test_dominance_range_covers_this_codebases_actual_hop_horizon`). A
+`hypothesis`-driven property test proves dominance holds across that
+entire in-range domain, not just the two or three hand-picked examples
+above.
+
+`JaccardSimilarity(A, B) = |A ∩ B| / |A ∪ B|`, defined as `0.0` (not the
+mathematically common `1.0`) when both `A` and `B` are empty - an
+untagged node has no similarity *signal* to offer, which should be
+neutral (no bonus), the same "no signal is not a confirmed match"
+principle `UNTAGGED_TAG_DISTANCE` already establishes for `D_hybrid`'s
+own tag term.
+
 ## 3. Compression Taxonomy
 
 `ASTCompressor`/`CompressionProvider` (`prism.slicer.compressor`) render
