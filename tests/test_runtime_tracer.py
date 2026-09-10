@@ -6,6 +6,7 @@ local subprocess is not).
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 
@@ -230,8 +231,14 @@ def test_tracer_captures_getattr_dynamic_dispatch(tmp_path):
     assert '"callee":"handlers.handle_create"' in text
     # Confirms this is a genuine *dynamic* invocation, not something the
     # tracer just happened to also see: `getattr` itself is stdlib, so it
-    # must never appear as a traced callee in its own right.
-    assert "getattr" not in text
+    # must never appear as a traced caller/callee *value* in its own right
+    # - matched against the JSON field values specifically (not the raw
+    # line), since `callee_file`'s absolute tmp-path can otherwise contain
+    # this very test's own name as an incidental substring.
+    records = [json.loads(line) for line in text.splitlines() if line.strip()]
+    for record in records:
+        assert record["caller"] != "getattr" and "getattr" not in (record["caller"] or "")
+        assert record["callee"] != "getattr" and "getattr" not in (record["callee"] or "")
 
 
 def test_reconciler_injects_dynamic_dispatch_edge_with_confirmed_runtime_confidence(tmp_path):

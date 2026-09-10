@@ -44,6 +44,7 @@ from prism.graph.guard import (
     reconcile as guard_reconcile,
     save_fingerprints,
 )
+from prism.graph.symbol_table import path_to_module
 from prism.runtime.tracer import TraceRecord
 
 # --------------------------------------------------------------------- #
@@ -146,6 +147,19 @@ RUNTIME_TRUST_HIGH_THRESHOLD = 0.9
 # itself already encodes (a handful of events can't safely indict
 # anything).
 NON_OBSERVATION_EXECUTION_THRESHOLD = 10
+
+# Item 10 (second post-implementation audit): Fuzzy Anchor Matching. A
+# `pytest_tracer`-sourced event whose exact `callee` qualified name misses
+# the static symbol table (`DYNAMIC_DISPATCH`-shaped: a decorator-wrapped
+# or metaclass-synthesized callable whose `co_qualname` drifted from what
+# Pass 1 indexed) still carries the real `(file, line)` its frame actually
+# ran at - a static symbol defined within this many source lines of that
+# location, in the *same* file, is treated as the real target. 25 lines
+# comfortably covers a decorator stack, a multi-line signature, or a
+# docstring/blank-line gap between the recorded frame line and the
+# textual `def`, without being so wide it starts matching an unrelated
+# sibling function three screens away.
+FUZZY_ANCHOR_LINE_WINDOW = 25
 
 #: The tag `DYNAMIC_DISPATCH` orphans feed back onto their (statically
 #: resolvable) caller - Issue #15.4's "dynamically tag candidate symbols
@@ -373,6 +387,16 @@ class ReconciliationResult:
     #: down this particular statically-resolved edge. Kept, never deleted -
     #: see `GraphReconciler._apply_non_observation_penalty`.
     non_observed_edges: list[tuple[str, str]] = dataclasses.field(default_factory=list)
+    #: Item 10: `(caller, matched_symbol)` pairs Fuzzy Anchor Matching
+    #: synthesized this run - `matched_symbol` is the nearest static
+    #: symbol within `FUZZY_ANCHOR_LINE_WINDOW` lines of the traced
+    #: frame's actual source location, not necessarily the exact name the
+    #: frame's `co_qualname` reported. See `GraphReconciler._fuzzy_anchor_match`.
+    fuzzy_matched_edges: list[tuple[str, str]] = dataclasses.field(default_factory=list)
+    #: Item 10: fraction of callee-side orphans (caller resolved, exact
+    #: callee name didn't) Fuzzy Anchor Matching rescued this run - 1.0
+    #: vacuously when there were no such orphans.
+    orphan_resolution_ratio: float = 1.0
 
 
 class GraphReconciler:
@@ -389,13 +413,19 @@ class GraphReconciler:
     def reconcile(self, events: list[TraceRecord]) -> ReconciliationResult:
         confirmed: set[tuple[str, str]] = set()
         discovered: set[tuple[str, str]] = set()
+        fuzzy_matched: set[tuple[str, str]] = set()
         sink_symbols: dict[str, set[str]] = {}
         unresolved: list[TraceRecord] = []
         counts: dict[tuple[str, str], int] = {}
+        fuzzy_orphan_events: list[TraceRecord] = []
+        fuzzy_resolved_events: list[TraceRecord] = []
 
         for event in events:
             if event.callee is not None:
-                self._reconcile_call(event, confirmed, discovered, unresolved, counts)
+                self._reconcile_call(
+                    event, confirmed, discovered, fuzzy_matched, unresolved, counts,
+                    fuzzy_orphan_events, fuzzy_resolved_events,
+                )
             if event.sink_tag is not None:
                 self._reconcile_sink(event, sink_symbols, unresolved)
 
@@ -416,6 +446,21 @@ class GraphReconciler:
                 confidence="CONFIRMED_RUNTIME",
                 runtime_invocation_count=counts.get(edge, 0),
             )
+
+        for edge in fuzzy_matched:
+            # A fuzzy match landing on a pair the graph already has an edge
+            # for (static, or already discovered/confirmed above) adds no
+            # new information - never downgrade an existing edge to a
+            # weaker `TENTATIVE_DYNAMIC_CALL`.
+            if not self.builder.graph.has_edge(*edge):
+                self.builder.graph.add_edge(
+                    edge[0], edge[1],
+                    relation="CALLS",
+                    provenance="RUNTIME_FUZZY_MATCHED",
+                    confidence="TENTATIVE_RUNTIME",
+                    kind="TENTATIVE_DYNAMIC_CALL",
+                    runtime_invocation_count=counts.get(edge, 0),
+                )
 
         for symbol, tags in sink_symbols.items():
             merged = self.tag_matrix.setdefault(symbol, set())
@@ -468,6 +513,15 @@ class GraphReconciler:
                 symbol_execution_count[event.caller] = symbol_execution_count.get(event.caller, 0) + 1
         non_observed = self._apply_non_observation_penalty(symbol_execution_count, confirmed)
 
+        # Item 10: what fraction of callee-side orphans (caller resolved,
+        # exact callee name didn't) Fuzzy Anchor Matching actually rescued
+        # this run - vacuously 1.0 when there were no such orphans to
+        # begin with, the same "nothing to distrust" convention
+        # `trust_score` itself already uses for a trace with zero events.
+        orphan_resolution_ratio = (
+            len(fuzzy_resolved_events) / len(fuzzy_orphan_events) if fuzzy_orphan_events else 1.0
+        )
+
         return ReconciliationResult(
             confirmed_edges=sorted(confirmed),
             discovered_edges=sorted(discovered),
@@ -479,6 +533,8 @@ class GraphReconciler:
             trust_warning=trust_warning,
             dynamic_tagged_symbols=dynamic_tagged,
             non_observed_edges=sorted(non_observed),
+            fuzzy_matched_edges=sorted(fuzzy_matched),
+            orphan_resolution_ratio=round(orphan_resolution_ratio, 4),
         )
 
     def _apply_non_observation_penalty(
@@ -500,7 +556,10 @@ class GraphReconciler:
         for u, v, data in self.builder.graph.edges(data=True):
             if data.get("relation", "CALLS") != "CALLS":
                 continue
-            if data.get("provenance") == "RUNTIME_DISCOVERED":
+            if data.get("provenance") in ("RUNTIME_DISCOVERED", "RUNTIME_FUZZY_MATCHED"):
+                # Both are runtime evidence themselves - an edge synthesized
+                # *from* this run's trace can't simultaneously be "never
+                # observed" by it.
                 continue
             if symbol_execution_count.get(u, 0) < NON_OBSERVATION_EXECUTION_THRESHOLD:
                 continue
@@ -515,20 +574,37 @@ class GraphReconciler:
         event: TraceRecord,
         confirmed: set[tuple[str, str]],
         discovered: set[tuple[str, str]],
+        fuzzy_matched: set[tuple[str, str]],
         unresolved: list[TraceRecord],
         counts: dict[tuple[str, str], int],
+        fuzzy_orphan_events: list[TraceRecord],
+        fuzzy_resolved_events: list[TraceRecord],
     ) -> None:
         caller, callee = event.caller, event.callee
-        if callee not in self.builder.symbol_table or caller is None or caller not in self.builder.symbol_table:
-            # Either side isn't a symbol the static indexer actually
-            # knows about - most commonly the immediate caller being
-            # outside the repo (a test runner, a framework dispatch loop)
-            # or the traced frame belonging to a symbol kind Pass 1 never
-            # registers (module-level code, a lambda). Kept for
-            # visibility, not silently dropped - `prism status` surfaces
-            # this count - but there's no real `G_C` node pair to draw an
-            # edge between.
+        if caller is None or caller not in self.builder.symbol_table:
+            # The caller side isn't a symbol the static indexer actually
+            # knows about - most commonly it being outside the repo (a test
+            # runner, a framework dispatch loop). Kept for visibility, not
+            # silently dropped - `prism status` surfaces this count - but
+            # there's no real `G_C` source node to draw an edge from, and
+            # Item 10's Fuzzy Anchor Matching (below) can't help either: it
+            # only ever resolves the *callee* side.
             unresolved.append(event)
+            return
+        if callee not in self.builder.symbol_table:
+            # Item 10: the exact qualified name Pass 1 registered and the
+            # one this frame's `co_qualname` produced disagree (a
+            # decorator-wrapped or metaclass-synthesized callable) - try
+            # matching by source-location proximity before giving up.
+            fuzzy_orphan_events.append(event)
+            matched = self._fuzzy_anchor_match(event)
+            if matched is None:
+                unresolved.append(event)
+                return
+            fuzzy_resolved_events.append(event)
+            edge = (caller, matched)
+            counts[edge] = counts.get(edge, 0) + 1
+            fuzzy_matched.add(edge)
             return
         edge = (caller, callee)
         counts[edge] = counts.get(edge, 0) + 1
@@ -536,6 +612,56 @@ class GraphReconciler:
             confirmed.add(edge)
         else:
             discovered.add(edge)
+
+    def _fuzzy_anchor_match(self, event: TraceRecord) -> str | None:
+        """Item 10: Fuzzy Anchor Matching. Only ever called once exact
+        qualified-name resolution has already failed for `event.callee`.
+        Searches the *same file* `event.callee_file` names for a static
+        symbol whose `line_range` is within `FUZZY_ANCHOR_LINE_WINDOW`
+        lines of `event.callee_line` - the nearest one wins; a genuine tie
+        (two equidistant candidates) is real ambiguity, not a coin flip, so
+        it is left unresolved rather than guessed, the same "don't guess"
+        principle `ConcreteGraphBuilder`'s Go Stage 2 fallback and TS
+        heritage-target resolution already apply.
+
+        Candidates are restricted to `function`/`method` symbols - the
+        same restriction `GlobalSymbolTable._simple_name_index` already
+        applies for the identical reason ("a class ... is never itself the
+        target of ... a call"): a traced *call* event's target is always a
+        callable, and an enclosing class's `line_range` always contains
+        every one of its methods' ranges, which would otherwise manufacture
+        a spurious distance-0 tie between a method and its own class on
+        every single match attempt. The same containment shape recurs one
+        level down for a *nested* function (a closure's `line_range` is
+        always inside its enclosing function's) - among candidates that
+        directly contain `event.callee_line` (distance 0), the smallest
+        (most specific/innermost) span wins rather than tying, so a traced
+        closure resolves to itself, not to the outer function textually
+        wrapped around it. A genuine tie (equal distance *and* equal span)
+        is real ambiguity, not a coin flip, so it is left unresolved rather
+        than guessed - the same "don't guess" principle `ConcreteGraphBuilder`'s
+        Go Stage 2 fallback and TS heritage-target resolution already apply.
+        """
+        if event.callee_file is None or event.callee_line is None:
+            return None
+        module = path_to_module(event.callee_file, self.builder.repo_root)
+        best: list[tuple[int, int, str]] = []
+        for symbol in self.builder.symbol_table:
+            if symbol.module != module or symbol.kind not in ("function", "method"):
+                continue
+            start, end = symbol.line_range
+            if start <= event.callee_line <= end:
+                distance = 0
+            else:
+                distance = min(abs(start - event.callee_line), abs(end - event.callee_line))
+            if distance <= FUZZY_ANCHOR_LINE_WINDOW:
+                best.append((distance, end - start, symbol.qualified_name))
+        if not best:
+            return None
+        best.sort()
+        if len(best) > 1 and best[0][:2] == best[1][:2]:
+            return None
+        return best[0][2]
 
     def _reconcile_sink(
         self, event: TraceRecord, sink_symbols: dict[str, set[str]], unresolved: list[TraceRecord]
@@ -579,6 +705,10 @@ def _empty_state() -> dict:
         # far, minus any pair a later run did confirm (see
         # `merge_result_into_state`).
         "unobserved_edges": [],
+        # Item 10: [caller, callee] pairs cumulatively synthesized by Fuzzy
+        # Anchor Matching across every run so far, minus any pair a later
+        # exact-match run superseded (see `merge_result_into_state`).
+        "fuzzy_matched_edges": [],
         "last_updated": None,
     }
 
@@ -671,6 +801,18 @@ def merge_result_into_state(state: dict, result: ReconciliationResult, trace_fil
     unobserved -= discovered
     merged["unobserved_edges"] = [list(edge) for edge in sorted(unobserved)]
 
+    # Item 10: accumulate across runs; a pair later resolved exactly
+    # (confirmed or discovered) supersedes its earlier fuzzy guess -
+    # `apply_runtime_state` applies `confirmed_edges`/`discovered_edges`
+    # first, so leaving a superseded pair in here would be harmless either
+    # way, but pruning it keeps the persisted state an honest reflection
+    # of "still only a fuzzy guess as of the latest evidence".
+    fuzzy_matched = {tuple(e) for e in merged.get("fuzzy_matched_edges", [])}
+    fuzzy_matched.update(result.fuzzy_matched_edges)
+    fuzzy_matched -= confirmed
+    fuzzy_matched -= discovered
+    merged["fuzzy_matched_edges"] = [list(edge) for edge in sorted(fuzzy_matched)]
+
     merged["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     return merged
 
@@ -732,6 +874,22 @@ def apply_runtime_state(builder: ConcreteGraphBuilder, tag_matrix: dict[str, set
     for caller, callee in state.get("unobserved_edges", []):
         if builder.graph.has_edge(caller, callee):
             builder.graph.edges[caller, callee]["unobserved_in_traces"] = True
+
+    # Item 10: re-validated against the fresh static graph exactly like
+    # `discovered_edges` above - and, same as there, an edge the static
+    # resolver now finds on its own supersedes the earlier fuzzy guess
+    # rather than being downgraded back to `TENTATIVE_DYNAMIC_CALL`.
+    for caller, callee in state.get("fuzzy_matched_edges", []):
+        if builder.graph.has_edge(caller, callee):
+            continue
+        if caller in builder.symbol_table and callee in builder.symbol_table:
+            builder.graph.add_edge(
+                caller, callee,
+                relation="CALLS",
+                provenance="RUNTIME_FUZZY_MATCHED",
+                confidence="TENTATIVE_RUNTIME",
+                kind="TENTATIVE_DYNAMIC_CALL",
+            )
 
     # RuntimeTrust boost (Issue #15.3), re-derived from the persisted
     # trust_score rather than a separately-persisted edge list - the most

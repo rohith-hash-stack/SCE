@@ -367,6 +367,9 @@ def trace(repo_path: str, otel_path: str | None, command: tuple[str, ...]) -> No
         click.echo(f"  Symbols newly tagged #dynamic:       {len(result.dynamic_tagged_symbols)}")
     if result.non_observed_edges:
         click.echo(f"  Static edges flagged unobserved (this run): {len(result.non_observed_edges)}")
+    if result.fuzzy_matched_edges:
+        click.echo(f"  Fuzzy-anchor-matched edges (this run):      {len(result.fuzzy_matched_edges)}")
+        click.echo(f"  Orphan resolution ratio (this run):         {result.orphan_resolution_ratio:.0%}")
     click.echo(f"Runtime state saved to {runtime_state_path(repo_root)}")
 
 
@@ -402,6 +405,8 @@ def status(repo_path: str) -> None:
     click.echo(f"RuntimeTrust (latest run):    {state.get('trust_score', 1.0):.0%}")
     if state.get("unobserved_edges"):
         click.echo(f"Edges flagged unobserved:     {len(state['unobserved_edges'])}")
+    if state.get("fuzzy_matched_edges"):
+        click.echo(f"Fuzzy-anchor-matched edges:   {len(state['fuzzy_matched_edges'])}")
     click.echo(f"Trace files ingested:         {len(state['trace_files'])}")
     if state["last_updated"]:
         click.echo(f"Last updated:                 {state['last_updated']}")

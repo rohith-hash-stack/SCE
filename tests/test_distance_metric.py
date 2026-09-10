@@ -6,7 +6,12 @@ from __future__ import annotations
 import networkx as nx
 
 from prism.graph.metamodel import MAX_TAG_DISTANCE, UNTAGGED_TAG_DISTANCE, SemanticMetamodel
-from prism.slicer.distance import GAMMA_UNOBSERVED, DistanceConfig, DistanceEngine
+from prism.slicer.distance import (
+    GAMMA_UNOBSERVED,
+    RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT,
+    DistanceConfig,
+    DistanceEngine,
+)
 
 
 def test_untagged_distance_is_less_than_confirmed_max_distance():
@@ -145,3 +150,28 @@ def test_unobserved_and_tentative_call_penalties_compose():
 
 def test_gamma_unobserved_is_a_real_discount_below_one():
     assert 0.0 < GAMMA_UNOBSERVED < 1.0
+
+
+def test_tentative_dynamic_call_edge_scores_higher_distance_than_a_plain_edge():
+    """Item 10: `kind='TENTATIVE_DYNAMIC_CALL'` (Fuzzy Anchor Matching)
+    must price a hop as strictly more expensive than an ordinary
+    exactly-resolved one, so it never outranks a same-hop-count confident
+    neighbor."""
+    g = nx.DiGraph()
+    g.add_edge("seed", "plain_target")
+    g.add_edge("seed", "fuzzy_target", kind="TENTATIVE_DYNAMIC_CALL")
+
+    engine = DistanceEngine(SemanticMetamodel(), {}, DistanceConfig())
+    distances = engine.compute_all("seed", g)
+
+    assert distances["fuzzy_target"] > distances["plain_target"]
+
+
+def test_tentative_dynamic_call_is_cheaper_than_tentative_static_call():
+    """A Fuzzy Anchor Match is backed by an actual traced execution, not
+    pure static-uniqueness inference (Go Stage 2's `TENTATIVE_CALL`) - it
+    should be strictly more trustworthy (a lower hop cost / higher
+    structural weight) than that guess."""
+    from prism.slicer.distance import RELATION_TENTATIVE_CALL_WEIGHT
+
+    assert RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT > RELATION_TENTATIVE_CALL_WEIGHT

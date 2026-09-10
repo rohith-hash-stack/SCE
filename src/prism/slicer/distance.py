@@ -134,6 +134,19 @@ RELATION_TENTATIVE_CALL_WEIGHT = 0.60
 # stays fully reachable, just ranked behind evidence-backed neighbors.
 GAMMA_UNOBSERVED = 0.50
 
+# Item 10 (second post-implementation audit): Fuzzy Anchor Matching. A
+# `kind="TENTATIVE_DYNAMIC_CALL"` edge (`prism.runtime.reconciler`'s
+# `_fuzzy_anchor_match`) is a runtime-observed call whose callee resolved
+# by source-location proximity rather than an exact qualified-name match -
+# real evidence a call happened, but to the *nearest* static symbol, not a
+# name-verified one. Priced between an ordinary CALLS hop (1.0) and the
+# Go Stage 2 `TENTATIVE_CALL` guess (0.60): more trustworthy than Stage
+# 2's "exactly one struct in the whole repo defines this method name"
+# inference (this one is backed by an actual traced execution, not pure
+# static uniqueness), but still strictly short of full confidence, so it
+# never outranks a same-or-fewer-hop exactly-resolved neighbor.
+RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT = 0.65
+
 
 @dataclass(frozen=True)
 class DistanceConfig:
@@ -212,6 +225,8 @@ class DistanceEngine:
             structural_weight = RELATION_STRUCTURAL_WEIGHT.get(data.get("relation", "CALLS"), 1.0)
             if data.get("kind") == "TENTATIVE_CALL":
                 structural_weight *= RELATION_TENTATIVE_CALL_WEIGHT
+            elif data.get("kind") == "TENTATIVE_DYNAMIC_CALL":
+                structural_weight *= RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT
             if data.get("unobserved_in_traces"):
                 structural_weight *= GAMMA_UNOBSERVED
             base_cost = 1.0 / structural_weight if structural_weight else 1.0

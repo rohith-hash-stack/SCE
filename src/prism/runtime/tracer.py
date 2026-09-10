@@ -69,6 +69,19 @@ class TraceRecord:
     timestamp: float | None = None
     sink_tag: str | None = None
     detail: str | None = None
+    #: Item 10 (second post-implementation audit): the callee frame's
+    #: repo-relative-resolvable source location, captured whenever a
+    #: `pytest_tracer`-sourced event's frame is in-repo - independent of
+    #: whether `callee` itself ends up matching a static symbol, so
+    #: `GraphReconciler`'s Fuzzy Anchor Matching pass has a location to
+    #: search from even when the exact qualified name doesn't resolve (a
+    #: decorator-wrapped or metaclass-synthesized callable whose
+    #: `co_qualname` drifted from what Pass 1 indexed, but whose actual
+    #: source line is still right where the real definition lives).
+    #: `None` for every `otel`-sourced event (OTel spans carry no
+    #: guaranteed source-location attribute Prism can trust).
+    callee_file: str | None = None
+    callee_line: int | None = None
 
     def to_json_line(self) -> str:
         return json.dumps(dataclasses.asdict(self), separators=(",", ":"))
@@ -172,7 +185,17 @@ class Tracer:
             return self._trace_calls
 
         caller = resolve_qualified_name(frame.f_back, self.repo_root) if frame.f_back is not None else None
-        self._write(TraceRecord(caller=caller, callee=callee, source="pytest_tracer", timestamp=time.time()))
+        # `resolve_qualified_name` above already proved this frame's file is
+        # a real, in-repo path - `co_firstlineno` is the code object's `def`
+        # line (matches the tree-sitter function-definition node's own
+        # start line, decorators excluded from both), independent of
+        # whether `callee` ends up matching a Pass-1-registered symbol.
+        callee_file = os.path.abspath(frame.f_code.co_filename)
+        callee_line = frame.f_code.co_firstlineno
+        self._write(TraceRecord(
+            caller=caller, callee=callee, source="pytest_tracer", timestamp=time.time(),
+            callee_file=callee_file, callee_line=callee_line,
+        ))
         return self._trace_calls
 
     def _write(self, record: TraceRecord) -> None:

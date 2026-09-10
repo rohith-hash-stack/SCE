@@ -489,6 +489,45 @@ confirmed` line just above it) rather than staying flagged forever, since
 a later confirmation is direct proof the earlier non-observation was
 incomplete coverage, not a genuine static false positive.
 
+### 5.5 Fuzzy Anchor Matching for unresolved runtime orphans (Item 10)
+
+Some traced events resolve a real callee frame but not to a name Pass 1
+ever registered - most commonly a decorator-wrapped or metaclass-
+synthesized callable, where the code object that actually executes has a
+`co_qualname` that has drifted from the textual definition
+(`functools.wraps` copies `__qualname__` onto the *function object*, not
+onto the code object the tracer reads). `Tracer` now captures that frame's
+real `(file, line)` regardless of whether the name resolves
+(`TraceRecord.callee_file`/`callee_line`, `co_firstlineno` of the entered
+code object), so `GraphReconciler` has a location to search from even when
+`event.callee` matches nothing.
+
+`_fuzzy_anchor_match` searches every `function`/`method` static symbol in
+the *same file* (`event.callee_file`'s module) for one whose `line_range`
+lies within `FUZZY_ANCHOR_LINE_WINDOW` (25) lines of `event.callee_line`.
+Distance 0 means the line falls directly inside the symbol's own range;
+among several distance-0 containers (a closure is always inside its
+enclosing function's range, the same way a method's range sits inside its
+class's), the smallest (innermost) span wins rather than tying, so a
+traced closure resolves to itself rather than to the function textually
+wrapped around it. Beyond that, the nearest edge-distance wins; a genuine
+tie (equal distance *and* equal span) is real ambiguity and is left
+unresolved rather than guessed - the same principle Go Stage 2 call
+resolution and TS heritage-target resolution already apply.
+
+A match becomes a new `G_C` edge tagged `provenance="RUNTIME_FUZZY_MATCHED"`,
+`confidence="TENTATIVE_RUNTIME"`, `kind="TENTATIVE_DYNAMIC_CALL"` - never
+overwriting an edge the graph already has (static or otherwise). Distance
+weighting (`RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT = 0.65`, Section 2.1)
+prices it between an ordinary CALLS hop (1.0) and a Go Stage 2
+`TENTATIVE_CALL` guess (0.60) - a real traced execution backs it, unlike
+Stage 2's pure static-uniqueness inference, but it is still short of full
+confidence. `ReconciliationResult.orphan_resolution_ratio` reports what
+fraction of callee-side orphans (caller resolved, exact callee name
+didn't) this pass rescued in a given run; `fuzzy_matched_edges` persists
+across runs the same way `unobserved_edges` does, pruned once a later run
+resolves the same pair exactly.
+
 ## 6. Invariant Summary
 
 The six formal invariants this design guarantees, and where each is proven
