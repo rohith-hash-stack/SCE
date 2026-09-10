@@ -12,7 +12,9 @@ from prism.graph.hierarchy import compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.language_tiers import TIER_1_ONLY_LANGUAGES
+from prism.packer.submodular_knapsack import pack_symbol_context
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
+from prism.semantics.bitmask import describe_mask
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.index_cache import load_pipeline_from_cache, save_pipeline_to_cache
 from prism.runtime.reconciler import (
@@ -327,6 +329,53 @@ def query(
         click.echo(f"Wrote context package to {output}")
     else:
         click.echo(text)
+
+
+@main.command(name="causal-query")
+@click.argument("repo_path", type=click.Path(exists=True, file_okay=False))
+@click.argument("symbol")
+@click.option("--budget", type=int, default=4000, show_default=True, help="Token budget for the packed context.")
+@click.option(
+    "--max-hops", "max_hops", type=float, default=6.0, show_default=True,
+    help="Continuous Dijkstra distance horizon (Section 2.4/Part 2) - a candidate farther than this from the "
+    "seed is never considered, however cheap or feature-rich.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit the packed context as JSON instead of a text listing.")
+def causal_query(repo_path: str, symbol: str, budget: int, max_hops: float, as_json: bool) -> None:
+    """v1.1 Causal Coupling & Submodular Coverage: pack SYMBOL's context
+    using the Continuous Dijkstra topological distance (causally-coupled
+    data-flow/guard edges shorten graph distance) and the bitwise
+    submodular-coverage knapsack (`prism.packer.submodular_knapsack`) -
+    a companion engine to `prism query`'s own `D_hybrid`/greedy-knapsack
+    pipeline, not a replacement for it (see docs/design_formalism.md
+    Section 8 for why both exist side by side).
+    """
+    builder, tag_matrix = build_pipeline(repo_path)
+    if symbol not in builder.symbol_table:
+        raise SystemExit(f"error: seed symbol '{symbol}' was not found in the concrete graph (unknown or external symbol)")
+
+    result = pack_symbol_context(builder, symbol, budget, max_hops=max_hops)
+
+    if as_json:
+        click.echo(json.dumps({
+            "seed": result.seed,
+            "budget": result.budget,
+            "total_cost": result.total_cost,
+            "selected": result.selected,
+            "items": [
+                {"symbol": i.symbol, "cost": i.cost, "feature_mask": i.feature_mask, "dist_w": i.dist_w}
+                for i in result.items
+            ],
+            "covered_features": describe_mask(result.covered_mask),
+        }, indent=2))
+        return
+
+    click.echo(f"Causal context for {result.seed} (budget {result.budget}, used {result.total_cost}):")
+    for item in result.items:
+        marker = "seed" if item.symbol == result.seed else f"dist_w={item.dist_w:.3f}"
+        click.echo(f"  {item.symbol}  [{marker}, cost={item.cost}]")
+        click.echo(f"      features: {', '.join(describe_mask(item.feature_mask)) or '(none)'}")
+    click.echo(f"Coverage: {', '.join(describe_mask(result.covered_mask)) or '(none)'}")
 
 
 @main.command(
