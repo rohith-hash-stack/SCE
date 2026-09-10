@@ -257,7 +257,7 @@ decision.
 ### 4.4 Strict Budget Compliance (Invariant #2)
 
 By construction, `ActualTokens(RenderedContext) <= B_token` for any
-admitted item set: every admission check (`total_tokens + cost >
+*admitted candidate set*: every admission check (`total_tokens + cost >
 self._admission_budget`) happens *before* appending to `items`, and the
 Swap-Refinement Pass only ever accepts a substitution when the post-swap
 total still fits. `B_token`'s own `SAFETY_MARGIN` (0.92) and
@@ -266,6 +266,18 @@ to any tokenizer (including a real BPE one, since the packer's own
 per-item accounting doesn't render the *complete* final document
 incrementally - see the module docstring's "not byte-exact" note on
 `_wrapping_overhead_tokens`).
+
+**One deliberate, unconditional exception:** the seed itself is always
+packed at L0 regardless of budget (Section 4/Seed Dominance, Invariant
+#4 - a query response must always show its own target). If the seed's
+own rendered size alone exceeds `B_token`, `allocated_tokens` will
+exceed the nominal budget with zero candidates admitted - confirmed
+directly (a 100-token budget against an ~188-token seed body allocates
+188 tokens, all from the mandatory seed). This is intentional, not a gap
+in the guarantee: Strict Budget Compliance governs *candidate selection*
+beyond the seed, which is the only part of packing that is actually a
+choice. `tests/test_invariants_hypothesis.py`'s property test bounds its
+own budget range above the fixture's seed size for exactly this reason.
 
 ## 5. Dynamic Reconciliation Model
 
