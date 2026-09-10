@@ -229,3 +229,162 @@ class InstanceTypeMap:
 
     def resolve(self, var_name: str) -> str | None:
         return self.bindings.get(var_name)
+
+
+# --------------------------------------------------------------------- #
+# Barrel-file / re-export resolution (Issues #6/#7).
+#
+# `LocalImportMap` (above) is deliberately a purely textual, per-file
+# mapping: `from app import OrderService` records `"OrderService" ->
+# "app.OrderService"` from the import statement's own text alone, with no
+# idea whether `app.OrderService` is really where `OrderService` is
+# *defined* versus merely where it happens to be *re-exported from* - a
+# barrel/index module (`app/__init__.py` doing `from .order_service import
+# OrderService`, a TS `index.ts` doing `export { OrderService } from
+# './order_service'`) makes exactly that distinction matter: the real
+# definition lives at `app.order_service.OrderService`, and a consumer
+# that only ever imports through the barrel (`from app import
+# OrderService`) would otherwise resolve to a phantom `app.OrderService`
+# node that Pass 1 never actually registered. `ExportRegistry` tracks
+# every file's own "what did I bring into scope, and from where" — the
+# same information `LocalImportMap` already carries per-file — but
+# persistently, keyed by the *exporting* module rather than discarded once
+# that one file's Pass 2 pass finishes, so `resolve_export` can walk the
+# chain across as many intermediate barrel files as necessary.
+# --------------------------------------------------------------------- #
+#: Recursive `resolve_export` hop limit - matches the audit spec's own
+#: bound exactly (Issue #6.2: "`if depth > 5`"). A real barrel-file chain
+#: nesting five re-export hops deep is already pathological; this exists
+#: to guarantee termination on a circular import chain (`a` re-exports
+#: from `b`, `b` re-exports from `a`) without needing cycle detection to
+#: be the *only* thing standing between this and infinite recursion.
+EXPORT_RESOLUTION_MAX_DEPTH = 5
+
+
+class ExportRegistry:
+    """Persistent, repo-wide "module -> what it re-exports, and from
+    where" registry, built once per file (see
+    `ConcreteGraphBuilder._register_exports`) from the same import-parsing
+    machinery that already populates each file's own `LocalImportMap`.
+    """
+
+    def __init__(self) -> None:
+        # (module, exported_simple_name) -> (origin_module, origin_name)
+        self._explicit: dict[tuple[str, str], tuple[str, str]] = {}
+        # module -> [origin_module, ...], in declared order - Python
+        # `from .x import *` / TS `export * from './x'` / a Java
+        # `import pkg.*`-shaped wildcard, all folded into the same shape.
+        self._wildcards: dict[str, list[str]] = {}
+        # module -> explicit __all__ whitelist, when statically known
+        # (an ast.List/Tuple of string literals) - None means "no
+        # explicit __all__ was ever declared for this module" (distinct
+        # from an empty whitelist, `frozenset()`, meaning "__all__ = []").
+        self._all_whitelist: dict[str, frozenset[str] | None] = {}
+        # module -> True iff this module's own __all__ is dynamically
+        # modified (`__all__.extend(...)`, `__all__ += [...]`, a list
+        # comprehension, ...) rather than a static literal - Issue #6.3's
+        # `PARTIAL_EXPORT_MAP` flag: `resolve_export` falls back to
+        # "any public (non-underscore) name" for such a module instead of
+        # strictly honoring a whitelist it can't fully determine statically.
+        self._partial_export_modules: set[str] = set()
+
+    def add_explicit(self, module: str, exported_name: str, origin_module: str, origin_name: str) -> None:
+        self._explicit[(module, exported_name)] = (origin_module, origin_name)
+
+    def add_wildcard(self, module: str, origin_module: str) -> None:
+        targets = self._wildcards.setdefault(module, [])
+        if origin_module not in targets:
+            targets.append(origin_module)
+
+    def set_all_whitelist(self, module: str, names: frozenset[str]) -> None:
+        self._all_whitelist[module] = names
+
+    def mark_partial_export(self, module: str) -> None:
+        self._partial_export_modules.add(module)
+
+    def is_partial_export(self, module: str) -> bool:
+        return module in self._partial_export_modules
+
+    def all_whitelist(self, module: str) -> frozenset[str] | None:
+        return self._all_whitelist.get(module)
+
+    def wildcard_targets(self, module: str) -> list[str]:
+        return list(self._wildcards.get(module, []))
+
+    def explicit_origin(self, module: str, exported_name: str) -> tuple[str, str] | None:
+        return self._explicit.get((module, exported_name))
+
+    def permits_wildcard_export(self, module: str, name: str) -> bool:
+        """Whether `name` would actually be visible through `module`'s own
+        `from module import *` / `export * from module` - honors a static
+        `__all__` whitelist when one is known, degrades to "any public
+        (non-underscore) name" when `__all__` is absent or only partially
+        determinable (`PARTIAL_EXPORT_MAP`)."""
+        whitelist = self._all_whitelist.get(module)
+        if whitelist is not None and not self.is_partial_export(module):
+            return name in whitelist
+        return not name.startswith("_")
+
+
+def resolve_export(
+    module: str,
+    symbol: str,
+    export_registry: "ExportRegistry",
+    symbol_table: GlobalSymbolTable,
+    visited: set[tuple[str, str]] | None = None,
+    depth: int = 0,
+) -> str | None:
+    """Recursively resolve `symbol` as it would actually be seen by a
+    consumer importing it from `module` - walking through as many
+    intermediate barrel/re-export files as necessary (Issue #6.2), with
+    cycle prevention (`visited`) and a hard depth bound
+    (`EXPORT_RESOLUTION_MAX_DEPTH`) guaranteeing termination on a circular
+    import chain (Invariant #3: "resolve_export() terminates
+    deterministically within <= 5 hops without recursion errors").
+
+    Resolution order at each hop, matching the audit spec exactly:
+      1. A direct explicit export in the registry (`from .x import Y`,
+         `export { Y } from './x'`).
+      2. Wildcard exports, tried in declared order, honoring the target
+         module's own `__all__` whitelist if any.
+      3. A local symbol actually defined in `module` itself (the base
+         case - not a re-export at all, just the real definition).
+    """
+    if visited is None:
+        visited = set()
+    if depth > EXPORT_RESOLUTION_MAX_DEPTH or (module, symbol) in visited:
+        return None
+    visited = visited | {(module, symbol)}
+
+    explicit = export_registry.explicit_origin(module, symbol)
+    if explicit is not None:
+        origin_module, origin_name = explicit
+        # The origin might itself be nothing but another re-export hop
+        # (a barrel re-exporting a barrel) - recurse to chase it to its
+        # real definition. A verified real symbol always wins; an
+        # *unverified* one-hop guess (`f"{origin_module}.{origin_name}"`
+        # when it isn't actually in `symbol_table`) is deliberately never
+        # returned - fabricating a string that was never Pass-1-registered
+        # would just reintroduce, one level further down the chain, the
+        # exact phantom-node problem this function exists to eliminate,
+        # and would also defeat both the cycle guard and the depth bound
+        # (a circular or over-deep chain would still "resolve" to a
+        # made-up name instead of terminating with `None`, as Invariant #3
+        # requires).
+        candidate = f"{origin_module}.{origin_name}"
+        if candidate in symbol_table:
+            return candidate
+        return resolve_export(origin_module, origin_name, export_registry, symbol_table, visited, depth + 1)
+
+    for wildcard_module in export_registry.wildcard_targets(module):
+        if not export_registry.permits_wildcard_export(wildcard_module, symbol):
+            continue
+        # The recursive call's own base case already tries
+        # `symbol_table.resolve_in_module(wildcard_module, symbol)`, so
+        # nothing further is needed here beyond trying the next
+        # wildcard target on a miss.
+        deeper = resolve_export(wildcard_module, symbol, export_registry, symbol_table, visited, depth + 1)
+        if deeper is not None:
+            return deeper
+
+    return symbol_table.resolve_in_module(module, symbol)

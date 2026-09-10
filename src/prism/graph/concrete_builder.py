@@ -46,6 +46,7 @@ from prism.graph.call_site import (
     dynamic_edge_sentinel_id,
 )
 from prism.graph.symbol_table import (
+    ExportRegistry,
     GlobalSymbolTable,
     InstanceTypeMap,
     LocalImportMap,
@@ -54,6 +55,7 @@ from prism.graph.symbol_table import (
     locality_distance,
     namespace_match,
     path_to_module,
+    resolve_export,
     score_candidate,
     unresolved_polymorphic_node_id,
     POLYSEMY_THRESHOLD,
@@ -91,6 +93,9 @@ class ConcreteGraphBuilder:
         self._def_nodes: dict[str, Node] = {}
         self._methods_by_class: dict[str, list[str]] = {}
         self._calls_graph_cache: nx.DiGraph | None = None
+        #: Barrel-file / re-export tracking (Issues #6/#7) - see
+        #: `prism.graph.symbol_table.ExportRegistry`.
+        self.export_registry = ExportRegistry()
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
@@ -407,12 +412,32 @@ class ConcreteGraphBuilder:
             if symbol.kind == "class":
                 classes_by_file.setdefault(symbol.file, []).append(symbol.qualified_name)
 
+        # Sub-pass 2a: build every file's own import map and register its
+        # exports/re-exports into `self.export_registry` *before* any call
+        # resolution happens (Issues #6/#7). This must fully complete
+        # first: a file whose calls resolve through a barrel import (`from
+        # app import OrderService`) needs `app`'s own re-export of
+        # `OrderService` already registered even if `app/__init__.py`
+        # happens to sort after this file alphabetically - `resolve_export`
+        # has no way to "wait" for a registration that hasn't happened yet.
+        import_maps: dict[str, LocalImportMap] = {}
         for path in sorted(files):
             parsed = self._parsed_files.get(path)
             if parsed is None:
                 continue
             module = self._module_for_file(parsed)
             import_map = self._build_import_map(parsed, module)
+            import_maps[path] = import_map
+            self._register_exports(parsed, module, import_map)
+
+        # Sub-pass 2b: resolve every call site, now that the whole repo's
+        # export registry is complete.
+        for path in sorted(files):
+            parsed = self._parsed_files.get(path)
+            if parsed is None:
+                continue
+            module = self._module_for_file(parsed)
+            import_map = import_maps[path]
             self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
             file_symbols = [
                 qname
@@ -456,6 +481,7 @@ class ConcreteGraphBuilder:
 
     def _parse_python_imports(self, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
         src = parsed.source
+        is_package_init = os.path.basename(parsed.path) == "__init__.py"
         for stmt in find_all(parsed.root_node, {"import_statement", "import_from_statement"}):
             if stmt.type == "import_statement":
                 for name_node in stmt.children_by_field_name("name"):
@@ -463,10 +489,19 @@ class ConcreteGraphBuilder:
             else:
                 module_name_node = stmt.child_by_field_name("module_name")
                 base_module = (
-                    self._python_module_ref_text(module_name_node, src, module)
+                    self._python_module_ref_text(module_name_node, src, module, is_package_init)
                     if module_name_node is not None
                     else module
                 )
+                # `from .x import *` - tree-sitter-python gives this its own
+                # distinct `wildcard_import` child, *not* bound to the
+                # "name" field the way every other imported name is, so
+                # `children_by_field_name("name")` below never sees it at
+                # all: previously silently unhandled in its entirety
+                # (Issues #6/#7's barrel-file gap), not merely imprecise.
+                if any(c.type == "wildcard_import" for c in stmt.children):
+                    import_map.add_wildcard(base_module)
+                    continue
                 for name_node in stmt.children_by_field_name("name"):
                     self._handle_python_import_name(name_node, src, import_map, from_module=base_module)
 
@@ -486,7 +521,7 @@ class ConcreteGraphBuilder:
             else:
                 import_map.add(text, f"{from_module}.{text}")
 
-    def _python_module_ref_text(self, node: Node, src: bytes, current_module: str) -> str:
+    def _python_module_ref_text(self, node: Node, src: bytes, current_module: str, is_package_init: bool = False) -> str:
         if node.type == "relative_import":
             dots = 0
             suffix: str | None = None
@@ -495,13 +530,29 @@ class ConcreteGraphBuilder:
                     dots = node_text(child, src).count(".")
                 elif child.type == "dotted_name":
                     suffix = node_text(child, src)
-            return self._resolve_relative_module(current_module, dots, suffix)
+            return self._resolve_relative_module(current_module, dots, suffix, is_package_init)
         return node_text(node, src)
 
     @staticmethod
-    def _resolve_relative_module(current_module: str, dots: int, suffix: str | None) -> str:
+    def _resolve_relative_module(current_module: str, dots: int, suffix: str | None, is_package_init: bool = False) -> str:
+        """A single dot (`from . import x` / `from .sibling import y`)
+        means "within my own containing package" - which package that is
+        depends on whether `current_module` is a *plain* module file
+        (`app/order_service.py` -> module `"app.order_service"`, whose
+        containing package is `"app"`, found by dropping its own last
+        component) or a package's own `__init__.py` (`app/__init__.py` ->
+        module `"app"` - already exactly its containing package, nothing
+        to drop, since `path_to_module` already strips the `__init__`
+        segment). Treating the two the same way (unconditionally dropping
+        the last component) previously resolved `app/__init__.py`'s own
+        `from .order_service import OrderService` to bare `"order_service"`
+        instead of `"app.order_service"` - stripping one package level too
+        many - which broke every barrel-file re-export
+        (`ExportRegistry`/Issues #6-#7) rooted at a package's own
+        `__init__.py`, the single most common place that idiom appears.
+        """
         parts = current_module.split(".") if current_module else []
-        package_parts = parts[:-1]
+        package_parts = parts if is_package_init else parts[:-1]
         levels_up = max(dots - 1, 0)
         if levels_up:
             package_parts = package_parts[: max(len(package_parts) - levels_up, 0)]
@@ -509,6 +560,129 @@ class ConcreteGraphBuilder:
         if suffix:
             return f"{base}.{suffix}" if base else suffix
         return base
+
+    # -- Barrel-file / re-export registration (Issues #6/#7) ------------- #
+    def _register_exports(self, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
+        """Populate `self.export_registry` with everything `module` makes
+        available to a *consumer* importing from it - distinct from
+        `import_map` itself, which only ever represents what's usable
+        *inside* this one file.
+
+        Python has no import/export distinction at all: any name bound at
+        module scope - imported or not - is a real attribute of that
+        module (`from .order_service import OrderService` inside
+        `app/__init__.py` really does make `app.OrderService` valid,
+        exactly the barrel-file idiom this exists to resolve), so
+        `import_map.aliases` (already exactly that set) is registered
+        directly. JS/TS draw a sharp line a plain `import` does *not*
+        cross - only an explicit `export { x } from './y'` / `export *
+        from './y'` re-export statement makes `x` visible to another
+        module through this one - so those get their own, separate scan
+        (`_parse_js_reexports`) rather than reusing `import_map.aliases`.
+        """
+        lang = parsed.language_id
+        if lang == LanguageID.PYTHON:
+            for local_name, target in import_map.aliases.items():
+                if "." not in target:
+                    continue
+                origin_module, origin_name = target.rsplit(".", 1)
+                self.export_registry.add_explicit(module, local_name, origin_module, origin_name)
+            for wildcard in import_map.wildcard_targets:
+                self.export_registry.add_wildcard(module, wildcard)
+            self._parse_python_all(parsed, module)
+        elif lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+            self._parse_js_reexports(parsed, module)
+
+    def _parse_python_all(self, parsed: ParsedFile, module: str) -> None:
+        """`__all__ = [...]`/`(...)` at module scope (Issue #6.3): a
+        statically-literal list/tuple of string constants is honored as a
+        strict whitelist for `from module import *`; anything else
+        (`__all__.extend(...)`, `__all__ += [...]`, a comprehension, a
+        name computed at runtime) sets `PARTIAL_EXPORT_MAP` instead,
+        falling back to "any public (non-underscore) name" - this pass
+        cannot determine the true dynamic whitelist statically, and
+        silently treating an unrecognized shape as an *empty* whitelist
+        would be strictly worse (it would hide every wildcard-exported
+        name, not just the dynamically-computed ones).
+        """
+        assign_type = ASSIGNMENT_NODE_TYPE.get(LanguageID.PYTHON)
+        for assign in self._direct_assignments(parsed.root_node, assign_type):
+            target = assign.child_by_field_name("left")
+            if target is None or target.type != "identifier" or node_text(target, parsed.source) != "__all__":
+                continue
+            value = assign.child_by_field_name("right")
+            names = self._python_literal_string_list(value, parsed.source)
+            if names is not None:
+                self.export_registry.set_all_whitelist(module, frozenset(names))
+            else:
+                self.export_registry.mark_partial_export(module)
+            return
+        # `__all__.extend(...)` / `__all__ += [...]` - an augmented
+        # assignment or a call whose receiver is `__all__`, appearing
+        # anywhere at module scope (not necessarily the first binding) -
+        # any such mutation after an initial literal assignment makes the
+        # final whitelist no longer purely static.
+        for node in parsed.root_node.children:
+            text = node_text(node, parsed.source)
+            if "__all__" in text and ("+=" in text or ".extend(" in text or ".append(" in text):
+                self.export_registry.mark_partial_export(module)
+                return
+
+    @staticmethod
+    def _python_literal_string_list(node: Node | None, source: bytes) -> list[str] | None:
+        if node is None or node.type not in ("list", "tuple"):
+            return None
+        names: list[str] = []
+        for child in node.named_children:
+            if child.type != "string":
+                return None
+            text = node_text(child, source)
+            # Strip the outer quote characters (tree-sitter-python's
+            # `string` node includes them) - a plain single/double-quoted
+            # literal only; an f-string or one containing an `escape_sequence`
+            # sub-node is conservatively treated as non-literal.
+            if any(c.type not in ("string_start", "string_content", "string_end") for c in child.children):
+                return None
+            inner = "".join(node_text(c, source) for c in child.children if c.type == "string_content")
+            names.append(inner)
+        return names
+
+    def _parse_js_reexports(self, parsed: ParsedFile, module: str) -> None:
+        """`export { x [as y] } from './z'` (named re-export) and
+        `export * from './z'` (wildcard re-export) - genuinely distinct
+        node shapes from a plain `import_statement`
+        (`export_statement` with a `source` field), and entirely
+        unhandled before this (Issues #6/#7's TS/JS barrel-file gap).
+        `export * as ns from './z'` (a *namespace* re-export, binding a
+        single object `ns` rather than re-exporting each name directly) is
+        a structurally different idiom - out of scope here, not silently
+        folded into the wildcard case it only superficially resembles.
+        """
+        src = parsed.source
+        for stmt in find_all(parsed.root_node, {"export_statement"}):
+            source_node = stmt.child_by_field_name("source")
+            if source_node is None:
+                continue
+            specifier = node_text(source_node, src).strip("'\"")
+            module_ref = self._resolve_js_specifier(specifier, parsed.path, module)
+
+            export_clause = next((c for c in stmt.children if c.type == "export_clause"), None)
+            if export_clause is not None:
+                for spec in find_all(export_clause, {"export_specifier"}):
+                    name_node = spec.child_by_field_name("name")
+                    alias_node = spec.child_by_field_name("alias")
+                    if name_node is None:
+                        continue
+                    origin_name = node_text(name_node, src)
+                    exported_name = node_text(alias_node, src) if alias_node is not None else origin_name
+                    self.export_registry.add_explicit(module, exported_name, module_ref, origin_name)
+                continue
+
+            # A bare `*` child (not wrapped in `namespace_export`, which
+            # covers `export * as ns from ...` instead) is the wildcard
+            # re-export form.
+            if any(c.type == "*" for c in stmt.children):
+                self.export_registry.add_wildcard(module, module_ref)
 
     def _parse_js_imports(self, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
         src = parsed.source
@@ -605,7 +779,8 @@ class ConcreteGraphBuilder:
         if not segments:
             return None
         root, *rest = segments
-        resolved_root = import_map.resolve(root)
+        from_import = import_map.resolve(root)
+        resolved_root = from_import
         if resolved_root is None:
             # Rule D: a bare name defined in the caller's own module - for
             # Java/C#, `module` is the file's declared package/namespace
@@ -623,7 +798,24 @@ class ConcreteGraphBuilder:
                     break
         if resolved_root is None:
             return None
-        return ".".join([resolved_root, *rest]) if rest else resolved_root
+        target = ".".join([resolved_root, *rest]) if rest else resolved_root
+
+        # Barrel-file / re-export fallback (Issues #6/#7): `root` was
+        # imported (`from_import` is not None), but the naive
+        # `<from_module>.<imported_name>` target this import statement's
+        # own text implies isn't a symbol Pass 1 actually registered -
+        # most likely because `root` is really defined somewhere *else*
+        # and merely re-exported from `from_import`'s module through a
+        # barrel/index file. Chase the real origin through the export
+        # registry rather than returning (or falling through to) a
+        # phantom target.
+        if from_import is not None and target not in self.symbol_table and "." in from_import:
+            origin_module, origin_name = from_import.rsplit(".", 1)
+            resolved = resolve_export(origin_module, origin_name, self.export_registry, self.symbol_table)
+            if resolved is not None:
+                return ".".join([resolved, *rest]) if rest else resolved
+
+        return target
 
     def _build_class_instance_map(
         self, enclosing_class: str, parsed: ParsedFile, module: str, import_map: LocalImportMap
