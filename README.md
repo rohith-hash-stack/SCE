@@ -82,8 +82,8 @@ prism mcp --transport stdio --repo .
 
 ## Architecture
 
-See the design document for the full mathematical formalism and pipeline
-description. In short:
+See [`docs/design_formalism.md`](docs/design_formalism.md) for the full
+mathematical formalism and pipeline description. In short:
 
 1. **Stage 1/2 - Parsing & Linking** (`prism.parser`, `prism.graph`): tree-sitter
    extracts definitions from every supported source file; a two-pass linker
