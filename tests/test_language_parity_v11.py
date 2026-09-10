@@ -77,7 +77,7 @@ def test_python_database_io_sink(tmp_path):
 def test_typescript_database_io_sink(tmp_path):
     builder, _ = _build(
         tmp_path, "svc.ts",
-        "import * as pg from 'pg';\n\nfunction storeRow(data: string) {\n    return pg.query(data);\n}\n",
+        "import { Pool } from 'pg';\n\nfunction storeRow(data: string) {\n    const pool = new Pool();\n    return pool.query(data);\n}\n",
     )
     bits = compute_substance_bits(builder)
     assert bits["svc.storeRow"] & int(FeatureBit.SINK_DATABASE_IO)
@@ -99,7 +99,7 @@ def test_all_three_languages_agree_on_database_io_bit(tmp_path):
     )
     ts_builder, _ = _build(
         tmp_path / "ts", "svc.ts",
-        "import * as pg from 'pg';\n\nfunction storeRow(data: string) {\n    return pg.query(data);\n}\n",
+        "import { Pool } from 'pg';\n\nfunction storeRow(data: string) {\n    const pool = new Pool();\n    return pool.query(data);\n}\n",
     )
     go_builder, _ = _build(
         tmp_path / "go", "svc.go",
@@ -126,10 +126,11 @@ def test_combined_network_and_database_function_matches_across_languages(tmp_pat
     )
     ts_builder, _ = _build(
         tmp_path / "ts", "svc.ts",
-        "import axios from 'axios';\nimport * as pg from 'pg';\n\n"
+        "import axios from 'axios';\nimport { Pool } from 'pg';\n\n"
         "function syncRemoteData(url: string) {\n"
         "    const data = axios.get(url);\n"
-        "    return pg.query(data);\n"
+        "    const pool = new Pool();\n"
+        "    return pool.query(data);\n"
         "}\n",
     )
     go_builder, _ = _build(

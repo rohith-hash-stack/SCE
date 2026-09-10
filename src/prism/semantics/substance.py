@@ -1,75 +1,71 @@
-"""v1.1 Axis 1: Substance `S(v)` - the behavioral I/O sinks a symbol's own
-body (and, one hop out, its thin wrapper callees) actually touches.
+"""v1.1+ Axis 1: Substance `S(v)` - the behavioral I/O sinks a symbol's
+own body (and, one hop out, its thin wrapper callees) actually touches.
 
-Two-tier detection:
-  - `S_direct(v)`: call sites inside `v`'s own body whose resolved target
-    matches `CANONICAL_SINKS` - either a stdlib/dotted builtin
-    (`time.sleep`, `os.path`, `Math.random`) matched against the call's
-    full dotted chain, or a third-party import matched by resolving the
-    call's *root* identifier through the file's own `LocalImportMap`
-    (`ConcreteGraphBuilder._build_import_map` - reused directly rather
-    than re-implemented, so import resolution never drifts from what
-    Pass 2's own call linking already established as correct).
-  - `S_transitive(v)`: if `v` calls `u`, and `u` is a thin (<= 2
-    statement) wrapper that itself has a direct sink bit, that bit is
-    folded into `v`'s own mask too - "an unaliased sink" per the spec: a
-    function that's nothing but `def send(payload): requests.post(url,
-    payload)` shouldn't force every one of its callers to also spell out
+**Three-phase detection**, per the engineering spec:
+
+  - **Phase 1 (Direct Qualified Matching)**: a call site's callee chain,
+    resolved through the file's own `LocalImportMap`
+    (`ConcreteGraphBuilder._build_import_map` - reused directly, never
+    re-implemented, so import resolution never drifts from what Pass 2's
+    own call linking already established as correct), matched against
+    `prism.semantics.canonical_sinks.CANONICAL_SINKS` three ways: a bare
+    single-segment entry (`requests`, `fs`) against the call's root or
+    its import-resolved form; a dotted entry with no `/` (`time.sleep`,
+    Go's own `time.Sleep`) against the call's own joined chain *and*
+    against the chain with its root swapped for the resolved import path
+    (so an aliased `import time as t; t.sleep()` still matches); a
+    slash-containing entry (Go import paths only - `net/http.Get`,
+    `gorm.io/gorm.DB.Create`) split into `(import_path, suffix_chain)`
+    and matched against the call's import-resolved root plus its
+    remaining segments.
+  - **Phase 2 (Receiver Suffix & Driver Method Matching)**: most real
+    sink calls are *instance* method calls (`conn.execute(...)`,
+    `db.Query(...)`) that Phase 1 alone can never match without real type
+    inference - a local variable's root identifier never resolves
+    through an import map. Two real, bounded mechanisms instead of full
+    type inference: (2a) **local constructor provenance** - a variable
+    locally bound (`=`/`:=`/a declarator) directly from a Phase-1-matched
+    constructor call (`db, err := sql.Open(...)`) propagates that same
+    call's sink bit(s) to every later call whose receiver root is that
+    variable, within the same function body only (never cross-function -
+    that is Phase 3's job); (2b) **unambiguous driver-signature
+    fallback** - a small, curated set of method names
+    (`_UNAMBIGUOUS_DRIVER_SUFFIXES`) that are driver-internal signatures
+    specific enough (`QueryRowContext`, `execute_driver_sql`,
+    `storbinary`, ...) to name their own sink category regardless of
+    receiver, matched against the call's own trailing segment as a last
+    resort when nothing else matched.
+  - **Phase 3 (Short Wrapper Unaliasing, `S_transitive`)**: if user
+    function `A` calls user function `B`, and `B` has a statement count
+    `<= 3` and a non-empty direct sink mask, that mask propagates into
+    `A`'s own mask too - "an unaliased sink" per the spec: a function
+    that's nothing but `def send(payload): requests.post(url, payload)`
+    shouldn't force every one of its callers to also spell out
     `requests.post` before being recognized as network-touching.
 
-A symbol with zero sink bits after both tiers, and no detected state
-mutation (reusing `prism.graph.contracts.ContractExtractor`'s own
-mutation check when a `contracts` map is supplied), gets
-`SINK_PURE_COMPUTE` instead.
+A symbol with zero sink bits after all three phases, and no detected
+state mutation (reusing `prism.graph.contracts.ContractExtractor`'s own
+mutation check), gets `SINK_PURE_COMPUTE` instead.
 """
 from __future__ import annotations
 
 from tree_sitter import Node
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
-from prism.graph.symbol_table import SymbolInfo
-from prism.parser.lang_config import CALL_NODE_TYPE, call_callee_segments, iter_scoped_nodes
+from prism.parser.lang_config import CALL_NODE_TYPE, call_callee_segments, flatten_reference_chain, iter_scoped_nodes
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile
 from prism.semantics._ast_utils import count_statements
 from prism.semantics.bitmask import FeatureBit
+from prism.semantics.canonical_sinks import CANONICAL_SINKS
+from prism.traversal._data_flow_common import _bindings, _decl_node_types, _node_key
 
-#: The audit's own literal registry, keyed by sink category then by this
-#: codebase's own `LanguageID` values. TypeScript/TSX share the
-#: JavaScript entry (the runtime/stdlib surface being matched - `fetch`,
-#: `fs`, `child_process` - is identical; only the type system differs,
-#: which this axis never inspects).
-CANONICAL_SINKS: dict[str, dict[str, set[str]]] = {
-    "network_io": {
-        "python": {"requests", "httpx", "urllib", "aiohttp", "socket"},
-        "javascript": {"fetch", "axios", "http", "https", "got"},
-        "go": {"net/http", "net", "grpc"},
-    },
-    "database_io": {
-        "python": {"psycopg2", "sqlalchemy", "django.db", "pymongo", "redis"},
-        "javascript": {"pg", "mysql2", "mongoose", "sequelize", "prisma"},
-        "go": {"database/sql", "gorm.io", "mongo-driver"},
-    },
-    "filesystem_io": {
-        "python": {"open", "pathlib", "os.path", "shutil"},
-        "javascript": {"fs", "fs/promises", "path"},
-        "go": {"os", "io/ioutil", "path/filepath"},
-    },
-    "process_io": {
-        "python": {"subprocess", "os.system", "multiprocessing"},
-        "javascript": {"child_process", "worker_threads"},
-        "go": {"os/exec"},
-    },
-    "time_io": {
-        "python": {"time.sleep", "asyncio.sleep"},
-        "javascript": {"setTimeout", "setInterval"},
-        "go": {"time.Sleep", "time.After"},
-    },
-    "randomness": {
-        "python": {"random", "secrets", "uuid"},
-        "javascript": {"Math.random", "crypto"},
-        "go": {"math/rand", "crypto/rand"},
-    },
-}
+#: The maximum statement count a callee `B` may have for its own direct
+#: sink bits to still propagate up into a caller `A` (Phase 3) - raised
+#: from 2 to 3 for v1.1+ per the spec's own wording ("statement count
+#: <= 3"), still small enough that only genuine thin wrappers qualify,
+#: not arbitrary multi-step business logic that merely happens to call a
+#: sink partway through.
+_TRANSITIVE_WRAPPER_MAX_STATEMENTS = 3
 
 _CATEGORY_BIT: dict[str, FeatureBit] = {
     "network_io": FeatureBit.SINK_NETWORK_IO,
@@ -88,6 +84,42 @@ _LANG_REGISTRY_KEY: dict[str, str] = {
     LanguageID.GO: "go",
 }
 
+#: JS/TS's own constructor-invocation node - a real, distinct grammar
+#: shape from `call_expression` (confirmed directly), so a driver's own
+#: constructor (`new Pool()`, `new Client()`) would otherwise never be
+#: seen by a call-node-only walk at all. Python/Go have no `new` keyword
+#: (both construct via a bare call, already covered by `CALL_NODE_TYPE`),
+#: so this table only has JS/TS/TSX entries.
+_NEW_EXPRESSION_NODE_TYPE: dict[str, str] = {
+    LanguageID.JAVASCRIPT: "new_expression",
+    LanguageID.TYPESCRIPT: "new_expression",
+    LanguageID.TSX: "new_expression",
+}
+
+#: Phase 2b - method names specific enough to a single driver's own
+#: internal API that matching them by trailing segment alone, with no
+#: receiver/import resolution at all, is a safe (not merely convenient)
+#: fallback: no other unrelated library in these three ecosystems ships a
+#: same-named public method that means something else. Deliberately a
+#: short, curated list, not a general "any Query*/Exec*-shaped name"
+#: heuristic, which would be far too promiscuous (a domain object's own
+#: `.Query()` method having nothing to do with a database is common).
+_UNAMBIGUOUS_DRIVER_SUFFIXES: dict[str, str] = {
+    # SQLAlchemy's own "raw SQL, bypass the ORM" escape hatches.
+    "execute_driver_sql": "database_io",
+    "exec_driver_sql": "database_io",
+    # database/sql's context-aware driver methods - "Context" suffix is
+    # itself part of the stdlib driver's own unique naming convention.
+    "QueryRowContext": "database_io",
+    "QueryContext": "database_io",
+    "ExecContext": "database_io",
+    # ftplib's own binary/line transfer primitives.
+    "storbinary": "network_io",
+    "storlines": "network_io",
+    "retrbinary": "network_io",
+    "retrlines": "network_io",
+}
+
 
 def _registry_for(lang: str) -> dict[str, set[str]] | None:
     key = _LANG_REGISTRY_KEY.get(lang)
@@ -96,54 +128,87 @@ def _registry_for(lang: str) -> dict[str, set[str]] | None:
     return {category: entries.get(key, set()) for category, entries in CANONICAL_SINKS.items()}
 
 
-def _normalize_go(entry: str) -> str:
-    return entry.replace("/", ".")
+def _normalize_go(path: str) -> str:
+    return path.replace("/", ".")
+
+
+def _split_go_import_entry(entry: str) -> tuple[str, str] | None:
+    """For a Go registry entry shaped `<import/path>.<Suffix...>`
+    (contains at least one `/`), split it into `(import_path,
+    suffix_chain)`. The import path is everything up through the last
+    `/` plus the single dotted segment immediately following it (the
+    package's own locally-used identifier, which is not always the same
+    as the URL path's own last component - `gorm.io/gorm`'s package name
+    is `gorm`, matching its own last path segment here, but real Go code
+    doesn't require that); `suffix_chain` is whatever dotted call-chain
+    follows (a bare function name, or `Type.Method` for a receiver
+    call). Returns `None` for a malformed entry (no `/`, or nothing after
+    it) - never raises, since a registry-authoring mistake should degrade
+    to "this one entry never matches", not crash extraction.
+    """
+    last_slash = entry.rfind("/")
+    if last_slash == -1:
+        return None
+    after_slash = entry[last_slash + 1 :]
+    dot_idx = after_slash.find(".")
+    if dot_idx == -1:
+        return None
+    import_path = entry[: last_slash + 1] + after_slash[:dot_idx]
+    suffix_chain = after_slash[dot_idx + 1 :]
+    if not suffix_chain:
+        return None
+    return import_path, suffix_chain
+
+
+def _chain_matches(chain: str, entry_suffix: str) -> bool:
+    """Symmetric prefix match between a call's own dotted suffix
+    (everything after its root segment) and a registry entry's own
+    suffix chain - `chain == entry_suffix` for the common case
+    (`Command` vs `Command`), `chain` a longer, more specific path than
+    the entry (`entry_suffix` a prefix of `chain`), or `entry_suffix`
+    longer than what the call site can actually observe without receiver
+    type-tracking (`chain` a prefix of `entry_suffix` - e.g. matching a
+    bare `.Do` call against a registered `Client.Do`).
+    """
+    return chain == entry_suffix or chain.startswith(entry_suffix + ".") or entry_suffix.startswith(chain + ".")
 
 
 def _match_sink_bits_for_call(segments: list[str], import_map, lang: str, registry: dict[str, set[str]]) -> FeatureBit:
-    """Matches one call site's resolved dotted chain against every sink
-    category, three ways (any can fire independently, a call can in
-    principle match more than one axis - e.g. a hypothetical
-    `db.http_export()` - though no entry in the literal registry actually
-    does today):
-
-      1. A registry entry containing a literal `/` (Go import paths only
-         - `net/http`, `database/sql`, `os/exec`, ...) names a *module*,
-         not a call-chain shape - matched against `resolved_root` (the
-         call's root identifier, resolved through the file's own Go
-         import map, e.g. `sql.Open(...)`'s root `sql` resolving to
-         `database.sql`), never against the call's own joined text.
-      2. A registry entry containing a literal `.` but no `/`
-         (`time.sleep`, `os.path`, `Math.random`, Go's own `time.Sleep`)
-         *is* a real dotted call-chain shape - matched as a *prefix*
-         against the call's full joined chain (`os.path.join(...)`'s
-         chain is `["os", "path", "join"]`, three segments, against the
-         two-segment registry entry `os.path`).
-      3. A bare single-segment entry (`requests`, `fs`, `random`) is
-         matched against the call's root segment directly (Python
-         builtins like `open` need no import at all) or, failing that,
-         through the file's own `LocalImportMap` resolution (an aliased
-         import, `import psycopg2 as pg` -> `pg.connect()`).
+    """Phase 1 - direct qualified matching only (no receiver/provenance
+    tracking; that is `_direct_sink_bits`'s own job, Phase 2). See this
+    module's own docstring for the three entry shapes this checks.
     """
     if not segments:
         return FeatureBit(0)
     joined = ".".join(segments)
     root = segments[0]
     resolved_root = import_map.resolve(root) if import_map is not None else None
+    resolved_joined = ".".join([resolved_root, *segments[1:]]) if resolved_root is not None else None
+    suffix_after_root = ".".join(segments[1:]) if len(segments) > 1 else None
 
     bits = FeatureBit(0)
     for category, entries in registry.items():
         bit = _CATEGORY_BIT[category]
         for entry in entries:
             if "/" in entry:
-                normalized_entry = _normalize_go(entry)
-                if resolved_root is not None and (
-                    resolved_root == normalized_entry or resolved_root.startswith(normalized_entry + ".")
+                split = _split_go_import_entry(entry)
+                if split is None:
+                    continue
+                import_path, entry_suffix = split
+                normalized_import_path = _normalize_go(import_path)
+                if (
+                    resolved_root is not None
+                    and resolved_root == normalized_import_path
+                    and suffix_after_root is not None
+                    and _chain_matches(suffix_after_root, entry_suffix)
                 ):
                     bits |= bit
                     break
             elif "." in entry:
                 if joined == entry or joined.startswith(entry + "."):
+                    bits |= bit
+                    break
+                if resolved_joined is not None and (resolved_joined == entry or resolved_joined.startswith(entry + ".")):
                     bits |= bit
                     break
             else:
@@ -153,20 +218,78 @@ def _match_sink_bits_for_call(segments: list[str], import_map, lang: str, regist
     return bits
 
 
+def _suffix_fallback_bits(method_name: str) -> FeatureBit:
+    """Phase 2b - see `_UNAMBIGUOUS_DRIVER_SUFFIXES`."""
+    category = _UNAMBIGUOUS_DRIVER_SUFFIXES.get(method_name)
+    if category is None:
+        return FeatureBit(0)
+    return _CATEGORY_BIT[category]
+
+
+def _callable_segments(node: Node, new_expr_type: str | None, parsed: ParsedFile, lang: str) -> list[str] | None:
+    """The dotted callee/constructor segments for either an ordinary call
+    (`requests.get(url)`) or a JS/TS `new X(...)` instantiation - the
+    latter has its own `"constructor"` field rather than `call_
+    callee_segments`' `"function"` field, so it needs its own extraction,
+    not a variant of the same helper.
+    """
+    if new_expr_type is not None and node.type == new_expr_type:
+        ctor = node.child_by_field_name("constructor")
+        return flatten_reference_chain(ctor, parsed.source, lang) if ctor is not None else None
+    return call_callee_segments(node, parsed.source, lang)
+
+
 def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> FeatureBit:
+    """`S_direct(v)` - Phases 1 and 2 combined, scoped to `def_node`'s own
+    body. Two passes over the same call/instantiation-site set rather
+    than one: Phase 2a (local constructor provenance) needs every site's
+    own Phase-1 bits already computed before it can decide what a
+    locally-bound variable "means", and a document-order single pass
+    would see many receiver calls before the constructor they were bound
+    from was itself resolved.
+    """
     lang = parsed.language_id
     registry = _registry_for(lang)
     if registry is None:
         return FeatureBit(0)
     call_type = CALL_NODE_TYPE.get(lang)
-    if not call_type:
+    new_expr_type = _NEW_EXPRESSION_NODE_TYPE.get(lang)
+    if not call_type and not new_expr_type:
         return FeatureBit(0)
-    bits = FeatureBit(0)
-    for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
-        segments = call_callee_segments(call_node, parsed.source, lang)
+
+    target_types = {t for t in (call_type, new_expr_type) if t}
+    phase1_bits: dict[tuple[int, int], FeatureBit] = {}
+    segments_by_key: dict[tuple[int, int], list[str]] = {}
+    for node in iter_scoped_nodes(def_node, target_types, lang):
+        segments = _callable_segments(node, new_expr_type, parsed, lang)
         if not segments:
             continue
-        bits |= _match_sink_bits_for_call(segments, import_map, lang, registry)
+        key = _node_key(node)
+        segments_by_key[key] = segments
+        phase1_bits[key] = _match_sink_bits_for_call(segments, import_map, lang, registry)
+
+    # Phase 2a: local constructor provenance - a variable bound directly
+    # from a Phase-1-matched call/instantiation inherits its sink bits
+    # for every later same-function call on it.
+    local_bindings: dict[str, FeatureBit] = {}
+    decl_types = _decl_node_types(lang)
+    if decl_types:
+        for decl_node in iter_scoped_nodes(def_node, decl_types, lang):
+            for name, value in _bindings(decl_node, lang, parsed.source):
+                if value is None or value.type not in target_types:
+                    continue
+                call_bits = phase1_bits.get(_node_key(value))
+                if call_bits:
+                    local_bindings[name] = local_bindings.get(name, FeatureBit(0)) | call_bits
+
+    bits = FeatureBit(0)
+    for key, segments in segments_by_key.items():
+        call_bits = phase1_bits[key]
+        if not call_bits and len(segments) >= 2 and segments[0] in local_bindings:
+            call_bits = local_bindings[segments[0]]  # Phase 2a
+        if not call_bits:
+            call_bits = _suffix_fallback_bits(segments[-1])  # Phase 2b
+        bits |= call_bits
     return bits
 
 
@@ -184,9 +307,10 @@ def _has_state_mutation(def_node: Node, parsed: ParsedFile) -> bool:
 def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
     """`{qualified_name: Substance bits}` for every function/method
     `builder` indexed - the one entry point `prism.semantics.extractor`
-    calls. Two passes: direct sinks first (needed to know which callees
-    are themselves sink-touching before propagation can run), then a
-    second pass folds in one-hop transitive wrapper propagation.
+    calls. Two passes: direct sinks first (Phases 1-2, needed to know
+    which callees are themselves sink-touching before Phase 3 can run),
+    then a second pass folds in Phase 3's one-hop transitive wrapper
+    propagation.
     """
     direct: dict[str, FeatureBit] = {}
     wrapper_statement_counts: dict[str, int] = {}
@@ -219,7 +343,7 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
                 callee_bits = direct.get(callee)
                 if not callee_bits:
                     continue
-                if wrapper_statement_counts.get(callee, 99) <= 2:
+                if wrapper_statement_counts.get(callee, 99) <= _TRANSITIVE_WRAPPER_MAX_STATEMENTS:
                     transitive_bits |= callee_bits
         combined = own_bits | transitive_bits
 
