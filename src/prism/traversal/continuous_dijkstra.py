@@ -36,7 +36,7 @@ from pathlib import Path
 import networkx as nx
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
-from prism.traversal.causal_weights import compute_causal_edges, edge_cost
+from prism.traversal.causal_weights import LAMBDA_DATA_FLOW, LAMBDA_GUARD, compute_causal_edges, edge_cost
 
 #: Blocker 1 performance work, Step 2/4: a correctly-keyed cache for
 #: `build_causal_graph` - seed/budget-independent (a pure function of
@@ -46,12 +46,22 @@ from prism.traversal.causal_weights import compute_causal_edges, edge_cost
 #: retrieve() call or a later one on the same engine.
 #:
 #: **Never** used for `compute_topological_distances` - that result is
-#: seed-dependent and must live in its own, separately-keyed cache
-#: (Step 3) specifically to prevent the silent-corruption bug a
-#: distance lookup under a seed-less key would cause: a query for seed
-#: B would silently receive seed A's distances - plausible-looking,
-#: wrong output that a same-seed bit-identical test would never catch.
+#: seed-dependent and lives in its own, separately-keyed cache
+#: (`_DISTANCE_CACHE`, Step 3, below) specifically to prevent the
+#: silent-corruption bug a distance lookup under a seed-less key would
+#: cause: a query for seed B would silently receive seed A's distances
+#: - plausible-looking, wrong output that a same-seed bit-identical
+#: test would never catch. `_DistanceCacheKey.digest()` always includes
+#: `seed` - see that class's own docstring.
 _GRAPH_CACHE: dict[str, nx.DiGraph] = {}
+
+#: Blocker 1 Step 3/4: the seed-keyed distance cache - see
+#: `_DistanceCacheKey` for its own key shape and why it is a distinct
+#: dataclass from `_GraphCacheKey` rather than that key plus a seed
+#: tacked on (the seed-separation guarantee is structural: there is no
+#: code path in this module that can compute a `_DISTANCE_CACHE` key
+#: without a `seed` argument, by construction, not by convention).
+_DISTANCE_CACHE: dict[str, dict[str, float]] = {}
 
 
 def _run_git_head(cwd: str | Path) -> str | None:
@@ -170,6 +180,73 @@ def _graph_cache_key(builder: ConcreteGraphBuilder) -> _GraphCacheKey:
     )
 
 
+@dataclass(frozen=True)
+class _DistanceCacheKey:
+    """`(repo_path, engine_commit_hash, file_hash_set, seed_symbol,
+    distance_metric_params)` - the cache-key matrix's own literal shape
+    for `compute_topological_distances`. `distance_metric_params` here
+    is `(LAMBDA_DATA_FLOW, LAMBDA_GUARD)` - the two real inputs to
+    `edge_cost`/`causal_edge_weight` this function's own Dijkstra run
+    actually depends on. The matrix's third named parameter, `DIST_MAX`,
+    has no corresponding input to this function today -
+    `compute_topological_distances` takes no hop-limit argument and
+    always returns the full unfiltered reachable set (`prism.packer.
+    submodular_knapsack.pack_symbol_context` filters the *result* by
+    `max_hops` afterward, a downstream concern, not an input to the
+    distance computation itself) - there is no real value to include
+    for it without fabricating one, so it is omitted rather than faked.
+
+    **Deliberately excludes `grammar_version`/`tag_rule_version`**,
+    matching the matrix's own row for this function exactly - flagged
+    directly, not silently accepted: since this function calls
+    `build_causal_graph` internally, and that graph *does* depend on
+    grammar/tag-rule version (see `_GraphCacheKey`), a grammar or
+    tag-rule change with an unchanged `(repo_path, engine_commit_hash,
+    file_hash_set, seed)` would leave a stale distance cached here even
+    though the underlying graph would rebuild fresh via `_GRAPH_CACHE`'s
+    own (correctly-keyed) miss. Implemented exactly as the matrix
+    specifies per "no deviations" - not silently corrected - so this is
+    a known, reported gap in the matrix's own design for this one row,
+    not an oversight in this implementation.
+
+    `seed` is always a required field - see `_DISTANCE_CACHE`'s own
+    module-level docstring for why that is structural, not a
+    convention that could be forgotten at a call site.
+    """
+
+    repo_path: str
+    engine_commit_hash: str
+    file_hash_set: str
+    seed: str
+    lambda_data_flow: float
+    lambda_guard: float
+
+    def digest(self) -> str:
+        raw = "|".join(
+            (
+                self.repo_path,
+                self.engine_commit_hash,
+                self.file_hash_set,
+                self.seed,
+                repr(self.lambda_data_flow),
+                repr(self.lambda_guard),
+            )
+        )
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _distance_cache_key(builder: ConcreteGraphBuilder, seed: str) -> _DistanceCacheKey:
+    graph_key = _graph_cache_key(builder)
+    return _DistanceCacheKey(
+        repo_path=graph_key.repo_path,
+        engine_commit_hash=graph_key.engine_commit_hash,
+        file_hash_set=graph_key.file_hash_set,
+        seed=seed,
+        lambda_data_flow=LAMBDA_DATA_FLOW,
+        lambda_guard=LAMBDA_GUARD,
+    )
+
+
 def build_causal_graph(builder: ConcreteGraphBuilder) -> nx.DiGraph:
     """The directed traversal graph `compute_topological_distances` runs
     Dijkstra over - every function/method `builder` indexed as a node,
@@ -209,14 +286,24 @@ def compute_topological_distances(builder: ConcreteGraphBuilder, seed: str) -> d
     as "not reachable/not the seed", the same convention `DistanceEngine.
     compute_all` uses). Empty dict if `seed` isn't in the graph at all.
 
-    Not yet cached itself (Blocker 1 Step 3 adds a seed-keyed cache
-    here) - `build_causal_graph`'s own cache (Step 2, above) already
-    means a 2nd/3rd call within one `retrieve()` is a cheap cache hit
-    on the graph itself, even before Step 3 lands.
+    Cached, seed-keyed (`_DistanceCacheKey` - see its own docstring for
+    the exact key shape and the one known gap versus the cache-key
+    matrix's own design for this function). **The cache is never
+    consulted or written without `seed` as part of the key** - this is
+    the one constraint stated with the most force in the whole Blocker
+    1 plan (a seed-less key would silently return a *different* seed's
+    distances), so it is structural here: `_distance_cache_key` takes
+    `seed` as a required positional argument, and there is no other
+    code path into `_DISTANCE_CACHE`.
     """
+    dist_key = _distance_cache_key(builder, seed).digest()
+    cached = _DISTANCE_CACHE.get(dist_key)
+    if cached is not None:
+        return cached
     graph = build_causal_graph(builder)
     if seed not in graph:
         return {}
     distances = nx.single_source_dijkstra_path_length(graph, seed, weight="weight")
     distances.pop(seed, None)
+    _DISTANCE_CACHE[dist_key] = distances
     return distances
