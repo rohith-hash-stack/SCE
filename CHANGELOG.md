@@ -139,3 +139,25 @@ the fully-qualified name in that case.
   budget fixture from 100 to 150 tokens - Issue A1's fail-closed
   tokenizer counts run higher, so the old threshold no longer left room
   for exactly one extra candidate; re-measured directly, not guessed.
+
+### Corrections
+
+- **`69e1f63` ("gap-7: normalize T02 Debug task labels")'s summary line
+  is wrong and is corrected here rather than by amending the pushed
+  commit.** The title claims label normalization; the audit that commit
+  describes actually found the 5 real T02 task YAMLs were never
+  mislabeled (`task_type` was already `"debug"` in every one, and their
+  "chain" prose is a real English noun for the traced concept, not a
+  stray label) - **no label was renamed or normalized**. The commit's
+  real, substantive change was a functional bug fix:
+  `_cpi_for_lambda_config`'s ablation-sweep task filter matched
+  `task_type == "chain"` literally while `compute_diagnostics` already
+  treated `"chain"`/`"debug"` as equivalent, so the lambda-grid silently
+  matched zero of the 5 real tasks and returned vacuous `(0.0, 0.0)` for
+  every configuration. That filter (and
+  `GroundTruthAnnotation.pipeline_symbols`'s field description, which
+  named only "Type 1 chain") are what `69e1f63` actually fixed. A more
+  accurate title would have been `gap-7: fix ablation task-type filter
+  vacuous-match bug`. See `69e1f63`'s own commit body for the real,
+  correctly-described technical content - only its one-line summary was
+  misleading.
