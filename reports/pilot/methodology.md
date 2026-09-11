@@ -270,6 +270,60 @@ O(1) lookup (it is called twice per `retrieve()` - once inside
 *not* to any causal-graph/distance caching, which stays equally
 redundant (3x) in both arms.
 
+### Milestone 1 closure, Item 1: build.py:243 re-measurement finding
+
+The one-line source fix at `prism/surface/build.py:243`
+(`compute_feature_masks_cached(builder, repo_root)` in place of the
+uncached `compute_feature_masks(builder)`) is correctly applied and
+already committed (`c71e6d4`). A fresh re-measurement against the real
+Django corpus (3 seeds x 3 runs, warm cache, ad-hoc scratch
+instrumentation only, no permanent timers added anywhere) found:
+
+```
+Raw engine (PrismEngine.retrieve == build_context_package), medians
+across 3 seeds x 3 runs each, warm session cache:
+  build_causal_graph               0.0030s
+  compute_topological_distances    0.0066s
+  feature masks, 1st call          4.2814s  (inside pack_symbol_context)
+  feature masks, 2nd call          4.2277s  (inside build_context_package, line 243)
+  edge weights (causal + data-flow + guard) 0.0078s
+  knapsack (token counting + greedy loop + upstream callers) 0.1045s
+  rendering/other                  0.0470s
+  total                            8.7299s
+```
+
+**Target (<5s raw engine) not met.** The 1st and 2nd feature-mask calls
+cost essentially the same (~4.2-4.3s each) - the 2nd call is *not*
+near-zero despite hitting `compute_feature_masks_cached`'s own disk
+cache. Root cause, read directly from `prism/semantics/extractor.py`
+(read-only - this investigation did not modify it, per the explicit
+guardrail): `compute_feature_masks_cached` iterates every file with at
+least one function/method symbol (~2,700+ `.py` files in this corpus)
+on **every call**, and for each one performs a real file read + SHA-256
+content hash + a `prism.cache.sqlite_cache` query - the mechanism that
+lets it skip AST re-extraction on a hit. There is no in-memory layer on
+top of that per-file disk cache the way Steps 2/4 added for
+`build_causal_graph`/`compute_topological_distances`/the causal-edge
+functions (all now ~0.003-0.03s, effectively free on a warm session) -
+so a "hit" here still pays the full file-scan-and-hash-and-query cost,
+which does not shrink between the first and second call within the
+same `retrieve()`, nor across repeated `retrieve()` calls in the same
+warm process.
+
+This is a real, structural property of `compute_feature_masks_cached`
+itself, not a defect in the one-line swap at `build.py:243` - the swap
+does exactly what it says (route through the cached function instead
+of the fully uncached one) and the *overall* raw-engine cost is still
+dramatically lower than the pre-Steps-1-4 baseline (183-203s). But it
+does not reduce the specific 54.66s-attributed bucket to anywhere near
+1s, and does not meet the <5s raw-engine target on its own. Fixing this
+further would mean adding an in-memory memoization layer to
+`compute_feature_masks_cached` or its caller - out of the scope this
+checkpoint approved (`prism/semantics/extractor.py` explicitly
+off-limits, and the `build.py` exception was scoped to the one-line
+call-site swap already made). No further change was made pending
+direction.
+
 ### Scratch-branch redundancy measurement (not committed)
 
 A throwaway local branch memoized `build_causal_graph`/
@@ -290,7 +344,55 @@ graph/distance redundancy alone leaves `compute_feature_masks`'s own
 branch and its commit were both deleted after measurement; nothing
 from it was merged.
 
+### Reverse-seed anomaly investigation (Milestone 1 closure, Decision 3)
 
+**Cause identified, obvious, within the 30-minute time-box.** The
+`reverse` seed's warm-cache retrieve costs ~1.3-1.4s versus ~0.02-0.1s
+for `load_middleware`/`_fetch_all` - within budget, but previously
+unexplained. Ad-hoc scratch instrumentation (never committed to any
+source module) tested the originally-suspected location first and
+ruled it out: `prism/surface/build.py`'s own un-instrumented "other"
+bucket - `_node_body`, `_derive_contract`, `_coverage_summary` - costs
+a few **milliseconds** for all three seeds regardless of `reverse`'s
+own packed-node count (32/59/65 nodes respectively; reachable-node
+counts are also flat across seeds, ~2434-2489, not correlated with the
+anomaly at all).
+
+The real cost lives in `pack_symbol_context`'s own already-instrumented
+knapsack phase (`prism/packer/submodular_knapsack.py`'s debug-flag
+profiler, `PRISM_PROFILE_KNAPSACK=1` - no new instrumentation added),
+split into its three sub-phases:
+
+| Seed | `upstream_callers` | `knapsack.token_counting` | `knapsack.greedy_loop` | real caller-set size (`compute_upstream_callers`) |
+|---|---|---|---|---|
+| `load_middleware` | 0.0021s | 0.0201s | 0.0013s | 4 |
+| `_fetch_all` | 0.0015s | 0.1015s | 0.0019s | 5 |
+| `reverse` | 0.3900s | 0.8947s | 0.0465s | 656 |
+
+**Cause: `reverse`'s real upstream-caller set (`prism.packer.
+blast_radius.compute_upstream_callers`) is ~130-160x larger than the
+other two seeds' (656 vs. 4-5)**, and both `upstream_callers` (blast-
+radius weighting, one pass per caller) and `knapsack.token_counting`
+(one tokenization pass per knapsack candidate, and every upstream
+caller is a candidate) scale directly with that count - both phases
+together (0.39s + 0.89s = 1.28s) account for essentially all of the
+observed ~1.3s gap. This is a real, structural, caller-count-driven
+cost, not a bug: `reverse` genuinely has an order of magnitude more
+real callers than the other two seeds, and the engine correctly does
+more real work to weigh and tokenize all of them. (Note: 656 is
+`compute_upstream_callers`'s own direct-call-site count over the real
+graph, not directly comparable to the "164 direct callers" figure
+elsewhere in this document from a *different* detector,
+`compute_direct_and_transitive_callers`, which dedupes/counts
+differently - both agree `reverse` is a high-fan-in seed by a wide
+margin over the others; the exact multiplier depends on which detector
+is asked.)
+
+**No fix applied.** `reverse`'s ~1.3-1.4s retrieve is well within
+budget on its own terms - this was a "why is it different," not a
+"why is it too slow," investigation. No code change was needed or
+made; this section is the required documentation. Time spent: ~7
+minutes of the 30-minute cap.
 
 `fpr_oracle` (Gap 2) is defined as divergence from the Oracle engine's
 own package for the same (task, budget) - but this repository ships no
