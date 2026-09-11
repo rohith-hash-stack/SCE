@@ -42,6 +42,22 @@ class TaskRunRecord:
     def tsr_mean(self) -> float:
         return sum(self.tsr_scores) / len(self.tsr_scores) if self.tsr_scores else 0.0
 
+    @property
+    def tsr_variance(self) -> float:
+        """Population variance across this cell's own per-seed TSR
+        scores (Gap 6's own "report per-seed variance" - distinct from
+        `compute_tsr_summary`'s bootstrap CI, which resamples the
+        *pooled* scores across every task in a cell; this is the raw
+        seed-to-seed spread within one task's own cell). `0.0` for fewer
+        than 2 scores - variance is undefined, not "no spread", for a
+        single sample, but `0.0` is the honest "nothing to measure"
+        value the rest of this module already uses for that case."""
+        n = len(self.tsr_scores)
+        if n < 2:
+            return 0.0
+        mean = self.tsr_mean
+        return sum((score - mean) ** 2 for score in self.tsr_scores) / n
+
 
 @dataclass
 class EvaluationRun:
@@ -76,12 +92,23 @@ def write_json_results(run: EvaluationRun, path: str | Path) -> None:
 
 
 def render_tsr_markdown_table(run: EvaluationRun, n_resamples: int = 10_000, random_seed: int | None = None) -> str:
+    """`TSR`/`95% CI` are the pooled-bootstrap estimate for the cell
+    (`compute_tsr_summary`'s own definition). `Seed Variance` is a
+    different, complementary number (Gap 6): the mean, across every task
+    in that cell, of each task's own per-seed TSR-score population
+    variance - how much a single task's score swings seed-to-seed, not
+    how uncertain the pooled aggregate is."""
     summary = compute_tsr_summary(run, n_resamples=n_resamples, random_seed=random_seed)
-    headers = ["Engine", "Budget", "TSR", "95% CI", "N"]
+    headers = ["Engine", "Budget", "TSR", "95% CI", "N", "Seed Variance"]
     rows = []
     for (engine, budget), ci in sorted(summary.items()):
-        n = sum(len(r.tsr_scores) for r in run.records if r.engine_name == engine and r.budget_tokens == budget)
-        rows.append([engine, str(budget), f"{ci.point_estimate:.3f}", f"[{ci.lower:.3f}, {ci.upper:.3f}]", str(n)])
+        cell_records = [r for r in run.records if r.engine_name == engine and r.budget_tokens == budget]
+        n = sum(len(r.tsr_scores) for r in cell_records)
+        variances = [r.tsr_variance for r in cell_records if len(r.tsr_scores) >= 2]
+        mean_variance = sum(variances) / len(variances) if variances else 0.0
+        rows.append(
+            [engine, str(budget), f"{ci.point_estimate:.3f}", f"[{ci.lower:.3f}, {ci.upper:.3f}]", str(n), f"{mean_variance:.4f}"]
+        )
     return format_table(headers, rows)
 
 

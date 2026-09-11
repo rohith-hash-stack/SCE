@@ -772,6 +772,93 @@ def test_resolve_budgets_both_raises():
 
 
 # --------------------------------------------------------------------- #
+# Gap 6: --seeds flag + seed loop
+# --------------------------------------------------------------------- #
+def test_resolve_seeds_parses_comma_separated_list():
+    from benchmarks.runner import resolve_seeds
+
+    assert resolve_seeds("42,43") == (42, 43)
+
+
+def test_resolve_seeds_none_falls_back_to_default():
+    from benchmarks.runner import resolve_seeds
+    from benchmarks.tsr.client import DEFAULT_SEEDS
+
+    assert resolve_seeds(None) == DEFAULT_SEEDS
+    assert resolve_seeds("") == DEFAULT_SEEDS
+
+
+def test_resolve_seeds_malformed_raises():
+    from benchmarks.runner import resolve_seeds
+
+    with pytest.raises(ValueError):
+        resolve_seeds("42,abc")
+    with pytest.raises(ValueError):
+        resolve_seeds("42,,43")
+
+
+def test_seeds_42_43_produces_two_samples_per_cell():
+    """The actual seed-loop mechanism run_evaluation relies on:
+    run_tsr_prompt makes one real call per seed - a fake client (no
+    network) proves --seeds 42,43 really does produce 2 samples."""
+    from benchmarks.openai_client import CallResult
+    from benchmarks.runner import resolve_seeds
+    from benchmarks.tsr.client import run_tsr_prompt
+
+    class FakeClient:
+        def __init__(self):
+            self.seeds_called = []
+
+        def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+            self.seeds_called.append(seed)
+            return CallResult(
+                model=model, content="response", prompt_tokens=1, completion_tokens=1,
+                total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
+            )
+
+    client = FakeClient()
+    seeds = resolve_seeds("42,43")
+    results = run_tsr_prompt(client, "system", "<xml/>", "task", seeds=seeds)
+
+    assert len(results) == 2
+    assert client.seeds_called == [42, 43]
+    assert [r.seed for r in results] == [42, 43]
+
+
+def test_task_run_record_tsr_variance():
+    from benchmarks.reporting.report_generator import TaskRunRecord
+
+    record = TaskRunRecord(
+        task_id="t1", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000,
+        tsr_scores=[1.0, 0.0, 1.0, 0.0],
+    )
+    assert record.tsr_variance == pytest.approx(0.25)
+
+
+def test_task_run_record_tsr_variance_zero_for_fewer_than_two_scores():
+    from benchmarks.reporting.report_generator import TaskRunRecord
+
+    assert TaskRunRecord(task_id="t1", task_type="debug", repo="django", engine_name="e", budget_tokens=1, tsr_scores=[1.0]).tsr_variance == 0.0
+    assert TaskRunRecord(task_id="t1", task_type="debug", repo="django", engine_name="e", budget_tokens=1, tsr_scores=[]).tsr_variance == 0.0
+
+
+def test_render_tsr_markdown_table_includes_seed_variance_column():
+    from benchmarks.reporting.report_generator import EvaluationRun, TaskRunRecord, render_tsr_markdown_table
+
+    run = EvaluationRun(
+        records=[
+            TaskRunRecord(
+                task_id="t1", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000,
+                tsr_scores=[1.0, 0.0],
+            )
+        ]
+    )
+    table = render_tsr_markdown_table(run, random_seed=1)
+    assert "Seed Variance" in table
+    assert "0.2500" in table
+
+
+# --------------------------------------------------------------------- #
 # Gap 2: fpr_oracle (divergence-from-Oracle FPR) on synthetic packages
 # --------------------------------------------------------------------- #
 def _debug_task_for_fpr() -> "EvaluationTask":  # noqa: F821 - imported locally below

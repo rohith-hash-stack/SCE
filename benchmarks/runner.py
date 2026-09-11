@@ -1,6 +1,6 @@
 """v1.1+ Empirical Benchmarking Harness - CLI entrypoint.
 
-    python -m benchmarks.runner --repo=django --budget=4000 --runs=5 --output=reports/
+    python -m benchmarks.runner --repo=django --budget=4000 --seeds=42,43,44,45,46 --output=reports/
     python -m benchmarks.runner --mode=ablation --output=reports/
 
 Every engine's output is serialized through the one canonical renderer
@@ -185,11 +185,30 @@ def score_tsr_response(task: EvaluationTask, response_text: str, candidate_symbo
     return score_redundancy(response_text, task.seed_symbol, task.adjudicated.orthogonal_neighbors)
 
 
+def resolve_seeds(seeds: str | None, *, default: tuple[int, ...] = DEFAULT_SEEDS) -> tuple[int, ...]:
+    """Resolves the CLI's `--seeds` flag (a comma-separated list, e.g.
+    `"42,43"`) into the effective seed tuple - each seed becomes one
+    separate real LLM call per (task, engine, budget) cell. `None` or an
+    empty string falls back to `default` (the spec's own 5-seed list).
+    Raises `ValueError` for a malformed entry (never silently drops or
+    truncates it).
+    """
+    if not seeds:
+        return default
+    tokens = [t.strip() for t in seeds.split(",")]
+    if any(not t for t in tokens):
+        raise ValueError(f"--seeds contains an empty entry: {seeds!r}")
+    try:
+        return tuple(int(t) for t in tokens)
+    except ValueError as exc:
+        raise ValueError(f"--seeds must be a comma-separated list of integers, got {seeds!r}") from exc
+
+
 def run_evaluation(
     repo: str,
     budgets: list[int],
     tasks_dir: str,
-    runs: int = 5,
+    seeds: tuple[int, ...] = DEFAULT_SEEDS,
     model: str = DEFAULT_MODEL,
     dry_run: bool = False,
     oracle_packages_path: str | None = None,
@@ -197,8 +216,8 @@ def run_evaluation(
 ) -> EvaluationRun:
     """The real end-to-end sweep: resolve the pinned corpus, load its
     ground-truth tasks, run every engine at every budget, and (unless
-    `dry_run`, or no API key is configured at all) run the real 5-seed
-    TSR protocol against a real LLM."""
+    `dry_run`, or no API key is configured at all) run the real TSR
+    protocol - one LLM call per seed in `seeds` - against a real LLM."""
     if repo not in CORPORA:
         raise ValueError(f"unknown repo {repo!r} - registered corpora: {sorted(CORPORA)}")
     repo_path = str(resolve(repo, force=force_reclone))
@@ -224,7 +243,6 @@ def run_evaluation(
             print(f"warning: LLM client unavailable ({exc}) - running in dry-run mode, tsr_scores will be empty", file=sys.stderr)
             dry_run = True
 
-    seeds = DEFAULT_SEEDS[: max(1, min(runs, len(DEFAULT_SEEDS)))]
     run = EvaluationRun()
 
     for task in tasks:
@@ -489,7 +507,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=["eval", "pilot", "ablation", "smoke"],
         default="eval",
         help="'pilot' is 'eval' under another name (a pinned-corpus run, typically with --dry-run for a P1 pilot); "
-        "'smoke' runs a network-free synthetic-fixture pipeline check, ignoring --repo/--tasks-dir/--runs/--model",
+        "'smoke' runs a network-free synthetic-fixture pipeline check, ignoring --repo/--tasks-dir/--seeds/--model",
     )
     parser.add_argument("--repo", choices=sorted(CORPORA), default="django")
     parser.add_argument(
@@ -506,7 +524,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override the full (eval mode) budget sweep, default 2000 4000 8000. Mutually exclusive with --budget.",
     )
-    parser.add_argument("--runs", type=int, default=5, help="Number of seeded TSR runs (max 5, the spec's own seed list)")
+    parser.add_argument(
+        "--seeds",
+        default=None,
+        help="Comma-separated seeds for the TSR protocol, e.g. '42,43' - one real LLM call per seed per "
+        f"(task, engine, budget) cell. Default: {','.join(str(s) for s in DEFAULT_SEEDS)} (the spec's own 5-seed list).",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--tasks-dir", default=None, help=f"Default: {DEFAULT_TASKS_DIR_TEMPLATE}")
     parser.add_argument("--output", default="reports/")
@@ -538,13 +561,14 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             budgets = resolve_budgets(args.budget, args.budgets)
+            seeds = resolve_seeds(args.seeds)
         except ValueError as exc:
             parser.error(str(exc))
         run = run_evaluation(
             repo=args.repo,
             budgets=budgets,
             tasks_dir=tasks_dir,
-            runs=args.runs,
+            seeds=seeds,
             model=args.model,
             dry_run=args.dry_run,
             oracle_packages_path=args.oracle_packages,
