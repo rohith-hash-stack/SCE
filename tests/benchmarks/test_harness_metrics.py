@@ -720,3 +720,78 @@ def test_resolve_budgets_both_raises():
 
     with pytest.raises(ValueError, match="mutually exclusive"):
         resolve_budgets(4000, [2000, 8000])
+
+
+# --------------------------------------------------------------------- #
+# Gap 2: fpr_oracle (divergence-from-Oracle FPR) on synthetic packages
+# --------------------------------------------------------------------- #
+def _debug_task_for_fpr() -> "EvaluationTask":  # noqa: F821 - imported locally below
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+
+    ann = GroundTruthAnnotation(
+        annotator_id="a", pipeline_symbols=["svc.seed", "svc.a"], expected_solution="x"
+    )
+    return EvaluationTask(
+        task_id="t1", repo="django", pinned_commit="x", seed_symbol="svc.seed", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+
+
+def test_compute_diagnostics_fpr_oracle_none_when_oracle_absent():
+    from benchmarks.metrics.fcc import CorpusFeatureStats
+    from benchmarks.runner import compute_diagnostics
+
+    pkg = _pkg([_node("svc.seed", "seed", 0.0, 10), _node("svc.a", "callee", 1.0, 10), _node("svc.extra", "callee", 1.0, 10)])
+    task = _debug_task_for_fpr()
+    stats = CorpusFeatureStats(total_symbols=10, document_frequency={})
+
+    diagnostics = compute_diagnostics(pkg, task, stats, oracle_selected=None)
+    assert diagnostics["fpr_oracle"] is None
+    assert isinstance(diagnostics["fpr_gt"], float)
+
+
+def test_compute_diagnostics_fpr_oracle_computed_when_oracle_present():
+    from benchmarks.metrics.fcc import CorpusFeatureStats
+    from benchmarks.metrics.fpr import fpr
+    from benchmarks.runner import compute_diagnostics
+
+    pkg = _pkg([_node("svc.seed", "seed", 0.0, 10), _node("svc.a", "callee", 1.0, 10), _node("svc.extra", "callee", 1.0, 10)])
+    task = _debug_task_for_fpr()
+    stats = CorpusFeatureStats(total_symbols=10, document_frequency={})
+    oracle_selected = {"svc.seed", "svc.a"}  # svc.extra is not in the Oracle's own package
+
+    diagnostics = compute_diagnostics(pkg, task, stats, oracle_selected=oracle_selected)
+    expected = fpr({"svc.seed", "svc.a", "svc.extra"}, oracle_selected)
+    assert diagnostics["fpr_oracle"] == expected
+    assert diagnostics["fpr_oracle"] == pytest.approx(1 / 3)
+
+
+def test_render_diagnostics_markdown_table_excludes_fpr_gt_includes_fpr_oracle():
+    from benchmarks.reporting.report_generator import EvaluationRun, TaskRunRecord, render_diagnostics_markdown_table
+
+    run = EvaluationRun(
+        records=[
+            TaskRunRecord(
+                task_id="t1", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000,
+                diagnostics={"fpr_gt": 0.9, "fpr_oracle": 0.1},
+            )
+        ]
+    )
+    table = render_diagnostics_markdown_table(run)
+    assert "fpr_oracle" in table
+    assert "fpr_gt" not in table
+
+
+def test_render_diagnostics_markdown_table_none_values_render_as_dash():
+    from benchmarks.reporting.report_generator import EvaluationRun, TaskRunRecord, render_diagnostics_markdown_table
+
+    run = EvaluationRun(
+        records=[
+            TaskRunRecord(
+                task_id="t1", task_type="debug", repo="django", engine_name="baseline_rag", budget_tokens=4000,
+                diagnostics={"fcc": None},
+            )
+        ]
+    )
+    table = render_diagnostics_markdown_table(run)
+    assert "—" in table

@@ -123,6 +123,11 @@ def run_smoke_test(output_dir: str = "reports/") -> EvaluationRun:
 
         render_options = RenderOptions(include_timestamp=False, include_run_id=False)
 
+        # Oracle is always first in `_build_engines`'s own return order,
+        # so by the time any other engine's turn comes around its
+        # selected-symbol set is already here for `fpr_oracle`.
+        oracle_selected: set[str] | None = None
+
         for engine in engines:
             engine.index(str(repo_path))
             pkg = engine.retrieve(SMOKE_SEED_SYMBOL, SMOKE_BUDGET)
@@ -152,12 +157,16 @@ def run_smoke_test(output_dir: str = "reports/") -> EvaluationRun:
             rerendered = render(parsed, render_options)
             assert rerendered == rendered_a, f"{engine.name}: parse_context(render(pkg)) is not a lossless roundtrip"
 
-            diagnostics = compute_diagnostics(pkg, task, feature_stats)
+            candidate_symbols = selected_symbols(pkg)
+            if engine.name == "oracle":
+                oracle_selected = candidate_symbols
+
+            diagnostics = compute_diagnostics(pkg, task, feature_stats, oracle_selected=oracle_selected)
             for metric_name, value in diagnostics.items():
+                if value is None:
+                    continue  # a structurally-absent dimension (e.g. fcc for a non-coordinate-space engine), not a failure
                 assert not math.isnan(value), f"{engine.name}.{metric_name} is NaN"
                 assert math.isfinite(value), f"{engine.name}.{metric_name} is not finite ({value})"
-
-            candidate_symbols = selected_symbols(pkg)
             ground_truth = (
                 set(task.adjudicated.pipeline_symbols) | task.adjudicated.critical_callers | {task.seed_symbol}
             )

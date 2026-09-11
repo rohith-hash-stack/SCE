@@ -28,6 +28,7 @@ from benchmarks.corpora.resolver import CORPORA, CorpusResolutionError, resolve
 from benchmarks.engines.base import AbstractRetrievalEngine, selected_symbols
 from benchmarks.engines.baseline_bfs import BaselineBFSEngine
 from benchmarks.engines.baseline_rag import BaselineRAGEngine
+from benchmarks.engines.oracle_engine import ENGINE_NAME as ORACLE_ENGINE_NAME
 from benchmarks.engines.oracle_engine import OracleEngine
 from benchmarks.engines.prism_engine import PrismEngine
 from benchmarks.ground_truth.loader import load_tasks_from_dir
@@ -99,14 +100,22 @@ SYSTEM_PROMPT = (
 # Core evaluation
 # --------------------------------------------------------------------- #
 def _build_engines(oracle_packages_path: str | None, task_id: str) -> list[AbstractRetrievalEngine]:
-    engines: list[AbstractRetrievalEngine] = [
-        PrismEngine(),
-        BaselineRAGEngine(),
-        BaselineBFSEngine(mode="forward"),
-        BaselineBFSEngine(mode="bidirectional"),
-    ]
+    """Oracle (when configured) is returned *first* - `run_evaluation`
+    needs its per-budget selected-symbol set computed before any other
+    engine's turn, so every engine's `fpr_oracle` (divergence from the
+    Oracle package at that same budget) can be computed in a single pass
+    with no engine retrieved twice."""
+    engines: list[AbstractRetrievalEngine] = []
     if oracle_packages_path is not None:
         engines.append(OracleEngine(oracle_packages_path, task_id))
+    engines.extend(
+        [
+            PrismEngine(),
+            BaselineRAGEngine(),
+            BaselineBFSEngine(mode="forward"),
+            BaselineBFSEngine(mode="bidirectional"),
+        ]
+    )
     return engines
 
 
@@ -121,10 +130,19 @@ def _ground_truth_universe(task: EvaluationTask) -> set[str]:
     )
 
 
-def compute_diagnostics(pkg, task: EvaluationTask, feature_stats) -> dict[str, float]:
+def compute_diagnostics(
+    pkg, task: EvaluationTask, feature_stats, oracle_selected: set[str] | None = None
+) -> dict[str, float | None]:
+    """`oracle_selected` is the Oracle engine's own packed symbol set for
+    this exact `(task, budget)` cell, when an Oracle run was configured
+    and available for this call - `None` otherwise (no `--oracle-
+    packages` configured, or the Oracle failed to index/retrieve for
+    this task). `fpr_oracle` is `None`, not a fabricated `0.0`, in that
+    case: an absent comparison point is an absent number, never a
+    silently-wrong one."""
     selected = selected_symbols(pkg)
     adjudicated = task.adjudicated
-    diagnostics: dict[str, float] = {"fcc": fcc(pkg, feature_stats)}
+    diagnostics: dict[str, float | None] = {"fcc": fcc(pkg, feature_stats)}
 
     if task.task_type in ("chain", "debug"):
         diagnostics["cpi_strict"] = cpi_strict(selected, adjudicated.pipeline_symbols)
@@ -139,7 +157,18 @@ def compute_diagnostics(pkg, task: EvaluationTask, feature_stats) -> dict[str, f
     else:  # redundancy
         diagnostics["src"] = src(pkg)
 
-    diagnostics["fpr"] = fpr(selected, _ground_truth_universe(task))
+    # fpr_gt: divergence from the human-annotated ground truth (the
+    # original definition - kept, for transparency, since it really
+    # does measure something, just something narrower than "engine
+    # quality": how much of what an engine packs falls outside the 3-4
+    # symbols this task happened to annotate).
+    diagnostics["fpr_gt"] = fpr(selected, _ground_truth_universe(task))
+    # fpr_oracle: divergence from the Oracle's own package at this same
+    # budget - the metric this harness actually reports as "the" FPR,
+    # since an engine legitimately pulling in real, relevant context
+    # beyond the narrow annotated set is not a false positive against a
+    # domain expert's own answer.
+    diagnostics["fpr_oracle"] = fpr(selected, oracle_selected) if oracle_selected is not None else None
     return diagnostics
 
 
@@ -198,7 +227,12 @@ def run_evaluation(
     run = EvaluationRun()
 
     for task in tasks:
+        # Oracle first (see `_build_engines`'s own docstring): its
+        # per-budget selected-symbol set must exist before any other
+        # engine's turn so `fpr_oracle` can be computed for everyone in
+        # one pass, with the Oracle itself retrieved exactly once.
         engines = _build_engines(oracle_packages_path, task.task_id)
+        oracle_selected_by_budget: dict[int, set[str]] = {}
         for engine in engines:
             try:
                 engine.index(repo_path)
@@ -213,6 +247,9 @@ def run_evaluation(
                     continue
 
                 candidate_symbols = selected_symbols(pkg)
+                if engine.name == ORACLE_ENGINE_NAME:
+                    oracle_selected_by_budget[budget] = candidate_symbols
+
                 tsr_scores: list[float] = []
                 if not dry_run and client is not None:
                     rendered_xml = render(pkg, RenderOptions(include_timestamp=False, include_run_id=False))
@@ -227,7 +264,9 @@ def run_evaluation(
                         engine_name=engine.name,
                         budget_tokens=budget,
                         tsr_scores=tsr_scores,
-                        diagnostics=compute_diagnostics(pkg, task, feature_stats),
+                        diagnostics=compute_diagnostics(
+                            pkg, task, feature_stats, oracle_selected=oracle_selected_by_budget.get(budget)
+                        ),
                         selected_symbols=sorted(candidate_symbols),
                         ground_truth_symbols=sorted(_ground_truth_universe(task)),
                     )

@@ -29,7 +29,12 @@ class TaskRunRecord:
     engine_name: str
     budget_tokens: int
     tsr_scores: list[float] = field(default_factory=list)  # one per seed run
-    diagnostics: dict[str, float] = field(default_factory=dict)  # cpi_strict, src, bccr_direct, fcc, fpr, ...
+    #: cpi_strict, src, bccr_direct, fcc, fpr_gt, fpr_oracle, ... - `None`
+    #: (never a fabricated `0.0`) for a metric that is either
+    #: uncomputable for this cell (no Oracle package to diverge from) or
+    #: structurally inapplicable to this engine (`fcc` for an engine
+    #: with no four-axis feature vectors at all).
+    diagnostics: dict[str, float | None] = field(default_factory=dict)
     selected_symbols: list[str] = field(default_factory=list)
     ground_truth_symbols: list[str] = field(default_factory=list)
 
@@ -80,12 +85,30 @@ def render_tsr_markdown_table(run: EvaluationRun, n_resamples: int = 10_000, ran
     return format_table(headers, rows)
 
 
+#: Diagnostics computed for transparency but not meant for the headline
+#: per-engine table - `fpr_gt` (the original, ground-truth-scope-limited
+#: FPR definition - Gap 2) is still in every JSON record, just not
+#: repeated here alongside its replacement, `fpr_oracle`.
+_MARKDOWN_HEADLINE_EXCLUDED_METRICS = frozenset({"fpr_gt"})
+
+
 def render_diagnostics_markdown_table(run: EvaluationRun) -> str:
+    """Mean per (engine, metric), skipping `None` cells rather than
+    letting one uncomputable/inapplicable value poison the average of
+    every real one. A metric that is `None` for *every* record of an
+    engine (e.g. `fcc` for a baseline with no four-axis coordinate
+    space at all - Gap 3) renders as `"—"`, not `"0.000"` - a
+    structurally-absent dimension must never look like a measured zero.
+    """
     by_engine: dict[str, dict[str, list[float]]] = {}
     for record in run.records:
         bucket = by_engine.setdefault(record.engine_name, {})
         for key, value in record.diagnostics.items():
-            bucket.setdefault(key, []).append(value)
+            if key in _MARKDOWN_HEADLINE_EXCLUDED_METRICS:
+                continue
+            bucket.setdefault(key, [])
+            if value is not None:
+                bucket[key].append(value)
 
     metric_names = sorted({key for bucket in by_engine.values() for key in bucket})
     headers = ["Engine", *metric_names]
@@ -94,7 +117,7 @@ def render_diagnostics_markdown_table(run: EvaluationRun) -> str:
         row = [engine]
         for metric in metric_names:
             values = by_engine[engine].get(metric, [])
-            row.append(f"{sum(values) / len(values):.3f}" if values else "-")
+            row.append(f"{sum(values) / len(values):.3f}" if values else "—")
         rows.append(row)
     return format_table(headers, rows)
 
@@ -116,6 +139,20 @@ def write_markdown_report(run: EvaluationRun, path: str | Path, n_resamples: int
         "## Diagnostic Metrics (mean per engine)",
         "",
         render_diagnostics_markdown_table(run),
+        "",
+        "### Notes on Diagnostic Metrics",
+        "",
+        "- **FPR redefined (divergence from Oracle).** `fpr` used to mean "
+        "`|S_M \\ G*| / |S_M|` against the human-annotated ground truth "
+        "`G*` alone - typically only 3-4 symbols per task, so *any* other "
+        "real context an engine pulled in (imports, helpers, callers) "
+        "counted as a false positive, regardless of whether it was "
+        "actually relevant. Two metrics are now reported: `fpr_gt` (the "
+        "original definition, kept in the raw JSON for transparency, "
+        "excluded from this table) and **`fpr_oracle`** (shown above) - "
+        "`|S_M \\ S_Oracle| / |S_M|`, divergence from the Oracle engine's "
+        "own package for the same (task, budget). `fpr_oracle` is `—` "
+        "wherever no Oracle run was configured/available for that cell.",
         "",
     ]
     path.write_text("\n".join(lines) + "\n")
