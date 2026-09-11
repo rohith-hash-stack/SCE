@@ -1,0 +1,84 @@
+# T02 "Django Debug" - Task 1: request/response middleware chain.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below, matching benchmarks/corpora/pinned_commits.json's own "django"
+# entry, tag 4.2.30) - every symbol here is a real, indexed
+# django.core.handlers.base.BaseHandler method, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that
+# checkout (qualified names and line ranges below match exactly).
+#
+#   django.core.handlers.base.BaseHandler.load_middleware  lines 26-102
+#   django.core.handlers.base.BaseHandler.get_response     lines 136-150
+#   django.core.handlers.base.BaseHandler._get_response    lines 174-226
+#   django.core.handlers.base.BaseHandler.resolve_request  lines 300-315
+#
+# Real causal chain: load_middleware() builds self._middleware_chain
+# (wrapping _get_response through every configured middleware, in
+# reverse-MIDDLEWARE order); get_response() invokes that chain, which
+# bottoms out in _get_response(), which calls self.resolve_request(request)
+# to obtain the (callback, args, kwargs) it will actually dispatch to.
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1, Hripcsak
+# & Rothschild 2005) from annotation_a/annotation_b below rather than
+# trusting a hand-typed number.
+task_id: django_t02_001_request_middleware_chain
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.core.handlers.base.BaseHandler.load_middleware
+task_type: debug
+prompt: |
+  You are debugging Django's request-handling entrypoint in
+  django/core/handlers/base.py. Starting from
+  `BaseHandler.load_middleware`, trace the exact causal pipeline a real
+  HTTP request travels through this file, in the order each stage is
+  actually reached at request time (not the order they're defined in
+  the file), up to and including the call that resolves which view
+  callback will handle the request.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.core.handlers.base.BaseHandler.load_middleware", "django.core.handlers.base.BaseHandler.get_response"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.core.handlers.base.BaseHandler.load_middleware
+    - django.core.handlers.base.BaseHandler.get_response
+    - django.core.handlers.base.BaseHandler._get_response
+    - django.core.handlers.base.BaseHandler.resolve_request
+  expected_solution: >
+    The full chain: load_middleware() builds the wrapped handler chain,
+    get_response() invokes it, which bottoms out in _get_response(),
+    which calls resolve_request() to get the view callback.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.core.handlers.base.BaseHandler.load_middleware
+    - django.core.handlers.base.BaseHandler.get_response
+    - django.core.handlers.base.BaseHandler._get_response
+  expected_solution: >
+    load_middleware() builds the chain, get_response() runs it, which
+    calls _get_response() to resolve and invoke the view. (Missed that
+    view resolution is itself a separate traced call, resolve_request().)
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.core.handlers.base.BaseHandler.load_middleware
+    - django.core.handlers.base.BaseHandler.get_response
+    - django.core.handlers.base.BaseHandler._get_response
+    - django.core.handlers.base.BaseHandler.resolve_request
+  expected_solution: >
+    Annotator A's full chain is correct: _get_response's own first
+    action (base.py line 180) is `callback, callback_args,
+    callback_kwargs = self.resolve_request(request)` - a distinct,
+    separately-traceable causal stage, not inlined logic.

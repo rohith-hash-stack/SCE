@@ -1,0 +1,74 @@
+# T02 "Django Debug" - Task 2: QuerySet evaluation -> SQL compilation.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below). Verified against the real symbol table:
+#
+#   django.db.models.query.QuerySet._fetch_all        lines 1884-1888
+#   django.db.models.sql.query.Query.get_compiler      lines 298-305
+#   django.db.models.sql.compiler.SQLCompiler.as_sql   lines 725-948
+#   django.db.models.query.QuerySet.__iter__           lines 385-401
+#
+# Real data-flow chain: QuerySet._fetch_all() is what actually triggers
+# database evaluation (`self._result_cache = list(self._iterable_class(self))`);
+# building that iterable eventually calls self.query.get_compiler(...)
+# to obtain a SQLCompiler, whose as_sql() produces the real SQL string
+# and parameter list. QuerySet.__iter__ is a real, related caller (it
+# calls self._fetch_all() itself) but is one hop upstream of the actual
+# compile pipeline, not part of it - included here as a plausible
+# annotator mistake (see annotation_b).
+task_id: django_t02_002_query_compile_pipeline
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.db.models.query.QuerySet._fetch_all
+task_type: debug
+prompt: |
+  You are debugging why a Django QuerySet issues the SQL it does. Trace
+  the real data-flow pipeline from `QuerySet._fetch_all` (the method
+  that actually triggers database evaluation) through to the method
+  that produces the final SQL string and parameter list.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.db.models.query.QuerySet._fetch_all", "django.db.models.sql.query.Query.get_compiler"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.db.models.query.QuerySet._fetch_all
+    - django.db.models.sql.query.Query.get_compiler
+    - django.db.models.sql.compiler.SQLCompiler.as_sql
+  expected_solution: >
+    _fetch_all() triggers evaluation, which needs a compiler from
+    query.get_compiler(), whose as_sql() produces the final SQL.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.db.models.query.QuerySet.__iter__
+    - django.db.models.query.QuerySet._fetch_all
+    - django.db.models.sql.query.Query.get_compiler
+    - django.db.models.sql.compiler.SQLCompiler.as_sql
+  expected_solution: >
+    Iterating a QuerySet (__iter__) is what calls _fetch_all(), which
+    needs a compiler from get_compiler(), whose as_sql() produces the
+    SQL. (Included the one-hop-upstream trigger, not just the pipeline
+    the task asked to start from.)
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.db.models.query.QuerySet._fetch_all
+    - django.db.models.sql.query.Query.get_compiler
+    - django.db.models.sql.compiler.SQLCompiler.as_sql
+  expected_solution: >
+    Annotator A's 3-stage chain is the correct answer to the task as
+    posed (starting *from* _fetch_all, not what calls it). __iter__ is a
+    real, correct caller of _fetch_all, but the task explicitly starts
+    the trace at _fetch_all itself, so it is not part of this pipeline.

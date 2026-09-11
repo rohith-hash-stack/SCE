@@ -54,6 +54,7 @@ from benchmarks.reporting.report_generator import (
 from benchmarks.tsr.scorer_architecture import reference_symbol_recall, score_architecture
 from benchmarks.tsr.scorer_blast import extract_mentioned_symbols, precision_recall_f1, score_blast
 from benchmarks.tsr.scorer_chain import score_chain
+from benchmarks.tsr.scorer_debug import extract_fenced_symbol_list, score_debug
 from benchmarks.tsr.scorer_redundancy import rubric_score, score_redundancy
 
 
@@ -499,6 +500,42 @@ def test_scorer_architecture_recall_below_threshold_fails():
 def test_scorer_architecture_vacuous_empty_reference_set():
     assert reference_symbol_recall("anything at all", set()) == 1.0
     assert score_architecture("anything at all", set()) == 1.0
+
+
+def test_scorer_debug_extracts_fenced_json_array():
+    text = 'Here is my answer:\n```json\n["svc.a", "svc.b"]\n```\nDone.'
+    assert extract_fenced_symbol_list(text) == ["svc.a", "svc.b"]
+
+
+def test_scorer_debug_bare_fence_without_json_tag_also_parses():
+    text = '```\n["svc.a", "svc.b"]\n```'
+    assert extract_fenced_symbol_list(text) == ["svc.a", "svc.b"]
+
+
+def test_scorer_debug_no_fenced_block_returns_none():
+    assert extract_fenced_symbol_list("svc.a then svc.b, no fence here") is None
+
+
+def test_scorer_debug_malformed_json_returns_none():
+    assert extract_fenced_symbol_list("```json\n[svc.a, svc.b]\n```") is None
+
+
+def test_scorer_debug_exact_ordered_match_scores_one():
+    text = '```json\n["svc.parse_order", "svc.store_order"]\n```'
+    assert score_debug(text, ["svc.parse_order", "svc.store_order"]) == 1.0
+
+
+def test_scorer_debug_wrong_order_scores_zero():
+    text = '```json\n["svc.store_order", "svc.parse_order"]\n```'
+    assert score_debug(text, ["svc.parse_order", "svc.store_order"]) == 0.0
+
+
+def test_scorer_debug_missing_fence_scores_zero():
+    assert score_debug("svc.parse_order runs then svc.store_order.", ["svc.parse_order", "svc.store_order"]) == 0.0
+
+
+def test_scorer_debug_vacuous_empty_pipeline_and_empty_array():
+    assert score_debug("```json\n[]\n```", []) == 1.0
 
 
 # --------------------------------------------------------------------- #

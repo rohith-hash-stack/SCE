@@ -1,0 +1,79 @@
+# T02 "Django Debug" - Task 5: model save lifecycle + signal dispatch.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below). Verified against the real symbol table:
+#
+#   django.db.models.base.Model.save         lines 767-819
+#   django.db.models.base.Model.save_base    lines 835-899
+#   django.db.models.base.Model._save_table  lines 938-1026  (a real
+#     helper save_base() calls internally - one level below the
+#     pipeline this task traces; included in annotation_b below as a
+#     realistic annotator over-inclusion)
+#
+# Real mutation lifecycle: Model.save() (the public API) delegates to
+# self.save_base(...) to do the actual work. save_base() (base.py lines
+# 861-867) sends the `pre_save` signal before writing, then (lines
+# 892-899) sends `post_save` after. `pre_save`/`post_save` are
+# django.db.models.signals.Signal *instances*, not methods defined in
+# this file, so they're described in prose rather than listed as
+# pipeline_symbols (which name real indexed method/function symbols).
+task_id: django_t02_005_model_save_signals
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.db.models.base.Model.save
+task_type: debug
+prompt: |
+  You are debugging Django model save behavior in
+  django/db/models/base.py. Starting from `Model.save`, trace the real
+  causal pipeline of Model methods it calls that are responsible for
+  actually persisting the instance and dispatching the `pre_save`/
+  `post_save` signals.
+
+  First give a short (2-4 sentence) explanation of the pipeline,
+  noting where the pre_save/post_save signal dispatch happens even
+  though Signal instances aren't themselves indexed method symbols.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified Model symbol names in that
+  causal order - only symbols actually present in the provided context
+  package may appear, e.g.:
+
+  ```json
+  ["django.db.models.base.Model.save", "django.db.models.base.Model.save_base"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.db.models.base.Model.save
+    - django.db.models.base.Model.save_base
+  expected_solution: >
+    save() delegates to save_base(), which sends pre_save before
+    writing and post_save after.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.db.models.base.Model.save
+    - django.db.models.base.Model.save_base
+    - django.db.models.base.Model._save_table
+  expected_solution: >
+    save() delegates to save_base(), which sends pre_save, calls
+    _save_table() to do the actual INSERT/UPDATE, then sends post_save.
+    (Included the internal write helper as its own pipeline stage,
+    beyond what the task's save/save_base scope asked for.)
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.db.models.base.Model.save
+    - django.db.models.base.Model.save_base
+  expected_solution: >
+    Annotator A's 2-stage chain matches the task's own scope (the
+    signal-dispatch pipeline, not the full write path): save()
+    (base.py line 778) delegates entirely to save_base(), which is
+    where both pre_save.send(...) (line 861) and post_save.send(...)
+    (line 892) actually happen. _save_table() is real and is called
+    from inside save_base() (between the two signals), but it is a
+    write-mechanics helper, not part of the signal-dispatch pipeline
+    this task traces.

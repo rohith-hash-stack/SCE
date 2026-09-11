@@ -50,6 +50,7 @@ from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, run_tsr_prompt
 from benchmarks.tsr.scorer_architecture import score_architecture
 from benchmarks.tsr.scorer_blast import score_blast
 from benchmarks.tsr.scorer_chain import score_chain
+from benchmarks.tsr.scorer_debug import score_debug
 from benchmarks.tsr.scorer_redundancy import score_redundancy
 
 DEFAULT_BUDGETS = (2000, 4000, 8000)
@@ -93,7 +94,7 @@ def compute_diagnostics(pkg, task: EvaluationTask, feature_stats) -> dict[str, f
     adjudicated = task.adjudicated
     diagnostics: dict[str, float] = {"fcc": fcc(pkg, feature_stats)}
 
-    if task.task_type == "chain":
+    if task.task_type in ("chain", "debug"):
         diagnostics["cpi_strict"] = cpi_strict(selected, adjudicated.pipeline_symbols)
         diagnostics["cpi_fractional"] = cpi_fractional(selected, adjudicated.pipeline_symbols)
         diagnostics["src"] = src(pkg, set(adjudicated.pipeline_symbols))
@@ -113,6 +114,8 @@ def compute_diagnostics(pkg, task: EvaluationTask, feature_stats) -> dict[str, f
 def score_tsr_response(task: EvaluationTask, response_text: str, candidate_symbols: set[str]) -> float:
     if task.task_type == "chain":
         return score_chain(response_text, task.adjudicated.pipeline_symbols)
+    if task.task_type == "debug":
+        return score_debug(response_text, task.adjudicated.pipeline_symbols)
     if task.task_type == "blast":
         return score_blast(response_text, candidate_symbols, task.adjudicated.critical_callers)
     if task.task_type == "architecture":
@@ -409,7 +412,13 @@ def run_ablation(repo: str, tasks_dir: str, budget: int, output_dir: str, force_
 # --------------------------------------------------------------------- #
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m benchmarks.runner", description="Prism v1.1+ Empirical Benchmarking Harness")
-    parser.add_argument("--mode", choices=["eval", "ablation"], default="eval")
+    parser.add_argument(
+        "--mode",
+        choices=["eval", "pilot", "ablation", "smoke"],
+        default="eval",
+        help="'pilot' is 'eval' under another name (a pinned-corpus run, typically with --dry-run for a P1 pilot); "
+        "'smoke' runs a network-free synthetic-fixture pipeline check, ignoring --repo/--tasks-dir/--runs/--model",
+    )
     parser.add_argument("--repo", choices=sorted(CORPORA), default="django")
     parser.add_argument("--budget", type=int, default=4000, help="Token budget (eval mode: also used as the ablation budget)")
     parser.add_argument("--budgets", type=int, nargs="+", default=None, help="Override the full (eval mode) budget sweep, default 2000 4000 8000")
@@ -429,6 +438,11 @@ def main(argv: list[str] | None = None) -> int:
     tasks_dir = args.tasks_dir or DEFAULT_TASKS_DIR_TEMPLATE.format(repo=args.repo)
 
     try:
+        if args.mode == "smoke":
+            from benchmarks.smoke import run_smoke
+
+            return run_smoke(args.output)
+
         if args.mode == "ablation":
             run_ablation(args.repo, tasks_dir, args.budget, args.output, force_reclone=args.force_reclone)
             print(f"Ablation report written to {Path(args.output) / 'ablation_report.md'}")

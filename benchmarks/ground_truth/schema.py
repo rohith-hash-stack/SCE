@@ -40,7 +40,7 @@ class EvaluationTask(BaseModel):
     repo: Literal["django", "gin", "trpc", "express"]
     pinned_commit: str
     seed_symbol: str
-    task_type: Literal["chain", "blast", "redundancy", "architecture"]
+    task_type: Literal["chain", "blast", "redundancy", "architecture", "debug"]
     prompt: str
     annotation_a: GroundTruthAnnotation
     annotation_b: GroundTruthAnnotation

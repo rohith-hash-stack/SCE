@@ -1,0 +1,81 @@
+# T02 "Django Debug" - Task 4: URLconf resolution traversal.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below). Verified against the real symbol table:
+#
+#   django.urls.resolvers.URLResolver.resolve    lines 657-703
+#   django.urls.resolvers.RegexPattern.match     lines 195-209
+#   django.urls.resolvers.URLPattern.resolve     lines 424-438
+#   django.urls.resolvers.RoutePattern.match     lines 306-318  (a real
+#     sibling matcher for path()-declared patterns - not on this task's
+#     own regex-based pipeline; included in annotation_a below as a
+#     realistic annotator mix-up)
+#
+# Real traversal (assuming a regex-based URLconf, i.e. `re_path()`
+# entries - RoutePattern/`path()` follows a structurally parallel but
+# distinct chain): URLResolver.resolve() first calls
+# `self.pattern.match(path)` (RegexPattern.match, for a resolver whose
+# own prefix was declared with re_path()) to strip the matched prefix,
+# then iterates its own url_patterns calling `pattern.resolve(new_path)`
+# on each; for a leaf URLPattern, that lands in URLPattern.resolve(),
+# which itself calls `self.pattern.match(path)` again on the remaining
+# path.
+task_id: django_t02_004_url_resolve_traversal
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.urls.resolvers.URLResolver.resolve
+task_type: debug
+prompt: |
+  You are debugging URLconf resolution in django/urls/resolvers.py, for
+  a URLconf declared entirely with `re_path()` (regex patterns, not
+  `path()`/route converters). Starting from `URLResolver.resolve`,
+  trace the real causal traversal down to the leaf URL pattern's own
+  resolution call.
+
+  First give a short (2-4 sentence) explanation of the traversal.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.urls.resolvers.URLResolver.resolve", "django.urls.resolvers.RegexPattern.match"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.urls.resolvers.URLResolver.resolve
+    - django.urls.resolvers.RegexPattern.match
+    - django.urls.resolvers.RoutePattern.match
+  expected_solution: >
+    URLResolver.resolve() matches its own prefix via RegexPattern.match(),
+    then dispatches to the matching pattern. (Mistakenly named
+    RoutePattern.match as the leaf dispatch - that's the path()-style
+    matcher, not what a regex-declared leaf URLPattern actually calls.)
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.urls.resolvers.URLResolver.resolve
+    - django.urls.resolvers.RegexPattern.match
+    - django.urls.resolvers.URLPattern.resolve
+  expected_solution: >
+    URLResolver.resolve() matches its own prefix via RegexPattern.match(),
+    then calls pattern.resolve() on the matching sub-pattern, which for
+    a leaf entry is URLPattern.resolve().
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.urls.resolvers.URLResolver.resolve
+    - django.urls.resolvers.RegexPattern.match
+    - django.urls.resolvers.URLPattern.resolve
+  expected_solution: >
+    Annotator B is correct: resolvers.py line 660
+    (`match = self.pattern.match(path)`) is RegexPattern.match() for a
+    re_path()-declared resolver; the for-loop's `pattern.resolve(new_path)`
+    (line 663) lands in URLPattern.resolve() for a leaf entry - not
+    RoutePattern.match(), which only applies to path()-declared patterns
+    and is never reached on this all-re_path() URLconf.

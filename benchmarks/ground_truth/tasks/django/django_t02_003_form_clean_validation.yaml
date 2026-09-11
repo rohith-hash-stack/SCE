@@ -1,0 +1,72 @@
+# T02 "Django Debug" - Task 3: form field validation pipeline.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below). Verified against the real symbol table:
+#
+#   django.forms.forms.BaseForm.full_clean     lines 420-435
+#   django.forms.forms.BaseForm._clean_fields   lines 437-451
+#   django.forms.forms.BaseForm._clean_form     lines 453-460
+#
+# Real validation chain: full_clean() is the public entrypoint (called
+# by is_valid()); it calls self._clean_fields() first (which runs each
+# bound field's own field.clean() plus any user-defined clean_<field>()
+# hook - dynamic per concrete form subclass, not a fixed BaseForm
+# symbol, so it is described in prose rather than named as a pipeline
+# stage here), then self._clean_form() (which runs the form-wide
+# self.clean() hook and merges its return value into cleaned_data).
+task_id: django_t02_003_form_clean_validation
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.forms.forms.BaseForm.full_clean
+task_type: debug
+prompt: |
+  You are debugging Django form validation order in
+  django/forms/forms.py. Starting from `BaseForm.full_clean`, trace the
+  real causal pipeline of BaseForm methods it calls, in the order they
+  actually run, that together populate `self.cleaned_data` and
+  `self._errors`.
+
+  First give a short (2-4 sentence) explanation of the pipeline,
+  noting where per-field `clean_<fieldname>` hooks fit in even though
+  they aren't a fixed BaseForm symbol.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified BaseForm symbol names in that
+  causal order - only symbols actually present in the provided context
+  package may appear, e.g.:
+
+  ```json
+  ["django.forms.forms.BaseForm.full_clean", "django.forms.forms.BaseForm._clean_fields"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.forms.forms.BaseForm.full_clean
+    - django.forms.forms.BaseForm._clean_fields
+    - django.forms.forms.BaseForm._clean_form
+  expected_solution: >
+    full_clean() calls _clean_fields() (runs each field's own clean() +
+    any clean_<field>() hook) then _clean_form() (runs the form-wide
+    clean() hook).
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.forms.forms.BaseForm.full_clean
+    - django.forms.forms.BaseForm._clean_fields
+  expected_solution: >
+    full_clean() calls _clean_fields() to run per-field validation.
+    (Missed that full_clean() also calls _clean_form() afterward for
+    form-wide validation.)
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.forms.forms.BaseForm.full_clean
+    - django.forms.forms.BaseForm._clean_fields
+    - django.forms.forms.BaseForm._clean_form
+  expected_solution: >
+    Annotator A's 3-stage chain is correct: full_clean() (forms.py line
+    432-433) calls self._clean_fields() then self._clean_form() as two
+    separate, sequential stages, not one.
