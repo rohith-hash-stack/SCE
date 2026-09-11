@@ -30,10 +30,25 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
 from prism.semantics._ast_utils import conditional_nodes, top_level_statements, try_nodes
+from prism.traversal._cache_keys import graph_cache_key
 from prism.traversal._data_flow_common import _node_key, _resolve_call_sites
 from prism.traversal.data_flow_go import compute_go_data_flow_edges
 from prism.traversal.data_flow_py import compute_python_data_flow_edges
 from prism.traversal.data_flow_ts import compute_ts_data_flow_edges
+
+#: Blocker 1 performance work, Step 4: `compute_guard_indicator_edges`/
+#: `compute_all_data_flow_edges`/`compute_causal_edges` are each
+#: seed/budget-independent (pure functions of `builder` alone, same as
+#: `continuous_dijkstra.build_causal_graph`) and, per the cache-key
+#: matrix, share that function's exact key shape ("Same as
+#: build_causal_graph"). `prism.traversal._cache_keys.graph_cache_key`
+#: is imported directly (not `continuous_dijkstra`'s own re-export) -
+#: `continuous_dijkstra.py` imports *this* module (`compute_causal_
+#: edges`, `edge_cost`), so importing back from it here would be
+#: circular.
+_DATA_FLOW_EDGES_CACHE: dict[str, dict[tuple[str, str], float]] = {}
+_GUARD_INDICATOR_EDGES_CACHE: dict[str, dict[tuple[str, str], float]] = {}
+_CAUSAL_EDGES_CACHE: dict[str, tuple[dict[tuple[str, str], float], set[tuple[str, str]]]] = {}
 
 #: The spec's own literal base weights - CALLS/INSTANTIATES treated
 #: identically (a construction is causally no weaker a link than an
@@ -184,7 +199,18 @@ def compute_guard_indicator_edges(builder: ConcreteGraphBuilder) -> dict[tuple[s
     `prism.traversal._data_flow_common.compute_data_flow_edges` uses, for
     the same reason (both indicators ultimately price one `G_C` graph
     edge, not a per-caller-context fact).
+
+    Cached, repo-content-addressed (`_GraphCacheKey`'s own key shape,
+    "Same as build_causal_graph" per the cache-key matrix) - seed/
+    budget-independent, safe to share across every call site (this
+    function's own direct callers, and `compute_causal_edges`'s
+    internal call) and across retrieves on the same or a different
+    engine instance.
     """
+    key = graph_cache_key(builder.repo_root).digest()
+    cached = _GUARD_INDICATOR_EDGES_CACHE.get(key)
+    if cached is not None:
+        return cached
     result: dict[tuple[str, str], float] = {}
     for symbol in builder.symbol_table:
         if symbol.kind not in ("function", "method"):
@@ -194,24 +220,36 @@ def compute_guard_indicator_edges(builder: ConcreteGraphBuilder) -> dict[tuple[s
         if def_node is None or parsed is None:
             continue
         for u, v, confidence in extract_guard_indicators(def_node, parsed, symbol.qualified_name, builder):
-            key = (u, v)
-            if confidence > result.get(key, 0.0):
-                result[key] = confidence
+            pair = (u, v)
+            if confidence > result.get(pair, 0.0):
+                result[pair] = confidence
+    _GUARD_INDICATOR_EDGES_CACHE[key] = result
     return result
 
 
 def compute_all_data_flow_edges(builder: ConcreteGraphBuilder) -> dict[tuple[str, str], float]:
     """`{(u, v): confidence}` merging Python/Go/TS data-flow extraction
-    across the whole repository, max-confidence-wins per pair."""
+    across the whole repository, max-confidence-wins per pair.
+
+    Cached, repo-content-addressed - see `compute_guard_indicator_
+    edges`'s own docstring for the exact same rationale (this function
+    is the other half of "Same as build_causal_graph" in the cache-key
+    matrix).
+    """
+    key = graph_cache_key(builder.repo_root).digest()
+    cached = _DATA_FLOW_EDGES_CACHE.get(key)
+    if cached is not None:
+        return cached
     merged: dict[tuple[str, str], float] = {}
     for edges in (
         compute_python_data_flow_edges(builder),
         compute_go_data_flow_edges(builder),
         compute_ts_data_flow_edges(builder),
     ):
-        for key, confidence in edges.items():
-            if confidence > merged.get(key, 0.0):
-                merged[key] = confidence
+        for pair, confidence in edges.items():
+            if confidence > merged.get(pair, 0.0):
+                merged[pair] = confidence
+    _DATA_FLOW_EDGES_CACHE[key] = merged
     return merged
 
 
@@ -268,7 +306,20 @@ def compute_causal_edges(
     """Returns `(weights, synthetic_edges)` - see `compute_causal_weights`'s
     own docstring for the full rationale. `synthetic_edges` is the subset
     of `weights`' keys that are *not* already real edges on `builder.graph`.
+
+    Cached, repo-content-addressed - see `compute_guard_indicator_
+    edges`'s own docstring for the rationale (this is the third of the
+    three functions the cache-key matrix marks "Same as build_causal_
+    graph"). Its own two internal calls (`compute_all_data_flow_edges`/
+    `compute_guard_indicator_edges`) benefit from their own caches too,
+    so a cold call here still only pays the real cost once even though
+    it fans out into two more cached functions.
     """
+    key = graph_cache_key(builder.repo_root).digest()
+    cached = _CAUSAL_EDGES_CACHE.get(key)
+    if cached is not None:
+        return cached
+
     data_flow = compute_all_data_flow_edges(builder)
     guards = compute_guard_indicator_edges(builder)
 
@@ -291,4 +342,6 @@ def compute_causal_edges(
         weights[(u, v)] = causal_edge_weight(SYNTHETIC_EDGE_BASE_RELATION, i_dataflow, i_guard)
         synthetic_edges.add((u, v))
 
-    return weights, synthetic_edges
+    result = (weights, synthetic_edges)
+    _CAUSAL_EDGES_CACHE[key] = result
+    return result
