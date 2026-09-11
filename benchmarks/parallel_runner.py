@@ -103,11 +103,19 @@ from benchmarks.metrics.fcc import compute_corpus_feature_stats
 from benchmarks.reporting.report_generator import EvaluationRun, TaskRunRecord
 from benchmarks.runner import ORACLE_ENGINE_NAME, _build_engines, _ground_truth_universe, compute_diagnostics
 
-#: 2, not 8 or 4 - see this module's own docstring for the real,
-#: measured investigation behind this number (a 4-worker pool hung
-#: indefinitely on this 4-core environment; 2 workers is the largest
-#: worker count actually verified to complete without hanging, at a
-#: measured 1.68x speedup with byte-identical output).
+# DEFAULT_WORKERS = 2
+#
+# 4-worker hangs on this container (4 cores). Fork itself is healthy
+# (0.7ms spread across workers), SQLite FD inheritance is ruled out
+# (no open .db FDs at fork time, both cache modules close in finally),
+# and the hang is post-fork. Root cause unidentified as of commit 277896c.
+#
+# Do NOT raise this to 4+ without first capturing a py-spy dump from a
+# live hung worker. See reports/pilot/methodology.md for the 45-minute
+# investigation summary.
+#
+# 2 workers verified: 1.68x speedup, byte-identical output, on 4-task
+# sweep against Django. 107s vs 180s sequential.
 DEFAULT_WORKERS = 2
 
 
