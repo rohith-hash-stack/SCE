@@ -16,7 +16,7 @@ Every non-trivial per-node field reuses infrastructure already built for
 the causal engine rather than re-deriving it a second way:
 
   - `NodeFeatures`/`NodeSignatureReturn.kind`: `prism.semantics.extractor.
-    compute_feature_masks`' own per-axis `FeatureBit` masks.
+    compute_feature_masks_cached`' own per-axis `FeatureBit` masks.
   - `EdgeEntry.data_flow`/`guard`: `prism.traversal.causal_weights.
     compute_causal_edges`' own synthetic/real edge classification.
   - `NodeEntry.role`: `prism.packer.submodular_knapsack._classify_role`,
@@ -49,7 +49,7 @@ from prism.semantics.bitmask import (
     SUBSTANCE_BITS,
     FeatureBit,
 )
-from prism.semantics.extractor import compute_feature_masks
+from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import active_backend, count_tokens, is_exact
 from prism.traversal._data_flow_common import _bindings, _call_arguments, _decl_node_types, _node_key, _resolve_call_sites
 from prism.traversal.causal_weights import LAMBDA_DATA_FLOW, LAMBDA_GUARD, compute_causal_edges
@@ -240,7 +240,7 @@ def build_context_package(
         raise KeyError(seed_id)
 
     pack_result: SubmodularPackResult = pack_symbol_context(builder, seed_id, target_budget, max_hops=max_hops)
-    feature_masks = compute_feature_masks(builder)
+    feature_masks = compute_feature_masks_cached(builder, repo_root)
     dist_w_map = compute_topological_distances(builder, seed_id)
     reachable_ids = set(dist_w_map) | {seed_id}
     packed_ids = set(pack_result.selected)
