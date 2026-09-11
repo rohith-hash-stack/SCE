@@ -428,6 +428,64 @@ def test_oracle_engine_loads_curated_symbols(tmp_path):
     assert selected_symbols(pkg) == {"svc.calculate_tax", "svc.invoice_generator"}
 
 
+def test_pragmatic_oracle_unions_three_sets_truncated_by_dist_w(tmp_path):
+    """Gap 2 Blocker 2 Option B: candidate set is pipeline_symbols u
+    required_context u boundary_symbols, no annotation cost, truncated
+    to budget by ascending real dist_W (compute_topological_distances)."""
+    from benchmarks.engines.oracle_engine import PragmaticOracle
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+
+    repo = _bfs_repo(tmp_path)  # seed() -> callee(); calculate_tax()/invoice_generator() pair
+    ann = GroundTruthAnnotation(
+        annotator_id="a",
+        pipeline_symbols=["svc.calculate_tax"],
+        required_context={"svc.invoice_generator"},
+        boundary_symbols=set(),
+        expected_solution="x",
+    )
+    task = EvaluationTask(
+        task_id="t1", repo="django", pinned_commit="x", seed_symbol="svc.calculate_tax", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+    engine = PragmaticOracle(task)
+    engine.name  # same identity as the hand-curated OracleEngine
+    assert engine.name == "oracle"
+    engine.index(str(repo))
+
+    pkg = engine.retrieve("svc.calculate_tax", 4000)
+    assert selected_symbols(pkg) == {"svc.calculate_tax", "svc.invoice_generator"}
+    assert sum(n.cost for n in pkg.nodes) <= 4000
+
+    # a budget too tight for anything beyond the seed truncates the rest
+    tight_pkg = engine.retrieve("svc.calculate_tax", 1)
+    assert selected_symbols(tight_pkg) == {"svc.calculate_tax"}
+
+
+def test_pragmatic_oracle_shares_prism_engine_cache_feature_masks(tmp_path):
+    """PragmaticOracle reuses PrismEngineCache's own shared cache for
+    (builder, contracts, feature_masks) - indexing both against the same
+    repo pays the extraction cost once, not twice."""
+    from benchmarks.engines.oracle_engine import PragmaticOracle
+    from benchmarks.engines.prism_engine_cache import PrismEngineCache
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+
+    PrismEngineCache._process_graph_cache.clear()
+    repo = _bfs_repo(tmp_path)
+    ann = GroundTruthAnnotation(annotator_id="a", pipeline_symbols=["svc.calculate_tax"], expected_solution="x")
+    task = EvaluationTask(
+        task_id="t1", repo="django", pinned_commit="x", seed_symbol="svc.calculate_tax", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+
+    prism = PrismEngineCache(cache_dir=tmp_path / "cache")
+    prism.index(str(repo))
+    assert prism.extraction_count == 1
+
+    oracle = PragmaticOracle(task)
+    oracle.index(str(repo))
+    assert oracle._feature_masks is prism._feature_masks  # literally the same cached dict object, not just equal
+
+
 def test_oracle_engine_missing_task_id_raises(tmp_path):
     repo = _bfs_repo(tmp_path)
     oracle_file = tmp_path / "oracle.yaml"

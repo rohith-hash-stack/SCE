@@ -118,7 +118,7 @@ def run_smoke_test(output_dir: str = "reports/") -> EvaluationRun:
         builder, _tag_matrix = build_pipeline(str(repo_path))
         feature_stats = compute_corpus_feature_stats(builder)
 
-        engines = _build_engines(str(oracle_packages_path), task.task_id)
+        engines = _build_engines(task, oracle_packages_path=str(oracle_packages_path))
         assert len(engines) == 5, f"expected all 5 engines (4 baselines/Prism + Oracle), got {len(engines)}"
 
         render_options = RenderOptions(include_timestamp=False, include_run_id=False)

@@ -29,7 +29,7 @@ from benchmarks.engines.base import AbstractRetrievalEngine, selected_symbols
 from benchmarks.engines.baseline_bfs import BaselineBFSEngine
 from benchmarks.engines.baseline_rag import BaselineRAGEngine
 from benchmarks.engines.oracle_engine import ENGINE_NAME as ORACLE_ENGINE_NAME
-from benchmarks.engines.oracle_engine import OracleEngine
+from benchmarks.engines.oracle_engine import OracleEngine, PragmaticOracle
 from benchmarks.engines.prism_engine import PrismEngine
 from benchmarks.engines.prism_engine_cache import PrismEngineCache
 from benchmarks.ground_truth.loader import load_tasks_from_dir
@@ -100,15 +100,26 @@ SYSTEM_PROMPT = (
 # --------------------------------------------------------------------- #
 # Core evaluation
 # --------------------------------------------------------------------- #
-def _build_engines(oracle_packages_path: str | None, task_id: str) -> list[AbstractRetrievalEngine]:
+def _build_engines(
+    task: EvaluationTask, oracle_packages_path: str | None = None, use_pragmatic_oracle: bool = False
+) -> list[AbstractRetrievalEngine]:
     """Oracle (when configured) is returned *first* - `run_evaluation`
     needs its per-budget selected-symbol set computed before any other
     engine's turn, so every engine's `fpr_oracle` (divergence from the
     Oracle package at that same budget) can be computed in a single pass
-    with no engine retrieved twice."""
+    with no engine retrieved twice.
+
+    At most one Oracle variant is ever active: `oracle_packages_path`
+    (hand-curated, `OracleEngine`) takes precedence if both are somehow
+    set - `use_pragmatic_oracle` (Gap 2 Blocker 2 Option B,
+    `PragmaticOracle`) is the real, zero-annotation-cost substitute for
+    when no hand-curated file exists, which for this repo's own real
+    tasks is always (see `oracle_engine.py`'s own docstring)."""
     engines: list[AbstractRetrievalEngine] = []
     if oracle_packages_path is not None:
-        engines.append(OracleEngine(oracle_packages_path, task_id))
+        engines.append(OracleEngine(oracle_packages_path, task.task_id))
+    elif use_pragmatic_oracle:
+        engines.append(PragmaticOracle(task))
     engines.extend(
         [
             PrismEngineCache(),  # same name="prism_v11" as PrismEngine - see Gap 5 (prism_engine_cache.py)
@@ -219,6 +230,7 @@ def run_evaluation(
     model: str = DEFAULT_MODEL,
     dry_run: bool = False,
     oracle_packages_path: str | None = None,
+    use_pragmatic_oracle: bool = False,
     force_reclone: bool = False,
 ) -> EvaluationRun:
     """The real end-to-end sweep: resolve the pinned corpus, load its
@@ -257,7 +269,7 @@ def run_evaluation(
         # per-budget selected-symbol set must exist before any other
         # engine's turn so `fpr_oracle` can be computed for everyone in
         # one pass, with the Oracle itself retrieved exactly once.
-        engines = _build_engines(oracle_packages_path, task.task_id)
+        engines = _build_engines(task, oracle_packages_path, use_pragmatic_oracle)
         oracle_selected_by_budget: dict[int, set[str]] = {}
         for engine in engines:
             try:
@@ -544,6 +556,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default="reports/")
     parser.add_argument("--dry-run", action="store_true", help="Skip real LLM calls even if an API key is configured")
     parser.add_argument("--oracle-packages", default=None, help="Path to a hand-curated oracle-packages YAML/JSON file")
+    parser.add_argument(
+        "--pragmatic-oracle",
+        action="store_true",
+        help="Use PragmaticOracle (Gap 2 Blocker 2 Option B: pipeline_symbols/required_context/boundary_symbols, "
+        "truncated by real dist_W) when --oracle-packages isn't set, instead of running with no Oracle at all",
+    )
     parser.add_argument("--force-reclone", action="store_true")
     return parser
 
@@ -581,6 +599,7 @@ def main(argv: list[str] | None = None) -> int:
             model=args.model,
             dry_run=args.dry_run,
             oracle_packages_path=args.oracle_packages,
+            use_pragmatic_oracle=args.pragmatic_oracle,
             force_reclone=args.force_reclone,
         )
         write_reports(run, args.output)
