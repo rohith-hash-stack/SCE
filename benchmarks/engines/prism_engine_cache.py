@@ -201,9 +201,11 @@ class PrismEngineCache(AbstractRetrievalEngine):
         if self._feature_masks is None:
             raise RuntimeError("PrismEngineCache.retrieve called before index()")
 
-        # `build_context_package`/`pack_symbol_context` each call
-        # `compute_feature_masks(builder)` internally, unconditionally -
-        # neither takes a pre-computed value as a parameter, so the only
+        # `build_context_package` calls `compute_feature_masks(builder)`
+        # directly; `pack_symbol_context` calls `compute_feature_masks_
+        # cached(builder, builder.repo_root)` (Step 1 of the Blocker 1
+        # performance work - see that module's own commit). Neither
+        # takes a pre-computed value as a parameter, so the only
         # harness-level way to skip that redundant recomputation without
         # editing either module is to substitute the *module-level* name
         # each already bound at its own import time, for the duration of
@@ -216,11 +218,11 @@ class PrismEngineCache(AbstractRetrievalEngine):
 
         cached_masks = self._feature_masks
         original_build_fn = build_module.compute_feature_masks
-        original_knapsack_fn = knapsack_module.compute_feature_masks
+        original_knapsack_fn = knapsack_module.compute_feature_masks_cached
         build_module.compute_feature_masks = lambda builder: cached_masks
-        knapsack_module.compute_feature_masks = lambda builder: cached_masks
+        knapsack_module.compute_feature_masks_cached = lambda builder, repo_root: cached_masks
         try:
             return self._inner.retrieve(seed_symbol, budget_tokens)
         finally:
             build_module.compute_feature_masks = original_build_fn
-            knapsack_module.compute_feature_masks = original_knapsack_fn
+            knapsack_module.compute_feature_masks_cached = original_knapsack_fn

@@ -93,7 +93,7 @@ import networkx as nx
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
-from prism.semantics.extractor import compute_feature_masks
+from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import count_tokens
 from prism.traversal.continuous_dijkstra import build_causal_graph, compute_topological_distances
 
@@ -384,16 +384,19 @@ def pack_symbol_context(
     """The real, wired-together entry point: builds the causal graph
     (`prism.traversal.continuous_dijkstra.build_causal_graph`), the
     four-axis feature masks (`prism.semantics.extractor.
-    compute_feature_masks`), Continuous Dijkstra distances from `seed_id`,
-    the upstream blast-radius candidate set (`prism.packer.blast_radius.
-    compute_upstream_callers`), and real BPE token costs, then runs
+    compute_feature_masks_cached` - file-content-hash-keyed, `builder.
+    repo_root`-scoped; see that function's own docstring for exactly
+    what is and isn't safe to cache this way), Continuous Dijkstra
+    distances from `seed_id`, the upstream blast-radius candidate set
+    (`prism.packer.blast_radius.compute_upstream_callers`), and real
+    BPE token costs, then runs
     `select_submodular_context` over all of it. This is what `prism query
     --engine causal` (`prism.cli`) actually calls.
     """
     with _profile_phase("build_causal_graph"):
         graph = build_causal_graph(builder)
     with _profile_phase("feature_masks"):
-        feature_masks = compute_feature_masks(builder)
+        feature_masks = compute_feature_masks_cached(builder, builder.repo_root)
     with _profile_phase("compute_topological_distances"):
         dist_w_map = compute_topological_distances(builder, seed_id)
     with _profile_phase("upstream_callers"):
