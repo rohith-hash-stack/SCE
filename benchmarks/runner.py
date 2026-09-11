@@ -31,6 +31,7 @@ from benchmarks.engines.baseline_rag import BaselineRAGEngine
 from benchmarks.engines.oracle_engine import ENGINE_NAME as ORACLE_ENGINE_NAME
 from benchmarks.engines.oracle_engine import OracleEngine
 from benchmarks.engines.prism_engine import PrismEngine
+from benchmarks.engines.prism_engine_cache import PrismEngineCache
 from benchmarks.ground_truth.loader import load_tasks_from_dir
 from benchmarks.ground_truth.schema import EvaluationTask
 from benchmarks.metrics.bccr import bccr_direct
@@ -110,7 +111,7 @@ def _build_engines(oracle_packages_path: str | None, task_id: str) -> list[Abstr
         engines.append(OracleEngine(oracle_packages_path, task_id))
     engines.extend(
         [
-            PrismEngine(),
+            PrismEngineCache(),  # same name="prism_v11" as PrismEngine - see Gap 5 (prism_engine_cache.py)
             BaselineRAGEngine(),
             BaselineBFSEngine(mode="forward"),
             BaselineBFSEngine(mode="bidirectional"),
