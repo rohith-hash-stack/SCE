@@ -121,12 +121,19 @@ def _build_engines(oracle_packages_path: str | None, task_id: str) -> list[Abstr
 
 
 def _ground_truth_universe(task: EvaluationTask) -> set[str]:
+    """`fpr_gt`'s own ground-truth set - for a T02 debug task (Gap 8),
+    this is exactly the union of all three annotated sets
+    (`pipeline_symbols`, `required_context`, `boundary_symbols`); the
+    other task types' own fields are unioned in too (empty by
+    construction for a task that isn't their type, so harmless)."""
     adjudicated = task.adjudicated
     return (
         set(adjudicated.pipeline_symbols)
         | adjudicated.critical_callers
         | adjudicated.orthogonal_neighbors
         | adjudicated.reference_symbols
+        | adjudicated.required_context
+        | adjudicated.boundary_symbols
         | {task.seed_symbol}
     )
 

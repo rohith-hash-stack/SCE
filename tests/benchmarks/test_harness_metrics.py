@@ -1002,6 +1002,75 @@ def test_all_four_existing_blast_seeds_pass_the_richness_screen():
         validate_blast_seed_richness(direct, transitive)  # must not raise
 
 
+# --------------------------------------------------------------------- #
+# Gap 8: three-set ground truth (pipeline_symbols/required_context/boundary_symbols)
+# --------------------------------------------------------------------- #
+def test_ground_truth_annotation_accepts_required_context_and_boundary_symbols():
+    from benchmarks.ground_truth.schema import GroundTruthAnnotation
+
+    ann = GroundTruthAnnotation(
+        annotator_id="a",
+        pipeline_symbols=["svc.seed", "svc.a"],
+        required_context={"svc.SeedClass"},
+        boundary_symbols={"svc.adjacent_helper"},
+        expected_solution="x",
+    )
+    assert ann.required_context == {"svc.SeedClass"}
+    assert ann.boundary_symbols == {"svc.adjacent_helper"}
+
+
+def test_dice_f1_now_unions_all_three_sets():
+    from benchmarks.ground_truth.schema import GroundTruthAnnotation, compute_inter_annotator_agreement
+
+    a = GroundTruthAnnotation(
+        annotator_id="a", pipeline_symbols=["svc.p1"], required_context={"svc.rc1"}, boundary_symbols={"svc.b1"},
+        expected_solution="x",
+    )
+    b = GroundTruthAnnotation(
+        annotator_id="b", pipeline_symbols=["svc.p1"], required_context={"svc.rc1"}, boundary_symbols={"svc.other"},
+        expected_solution="x",
+    )
+    # union sizes 3 and 3, intersection 2 (p1, rc1) -> 2*2/(3+3) = 0.667
+    assert compute_inter_annotator_agreement(a, b) == pytest.approx(2 / 3)
+
+
+def test_ground_truth_universe_fpr_gt_includes_required_context_and_boundary_symbols():
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+    from benchmarks.runner import _ground_truth_universe
+
+    ann = GroundTruthAnnotation(
+        annotator_id="a",
+        pipeline_symbols=["svc.p1"],
+        required_context={"svc.rc1"},
+        boundary_symbols={"svc.b1"},
+        expected_solution="x",
+    )
+    task = EvaluationTask(
+        task_id="t1", repo="django", pinned_commit="x", seed_symbol="svc.seed", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+    universe = _ground_truth_universe(task)
+    assert universe == {"svc.p1", "svc.rc1", "svc.b1", "svc.seed"}
+
+
+def test_all_five_debug_tasks_load_with_kappa_at_least_0_80():
+    """Gap 8's own stricter gate (kappa >= 0.80, not the general
+    adjudicate-tier exception) for the 5 real T02 tasks now that
+    required_context/boundary_symbols are part of every Dice-F1
+    computation."""
+    from benchmarks.ground_truth.loader import load_tasks_from_dir
+
+    result = load_tasks_from_dir("benchmarks/ground_truth/tasks/django")
+    assert not result.rejected
+
+    debug_tasks = [t for t in result.accepted if t.task_type == "debug"]
+    assert len(debug_tasks) == 5
+    for task in debug_tasks:
+        assert task.cohen_kappa >= 0.80, f"{task.task_id}: kappa={task.cohen_kappa}"
+        assert task.adjudicated.required_context
+        assert task.adjudicated.boundary_symbols
+
+
 def test_django_blast_tasks_load_and_gate_correctly():
     from benchmarks.ground_truth.loader import load_tasks_from_dir
 

@@ -11,6 +11,13 @@
 #     own regex-based pipeline; included in annotation_a below as a
 #     realistic annotator mix-up)
 #
+# required_context/boundary_symbols (Gap 8), also real and verified:
+#   django.urls.resolvers.URLResolver              (class)
+#   django.urls.resolvers.RegexPattern              (class)
+#   django.urls.resolvers.URLPattern                (class)
+#   django.urls.resolvers.URLResolver._extend_tried (method, boundary -
+#     called inside resolve()'s own for-loop, not part of the traversal)
+#
 # Real traversal (assuming a regex-based URLconf, i.e. `re_path()`
 # entries - RoutePattern/`path()` follows a structurally parallel but
 # distinct chain): URLResolver.resolve() first calls
@@ -49,11 +56,18 @@ annotation_a:
     - django.urls.resolvers.URLResolver.resolve
     - django.urls.resolvers.RegexPattern.match
     - django.urls.resolvers.RoutePattern.match
+  required_context:
+    - django.urls.resolvers.URLResolver
+    - django.urls.resolvers.RegexPattern
+    - django.urls.resolvers.URLPattern
+  boundary_symbols:
+    - django.urls.resolvers.URLResolver._extend_tried
   expected_solution: >
     URLResolver.resolve() matches its own prefix via RegexPattern.match(),
     then dispatches to the matching pattern. (Mistakenly named
     RoutePattern.match as the leaf dispatch - that's the path()-style
     matcher, not what a regex-declared leaf URLPattern actually calls.)
+    Required context and boundary symbols agreed with annotator B.
 
 annotation_b:
   annotator_id: annotator_b
@@ -61,6 +75,12 @@ annotation_b:
     - django.urls.resolvers.URLResolver.resolve
     - django.urls.resolvers.RegexPattern.match
     - django.urls.resolvers.URLPattern.resolve
+  required_context:
+    - django.urls.resolvers.URLResolver
+    - django.urls.resolvers.RegexPattern
+    - django.urls.resolvers.URLPattern
+  boundary_symbols:
+    - django.urls.resolvers.URLResolver._extend_tried
   expected_solution: >
     URLResolver.resolve() matches its own prefix via RegexPattern.match(),
     then calls pattern.resolve() on the matching sub-pattern, which for
@@ -72,6 +92,12 @@ adjudicated:
     - django.urls.resolvers.URLResolver.resolve
     - django.urls.resolvers.RegexPattern.match
     - django.urls.resolvers.URLPattern.resolve
+  required_context:
+    - django.urls.resolvers.URLResolver
+    - django.urls.resolvers.RegexPattern
+    - django.urls.resolvers.URLPattern
+  boundary_symbols:
+    - django.urls.resolvers.URLResolver._extend_tried
   expected_solution: >
     Annotator B is correct: resolvers.py line 660
     (`match = self.pattern.match(path)`) is RegexPattern.match() for a

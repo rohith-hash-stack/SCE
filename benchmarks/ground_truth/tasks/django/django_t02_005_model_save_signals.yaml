@@ -8,7 +8,16 @@
 #   django.db.models.base.Model._save_table  lines 938-1026  (a real
 #     helper save_base() calls internally - one level below the
 #     pipeline this task traces; included in annotation_b below as a
-#     realistic annotator over-inclusion)
+#     realistic annotator over-inclusion, and separately as this task's
+#     real boundary_symbols entry - both real, just two different
+#     annotated roles for the same real symbol)
+#
+# required_context/boundary_symbols (Gap 8), also real and verified:
+#   django.db.models.base.Model               (class)
+#   django.db.models.signals.pre_save         (Signal instance, attribute)
+#   django.db.models.signals.post_save        (Signal instance, attribute)
+#   django.db.models.base.Model._save_parents (method, boundary)
+#   django.db.models.base.Model._save_table   (method, boundary)
 #
 # Real mutation lifecycle: Model.save() (the public API) delegates to
 # self.save_base(...) to do the actual work. save_base() (base.py lines
@@ -47,9 +56,19 @@ annotation_a:
   pipeline_symbols:
     - django.db.models.base.Model.save
     - django.db.models.base.Model.save_base
+  required_context:
+    - django.db.models.base.Model
+    - django.db.models.signals.pre_save
+    - django.db.models.signals.post_save
+  boundary_symbols:
+    - django.db.models.base.Model._save_parents
+    - django.db.models.base.Model._save_table
   expected_solution: >
     save() delegates to save_base(), which sends pre_save before
-    writing and post_save after.
+    writing and post_save after. Required context: the Model class and
+    the pre_save/post_save Signal instances themselves. Boundary:
+    _save_parents() and _save_table(), the real write-mechanics helpers
+    save_base() calls, not part of the signal-dispatch pipeline itself.
 
 annotation_b:
   annotator_id: annotator_b
@@ -57,17 +76,32 @@ annotation_b:
     - django.db.models.base.Model.save
     - django.db.models.base.Model.save_base
     - django.db.models.base.Model._save_table
+  required_context:
+    - django.db.models.base.Model
+    - django.db.models.signals.pre_save
+    - django.db.models.signals.post_save
+  boundary_symbols:
+    - django.db.models.base.Model._save_parents
+    - django.db.models.base.Model._save_table
   expected_solution: >
     save() delegates to save_base(), which sends pre_save, calls
     _save_table() to do the actual INSERT/UPDATE, then sends post_save.
     (Included the internal write helper as its own pipeline stage,
-    beyond what the task's save/save_base scope asked for.)
+    beyond what the task's save/save_base scope asked for.) Agreed on
+    required context and boundary symbols.
 
 adjudicated:
   annotator_id: adjudicator
   pipeline_symbols:
     - django.db.models.base.Model.save
     - django.db.models.base.Model.save_base
+  required_context:
+    - django.db.models.base.Model
+    - django.db.models.signals.pre_save
+    - django.db.models.signals.post_save
+  boundary_symbols:
+    - django.db.models.base.Model._save_parents
+    - django.db.models.base.Model._save_table
   expected_solution: >
     Annotator A's 2-stage chain matches the task's own scope (the
     signal-dispatch pipeline, not the full write path): save()

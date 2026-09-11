@@ -18,10 +18,18 @@
 # bottoms out in _get_response(), which calls self.resolve_request(request)
 # to obtain the (callback, args, kwargs) it will actually dispatch to.
 #
+# required_context/boundary_symbols (Gap 8), also real and verified:
+#   django.core.handlers.base.BaseHandler                            (class)
+#   django.core.handlers.exception.convert_exception_to_response     (function)
+#   django.core.handlers.base.BaseHandler.check_response              (method)
+#   django.core.handlers.base.BaseHandler.make_view_atomic            (method)
+#
 # cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
 # computes it for real (Positive Specific Agreement / Dice-F1, Hripcsak
-# & Rothschild 2005) from annotation_a/annotation_b below rather than
-# trusting a hand-typed number.
+# & Rothschild 2005) from annotation_a/annotation_b below - now over all
+# three annotated sets (pipeline_symbols, required_context,
+# boundary_symbols), not just the pipeline - rather than trusting a
+# hand-typed number.
 task_id: django_t02_001_request_middleware_chain
 repo: django
 pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
@@ -54,10 +62,20 @@ annotation_a:
     - django.core.handlers.base.BaseHandler.get_response
     - django.core.handlers.base.BaseHandler._get_response
     - django.core.handlers.base.BaseHandler.resolve_request
+  required_context:
+    - django.core.handlers.base.BaseHandler
+    - django.core.handlers.exception.convert_exception_to_response
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler.check_response
+    - django.core.handlers.base.BaseHandler.make_view_atomic
   expected_solution: >
     The full chain: load_middleware() builds the wrapped handler chain,
     get_response() invokes it, which bottoms out in _get_response(),
-    which calls resolve_request() to get the view callback.
+    which calls resolve_request() to get the view callback. Required
+    context: the BaseHandler class itself, and convert_exception_to_
+    response, which load_middleware() wraps every middleware/handler in.
+    Boundary: check_response() and make_view_atomic(), both called from
+    _get_response() but not part of the causal chain itself.
 
 annotation_b:
   annotator_id: annotator_b
@@ -65,10 +83,17 @@ annotation_b:
     - django.core.handlers.base.BaseHandler.load_middleware
     - django.core.handlers.base.BaseHandler.get_response
     - django.core.handlers.base.BaseHandler._get_response
+  required_context:
+    - django.core.handlers.base.BaseHandler
+    - django.core.handlers.exception.convert_exception_to_response
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler.check_response
+    - django.core.handlers.base.BaseHandler.make_view_atomic
   expected_solution: >
     load_middleware() builds the chain, get_response() runs it, which
     calls _get_response() to resolve and invoke the view. (Missed that
     view resolution is itself a separate traced call, resolve_request().)
+    Agreed on required context and boundary symbols.
 
 adjudicated:
   annotator_id: adjudicator
@@ -77,6 +102,12 @@ adjudicated:
     - django.core.handlers.base.BaseHandler.get_response
     - django.core.handlers.base.BaseHandler._get_response
     - django.core.handlers.base.BaseHandler.resolve_request
+  required_context:
+    - django.core.handlers.base.BaseHandler
+    - django.core.handlers.exception.convert_exception_to_response
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler.check_response
+    - django.core.handlers.base.BaseHandler.make_view_atomic
   expected_solution: >
     Annotator A's full chain is correct: _get_response's own first
     action (base.py line 180) is `callback, callback_args,

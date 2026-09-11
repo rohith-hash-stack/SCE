@@ -14,6 +14,14 @@
 # symbol, so it is described in prose rather than named as a pipeline
 # stage here), then self._clean_form() (which runs the form-wide
 # self.clean() hook and merges its return value into cleaned_data).
+#
+# required_context/boundary_symbols (Gap 8), also real and verified:
+#   django.forms.forms.BaseForm             (class, required context)
+#   django.forms.forms.BaseForm._post_clean (method, boundary - called
+#     right after _clean_form() inside full_clean(), not part of this
+#     task's own 3-stage pipeline)
+#   django.forms.forms.BaseForm.clean       (method, boundary - the
+#     form-wide hook _clean_form() itself calls)
 task_id: django_t02_003_form_clean_validation
 repo: django
 pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
@@ -45,20 +53,33 @@ annotation_a:
     - django.forms.forms.BaseForm.full_clean
     - django.forms.forms.BaseForm._clean_fields
     - django.forms.forms.BaseForm._clean_form
+  required_context:
+    - django.forms.forms.BaseForm
+  boundary_symbols:
+    - django.forms.forms.BaseForm._post_clean
+    - django.forms.forms.BaseForm.clean
   expected_solution: >
     full_clean() calls _clean_fields() (runs each field's own clean() +
     any clean_<field>() hook) then _clean_form() (runs the form-wide
-    clean() hook).
+    clean() hook). Required context: the BaseForm class. Boundary:
+    _post_clean() (called right after, not part of this pipeline) and
+    clean() (called from inside _clean_form(), the form-wide hook).
 
 annotation_b:
   annotator_id: annotator_b
   pipeline_symbols:
     - django.forms.forms.BaseForm.full_clean
     - django.forms.forms.BaseForm._clean_fields
+  required_context:
+    - django.forms.forms.BaseForm
+  boundary_symbols:
+    - django.forms.forms.BaseForm._post_clean
+    - django.forms.forms.BaseForm.clean
   expected_solution: >
     full_clean() calls _clean_fields() to run per-field validation.
     (Missed that full_clean() also calls _clean_form() afterward for
-    form-wide validation.)
+    form-wide validation.) Agreed on required context and boundary
+    symbols.
 
 adjudicated:
   annotator_id: adjudicator
@@ -66,6 +87,11 @@ adjudicated:
     - django.forms.forms.BaseForm.full_clean
     - django.forms.forms.BaseForm._clean_fields
     - django.forms.forms.BaseForm._clean_form
+  required_context:
+    - django.forms.forms.BaseForm
+  boundary_symbols:
+    - django.forms.forms.BaseForm._post_clean
+    - django.forms.forms.BaseForm.clean
   expected_solution: >
     Annotator A's 3-stage chain is correct: full_clean() (forms.py line
     432-433) calls self._clean_fields() then self._clean_form() as two

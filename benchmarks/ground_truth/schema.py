@@ -34,6 +34,16 @@ class GroundTruthAnnotation(BaseModel):
     critical_callers: set[str] = Field(default_factory=set, description="Symbols that bind/unpack return values for Type 2")
     orthogonal_neighbors: set[str] = Field(default_factory=set, description="Non-redundant subset for Type 3")
     reference_symbols: set[str] = Field(default_factory=set, description="Structural/architectural symbols a correct answer should identify, for Type 4 (architecture)")
+    required_context: set[str] = Field(
+        default_factory=set,
+        description="Imports, type declarations, and helpers needed to reason about the pipeline - not causal-chain "
+        "members themselves, but background a correct answer implicitly depends on",
+    )
+    boundary_symbols: set[str] = Field(
+        default_factory=set,
+        description="One-hop callers/callees of the pipeline providing critical context, without being part of the "
+        "causal chain themselves",
+    )
     expected_solution: str = Field(..., description="Reference answer or regex pattern for automated scoring")
 
 
@@ -58,12 +68,22 @@ KAPPA_ADJUDICATION_THRESHOLD = 0.60
 
 
 def _selected_symbols(ann: GroundTruthAnnotation) -> set[str]:
-    """One annotator's full "what did you select" set across all three
-    task-type fields (a task only ever populates the one field relevant
-    to its own `task_type`, so this is safe to union unconditionally -
-    the other two are empty by construction, never a real disagreement
-    source)."""
-    return set(ann.pipeline_symbols) | ann.critical_callers | ann.orthogonal_neighbors | ann.reference_symbols
+    """One annotator's full "what did you select" set across every
+    task-type field (a task only ever populates the fields relevant to
+    its own `task_type`, so this is safe to union unconditionally - the
+    rest are empty by construction, never a real disagreement source).
+    `required_context`/`boundary_symbols` (Gap 8) are real, scoreable
+    annotator selections too - a debug task's Dice-F1 now measures
+    agreement across all three of its populated sets, not just
+    `pipeline_symbols`."""
+    return (
+        set(ann.pipeline_symbols)
+        | ann.critical_callers
+        | ann.orthogonal_neighbors
+        | ann.reference_symbols
+        | ann.required_context
+        | ann.boundary_symbols
+    )
 
 
 def compute_inter_annotator_agreement(ann_a: GroundTruthAnnotation, ann_b: GroundTruthAnnotation) -> float:

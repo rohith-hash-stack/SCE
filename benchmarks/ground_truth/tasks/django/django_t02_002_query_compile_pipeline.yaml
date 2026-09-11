@@ -15,7 +15,14 @@
 # and parameter list. QuerySet.__iter__ is a real, related caller (it
 # calls self._fetch_all() itself) but is one hop upstream of the actual
 # compile pipeline, not part of it - included here as a plausible
-# annotator mistake (see annotation_b).
+# annotator mistake (see annotation_b) and, separately, as this task's
+# real boundary_symbols entry (Gap 8) - both real, just two different
+# annotated roles for the same real symbol.
+#
+# required_context (Gap 8), also real and verified:
+#   django.db.models.query.QuerySet          (class)
+#   django.db.models.sql.query.Query          (class)
+#   django.db.models.sql.compiler.SQLCompiler (class)
 task_id: django_t02_002_query_compile_pipeline
 repo: django
 pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
@@ -44,9 +51,18 @@ annotation_a:
     - django.db.models.query.QuerySet._fetch_all
     - django.db.models.sql.query.Query.get_compiler
     - django.db.models.sql.compiler.SQLCompiler.as_sql
+  required_context:
+    - django.db.models.query.QuerySet
+    - django.db.models.sql.query.Query
+    - django.db.models.sql.compiler.SQLCompiler
+  boundary_symbols:
+    - django.db.models.query.QuerySet.__iter__
   expected_solution: >
     _fetch_all() triggers evaluation, which needs a compiler from
     query.get_compiler(), whose as_sql() produces the final SQL.
+    Required context: the QuerySet/Query/SQLCompiler classes. Boundary:
+    __iter__, a real caller of _fetch_all, one hop upstream of the
+    pipeline itself.
 
 annotation_b:
   annotator_id: annotator_b
@@ -55,11 +71,18 @@ annotation_b:
     - django.db.models.query.QuerySet._fetch_all
     - django.db.models.sql.query.Query.get_compiler
     - django.db.models.sql.compiler.SQLCompiler.as_sql
+  required_context:
+    - django.db.models.query.QuerySet
+    - django.db.models.sql.query.Query
+    - django.db.models.sql.compiler.SQLCompiler
+  boundary_symbols:
+    - django.db.models.query.QuerySet.__iter__
   expected_solution: >
     Iterating a QuerySet (__iter__) is what calls _fetch_all(), which
     needs a compiler from get_compiler(), whose as_sql() produces the
     SQL. (Included the one-hop-upstream trigger, not just the pipeline
-    the task asked to start from.)
+    the task asked to start from.) Agreed on required context and
+    boundary symbols.
 
 adjudicated:
   annotator_id: adjudicator
@@ -67,8 +90,15 @@ adjudicated:
     - django.db.models.query.QuerySet._fetch_all
     - django.db.models.sql.query.Query.get_compiler
     - django.db.models.sql.compiler.SQLCompiler.as_sql
+  required_context:
+    - django.db.models.query.QuerySet
+    - django.db.models.sql.query.Query
+    - django.db.models.sql.compiler.SQLCompiler
+  boundary_symbols:
+    - django.db.models.query.QuerySet.__iter__
   expected_solution: >
     Annotator A's 3-stage chain is the correct answer to the task as
     posed (starting *from* _fetch_all, not what calls it). __iter__ is a
     real, correct caller of _fetch_all, but the task explicitly starts
-    the trace at _fetch_all itself, so it is not part of this pipeline.
+    the trace at _fetch_all itself, so it is not part of this pipeline -
+    it is correctly a boundary symbol instead.
