@@ -121,3 +121,60 @@ def agreement_tier(kappa: float) -> Literal["proceed", "adjudicate", "reject"]:
     if kappa >= KAPPA_ADJUDICATION_THRESHOLD:
         return "adjudicate"
     return "reject"
+
+
+#: The T13 (blast/signature-change) task screening criterion, established
+#: after 3 of the 4 originally-suggested seeds for the first blast tasks
+#: (`Model.save`, `URLResolver.resolve`, `QuerySet.filter`) turned out to
+#: have 0-1 real return-binding callers against the real pinned Django
+#: 4.2.30 checkout - BCCR is vacuous (trivially ~1.0 for every engine,
+#: capturing "nothing" perfectly) at that thinness, defeating the whole
+#: point of a blast task. Going forward, any blast task's seed must have
+#: at least this many real (direct + 2-hop) return-binding callers,
+#: verified by the exact same static detector BCCR itself scores
+#: against - never eyeballed or guessed - before a single annotator
+#: looks at it.
+BLAST_SEED_MIN_CALLERS = 20
+
+
+class BlastSeedTooThinError(Exception):
+    """Raised by `validate_blast_seed_richness` for a candidate blast-
+    task seed whose real caller count falls below `BLAST_SEED_MIN_
+    CALLERS` - reject the seed before annotation begins, not after two
+    annotators have already worked on a task that BCCR can't actually
+    measure anything with."""
+
+
+def validate_blast_seed_richness(
+    direct_callers: set[str] | int,
+    transitive_callers: set[str] | int | None = None,
+    *,
+    minimum: int = BLAST_SEED_MIN_CALLERS,
+) -> None:
+    """Screens a candidate T13 seed *before* it is annotated. Pass the
+    real output of `benchmarks.metrics.bccr.compute_direct_and_
+    transitive_callers(builder, candidate_seed)` (either the two sets
+    directly, or their pre-counted lengths) - never a guessed or
+    estimated count. Raises `BlastSeedTooThinError` if the total falls
+    below `minimum`; returns `None` (silently) otherwise.
+
+    This is deliberately a plain function taking real caller data as a
+    parameter, not a pydantic field/model validator on `EvaluationTask`
+    itself: checking a *candidate* seed requires a real indexed
+    `ConcreteGraphBuilder` for the target repo, which schema.py (pure
+    data validation, no filesystem/parsing access by design - loading a
+    task YAML must never silently require a full corpus clone and index)
+    correctly has no access to. Call this during task authoring, before
+    a candidate seed is committed to a YAML file - see
+    `benchmarks/ground_truth/TASK_AUTHORING.md`.
+    """
+    direct_count = len(direct_callers) if isinstance(direct_callers, (set, frozenset)) else direct_callers
+    transitive_count = 0
+    if transitive_callers is not None:
+        transitive_count = len(transitive_callers) if isinstance(transitive_callers, (set, frozenset)) else transitive_callers
+    total = direct_count + transitive_count
+    if total < minimum:
+        raise BlastSeedTooThinError(
+            f"candidate blast seed has only {total} real direct+transitive return-binding callers "
+            f"(minimum {minimum}) - BCCR would be near-vacuous for this seed; reject before annotation"
+        )

@@ -6,6 +6,8 @@ layer - no network, no LLM API calls anywhere in this file.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from prism.cli import build_pipeline
@@ -827,6 +829,54 @@ def test_render_diagnostics_markdown_table_excludes_fpr_gt_includes_fpr_oracle()
     table = render_diagnostics_markdown_table(run)
     assert "fpr_oracle" in table
     assert "fpr_gt" not in table
+
+
+def test_validate_blast_seed_richness_passes_at_or_above_minimum():
+    from benchmarks.ground_truth.schema import validate_blast_seed_richness
+
+    validate_blast_seed_richness(direct_callers=15, transitive_callers=5)  # exactly 20 - does not raise
+
+
+def test_validate_blast_seed_richness_rejects_below_minimum():
+    from benchmarks.ground_truth.schema import BlastSeedTooThinError, validate_blast_seed_richness
+
+    with pytest.raises(BlastSeedTooThinError, match="19"):
+        validate_blast_seed_richness(direct_callers=1, transitive_callers=18)
+
+
+def test_validate_blast_seed_richness_accepts_real_sets_not_just_counts():
+    from benchmarks.ground_truth.schema import BlastSeedTooThinError, validate_blast_seed_richness
+
+    with pytest.raises(BlastSeedTooThinError):
+        validate_blast_seed_richness(direct_callers={"a"}, transitive_callers=set())
+    validate_blast_seed_richness(direct_callers={f"s{i}" for i in range(20)})
+
+
+@pytest.mark.skipif(
+    not Path(".benchmarks/corpora/django").is_dir(),
+    reason="requires the real pinned Django checkout already resolved on disk - not a network fetch, "
+    "but this file's own docstring promises no external dependency, so skip cleanly when it's absent",
+)
+def test_all_four_existing_blast_seeds_pass_the_richness_screen():
+    """Real, not synthetic: proves the Gap 4 substitute seeds (reverse,
+    QuerySet.get, Field.clean, Options.get_field) actually satisfy the
+    >=20-real-caller screen this refinement introduces, against the real
+    pinned Django 4.2.30 checkout."""
+    from prism.cli import build_pipeline
+
+    from benchmarks.ground_truth.schema import validate_blast_seed_richness
+    from benchmarks.metrics.bccr import compute_direct_and_transitive_callers
+
+    builder, _ = build_pipeline(".benchmarks/corpora/django")
+    seeds = [
+        "django.urls.base.reverse",
+        "django.db.models.query.QuerySet.get",
+        "django.forms.fields.Field.clean",
+        "django.db.models.options.Options.get_field",
+    ]
+    for seed in seeds:
+        direct, transitive = compute_direct_and_transitive_callers(builder, seed)
+        validate_blast_seed_richness(direct, transitive)  # must not raise
 
 
 def test_django_blast_tasks_load_and_gate_correctly():
