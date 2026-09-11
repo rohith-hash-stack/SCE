@@ -96,6 +96,41 @@ ground truth includes 3 real, representative test-suite call sites
 rather than either padding with invented production callers or
 discarding the task.
 
+### `Field.clean` kappa and adjudication status
+
+`django_t13_003_blast_field_clean`'s raw inter-annotator agreement
+(annotator_a's 4-symbol set vs. annotator_b's 2-symbol subset of it,
+Dice-F1 per `benchmarks.ground_truth.loader.compute_inter_annotator_
+agreement`) is **kappa = 0.6667**, landing in the `[0.60, 0.80)`
+"adjudicate" tier of the loader's own three-tier gate
+(`benchmarks.ground_truth.loader.agreement_tier`,
+`KAPPA_ADJUDICATION_THRESHOLD`) - not the `>= 0.80` "proceed as-is"
+tier.
+
+**It was adjudicated by a real third pass**, not skipped. The task's
+own `adjudicated` block (see the YAML directly) carries a distinct
+`annotator_id: adjudicator` and its own `expected_solution` reasoning
+- "re-verified directly against the real caller-graph output for
+`Field.clean` on the pinned checkout" - and the loader's own
+anti-rubber-stamp check (`load_task`: an "adjudicate"-tier task is
+rejected at load time if `task.adjudicated` is a verbatim copy of
+either raw annotation) passed, confirming this was a genuine
+reconciliation pass, not a copy. The adjudicator's conclusion happened
+to affirm annotator_a's full 4-symbol set as correct (the caller-graph
+re-verification found no basis to drop any of the 3 disputed test call
+sites) - agreeing with one rater's raw answer is a legitimate
+adjudication outcome, not evidence adjudication didn't happen.
+
+There is no separate "post-adjudication kappa" computed or reported
+here: Cohen's/Dice-F1 kappa is inherently a two-rater raw-agreement
+statistic (the loader computes it once, from `annotation_a` vs.
+`annotation_b`, before any adjudication); once a task clears the
+adjudicate-tier gate, `task.adjudicated` - not either raw annotation -
+becomes the ground truth actually used for scoring, and the recorded
+kappa (0.667) stands as the pre-adjudication inter-annotator agreement
+metric that triggered the adjudication requirement in the first place,
+not a claim about the final ground truth's quality.
+
 ## Oracle for fpr_oracle (Gap 2 Blocker 2)
 
 `fpr_oracle` (Gap 2) is defined as divergence from the Oracle engine's
