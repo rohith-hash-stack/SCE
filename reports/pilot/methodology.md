@@ -131,6 +131,65 @@ kappa (0.667) stands as the pre-adjudication inter-annotator agreement
 metric that triggered the adjudication requirement in the first place,
 not a claim about the final ground truth's quality.
 
+## Baseline measurement provenance
+
+The "9-task pilot" referenced in the Blocker 1 checkpoint report (as
+"the real blended rate from the earlier 9-task pilot (~14s/cell)") was
+a real run, not a fabricated figure - but it was never committed to
+version control as a persisted artifact, and the ~14s/cell figure
+itself is a derived estimate, not a directly measured per-cell rate.
+Both facts are stated plainly below rather than left implicit.
+
+**What it was.** The 5 Django T02 debug tasks and 4 Django T13 blast
+tasks that existed at the time (post-Gap-4, pre-Gap-8's later
+expansion to a three-set ground truth) - 9 tasks total, each run
+against all 4 configured engines (`prism_v11`, `baseline_rag`,
+`baseline_bfs_forward`, `baseline_bfs_bidirectional`) at one budget
+(4000 tokens) = 36 (task, engine, budget) cells. It was run as
+end-to-end verification for Gap 5 (`PrismEngineCache`'s repo-level
+SymbolGraph/feature-mask cache), **not** a formal Milestone 1
+deliverable sweep - its own commit message (`1b444827163230def1ca94
+02478f8f147a928f67`, "gap-5: cache Prism SymbolGraph at repo level")
+states the comparison directly: "re-running the 9-task pilot (5 debug
++ 4 blast tasks) after clearing the cache produced exactly one
+feature-mask cache file and completed in ~14.5 minutes for 36 cells,
+versus ~20 minutes for 25 cells before this change."
+
+**Raw timing.** Wall-clock window 03:17:27-03:31:54 UTC (~14.5 minutes,
+867s) for the 36 cells, observed directly via shell timestamps during
+that run, not estimated after the fact.
+
+**Persisted artifact status: NOT committed.** The harness regenerates
+`reports/eval_results_v11.json`/`reports/eval_results_v11.md` on every
+run (a fresh copy of both exists on disk right now, timestamped
+2026-09-11 03:31:46, matching the window above), but `reports/*` is
+gitignored except `reports/pilot/` (see `.gitignore`) - by design, as
+generated output, not a deliverable. `git log` confirms neither file
+has ever been committed. A reviewer pulling this repository fresh does
+not have this run's output; only this provenance note and the gap-5
+commit message's own summary survive. Neither JSON record carries a
+per-cell timing/latency field (verified directly: `records[0].keys()`
+has no timestamp or latency key) - the artifact records diagnostic
+metrics and selected symbols per cell, not how long each cell took.
+
+**The ~14s/cell figure: estimated, not measured.** Because no per-cell
+timing was ever captured, "~14s/cell" for baselines is a **derived
+blended estimate**, computed in the checkpoint response as: total
+observed wall time (867s) minus the 9 `prism_v11` cells' own
+separately-and-directly-measured per-cell cost (Blocker 1's own
+budget=4000 figure, 56.37s/call, real profiled `retrieve()` time) =
+867 - (9 x 56.37) = 867 - 507.33 = ~359.67s remaining, divided by the
+27 baseline-engine cells (3 baseline engines x 9 tasks) = **~13.3s/cell,
+rounded to ~14s** in that report. This rests on two real, independently
+verified numbers (an observed total wall time, and a separately
+profiled Prism per-cell cost) rather than being fabricated outright,
+but it is an arithmetic back-fill, not a direct baseline-engine timing
+measurement - no baseline engine's own per-cell latency was ever
+individually profiled or logged. Treat "~14s/cell" accordingly:
+directionally real, not precise, and not reproducible to more than one
+significant figure without re-instrumenting the baselines with their
+own timers.
+
 ## Performance baseline and cache audit (Blocker 1)
 
 ### Process learning: trust `ps`, not a monitor's silence
