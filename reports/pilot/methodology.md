@@ -324,3 +324,32 @@ available immediately at zero marginal annotation cost. `PragmaticOracle`
 shares `PrismEngineCache`'s own cache for `(builder, contracts,
 feature_masks)` and caches its own `dist_W` computation once per (repo,
 seed) - see that class's own docstring for exactly how.
+
+### Follow-up 2: does PragmaticOracle filter phantom ground-truth symbols?
+
+**Case (a) applies.** `PragmaticOracle.retrieve` already filters its
+candidate set (the union of `pipeline_symbols`/`required_context`/
+`boundary_symbols`) to symbols actually present in the indexed graph
+before it ever builds a node, and does so before the budget-truncation
+step, not after: `benchmarks/engines/oracle_engine.py:291-293` -
+`info = builder.symbol_table.get(qname); if info is None: continue` -
+runs first in the same loop that enforces `dist_W` truncation
+(line 295-296), so a phantom symbol (a ground-truth annotation
+referencing a name this build's parser never registered - a typo, a
+renamed symbol, or a reference that only resolves in a part of the
+repo the indexer doesn't parse) is dropped unconditionally: it never
+becomes a `NodeEntry`, never enters `packed_ids`, and never consumes
+budget (`total_cost` is only incremented for symbols that pass the
+`info is not None` check). Since `fpr_oracle` is defined as `|S_M \
+S_Oracle| / |S_M|` (divergence from `packed_ids`, the Oracle's actually
+*rendered* selection), a phantom ground-truth symbol was never at risk
+of inflating that denominator - it can't appear in `S_Oracle` in the
+first place.
+
+No code change was needed. A regression test asserting this
+directly - `test_pragmatic_oracle_drops_phantom_symbols_not_in_indexed_
+graph` (`tests/benchmarks/test_harness_metrics.py`) - was added since
+no prior test exercised this path; it constructs a `required_context`
+entry that doesn't exist in the synthetic fixture repo and asserts it
+never appears in `selected_symbols(pkg)`, never appears as a node, and
+contributes nothing to `sum(n.cost for n in pkg.nodes)`.

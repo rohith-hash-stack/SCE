@@ -461,6 +461,43 @@ def test_pragmatic_oracle_unions_three_sets_truncated_by_dist_w(tmp_path):
     assert selected_symbols(tight_pkg) == {"svc.calculate_tax"}
 
 
+def test_pragmatic_oracle_drops_phantom_symbols_not_in_indexed_graph(tmp_path):
+    """Follow-up 2 (Blocker 1 checkpoint): a ground-truth annotation set
+    can reference a symbol that doesn't exist in *this* indexed build
+    (a typo, a renamed symbol, a test-only reference the parser never
+    registered) - PragmaticOracle must silently drop it (never fabricate
+    a NodeEntry for it), not error and not silently inflate the FPR
+    denominator by counting a phantom as part of the Oracle's own
+    selected set. See oracle_engine.py:291-293 (`if info is None:
+    continue`) - the filter this test exercises directly."""
+    from benchmarks.engines.oracle_engine import PragmaticOracle
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+
+    repo = _bfs_repo(tmp_path)  # only svc.calculate_tax and svc.invoice_generator are real
+    ann = GroundTruthAnnotation(
+        annotator_id="a",
+        pipeline_symbols=["svc.calculate_tax"],
+        required_context={"svc.invoice_generator", "svc.this_symbol_does_not_exist"},
+        boundary_symbols=set(),
+        expected_solution="x",
+    )
+    task = EvaluationTask(
+        task_id="t1", repo="django", pinned_commit="x", seed_symbol="svc.calculate_tax", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+    engine = PragmaticOracle(task)
+    engine.index(str(repo))
+
+    pkg = engine.retrieve("svc.calculate_tax", 4000)
+    assert selected_symbols(pkg) == {"svc.calculate_tax", "svc.invoice_generator"}
+    assert "svc.this_symbol_does_not_exist" not in selected_symbols(pkg)
+    assert all(n.id != "svc.this_symbol_does_not_exist" for n in pkg.nodes)
+    # the phantom must not have consumed any of the budget either
+    assert sum(n.cost for n in pkg.nodes) == sum(
+        n.cost for n in pkg.nodes if n.id in {"svc.calculate_tax", "svc.invoice_generator"}
+    )
+
+
 def test_pragmatic_oracle_shares_prism_engine_cache_feature_masks(tmp_path):
     """PragmaticOracle reuses PrismEngineCache's own shared cache for
     (builder, contracts, feature_masks) - indexing both against the same
