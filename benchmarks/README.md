@@ -856,7 +856,8 @@ bidirectional, `engines/baseline_bfs.py`), Prism v1.1+ (the real causal
 engine - Four-Axis Bitmask Knapsack, Continuous Dijkstra, Canonical
 Sinks, Bidirectional Blast Radius - `engines/prism_engine.py`), and a
 hand-curated Oracle (`engines/oracle_engine.py`) - against real,
-pinned-commit corpora (Django, Gin, tRPC; `corpora/resolver.py`), scored
+pinned-commit corpora (Django 4.2.30, Gin v1.9.1, tRPC v10.45.4, Express
+4.21.0; `corpora/resolver.py`, `corpora/pinned_commits.json`), scored
 by an LLM against double-blind, Cohen's-kappa-gated ground truth
 (`ground_truth/`), with diagnostic metrics (`metrics/`: Causal Pipeline
 Integrity, Semantic Redundancy Coefficient, Blast-Radius Caller Capture
@@ -879,7 +880,7 @@ client, scorers, bootstrap CI, and reporting are all real, tested code
 (`tests/benchmarks/test_harness_metrics.py`) with no network/API
 dependency of their own. Two things this repository does *not* ship,
 because fabricating them would be dishonest, not merely incomplete:
-real double-blind human-annotated ground-truth tasks for Django/Gin/tRPC
+real double-blind human-annotated ground-truth tasks for Django/Gin/tRPC/Express
 (`ground_truth/`'s schema and Cohen's-kappa-gated loader are real; the
 actual annotations need two real human annotators), and a hand-curated
 "optimal" Oracle package set for those same tasks (`oracle_engine.py`'s

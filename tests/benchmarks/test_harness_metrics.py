@@ -51,6 +51,7 @@ from benchmarks.reporting.report_generator import (
     write_json_results,
     write_markdown_report,
 )
+from benchmarks.tsr.scorer_architecture import reference_symbol_recall, score_architecture
 from benchmarks.tsr.scorer_blast import extract_mentioned_symbols, precision_recall_f1, score_blast
 from benchmarks.tsr.scorer_chain import score_chain
 from benchmarks.tsr.scorer_redundancy import rubric_score, score_redundancy
@@ -480,6 +481,26 @@ def test_scorer_redundancy_flags_conflation():
     assert rubric_score("calculate_tax computes a flat rate.", "svc.calculate_tax", {"svc.calculate_tax_v2"}) >= 1
 
 
+def test_scorer_architecture_recall_above_threshold_passes():
+    reference = {"svc.Handler", "svc.Router", "svc.Middleware"}
+    text = "The Handler is invoked by the Router after passing through Middleware."
+    assert reference_symbol_recall(text, reference) == 1.0
+    assert score_architecture(text, reference) == 1.0
+
+
+def test_scorer_architecture_recall_below_threshold_fails():
+    reference = {"svc.Handler", "svc.Router", "svc.Middleware"}
+    text = "The Handler processes the request."
+    recall = reference_symbol_recall(text, reference)
+    assert recall == pytest.approx(1 / 3)
+    assert score_architecture(text, reference) == 0.0
+
+
+def test_scorer_architecture_vacuous_empty_reference_set():
+    assert reference_symbol_recall("anything at all", set()) == 1.0
+    assert score_architecture("anything at all", set()) == 1.0
+
+
 # --------------------------------------------------------------------- #
 # Bootstrap CI
 # --------------------------------------------------------------------- #
@@ -612,3 +633,25 @@ def test_resolve_unknown_corpus_name_raises():
 
     with pytest.raises(CorpusResolutionError):
         resolve("not_a_real_corpus")
+
+
+def test_corpora_loaded_from_pinned_commits_json_covers_all_four_repos():
+    from benchmarks.corpora.resolver import CORPORA
+
+    assert set(CORPORA) == {"django", "gin", "trpc", "express"}
+    for name, spec in CORPORA.items():
+        assert spec.name == name
+        assert spec.url.startswith("https://github.com/")
+        assert len(spec.pinned_commit) == 40  # a full git SHA-1, not a short/abbreviated one
+        assert all(c in "0123456789abcdef" for c in spec.pinned_commit)
+
+
+def test_evaluation_task_schema_accepts_express_repo():
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+
+    ann = GroundTruthAnnotation(annotator_id="a", critical_callers={"x"}, expected_solution="x")
+    task = EvaluationTask(
+        task_id="t1", repo="express", pinned_commit="abc", seed_symbol="a.b", task_type="blast", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+    assert task.repo == "express"

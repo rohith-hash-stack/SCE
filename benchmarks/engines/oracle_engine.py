@@ -7,7 +7,7 @@ formatting).
 
 **Stated honestly**: this loader is real and fully functional, but this
 repository ships no genuine hand-curated oracle packages for
-django/gin/trpc - producing those requires a domain expert manually
+django/gin/trpc/express - producing those requires a domain expert manually
 selecting the truly-optimal symbol set per task, which this session
 cannot fabricate convincingly (a self-authored "hand-curated" answer
 would just be this engine grading itself). `oracle_packages_path` points

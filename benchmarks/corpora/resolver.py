@@ -1,17 +1,23 @@
 """v1.1+ Empirical Benchmarking Harness: resolves and validates a local
-checkout of each real-world corpus (Django, Gin, tRPC) at an exact,
-pinned commit SHA - reproducibility requires every engine and every run
-to see byte-identical source, not "whatever HEAD happened to be" at
-benchmark time.
+checkout of each real-world corpus (Django, Gin, tRPC, Express) at an
+exact, pinned commit SHA - reproducibility requires every engine and
+every run to see byte-identical source, not "whatever HEAD happened to
+be" at benchmark time.
 
-`CORPORA`'s three entries are real, verified commits (each is the exact
-commit a real upstream release tag points to, confirmed directly via
-`git ls-remote --tags <url>` against the live repository at the time this
-module was written - `django` -> tag `5.1.9`, `gin` -> tag `v1.10.1`,
-`trpc` -> tag `v11.0.0`), not placeholders.
+Pins live in `pinned_commits.json` (sibling file, not inline Python
+constants), each entry real and verified directly against the live
+repository's own tag refs (`git ls-remote --tags <url>`) at the time this
+module was written - the commit each named release tag dereferences to,
+not a fabricated/guessed SHA:
+
+    django  -> tag 4.2.30    (the 4.2 LTS line)
+    gin     -> tag v1.9.1
+    trpc    -> tag v10.45.4
+    express -> tag 4.21.0
 """
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -20,6 +26,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_CACHE_DIR = PROJECT_ROOT / ".benchmarks" / "corpora"
 FETCH_TIMEOUT_SECONDS = 300
+PINNED_COMMITS_PATH = Path(__file__).resolve().parent / "pinned_commits.json"
 
 
 @dataclass(frozen=True)
@@ -29,23 +36,19 @@ class CorpusSpec:
     pinned_commit: str
 
 
-#: Verified directly against each repository's own tag refs (`git
-#: ls-remote --tags <url>`) - the commit each named release tag
-#: dereferences to, not a fabricated/guessed SHA.
-CORPORA: dict[str, CorpusSpec] = {
-    "django": CorpusSpec(
-        name="django", url="https://github.com/django/django.git",
-        pinned_commit="db5c8a97bb084cee880e678681d63bddecf6d38b",  # tag 5.1.9
-    ),
-    "gin": CorpusSpec(
-        name="gin", url="https://github.com/gin-gonic/gin.git",
-        pinned_commit="b5af7796535d97d9c7af42539af01d787fcb3b4d",  # tag v1.10.1
-    ),
-    "trpc": CorpusSpec(
-        name="trpc", url="https://github.com/trpc/trpc.git",
-        pinned_commit="85841a1ae4679847fd29ad5454c1a584a2e206d2",  # tag v11.0.0
-    ),
-}
+def _load_corpora(path: Path = PINNED_COMMITS_PATH) -> dict[str, CorpusSpec]:
+    data = json.loads(path.read_text())
+    return {
+        name: CorpusSpec(name=name, url=entry["url"], pinned_commit=entry["pinned_commit"])
+        for name, entry in data.items()
+    }
+
+
+#: Loaded once at import time from `pinned_commits.json` - see that
+#: file's own entries (each carries its own `tag` field documenting
+#: which release the `pinned_commit` SHA corresponds to) for the
+#: authoritative version-to-commit mapping.
+CORPORA: dict[str, CorpusSpec] = _load_corpora()
 
 
 class CorpusResolutionError(Exception):
@@ -134,7 +137,7 @@ def resolve_corpus(spec: CorpusSpec, cache_dir: Path = DEFAULT_CACHE_DIR, force:
 
 def resolve(name: str, cache_dir: Path = DEFAULT_CACHE_DIR, force: bool = False) -> Path:
     """`resolve_corpus` keyed by one of `CORPORA`'s own registered
-    names ("django", "gin", "trpc")."""
+    names ("django", "gin", "trpc", "express")."""
     spec = CORPORA.get(name)
     if spec is None:
         raise CorpusResolutionError(f"unknown corpus {name!r} - registered corpora: {sorted(CORPORA)}")

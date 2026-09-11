@@ -31,15 +31,16 @@ class GroundTruthAnnotation(BaseModel):
     pipeline_symbols: list[str] = Field(default_factory=list, description="Ordered symbols for Type 1 chain")
     critical_callers: set[str] = Field(default_factory=set, description="Symbols that bind/unpack return values for Type 2")
     orthogonal_neighbors: set[str] = Field(default_factory=set, description="Non-redundant subset for Type 3")
+    reference_symbols: set[str] = Field(default_factory=set, description="Structural/architectural symbols a correct answer should identify, for Type 4 (architecture)")
     expected_solution: str = Field(..., description="Reference answer or regex pattern for automated scoring")
 
 
 class EvaluationTask(BaseModel):
     task_id: str
-    repo: Literal["django", "gin", "trpc"]
+    repo: Literal["django", "gin", "trpc", "express"]
     pinned_commit: str
     seed_symbol: str
-    task_type: Literal["chain", "blast", "redundancy"]
+    task_type: Literal["chain", "blast", "redundancy", "architecture"]
     prompt: str
     annotation_a: GroundTruthAnnotation
     annotation_b: GroundTruthAnnotation
@@ -60,7 +61,7 @@ def _selected_symbols(ann: GroundTruthAnnotation) -> set[str]:
     to its own `task_type`, so this is safe to union unconditionally -
     the other two are empty by construction, never a real disagreement
     source)."""
-    return set(ann.pipeline_symbols) | ann.critical_callers | ann.orthogonal_neighbors
+    return set(ann.pipeline_symbols) | ann.critical_callers | ann.orthogonal_neighbors | ann.reference_symbols
 
 
 def compute_inter_annotator_agreement(ann_a: GroundTruthAnnotation, ann_b: GroundTruthAnnotation) -> float:

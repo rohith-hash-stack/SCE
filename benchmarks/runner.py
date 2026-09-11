@@ -47,6 +47,7 @@ from benchmarks.reporting.report_generator import (
     write_markdown_report,
 )
 from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, run_tsr_prompt
+from benchmarks.tsr.scorer_architecture import score_architecture
 from benchmarks.tsr.scorer_blast import score_blast
 from benchmarks.tsr.scorer_chain import score_chain
 from benchmarks.tsr.scorer_redundancy import score_redundancy
@@ -78,7 +79,13 @@ def _build_engines(oracle_packages_path: str | None, task_id: str) -> list[Abstr
 
 def _ground_truth_universe(task: EvaluationTask) -> set[str]:
     adjudicated = task.adjudicated
-    return set(adjudicated.pipeline_symbols) | adjudicated.critical_callers | adjudicated.orthogonal_neighbors | {task.seed_symbol}
+    return (
+        set(adjudicated.pipeline_symbols)
+        | adjudicated.critical_callers
+        | adjudicated.orthogonal_neighbors
+        | adjudicated.reference_symbols
+        | {task.seed_symbol}
+    )
 
 
 def compute_diagnostics(pkg, task: EvaluationTask, feature_stats) -> dict[str, float]:
@@ -93,6 +100,9 @@ def compute_diagnostics(pkg, task: EvaluationTask, feature_stats) -> dict[str, f
     elif task.task_type == "blast":
         diagnostics["bccr_direct"] = bccr_direct(selected, adjudicated.critical_callers)
         diagnostics["src"] = src(pkg)
+    elif task.task_type == "architecture":
+        diagnostics["reference_symbol_capture"] = bccr_direct(selected, adjudicated.reference_symbols)
+        diagnostics["src"] = src(pkg)
     else:  # redundancy
         diagnostics["src"] = src(pkg)
 
@@ -105,6 +115,8 @@ def score_tsr_response(task: EvaluationTask, response_text: str, candidate_symbo
         return score_chain(response_text, task.adjudicated.pipeline_symbols)
     if task.task_type == "blast":
         return score_blast(response_text, candidate_symbols, task.adjudicated.critical_callers)
+    if task.task_type == "architecture":
+        return score_architecture(response_text, task.adjudicated.reference_symbols)
     return score_redundancy(response_text, task.seed_symbol, task.adjudicated.orthogonal_neighbors)
 
 
