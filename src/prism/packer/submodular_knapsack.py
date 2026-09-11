@@ -84,6 +84,9 @@ the greedy loop didn't already admit it on its own merits.
 """
 from __future__ import annotations
 
+import contextlib
+import os
+import time
 from dataclasses import dataclass, field
 
 import networkx as nx
@@ -93,6 +96,37 @@ from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_
 from prism.semantics.extractor import compute_feature_masks
 from prism.slicer.tokenizer import count_tokens
 from prism.traversal.continuous_dijkstra import build_causal_graph, compute_topological_distances
+
+#: Debug-only sub-phase profiler for `pack_symbol_context` (Step 4a of
+#: the Blocker 1 performance investigation) - off by default, zero
+#: measurable overhead when disabled (`_profile_phase` skips both
+#: `time.time()` calls entirely rather than timing-and-discarding), and
+#: never used by any non-debug code path. Enable with
+#: `PRISM_PROFILE_KNAPSACK=1` or by setting `_PROFILE_ENABLED = True`
+#: directly (what the Step 4a measurement scripts do). Not wired into
+#: any CLI flag or public API - purely a temporary investigation aid.
+_PROFILE_ENABLED = os.environ.get("PRISM_PROFILE_KNAPSACK") == "1"
+_phase_times: dict[str, float] = {}
+
+
+def reset_profile() -> None:
+    _phase_times.clear()
+
+
+def get_profile() -> dict[str, float]:
+    return dict(_phase_times)
+
+
+@contextlib.contextmanager
+def _profile_phase(phase: str):
+    if not _PROFILE_ENABLED:
+        yield
+        return
+    t0 = time.time()
+    try:
+        yield
+    finally:
+        _phase_times[phase] = _phase_times.get(phase, 0.0) + (time.time() - t0)
 
 DEFAULT_MAX_HOPS = 6.0
 DEFAULT_BETA = 0.10
@@ -356,10 +390,14 @@ def pack_symbol_context(
     `select_submodular_context` over all of it. This is what `prism query
     --engine causal` (`prism.cli`) actually calls.
     """
-    graph = build_causal_graph(builder)
-    feature_masks = compute_feature_masks(builder)
-    dist_w_map = compute_topological_distances(builder, seed_id)
-    upstream_callers = compute_upstream_callers(builder, seed_id)
+    with _profile_phase("build_causal_graph"):
+        graph = build_causal_graph(builder)
+    with _profile_phase("feature_masks"):
+        feature_masks = compute_feature_masks(builder)
+    with _profile_phase("compute_topological_distances"):
+        dist_w_map = compute_topological_distances(builder, seed_id)
+    with _profile_phase("upstream_callers"):
+        upstream_callers = compute_upstream_callers(builder, seed_id)
     dist_w_upstream_map = {symbol: caller.dist_w_upstream for symbol, caller in upstream_callers.items()}
     upstream_contract_preserving = {symbol for symbol, caller in upstream_callers.items() if caller.unpacks_return}
 
@@ -368,15 +406,27 @@ def pack_symbol_context(
         + [n for n in dist_w_map if dist_w_map[n] <= max_hops]
         + [n for n in dist_w_upstream_map if dist_w_upstream_map[n] <= upstream_max_hops]
     )
-    costs = _default_costs(builder, candidate_symbols)
+    with _profile_phase("knapsack.token_counting"):
+        costs = _default_costs(builder, candidate_symbols)
 
-    selected = select_submodular_context(
-        graph, seed_id, target_budget, dist_w_map, feature_masks, costs,
-        max_hops=max_hops, beta=beta, delta_max=delta_max,
-        dist_w_upstream_map=dist_w_upstream_map,
-        upstream_contract_preserving=upstream_contract_preserving,
-        upstream_max_hops=upstream_max_hops,
-    )
+    # NOTE (Step 4a): select_submodular_context is a single greedy loop -
+    # every outer iteration re-scores every frontier candidate, then
+    # admits the best and expands the frontier. There is no distinct
+    # "initial candidate scoring" phase separate from the "greedy
+    # selection loop" in this v1.1+ implementation (unlike the older
+    # prism/slicer/knapsack.py, which does have that split) - both are
+    # timed together here as knapsack.greedy_loop. There is also no
+    # swap-refinement pass anywhere in this code path; that phase name
+    # belongs to prism/slicer/knapsack.py's own Issue #12 pass, a
+    # different, older module PrismEngine.retrieve() never calls.
+    with _profile_phase("knapsack.greedy_loop"):
+        selected = select_submodular_context(
+            graph, seed_id, target_budget, dist_w_map, feature_masks, costs,
+            max_hops=max_hops, beta=beta, delta_max=delta_max,
+            dist_w_upstream_map=dist_w_upstream_map,
+            upstream_contract_preserving=upstream_contract_preserving,
+            upstream_max_hops=upstream_max_hops,
+        )
 
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
     items = [
