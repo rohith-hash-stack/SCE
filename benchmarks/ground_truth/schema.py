@@ -28,7 +28,9 @@ from typing import Literal
 
 class GroundTruthAnnotation(BaseModel):
     annotator_id: str
-    pipeline_symbols: list[str] = Field(default_factory=list, description="Ordered symbols for Type 1 chain")
+    pipeline_symbols: list[str] = Field(
+        default_factory=list, description="Ordered causal-pipeline symbols, for Type 1 chain and T02 debug tasks alike"
+    )
     critical_callers: set[str] = Field(default_factory=set, description="Symbols that bind/unpack return values for Type 2")
     orthogonal_neighbors: set[str] = Field(default_factory=set, description="Non-redundant subset for Type 3")
     reference_symbols: set[str] = Field(default_factory=set, description="Structural/architectural symbols a correct answer should identify, for Type 4 (architecture)")

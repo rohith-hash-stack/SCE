@@ -311,19 +311,21 @@ MU1_GRID = (0.20, 0.30, 0.45, 0.60)
 
 
 def _cpi_for_lambda_config(builder, tasks: list[EvaluationTask], budget: int, lambda1: float, lambda2: float) -> tuple[float, float]:
-    """Runs `PrismEngine` for every "chain" task at `budget` with
-    `causal_weights.LAMBDA_DATA_FLOW`/`LAMBDA_GUARD` temporarily
-    overridden, returning `(mean_cpi_strict, mean_cpi_fractional)`.
-    Real module-constant monkey-patching (restored in `finally`) - these
-    two lambdas are read directly as module globals by `causal_edge_
-    weight`, not threaded through as function parameters, so this is the
-    only way to sweep them without forking the causal engine itself for
-    the ablation run.
+    """Runs `PrismEngine` for every pipeline-shaped task (`task_type`
+    `"chain"` or `"debug"` - both score CPI against an ordered
+    `pipeline_symbols`, the same as `compute_diagnostics`'s own dispatch
+    already treats them) at `budget` with `causal_weights.LAMBDA_
+    DATA_FLOW`/`LAMBDA_GUARD` temporarily overridden, returning
+    `(mean_cpi_strict, mean_cpi_fractional)`. Real module-constant
+    monkey-patching (restored in `finally`) - these two lambdas are read
+    directly as module globals by `causal_edge_weight`, not threaded
+    through as function parameters, so this is the only way to sweep
+    them without forking the causal engine itself for the ablation run.
     """
     import prism.traversal.causal_weights as causal_weights
 
-    chain_tasks = [t for t in tasks if t.task_type == "chain"]
-    if not chain_tasks:
+    pipeline_tasks = [t for t in tasks if t.task_type in ("chain", "debug")]
+    if not pipeline_tasks:
         return 0.0, 0.0
 
     original_lambda1 = causal_weights.LAMBDA_DATA_FLOW
@@ -333,7 +335,7 @@ def _cpi_for_lambda_config(builder, tasks: list[EvaluationTask], budget: int, la
     try:
         engine = PrismEngine.from_builder(builder, repo_root=getattr(builder, "repo_root", "."))
         strict_scores, fractional_scores = [], []
-        for task in chain_tasks:
+        for task in pipeline_tasks:
             pkg = engine.retrieve(task.seed_symbol, budget)
             selected = selected_symbols(pkg)
             strict_scores.append(cpi_strict(selected, task.adjudicated.pipeline_symbols))

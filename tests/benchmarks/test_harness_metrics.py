@@ -746,6 +746,42 @@ def test_evaluation_task_schema_accepts_express_repo():
 # --------------------------------------------------------------------- #
 # Gap 1: --budget (singular) as a true --budgets alias
 # --------------------------------------------------------------------- #
+# --------------------------------------------------------------------- #
+# Gap 7: T02 "debug" tasks must be treated as pipeline-shaped, same as "chain"
+# --------------------------------------------------------------------- #
+def test_ablation_lambda_sweep_includes_debug_type_tasks_not_just_chain(tmp_path):
+    """Before Gap 7, `_cpi_for_lambda_config`'s own task filter only
+    matched `task_type == "chain"` - every real T02 task in this repo is
+    `task_type == "debug"`, so the ablation sweep silently saw zero
+    tasks and returned vacuous (0.0, 0.0) for every lambda configuration.
+    A debug-type task must now be picked up exactly like a chain-type
+    one - both score CPI against the same ordered `pipeline_symbols`.
+    """
+    from prism.cli import build_pipeline
+
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+    from benchmarks.runner import _cpi_for_lambda_config
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "svc.py").write_text(
+        "def calculate_tax(amount):\n    return amount * 0.2\n\n\n"
+        "def invoice_generator(amount):\n    total = calculate_tax(amount)\n    return total\n"
+    )
+    builder, _ = build_pipeline(str(repo))
+
+    ann = GroundTruthAnnotation(
+        annotator_id="a", pipeline_symbols=["svc.calculate_tax", "svc.invoice_generator"], expected_solution="x"
+    )
+    debug_task = EvaluationTask(
+        task_id="t1", repo="django", pinned_commit="x", seed_symbol="svc.calculate_tax", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+
+    mean_strict, mean_fractional = _cpi_for_lambda_config(builder, [debug_task], budget=4000, lambda1=0.25, lambda2=0.15)
+    assert (mean_strict, mean_fractional) != (0.0, 0.0)  # not the vacuous "no matching tasks" result
+
+
 def test_resolve_budgets_singular_budget_alone():
     from benchmarks.runner import resolve_budgets
 
