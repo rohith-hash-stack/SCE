@@ -65,3 +65,68 @@ is rejected at authoring time. Enforced by
 was added to, including the earlier, cheaper filter it should have
 caught in the first place: does the candidate seed even return a
 non-`None` value?
+
+### Caller composition: source vs. test files
+
+The "real caller" counts above (`compute_direct_and_transitive_callers`)
+include every real call site in the pinned checkout - Django's own test
+suite (`tests.*`) included, since a real call site is a real call site
+regardless of which part of the pinned repository it lives in. This
+matters for what "168 real callers" actually means for `reverse`, so the
+composition is stated directly rather than left implicit:
+
+| Seed | Direct: source / test | Transitive: source / test |
+|---|---|---|
+| `django.urls.base.reverse` | 15 / 149 | 4 / 0 |
+| `django.db.models.query.QuerySet.get` | 22 / 26 | 4 / 3 |
+| `django.forms.fields.Field.clean` | 1 / 36 | 0 / 0 |
+| `django.db.models.options.Options.get_field` | 31 / 8 | 6 / 14 |
+
+The screening criterion above (>= 20 real callers) is satisfied by all
+four **on the raw pool**, source-and-test combined. What actually
+matters for BCCR ground-truth integrity, though, is what's in each
+task's own annotated `critical_callers` set, not the raw pool it was
+curated from - and there, 3 of the 4 tasks (`reverse`, `QuerySet.get`,
+`Options.get_field`) curate **exclusively** real source/production
+callers (0 test-file entries in the ground truth itself, verified
+directly against each task's own YAML). `Field.clean` is the one
+exception, already disclosed in its own YAML header and in the table
+above: its real production pool is only 1 caller, so its 4-symbol
+ground truth includes 3 real, representative test-suite call sites
+rather than either padding with invented production callers or
+discarding the task.
+
+## Oracle for fpr_oracle (Gap 2 Blocker 2)
+
+`fpr_oracle` (Gap 2) is defined as divergence from the Oracle engine's
+own package for the same (task, budget) - but this repository ships no
+genuine hand-curated Oracle packages (`oracle_engine.py`'s own honesty
+disclaimer), so without an Oracle configured, `fpr_oracle` is `None`
+for every cell, delivering no value in the pilot.
+
+Three options were on the table:
+
+- **Option A (hand-curated)**: a domain expert curates an ideal package
+  per (task, budget) - 24 tasks x 3 budgets = 72 packages, estimated
+  18-36 annotator-hours. Highest fidelity, highest cost, and no
+  annotator resource was available to commit that time within this
+  checkpoint.
+- **Option B (pragmatic, chosen)**: `PragmaticOracle`
+  (`benchmarks/engines/oracle_engine.py`) - the real union of a task's
+  own adjudicated `pipeline_symbols`/`required_context`/`boundary_
+  symbols` (Gap 8's three real annotated sets), rendered at L0 and
+  truncated to budget by ascending real `dist_W(seed, ·)` (`prism.
+  traversal.continuous_dijkstra.compute_topological_distances` - the
+  same weighted distance Prism's own knapsack packer computes, not a
+  cheaper proxy). Automatic, deterministic, zero additional annotation
+  cost beyond what Gap 8 already produced.
+- **Option C (defer)**: report `fpr_oracle` as `None` for the pilot,
+  document as a known limitation, revisit later.
+
+**Option B was chosen.** It is not literal optimality - a human expert
+might curate a different package - but it is real (every symbol comes
+from real, verified annotation, never fabricated), reproducible, and
+available immediately at zero marginal annotation cost. `PragmaticOracle`
+shares `PrismEngineCache`'s own cache for `(builder, contracts,
+feature_masks)` and caches its own `dist_W` computation once per (repo,
+seed) - see that class's own docstring for exactly how.
