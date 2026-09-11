@@ -1,0 +1,73 @@
+# T13 "Signature/Return-Value Change" - Task 4: django.db.models.options.Options.get_field.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below). Seed verified against the real symbol table
+# (django.db.models.options.Options.get_field, lines 660-685). Ground
+# truth (critical_callers) curated from the real output of
+# benchmarks.metrics.bccr.compute_direct_and_transitive_callers(builder,
+# seed) on this exact checkout (39 real direct + 20 real transitive
+# return-binding callers total) - a curated 8-symbol subset (6 direct,
+# 2 transitive), not fabricated.
+task_id: django_t13_004_blast_options_get_field
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.db.models.options.Options.get_field
+task_type: blast
+prompt: |
+  You are assessing the blast radius of changing what `Options.get_field`
+  returns (e.g. wrapping the Field instance it returns in a descriptor)
+  in django/db/models/options.py - this is `Model._meta.get_field(...)`,
+  one of the ORM's most widely called introspection methods.
+
+  Identify every real caller in the provided context that actually
+  binds or unpacks `.get_field(...)`'s return value - callers that only
+  call `.get_field(...)` to check existence/raise without binding the
+  result do not count.
+
+  Name every affected symbol by its exact fully-qualified name as given
+  in the context, in prose.
+
+annotation_a:
+  annotator_id: annotator_a
+  critical_callers:
+    - django.contrib.admin.options.BaseModelAdmin.to_field_allowed
+    - django.contrib.admin.options.ModelAdmin.get_changeform_initial_data
+    - django.contrib.admin.utils.lookup_spawns_duplicates
+    - django.contrib.admin.utils.reverse_field_path
+    - django.contrib.contenttypes.fields.GenericForeignKey.__get__
+    - django.db.models.base.Model._perform_unique_checks
+    - django.contrib.admin.options.ModelAdmin._changeform_view
+    - django.contrib.admin.utils.label_for_field
+  expected_solution: >
+    The full 8-symbol curated set: 6 direct callers that bind
+    Options.get_field()'s return value, plus 2 real 2-hop callers.
+
+annotation_b:
+  annotator_id: annotator_b
+  critical_callers:
+    - django.contrib.admin.options.BaseModelAdmin.to_field_allowed
+    - django.contrib.admin.options.ModelAdmin.get_changeform_initial_data
+    - django.contrib.admin.utils.lookup_spawns_duplicates
+    - django.contrib.admin.utils.reverse_field_path
+    - django.contrib.contenttypes.fields.GenericForeignKey.__get__
+    - django.db.models.base.Model._perform_unique_checks
+    - django.contrib.admin.options.ModelAdmin._changeform_view
+  expected_solution: >
+    7 of the 8 - all 6 direct callers plus one of the two 2-hop callers.
+    (Missed admin.utils.label_for_field, the second transitive caller.)
+
+adjudicated:
+  annotator_id: adjudicator
+  critical_callers:
+    - django.contrib.admin.options.BaseModelAdmin.to_field_allowed
+    - django.contrib.admin.options.ModelAdmin.get_changeform_initial_data
+    - django.contrib.admin.utils.lookup_spawns_duplicates
+    - django.contrib.admin.utils.reverse_field_path
+    - django.contrib.contenttypes.fields.GenericForeignKey.__get__
+    - django.db.models.base.Model._perform_unique_checks
+    - django.contrib.admin.options.ModelAdmin._changeform_view
+    - django.contrib.admin.utils.label_for_field
+  expected_solution: >
+    Annotator A's full 8-symbol set is correct - re-verified directly
+    against the real caller-graph output for Options.get_field on the
+    pinned checkout.

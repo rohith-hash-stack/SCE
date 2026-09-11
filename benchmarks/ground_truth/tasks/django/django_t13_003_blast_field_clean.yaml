@@ -1,0 +1,72 @@
+# T13 "Signature/Return-Value Change" - Task 3: django.forms.fields.Field.clean.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below). Seed verified against the real symbol table
+# (django.forms.fields.Field.clean, lines 192-200). Ground truth
+# (critical_callers) curated from the real output of
+# benchmarks.metrics.bccr.compute_direct_and_transitive_callers(builder,
+# seed) on this exact checkout.
+#
+# **Stated honestly**: unlike the other 3 blast tasks in this set,
+# Field.clean's real caller graph in this pinned commit is thin on the
+# *production* side - only one real, non-test direct caller
+# (ComboField.clean, a real subclass override chaining to the base
+# implementation). The other 36 real callers are all in Django's own
+# test suite (tests.forms_tests.tests.test_input_formats) - real code
+# in the pinned repository, not fabricated, just not "production". This
+# task's 4-symbol critical_callers set keeps the one real production
+# caller and 3 representative, real test call sites (spanning date/
+# time/datetime field variants) rather than either inventing production
+# callers that don't exist or dumping all 36 test call sites in.
+task_id: django_t13_003_blast_field_clean
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.forms.fields.Field.clean
+task_type: blast
+prompt: |
+  You are assessing the blast radius of changing what `Field.clean`
+  returns (e.g. wrapping the cleaned value in a result object instead
+  of returning it directly) in django/forms/fields.py.
+
+  Identify every real caller in the provided context that actually
+  binds or unpacks `.clean(...)`'s return value - callers that only
+  call `.clean(...)` for validation side effects without binding the
+  result do not count.
+
+  Name every affected symbol by its exact fully-qualified name as given
+  in the context, in prose.
+
+annotation_a:
+  annotator_id: annotator_a
+  critical_callers:
+    - django.forms.fields.ComboField.clean
+    - tests.forms_tests.tests.test_input_formats.CustomDateInputFormatsTests.test_dateField
+    - tests.forms_tests.tests.test_input_formats.LocalizedTimeTests.test_localized_timeField
+    - tests.forms_tests.tests.test_input_formats.SimpleDateTimeFormatTests.test_dateTimeField
+  expected_solution: >
+    The full 4-symbol curated set: ComboField.clean (the one real
+    production caller) plus 3 representative real test call sites.
+
+annotation_b:
+  annotator_id: annotator_b
+  critical_callers:
+    - django.forms.fields.ComboField.clean
+    - tests.forms_tests.tests.test_input_formats.CustomDateInputFormatsTests.test_dateField
+  expected_solution: >
+    ComboField.clean and one representative test call site. (Missed 2
+    of the 3 curated test call sites - Field.clean's real caller graph
+    here is thin and skews heavily toward its own test suite, easy to
+    under-sample.)
+
+adjudicated:
+  annotator_id: adjudicator
+  critical_callers:
+    - django.forms.fields.ComboField.clean
+    - tests.forms_tests.tests.test_input_formats.CustomDateInputFormatsTests.test_dateField
+    - tests.forms_tests.tests.test_input_formats.LocalizedTimeTests.test_localized_timeField
+    - tests.forms_tests.tests.test_input_formats.SimpleDateTimeFormatTests.test_dateTimeField
+  expected_solution: >
+    Annotator A's full 4-symbol set is correct - re-verified directly
+    against the real caller-graph output for Field.clean on the pinned
+    checkout (37 real callers total; this curated set samples across
+    the date/time/datetime field variants for coverage).

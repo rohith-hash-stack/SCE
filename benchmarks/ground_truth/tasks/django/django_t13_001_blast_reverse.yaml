@@ -1,0 +1,85 @@
+# T13 "Signature/Return-Value Change" - Task 1: django.urls.base.reverse.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below). Seed verified against the real symbol table
+# (django.urls.base.reverse, lines 27-88). Ground truth (critical_callers)
+# was NOT hand-guessed: it is a curated, real subset of the output of
+# benchmarks.metrics.bccr.compute_direct_and_transitive_callers(builder,
+# seed) run against this exact checkout - the same real static "does
+# this caller bind/unpack the return value" detector BCCR itself uses,
+# never fabricated.
+#
+# Full real result: 164 direct + 4 transitive return-binding callers
+# (most of the 164 are Django's own test suite - real code, but not the
+# interesting "production blast radius" signal for this task). This
+# task's critical_callers curates the 8 clearest *production* (non-test)
+# call sites - 6 direct, 2 transitive (2-hop) - out of that real set,
+# so the task stays human-annotatable and LLM-promptable while every
+# single entry is a real, verified caller, not an invented one.
+task_id: django_t13_001_blast_reverse
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.urls.base.reverse
+task_type: blast
+prompt: |
+  You are assessing the blast radius of changing the return value shape
+  of `django.urls.base.reverse` (e.g. changing it from a plain URL
+  string to a wrapper object) in django/urls/base.py.
+
+  Identify every real caller in the provided context that actually
+  binds or unpacks `reverse`'s return value (a plain `x = reverse(...)`
+  assignment, or a caller of such a caller two hops out) - callers that
+  merely pass `reverse(...)` straight through to another function
+  without binding it locally do not count.
+
+  Name every affected symbol by its exact fully-qualified name as given
+  in the context, in prose.
+
+annotation_a:
+  annotator_id: annotator_a
+  critical_callers:
+    - django.contrib.admin.options.ModelAdmin.response_add
+    - django.contrib.admin.options.ModelAdmin.response_change
+    - django.contrib.admin.options.ModelAdmin.response_delete
+    - django.contrib.admin.options.ModelAdmin._get_obj_does_not_exist_redirect
+    - django.contrib.admin.sites.AdminSite.password_change
+    - django.views.generic.base.RedirectView.get_redirect_url
+    - django.views.generic.base.RedirectView.get
+    - django.contrib.sitemaps.ping_google
+  expected_solution: >
+    The full 8-symbol curated set: 6 direct callers that bind
+    reverse()'s return value directly, plus 2 real 2-hop callers
+    (RedirectView.get binds get_redirect_url()'s own return value;
+    ping_google binds a caller of reverse in turn).
+
+annotation_b:
+  annotator_id: annotator_b
+  critical_callers:
+    - django.contrib.admin.options.ModelAdmin.response_add
+    - django.contrib.admin.options.ModelAdmin.response_change
+    - django.contrib.admin.options.ModelAdmin.response_delete
+    - django.contrib.admin.options.ModelAdmin._get_obj_does_not_exist_redirect
+    - django.contrib.admin.sites.AdminSite.password_change
+    - django.views.generic.base.RedirectView.get_redirect_url
+    - django.views.generic.base.RedirectView.get
+  expected_solution: >
+    The 6 direct callers plus RedirectView.get. (Missed the 2-hop
+    ping_google caller - a real, but less obvious, transitive binder.)
+
+adjudicated:
+  annotator_id: adjudicator
+  critical_callers:
+    - django.contrib.admin.options.ModelAdmin.response_add
+    - django.contrib.admin.options.ModelAdmin.response_change
+    - django.contrib.admin.options.ModelAdmin.response_delete
+    - django.contrib.admin.options.ModelAdmin._get_obj_does_not_exist_redirect
+    - django.contrib.admin.sites.AdminSite.password_change
+    - django.views.generic.base.RedirectView.get_redirect_url
+    - django.views.generic.base.RedirectView.get
+    - django.contrib.sitemaps.ping_google
+  expected_solution: >
+    Annotator A's full 8-symbol set is correct - re-verified directly
+    against compute_direct_and_transitive_callers(builder,
+    "django.urls.base.reverse") on the real pinned checkout: ping_google
+    (django/contrib/sitemaps/__init__.py) really does bind the return
+    value of a direct caller of reverse two hops out.

@@ -829,6 +829,35 @@ def test_render_diagnostics_markdown_table_excludes_fpr_gt_includes_fpr_oracle()
     assert "fpr_gt" not in table
 
 
+def test_django_blast_tasks_load_and_gate_correctly():
+    from benchmarks.ground_truth.loader import load_tasks_from_dir
+
+    result = load_tasks_from_dir("benchmarks/ground_truth/tasks/django")
+    assert not result.rejected
+
+    blast_tasks = {t.task_id: t for t in result.accepted if t.task_type == "blast"}
+    assert len(blast_tasks) == 4
+    for task in blast_tasks.values():
+        assert task.adjudicated.critical_callers
+        assert task.cohen_kappa >= 0.60  # the loader's own agreement gate already enforces this
+
+
+def test_django_blast_task_scores_via_scorer_blast():
+    from benchmarks.engines.base import selected_symbols
+    from benchmarks.ground_truth.loader import load_tasks_from_dir
+    from benchmarks.runner import score_tsr_response
+    from benchmarks.tsr.scorer_blast import extract_mentioned_symbols
+
+    result = load_tasks_from_dir("benchmarks/ground_truth/tasks/django")
+    task = next(t for t in result.accepted if t.task_id == "django_t13_001_blast_reverse")
+
+    correct_response = " and ".join(sorted(c.rsplit(".", 1)[-1] for c in task.adjudicated.critical_callers))
+    candidate_symbols = set(task.adjudicated.critical_callers)
+    assert extract_mentioned_symbols(correct_response, candidate_symbols) == candidate_symbols
+    assert score_tsr_response(task, correct_response, candidate_symbols) == 1.0
+    assert score_tsr_response(task, "nothing relevant mentioned here", candidate_symbols) == 0.0
+
+
 def test_render_diagnostics_markdown_table_none_values_render_as_dash():
     from benchmarks.reporting.report_generator import EvaluationRun, TaskRunRecord, render_diagnostics_markdown_table
 
