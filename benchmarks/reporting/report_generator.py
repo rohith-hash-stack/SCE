@@ -153,6 +153,11 @@ def write_markdown_report(run: EvaluationRun, path: str | Path, n_resamples: int
         "`|S_M \\ S_Oracle| / |S_M|`, divergence from the Oracle engine's "
         "own package for the same (task, budget). `fpr_oracle` is `—` "
         "wherever no Oracle run was configured/available for that cell.",
+        "- **FCC (`—` = n/a, not zero).** FCC is an internal packing-density "
+        "diagnostic defined over Prism's four-axis coordinate space. It is "
+        "structurally inapplicable to topological and lexical baselines "
+        "that do not operate over that space - their rows show `—`, never "
+        "a fabricated `0.000`.",
         "",
     ]
     path.write_text("\n".join(lines) + "\n")

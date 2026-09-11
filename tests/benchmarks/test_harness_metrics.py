@@ -205,9 +205,12 @@ def test_idf_of_an_unseen_feature_is_the_max_possible():
     assert idf("NEVER_SEEN", stats) > idf("SEEN", stats)
 
 
-def test_fcc_zero_for_zero_cost_package():
+def test_fcc_zero_for_zero_cost_package_with_real_features():
+    # Zero total tokens is a distinct "nothing to divide by" case from
+    # "no coordinate space at all" (Gap 3) - a real feature-bearing node
+    # at zero cost still returns 0.0, not None.
     stats = CorpusFeatureStats(total_symbols=10, document_frequency={})
-    pkg = _pkg([_node("svc.seed", "seed", 0.0, cost=0)])
+    pkg = _pkg([_node("svc.seed", "seed", 0.0, cost=0, substance="SINK_NETWORK_IO")])
     assert fcc(pkg, stats) == 0.0
 
 
@@ -215,6 +218,50 @@ def test_fcc_positive_for_a_real_covered_feature():
     stats = CorpusFeatureStats(total_symbols=100, document_frequency={"SINK_NETWORK_IO": 5})
     pkg = _pkg([_node("svc.seed", "seed", 0.0, cost=1000, substance="SINK_NETWORK_IO")])
     assert fcc(pkg, stats) > 0.0
+
+
+# --------------------------------------------------------------------- #
+# Gap 3: null FCC for engines with no four-axis coordinate space
+# --------------------------------------------------------------------- #
+def test_has_coordinate_space_features_false_for_all_none_package():
+    from benchmarks.metrics.fcc import has_coordinate_space_features
+
+    # substance/form/output/role all default to "NONE" - exactly what
+    # baseline_rag.py/baseline_bfs.py hardcode on every node.
+    pkg = _pkg([_node("svc.seed", "seed", 0.0, cost=1000), _node("svc.a", "callee", 1.0, cost=500)])
+    assert has_coordinate_space_features(pkg) is False
+
+
+def test_has_coordinate_space_features_true_for_real_feature_package():
+    from benchmarks.metrics.fcc import has_coordinate_space_features
+
+    pkg = _pkg([_node("svc.seed", "seed", 0.0, cost=1000, substance="SINK_NETWORK_IO")])
+    assert has_coordinate_space_features(pkg) is True
+
+
+def test_fcc_is_none_for_a_baseline_style_all_none_package():
+    stats = CorpusFeatureStats(total_symbols=10, document_frequency={})
+    pkg = _pkg([_node("svc.seed", "seed", 0.0, cost=1000), _node("svc.a", "callee", 1.0, cost=500)])
+    assert fcc(pkg, stats) is None
+
+
+def test_smoke_fixture_fcc_none_for_baselines_float_for_prism():
+    """End-to-end (not synthetic): the real BM25/BFS baseline engines
+    and the real Prism engine, run against the smoke module's own tiny
+    synthetic repo fixture - not fabricated feature stubs, the actual
+    engines' actual output."""
+    import tempfile
+
+    from benchmarks.smoke import run_smoke_test
+
+    with tempfile.TemporaryDirectory() as out_dir:
+        run = run_smoke_test(output_dir=out_dir)
+    fcc_by_engine = {r.engine_name: r.diagnostics["fcc"] for r in run.records}
+    assert fcc_by_engine["baseline_rag"] is None
+    assert fcc_by_engine["baseline_bfs_forward"] is None
+    assert fcc_by_engine["baseline_bfs_bidirectional"] is None
+    assert isinstance(fcc_by_engine["prism_v11"], float)
+    assert isinstance(fcc_by_engine["oracle"], float)
 
 
 def test_compute_corpus_feature_stats_real_repo(tmp_path):

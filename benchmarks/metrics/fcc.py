@@ -47,10 +47,33 @@ def idf(feature: str, stats: CorpusFeatureStats) -> float:
     return math.log(stats.total_symbols / (1 + df))
 
 
-def fcc(pkg: ContextPackage, stats: CorpusFeatureStats) -> float:
-    """`FCC(S_M) = sum(IDF(f) for f in union(Phi(v))) / (Total Tokens(S_M) / 1000)`
-    - `0.0` for a package that spent zero tokens (nothing to divide by,
-    and nothing was covered either)."""
+def has_coordinate_space_features(pkg: ContextPackage) -> bool:
+    """Whether `pkg` carries any real (non-`"NONE"`) four-axis feature
+    label on any node, on any axis - FCC's own coordinate space. A
+    retrieval engine that never computes per-node feature vectors at
+    all (the lexical/topological baselines - BM25, BFS forward and
+    bidirectional - hardcode every axis to `"NONE"` on every node,
+    verifiably, in their own source) always produces `False` here; a
+    real four-axis engine (Prism, Oracle) produces `True` for any
+    package with at least one classifiable node - which in practice is
+    every package that isn't literally empty of any indexed symbol."""
+    return any(feature_tokens(node) for node in pkg.nodes)
+
+
+def fcc(pkg: ContextPackage, stats: CorpusFeatureStats) -> float | None:
+    """`FCC(S_M) = sum(IDF(f) for f in union(Phi(v))) / (Total Tokens(S_M) / 1000)`.
+
+    `None` (never a fabricated `0.0`) when `pkg` carries no real
+    four-axis feature data at all (`has_coordinate_space_features` is
+    `False`) - FCC is an internal packing-density diagnostic defined
+    over that coordinate space; it is structurally inapplicable to an
+    engine that never operates over it, not "measured and found to be
+    zero". `0.0` for a package that spent zero tokens (nothing to
+    divide by, and nothing was covered either) despite otherwise
+    carrying real feature data.
+    """
+    if not has_coordinate_space_features(pkg):
+        return None
     total_tokens = sum(node.cost for node in pkg.nodes)
     if total_tokens <= 0:
         return 0.0
