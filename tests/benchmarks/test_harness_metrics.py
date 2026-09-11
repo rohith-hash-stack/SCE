@@ -692,3 +692,31 @@ def test_evaluation_task_schema_accepts_express_repo():
         annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
     )
     assert task.repo == "express"
+
+
+# --------------------------------------------------------------------- #
+# Gap 1: --budget (singular) as a true --budgets alias
+# --------------------------------------------------------------------- #
+def test_resolve_budgets_singular_budget_alone():
+    from benchmarks.runner import resolve_budgets
+
+    assert resolve_budgets(4000, None) == [4000]
+
+
+def test_resolve_budgets_plural_budgets_alone():
+    from benchmarks.runner import resolve_budgets
+
+    assert resolve_budgets(None, [2000, 8000]) == [2000, 8000]
+
+
+def test_resolve_budgets_neither_falls_back_to_default_sweep():
+    from benchmarks.runner import DEFAULT_BUDGETS, resolve_budgets
+
+    assert resolve_budgets(None, None) == list(DEFAULT_BUDGETS)
+
+
+def test_resolve_budgets_both_raises():
+    from benchmarks.runner import resolve_budgets
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        resolve_budgets(4000, [2000, 8000])

@@ -56,6 +56,38 @@ from benchmarks.tsr.scorer_redundancy import score_redundancy
 DEFAULT_BUDGETS = (2000, 4000, 8000)
 DEFAULT_TASKS_DIR_TEMPLATE = "benchmarks/ground_truth/tasks/{repo}"
 
+
+def resolve_budgets(budget: int | None, budgets: list[int] | None) -> list[int]:
+    """Resolves the CLI's `--budget`/`--budgets` flags into the
+    effective (eval/pilot mode) budget list. `--budget` (singular) is a
+    true alias for `--budgets` with one value - passing both is a
+    configuration error (never a silent "one wins"), passing neither
+    falls back to the full `DEFAULT_BUDGETS` sweep.
+    """
+    if budget is not None and budgets is not None:
+        raise ValueError("--budget and --budgets are mutually exclusive - pass exactly one")
+    if budget is not None:
+        return [budget]
+    if budgets:
+        return list(budgets)
+    return list(DEFAULT_BUDGETS)
+
+
+def resolve_ablation_budget(budget: int | None, budgets: list[int] | None) -> int:
+    """The ablation-mode counterpart of `resolve_budgets` - ablation
+    sweeps lambda/mu hyperparameters at one fixed budget, so `--budgets`
+    is only accepted here with exactly one value (more than one is a
+    real configuration error, not silently reduced to `budgets[0]`)."""
+    if budget is not None and budgets is not None:
+        raise ValueError("--budget and --budgets are mutually exclusive - pass exactly one")
+    if budget is not None:
+        return budget
+    if budgets:
+        if len(budgets) > 1:
+            raise ValueError("--mode=ablation takes a single budget - pass --budget or one value to --budgets")
+        return budgets[0]
+    return DEFAULT_BUDGETS[1]
+
 SYSTEM_PROMPT = (
     "You are a senior software engineer. You will be given a <prism_context> context package "
     "describing part of a real codebase, followed by a task. Answer the task precisely, "
@@ -420,8 +452,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "'smoke' runs a network-free synthetic-fixture pipeline check, ignoring --repo/--tasks-dir/--runs/--model",
     )
     parser.add_argument("--repo", choices=sorted(CORPORA), default="django")
-    parser.add_argument("--budget", type=int, default=4000, help="Token budget (eval mode: also used as the ablation budget)")
-    parser.add_argument("--budgets", type=int, nargs="+", default=None, help="Override the full (eval mode) budget sweep, default 2000 4000 8000")
+    parser.add_argument(
+        "--budget",
+        type=int,
+        default=None,
+        help="A single token budget - a true alias for '--budgets N' (eval/pilot mode) or the ablation budget "
+        "(ablation mode). Mutually exclusive with --budgets.",
+    )
+    parser.add_argument(
+        "--budgets",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Override the full (eval mode) budget sweep, default 2000 4000 8000. Mutually exclusive with --budget.",
+    )
     parser.add_argument("--runs", type=int, default=5, help="Number of seeded TSR runs (max 5, the spec's own seed list)")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--tasks-dir", default=None, help=f"Default: {DEFAULT_TASKS_DIR_TEMPLATE}")
@@ -444,11 +488,18 @@ def main(argv: list[str] | None = None) -> int:
             return run_smoke(args.output)
 
         if args.mode == "ablation":
-            run_ablation(args.repo, tasks_dir, args.budget, args.output, force_reclone=args.force_reclone)
+            try:
+                ablation_budget = resolve_ablation_budget(args.budget, args.budgets)
+            except ValueError as exc:
+                parser.error(str(exc))
+            run_ablation(args.repo, tasks_dir, ablation_budget, args.output, force_reclone=args.force_reclone)
             print(f"Ablation report written to {Path(args.output) / 'ablation_report.md'}")
             return 0
 
-        budgets = list(args.budgets) if args.budgets else list(DEFAULT_BUDGETS)
+        try:
+            budgets = resolve_budgets(args.budget, args.budgets)
+        except ValueError as exc:
+            parser.error(str(exc))
         run = run_evaluation(
             repo=args.repo,
             budgets=budgets,
