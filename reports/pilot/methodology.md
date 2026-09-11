@@ -131,7 +131,107 @@ kappa (0.667) stands as the pre-adjudication inter-annotator agreement
 metric that triggered the adjudication requirement in the first place,
 not a claim about the final ground truth's quality.
 
-## Oracle for fpr_oracle (Gap 2 Blocker 2)
+## Performance baseline and cache audit (Blocker 1)
+
+### Process learning: trust `ps`, not a monitor's silence
+
+The first cache-audit run (Step 1) was reported mid-investigation as
+"still running" based on a self-managed background monitor loop that
+had, in fact, already died silently - the script itself had completed
+cleanly 85 minutes earlier. The monitor's absence of a completion
+signal was mistaken for "still in progress" instead of being verified
+directly. **Rule going forward: never report a process as "still
+running" without a fresh `ps` check performed in the same minute as
+the report.** If a monitor mechanism is unreliable, check the process
+table directly rather than trusting the monitor's silence.
+
+### Baseline measurement
+
+The originally-cited ~54-56s per-`retrieve()` figure was never
+persisted with its seed/budget/commit and could not be reproduced. It
+is discarded as noise. The baseline below was measured directly,
+persisted here with its exact seeds/budgets/commit, and independently
+reproduced once (max deviation 3.7%, within the required ±5%):
+
+```
+Baseline measurement (Blocker 1):
+  Commit:                6221fa2e5f67ed884ea44a9b8cd0ebd050dba4f9
+  Seeds used:            django.core.handlers.base.BaseHandler.load_middleware
+                         django.db.models.query.QuerySet._fetch_all
+  Budgets:               4000, 4000, 8000
+  Raw engine retrieve:   ~183-203s per call (first run: 196.65/182.48/185.43s;
+                         reproduction: 203.33/186.13/184.77s)
+  Wrapped retrieve:      ~73-78s per call (first run: 74.99/76.57/72.62s;
+                         reproduction: 77.78/75.36/72.74s)
+  build_causal_graph:    3 calls per retrieve (raw and wrapped, both runs)
+  Prior 54s figure:      DISCARDED - unpersisted, unreproducible
+```
+
+### Call-graph analysis
+
+`build_causal_graph`/`compute_topological_distances` have exactly two
+call sites each in `src/prism`, but one path fires twice per
+`retrieve()`:
+
+- `compute_topological_distances` - 2 call sites: `prism/packer/
+  submodular_knapsack.py:361` inside `pack_symbol_context` (required -
+  feeds `select_submodular_context`), and `prism/surface/build.py:244`
+  inside `build_context_package` (redundant - its only consumer is
+  `reachable_ids`, used for `manifest.considered_nodes`/
+  `reachable_nodes` and `_coverage_summary`; `SubmodularPackResult`
+  does not currently expose the `dist_w_map` `pack_symbol_context`
+  already computed, which is why `build_context_package` recomputes it
+  instead of reusing it - fixing this the direct way would touch
+  `prism/surface/build.py`, outside the `prism/traversal/`+`prism/
+  packer/` scope guardrail).
+- `build_causal_graph` - 2 source call sites (`submodular_knapsack.py:
+  359`, direct; `continuous_dijkstra.py:62`, inside
+  `compute_topological_distances`), 3 total invocations per
+  `retrieve()` because the second site fires once per each of the two
+  `compute_topological_distances` calls above. 1 + 2 = 3, matching the
+  audit's empirical count exactly.
+
+### Wrapper (`PrismEngineCache`) cache surface
+
+|                         | Cached? |
+|---|---|
+| Parsed ASTs / builder   | Yes - in-process, class-level, keyed by repo+engine-commit+prism-version+file-hash |
+| Contracts               | Yes - same key/tuple as the builder |
+| Feature masks           | Yes - in-process and disk-persisted (Gap 5's entire surface) |
+| Causal graph            | No - confirmed by code and by the audit's 3-calls-even-when-wrapped result |
+| Topological distances   | No - same |
+| Token counts             | No - nothing in the wrapper touches token counting |
+
+Since `index()` is called once before all 3 timed `retrieve()` calls
+in both the raw and wrapped audit arms, builder/AST reuse is identical
+in both during the timed window. The entire 183-203s -> 73-78s delta
+is attributable to `compute_feature_masks` being monkey-patched to an
+O(1) lookup (it is called twice per `retrieve()` - once inside
+`pack_symbol_context`, once directly in `build_context_package`) -
+*not* to any causal-graph/distance caching, which stays equally
+redundant (3x) in both arms.
+
+### Scratch-branch redundancy measurement (not committed)
+
+A throwaway local branch memoized `build_causal_graph`/
+`compute_topological_distances` inside `prism/traversal/
+continuous_dijkstra.py` only (id(builder)-keyed, in-process; not a
+real fix - id() reuse after GC makes this unsafe outside a single
+short-lived measurement process). Verified against the unpatched
+baseline for 5 real seeds (`load_middleware`, `_fetch_all`, `reverse`,
+`QuerySet.get`, `Options.get_field`): **all 5 bit-identical**
+(`dist_W` values compared by dict equality, no tolerance). Timed
+raw-engine retrieve with the memoized module: 148.99s / 139.82s /
+139.76s (`build_causal_graph` invocation-site count dropped from 3 to
+1 per retrieve, confirming the call-graph analysis above), a ~23-26%
+reduction versus the raw baseline - real, but smaller than the naive
+"redundant work eliminated" estimate suggested, since eliminating the
+graph/distance redundancy alone leaves `compute_feature_masks`'s own
+(separately redundant, 2x-per-retrieve) cost untouched. The scratch
+branch and its commit were both deleted after measurement; nothing
+from it was merged.
+
+
 
 `fpr_oracle` (Gap 2) is defined as divergence from the Oracle engine's
 own package for the same (task, budget) - but this repository ships no
