@@ -871,7 +871,7 @@ so TSR differences measure retrieval quality, not prompt formatting.
 pip install -e '.[dev,bench]'   # openai (dev) + rank-bm25/pyyaml/numpy (bench)
 export OPENAI_API_KEY=sk-...    # only needed for a real TSR sweep - omitted/--dry-run skips LLM calls
 
-python -m benchmarks.runner --repo=django --budget=4000 --runs=5 --output=reports/
+python -m benchmarks.runner --repo=django --budget=4000 --seeds=42,43,44,45,46 --output=reports/
 python -m benchmarks.runner --mode=ablation --repo=django --output=reports/
 ```
 
