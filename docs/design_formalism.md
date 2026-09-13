@@ -976,3 +976,41 @@ Formal properties this layer guarantees, proven in
    `tests/test_pipeline_preservation.py` proves the strongest form of
    this end to end (a synthetic edge making a sibling function reachable
    at all, where no structural path existed).
+
+## 9. Fuzzy Seed Resolution — Known Limits
+
+`prism.packer.submodular_knapsack.suggest_similar_seeds` (Bookmark 1
+Item 5) is a deterministic, non-learned "did you mean" fallback for a
+`seed_symbol` that misses an exact match against `builder.symbol_table`
+- never the primary resolution path, which stays exact-match-or-fail.
+Similarity is `max(token-Jaccard over the qualified name, normalized-
+Levenshtein over the symbol's own unqualified name)`, computed against
+every function/method symbol in the indexed repo.
+
+**Accepted tradeoff, not an oversight.** Meeting the hard performance
+requirement (< 50ms against a real ~50k-symbol corpus) required gating
+the two metrics independently behind their own cheap bounds. Jaccard's
+gate is fully exact (a real, lossless upper bound derived from
+`str.count("_")`/`str.count(".")`). Levenshtein's gate is not: alongside
+the exact length-difference bound on edit distance, it also requires
+the candidate's own (unqualified) name to share the query's first and
+last character - a deliberately inexact heuristic. A first, fully-exact
+version of this function measured 750ms-1.4s on the real Django corpus
+(15-28x over budget); the heuristic was what closed that gap.
+
+**Consequence**: a query that is a genuine typo of some real seed, but
+changes *both* the first and last character of that seed's own name,
+and shares no tokens with it either (so the Jaccard path can't rescue
+it), will not be surfaced as a candidate. Example: querying
+`"xet_user_profilz"` against a real `get_user_profile` symbol - both
+endpoints changed, and `{"xet","user","profilz"}` vs. `{"get","user",
+"profile"}` still shares the `"user"` token, so this *particular*
+example is actually caught by Jaccard; a query that changes both
+endpoints *and* every token would not be.
+
+This was a deliberate performance/completeness tradeoff, decided and
+accepted explicitly (not discovered later) - see `suggest_similar_
+seeds`'s own docstring (`prism/packer/submodular_knapsack.py`) for the
+exact bound derivations, and `tests/test_fuzzy_seed_suggestion.py` for
+the verification this tradeoff was checked against, including the real-
+corpus performance measurement itself.
