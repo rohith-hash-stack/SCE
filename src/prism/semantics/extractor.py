@@ -9,6 +9,7 @@ three are independent) itself.
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 
 from prism.cache.sqlite_cache import load_file_cache_entry, save_file_cache_entry
 from prism.graph.concrete_builder import ConcreteGraphBuilder
@@ -18,8 +19,31 @@ from prism.semantics.form import compute_form_bits, extract_form
 from prism.semantics.output import compute_output_bits, extract_output
 from prism.semantics.role import compute_role_bits
 from prism.semantics.substance import _direct_sink_bits, _has_state_mutation, compute_substance_bits
+from prism.traversal._cache_keys import engine_commit_hash, target_repo_file_signature
 
 _SUBSTANCE_MASK = compose_mask(*SUBSTANCE_BITS)
+
+#: Step-1c in-memory layer on top of `compute_feature_masks_cached`'s own
+#: per-file disk cache (`prism.cache.sqlite_cache`). That disk cache
+#: still pays a real file-read + sha256 + sqlite-query cost per source
+#: file on *every* call, even on a hit (Milestone 1 closure finding,
+#: see `reports/pilot/methodology.md`) - this dict skips the whole
+#: function body entirely on a repeat call within the same process, the
+#: same in-memory treatment Steps 2/4 already gave `build_causal_graph`/
+#: `compute_topological_distances`/the causal-edge functions.
+#: `digest(repo_path, engine_commit_hash, file_hash_set) -> masks`.
+_FEATURE_MASKS_CACHE: dict[str, dict[str, int]] = {}
+
+
+def _feature_masks_cache_key(repo_root: str) -> str:
+    """`file_hash_set` here is `target_repo_file_signature(repo_root)` -
+    not itself session-cached (no `@lru_cache`), but measured directly
+    against the real Django corpus at ~2-3ms/call (a single `git
+    rev-parse HEAD` for a git-tracked repo, not a full per-file rehash)
+    - cheap enough to call fresh on every `compute_feature_masks_cached`
+    invocation without threatening the <100ms warm-call target."""
+    raw = "|".join((str(Path(repo_root).resolve()), engine_commit_hash(), target_repo_file_signature(repo_root)))
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def compute_feature_masks(builder: ConcreteGraphBuilder) -> dict[str, int]:
@@ -66,7 +90,15 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
     why (Substance's one-hop transitive wrapper propagation and all of
     Role are graph-shaped, not file-shaped, and are always recomputed
     fresh here, cheaply, from the - possibly cached - direct bits).
+
+    Step 1c: an in-memory session cache sits in front of the whole
+    function body below - see `_FEATURE_MASKS_CACHE`'s own docstring.
     """
+    cache_key = _feature_masks_cache_key(repo_root)
+    cached_masks = _FEATURE_MASKS_CACHE.get(cache_key)
+    if cached_masks is not None:
+        return cached_masks
+
     symbols_by_file: dict[str, list] = {}
     for symbol in builder.symbol_table:
         if symbol.kind not in ("function", "method"):
@@ -150,4 +182,5 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
         qname = symbol.qualified_name
         non_substance = int(base_bits.get(qname, FeatureBit(0))) & ~_SUBSTANCE_MASK
         masks[qname] = compose_mask(substance_only.get(qname, 0), non_substance, role.get(qname, 0))
+    _FEATURE_MASKS_CACHE[cache_key] = masks
     return masks

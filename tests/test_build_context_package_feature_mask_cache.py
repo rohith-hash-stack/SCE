@@ -49,6 +49,20 @@ def _patched_cache_counters(monkeypatch):
 
 
 def test_build_context_package_hits_feature_mask_cache_on_second_call(tmp_path, monkeypatch):
+    """Step 1c added an in-memory session cache in front of the disk
+    cache these counters observe (see `_FEATURE_MASKS_CACHE` in
+    extractor.py). `build_context_package` still calls `compute_
+    feature_masks_cached` twice per invocation (once indirectly via
+    `pack_symbol_context`, once directly at build.py:243), but now
+    only the very first of all these calls (across both top-level
+    calls below) ever reaches the disk layer at all - every call after
+    that, including the second internal call within the very first
+    `build_context_package` invocation, is answered by the in-memory
+    cache before `load_file_cache_entry`/`save_file_cache_entry` are
+    reached."""
+    from prism.semantics.extractor import _FEATURE_MASKS_CACHE
+
+    _FEATURE_MASKS_CACHE.clear()
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "x.py").write_text(_SOURCE)
@@ -57,26 +71,33 @@ def test_build_context_package_hits_feature_mask_cache_on_second_call(tmp_path, 
 
     counts = _patched_cache_counters(monkeypatch)
 
-    # build_context_package calls compute_feature_masks_cached TWICE per
-    # invocation - once indirectly via pack_symbol_context (Step 1),
-    # once directly (Decision 1, this fix) - so even the very FIRST
-    # call already shows the direct call hitting what pack_symbol_
-    # context's own call just populated: 1 real miss, 1 hit, 1 save.
     pkg_1 = build_context_package(builder, "x.parse_order", str(repo), 2000, contracts=contracts)
     assert pkg_1.nodes
     assert counts["misses"] == 1, "first run: no prior cache entry for x.py, must be a real miss (once)"
-    assert counts["hits"] == 1, "the direct call must hit what pack_symbol_context's own call just wrote"
+    assert counts["hits"] == 0, "the direct call now hits the in-memory layer before the disk layer is ever reached"
     assert counts["saves"] == 1
+    assert len(_FEATURE_MASKS_CACHE) == 1, "the in-memory layer must be populated after the first call"
 
     counts["misses"] = counts["saves"] = counts["hits"] = 0
     pkg_2 = build_context_package(builder, "x.parse_order", str(repo), 2000, contracts=contracts)
     assert [n.id for n in pkg_2.nodes] == [n.id for n in pkg_1.nodes]
-    assert counts["hits"] == 2, "second run: both internal calls must be real cache hits"
+    assert counts["hits"] == 0, "second run: both internal calls are answered by the in-memory cache, disk layer untouched"
     assert counts["misses"] == 0
     assert counts["saves"] == 0
 
 
 def test_build_context_package_feature_mask_cache_invalidates_on_file_change(tmp_path, monkeypatch):
+    """Step 1c: the in-memory layer intercepts before the disk layer on
+    every same-process call once populated (see the sibling hits-test
+    above), so 'warm' below sees 0/0/0 at the disk layer, not 2 hits.
+    After the file is touched, the in-memory cache key (which folds in
+    file_hash_set) differs too, so the first internal call in run 3
+    correctly falls through to a real disk miss; the second internal
+    call within that same run 3 is then answered by the in-memory
+    cache (just populated by the first), not the disk layer."""
+    from prism.semantics.extractor import _FEATURE_MASKS_CACHE
+
+    _FEATURE_MASKS_CACHE.clear()
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "x.py").write_text(_SOURCE)
@@ -87,7 +108,7 @@ def test_build_context_package_feature_mask_cache_invalidates_on_file_change(tmp
     build_context_package(builder, "x.parse_order", str(repo), 2000, contracts=contracts)  # cold
     counts["misses"] = counts["saves"] = counts["hits"] = 0
     build_context_package(builder, "x.parse_order", str(repo), 2000, contracts=contracts)  # warm
-    assert counts["hits"] == 2 and counts["misses"] == 0
+    assert counts["hits"] == 0 and counts["misses"] == 0 and counts["saves"] == 0
 
     (repo / "x.py").write_text(_SOURCE + "\n\ndef unrelated_new_function():\n    return 1\n")
     builder_after_touch, _ = build_pipeline(str(repo))
@@ -98,7 +119,7 @@ def test_build_context_package_feature_mask_cache_invalidates_on_file_change(tmp
     assert pkg_3.nodes
     assert counts["misses"] == 1, "file content changed, the first internal call must be a real miss, not a stale hit"
     assert counts["saves"] == 1
-    assert counts["hits"] == 1, "the second internal call hits what the first one (post-change) just wrote"
+    assert counts["hits"] == 0, "the second internal call now hits the in-memory layer, populated by the first call in this same run"
 
 
 def test_build_context_package_feature_masks_identical_cached_vs_uncached(tmp_path):

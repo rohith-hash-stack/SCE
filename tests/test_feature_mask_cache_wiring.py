@@ -52,6 +52,16 @@ def _patched_cache_counters(monkeypatch):
 
 
 def test_pack_symbol_context_hits_feature_mask_cache_on_second_call(tmp_path, monkeypatch):
+    """Step 1c added an in-memory session cache in front of the disk
+    cache these counters observe (see `_FEATURE_MASKS_CACHE` in
+    extractor.py) - a second same-process call now short-circuits
+    *before* `load_file_cache_entry`/`save_file_cache_entry` are ever
+    reached, so the disk-layer counters correctly see nothing at all on
+    the second call (0/0/0), not a disk-level hit. The in-memory cache
+    itself is verified directly instead: same object, same repo."""
+    from prism.semantics.extractor import _FEATURE_MASKS_CACHE
+
+    _FEATURE_MASKS_CACHE.clear()
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "x.py").write_text(_SOURCE)
@@ -64,30 +74,39 @@ def test_pack_symbol_context_hits_feature_mask_cache_on_second_call(tmp_path, mo
     assert counts["misses"] == 1, "first run: no prior cache entry for x.py, must be a real miss"
     assert counts["saves"] == 1, "first run: a real miss must write a cache entry"
     assert counts["hits"] == 0
+    assert len(_FEATURE_MASKS_CACHE) == 1, "the in-memory layer must be populated after the first call"
 
     counts["misses"] = counts["saves"] = counts["hits"] = 0
     result_2 = pack_symbol_context(builder, "x.parse_order", 2000)
     assert result_2.selected == result_1.selected
-    assert counts["hits"] == 1, "second run: same repo, same file content, must be a real cache hit"
+    assert counts["hits"] == 0, "second run: the in-memory cache answers first - the disk layer is never reached"
     assert counts["misses"] == 0
-    assert counts["saves"] == 0, "a cache hit must not re-save"
+    assert counts["saves"] == 0, "a cache hit (in-memory or disk) must not re-save"
 
 
 def test_pack_symbol_context_feature_mask_cache_invalidates_on_file_change(tmp_path, monkeypatch):
+    from prism.semantics.extractor import _FEATURE_MASKS_CACHE
+
+    _FEATURE_MASKS_CACHE.clear()
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "x.py").write_text(_SOURCE)
     builder, _ = build_pipeline(str(repo))
 
     counts = _patched_cache_counters(monkeypatch)
-    pack_symbol_context(builder, "x.parse_order", 2000)  # run 1: cold, writes cache
+    pack_symbol_context(builder, "x.parse_order", 2000)  # run 1: cold, writes disk cache + in-memory cache
     counts["misses"] = counts["saves"] = counts["hits"] = 0
-    pack_symbol_context(builder, "x.parse_order", 2000)  # run 2: warm, hits cache
-    assert counts["hits"] == 1 and counts["misses"] == 0
+    pack_symbol_context(builder, "x.parse_order", 2000)  # run 2: warm - in-memory cache short-circuits, disk layer untouched
+    assert counts["hits"] == 0 and counts["misses"] == 0 and counts["saves"] == 0
 
     # Touch the source file (real content change) and re-index - a
     # cache is only as good as its invalidation; this proves it isn't
-    # a "no expiry" cache masquerading as a correct one.
+    # a "no expiry" cache masquerading as a correct one. The changed
+    # content changes this repo's own file_hash_set (a real sha256 over
+    # every *.py file's content, since this tmp_path fixture isn't a
+    # git working tree - see target_repo_file_signature), so the
+    # in-memory cache key differs too and correctly falls through to
+    # the disk layer, which independently misses on the new content.
     (repo / "x.py").write_text(_SOURCE + "\n\ndef unrelated_new_function():\n    return 1\n")
     builder_after_touch, _ = build_pipeline(str(repo))
 
