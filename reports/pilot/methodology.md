@@ -455,3 +455,63 @@ no prior test exercised this path; it constructs a `required_context`
 entry that doesn't exist in the synthetic fixture repo and asserts it
 never appears in `selected_symbols(pkg)`, never appears as a node, and
 contributes nothing to `sum(n.cost for n in pkg.nodes)`.
+
+## Ground Truth Provenance
+
+The 9 existing ground-truth tasks (5 T02 debug tasks, commit
+`38d1264`; 4 T13 blast tasks, commit `44f0ef7`) were annotated by
+Claude - both raw annotations (`annotation_a`/`annotation_b`) and the
+`adjudicated` reconciliation for every task were produced by one AI
+process across two commits, not by two independent human annotators
+plus a separate human adjudicator as `benchmarks/ground_truth/
+TASK_AUTHORING.md`'s "two independent annotators + a real adjudicator"
+requirement describes. `38d1264`'s own commit message uses the
+qualifier "human-style" - a description of the simulation, not a claim
+of an actual human process.
+
+**Spot-check (3 of 9 tasks):**
+
+- `django_t02_001_request_middleware_chain` - an independent Gemini
+  annotation reproduced the adjudicated 4-symbol pipeline
+  (`load_middleware` -> `get_response` -> `_get_response` ->
+  `resolve_request`) exactly. Validated.
+- `django_t13_001_blast_reverse` - all 8 adjudicated `critical_callers`
+  verified directly against the pinned Django 4.2.30 source
+  (`django/contrib/admin/options.py`, `django/contrib/admin/sites.py`,
+  `django/views/generic/base.py`, `django/contrib/sitemaps/__init__.py`);
+  every caller genuinely binds or transitively binds `reverse`'s return
+  value. Validated.
+- `django_t02_003_form_clean_validation` - an independent Gemini
+  annotation agreed on the 3 core pipeline symbols (`full_clean` ->
+  `_clean_fields` -> `_clean_form`) but additionally included
+  `_post_clean` and `clean`, which the ground truth classifies as
+  boundary rather than pipeline. Root cause: the original prompt asked
+  for the "causal pipeline ... that together populate
+  `self.cleaned_data` and `self._errors`" without excluding methods
+  that touch those attributes without being part of the 3-stage chain
+  itself (`_post_clean` is a no-op hook in `BaseForm`, only meaningful
+  when a subclass overrides it; `clean()` is called *from inside*
+  `_clean_form()`, not a separate top-level stage). Real prompt
+  ambiguity, not a ground-truth error - the adjudicated symbol set is
+  unchanged; the prompt was corrected instead (see below).
+
+All 3 spot-checked tasks validated. No ground-truth annotation content
+was found to be wrong; one prompt was found to be ambiguous and was
+disambiguated.
+
+**Prompt correction (`django_t02_003_form_clean_validation.yaml`):**
+the prompt now asks for "the direct method calls made by full_clean,
+in order, that populate `self.cleaned_data` and `self._errors`.
+Exclude no-op hooks and hooks that are only overridden by subclasses,"
+replacing the earlier "real causal pipeline ... that together
+populate" phrasing that Gemini's otherwise-correct answer read more
+broadly than the adjudicated boundary intended.
+
+**Answering-LLM pinning:** the pilot's answering LLM (the model that
+consumes each task's context package and produces the graded response)
+is pinned to GPT-4o - `benchmarks/tsr/client.py`'s existing
+`DEFAULT_MODEL = "gpt-4o-2024-11-20"`, used by `benchmarks/runner.py`'s
+`--model` default - not Claude. Since ground truth was annotated by
+Claude, this pinning is what makes the pilot's scores measure
+cross-model agreement (does GPT-4o's answer match Claude's annotation)
+rather than Claude-vs-Claude self-consistency.
