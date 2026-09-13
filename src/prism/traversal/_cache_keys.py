@@ -13,10 +13,14 @@ from __future__ import annotations
 
 import hashlib
 import importlib.metadata
+import os
 import subprocess
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+
+from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
 
 
 def _run_git_head(cwd: str | Path) -> str | None:
@@ -70,25 +74,152 @@ def grammar_version() -> str:
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
 
-def target_repo_file_signature(repo_root: str) -> str:
-    """Same technique `benchmarks.engines.prism_engine_cache.
-    _repo_file_signature` already uses (duplicated, not imported, for
-    the same layering reason as `engine_commit_hash` above): the
-    checked-out commit SHA if `repo_root` is a git working tree (cheap:
-    one `git rev-parse HEAD`), else a real sha256 over every `*.py`
-    file's own content (slower, but correct for a non-git fixture)."""
-    git_head = _run_git_head(repo_root) if (Path(repo_root) / ".git").is_dir() else None
-    if git_head:
-        return f"git:{git_head}"
-    hasher = hashlib.sha256()
-    for path in sorted(Path(repo_root).rglob("*.py")):
+#: Bookmark 1 Item 1: duplicated from `prism.cli.IGNORED_DIRS` rather
+#: than imported - `prism.cli` imports `prism.surface.build`, which
+#: imports `prism.semantics.extractor`, which imports this module, so
+#: importing `prism.cli` from here would be circular. Same layering
+#: reason `_run_git_head`/`engine_commit_hash` above are duplicated
+#: from `benchmarks.engines.prism_engine_cache` instead of imported.
+_IGNORED_DIRS = {
+    ".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build",
+    ".mypy_cache", ".pytest_cache", ".tox", "site-packages", ".prism_cache",
+}
+
+#: A cached (mtime, size) match is only trusted without re-hashing if
+#: its mtime is more than this many seconds older than the *previous*
+#: scan's own timestamp - guards both a same-second edit (mtime ==
+#: last_scan_time - delta is 0, not > the window) and a `cp -p`-style
+#: preserved-mtime overwrite (an edit whose mtime lands suspiciously
+#: close to when we last looked is treated as ambiguous, not trusted).
+_MTIME_STABILITY_WINDOW_SECONDS = 1.0
+
+
+@dataclass(frozen=True)
+class _TrackedFileState:
+    mtime: float
+    size: int
+    sha256: str
+
+
+@dataclass
+class _RepoScanState:
+    git_head: str | None
+    last_scan_time: float
+    files: dict[str, _TrackedFileState] = field(default_factory=dict)
+
+
+#: Bookmark 1 Item 1: one entry per repo (resolved absolute path) this
+#: process has scanned - the real mtime/size/hash bookkeeping an MCP
+#: session needs to detect an uncommitted edit between two `retrieve()`
+#: calls, which the old git-HEAD-only signature could never see (its
+#: whole failure mode: a live session serving stale results after the
+#: first uncommitted edit). Not itself bounded here - Bookmark 1 Item 3
+#: covers eviction for the five caches that *consume* this state's own
+#: output; this dict holds one entry per distinct repo a session has
+#: touched, which grows far slower than any of those five.
+_REPO_SCAN_STATE: dict[str, _RepoScanState] = {}
+
+
+def _discover_tracked_files(repo_root: str) -> list[str]:
+    """The same file-tracking definition `prism.cli.discover_files`
+    uses (`EXTENSION_LANGUAGE_MAP` + ignored-directory pruning) - the
+    "tracked file list" Item 1's own scan walks, not a separately
+    invented one. Returns absolute paths, sorted."""
+    files: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(repo_root):
+        dirnames[:] = [d for d in dirnames if d not in _IGNORED_DIRS and not d.startswith(".")]
+        for filename in filenames:
+            if any(filename.endswith(ext) for ext in EXTENSION_LANGUAGE_MAP):
+                files.append(os.path.join(dirpath, filename))
+    return sorted(files)
+
+
+def _hash_file_bytes(path: str) -> str | None:
+    """Item 4 (content normalization) changes what bytes this hashes,
+    not this function's own role - see that item's own commit."""
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def _compute_file_hash_set(repo_root: str) -> str:
+    """The real, stateful mtime-based scan (Bookmark 1 Item 1):
+
+    1. Git-HEAD is still the first-pass fast check - unchanged (or this
+       repo isn't git-tracked at all) falls through to the per-file
+       mtime scan below; changed forces a full rescan (every tracked
+       file re-hashed unconditionally, and a fresh `_RepoScanState`
+       baseline established) rather than trying to diff against a
+       potentially wholesale-stale mtime map after a checkout/pull.
+    2. Otherwise, per tracked file: a cached (mtime, size) match whose
+       mtime is safely in the past (see `_MTIME_STABILITY_WINDOW_
+       SECONDS`) is trusted without re-reading the file's bytes; any
+       other case (new file, mtime/size changed, or an ambiguous
+       recent mtime) is hashed for real.
+    3. Added/deleted files fall out of comparing the current tracked
+       set against the previous scan's own key set - no separate pass.
+
+    The returned signature is built **only from each file's own
+    content hash** (never mtime/size, which are pure bookkeeping for
+    deciding whether to re-hash) - two scans with different mtimes but
+    identical content must produce the identical signature (a `touch`
+    with no content change is a cache hit, per Item 1's own
+    verification requirement), and any content difference - a real
+    edit, a new file, a deleted file - must change it.
+    """
+    resolved_root = str(Path(repo_root).resolve())
+    git_head = _run_git_head(resolved_root) if (Path(resolved_root) / ".git").is_dir() else None
+    prev_state = _REPO_SCAN_STATE.get(resolved_root)
+
+    force_full_rescan = prev_state is None or prev_state.git_head != git_head
+    last_scan_time = prev_state.last_scan_time if prev_state is not None else 0.0
+    prev_files = prev_state.files if prev_state is not None else {}
+
+    current_paths = _discover_tracked_files(resolved_root)
+    new_files: dict[str, _TrackedFileState] = {}
+
+    for path in current_paths:
         try:
-            content = path.read_bytes()
+            st = os.stat(path)
         except OSError:
             continue
-        hasher.update(str(path.relative_to(repo_root)).encode())
-        hasher.update(content)
+        mtime, size = st.st_mtime, st.st_size
+        prev = prev_files.get(path)
+
+        trusted_stable = (
+            not force_full_rescan
+            and prev is not None
+            and prev.mtime == mtime
+            and prev.size == size
+            and (last_scan_time - mtime) > _MTIME_STABILITY_WINDOW_SECONDS
+        )
+        if trusted_stable:
+            new_files[path] = prev
+            continue
+
+        digest = _hash_file_bytes(path)
+        if digest is None:
+            continue
+        new_files[path] = _TrackedFileState(mtime=mtime, size=size, sha256=digest)
+
+    _REPO_SCAN_STATE[resolved_root] = _RepoScanState(git_head=git_head, last_scan_time=time.time(), files=new_files)
+
+    hasher = hashlib.sha256()
+    for path in sorted(new_files):
+        hasher.update(os.path.relpath(path, resolved_root).encode())
+        hasher.update(new_files[path].sha256.encode())
     return f"content:{hasher.hexdigest()}"
+
+
+def target_repo_file_signature(repo_root: str) -> str:
+    """`file_hash_set` - the checked-out commit SHA plus a real
+    mtime/content-hash scan for anything git-HEAD can't see (an
+    uncommitted edit), or a pure content scan for a non-git repo. See
+    `_compute_file_hash_set`'s own docstring for the real algorithm."""
+    resolved_root = str(Path(repo_root).resolve())
+    return _compute_file_hash_set(resolved_root)
 
 
 @dataclass(frozen=True)
