@@ -18,7 +18,12 @@ from prism.semantics.bitmask import SUBSTANCE_BITS, FeatureBit, compose_mask
 from prism.semantics.form import compute_form_bits, extract_form
 from prism.semantics.output import compute_output_bits, extract_output
 from prism.semantics.role import compute_role_bits
-from prism.semantics.substance import _direct_sink_bits, _has_state_mutation, compute_substance_bits
+from prism.semantics.substance import (
+    _TRANSITIVE_WRAPPER_MAX_STATEMENTS,
+    _direct_sink_bits,
+    _has_state_mutation,
+    compute_substance_bits,
+)
 from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, target_repo_file_signature
 
 _SUBSTANCE_MASK = compose_mask(*SUBSTANCE_BITS)
@@ -170,11 +175,27 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
                 if data.get("relation", "CALLS") not in ("CALLS", "INSTANTIATES"):
                     continue
                 callee_bits = int(base_bits.get(callee, FeatureBit(0))) & (_SUBSTANCE_MASK & ~int(FeatureBit.SINK_PURE_COMPUTE))
-                if callee_bits and statement_counts.get(callee, 99) <= 2:
+                if callee_bits and statement_counts.get(callee, 99) <= _TRANSITIVE_WRAPPER_MAX_STATEMENTS:
                     transitive |= callee_bits
         combined = own | transitive
         if not combined:
-            combined = int(FeatureBit.SINK_PURE_COMPUTE)
+            # Mirror `compute_substance_bits`'s own fallback exactly - an
+            # empty combination means "no real sink, direct or
+            # transitive", not "pure": a symbol with a real state
+            # mutation and no sink must stay bit-empty here too, not be
+            # miscategorized as SINK_PURE_COMPUTE. `_has_state_mutation`
+            # is re-checked fresh rather than trusted from `base_bits`
+            # because masking out SINK_PURE_COMPUTE above (to keep it
+            # out of `own`/`callee_bits`, which must never themselves
+            # carry it) also erases the impure/pure distinction the
+            # earlier direct-bit computation already made.
+            def_node = builder.def_node(qname)
+            parsed = builder.parsed_file(symbol.file)
+            is_pure = True
+            if def_node is not None and parsed is not None:
+                is_pure = not _has_state_mutation(def_node, parsed)
+            if is_pure:
+                combined = int(FeatureBit.SINK_PURE_COMPUTE)
         substance_only[qname] = combined
 
     role = compute_role_bits(builder, substance_only)
