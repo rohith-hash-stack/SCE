@@ -11,11 +11,13 @@ from here instead.
 """
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import importlib.metadata
 import os
 import subprocess
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -213,13 +215,58 @@ def _compute_file_hash_set(repo_root: str) -> str:
     return f"content:{hasher.hexdigest()}"
 
 
+#: Bookmark 1 Item 2: a request-scoped override, set by `snapshot_file_
+#: hash_set` (below) so every `target_repo_file_signature(repo_root)`
+#: call within one `pack_symbol_context()` invocation answers from one
+#: value computed once, instead of independently re-running the real
+#: scan above per call site (`build_causal_graph`, `compute_feature_
+#: masks_cached`, `compute_topological_distances`, the three
+#: causal-edge functions all call this same function). A plain dict
+#: behind a `contextvars.ContextVar`, not a lock - "the snapshot is a
+#: value, not a shared object," per Item 2's own spec. Callers outside
+#: an active snapshot context (`prism.surface.build`'s own direct
+#: calls, unmodified - see Bookmark 1's closed-module guardrail)
+#: compute fresh exactly as before; unaffected by this mechanism.
+_snapshot_override: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
+    "_snapshot_override", default=None
+)
+
+
 def target_repo_file_signature(repo_root: str) -> str:
     """`file_hash_set` - the checked-out commit SHA plus a real
     mtime/content-hash scan for anything git-HEAD can't see (an
     uncommitted edit), or a pure content scan for a non-git repo. See
-    `_compute_file_hash_set`'s own docstring for the real algorithm."""
+    `_compute_file_hash_set`'s own docstring for the real algorithm;
+    this wrapper only adds the Item 2 snapshot short-circuit."""
     resolved_root = str(Path(repo_root).resolve())
+    override = _snapshot_override.get()
+    if override is not None and resolved_root in override:
+        return override[resolved_root]
     return _compute_file_hash_set(resolved_root)
+
+
+@contextmanager
+def snapshot_file_hash_set(repo_root: str):
+    """Bookmark 1 Item 2: computes `file_hash_set` for `repo_root`
+    exactly once, then makes every `target_repo_file_signature(repo_
+    root)` call for the duration of this `with` block return that same
+    value - `pack_symbol_context` wraps its own body in this so a
+    single `retrieve()` performs exactly one real file-hash-set scan,
+    not the 3-4 redundant ones the un-snapshotted call chain would
+    otherwise trigger (`build_causal_graph`, `compute_feature_masks_
+    cached`, `compute_topological_distances` - which itself re-invokes
+    `build_causal_graph`'s own cache-key check - each independently
+    call `target_repo_file_signature`). A file changed after the
+    snapshot is taken is invisible to this retrieve (by design - "no
+    lock, the snapshot is a value") and is only ever caught starting
+    with the *next* `retrieve()`, which opens its own fresh context."""
+    resolved_root = str(Path(repo_root).resolve())
+    value = _compute_file_hash_set(resolved_root)
+    token = _snapshot_override.set({resolved_root: value})
+    try:
+        yield value
+    finally:
+        _snapshot_override.reset(token)
 
 
 @dataclass(frozen=True)

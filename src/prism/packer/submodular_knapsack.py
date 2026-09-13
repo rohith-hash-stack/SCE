@@ -95,6 +95,7 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
 from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import count_tokens
+from prism.traversal._cache_keys import snapshot_file_hash_set
 from prism.traversal.continuous_dijkstra import build_causal_graph, compute_topological_distances
 
 #: Debug-only sub-phase profiler for `pack_symbol_context` (Step 4a of
@@ -392,44 +393,56 @@ def pack_symbol_context(
     BPE token costs, then runs
     `select_submodular_context` over all of it. This is what `prism query
     --engine causal` (`prism.cli`) actually calls.
+
+    Bookmark 1 Item 2: the whole body below runs inside `snapshot_file_
+    hash_set(builder.repo_root)` - `file_hash_set` (the mtime/content
+    scan Item 1 added) is computed exactly once here, not once per
+    cache-key check (`build_causal_graph`, `compute_feature_masks_
+    cached`, and `compute_topological_distances` - which itself
+    re-checks `build_causal_graph`'s own cache key internally - would
+    otherwise each independently re-scan the repo). A file changed
+    after this snapshot is taken is only visible starting with the
+    *next* call to this function, which opens its own fresh snapshot -
+    see that context manager's own docstring.
     """
-    with _profile_phase("build_causal_graph"):
-        graph = build_causal_graph(builder)
-    with _profile_phase("feature_masks"):
-        feature_masks = compute_feature_masks_cached(builder, builder.repo_root)
-    with _profile_phase("compute_topological_distances"):
-        dist_w_map = compute_topological_distances(builder, seed_id)
-    with _profile_phase("upstream_callers"):
-        upstream_callers = compute_upstream_callers(builder, seed_id)
-    dist_w_upstream_map = {symbol: caller.dist_w_upstream for symbol, caller in upstream_callers.items()}
-    upstream_contract_preserving = {symbol for symbol, caller in upstream_callers.items() if caller.unpacks_return}
+    with snapshot_file_hash_set(builder.repo_root):
+        with _profile_phase("build_causal_graph"):
+            graph = build_causal_graph(builder)
+        with _profile_phase("feature_masks"):
+            feature_masks = compute_feature_masks_cached(builder, builder.repo_root)
+        with _profile_phase("compute_topological_distances"):
+            dist_w_map = compute_topological_distances(builder, seed_id)
+        with _profile_phase("upstream_callers"):
+            upstream_callers = compute_upstream_callers(builder, seed_id)
+        dist_w_upstream_map = {symbol: caller.dist_w_upstream for symbol, caller in upstream_callers.items()}
+        upstream_contract_preserving = {symbol for symbol, caller in upstream_callers.items() if caller.unpacks_return}
 
-    candidate_symbols = (
-        [seed_id]
-        + [n for n in dist_w_map if dist_w_map[n] <= max_hops]
-        + [n for n in dist_w_upstream_map if dist_w_upstream_map[n] <= upstream_max_hops]
-    )
-    with _profile_phase("knapsack.token_counting"):
-        costs = _default_costs(builder, candidate_symbols)
-
-    # NOTE (Step 4a): select_submodular_context is a single greedy loop -
-    # every outer iteration re-scores every frontier candidate, then
-    # admits the best and expands the frontier. There is no distinct
-    # "initial candidate scoring" phase separate from the "greedy
-    # selection loop" in this v1.1+ implementation (unlike the older
-    # prism/slicer/knapsack.py, which does have that split) - both are
-    # timed together here as knapsack.greedy_loop. There is also no
-    # swap-refinement pass anywhere in this code path; that phase name
-    # belongs to prism/slicer/knapsack.py's own Issue #12 pass, a
-    # different, older module PrismEngine.retrieve() never calls.
-    with _profile_phase("knapsack.greedy_loop"):
-        selected = select_submodular_context(
-            graph, seed_id, target_budget, dist_w_map, feature_masks, costs,
-            max_hops=max_hops, beta=beta, delta_max=delta_max,
-            dist_w_upstream_map=dist_w_upstream_map,
-            upstream_contract_preserving=upstream_contract_preserving,
-            upstream_max_hops=upstream_max_hops,
+        candidate_symbols = (
+            [seed_id]
+            + [n for n in dist_w_map if dist_w_map[n] <= max_hops]
+            + [n for n in dist_w_upstream_map if dist_w_upstream_map[n] <= upstream_max_hops]
         )
+        with _profile_phase("knapsack.token_counting"):
+            costs = _default_costs(builder, candidate_symbols)
+
+        # NOTE (Step 4a): select_submodular_context is a single greedy loop -
+        # every outer iteration re-scores every frontier candidate, then
+        # admits the best and expands the frontier. There is no distinct
+        # "initial candidate scoring" phase separate from the "greedy
+        # selection loop" in this v1.1+ implementation (unlike the older
+        # prism/slicer/knapsack.py, which does have that split) - both are
+        # timed together here as knapsack.greedy_loop. There is also no
+        # swap-refinement pass anywhere in this code path; that phase name
+        # belongs to prism/slicer/knapsack.py's own Issue #12 pass, a
+        # different, older module PrismEngine.retrieve() never calls.
+        with _profile_phase("knapsack.greedy_loop"):
+            selected = select_submodular_context(
+                graph, seed_id, target_budget, dist_w_map, feature_masks, costs,
+                max_hops=max_hops, beta=beta, delta_max=delta_max,
+                dist_w_upstream_map=dist_w_upstream_map,
+                upstream_contract_preserving=upstream_contract_preserving,
+                upstream_max_hops=upstream_max_hops,
+            )
 
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
     items = [
