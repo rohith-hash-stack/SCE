@@ -19,7 +19,7 @@ from prism.semantics.form import compute_form_bits, extract_form
 from prism.semantics.output import compute_output_bits, extract_output
 from prism.semantics.role import compute_role_bits
 from prism.semantics.substance import _direct_sink_bits, _has_state_mutation, compute_substance_bits
-from prism.traversal._cache_keys import engine_commit_hash, target_repo_file_signature
+from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, target_repo_file_signature
 
 _SUBSTANCE_MASK = compose_mask(*SUBSTANCE_BITS)
 
@@ -32,7 +32,11 @@ _SUBSTANCE_MASK = compose_mask(*SUBSTANCE_BITS)
 #: same in-memory treatment Steps 2/4 already gave `build_causal_graph`/
 #: `compute_topological_distances`/the causal-edge functions.
 #: `digest(repo_path, engine_commit_hash, file_hash_set) -> masks`.
-_FEATURE_MASKS_CACHE: dict[str, dict[str, int]] = {}
+#:
+#: Bookmark 1 Item 3: bounded at 10 entries (LRU-evicted) - the
+#: slowest-growing of the five caches, one entry per repo (not per
+#: seed), same cap as `_GRAPH_CACHE`.
+_FEATURE_MASKS_CACHE: _LRUCache[dict[str, int]] = _LRUCache(maxsize=10)
 
 
 def _feature_masks_cache_key(repo_root: str) -> str:

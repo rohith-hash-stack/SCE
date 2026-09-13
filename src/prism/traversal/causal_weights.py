@@ -30,7 +30,7 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
 from prism.semantics._ast_utils import conditional_nodes, top_level_statements, try_nodes
-from prism.traversal._cache_keys import graph_cache_key
+from prism.traversal._cache_keys import _LRUCache, graph_cache_key
 from prism.traversal._data_flow_common import _node_key, _resolve_call_sites
 from prism.traversal.data_flow_go import compute_go_data_flow_edges
 from prism.traversal.data_flow_py import compute_python_data_flow_edges
@@ -46,9 +46,13 @@ from prism.traversal.data_flow_ts import compute_ts_data_flow_edges
 #: `continuous_dijkstra.py` imports *this* module (`compute_causal_
 #: edges`, `edge_cost`), so importing back from it here would be
 #: circular.
-_DATA_FLOW_EDGES_CACHE: dict[str, dict[tuple[str, str], float]] = {}
-_GUARD_INDICATOR_EDGES_CACHE: dict[str, dict[tuple[str, str], float]] = {}
-_CAUSAL_EDGES_CACHE: dict[str, tuple[dict[tuple[str, str], float], set[tuple[str, str]]]] = {}
+#:
+#: Bookmark 1 Item 3: each bounded at 10 entries (LRU-evicted) - same
+#: cap as `continuous_dijkstra._GRAPH_CACHE`, since these three share
+#: its exact key shape and grow at the same per-repo rate.
+_DATA_FLOW_EDGES_CACHE: _LRUCache[dict[tuple[str, str], float]] = _LRUCache(maxsize=10)
+_GUARD_INDICATOR_EDGES_CACHE: _LRUCache[dict[tuple[str, str], float]] = _LRUCache(maxsize=10)
+_CAUSAL_EDGES_CACHE: _LRUCache[tuple[dict[tuple[str, str], float], set[tuple[str, str]]]] = _LRUCache(maxsize=10)
 
 #: The spec's own literal base weights - CALLS/INSTANTIATES treated
 #: identically (a construction is causally no weaker a link than an

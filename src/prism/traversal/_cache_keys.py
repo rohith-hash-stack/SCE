@@ -17,12 +17,16 @@ import importlib.metadata
 import os
 import subprocess
 import time
+from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from typing import Generic, Iterator, TypeVar
 
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
+
+_V = TypeVar("_V")
 
 
 def _run_git_head(cwd: str | Path) -> str | None:
@@ -312,3 +316,58 @@ def graph_cache_key(repo_root: str) -> GraphCacheKey:
         tag_rule_version=commit_hash,
         file_hash_set=target_repo_file_signature(repo_path),
     )
+
+
+class _LRUCache(Generic[_V]):
+    """Bookmark 1 Item 3: a bounded, dict-compatible cache with
+    least-recently-used eviction - a small dedicated class (over a bare
+    `collections.OrderedDict`) so every one of the five module-level
+    cache dicts can swap in this exact drop-in without any change to
+    the `.get(key)` / `cache[key] = value` call sites that already use
+    them (`build_causal_graph`, `compute_topological_distances`, the
+    three causal-edge functions, `compute_feature_masks_cached`).
+
+    Every *read* (`.get`, `__getitem__`, `__contains__`) refreshes the
+    accessed key's recency, not just writes - "access an entry to
+    refresh its LRU position" per Item 3's own spec, so a hot entry
+    that's read often but rewritten rarely still survives eviction.
+    Eviction is transparent: the next access after an entry is evicted
+    is an ordinary cache miss, and the caller recomputes exactly as it
+    would for any other miss - no special-casing needed anywhere else.
+    """
+
+    def __init__(self, maxsize: int) -> None:
+        self._maxsize = maxsize
+        self._data: OrderedDict[str, _V] = OrderedDict()
+
+    def get(self, key: str, default: _V | None = None) -> _V | None:
+        if key not in self._data:
+            return default
+        self._data.move_to_end(key)
+        return self._data[key]
+
+    def __contains__(self, key: str) -> bool:
+        if key not in self._data:
+            return False
+        self._data.move_to_end(key)
+        return True
+
+    def __getitem__(self, key: str) -> _V:
+        value = self._data[key]
+        self._data.move_to_end(key)
+        return value
+
+    def __setitem__(self, key: str, value: _V) -> None:
+        self._data[key] = value
+        self._data.move_to_end(key)
+        while len(self._data) > self._maxsize:
+            self._data.popitem(last=False)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._data)
+
+    def clear(self) -> None:
+        self._data.clear()

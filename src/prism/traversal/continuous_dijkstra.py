@@ -32,7 +32,7 @@ from dataclasses import dataclass
 import networkx as nx
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
-from prism.traversal._cache_keys import GraphCacheKey, engine_commit_hash, graph_cache_key
+from prism.traversal._cache_keys import GraphCacheKey, _LRUCache, engine_commit_hash, graph_cache_key
 from prism.traversal.causal_weights import LAMBDA_DATA_FLOW, LAMBDA_GUARD, compute_causal_edges, edge_cost
 
 #: Backward-compatible aliases - this module's own cache-key logic
@@ -64,7 +64,11 @@ def _graph_cache_key(builder: ConcreteGraphBuilder) -> GraphCacheKey:
 #: - plausible-looking, wrong output that a same-seed bit-identical
 #: test would never catch. `_DistanceCacheKey.digest()` always includes
 #: `seed` - see that class's own docstring.
-_GRAPH_CACHE: dict[str, nx.DiGraph] = {}
+#:
+#: Bookmark 1 Item 3: bounded at 10 entries (LRU-evicted) - one repo's
+#: graph is a real, potentially large object; a long-running MCP
+#: session touching many repos should not grow this without limit.
+_GRAPH_CACHE: _LRUCache[nx.DiGraph] = _LRUCache(maxsize=10)
 
 #: Blocker 1 Step 3/4: the seed-keyed distance cache - see
 #: `_DistanceCacheKey` for its own key shape and why it is a distinct
@@ -72,7 +76,11 @@ _GRAPH_CACHE: dict[str, nx.DiGraph] = {}
 #: tacked on (the seed-separation guarantee is structural: there is no
 #: code path in this module that can compute a `_DISTANCE_CACHE` key
 #: without a `seed` argument, by construction, not by convention).
-_DISTANCE_CACHE: dict[str, dict[str, float]] = {}
+#:
+#: Bookmark 1 Item 3: bounded at 100 entries (LRU-evicted) - the
+#: fastest-growing of the five caches, since it holds one entry per
+#: distinct seed queried against a repo, not one per repo.
+_DISTANCE_CACHE: _LRUCache[dict[str, float]] = _LRUCache(maxsize=100)
 
 
 @dataclass(frozen=True)
