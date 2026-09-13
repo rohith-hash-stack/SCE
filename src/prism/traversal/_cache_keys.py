@@ -140,14 +140,55 @@ def _discover_tracked_files(repo_root: str) -> list[str]:
     return sorted(files)
 
 
+def _normalize_content(raw: bytes) -> bytes:
+    """Bookmark 1 Item 4: strips whitespace/formatting differences that
+    cannot change Prism's own parse output out of a file's content
+    before it contributes to `file_hash_set` - a purely cosmetic edit
+    (line endings, trailing whitespace, redundant blank-line padding, a
+    missing/doubled final newline) should not cost a real cache miss
+    and the real re-extraction work that follows one.
+
+    Applied: CRLF/CR -> LF; trailing whitespace stripped per line;
+    consecutive blank lines collapsed to one; exactly one trailing
+    newline. **Never** touches indentation (semantic in Python - two
+    functions differing only in indentation are genuinely different
+    code) or internal whitespace within a line (may be semantic, e.g.
+    inside a string literal) - only line-boundary and file-boundary
+    whitespace is ever altered.
+
+    `errors="surrogateescape"` round-trips any byte sequence that isn't
+    valid UTF-8 losslessly (Prism indexes real-world source files, not
+    just clean UTF-8 ones) - this never raises on binary-ish content,
+    it just leaves un-decodable bytes as unpaired surrogates that
+    re-encode back to their original bytes unchanged.
+    """
+    text = raw.decode("utf-8", errors="surrogateescape")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.rstrip(" \t\x0b\x0c") for line in text.split("\n")]
+
+    collapsed: list[str] = []
+    prev_blank = False
+    for line in lines:
+        is_blank = line == ""
+        if is_blank and prev_blank:
+            continue
+        collapsed.append(line)
+        prev_blank = is_blank
+
+    normalized = "\n".join(collapsed).rstrip("\n") + "\n"
+    return normalized.encode("utf-8", errors="surrogateescape")
+
+
 def _hash_file_bytes(path: str) -> str | None:
-    """Item 4 (content normalization) changes what bytes this hashes,
-    not this function's own role - see that item's own commit."""
+    """Hashes the Item-4-normalized content, not the raw bytes - see
+    `_normalize_content`'s own docstring for exactly what changes and
+    what never does."""
     try:
         with open(path, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
+            raw = f.read()
     except OSError:
         return None
+    return hashlib.sha256(_normalize_content(raw)).hexdigest()
 
 
 def _compute_file_hash_set(repo_root: str) -> str:
