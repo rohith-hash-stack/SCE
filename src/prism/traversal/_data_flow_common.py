@@ -122,6 +122,19 @@ def _bindings(node: Node, lang: str, source: bytes) -> list[tuple[str, Node | No
             return []
         if left.type in IDENTIFIER_NODE_TYPES.get(lang, set()):
             return [(node_text(left, source), right)]
+        # Instance-state case (`self.x = f()`): a composite `base.attr`
+        # key, using the attribute node's own source text ("self.x") so
+        # it can never collide with a plain identifier binding (no bare
+        # identifier contains "."). Only the *direct* form - a plain
+        # identifier base - is bound here; a base that is itself another
+        # attribute (`self.a.b = ...`) is a nested chain and deliberately
+        # left unbound (v1.2).
+        attr_type = ATTRIBUTE_NODE_TYPE.get(lang)
+        obj_field = ATTR_OBJECT_FIELD.get(lang)
+        if attr_type and obj_field and left.type == attr_type:
+            base = left.child_by_field_name(obj_field)
+            if base is not None and base.type in IDENTIFIER_NODE_TYPES.get(lang, set()):
+                return [(node_text(left, source), right)]
         return []
     if node.type in VARIABLE_DECLARATOR_NODE_TYPE.values():
         name_node = node.child_by_field_name("name")
@@ -232,6 +245,17 @@ def extract_data_flow(
                 if name in provenance:
                     edges.append((provenance[name], consumer_id, 0.9))
             elif attr_type and arg.type == attr_type and obj_field:
+                # Instance-state case: the argument *is* a tracked
+                # composite (`self.x`, bound by `self.x = f()` above) -
+                # a direct read of a known provenance carrier, the same
+                # certainty tier as a plain variable pass (0.9), not the
+                # lossy "arbitrary attribute of a tracked object" guess
+                # the 0.7 fallback below models (`v(y.data)` where `y`
+                # has provenance but `.data` might not preserve it).
+                full_name = node_text(arg, src)
+                if full_name in provenance:
+                    edges.append((provenance[full_name], consumer_id, 0.9))
+                    continue
                 base = arg.child_by_field_name(obj_field)
                 if base is not None and base.type in ident_types:
                     name = node_text(base, src)
