@@ -9,15 +9,27 @@ include_run_id=False))`) before it ever reaches an LLM prompt, so TSR
 differences measure retrieval quality, not prompt formatting.
 
 **Stated honestly**: running a real TSR sweep calls a real, paid LLM API
-(`benchmarks.tsr.client`) - this module never does so silently. Without
-`OPENAI_API_KEY` configured (or with `--dry-run`), it runs the full
-retrieval + diagnostic-metrics pipeline for real and skips only the LLM
-call itself, leaving `tsr_scores` empty and saying so, rather than
-fabricating scores.
+(`benchmarks.tsr.client.DeepSeekClient`, the DeepSeek pilot's own client -
+Phase 1 of the DeepSeek pilot setup) - this module never does so
+silently. Without `DEEPSEEK_API_KEY` configured (or with `--dry-run`),
+it runs the full retrieval + diagnostic-metrics pipeline for real and
+skips only the LLM call itself, leaving `tsr_scores` empty and saying
+so, rather than fabricating scores.
+
+**Checkpointing** (Phase 1.4): every completed (task, engine, budget,
+seed) LLM call is recorded in a JSON checkpoint file
+(`reports/pilot/checkpoint.json` by default) after every 100 fresh
+calls, plus once more at the end of the run. `--resume` skips a cell
+already present in that file (re-using its recorded score) instead of
+re-calling the LLM for it. This is CLI infrastructure only - whether a
+given run is allowed to use `--resume` at all is a policy question
+answered by `docs/pilot/stop_condition.md` Section 7, not by this
+module.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -48,7 +60,7 @@ from benchmarks.reporting.report_generator import (
     write_json_results,
     write_markdown_report,
 )
-from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, run_tsr_prompt
+from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, DeepSeekClient, run_tsr_prompt
 from benchmarks.tsr.scorer_architecture import score_architecture
 from benchmarks.tsr.scorer_blast import score_blast
 from benchmarks.tsr.scorer_chain import score_chain
@@ -57,6 +69,44 @@ from benchmarks.tsr.scorer_redundancy import score_redundancy
 
 DEFAULT_BUDGETS = (2000, 4000, 8000)
 DEFAULT_TASKS_DIR_TEMPLATE = "benchmarks/ground_truth/tasks/{repo}"
+
+#: Phase 1.4: checkpoint saved after every this-many fresh (task, engine,
+#: budget, seed) LLM calls, plus once more at the end of the run.
+CHECKPOINT_INTERVAL = 100
+DEFAULT_CHECKPOINT_PATH = "reports/pilot/checkpoint.json"
+
+
+def _cell_key(task_id: str, engine_name: str, budget: int, seed: int) -> str:
+    """One (task, engine, budget, seed) cell's checkpoint key - a plain
+    string (not a tuple) since it round-trips through JSON, which has no
+    tuple type and would otherwise silently turn into a JSON array key
+    error (JSON object keys must be strings)."""
+    return f"{task_id}|{engine_name}|{budget}|{seed}"
+
+
+def load_checkpoint(path: str) -> dict:
+    """`{"cells": {cell_key: {"score": float, "prompt_tokens": int,
+    "completion_tokens": int, "cost_usd": float | None}}}` - an absent,
+    unreadable, or corrupt file is treated as "no completed cells yet"
+    (never raises), the same "checkpointing is a resumability
+    convenience, not a correctness dependency" contract this codebase's
+    other caches already establish."""
+    p = Path(path)
+    if not p.exists():
+        return {"cells": {}}
+    try:
+        data = json.loads(p.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"cells": {}}
+    if not isinstance(data, dict) or not isinstance(data.get("cells"), dict):
+        return {"cells": {}}
+    return data
+
+
+def save_checkpoint(path: str, checkpoint: dict) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(checkpoint, indent=2, sort_keys=True))
 
 
 def resolve_budgets(budget: int | None, budgets: list[int] | None) -> list[int]:
@@ -232,11 +282,21 @@ def run_evaluation(
     oracle_packages_path: str | None = None,
     use_pragmatic_oracle: bool = False,
     force_reclone: bool = False,
+    resume: bool = False,
+    checkpoint_path: str = DEFAULT_CHECKPOINT_PATH,
 ) -> EvaluationRun:
     """The real end-to-end sweep: resolve the pinned corpus, load its
     ground-truth tasks, run every engine at every budget, and (unless
     `dry_run`, or no API key is configured at all) run the real TSR
-    protocol - one LLM call per seed in `seeds` - against a real LLM."""
+    protocol - one LLM call per seed in `seeds` - against a real LLM.
+
+    `resume`: when set, a (task, engine, budget, seed) cell already
+    recorded in `checkpoint_path` is skipped (its recorded score is
+    reused) instead of making a fresh LLM call for it. Retrieval and
+    diagnostics are always recomputed fresh regardless - they're free
+    and deterministic, so there's nothing to gain by caching them; only
+    the LLM calls are checkpointed.
+    """
     if repo not in CORPORA:
         raise ValueError(f"unknown repo {repo!r} - registered corpora: {sorted(CORPORA)}")
     repo_path = str(resolve(repo, force=force_reclone))
@@ -255,12 +315,13 @@ def run_evaluation(
     client = None
     if not dry_run:
         try:
-            from benchmarks.openai_client import LLMClient
-
-            client = LLMClient()
-        except Exception as exc:  # MissingAPIKeyError / import error / etc.
+            client = DeepSeekClient()
+        except Exception as exc:  # MissingDeepSeekAPIKeyError / import error / etc.
             print(f"warning: LLM client unavailable ({exc}) - running in dry-run mode, tsr_scores will be empty", file=sys.stderr)
             dry_run = True
+
+    checkpoint = load_checkpoint(checkpoint_path) if resume else {"cells": {}}
+    fresh_calls_completed = 0
 
     run = EvaluationRun()
 
@@ -291,8 +352,37 @@ def run_evaluation(
                 tsr_scores: list[float] = []
                 if not dry_run and client is not None:
                     rendered_xml = render(pkg, RenderOptions(include_timestamp=False, include_run_id=False))
-                    tsr_results = run_tsr_prompt(client, SYSTEM_PROMPT, rendered_xml, task.prompt, model=model, seeds=seeds)
-                    tsr_scores = [score_tsr_response(task, r.call.content, candidate_symbols) for r in tsr_results]
+
+                    cell_scores: dict[int, float] = {}
+                    pending_seeds = []
+                    for seed in seeds:
+                        key = _cell_key(task.task_id, engine.name, budget, seed)
+                        cached_cell = checkpoint["cells"].get(key)
+                        if cached_cell is not None:
+                            cell_scores[seed] = cached_cell["score"]
+                        else:
+                            pending_seeds.append(seed)
+
+                    if pending_seeds:
+                        tsr_results = run_tsr_prompt(
+                            client, SYSTEM_PROMPT, rendered_xml, task.prompt, model=model, seeds=tuple(pending_seeds)
+                        )
+                        for r in tsr_results:
+                            score = score_tsr_response(task, r.call.content, candidate_symbols)
+                            cell_scores[r.seed] = score
+                            key = _cell_key(task.task_id, engine.name, budget, r.seed)
+                            checkpoint["cells"][key] = {
+                                "score": score,
+                                "prompt_tokens": r.call.prompt_tokens,
+                                "completion_tokens": r.call.completion_tokens,
+                                "cost_usd": r.call.cost_usd,
+                            }
+                            fresh_calls_completed += 1
+                            if fresh_calls_completed % CHECKPOINT_INTERVAL == 0:
+                                save_checkpoint(checkpoint_path, checkpoint)
+                                print(f"[pilot] {fresh_calls_completed} cells completed - checkpoint saved to {checkpoint_path}")
+
+                    tsr_scores = [cell_scores[seed] for seed in seeds]
 
                 run.records.append(
                     TaskRunRecord(
@@ -309,6 +399,13 @@ def run_evaluation(
                         ground_truth_symbols=sorted(_ground_truth_universe(task)),
                     )
                 )
+
+    if fresh_calls_completed % CHECKPOINT_INTERVAL != 0:
+        # A final, sub-interval batch of fresh calls (the common case: the
+        # total call count rarely lands on an exact multiple of 100) -
+        # saved once more here so no completed cell is lost to a crash
+        # after the loop's own last `% CHECKPOINT_INTERVAL == 0` save.
+        save_checkpoint(checkpoint_path, checkpoint)
 
     return run
 
@@ -563,6 +660,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "truncated by real dist_W) when --oracle-packages isn't set, instead of running with no Oracle at all",
     )
     parser.add_argument("--force-reclone", action="store_true")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip a (task, engine, budget, seed) cell already recorded in --checkpoint, reusing its saved score "
+        "instead of making a fresh LLM call for it.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default=DEFAULT_CHECKPOINT_PATH,
+        help=f"Checkpoint file path (read with --resume, written to after every {CHECKPOINT_INTERVAL} fresh calls "
+        f"and once more at the end of the run). Default: {DEFAULT_CHECKPOINT_PATH}",
+    )
     return parser
 
 
@@ -601,6 +710,8 @@ def main(argv: list[str] | None = None) -> int:
             oracle_packages_path=args.oracle_packages,
             use_pragmatic_oracle=args.pragmatic_oracle,
             force_reclone=args.force_reclone,
+            resume=args.resume,
+            checkpoint_path=args.checkpoint,
         )
         write_reports(run, args.output)
         print(f"Reports written to {args.output}")

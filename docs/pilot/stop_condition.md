@@ -53,10 +53,14 @@ than the primary comparison produces.
 
 ## 5. LLM pinning
 
-- **Model**: `gpt-4o-2024-11-20` (already pinned in
-  `benchmarks/tsr/client.py`).
+- **Model**: `deepseek-v4-flash` (pinned in `benchmarks/tsr/client.py`;
+  confirmed against https://api-docs.deepseek.com/quick_start/pricing -
+  the legacy `deepseek-chat`/`deepseek-reasoner` names were retired
+  2026-07-24 and must not be used).
 - **Temperature**: 0.
 - **Seeds**: 5 per cell.
+- **Off-peak scheduling**: the pilot runs off-peak (outside weekday
+  01:00–04:00 UTC and 06:00–10:00 UTC) to halve cost.
 
 ## 6. Failure to meet any pre-condition
 
@@ -66,6 +70,10 @@ precondition in this document no longer holds — the pilot is
 postponed. This STOP-condition document is not modified to
 accommodate the failure. The condition as written is either met or
 not; it is not edited to make a compromised run meet it.
+
+If the run fails mid-way for any reason, the partial run is discarded.
+The pilot restarts from call 1 on the same model. Do not combine
+partial results across runs.
 
 ## 7. Pre/post-pilot safety checklist
 
