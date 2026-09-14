@@ -35,6 +35,9 @@ from prism.parser.lang_config import (
     CALL_NODE_TYPE,
     IDENTIFIER_NODE_TYPES,
     SHORT_VAR_DECL_NODE_TYPE,
+    SUBSCRIPT_KEY_FIELD,
+    SUBSCRIPT_NODE_TYPE,
+    SUBSCRIPT_OBJECT_FIELD,
     VARIABLE_DECLARATOR_NODE_TYPE,
     call_callee_segments,
     iter_scoped_nodes,
@@ -135,6 +138,24 @@ def _bindings(node: Node, lang: str, source: bytes) -> list[tuple[str, Node | No
             base = left.child_by_field_name(obj_field)
             if base is not None and base.type in IDENTIFIER_NODE_TYPES.get(lang, set()):
                 return [(node_text(left, source), right)]
+        # G7 (Python only, parity with G8 above): container-field case
+        # (`d['k'] = f()`) - a composite `base[key]` key built from the
+        # subscript's own `value`/`subscript` fields, so an equal but
+        # differently-*spaced* read site (`d[ 'k' ]`) doesn't fail to
+        # match on `node_text`'s literal whitespace. Only the *direct*
+        # form - a plain identifier base - is bound; a base that is
+        # itself another subscript (`d['a']['b'] = ...`) is a nested
+        # chain and deliberately left unbound (v1.2), the same
+        # "one hop, no nesting" limit the attribute case above applies.
+        sub_type = SUBSCRIPT_NODE_TYPE.get(lang)
+        sub_obj_field = SUBSCRIPT_OBJECT_FIELD.get(lang)
+        sub_key_field = SUBSCRIPT_KEY_FIELD.get(lang)
+        if sub_type and sub_obj_field and sub_key_field and left.type == sub_type:
+            base = left.child_by_field_name(sub_obj_field)
+            key_node = left.child_by_field_name(sub_key_field)
+            if base is not None and base.type in IDENTIFIER_NODE_TYPES.get(lang, set()) and key_node is not None:
+                composite_key = f"{node_text(base, source)}[{node_text(key_node, source)}]"
+                return [(composite_key, right)]
         return []
     if node.type in VARIABLE_DECLARATOR_NODE_TYPE.values():
         name_node = node.child_by_field_name("name")
@@ -178,6 +199,9 @@ def extract_data_flow(
     call_type = CALL_NODE_TYPE.get(lang)
     attr_type = ATTRIBUTE_NODE_TYPE.get(lang)
     obj_field = ATTR_OBJECT_FIELD.get(lang)
+    sub_type = SUBSCRIPT_NODE_TYPE.get(lang)
+    sub_obj_field = SUBSCRIPT_OBJECT_FIELD.get(lang)
+    sub_key_field = SUBSCRIPT_KEY_FIELD.get(lang)
     ident_types = IDENTIFIER_NODE_TYPES.get(lang, set())
     decl_types = _decl_node_types(lang)
     if not call_type:
@@ -244,6 +268,19 @@ def extract_data_flow(
                 name = node_text(arg, src)
                 if name in provenance:
                     edges.append((provenance[name], consumer_id, 0.9))
+            elif sub_type and arg.type == sub_type and sub_obj_field and sub_key_field:
+                # G7: the argument is a subscript read (`g(d['k'])`) - the
+                # same composite `base[key]` key `_bindings` builds for
+                # the write side. Checked at the same confidence tier as
+                # a plain variable pass (0.9), before any lower-confidence
+                # fallback, since a composite-key hit is exact, not a
+                # guess.
+                base = arg.child_by_field_name(sub_obj_field)
+                key_node = arg.child_by_field_name(sub_key_field)
+                if base is not None and key_node is not None:
+                    composite_key = f"{node_text(base, src)}[{node_text(key_node, src)}]"
+                    if composite_key in provenance:
+                        edges.append((provenance[composite_key], consumer_id, 0.9))
             elif attr_type and arg.type == attr_type and obj_field:
                 # Instance-state case: the argument *is* a tracked
                 # composite (`self.x`, bound by `self.x = f()` above) -

@@ -182,6 +182,23 @@ VARIABLE_DECLARATOR_NODE_TYPE = {
 SHORT_VAR_DECL_NODE_TYPE = {
     LanguageID.GO: "short_var_declaration",
 }
+# G7: container-field data-flow (`d['k'] = f(); g(d['k'])`) - Python only
+# for now, matched against `_data_flow_common._bindings`'s existing
+# `self.x`-style composite-key mechanism (G8). Not added for JS/TS/TSX/
+# Go/Java/C# yet - each has its own subscript/index grammar shape
+# (`subscript_expression`, `index_expression`, ...) that hasn't been
+# verified against this codebase's tree-sitter bindings the way Python's
+# has; adding an unverified entry here risks a silent wrong-field lookup
+# rather than the clean "not this language yet" no-op an absent key gives.
+SUBSCRIPT_NODE_TYPE = {
+    LanguageID.PYTHON: "subscript",
+}
+SUBSCRIPT_OBJECT_FIELD = {
+    LanguageID.PYTHON: "value",
+}
+SUBSCRIPT_KEY_FIELD = {
+    LanguageID.PYTHON: "subscript",
+}
 RETURN_STATEMENT_NODE_TYPE = "return_statement"  # identical across every supported grammar
 
 RAISE_NODE_TYPE = {
