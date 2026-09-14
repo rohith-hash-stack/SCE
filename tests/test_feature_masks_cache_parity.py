@@ -14,8 +14,6 @@ reimplementing it.
 """
 from __future__ import annotations
 
-import pytest
-
 from prism.cli import build_pipeline
 from prism.semantics.extractor import compute_feature_masks, compute_feature_masks_cached
 
@@ -74,31 +72,6 @@ def test_three_statement_wrapper_transitively_propagates_in_both_paths(tmp_path)
         )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Blocked by a separate, deeper bug (tracked as G38, not this "
-        "module): prism.runtime.index_cache's warm-path reconstruction "
-        "loses builder.def_node() linkage for at least some real symbols "
-        "that resolve correctly on a cold build - confirmed directly "
-        "(cold build: def_node resolves; the next, warm-cache build "
-        "against the same unchanged repo: def_node is None for the same "
-        "symbol). compute_feature_masks (uncached) calls def_node() "
-        "fresh and is exposed to this directly; compute_feature_masks_"
-        "cached is incidentally shielded by its own separate per-file "
-        "disk cache (sqlite_cache.py), which is why the two paths still "
-        "diverge on a warm real corpus even after the G27 threshold/"
-        "purity-fallback fixes (verified correct on synthetic fixtures "
-        "above, which never hit index_cache). Remove this xfail once "
-        "G38 is fixed - it should then pass unmodified."
-    ),
-    # Not strict: whether this builder ends up cold or warm depends on
-    # ambient .prism/cache/ state left by whatever ran against this
-    # corpus earlier in the process/CI run - the same non-determinism
-    # that is G38 itself. A cold-built pass here is a real, if lucky,
-    # outcome, not evidence G38 is fixed; strict=True would make CI
-    # flaky-red on exactly the runs that happen to start warm.
-    strict=False,
-)
 def test_cached_and_uncached_feature_masks_identical_on_real_django_corpus():
     from benchmarks.corpora.resolver import resolve
 
