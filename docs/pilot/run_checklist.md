@@ -32,8 +32,14 @@ Every item must be checked before the first call goes out.
   `--pragmatic-oracle`:
 
       python -m benchmarks.runner --mode=pilot --pragmatic-oracle \
-        --repo=django --budgets=2000,4000,8000 \
+        --repo=django --budgets 2000 4000 8000 \
         --seeds=42,43,44,45,46 --output=reports/pilot/
+
+  (`--budgets` is `nargs="+"` - space-separated values, not a
+  comma-separated string; `--budgets=2000,4000,8000` fails argparse
+  with `invalid int value: '2000,4000,8000'`. `--seeds` *is*
+  comma-separated by design - the two flags don't share a convention,
+  confirmed directly by running both forms through `build_arg_parser()`.)
 
 - **Working tree clean**: uncommitted changes to the four-axis modules
   mid-run would (after G43's fix) correctly bust the feature-bitmask
