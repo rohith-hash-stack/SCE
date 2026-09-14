@@ -27,16 +27,47 @@ additional Debug tasks, the 4 blast tasks, or a future repo's tasks.
         data=True)` / `in_edges(this_stage, data=True)`, don't assume
         from reading source alone that a real Python relationship
         (a call, an inherited method) became a real graph edge.
-     3. The edge chain is `CALLS`, `INSTANTIATES`, or - for a method
-        inherited rather than directly defined - actually resolves
-        through a real `EXTENDS` edge to its defining class. Confirmed
-        directly (G40): this codebase's call resolution does **not**
-        currently follow `EXTENDS` to find an inherited method when a
-        `self.method()` call site's simple-name resolution lands on a
-        subclass that doesn't itself define that method - the `EXTENDS`
-        edge can be real while the method call still dangles to a
-        nonexistent symbol. Don't assume inheritance "just works" here;
-        check the actual edge.
+     3. The edge chain is `CALLS`, `INSTANTIATES`, `OVERRIDES`, or -
+        for a method inherited rather than directly defined - actually
+        resolves through a real `EXTENDS` edge to its defining class.
+        `OVERRIDES` is a real, traversable relation, not merely
+        structural metadata: confirmed directly in
+        `src/prism/graph/concrete_builder.py`'s `TRAVERSABLE_RELATIONS`
+        (which includes `OVERRIDES`) and `calls_graph` property (the
+        exact subgraph `prism.slicer`'s distance engine and the
+        knapsack packer traverse), and in
+        `src/prism/slicer/distance.py`'s `RELATION_STRUCTURAL_WEIGHT`
+        (`OVERRIDES: 0.90` - a real Dijkstra hop-cost, more expensive
+        than a plain call but real and reachable). A `super().method()`
+        call - a real Python pattern - shows up in `builder.graph` as
+        an `OVERRIDES` edge to the parent method, and that edge is
+        traversable; do not exclude a pipeline stage just because its
+        connecting edge is `OVERRIDES` rather than `CALLS`.
+        Confirmed separately (G40): this codebase's call resolution
+        does **not** currently follow `EXTENDS` to find an inherited
+        method when a `self.method()` call site's simple-name
+        resolution lands on a subclass that doesn't itself define that
+        method - the `EXTENDS` edge can be real while the method call
+        still dangles to a nonexistent symbol (distinct from
+        `OVERRIDES`, which concrete_builder.py adds explicitly for
+        every directly-declared method that overrides a base method,
+        not inferred from an unresolved call site). Don't assume
+        inheritance "just works" for a dangling call site; check the
+        actual edge.
+     4. The symbol is what the call site *actually* resolves to on
+        `builder.graph`, not merely a same-named method on some other
+        class the source's own types would suggest. Confirmed directly
+        (G41): a `self.<attribute>.<method>()` call where `<method>`
+        exists on more than one class in the codebase can resolve to
+        the *wrong* class's definition - a real symbol, on a real
+        reachable edge, but not the one the source's own types say
+        should run. Two confirmed instances: `self.nodelist.render(
+        context)` resolving to `Template.render` instead of `NodeList.
+        render`, and `self.filter_expression.resolve(context)`
+        resolving to `Variable.resolve` instead of `FilterExpression.
+        resolve` - see G41 in `docs/design_formalism.md`. Read the
+        source and check the receiver's actual declared/assigned type,
+        not just whether *a* same-named symbol is reachable.
    If any stage fails check 1 or 2, trim the pipeline to its last
    reachable stage and move the unreachable stage to `boundary_symbols`
    instead, with a header-comment note explaining why it's excluded

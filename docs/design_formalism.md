@@ -1058,6 +1058,32 @@ an implicit set of blind spots:
   scheduled v1.1 cache-layer audit (Section 10.1) should also survey
   the binding/call-resolution layer for the same class of issue while
   it's already auditing structural assumptions.
+- **G41** - Simple-name attribute-chain call misresolution: a
+  `self.<attribute>.<method>()` call site where `<method>` exists as a
+  real, distinct definition on more than one class in the codebase can
+  resolve to the *wrong* one - a real symbol, on a real, reachable
+  edge, just not the one the receiver's own actual type would produce
+  at runtime. Distinct from G40 (inheritance-unaware resolution,
+  missing an `EXTENDS` fallback for a *dangling* call site): G41 is
+  wrong-class resolution - the resolver finds a symbol with the right
+  simple name, on a real edge, but attached to the wrong receiver
+  type, no dangling edge involved. Two confirmed instances, both found
+  authoring Milestone 2's Debug tasks: `self.nodelist.render(context)`
+  (`prism.template.base.Node.render_annotated`, real batch-3 template-
+  rendering investigation) resolves to `Template.render` instead of
+  the real target, `NodeList.render`; `self.filter_expression.resolve(
+  context)` (`VariableNode.render`, batch 4) resolves to `Variable.
+  resolve` instead of the real target, `FilterExpression.resolve`.
+  Same class of finding as G7/G13/G22/G40 - the graph cannot represent
+  a real Python pattern (here, receiver-type-sensitive simple-name
+  disambiguation) so a real pipeline stage becomes invisible, or
+  worse, a *wrong* stage becomes visible instead. Not pilot scope
+  (affected seeds - `Template.render` chains specifically - are
+  avoided in ground-truth authoring rather than worked around).
+  Deferred to v1.2; the scheduled v1.1 cache-layer/binding audit
+  (Section 10.1, G40's own note) should include attribute-chain
+  resolution disambiguation in its survey scope alongside the
+  inheritance-fallback gap.
 
 ### 10.1 Cache layer - audit history
 

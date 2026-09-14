@@ -1,0 +1,161 @@
+# T02 "Django Debug" - Task 17: safe-redirect URL validation
+# (Milestone 2 batch 4, seed 3/15 - subsystem: HTTP response
+# construction / redirect safety).
+#
+# Not the originally-tried HTTP-response-construction candidate -
+# django.http.response.HttpResponseRedirectBase.__init__ was
+# investigated first and dropped (see below). This is the real
+# safety check that gates whether Django will construct a redirect
+# response to a given URL at all (used by
+# django.views.generic.base.RedirectView, django.contrib.auth's
+# login-redirect handling, and others) - substituted in the same way
+# django_t02_010/011/014 substituted their own subsystems in batches
+# 2-3.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly).
+#
+# Reachability check (TASK_AUTHORING.md item 2, added after batch 3):
+# for every pipeline stage, confirmed (1) presence in
+# builder.symbol_table and (2) a real CALLS out-edge from the previous
+# stage via builder.graph.out_edges(...):
+#
+#   django.utils.http.url_has_allowed_host_and_scheme    lines 259-286 (django/utils/http.py)
+#     -> _url_has_allowed_host_and_scheme  CALLS  (confirmed real edge)
+#   django.utils.http._url_has_allowed_host_and_scheme    lines 368-395
+#     -> _urlparse  CALLS  (confirmed real edge)
+#   django.utils.http._urlparse                            lines 291-305
+#
+# Real causal chain, read directly from source (http.py lines
+# 259-286, 368-395): url_has_allowed_host_and_scheme() calls
+# _url_has_allowed_host_and_scheme() twice (once for the URL as given,
+# once with backslashes normalized to forward slashes) - both real
+# call sites resolve to the same symbol, so builder.graph shows one
+# edge covering both. _url_has_allowed_host_and_scheme() itself, after
+# one early-return guard (`if url.startswith("///"): return False`),
+# unconditionally calls `_urlparse(url)` inside a try/except. Explicit
+# assumption this task's prompt states: assume the URL does not begin
+# with three slashes (`///`) - the one guard clause before parsing is
+# reached.
+#
+# Reachability note (corrected after batch-4 review): django.http.
+# response.HttpResponseRedirectBase.__init__ was investigated first
+# and dropped. Its real super().__init__(*args, **kwargs) call is
+# represented in builder.graph as an OVERRIDES edge to HttpResponse.
+# __init__, not a CALLS edge. At the time this task was authored,
+# OVERRIDES was mistakenly assumed non-traversable and excluded by
+# TASK_AUTHORING.md's own reachability check - that assumption was
+# checked directly after batch-4 review and found wrong: OVERRIDES is
+# a real, traversable relation (concrete_builder.py's
+# TRAVERSABLE_RELATIONS includes it, and it's part of the exact
+# calls_graph prism.slicer's distance engine and the knapsack packer
+# traverse - see design_formalism.md Section 8.2 and
+# TASK_AUTHORING.md's own corrected item 2.3). This task's pipeline
+# below is still preferred on its own merits - a clean, fully CALLS-
+# resolved 3-symbol chain - not because HttpResponseRedirectBase.
+# __init__ was unreachable; its next real, CALLS-resolved stage
+# (iri_to_uri) would still only leave a pipeline of 2 symbols
+# once the OVERRIDES-only step is excluded, too thin against this
+# batch's own preference. django.template.base.VariableNode.render was
+# also investigated and dropped for a different reason: its real
+# self.filter_expression.resolve(context) call (a FilterExpression
+# instance) resolves in builder.graph to
+# django.template.base.Variable.resolve instead - confirmed a second,
+# independent simple-name misresolution in the template-rendering
+# subsystem (a sibling finding to the Template.render/_render cycle
+# batch 3 already found there, not the same bug, not yet numbered).
+#
+# Seed check (Milestone 2 requirements): both functions are plain
+# module-level functions, not metaclass-generated; nothing here is
+# async/await; no container-subscript data-flow pattern is involved
+# (pure call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.utils.http.escape_leading_slashes  (function) lines 398-406
+#
+# escape_leading_slashes is a sibling function in the same module (a
+# different, unrelated URL-safety helper used elsewhere for a
+# different purpose - escaping, not validating), listed as boundary to
+# make clear it is not part of this pipeline. No required_context
+# beyond the pipeline itself is needed - both functions are simple,
+# self-contained module-level helpers.
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_017_redirect_url_safety_check
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.utils.http.url_has_allowed_host_and_scheme
+task_type: debug
+prompt: |
+  You are debugging why a redirect URL is rejected as unsafe in
+  django/utils/http.py. Starting from
+  `url_has_allowed_host_and_scheme`, trace the real causal pipeline
+  that validates the URL, in the order each stage is actually reached,
+  up to and including the call that parses the URL into its components.
+  Assume the URL does not begin with three slashes (`///`) - the one
+  guard clause before parsing is reached.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.utils.http.url_has_allowed_host_and_scheme", "django.utils.http._url_has_allowed_host_and_scheme"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.utils.http.url_has_allowed_host_and_scheme
+    - django.utils.http._url_has_allowed_host_and_scheme
+    - django.utils.http._urlparse
+  required_context: []
+  boundary_symbols:
+    - django.utils.http.escape_leading_slashes
+  expected_solution: >
+    url_has_allowed_host_and_scheme() calls
+    _url_has_allowed_host_and_scheme(), which (assuming the URL doesn't
+    start with "///") calls _urlparse() to break the URL into its real
+    components. No required context beyond the pipeline itself.
+    Boundary: escape_leading_slashes, an unrelated URL-safety helper in
+    the same module.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.utils.http.url_has_allowed_host_and_scheme
+    - django.utils.http._url_has_allowed_host_and_scheme
+  required_context: []
+  boundary_symbols:
+    - django.utils.http.escape_leading_slashes
+  expected_solution: >
+    url_has_allowed_host_and_scheme() calls
+    _url_has_allowed_host_and_scheme() to do the real validation work.
+    (Treated the underscore-prefixed helper as the pipeline's endpoint
+    itself, without tracing that it makes its own further real call to
+    parse the URL.) Agreed on required context (none) and boundary
+    symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.utils.http.url_has_allowed_host_and_scheme
+    - django.utils.http._url_has_allowed_host_and_scheme
+    - django.utils.http._urlparse
+  required_context: []
+  boundary_symbols:
+    - django.utils.http.escape_leading_slashes
+  expected_solution: >
+    Annotator A's full chain is correct: _url_has_allowed_host_and_
+    scheme's own source (http.py line 374) is
+    `url_info = _urlparse(url)` inside a try/except - a distinct,
+    separately-traceable call, and the prompt's own explicit stopping
+    point ("up to and including the call that parses the URL") requires
+    including it.

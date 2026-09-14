@@ -1,0 +1,121 @@
+# T02 "Django Debug" - Task 15: admin site per-page template context
+# (Milestone 2 batch 4, seed 1/15 - subsystem: Admin).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly).
+#
+# Reachability check (TASK_AUTHORING.md item 2, added after batch 3):
+# for every pipeline stage, confirmed (1) presence in
+# builder.symbol_table and (2) a real CALLS out-edge from the previous
+# stage via builder.graph.out_edges(...) - not assumed from source
+# alone:
+#
+#   django.contrib.admin.sites.AdminSite.each_context     lines 320-340 (django/contrib/admin/sites.py)
+#     -> has_permission  CALLS  (confirmed real edge)
+#   django.contrib.admin.sites.AdminSite.has_permission    lines 198-203 (django/contrib/admin/sites.py)
+#   django.contrib.admin.sites.AdminSite.get_app_list       lines 531-545 (django/contrib/admin/sites.py)
+#     (each_context -> get_app_list CALLS, confirmed real edge)
+#
+# Real causal chain, read directly from source (sites.py lines
+# 320-339): each_context() returns a dict literal whose values include
+# `self.has_permission(request)` and `self.get_app_list(request)` -
+# both evaluated unconditionally while building that one return
+# expression; no branch anywhere in this method gates either call. No
+# assumption needs to be stated in this task's prompt - the rare fully
+# unconditional case, like django_t02_009.
+#
+# Seed check (Milestone 2 requirements): AdminSite is a plain class,
+# not metaclass-generated; nothing here is async/await; no container-
+# subscript data-flow pattern is involved (pure call-chain). Does not
+# rely on any subclass-overridden hook the way
+# BaseModelAdmin.get_fields did (dropped in batch 3) - each_context,
+# has_permission, and get_app_list are all defined once, directly on
+# AdminSite itself, no dynamic-dispatch ambiguity.
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.contrib.admin.sites.AdminSite               (class)  lines 37-590
+#   django.contrib.admin.sites.AdminSite._build_app_dict (method) lines 459-529
+#
+# _build_app_dict is get_app_list's own real one-hop callee (confirmed:
+# get_app_list -> _build_app_dict CALLS), not traced further - the
+# prompt's own stopping point is enumerating the app list, not building
+# each app's own dict entry.
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_015_admin_each_context
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.contrib.admin.sites.AdminSite.each_context
+task_type: debug
+prompt: |
+  You are debugging what gets put into the template context for every
+  page of the Django admin site, in django/contrib/admin/sites.py.
+  Starting from `AdminSite.each_context`, trace the real causal
+  pipeline that produces that context, in the order each stage is
+  actually reached, up to and including the call that enumerates the
+  list of installed apps available to the current user.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.contrib.admin.sites.AdminSite.each_context", "django.contrib.admin.sites.AdminSite.has_permission"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.contrib.admin.sites.AdminSite.each_context
+    - django.contrib.admin.sites.AdminSite.has_permission
+    - django.contrib.admin.sites.AdminSite.get_app_list
+  required_context:
+    - django.contrib.admin.sites.AdminSite
+  boundary_symbols:
+    - django.contrib.admin.sites.AdminSite._build_app_dict
+  expected_solution: >
+    each_context() builds a dict whose values include
+    self.has_permission(request) and self.get_app_list(request), both
+    evaluated unconditionally. Required context: AdminSite itself.
+    Boundary: _build_app_dict, the real next stage inside get_app_list,
+    not traced further.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.contrib.admin.sites.AdminSite.each_context
+    - django.contrib.admin.sites.AdminSite.has_permission
+  required_context:
+    - django.contrib.admin.sites.AdminSite
+  boundary_symbols:
+    - django.contrib.admin.sites.AdminSite._build_app_dict
+  expected_solution: >
+    each_context() calls has_permission() while building the context
+    dict. (Missed that get_app_list() is a separate traced call in the
+    same dict-literal expression - read the dict as "one lookup plus a
+    static list" rather than checking that available_apps is itself a
+    real method call.) Agreed on required context and boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.contrib.admin.sites.AdminSite.each_context
+    - django.contrib.admin.sites.AdminSite.has_permission
+    - django.contrib.admin.sites.AdminSite.get_app_list
+  required_context:
+    - django.contrib.admin.sites.AdminSite
+  boundary_symbols:
+    - django.contrib.admin.sites.AdminSite._build_app_dict
+  expected_solution: >
+    Annotator A's full chain is correct: sites.py line 335 is
+    `"available_apps": self.get_app_list(request)` - a real method
+    call inside the dict literal, not a static value, and the prompt's
+    own explicit stopping point ("up to and including the call that
+    enumerates the list of installed apps") requires including it.
