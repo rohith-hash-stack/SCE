@@ -15,7 +15,7 @@ reimplementing it.
 from __future__ import annotations
 
 from prism.cli import build_pipeline
-from prism.semantics.extractor import compute_feature_masks, compute_feature_masks_cached
+from prism.semantics.extractor import _FEATURE_MASKS_CACHE, compute_feature_masks, compute_feature_masks_cached
 
 _SOURCE = (
     "import requests\n"
@@ -74,6 +74,13 @@ def test_three_statement_wrapper_transitively_propagates_in_both_paths(tmp_path)
 
 def test_cached_and_uncached_feature_masks_identical_on_real_django_corpus():
     from benchmarks.corpora.resolver import resolve
+
+    # G42: this test's purpose is cold-vs-warm parity, so it must start
+    # cold - _FEATURE_MASKS_CACHE is an in-process session cache with no
+    # per-test teardown, and an earlier test's own call to
+    # compute_feature_masks_cached on this same real repo (at the same
+    # engine commit) would otherwise leave a stale in-memory hit here.
+    _FEATURE_MASKS_CACHE.clear()
 
     repo_path = str(resolve("django"))
     builder, _ = build_pipeline(repo_path)
