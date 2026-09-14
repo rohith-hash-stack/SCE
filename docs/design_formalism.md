@@ -763,7 +763,7 @@ marginal-coverage comparisons reduce to `&`/`|`/`int.bit_count()`:
   `CANONICAL_SINKS` registry per language, resolved through the same
   `LocalImportMap` Pass 2 already builds
   (`ConcreteGraphBuilder._build_import_map`); `S_transitive` folds a
-  direct sink bit one hop upward through a thin (<=2 statement) wrapper
+  direct sink bit one hop upward through a thin (<=3 statement) wrapper
   callee, so `def send(p): requests.post(url, p)` doesn't force every
   caller to re-spell `requests.post` to be recognized as network-facing.
   Go's registry mixes two shapes matched two different ways: slash-
@@ -1014,3 +1014,38 @@ seeds`'s own docstring (`prism/packer/submodular_knapsack.py`) for the
 exact bound derivations, and `tests/test_fuzzy_seed_suggestion.py` for
 the verification this tradeoff was checked against, including the real-
 corpus performance measurement itself.
+
+## 10. Known Limitations (as of v1.1)
+
+Gaps identified during pilot-verification audit (Bookmark 2), not yet
+fixed, tracked here so the pilot runs against a documented rather than
+an implicit set of blind spots:
+
+- **G7** - Container-field data-flow (`d['k'] = f(); g(d['k'])`) is not
+  detected. Scheduled for v1.1, before Milestone 2 authoring begins.
+- **G13** - Async/await data-flow binding is not detected. Same class
+  as G8 (pre-fix); scheduled for v1.1.
+- **G14** - Decorator behavior attribution is narrow - only
+  `@deprecated`-style text matching is recognized. Deferred to v1.2.
+- **G25** - The `tiktoken` BPE asset is not vendored. Budget
+  enforcement falls back to a regex approximation in
+  network-restricted environments. The pilot must run with network
+  access, or its budget behavior must be documented as
+  regex-approximated.
+- **G34** - Single-repo only. Multi-repo federation is out of scope
+  for v1.1.
+- **G35** - No per-file AST cache. Deliberate, documented tradeoff -
+  the index cache re-parses on cold build.
+
+### 10.1 Cache layer - audit history
+
+Four cache-correctness bugs were found during pilot verification
+(Bookmark 1, G27, G38, G39). They share a common root: the caching
+layer was designed as a performance optimization, not as a
+correctness-critical subsystem. Each cache implicitly promises that a
+warm hit returns state identical to fresh computation; that promise
+has been empirically false in four places.
+
+A unified cache-layer audit and cold-vs-warm parity test suite is
+scheduled as the first item of v1.1. Until it lands, treat any
+cache-hit path as a potential source of stale or divergent state.
