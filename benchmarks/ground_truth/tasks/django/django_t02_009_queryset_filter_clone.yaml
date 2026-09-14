@@ -1,0 +1,129 @@
+# T02 "Django Debug" - Task 9: QuerySet.filter's real clone chain
+# (Milestone 2 batch 2, seed 1/15 - subsystem: ORM).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; each
+# has a real CALLS out-edge to the next stage in builder.graph).
+#
+#   django.db.models.query.QuerySet.filter                          lines 1432-1438 (django/db/models/query.py)
+#   django.db.models.query.QuerySet._not_support_combined_queries    lines 1963-1968 (django/db/models/query.py)
+#   django.db.models.query.QuerySet._filter_or_exclude               lines 1448-1457 (django/db/models/query.py)
+#   django.db.models.query.QuerySet._chain                           lines 1854-1863 (django/db/models/query.py)
+#   django.db.models.query.QuerySet._clone                           lines 1865-1882 (django/db/models/query.py)
+#
+# Real causal chain, read directly from source (query.py lines
+# 1432-1457, 1854-1863): filter() first calls
+# self._not_support_combined_queries("filter") - unconditionally, the
+# very first statement - then returns self._filter_or_exclude(False,
+# args, kwargs). _filter_or_exclude() unconditionally calls
+# self._chain(), which unconditionally calls self._clone(). No branch
+# anywhere in this five-symbol chain depends on the arguments passed to
+# filter() or on any queryset state - every stage is reached on every
+# real call, no assumption needs to be stated. (The one real branch in
+# _filter_or_exclude - whether to call _filter_or_exclude_inplace()
+# immediately after _chain() returns, or to defer it - happens *after*
+# _clone() has already run, so it does not gate anything in this
+# traced pipeline; it is listed as boundary below instead.)
+#
+# Seed check (Milestone 2 requirements): QuerySet is a plain class, not
+# metaclass-generated (Django's ModelBase metaclass applies to Model
+# subclasses, not QuerySet); nothing here is async/await (the real
+# `aget`/`acreate` wrappers live beside these methods but are not part
+# of this chain); no container-subscript data-flow pattern is involved
+# (pure call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.db.models.query.QuerySet                            (class)  lines 293-1981
+#   django.db.models.query.QuerySet.exclude                     (method) lines 1440-1446
+#   django.db.models.query.QuerySet._filter_or_exclude_inplace  (method) lines 1459-1466
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_009_queryset_filter_clone
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.db.models.query.QuerySet.filter
+task_type: debug
+prompt: |
+  You are debugging why `QuerySet.filter()` always returns a distinct
+  QuerySet object, never mutating the original in place, in
+  django/db/models/query.py. Starting from `QuerySet.filter`, trace the
+  real causal pipeline that produces the new, cloned queryset, in the
+  order each stage is actually reached, up to and including the call
+  that actually copies the queryset's internal state.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.db.models.query.QuerySet.filter", "django.db.models.query.QuerySet._not_support_combined_queries"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.db.models.query.QuerySet.filter
+    - django.db.models.query.QuerySet._not_support_combined_queries
+    - django.db.models.query.QuerySet._filter_or_exclude
+    - django.db.models.query.QuerySet._chain
+    - django.db.models.query.QuerySet._clone
+  required_context:
+    - django.db.models.query.QuerySet
+  boundary_symbols:
+    - django.db.models.query.QuerySet.exclude
+    - django.db.models.query.QuerySet._filter_or_exclude_inplace
+  expected_solution: >
+    filter() calls _not_support_combined_queries() first, then
+    _filter_or_exclude(), which calls _chain(), which calls _clone() -
+    the real copy. Every stage is unconditional. Required context:
+    QuerySet itself. Boundary: exclude() (the sibling negated-filter
+    method sharing the same first two calls) and
+    _filter_or_exclude_inplace() (the real next step after _clone
+    returns, applying the actual Q-object filter, not part of the
+    cloning pipeline this task traces).
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.db.models.query.QuerySet.filter
+    - django.db.models.query.QuerySet._not_support_combined_queries
+    - django.db.models.query.QuerySet._filter_or_exclude
+    - django.db.models.query.QuerySet._chain
+  required_context:
+    - django.db.models.query.QuerySet
+  boundary_symbols:
+    - django.db.models.query.QuerySet.exclude
+    - django.db.models.query.QuerySet._filter_or_exclude_inplace
+  expected_solution: >
+    filter() calls _not_support_combined_queries(), then
+    _filter_or_exclude(), which calls _chain(). (Missed that _chain()
+    itself calls _clone() - treated _chain() as the endpoint, since its
+    own docstring says "return a copy," without noticing the actual
+    copying happens one level deeper.) Agreed on required context and
+    boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.db.models.query.QuerySet.filter
+    - django.db.models.query.QuerySet._not_support_combined_queries
+    - django.db.models.query.QuerySet._filter_or_exclude
+    - django.db.models.query.QuerySet._chain
+    - django.db.models.query.QuerySet._clone
+  required_context:
+    - django.db.models.query.QuerySet
+  boundary_symbols:
+    - django.db.models.query.QuerySet.exclude
+    - django.db.models.query.QuerySet._filter_or_exclude_inplace
+  expected_solution: >
+    Annotator A's full chain is correct: _chain()'s own source (query.py
+    line 1857) is `obj = self._clone()` - the real copy happens inside
+    _clone(), a distinct, separately-traceable call, not inlined into
+    _chain() itself.

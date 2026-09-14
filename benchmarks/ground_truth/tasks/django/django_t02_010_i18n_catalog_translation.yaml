@@ -1,0 +1,133 @@
+# T02 "Django Debug" - Task 10: default translation catalog resolution
+# (Milestone 2 batch 2, seed 2/15 - subsystem: i18n).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; each
+# has a real CALLS/INSTANTIATES out-edge to the next stage in
+# builder.graph).
+#
+#   django.utils.translation.trans_real.catalog       lines 352-365 (django/utils/translation/trans_real.py)
+#   django.utils.translation.trans_real.translation    lines 287-293 (django/utils/translation/trans_real.py)
+#   django.utils.translation.trans_real.DjangoTranslation lines 130-284 (django/utils/translation/trans_real.py, class)
+#
+# Real causal chain, read directly from source (trans_real.py lines
+# 352-365, 287-293): catalog() first checks for an already-active
+# translation (`t = getattr(_active, "value", None)`) and returns it
+# directly if one exists - only reaching `translation(settings.
+# LANGUAGE_CODE)` when there is no active translation AND no cached
+# module-level default (`_default is None`). translation(language)
+# itself only constructs `DjangoTranslation(language)` when that
+# language isn't already in the module-level `_translations` cache
+# dict. Explicit assumption this task's prompt states: assume no
+# translation has been activated yet in this process, and this is the
+# very first request for the default language's catalog - the
+# cold-start path, not the (far more common at steady state) warm-cache
+# return.
+#
+# Seed check (Milestone 2 requirements): catalog/translation are plain
+# module-level functions, not metaclass-generated; nothing here is
+# async/await; no container-subscript data-flow pattern is involved
+# (the `_translations`/`_active` module-level dicts are read/written,
+# but never through the write-then-read-same-key pattern G7 covers -
+# this task's pipeline never touches them as anything but background
+# cache state, not traced symbols).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.utils.translation.trans_real.activate                    (function) lines 296-303
+#   django.utils.translation.trans_real.DjangoTranslation.__init__   (method)   lines 142-186
+#
+# No required_context beyond the pipeline itself is needed here - the
+# task is self-contained (two thin module-level functions plus the
+# class they construct), unlike the other batch-2 tasks which each
+# depend on a real parent class. boundary_symbols: activate() (the
+# sibling function that installs a translation as *current*, not part
+# of catalog()'s own read path) and DjangoTranslation.__init__ (the
+# real next step once the class is instantiated - a large, 13-callee
+# constructor deliberately not traced further; the prompt's own
+# stopping point is the construction itself, not what the constructor
+# does internally).
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_010_i18n_catalog_translation
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.utils.translation.trans_real.catalog
+task_type: debug
+prompt: |
+  You are debugging Django's translation-catalog resolution in
+  django/utils/translation/trans_real.py. Starting from `catalog()`,
+  trace the real causal pipeline that produces the default-language
+  translation catalog, in the order each stage is actually reached, up
+  to and including the call that constructs the real translation
+  object. Assume no translation has been activated yet in this process,
+  and this is the very first request for the default language's
+  catalog (the cold-start path, not a cache hit).
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.utils.translation.trans_real.catalog", "django.utils.translation.trans_real.translation"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.utils.translation.trans_real.catalog
+    - django.utils.translation.trans_real.translation
+    - django.utils.translation.trans_real.DjangoTranslation
+  required_context: []
+  boundary_symbols:
+    - django.utils.translation.trans_real.activate
+    - django.utils.translation.trans_real.DjangoTranslation.__init__
+  expected_solution: >
+    catalog() finds no active translation and no cached default, so it
+    calls translation(settings.LANGUAGE_CODE); translation() finds the
+    language not yet cached, so it constructs DjangoTranslation(language)
+    - the real translation object. No required context beyond the
+    pipeline itself. Boundary: activate() (installs a translation as
+    current, a different real entry point not reached from catalog())
+    and DjangoTranslation.__init__ (the constructor's own internals,
+    one hop past the construction call this pipeline stops at).
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.utils.translation.trans_real.catalog
+    - django.utils.translation.trans_real.translation
+  required_context: []
+  boundary_symbols:
+    - django.utils.translation.trans_real.activate
+    - django.utils.translation.trans_real.DjangoTranslation.__init__
+  expected_solution: >
+    catalog() calls translation(settings.LANGUAGE_CODE) on the cold-start
+    path. (Treated translation() as the pipeline's endpoint since it
+    "returns the translation object," without tracing that constructing
+    it is itself a separate, real traceable call.) Agreed on required
+    context (none) and boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.utils.translation.trans_real.catalog
+    - django.utils.translation.trans_real.translation
+    - django.utils.translation.trans_real.DjangoTranslation
+  required_context: []
+  boundary_symbols:
+    - django.utils.translation.trans_real.activate
+    - django.utils.translation.trans_real.DjangoTranslation.__init__
+  expected_solution: >
+    Annotator A's full chain is correct: translation()'s own source
+    (trans_real.py line 292) is `_translations[language] =
+    DjangoTranslation(language)` - the construction is a distinct,
+    separately-traceable statement, and the prompt's own explicit
+    stopping point ("up to and including the call that constructs the
+    real translation object") requires including it.
