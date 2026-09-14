@@ -573,3 +573,9 @@ All three reseeded tasks: real κ (Positive Specific Agreement / Dice-F1,
 computed by `benchmarks.ground_truth.loader`, never hand-typed) >= 0.93,
 loader-validated, and the full 20-task corpus re-audits at 20/20 PASS
 under the corrected transitive rule with these three substituted in.
+
+**Subsystem coverage note:** the reseed of Task 002 removed SQL
+compilation (`SQLCompiler.as_sql`) from the pilot corpus. The current
+corpus covers 20 subsystems but does not exercise the query compilation
+pipeline specifically. SQL compilation is a candidate for v1.2 corpus
+expansion.
