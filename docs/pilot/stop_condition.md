@@ -67,7 +67,26 @@ postponed. This STOP-condition document is not modified to
 accommodate the failure. The condition as written is either met or
 not; it is not edited to make a compromised run meet it.
 
-## 7. Sign-off
+## 7. Pre/post-pilot safety checklist
+
+- **Pre-pilot**: delete `.prism/cache/` before starting. One shell
+  command. Ensures no stale on-disk entries from a prior Prism
+  version or a prior, uncommitted working-tree state can leak into
+  the pilot run (see G43, `docs/design_formalism.md` Section 10.1 -
+  the on-disk feature-bitmask cache's key is derived from `git
+  rev-parse HEAD` only and does not detect an uncommitted change to
+  the code that computes the cached value).
+
+- **Post-pilot**: run 10 (task, engine, budget, seed) cells twice in
+  the same process. Compare byte-for-byte. If any diverge, flag it
+  in the report as a determinism concern. This is a spot-check, not
+  a gate — report the divergence rate, do not retry.
+
+G43 does not block the pilot. The pilot tasks are Python-only; G43
+manifests on minified JS. These two safety steps are cheap insurance
+regardless.
+
+## 8. Sign-off
 
 The STOP condition above is pre-registered and will not be adjusted
 after the pilot runs.
