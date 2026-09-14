@@ -1,0 +1,143 @@
+# T02 "Django Debug" - Task 2: QuerySet bulk-delete cascade pipeline.
+#
+# Reseeded (v2) and RENAMED after the corrected transitive-reachability
+# audit found the original seed (QuerySet._fetch_all) genuinely
+# unreachable to Query.get_compiler - no path of any length connects
+# them via CALLS/INSTANTIATES/EXTENDS/IMPLEMENTS/OVERRIDES/EMBEDS in
+# builder.graph. The old filename ("query_compile_pipeline") described
+# SQL compilation; this replacement is a different ORM subsystem
+# (cascade delete), so the old name would mislabel it - renamed rather
+# than kept for accuracy. Same repo/task-type, both real ORM subsystems.
+#
+# New seed: QuerySet.delete, whose real out-edges (verified directly
+# against builder.graph, not inferred from source alone) are:
+#   QuerySet.delete -> Collector.collect          [CALLS]
+#   QuerySet.delete -> Collector.delete           [CALLS]
+#   QuerySet.delete -> Collector (the class)      [INSTANTIATES]
+#   Collector.collect -> Collector.get_del_batches [CALLS] (inside a loop, deletion.py:~318)
+#   Collector.delete -> Collector.get_del_batches  NO EDGE - get_del_batches
+#     is only ever called from collect(), never from delete() - confirmed
+#     directly against builder.graph before writing this pipeline, per
+#     the user's own verification request (2026-09-14). The linear order
+#     below (delete -> collect -> get_del_batches -> delete) is correct.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below, matching benchmarks/corpora/pinned_commits.json's own "django"
+# entry, tag 4.2.30) - every symbol here is real and indexed, verified
+# against the real symbol table produced by prism.cli.build_pipeline on
+# that checkout (qualified names and line ranges below match exactly).
+#
+#   django.db.models.query.QuerySet.delete              lines 1126-1154
+#   django.db.models.deletion.Collector.collect          lines 247-401
+#   django.db.models.deletion.Collector.get_del_batches  lines 231-245
+#   django.db.models.deletion.Collector.delete           lines 436-522
+#
+# Real causal chain (query.py:1126-1154, deletion.py): delete()
+# instantiates a Collector, calls collector.collect() to recursively
+# gather cascade-related objects (batching related-object lookups via
+# get_del_batches() for each on_delete relation with more objects than
+# fit one query), then calls collector.delete() to execute the actual
+# SQL deletes.
+#
+# required_context/boundary_symbols (Gap 8), also real and verified:
+#   django.db.models.query.QuerySet                                (class,  lines 293-1981)
+#   django.db.models.deletion.Collector                            (class,  lines 96-522)
+#   django.db.models.deletion.Collector.can_fast_delete             (method, lines 187-229, called by both collect() and delete() as a fast-path check)
+#   django.db.models.query.QuerySet._chain                          (method, lines 1854-1863, boundary - direct setup callee of delete(), not part of the collect/delete cascade)
+#   django.db.models.query.QuerySet._not_support_combined_queries   (method, lines 1963-1968, boundary - direct guard callee of delete())
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1, Hripcsak
+# & Rothschild 2005) from annotation_a/annotation_b below, rather than
+# trusting a hand-typed number.
+task_id: django_t02_002_queryset_delete_cascade_pipeline
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.db.models.query.QuerySet.delete
+task_type: debug
+prompt: |
+  You are debugging Django's ORM bulk-delete path in
+  django/db/models/query.py and django/db/models/deletion.py. Starting
+  from `QuerySet.delete`, trace the exact causal pipeline used to
+  cascade-delete related objects and execute the deletes.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.db.models.query.QuerySet.delete", "django.db.models.deletion.Collector.collect"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.db.models.query.QuerySet.delete
+    - django.db.models.deletion.Collector.collect
+    - django.db.models.deletion.Collector.get_del_batches
+    - django.db.models.deletion.Collector.delete
+  required_context:
+    - django.db.models.query.QuerySet
+    - django.db.models.deletion.Collector
+    - django.db.models.deletion.Collector.can_fast_delete
+  boundary_symbols:
+    - django.db.models.query.QuerySet._chain
+    - django.db.models.query.QuerySet._not_support_combined_queries
+  expected_solution: >
+    delete() instantiates a Collector, calls collector.collect() to
+    recursively gather cascade-related objects (batching related-object
+    lookups via get_del_batches() for each on_delete relation), then
+    calls collector.delete() to execute the actual SQL deletes.
+    Required context: the QuerySet and Collector classes, and
+    can_fast_delete, the fast-path check collect() and delete() both
+    consult before doing real work. Boundary: _chain() and
+    _not_support_combined_queries(), both called directly by delete()
+    as setup/guard steps but not part of the collect/delete cascade
+    itself.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.db.models.query.QuerySet.delete
+    - django.db.models.deletion.Collector.collect
+    - django.db.models.deletion.Collector.delete
+  required_context:
+    - django.db.models.query.QuerySet
+    - django.db.models.deletion.Collector
+    - django.db.models.deletion.Collector.can_fast_delete
+  boundary_symbols:
+    - django.db.models.query.QuerySet._chain
+    - django.db.models.query.QuerySet._not_support_combined_queries
+  expected_solution: >
+    delete() builds a Collector, collect()s the related objects, then
+    delete()s them. (Missed that collect()'s own related-object
+    gathering is itself batched via a separately-traceable stage,
+    get_del_batches(), for every on_delete relation with more objects
+    than can be fetched in one query.) Agreed on required context and
+    boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.db.models.query.QuerySet.delete
+    - django.db.models.deletion.Collector.collect
+    - django.db.models.deletion.Collector.get_del_batches
+    - django.db.models.deletion.Collector.delete
+  required_context:
+    - django.db.models.query.QuerySet
+    - django.db.models.deletion.Collector
+    - django.db.models.deletion.Collector.can_fast_delete
+  boundary_symbols:
+    - django.db.models.query.QuerySet._chain
+    - django.db.models.query.QuerySet._not_support_combined_queries
+  expected_solution: >
+    Annotator A's full chain is correct: deletion.py line ~318
+    (`batches = self.get_del_batches(new_objs, [field])`) is a real,
+    separately-traceable stage inside collect(), not inlined logic -
+    confirmed directly against builder.graph: collect() -> get_del_batches
+    is a real CALLS edge, and delete() has no edge to get_del_batches at
+    all, so it belongs after collect() in the linear order, not after
+    delete().

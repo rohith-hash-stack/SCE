@@ -515,3 +515,61 @@ is pinned to GPT-4o - `benchmarks/tsr/client.py`'s existing
 Claude, this pinning is what makes the pilot's scores measure
 cross-model agreement (does GPT-4o's answer match Claude's annotation)
 rather than Claude-vs-Claude self-consistency.
+
+## Pre-pilot reseeds (corrected transitive reachability rule)
+
+A full-corpus audit of all 20 Django T02 debug tasks under the
+reachability rule then in `TASK_AUTHORING.md` - a direct edge required
+between every *consecutive* pair of `pipeline_symbols` - found 15 of 20
+tasks FAIL. That rule was itself wrong, not the corpus: most real
+pipelines are sibling-under-a-common-caller sequences reflecting
+execution order (e.g. `_clean_fields`/`_clean_form`, both called by
+`full_clean`, not one by the other), not a literal call chain between
+neighbors. The rule was corrected to *transitive* reachability - every
+`pi` (`i >= 2`) needs a directed path of any length from the seed via
+`CALLS`/`INSTANTIATES`/`EXTENDS`/`IMPLEMENTS`/`OVERRIDES`/`EMBEDS` edges,
+not a direct edge to its immediate predecessor (`TASK_AUTHORING.md` item
+2 now states this). Re-auditing under the corrected rule found only 3
+genuine failures, not 15 - the other 12 were false positives of the
+original rule, left untouched. The 3 genuine failures were reseeded:
+
+- **`django_t02_001_request_middleware_chain`** - the original seed
+  (`BaseHandler.load_middleware`) has no real path to `get_response`:
+  `load_middleware`'s only connection to `_get_response` is a
+  `READS_STATE` edge (an attribute reference, `get_response = ...
+  self._get_response`, not a call), and `get_response()` itself invokes
+  `self._middleware_chain(request)`, a runtime-built closure invisible
+  to static call-graph extraction - `READS_STATE` never counts toward
+  reachability by design. Reseeded to `BaseHandler._get_response`
+  itself, sidestepping the closure-invisibility problem entirely (every
+  pipeline stage is now a direct `CALLS` edge from the seed). **The
+  "Ground Truth Provenance" spot-check above (`django_t02_001_request_
+  middleware_chain`, "Validated") describes the pre-reseed pipeline
+  (`load_middleware -> get_response -> _get_response -> resolve_
+  request`) and is now stale as a description of the current task file -
+  left as-is as a historical record of that spot-check, not corrected in
+  place, since the spot-check itself (validating the *old* pipeline
+  against an independent Gemini annotation) remains a true statement
+  about what was checked at the time.**
+- **`django_t02_002_query_compile_pipeline`** - the original seed
+  (`QuerySet._fetch_all`) has no real path to `Query.get_compiler`.
+  Reseeded to `QuerySet.delete`, a different ORM subsystem entrypoint
+  (bulk-delete cascade, not SQL compilation) with a real, fully
+  transitively-reachable 4-stage pipeline into `django.db.models.
+  deletion.Collector`. **Subsystem shift: "query compile" to "query
+  delete cascade" - both real ORM subsystems, but genuinely different
+  ones, so the task was renamed to `django_t02_002_queryset_delete_
+  cascade_pipeline` (and the old `query_compile_pipeline` filename
+  deleted) rather than keeping a filename that would now mislabel the
+  content.**
+- **`django_t02_004_url_resolve_traversal`** - the original seed
+  (`URLResolver.resolve`) has no real path to `URLPattern.resolve` via
+  `RegexPattern.match`. Reseeded to the module-level `django.urls.base.
+  resolve` function, whose real chain (`get_urlconf` -> `get_resolver`
+  -> `_get_cached_resolver`) is fully transitively reachable; task_id
+  unchanged (still genuinely "URL resolve traversal").
+
+All three reseeded tasks: real κ (Positive Specific Agreement / Dice-F1,
+computed by `benchmarks.ground_truth.loader`, never hand-typed) >= 0.93,
+loader-validated, and the full 20-task corpus re-audits at 20/20 PASS
+under the corrected transitive rule with these three substituted in.
