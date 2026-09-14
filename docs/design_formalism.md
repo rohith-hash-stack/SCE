@@ -1049,3 +1049,31 @@ has been empirically false in four places.
 A unified cache-layer audit and cold-vs-warm parity test suite is
 scheduled as the first item of v1.1. Until it lands, treat any
 cache-hit path as a potential source of stale or divergent state.
+
+### 10.2 Ground Truth Provenance
+
+The 9 existing ground-truth tasks were annotated by Claude, not by two
+independent human annotators plus a separate human adjudicator as
+`benchmarks/ground_truth/TASK_AUTHORING.md`'s process describes.
+
+- Spot-checked on 3 of 9 tasks: 2 by independent Gemini annotation
+  (`django_t02_001_request_middleware_chain`,
+  `django_t02_003_form_clean_validation`), 1 by direct source
+  verification (`django_t13_001_blast_reverse`). All 3 validated - no
+  ground-truth annotation content was found to be wrong.
+- One prompt ambiguity was found (`django_t02_003`) and corrected -
+  the adjudicated symbol set itself was unchanged, only the prompt
+  wording. See `benchmarks/ground_truth/tasks/django/django_t02_003_
+  form_clean_validation.yaml`.
+- The pilot's answering LLM is pinned to GPT-4o-2024-11-20 (Section
+  10 note aside, this pin is `benchmarks/tsr/client.py`'s own
+  `DEFAULT_MODEL`, predating this document). Since ground truth was
+  annotated by Claude, this pinning is what makes the pilot's TSR
+  measure cross-model agreement (does GPT-4o's answer match Claude's
+  annotation) rather than Claude-vs-Claude self-consistency.
+
+Full detail - the per-task spot-check narrative, the exact root cause
+of the `django_t02_003` ambiguity, and the exact prompt wording
+before/after - is in `reports/pilot/methodology.md`'s own "Ground
+Truth Provenance" section; this is the condensed pointer to it from
+the design document itself.
