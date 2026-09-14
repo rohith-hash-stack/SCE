@@ -1,5 +1,34 @@
 """v1.1 Part 4: SQLite Cache Schema Upgrade (v2) - `file_cache_v2`.
 
+**G39**: this cache's only invalidation input used to be per-file
+`content_hash` - correct for "did this file's own source change,"
+wrong for "did the *code that computes bitmasks from that source*
+change." Across a Prism upgrade (or, inside one long-running
+development/test session, a code edit to `prism.semantics.substance`/
+`form`/`output`) with the repo's own files untouched, a stale row
+would be served forever, since nothing about its key ever changes.
+`prism.runtime.index_cache` already had exactly this protection
+(`_SCHEMA_VERSION`, checked on every read); this module already had
+its own `SCHEMA_VERSION` for row-*shape* changes, but nothing tracked
+the underlying *engine's* version. Fixed by folding `engine_commit_
+hash()`/`grammar_version()` (the same two real, process-wide version
+sources `prism.traversal._cache_keys.GraphCacheKey` already uses for
+this exact purpose) into the value actually compared against the
+stored `content_hash` column - `tag_rule_version` is `engine_commit_
+hash()`'s own value again, not a separately-tracked constant, for the
+identical reason `GraphCacheKey`'s own docstring gives: no
+independently-versioned tagging-rule scheme exists anywhere in this
+codebase. Entirely internal to this module - `save_file_cache_entry`/
+`load_file_cache_entry`'s own public signatures are unchanged, so
+every existing caller is automatically covered with no changes of its
+own. The on-disk row *shape* is unchanged too (still one `content_hash`
+TEXT column); only what gets hashed into that column's value changed -
+`SCHEMA_VERSION` is bumped regardless, since a row written under the
+old (file-hash-only) key can never legitimately satisfy the new
+(file-hash + engine + grammar) one, and letting a stale row merely
+"miss on content_hash mismatch" would be an accident of hashing, not a
+guarantee.
+
 **Scope, stated honestly up front**: this is a *per-file* cache for the
 v1.1 four-axis extraction layer specifically (`prism.semantics.substance`/
 `form`/`output` and `prism.traversal`'s data-flow/guard indicators) - it
@@ -52,15 +81,35 @@ time).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from pathlib import Path
 
-#: Bumped whenever the serialized row shape changes - an old cache row
-#: from a prior schema version is simply treated as a miss (never a
-#: deserialization crash), the same convention `prism.runtime.
+from prism.traversal._cache_keys import engine_commit_hash, grammar_version
+
+#: Bumped whenever the serialized row shape changes, *or* whenever what
+#: gets hashed into the `content_hash` column's value changes (G39's
+#: engine/grammar-version folding is exactly such a change) - an old
+#: cache row from a prior schema version is simply treated as a miss
+#: (never a deserialization crash), the same convention `prism.runtime.
 #: index_cache`'s own `_SCHEMA_VERSION` already establishes.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+
+
+def _versioned_content_hash(file_content_hash: str) -> str:
+    """G39: folds the two real, process-wide version sources `prism.
+    traversal._cache_keys.GraphCacheKey` already uses for this exact
+    purpose into the raw per-file content hash, so a stale row can
+    never satisfy a lookup made under a different engine build or a
+    different installed tree-sitter grammar set, even though the
+    file's own source is byte-identical. `tag_rule_version` is `engine_
+    commit_hash()`'s own value again, not a separately-tracked
+    constant - see `GraphCacheKey`'s own docstring for why.
+    """
+    commit_hash = engine_commit_hash()
+    raw = "|".join((file_content_hash, commit_hash, commit_hash, grammar_version()))
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def sqlite_cache_path(repo_root: str) -> Path:
@@ -109,7 +158,7 @@ def save_file_cache_entry(
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         relative_path,
-                        content_hash,
+                        _versioned_content_hash(content_hash),
                         mtime,
                         SCHEMA_VERSION,
                         json.dumps(serialized_symbols),
@@ -158,7 +207,7 @@ def load_file_cache_entry(
     if row is None:
         return None
     cached_hash, schema_version, symbols_json, bitmasks_json, data_flow_json = row
-    if cached_hash != content_hash or schema_version != SCHEMA_VERSION:
+    if cached_hash != _versioned_content_hash(content_hash) or schema_version != SCHEMA_VERSION:
         return None
     try:
         return {
