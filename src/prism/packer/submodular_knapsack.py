@@ -406,16 +406,31 @@ def select_submodular_context(
     covered_mask = feature_masks.get(seed_id, 0)
     upstream_contract_preserving = upstream_contract_preserving or set()
 
+    # B2: a candidate with no real, resolvable symbol-table entry - an
+    # unresolved polymorphic call-site marker (`prism.graph.symbol_table.
+    # unresolved_polymorphic_node_id`, shaped `<ambiguous:...>`) or any
+    # other graph node `_default_costs` couldn't find a real source
+    # snippet for (an external/stdlib reference, say) - always gets
+    # `cost == 0` there (`_default_costs`'s own `max(count_tokens(...), 1)`
+    # floor guarantees a REAL symbol's cost is never 0, so 0 is an exact,
+    # reliable signal, not a heuristic threshold). Such a node has no real
+    # source body to show an LLM at all, so it is excluded from ever
+    # entering the frontier - a hard admissibility gate on "is this a real
+    # symbol we can render," not a scored penalty, and it leaves the
+    # value/cost/density formula, beta, and delta_max completely untouched.
+    def _is_real_candidate(qname: str) -> bool:
+        return costs.get(qname, 0) > 0
+
     frontier: set[str] = set()
     upstream_candidates: set[str] = set()
     combined_dist_map = dict(dist_w_map)
     if seed_id in graph:
         for neighbor in graph.successors(seed_id):
-            if dist_w_map.get(neighbor, float("inf")) <= max_hops:
+            if dist_w_map.get(neighbor, float("inf")) <= max_hops and _is_real_candidate(neighbor):
                 frontier.add(neighbor)
         if dist_w_upstream_map is not None:
             for pred in graph.predecessors(seed_id):
-                if dist_w_upstream_map.get(pred, float("inf")) <= upstream_max_hops:
+                if dist_w_upstream_map.get(pred, float("inf")) <= upstream_max_hops and _is_real_candidate(pred):
                     upstream_candidates.add(pred)
                     existing = combined_dist_map.get(pred)
                     upstream_dist = dist_w_upstream_map[pred]
@@ -462,7 +477,7 @@ def select_submodular_context(
 
         for succ in graph.successors(best_node):
             if succ not in s_pack and succ not in frontier:
-                if dist_w_map.get(succ, float("inf")) <= max_hops:
+                if dist_w_map.get(succ, float("inf")) <= max_hops and _is_real_candidate(succ):
                     frontier.add(succ)
                     combined_dist_map.setdefault(succ, dist_w_map[succ])
 
