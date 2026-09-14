@@ -426,7 +426,17 @@ def select_submodular_context(
         best_node = None
         best_density = -1.0
 
-        for candidate in frontier:
+        # B1: sorted(frontier), not `for candidate in frontier` - `frontier`
+        # is a `set`, whose iteration order depends on string hash order
+        # (randomized per-process unless PYTHONHASHSEED is fixed), so an
+        # exact density tie between two candidates previously resolved to
+        # whichever one the set happened to yield first - not reproducible
+        # run to run, and with no preference for either candidate. Ascending
+        # qualified-name order makes a tie's winner deterministic and
+        # reproducible without introducing any new ranking criterion (still
+        # strictly `density > best_density`, never `>=` - a real, larger
+        # density always wins outright; only an *exact* tie is affected).
+        for candidate in sorted(frontier):
             cost = costs.get(candidate, 0)
             if current_cost + cost > target_budget:
                 continue
