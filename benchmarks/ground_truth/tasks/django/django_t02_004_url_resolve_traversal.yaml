@@ -1,45 +1,70 @@
-# T02 "Django Debug" - Task 4: URLconf resolution traversal.
+# T02 "Django Debug" - Task 4: URL resolve traversal.
+#
+# Reseeded (v2) after the corrected transitive-reachability audit found
+# the original seed (URLResolver.resolve) genuinely unreachable to
+# URLPattern.resolve via RegexPattern.match - no path of any length
+# connects them in builder.graph.
+#
+# New seed: the module-level django.urls.base.resolve() function
+# (genuinely different symbol from the old class-method seed), whose
+# real out-edges (verified directly against builder.graph) are:
+#   django.urls.base.resolve -> django.urls.base.get_urlconf          [CALLS]
+#   django.urls.base.resolve -> django.urls.resolvers.get_resolver    [CALLS]
+#   django.urls.resolvers.get_resolver -> django.urls.resolvers._get_cached_resolver  [CALLS]
+#   django.urls.resolvers._get_cached_resolver -> django.urls.resolvers.URLResolver   [INSTANTIATES]
+#   django.urls.resolvers._get_cached_resolver -> django.urls.resolvers.RegexPattern  [INSTANTIATES]
+# Note: resolve()'s own final statement, `get_resolver(urlconf).resolve(path)`,
+# calls .resolve() on a dynamically-returned URLResolver instance - this
+# does NOT show up as a static edge to URLResolver.resolve (the same
+# receiver-type/dynamic-dispatch invisibility noted for G41), so
+# URLResolver.resolve is deliberately NOT included as a pipeline stage
+# here; the pipeline stops at the real, statically-verified chain.
 #
 # Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
-# below). Verified against the real symbol table:
+# below, matching benchmarks/corpora/pinned_commits.json's own "django"
+# entry, tag 4.2.30) - every symbol here is real and indexed, verified
+# against the real symbol table produced by prism.cli.build_pipeline on
+# that checkout (qualified names and line ranges below match exactly).
 #
-#   django.urls.resolvers.URLResolver.resolve    lines 657-703
-#   django.urls.resolvers.RegexPattern.match     lines 195-209
-#   django.urls.resolvers.URLPattern.resolve     lines 424-438
-#   django.urls.resolvers.RoutePattern.match     lines 306-318  (a real
-#     sibling matcher for path()-declared patterns - not on this task's
-#     own regex-based pipeline; included in annotation_a below as a
-#     realistic annotator mix-up)
+#   django.urls.base.resolve                    lines 21-24
+#   django.urls.base.get_urlconf                lines 140-145
+#   django.urls.resolvers.get_resolver           lines 105-108
+#   django.urls.resolvers._get_cached_resolver   lines 112-113
+#
+# Real causal chain (urls/base.py:21-24): resolve() calls get_urlconf()
+# to determine which urlconf applies when none was passed explicitly,
+# then get_resolver(urlconf) to obtain the resolver for it, which
+# delegates to the lru_cache-wrapped _get_cached_resolver() - the actual
+# point where a URLResolver(RegexPattern('^/'), urlconf) is built (or
+# served from cache). get_urlconf() is only reached when the caller
+# didn't pass urlconf explicitly - the prompt states this assumption
+# explicitly so the pipeline is unconditionally well-defined.
 #
 # required_context/boundary_symbols (Gap 8), also real and verified:
-#   django.urls.resolvers.URLResolver              (class)
-#   django.urls.resolvers.RegexPattern              (class)
-#   django.urls.resolvers.URLPattern                (class)
-#   django.urls.resolvers.URLResolver._extend_tried (method, boundary -
-#     called inside resolve()'s own for-loop, not part of the traversal)
+#   django.urls.resolvers.URLResolver               (class,   lines 456-828, one of the two classes _get_cached_resolver instantiates)
+#   django.urls.resolvers.RegexPattern               (class,   lines 185-242, the other)
+#   django.urls.base.reverse                         (function, lines 27-88, boundary - sibling entrypoint calling the same get_urlconf/get_resolver pair for the opposite, name-to-path direction)
+#   django.core.handlers.base.BaseHandler.resolve_request  (method, lines 300-315, boundary - real production one-hop caller of get_resolver)
 #
-# Real traversal (assuming a regex-based URLconf, i.e. `re_path()`
-# entries - RoutePattern/`path()` follows a structurally parallel but
-# distinct chain): URLResolver.resolve() first calls
-# `self.pattern.match(path)` (RegexPattern.match, for a resolver whose
-# own prefix was declared with re_path()) to strip the matched prefix,
-# then iterates its own url_patterns calling `pattern.resolve(new_path)`
-# on each; for a leaf URLPattern, that lands in URLPattern.resolve(),
-# which itself calls `self.pattern.match(path)` again on the remaining
-# path.
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1, Hripcsak
+# & Rothschild 2005) from annotation_a/annotation_b below, rather than
+# trusting a hand-typed number.
 task_id: django_t02_004_url_resolve_traversal
 repo: django
 pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
-seed_symbol: django.urls.resolvers.URLResolver.resolve
+seed_symbol: django.urls.base.resolve
 task_type: debug
 prompt: |
-  You are debugging URLconf resolution in django/urls/resolvers.py, for
-  a URLconf declared entirely with `re_path()` (regex patterns, not
-  `path()`/route converters). Starting from `URLResolver.resolve`,
-  trace the real causal traversal down to the leaf URL pattern's own
-  resolution call.
+  You are debugging Django's URL resolution entrypoint in
+  django/urls/base.py and django/urls/resolvers.py. Starting from
+  `django.urls.base.resolve`, trace the exact causal pipeline used to
+  obtain the (possibly cached) resolver for the current urlconf. Assume
+  `resolve` is called without an explicit `urlconf` argument (the
+  default), so it must look up the current thread's urlconf itself
+  rather than skip straight to resolving the resolver.
 
-  First give a short (2-4 sentence) explanation of the traversal.
+  First give a short (2-4 sentence) explanation of the pipeline.
 
   Then, on its own line, emit a fenced JSON code block containing an
   ordered array of the fully-qualified symbol names in that causal
@@ -47,61 +72,70 @@ prompt: |
   may appear, e.g.:
 
   ```json
-  ["django.urls.resolvers.URLResolver.resolve", "django.urls.resolvers.RegexPattern.match"]
+  ["django.urls.base.resolve", "django.urls.base.get_urlconf"]
   ```
 
 annotation_a:
   annotator_id: annotator_a
   pipeline_symbols:
-    - django.urls.resolvers.URLResolver.resolve
-    - django.urls.resolvers.RegexPattern.match
-    - django.urls.resolvers.RoutePattern.match
+    - django.urls.base.resolve
+    - django.urls.base.get_urlconf
+    - django.urls.resolvers.get_resolver
+    - django.urls.resolvers._get_cached_resolver
   required_context:
     - django.urls.resolvers.URLResolver
     - django.urls.resolvers.RegexPattern
-    - django.urls.resolvers.URLPattern
   boundary_symbols:
-    - django.urls.resolvers.URLResolver._extend_tried
+    - django.urls.base.reverse
+    - django.core.handlers.base.BaseHandler.resolve_request
   expected_solution: >
-    URLResolver.resolve() matches its own prefix via RegexPattern.match(),
-    then dispatches to the matching pattern. (Mistakenly named
-    RoutePattern.match as the leaf dispatch - that's the path()-style
-    matcher, not what a regex-declared leaf URLPattern actually calls.)
-    Required context and boundary symbols agreed with annotator B.
+    resolve() calls get_urlconf() to determine which urlconf applies
+    when none was passed explicitly, then get_resolver(urlconf) to
+    obtain the resolver for it, which delegates to the lru_cache-wrapped
+    _get_cached_resolver() - the actual point where a
+    URLResolver(RegexPattern('^/'), urlconf) is built (or served from
+    cache) before .resolve(path) is called on it. Required context:
+    URLResolver and RegexPattern, the two classes _get_cached_resolver
+    instantiates. Boundary: reverse(), a sibling entrypoint calling the
+    same get_urlconf/get_resolver pair for the opposite (name-to-path)
+    direction, and BaseHandler.resolve_request, a real production
+    one-hop caller of get_resolver.
 
 annotation_b:
   annotator_id: annotator_b
   pipeline_symbols:
-    - django.urls.resolvers.URLResolver.resolve
-    - django.urls.resolvers.RegexPattern.match
-    - django.urls.resolvers.URLPattern.resolve
+    - django.urls.base.resolve
+    - django.urls.resolvers.get_resolver
+    - django.urls.resolvers._get_cached_resolver
   required_context:
     - django.urls.resolvers.URLResolver
     - django.urls.resolvers.RegexPattern
-    - django.urls.resolvers.URLPattern
   boundary_symbols:
-    - django.urls.resolvers.URLResolver._extend_tried
+    - django.urls.base.reverse
+    - django.core.handlers.base.BaseHandler.resolve_request
   expected_solution: >
-    URLResolver.resolve() matches its own prefix via RegexPattern.match(),
-    then calls pattern.resolve() on the matching sub-pattern, which for
-    a leaf entry is URLPattern.resolve().
+    resolve() gets the resolver via get_resolver(), which is cached by
+    _get_cached_resolver(). (Missed that get_urlconf() is itself a
+    separately-traceable stage - resolve()'s own first statement when
+    urlconf isn't passed explicitly, not inlined into get_resolver().)
+    Agreed on required context and boundary symbols.
 
 adjudicated:
   annotator_id: adjudicator
   pipeline_symbols:
-    - django.urls.resolvers.URLResolver.resolve
-    - django.urls.resolvers.RegexPattern.match
-    - django.urls.resolvers.URLPattern.resolve
+    - django.urls.base.resolve
+    - django.urls.base.get_urlconf
+    - django.urls.resolvers.get_resolver
+    - django.urls.resolvers._get_cached_resolver
   required_context:
     - django.urls.resolvers.URLResolver
     - django.urls.resolvers.RegexPattern
-    - django.urls.resolvers.URLPattern
   boundary_symbols:
-    - django.urls.resolvers.URLResolver._extend_tried
+    - django.urls.base.reverse
+    - django.core.handlers.base.BaseHandler.resolve_request
   expected_solution: >
-    Annotator B is correct: resolvers.py line 660
-    (`match = self.pattern.match(path)`) is RegexPattern.match() for a
-    re_path()-declared resolver; the for-loop's `pattern.resolve(new_path)`
-    (line 663) lands in URLPattern.resolve() for a leaf entry - not
-    RoutePattern.match(), which only applies to path()-declared patterns
-    and is never reached on this all-re_path() URLconf.
+    Annotator A's full chain is correct: base.py line 22 (`if urlconf is
+    None: urlconf = get_urlconf()`) is resolve()'s own first real
+    statement, a distinct, separately-traceable stage - the prompt
+    states the no-explicit-urlconf assumption explicitly, so a correct
+    answer includes it.
