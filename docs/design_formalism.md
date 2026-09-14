@@ -1021,8 +1021,9 @@ Gaps identified during pilot-verification audit (Bookmark 2), not yet
 fixed, tracked here so the pilot runs against a documented rather than
 an implicit set of blind spots:
 
-- **G7** - Container-field data-flow (`d['k'] = f(); g(d['k'])`) is not
-  detected. Scheduled for v1.1, before Milestone 2 authoring begins.
+- **G7** - Container-field data-flow (`d['k'] = f(); g(d['k'])`) was
+  not detected. Fixed before Milestone 2 authoring began (commit
+  `bookmark-2-g7`).
 - **G13** - Async/await data-flow binding is not detected. Same class
   as G8 (pre-fix); scheduled for v1.1.
 - **G14** - Decorator behavior attribution is narrow - only
@@ -1036,6 +1037,27 @@ an implicit set of blind spots:
   for v1.1.
 - **G35** - No per-file AST cache. Deliberate, documented tradeoff -
   the index cache re-parses on cold build.
+- **G40** - Inheritance-unaware `self.method()` call resolution: when
+  a call site resolves to `Class.method` and `method` isn't actually
+  defined on `Class` (only inherited from a real parent via a real
+  `EXTENDS` edge), the graph does not fall back through that edge to
+  the true defining method - the call site instead links to a
+  fabricated symbol name that was never indexed, or (for a `self.
+  attribute(...)` call through a class-valued attribute) to the
+  attribute descriptor itself with no further edge at all. Found
+  authoring `django_t02_014_send_mail_pipeline` (Milestone 2, batch 3):
+  `EmailMultiAlternatives.send()` resolves to a nonexistent
+  `EmailMultiAlternatives.send` rather than the real, inherited
+  `EmailMessage.send`, despite a real `EXTENDS` edge connecting the two
+  classes. Same class of finding as G7/G13/G22 - the graph cannot
+  represent a real Python pattern, so a real pipeline stage becomes
+  invisible to every engine's retrieval, not just to one. Not pilot
+  scope (ground truth for affected seeds is authored to stop at the
+  last reachable stage instead, per `benchmarks/ground_truth/
+  TASK_AUTHORING.md`'s reachability check). Deferred to v1.2; the
+  scheduled v1.1 cache-layer audit (Section 10.1) should also survey
+  the binding/call-resolution layer for the same class of issue while
+  it's already auditing structural assumptions.
 
 ### 10.1 Cache layer - audit history
 

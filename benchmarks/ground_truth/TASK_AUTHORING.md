@@ -14,12 +14,39 @@ additional Debug tasks, the 4 blast tasks, or a future repo's tasks.
    `builder.symbol_table.get(qualified_name)`. Never guess a qualified
    name, a line range, or whether a symbol exists. A seed/reference
    symbol that doesn't resolve in the real index is not a real task.
-2. **Real, verified pinned commit.** `pinned_commit` in the YAML must
+2. **Verify every pipeline stage is reachable, not just real** (added
+   after Milestone 2 batch 3's review caught two pipelines with a real-
+   but-unreachable terminal stage - see G40 in `docs/design_formalism.md`).
+   Existing in the symbol table is necessary but not sufficient - a
+   symbol with zero real path from the seed is exactly as useless to a
+   retrieval engine as a symbol that doesn't exist at all. For every
+   pipeline stage:
+     1. The symbol exists in the symbol table (item 1 above).
+     2. A reachable edge exists from the *previous* pipeline stage to
+        it - check directly with `builder.graph.out_edges(prev_stage,
+        data=True)` / `in_edges(this_stage, data=True)`, don't assume
+        from reading source alone that a real Python relationship
+        (a call, an inherited method) became a real graph edge.
+     3. The edge chain is `CALLS`, `INSTANTIATES`, or - for a method
+        inherited rather than directly defined - actually resolves
+        through a real `EXTENDS` edge to its defining class. Confirmed
+        directly (G40): this codebase's call resolution does **not**
+        currently follow `EXTENDS` to find an inherited method when a
+        `self.method()` call site's simple-name resolution lands on a
+        subclass that doesn't itself define that method - the `EXTENDS`
+        edge can be real while the method call still dangles to a
+        nonexistent symbol. Don't assume inheritance "just works" here;
+        check the actual edge.
+   If any stage fails check 1 or 2, trim the pipeline to its last
+   reachable stage and move the unreachable stage to `boundary_symbols`
+   instead, with a header-comment note explaining why it's excluded
+   (see `django_t02_014_send_mail_pipeline.yaml` for a worked example).
+3. **Real, verified pinned commit.** `pinned_commit` in the YAML must
    match `benchmarks/corpora/pinned_commits.json`'s own entry for that
    repo - re-verify with `git ls-remote --tags <url>` /
    `git rev-parse HEAD` on the actual checkout if in doubt, never typed
    from memory.
-3. **Two independent annotators + a real adjudicator.** Compute
+4. **Two independent annotators + a real adjudicator.** Compute
    agreement with `benchmarks.ground_truth.schema.
    compute_inter_annotator_agreement` (Positive Specific Agreement /
    Dice-F1, not literal Cohen's kappa - see that function's own
@@ -29,13 +56,13 @@ additional Debug tasks, the 4 blast tasks, or a future repo's tasks.
    annotation to be a real reconciliation (not a copy of either raw
    annotation), `< 0.60` is rejected outright - never lowered to make a
    task pass.
-4. **Structured, deterministically-scorable prompts.** A task's prompt
+5. **Structured, deterministically-scorable prompts.** A task's prompt
    should ask for a form a scorer can check without an LLM-judge second
    call or fragile prose-regex heuristics (a fenced JSON array of
    ordered symbol names for a `debug`/`chain` task; free prose naming
    symbols for a `blast` task, matched by `scorer_blast.py`'s own
    substring convention).
-5. **Disclose real limitations honestly, in the YAML itself.** If a
+6. **Disclose real limitations honestly, in the YAML itself.** If a
    seed's real caller/reference graph is thin, or skews toward the
    target repo's own test suite rather than production code, say so in
    a header comment - don't pad the ground truth with invented entries

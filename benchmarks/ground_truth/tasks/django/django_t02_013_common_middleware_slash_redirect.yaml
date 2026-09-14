@@ -1,0 +1,145 @@
+# T02 "Django Debug" - Task 13: append-slash redirect on 404
+# (Milestone 2 batch 3, seed 2/15 - subsystem: Middleware).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; each
+# has a real CALLS out-edge to the next stage in builder.graph).
+#
+#   django.middleware.common.CommonMiddleware.process_response              lines 100-115 (django/middleware/common.py)
+#   django.middleware.common.CommonMiddleware.should_redirect_with_slash     lines 62-74  (django/middleware/common.py)
+#   django.middleware.common.CommonMiddleware.get_full_path_with_slash       lines 76-98  (django/middleware/common.py)
+#   django.middleware.common.CommonMiddleware.response_redirect_class        lines 32-32  (django/middleware/common.py)
+#
+# Real causal chain, read directly from source (common.py lines
+# 100-108): process_response()'s first real statement is
+# `if response.status_code == 404 and self.should_redirect_with_slash(
+# request): return self.response_redirect_class(self.get_full_path_
+# with_slash(request))`. Python's `and` short-circuits, so should_
+# redirect_with_slash() is only reached when the status is 404; get_
+# full_path_with_slash() and the response_redirect_class() call are
+# only reached if should_redirect_with_slash() itself returns True.
+# Explicit assumption this task's prompt states: assume the response
+# has a 404 status code, and should_redirect_with_slash() determines
+# that a slash-appended redirect is warranted - the real branch that
+# reaches every stage in this pipeline, not the far more common
+# "leave the 404 as-is" branch.
+#
+# Seed check (Milestone 2 requirements): CommonMiddleware is a plain
+# MiddlewareMixin subclass, not metaclass-generated; nothing here is
+# async/await; no container-subscript data-flow pattern is involved
+# (pure call-chain). Different middleware class from
+# django_t02_001_request_middleware_chain's BaseHandler-level chain -
+# no overlap in seeds or traced symbols.
+#
+# Reachability check (batch-3 review): response_redirect_class is a
+# plain class attribute (`response_redirect_class =
+# HttpResponsePermanentRedirect`, common.py line 32) - it would be
+# tempting to use the real class it points to,
+# django.http.response.HttpResponsePermanentRedirect, as the "true"
+# final pipeline stage instead. Checked directly and rejected:
+# HttpResponsePermanentRedirect is a real, indexed symbol, but
+# builder.graph has no edge - direct or via any alias - connecting
+# process_response (or the response_redirect_class attribute node
+# itself, which has zero out-edges) to it; its only real in-edges come
+# from unrelated call sites elsewhere in the codebase (AdminSite.
+# catch_all_view, SecurityMiddleware.process_request, etc., each their
+# own separate INSTANTIATES edge). Using the class here would produce
+# exactly the unreachable-terminal-stage problem
+# django_t02_014_send_mail_pipeline hit and was trimmed for (see that
+# task's own header, and the new G40 entry in design_formalism.md).
+# response_redirect_class is the correct ground truth precisely because
+# it is the one real, *reachable* edge target from process_response -
+# not despite being "only" an attribute.
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.middleware.common.CommonMiddleware              (class)  lines 13-115
+#   django.middleware.common.CommonMiddleware.process_request (method) lines 34-60
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_013_common_middleware_slash_redirect
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.middleware.common.CommonMiddleware.process_response
+task_type: debug
+prompt: |
+  You are debugging Django's automatic append-slash redirect in
+  django/middleware/common.py. Starting from
+  `CommonMiddleware.process_response`, trace the real causal pipeline
+  that produces a slash-appended redirect response, in the order each
+  stage is actually reached, up to and including the call that
+  constructs the actual redirect response. Assume the response being
+  processed has a 404 status code, and that `should_redirect_with_slash`
+  determines a slash-appended redirect is warranted.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.middleware.common.CommonMiddleware.process_response", "django.middleware.common.CommonMiddleware.should_redirect_with_slash"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.middleware.common.CommonMiddleware.process_response
+    - django.middleware.common.CommonMiddleware.should_redirect_with_slash
+    - django.middleware.common.CommonMiddleware.get_full_path_with_slash
+    - django.middleware.common.CommonMiddleware.response_redirect_class
+  required_context:
+    - django.middleware.common.CommonMiddleware
+  boundary_symbols:
+    - django.middleware.common.CommonMiddleware.process_request
+  expected_solution: >
+    process_response() checks for a 404 status and calls should_
+    redirect_with_slash(); assuming both hold, it calls get_full_path_
+    with_slash() to build the new path, then response_redirect_class()
+    to construct the actual redirect response. Required context:
+    CommonMiddleware itself. Boundary: process_request, a sibling
+    method handling a different part of the request cycle, not part of
+    this response-side chain.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.middleware.common.CommonMiddleware.process_response
+    - django.middleware.common.CommonMiddleware.should_redirect_with_slash
+    - django.middleware.common.CommonMiddleware.get_full_path_with_slash
+  required_context:
+    - django.middleware.common.CommonMiddleware
+  boundary_symbols:
+    - django.middleware.common.CommonMiddleware.process_request
+  expected_solution: >
+    process_response() checks should_redirect_with_slash(), then calls
+    get_full_path_with_slash() to build the redirect target path.
+    (Missed that constructing the actual response object is itself a
+    separate traced call, response_redirect_class() - treated building
+    the path string as the pipeline's endpoint.) Agreed on required
+    context and boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.middleware.common.CommonMiddleware.process_response
+    - django.middleware.common.CommonMiddleware.should_redirect_with_slash
+    - django.middleware.common.CommonMiddleware.get_full_path_with_slash
+    - django.middleware.common.CommonMiddleware.response_redirect_class
+  required_context:
+    - django.middleware.common.CommonMiddleware
+  boundary_symbols:
+    - django.middleware.common.CommonMiddleware.process_request
+  expected_solution: >
+    Annotator A's full chain is correct: common.py line 108 is
+    `return self.response_redirect_class(self.get_full_path_with_slash(
+    request))` - response_redirect_class is the outer call, constructing
+    the real response object from the inner call's result, and the
+    prompt's own explicit stopping point ("up to and including the call
+    that constructs the actual redirect response") requires including
+    it.

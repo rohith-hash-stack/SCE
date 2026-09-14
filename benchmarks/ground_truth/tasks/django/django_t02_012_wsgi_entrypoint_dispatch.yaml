@@ -1,0 +1,136 @@
+# T02 "Django Debug" - Task 12: WSGI request entrypoint
+# (Milestone 2 batch 3, seed 1/15 - subsystem: HTTP request/response
+# lifecycle).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; each
+# has a real CALLS out-edge to the next stage in builder.graph).
+#
+#   django.core.handlers.wsgi.WSGIHandler.__call__       lines 120-144 (django/core/handlers/wsgi.py)
+#   django.core.handlers.wsgi.get_script_name              lines 154-184 (django/core/handlers/wsgi.py)
+#   django.urls.base.set_script_prefix                     lines 100-106 (django/urls/base.py)
+#   django.core.handlers.base.BaseHandler.get_response      lines 136-150 (django/core/handlers/base.py)
+#
+# Real causal chain, read directly from source (wsgi.py lines
+# 120-124): __call__'s first statement is
+# `set_script_prefix(get_script_name(environ))` - get_script_name()
+# evaluates first (it's the argument expression), then
+# set_script_prefix() runs on its result; both unconditional, the very
+# first thing this method does. The next two source statements are
+# `signals.request_started.send(...)` and
+# `request = self.request_class(environ)` - both real and reached, but
+# deliberately excluded from this pipeline: request_started is a
+# module-level Signal *instance*, and calling `.send()` on it does not
+# resolve to a real qualified symbol in this codebase's index (the
+# instance-attribute call site, not a class method); `self.request_
+# class(environ)` resolves in builder.graph to the `request_class`
+# class-attribute descriptor, not to `WSGIRequest` itself - neither is
+# a trustworthy pipeline member to assert as ground truth, so this task
+# skips straight to the next real, cleanly-resolved call:
+# `response = self.get_response(request)`. Every stage in the final
+# 4-symbol chain is unconditional - no branch in __call__ runs before
+# line 124.
+#
+# Seed check (Milestone 2 requirements): WSGIHandler is a plain
+# BaseHandler subclass, not metaclass-generated; nothing here is
+# async/await (this is the *synchronous* WSGI entrypoint specifically -
+# ASGIHandler.__call__ is the separate async counterpart, not this
+# seed); no container-subscript data-flow pattern is involved (pure
+# call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.core.handlers.wsgi.WSGIHandler                 (class)  lines 113-144
+#   django.core.handlers.base.BaseHandler.load_middleware   (method) lines 26-102
+#
+# django_t02_001_request_middleware_chain already traces what happens
+# *inside* get_response()/load_middleware() - this task is the entry
+# point immediately *before* that, complementary rather than
+# overlapping: load_middleware is listed as boundary here (the real
+# next real stage once get_response is entered, already fully traced
+# by task 001, deliberately not re-traced here).
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_012_wsgi_entrypoint_dispatch
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.core.handlers.wsgi.WSGIHandler.__call__
+task_type: debug
+prompt: |
+  You are debugging the very first steps of a Django request's
+  lifecycle in django/core/handlers/wsgi.py. Starting from
+  `WSGIHandler.__call__`, trace the real causal pipeline a request
+  travels through before Django's own request-handling machinery takes
+  over, in the order each stage is actually reached, up to and
+  including the call that hands off to the base handler's own response
+  pipeline.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.core.handlers.wsgi.WSGIHandler.__call__", "django.core.handlers.wsgi.get_script_name"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.core.handlers.wsgi.WSGIHandler.__call__
+    - django.core.handlers.wsgi.get_script_name
+    - django.urls.base.set_script_prefix
+    - django.core.handlers.base.BaseHandler.get_response
+  required_context:
+    - django.core.handlers.wsgi.WSGIHandler
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler.load_middleware
+  expected_solution: >
+    __call__() computes the script name via get_script_name(), passes
+    it to set_script_prefix() to install the URL prefix for this
+    request, then hands off to self.get_response(request). Every stage
+    is unconditional. Required context: WSGIHandler itself. Boundary:
+    load_middleware - the real next stage once get_response is entered,
+    already the subject of django_t02_001, not re-traced here.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.core.handlers.wsgi.WSGIHandler.__call__
+    - django.urls.base.set_script_prefix
+    - django.core.handlers.base.BaseHandler.get_response
+  required_context:
+    - django.core.handlers.wsgi.WSGIHandler
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler.load_middleware
+  expected_solution: >
+    __call__() calls set_script_prefix() then self.get_response().
+    (Missed that get_script_name() is itself a separate traced call
+    nested inside the set_script_prefix() call expression - read the
+    statement as "set_script_prefix does its own script-name lookup"
+    rather than noticing get_script_name() is a real, independently
+    resolvable function call.) Agreed on required context and boundary
+    symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.core.handlers.wsgi.WSGIHandler.__call__
+    - django.core.handlers.wsgi.get_script_name
+    - django.urls.base.set_script_prefix
+    - django.core.handlers.base.BaseHandler.get_response
+  required_context:
+    - django.core.handlers.wsgi.WSGIHandler
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler.load_middleware
+  expected_solution: >
+    Annotator A's full chain is correct: wsgi.py line 121 is literally
+    `set_script_prefix(get_script_name(environ))` - get_script_name()
+    is a real, separately-defined module-level function
+    (wsgi.py lines 154-184), not inlined logic, and Python evaluates it
+    before set_script_prefix can run.
