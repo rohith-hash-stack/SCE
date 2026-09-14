@@ -11,10 +11,14 @@ differences measure retrieval quality, not prompt formatting.
 **Stated honestly**: running a real TSR sweep calls a real, paid LLM API
 (`benchmarks.tsr.client.DeepSeekClient`, the DeepSeek pilot's own client -
 Phase 1 of the DeepSeek pilot setup) - this module never does so
-silently. Without `DEEPSEEK_API_KEY` configured (or with `--dry-run`),
-it runs the full retrieval + diagnostic-metrics pipeline for real and
-skips only the LLM call itself, leaving `tsr_scores` empty and saying
-so, rather than fabricating scores.
+silently, and it never silently *skips* doing so either. With
+`--dry-run` passed explicitly, it runs the full retrieval +
+diagnostic-metrics pipeline for real and skips only the LLM call
+itself, leaving `tsr_scores` empty and saying so. Without `--dry-run`,
+a working `DEEPSEEK_API_KEY` (and a reachable `api.deepseek.com`) is
+required - a client-construction failure is a fatal error (exit 1, a
+clear message, no report written), never a silent fallback to
+dry-run-shaped output with exit code 0.
 
 **Checkpointing** (Phase 1.4): every completed (task, engine, budget,
 seed) LLM call is recorded in a JSON checkpoint file
@@ -38,6 +42,7 @@ from prism.surface.renderer import RenderOptions, render
 
 from benchmarks.corpora.resolver import CORPORA, CorpusResolutionError, resolve
 from benchmarks.engines.base import AbstractRetrievalEngine, selected_symbols
+from benchmarks.openai_client import OpenAIClientError
 from benchmarks.engines.baseline_bfs import BaselineBFSEngine
 from benchmarks.engines.baseline_rag import BaselineRAGEngine
 from benchmarks.engines.oracle_engine import ENGINE_NAME as ORACLE_ENGINE_NAME
@@ -314,11 +319,19 @@ def run_evaluation(
 
     client = None
     if not dry_run:
-        try:
-            client = DeepSeekClient()
-        except Exception as exc:  # MissingDeepSeekAPIKeyError / import error / etc.
-            print(f"warning: LLM client unavailable ({exc}) - running in dry-run mode, tsr_scores will be empty", file=sys.stderr)
-            dry_run = True
+        # `dry_run` is False here precisely because the operator did NOT
+        # pass `--dry-run` - they expect real LLM calls. A client-
+        # construction failure (missing DEEPSEEK_API_KEY, the `openai`
+        # package not installed, etc.) must be fatal in that case: this
+        # used to catch the exception and silently fall back to
+        # `dry_run = True`, which produced a full report - exit code 0,
+        # every diagnostic computed normally - with every `tsr_scores`
+        # silently empty and no real signal in the output that no LLM
+        # call was ever made (the "no LLM calls were made" pilot-run
+        # bug). An operator who genuinely wants a dry run passes
+        # `--dry-run` explicitly - that path never reaches here at all
+        # (see the `if not dry_run:` guard above), so it is unaffected.
+        client = DeepSeekClient()
 
     checkpoint = load_checkpoint(checkpoint_path) if resume else {"cells": {}}
     fresh_calls_completed = 0
@@ -624,7 +637,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--mode",
         choices=["eval", "pilot", "ablation", "smoke"],
         default="eval",
-        help="'pilot' is 'eval' under another name (a pinned-corpus run, typically with --dry-run for a P1 pilot); "
+        help="'pilot' is 'eval' under another name (a pinned-corpus run) - pass --dry-run explicitly to skip real "
+        "LLM calls (e.g. to check the retrieval/diagnostics pipeline for free); without it, a real DeepSeek call "
+        "is made for every seed and a missing/broken DEEPSEEK_API_KEY is now a fatal error, not a silent fallback. "
         "'smoke' runs a network-free synthetic-fixture pipeline check, ignoring --repo/--tasks-dir/--seeds/--model",
     )
     parser.add_argument("--repo", choices=sorted(CORPORA), default="django")
@@ -716,7 +731,7 @@ def main(argv: list[str] | None = None) -> int:
         write_reports(run, args.output)
         print(f"Reports written to {args.output}")
         return 0
-    except (CorpusResolutionError, ValueError) as exc:
+    except (CorpusResolutionError, ValueError, OpenAIClientError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
