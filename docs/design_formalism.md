@@ -1165,6 +1165,23 @@ scenario: write a cache row under clean HEAD, make an uncommitted
 edit, verify the next read misses, revert, verify the next read hits
 again.
 
+A seventh, distinct finding surfaced by the test-practice work
+(`tests/test_resolution.py`), unrelated to the cache-key family above -
+a second call-resolution finding alongside G41, both in
+`_resolve_ambiguous_call`:
+
+**G44 - Unique-candidate calls silently unlinked.** When a call site's
+receiver type cannot be tracked but exactly one symbol repo-wide has
+the method name, the resolver leaves the edge unlinked ("silently
+unlinked" per `_resolve_ambiguous_call`'s own docstring) rather than
+resolving to the unique candidate - `_resolve_ambiguous_call` only runs
+its scoring logic at all when `len(candidates) >= 2`, so a single real
+candidate never gets a chance to be bound. A missing edge is harder to
+detect than a wrong one; the engine's output is subtly incomplete
+rather than obviously wrong. Deferred to v1.2 alongside G41. Regression
+coverage: `tests/test_resolution.py::test_single_candidate_for_a_name_does_not_get_silently_dropped_or_guessed`
+(marked `xfail(strict=True)`).
+
 ### 10.2 Ground Truth Provenance
 
 The 9 existing ground-truth tasks were annotated by Claude, not by two
