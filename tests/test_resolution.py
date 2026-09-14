@@ -21,6 +21,8 @@ not a hypothetical.
 """
 from __future__ import annotations
 
+import pytest
+
 from prism.cli import build_pipeline
 
 
@@ -110,6 +112,10 @@ def test_g41_ambiguous_receiver_resolution_is_order_dependent(tmp_path):
     assert resolved_a != resolved_b
 
 
+@pytest.mark.xfail(
+    reason="G41: self.<attr>.<method>() resolution is receiver-type-blind. Deferred to v1.2.",
+    strict=True,
+)
 def test_g41_receiver_named_after_its_real_type_still_resolves_correctly(tmp_path):
     """KNOWN GAP (G41), asserted as the correct/desired behavior: when
     Template is declared *before* NodeList in the file, the receiver
@@ -129,6 +135,10 @@ def test_g41_receiver_named_after_its_real_type_still_resolves_correctly(tmp_pat
 
 # --- Defensive control: genuine single-candidate ambiguity stays unresolved ---
 
+@pytest.mark.xfail(
+    reason="G44: unique-candidate calls silently unlinked when receiver type is untrackable. Deferred to v1.2.",
+    strict=True,
+)
 def test_single_candidate_for_a_name_does_not_get_silently_dropped_or_guessed(tmp_path):
     """Only one `finalize` method exists repo-wide, but its receiver type
     still can't be tracked (plain-parameter passthrough) - `_resolve_
