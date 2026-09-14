@@ -37,16 +37,52 @@ def _run_git_head(cwd: str | Path) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def _run_git_status_hash(cwd: str | Path) -> str:
+    """G43: `engine_commit_hash()`'s HEAD-only key cannot distinguish "the
+    committed code at this HEAD" from "this HEAD plus an uncommitted edit
+    to a tracked file" - exactly the gap that let a `prism.cache.
+    sqlite_cache` disk row written under a mid-edit working tree get
+    served again later at the same HEAD (once the edit was committed or
+    reverted), carrying a value computed under different code than a
+    fresh call would produce. `git status --porcelain` (which files
+    changed) plus `git diff` (what changed in them) together capture any
+    uncommitted change to a tracked file; hashed together into one short
+    value. Returns `""` on any failure - not a git repo (e.g. installed
+    as a package, no `.git` directory), `git` unavailable, or a timeout -
+    so the dirty check degrades to a no-op and `engine_commit_hash()`
+    falls back to HEAD-only, preserving current behavior for non-git
+    installs.
+    """
+    try:
+        status = subprocess.run(["git", "status", "--porcelain"], cwd=cwd, capture_output=True, text=True, timeout=10)
+        diff = subprocess.run(["git", "diff"], cwd=cwd, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if status.returncode != 0 or diff.returncode != 0:
+        return ""
+    combined = status.stdout + diff.stdout
+    if not combined:
+        # A clean tree must produce "" itself, not `sha256("")`'s own
+        # (non-empty) digest - `engine_commit_hash()`'s `if dirty else
+        # head` fallback depends on emptiness meaning "nothing to add".
+        return ""
+    return hashlib.sha256(combined.encode()).hexdigest()
+
+
 @lru_cache(maxsize=1)
 def engine_commit_hash() -> str:
-    """The SCE repo's own HEAD - process-invariant (this repo's source
+    """The SCE repo's own HEAD, plus a short hash of any uncommitted
+    working-tree change (G43) - process-invariant (this repo's source
     cannot change while it's running), so this is cached once per
     process rather than re-shelled-out-to on every cache-key
     computation. Mirrors `benchmarks.engines.prism_engine_cache.
     _engine_commit_hash`'s own technique - duplicated here rather than
     imported, since production engine code (`prism/traversal/`) must
     never depend on the benchmark harness (`benchmarks/`)."""
-    return _run_git_head(Path(__file__).resolve().parent) or "unknown"
+    cwd = Path(__file__).resolve().parent
+    head = _run_git_head(cwd) or "unknown"
+    dirty = _run_git_status_hash(cwd)
+    return f"{head}+{dirty[:8]}" if dirty else head
 
 
 #: `build_causal_graph`'s (and `causal_weights.py`'s edge functions')
