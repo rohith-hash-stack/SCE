@@ -12,8 +12,28 @@ Every item must be checked before the first call goes out.
       `docs/pilot/stop_condition.md` Section 5)
 - [ ] Model identifier matches `stop_condition.md`'s pin
       (`deepseek-v4-flash`)
+- [ ] `--pragmatic-oracle` is included in the invocation (Oracle is
+      NOT included in the engine sweep unless one of
+      `--oracle-packages`/`--pragmatic-oracle` is passed - see the
+      "Oracle engine" note below)
 
 ## Notes
+
+- **Oracle engine**: `benchmarks/runner.py`'s `_build_engines` only
+  includes an Oracle variant when the CLI invocation passes
+  `--oracle-packages <path>` (a hand-curated file) or
+  `--pragmatic-oracle` (the zero-annotation-cost substitute - the one
+  this pilot uses, since no hand-curated oracle-packages file exists
+  for this repo). Omitting both silently runs only the other 4 engines
+  (Prism v1.1, BM25, BFS-forward, BFS-bidirectional) - no error, no
+  warning, since running without an Oracle is itself a legitimate
+  eval-mode use case. The pilot's own plan calls for 5 engines
+  including Oracle, so the real invocation must include
+  `--pragmatic-oracle`:
+
+      python -m benchmarks.runner --mode=pilot --pragmatic-oracle \
+        --repo=django --budgets=2000,4000,8000 \
+        --seeds=42,43,44,45,46 --output=reports/pilot/
 
 - **Working tree clean**: uncommitted changes to the four-axis modules
   mid-run would (after G43's fix) correctly bust the feature-bitmask
