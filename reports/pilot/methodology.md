@@ -579,3 +579,40 @@ compilation (`SQLCompiler.as_sql`) from the pilot corpus. The current
 corpus covers 20 subsystems but does not exercise the query compilation
 pipeline specifically. SQL compilation is a candidate for v1.2 corpus
 expansion.
+
+## Test-practice coverage gaps closed
+
+The test-practice work (66 new tests across 10 files, 64 pass / 2
+xfail - see `tests/test_resolution.py`'s G41/G44 markers and G44 in
+`docs/design_formalism.md` Section 10.1) closed two structural gaps in
+what the existing 1,142-test suite actually enforced:
+
+1. **Task reachability had no automated enforcement.** The 15-of-20
+   false-positive audit that triggered the whole reseed cycle earlier
+   in this document was caught by a one-off scratchpad script, re-run
+   by hand before each task commit - nothing in `benchmarks/
+   ground_truth/loader.py` checked it (`enforce_agreement_gate` checks
+   inter-annotator kappa only). It does now:
+   `tests/test_task_reachability.py` (corrected from the path given in
+   the request that prompted this note, `tests/benchmarks/
+   test_task_reachability.py`, which doesn't exist - the file lives at
+   the top level of `tests/`, alongside every other non-benchmarks-
+   specific test in this repo). 8 unit tests on the reachability
+   predicate itself plus 1 integration test against the real,
+   currently-committed Django T02 corpus (20/20 pass). A future task
+   added without re-running the manual audit is now caught
+   automatically.
+
+2. **`PrismEngineCache`'s output-parity contract had never been
+   tested.** `tests/benchmarks/test_prism_engine_cache.py` proved the
+   extraction-count invariant (the real, expensive work runs at most
+   once) but never checked that a cache hit returns the *same*
+   `ContextPackage` a cache miss would. It does now:
+   `tests/test_cache_parity.py` (corrected from the path given in the
+   request, `tests/prism/cache/test_cache_parity.py`, which also
+   doesn't exist - no `tests/prism/` subdirectory exists in this
+   repo). Compares `PrismEngineCache` (warm, and disk-reloaded in a
+   simulated fresh process) against the real, unmodified `PrismEngine`
+   across a seed x budget matrix, plus a monkey-patch-leak check. This
+   guards specifically against the G27/G38/G43 class of cache-
+   divergence bug recurring undetected.
