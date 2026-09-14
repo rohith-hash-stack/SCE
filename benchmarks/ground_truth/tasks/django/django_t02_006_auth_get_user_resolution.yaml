@@ -1,0 +1,168 @@
+# T02 "Django Debug" - Task 6: authenticated-user resolution
+# (Milestone 2 batch 1, seed 1/15 - subsystem: Auth).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below, matching benchmarks/corpora/pinned_commits.json's own "django"
+# entry) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; also
+# confirmed each has a real CALLS out-edge to the next stage in
+# builder.graph, the same call-linking data the engine itself scores
+# against).
+#
+#   django.contrib.auth.middleware.get_user                lines 9-12  (django/contrib/auth/middleware.py)
+#   django.contrib.auth.get_user                            lines 182-223 (django/contrib/auth/__init__.py)
+#   django.contrib.auth._get_user_session_key               lines 57-60 (django/contrib/auth/__init__.py)
+#   django.contrib.auth.load_backend                        lines 20-21 (django/contrib/auth/__init__.py)
+#
+# Reseeded from an original draft seeded at AuthenticationMiddleware.
+# process_request (batch-1 review): process_request only *constructs*
+# `SimpleLazyObject(lambda: get_user(request))` - it does not call
+# get_user() itself; that happens later, deferred, whenever
+# request.user is first accessed. Seeding at process_request made the
+# prompt's "in the order each stage is actually reached" genuinely
+# ambiguous between "direct calls only" and "the eventual resolution
+# chain, deferred calls included" - a real reading a scored LLM could
+# reasonably split on. Reseeded at middleware.get_user itself instead:
+# once get_user is running (whenever/however it is invoked), every call
+# in its own body is direct and immediate, removing the ambiguity
+# entirely rather than papering over it with a prompt clarification.
+#
+# Real causal chain, read directly from source: middleware.get_user()
+# caches onto request._cached_user and calls auth.get_user(request),
+# which first calls _get_user_session_key(request) to read the
+# session's stored user id, then (in the `else` branch, only reached if
+# that lookup didn't raise KeyError) calls load_backend(backend_path) to
+# resolve which configured authentication backend will be asked for the
+# user. Explicit stopping point: the task prompt stops at load_backend -
+# the next real statement, `backend.get_user(user_id)`, is a call
+# through a dynamically-loaded backend object (load_backend() returns
+# different classes depending on settings.AUTHENTICATION_BACKENDS) and
+# is not statically resolvable to one target, so it is deliberately
+# excluded from the traced pipeline (not a G13/async issue - purely
+# dynamic dispatch, the same class of stopping point django_t02_004's
+# URLResolver.resolve task already uses).
+#
+# Seed check (Milestone 2 requirements): middleware.get_user is a plain
+# module-level function, not metaclass-generated; nothing in the chain
+# is async/await; no container-subscript data-flow pattern is involved
+# at all (pure call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.contrib.auth.middleware.AuthenticationMiddleware              (class)  lines 15-25
+#   django.contrib.auth.middleware.AuthenticationMiddleware.process_request (method) lines 16-25
+#   django.utils.functional.SimpleLazyObject                             (class)  lines 398-452
+#   django.contrib.auth.models.AnonymousUser                             (class)  lines 417-499
+#   django.contrib.auth.backends.ModelBackend.get_user                    (method) lines 159-164
+#   django.utils.crypto.constant_time_compare                            (function) lines 65-67
+#
+# process_request/SimpleLazyObject/AnonymousUser moved to required
+# context (they explain *why* get_user is invoked lazily, and what it
+# falls back to on failure, without being part of get_user's own direct
+# pipeline); ModelBackend.get_user stays boundary (the dynamically-
+# dispatched next call, still deliberately excluded); constant_time_
+# compare is a new boundary addition - a real one-hop callee of auth.
+# get_user (the session-hash verification branch, __init__.py lines
+# 202-208), reached only after backend.get_user() returns a user with a
+# get_session_auth_hash attribute, not part of the backend-resolution
+# pipeline this task traces.
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_006_auth_get_user_resolution
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.contrib.auth.middleware.get_user
+task_type: debug
+prompt: |
+  You are debugging how Django resolves `request.user` in
+  django/contrib/auth. Starting from `middleware.get_user`, trace the
+  real causal pipeline that determines which authentication backend
+  will be asked to resolve the user, in the order each stage is
+  actually reached, up to and including the call that loads that
+  backend. Do not trace into the backend's own `get_user` call itself -
+  which concrete backend class this becomes is resolved dynamically at
+  runtime, not statically in this pipeline.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.contrib.auth.middleware.get_user", "django.contrib.auth.get_user"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.contrib.auth.middleware.get_user
+    - django.contrib.auth.get_user
+    - django.contrib.auth._get_user_session_key
+    - django.contrib.auth.load_backend
+  required_context:
+    - django.contrib.auth.middleware.AuthenticationMiddleware
+    - django.contrib.auth.middleware.AuthenticationMiddleware.process_request
+    - django.utils.functional.SimpleLazyObject
+    - django.contrib.auth.models.AnonymousUser
+  boundary_symbols:
+    - django.contrib.auth.backends.ModelBackend.get_user
+    - django.utils.crypto.constant_time_compare
+  expected_solution: >
+    middleware.get_user() caches onto request._cached_user and calls
+    auth.get_user(), which first calls _get_user_session_key() to read
+    the stored user id, then load_backend() to resolve the configured
+    authentication backend. Required context: AuthenticationMiddleware
+    and its process_request, which construct the SimpleLazyObject that
+    defers to get_user() in the first place, and AnonymousUser, the
+    fallback return value. Boundary: ModelBackend.get_user (the
+    dynamically-dispatched next call, not statically traceable) and
+    constant_time_compare (the session-hash verification branch,
+    reached only after the backend call this pipeline stops before).
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.contrib.auth.middleware.get_user
+    - django.contrib.auth.get_user
+    - django.contrib.auth._get_user_session_key
+  required_context:
+    - django.contrib.auth.middleware.AuthenticationMiddleware
+    - django.contrib.auth.middleware.AuthenticationMiddleware.process_request
+    - django.utils.functional.SimpleLazyObject
+    - django.contrib.auth.models.AnonymousUser
+  boundary_symbols:
+    - django.contrib.auth.backends.ModelBackend.get_user
+    - django.utils.crypto.constant_time_compare
+  expected_solution: >
+    middleware.get_user() calls auth.get_user(), which calls
+    _get_user_session_key() to read the stored user id. (Missed that
+    backend resolution is itself a separate traced call, load_backend()
+    - stopped one stage early.) Agreed on required context and boundary
+    symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.contrib.auth.middleware.get_user
+    - django.contrib.auth.get_user
+    - django.contrib.auth._get_user_session_key
+    - django.contrib.auth.load_backend
+  required_context:
+    - django.contrib.auth.middleware.AuthenticationMiddleware
+    - django.contrib.auth.middleware.AuthenticationMiddleware.process_request
+    - django.utils.functional.SimpleLazyObject
+    - django.contrib.auth.models.AnonymousUser
+  boundary_symbols:
+    - django.contrib.auth.backends.ModelBackend.get_user
+    - django.utils.crypto.constant_time_compare
+  expected_solution: >
+    Annotator A's full chain is correct: auth.get_user's own source
+    (django/contrib/auth/__init__.py lines 195-201) shows
+    _get_user_session_key() and load_backend() as two distinct,
+    separately-traceable statements inside the same `else` branch -
+    load_backend() is not folded into the prior step, and is real,
+    reached code, not a boundary/skip candidate.

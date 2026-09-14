@@ -1,0 +1,137 @@
+# T02 "Django Debug" - Task 7: local-memory cache read + lazy eviction
+# (Milestone 2 batch 1, seed 2/15 - subsystem: Caching).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; each
+# has a real CALLS out-edge to the next stage in builder.graph).
+#
+#   django.core.cache.backends.locmem.LocMemCache.get             lines 34-42  (django/core/cache/backends/locmem.py)
+#   django.core.cache.backends.base.BaseCache.make_and_validate_key lines 119-123 (django/core/cache/backends/base.py)
+#   django.core.cache.backends.locmem.LocMemCache._has_expired     lines 87-89  (django/core/cache/backends/locmem.py)
+#   django.core.cache.backends.locmem.LocMemCache._delete          lines 101-107 (django/core/cache/backends/locmem.py)
+#
+# Real causal chain, read directly from source (locmem.py lines 34-42):
+# get(key, default, version) first calls self.make_and_validate_key(key,
+# version) to compute the real internal cache key, then - unconditionally,
+# not behind a feature flag - calls self._has_expired(key); if that
+# returns True, it calls self._delete(key) and returns default without
+# ever reading self._cache. Only if the key has *not* expired does
+# execution fall through to the pickle.loads(self._cache[key]) read.
+# make_and_validate_key() itself (base.py lines 119-123) is a thin
+# 2-line wrapper calling self.make_key(key, version) then
+# self.validate_key(key) - real, verified callees, listed here as
+# boundary (one hop past what the pipeline needs to trace).
+#
+# Seed check (Milestone 2 requirements): LocMemCache is a plain
+# BaseCache subclass, not metaclass-generated; nothing here is async;
+# no container-subscript data-flow pattern is involved (self._cache[key]
+# is a read, not a write the way G7's d['k']=f() pattern is, and it is
+# not part of the traced pipeline itself, only mentioned above for
+# narrative completeness).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.core.cache.backends.locmem.LocMemCache        (class) lines 16-117
+#   django.core.cache.backends.base.BaseCache             (class) lines 56-388
+#   django.core.cache.backends.base.BaseCache.make_key     (method) lines 97-108
+#   django.core.cache.backends.base.BaseCache.validate_key (method) lines 110-117
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real. This task's two annotators disagree by design
+# (not a mistake left uncorrected): annotator_b did not trace past
+# make_and_validate_key at all, treating the expiry-check/eviction
+# branch as an implementation detail rather than part of the causal
+# pipeline - a real, defensible reading, but one the adjudicator
+# rejects below, since _has_expired() is unconditionally reached code
+# (not behind any flag), making it and _delete() genuine pipeline
+# stages for a "why didn't my cache hit land" debugging narrative. This
+# lands the task in the [0.60, 0.80) adjudicate tier on purpose, to
+# exercise that gate for real rather than only ever landing auto-pass
+# cases.
+task_id: django_t02_007_locmem_cache_get_eviction
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.core.cache.backends.locmem.LocMemCache.get
+task_type: debug
+prompt: |
+  You are debugging a Django local-memory cache read in
+  django/core/cache/backends/locmem.py. Starting from
+  `LocMemCache.get`, trace the real causal pipeline a lookup travels
+  through, in the order each stage is actually reached, up to and
+  including the call that evicts a stale entry once it is found to
+  have expired. Assume the entry being looked up has, in fact,
+  expired.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.core.cache.backends.locmem.LocMemCache.get", "django.core.cache.backends.base.BaseCache.make_and_validate_key"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.core.cache.backends.locmem.LocMemCache.get
+    - django.core.cache.backends.base.BaseCache.make_and_validate_key
+    - django.core.cache.backends.locmem.LocMemCache._has_expired
+    - django.core.cache.backends.locmem.LocMemCache._delete
+  required_context:
+    - django.core.cache.backends.locmem.LocMemCache
+    - django.core.cache.backends.base.BaseCache
+  boundary_symbols:
+    - django.core.cache.backends.base.BaseCache.make_key
+    - django.core.cache.backends.base.BaseCache.validate_key
+  expected_solution: >
+    get() calls make_and_validate_key() to compute the real key, then
+    unconditionally calls _has_expired() to check the entry's expiry;
+    since the entry has expired, get() calls _delete() to evict it and
+    returns the default. Required context: LocMemCache and its parent
+    BaseCache, which defines make_and_validate_key. Boundary: make_key
+    and validate_key, the two real callees make_and_validate_key itself
+    calls, one hop past what this pipeline needs.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.core.cache.backends.locmem.LocMemCache.get
+    - django.core.cache.backends.base.BaseCache.make_and_validate_key
+  required_context:
+    - django.core.cache.backends.locmem.LocMemCache
+  boundary_symbols:
+    - django.core.cache.backends.base.BaseCache.make_key
+  expected_solution: >
+    get() calls make_and_validate_key() to compute the real key. (Did
+    not trace past this point - treated the expiry check and eviction
+    as internal implementation detail rather than a traceable causal
+    stage, and only listed LocMemCache itself as required context, plus
+    make_key as a loosely-related boundary mention.)
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.core.cache.backends.locmem.LocMemCache.get
+    - django.core.cache.backends.base.BaseCache.make_and_validate_key
+    - django.core.cache.backends.locmem.LocMemCache._has_expired
+    - django.core.cache.backends.locmem.LocMemCache._delete
+  required_context:
+    - django.core.cache.backends.locmem.LocMemCache
+    - django.core.cache.backends.base.BaseCache
+  boundary_symbols:
+    - django.core.cache.backends.base.BaseCache.make_key
+    - django.core.cache.backends.base.BaseCache.validate_key
+  expected_solution: >
+    Reconciled toward annotator A's fuller trace: _has_expired() (locmem.py
+    line 37) is called unconditionally, right after make_and_validate_key,
+    not behind any flag - it is real, always-reached code, so tracing "up
+    to and including eviction" per the prompt's own explicit stopping
+    point requires including both _has_expired() and _delete(). Annotator
+    B's narrower reading (stopping at the key computation) undercounts a
+    genuinely reachable pipeline stage; BaseCache is required context
+    because it, not LocMemCache, is where make_and_validate_key is
+    actually defined.

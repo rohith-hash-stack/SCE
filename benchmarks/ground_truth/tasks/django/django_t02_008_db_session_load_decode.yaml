@@ -1,0 +1,122 @@
+# T02 "Django Debug" - Task 8: database-backed session load + decode
+# (Milestone 2 batch 1, seed 3/15 - subsystem: Sessions).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; each
+# has a real CALLS out-edge to the next stage in builder.graph).
+#
+#   django.contrib.sessions.backends.db.SessionStore.load               lines 41-43  (django/contrib/sessions/backends/db.py)
+#   django.contrib.sessions.backends.db.SessionStore._get_session_from_db lines 30-39 (django/contrib/sessions/backends/db.py)
+#   django.contrib.sessions.backends.base.SessionBase.decode             lines 101-113 (django/contrib/sessions/backends/base.py)
+#
+# Real causal chain, read directly from source (db.py lines 41-43):
+# `def load(self): s = self._get_session_from_db(); return self.decode(
+# s.session_data) if s else {}` - load() calls _get_session_from_db()
+# first (defined in the same class/file), which does a real ORM lookup
+# (self.model.objects.get(session_key=..., expire_date__gt=...)) and
+# returns None on DoesNotExist/SuspiciousOperation; load() then calls
+# self.decode(...) - inherited from SessionBase (base.py), a different
+# module - only when a row was actually found. This crosses a real
+# module boundary (db.py -> base.py), the two-plus-file chain
+# TASK_AUTHORING.md's Debug-task guidance prefers.
+#
+# Seed check (Milestone 2 requirements): SessionStore is a plain
+# SessionBase subclass, not a Django Model itself and not metaclass-
+# generated (it *uses* a Model, django.contrib.sessions.models.Session,
+# via self.model, but SessionStore's own class is a plain class); no
+# async/await anywhere in this chain; no container-subscript data-flow
+# pattern involved (pure call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.contrib.sessions.backends.db.SessionStore      (class)  lines 10-110
+#   django.contrib.sessions.backends.base.SessionBase      (class)  lines 33-365
+#   django.contrib.sessions.backends.db.SessionStore.exists (method) lines 45-46
+#   django.contrib.sessions.backends.base.SessionBase.encode (method) lines 92-99
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_008_db_session_load_decode
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.contrib.sessions.backends.db.SessionStore.load
+task_type: debug
+prompt: |
+  You are debugging a Django database-backed session load in
+  django/contrib/sessions/backends/db.py. Starting from
+  `SessionStore.load`, trace the real causal pipeline a session load
+  travels through, in the order each stage is actually reached at
+  request time, up to and including the call that decodes the stored
+  session data back into a Python dict. Assume a matching, unexpired
+  session row exists in the database.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.contrib.sessions.backends.db.SessionStore.load", "django.contrib.sessions.backends.db.SessionStore._get_session_from_db"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.contrib.sessions.backends.db.SessionStore.load
+    - django.contrib.sessions.backends.db.SessionStore._get_session_from_db
+    - django.contrib.sessions.backends.base.SessionBase.decode
+  required_context:
+    - django.contrib.sessions.backends.db.SessionStore
+    - django.contrib.sessions.backends.base.SessionBase
+  boundary_symbols:
+    - django.contrib.sessions.backends.db.SessionStore.exists
+    - django.contrib.sessions.backends.base.SessionBase.encode
+  expected_solution: >
+    load() calls _get_session_from_db() to look up the real session
+    row, then (since a matching row exists) calls self.decode() -
+    inherited from SessionBase - on its session_data to get back the
+    real dict. Required context: SessionStore and its parent SessionBase,
+    which defines decode. Boundary: exists() (a sibling read-only check,
+    not part of load's own chain) and encode() (the inverse operation,
+    only used on save, not load).
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.contrib.sessions.backends.db.SessionStore.load
+    - django.contrib.sessions.backends.db.SessionStore._get_session_from_db
+  required_context:
+    - django.contrib.sessions.backends.db.SessionStore
+    - django.contrib.sessions.backends.base.SessionBase
+  boundary_symbols:
+    - django.contrib.sessions.backends.db.SessionStore.exists
+    - django.contrib.sessions.backends.base.SessionBase.encode
+  expected_solution: >
+    load() calls _get_session_from_db() to look up the session row.
+    (Missed that decoding the row's session_data is itself a separate
+    traced call, decode() - treated it as "just returning the row" and
+    stopped one stage early.) Agreed on required context and boundary
+    symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.contrib.sessions.backends.db.SessionStore.load
+    - django.contrib.sessions.backends.db.SessionStore._get_session_from_db
+    - django.contrib.sessions.backends.base.SessionBase.decode
+  required_context:
+    - django.contrib.sessions.backends.db.SessionStore
+    - django.contrib.sessions.backends.base.SessionBase
+  boundary_symbols:
+    - django.contrib.sessions.backends.db.SessionStore.exists
+    - django.contrib.sessions.backends.base.SessionBase.encode
+  expected_solution: >
+    Annotator A's full chain is correct: load()'s own source (db.py
+    line 43) is `return self.decode(s.session_data) if s else {}` - a
+    distinct, separately-traceable call on the found-row branch the
+    prompt explicitly asks for ("assume a matching, unexpired session
+    row exists"), not inlined logic.
