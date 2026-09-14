@@ -1127,38 +1127,43 @@ itself - but it's counted alongside them here because it was found by
 the same kind of scrutiny (real-corpus parity checking) this
 subsection already tracks.
 
-Investigating G42 surfaced a sixth, distinct finding: even with
-`_FEATURE_MASKS_CACHE` cleared, the same parity test still diverged
-when run alongside `tests/benchmarks/` unless the on-disk
-`features_v2.db` (`prism.cache.sqlite_cache`, G39's own subject) was
-also cleared first. Direct inspection of the stored row for a
-diverging file (`xregexp.min.js`, a vendored/minified JS fixture)
-found the stored cache *key* matched exactly what current code
-independently recomputes right now - same engine commit, same grammar
-version, same file content hash - yet the stored bitmask *value*
-still differed from a fresh `compute_feature_masks()` call in the same
-process. This rules out a weak or incomplete cache key (the key is
-already maximally strong and correct) and rules out a clean
-key-mismatch bug; the two code paths that are each supposed to compute
-the same bitmask for the same file simply do not agree. Numbered
-**G43**, and re-categorized as engine-correctness, not cache-layer: a
-recurrence of the G27-class problem (`compute_feature_masks_cached`
-not being a pure function of `compute_feature_masks`'s own inputs) in
-the same function pair G27 already touched, manifesting specifically
-on minified JS files (dense, single/double-letter identifiers) most
-likely in the transitive-propagation recompute step this module's own
-docstring documents as deliberately never persisted and always
-recomputed fresh from cached direct bits (see
-`src/prism/cache/sqlite_cache.py`'s module docstring, lines 58-62).
-Deferred to v1.1's scheduled cache-layer audit; does not block the
-pilot, since the pilot's task corpus is Python-only and G43 has only
-been observed on minified JS. The scheduled v1.1 cache-layer audit
-should note both G42 (a reminder to check for analogous
-test-isolation gaps around any *other* module-level cache this
-codebase adds) and G43 (a reminder that the two-pass cached/uncached
-parity guarantee needs a real cross-language regression test, not just
-the Python-fixture coverage `tests/test_feature_masks_cache_parity.py`
-already has).
+Investigating G42 surfaced a sixth, distinct finding, initially
+misattributed to the same G27-class cached/uncached-divergence family
+before a follow-up diagnostic corrected it:
+
+**G43 - Cache key is blind to uncommitted working-tree state.**
+`engine_commit_hash()` used `git rev-parse HEAD` only, without checking
+working-tree state. Disk entries written while uncommitted edits to
+the four-axis modules were in effect are later served at the same
+HEAD, reporting a matching key while carrying values computed under
+different code. Does not affect clean installs or the pilot (fresh
+process, committed code). Fixed by hashing working-tree status
+alongside HEAD.
+
+The initial report (before the corrected diagnostic below) suspected a
+genuine `compute_feature_masks`/`compute_feature_masks_cached`
+divergence, since a diverging on-disk row's stored key matched what
+code at the same commit would independently produce. A focused
+diagnostic (four questions: where the two-pass structure lives in each
+path; the actual diverging bitmask values for the file in question;
+whether the graph-shaped recompute is iteration-order-dependent when
+run twice in the same process; whether both paths see the same symbol
+set) found the two implementations bit-exact and fully deterministic
+on a clean run across the entire real Django corpus (30,045 symbols,
+zero divergence, repeated calls identical). That ruled out both a
+weak cache key and a real computation divergence, and pointed instead
+to `engine_commit_hash()`'s own HEAD-only design - confirmed by
+inspection of `_cache_keys.py`, which shells out to `git rev-parse
+HEAD` with no working-tree check at all. Fixed in
+`src/prism/traversal/_cache_keys.py`'s `engine_commit_hash()`: a new
+`_run_git_status_hash()` helper hashes `git status --porcelain` plus
+`git diff` output and folds it into the key (`head+dirty[:8]` when
+dirty, head-only when clean or not a git repo, preserving current
+behavior for non-git installs). Regression coverage in
+`tests/test_engine_commit_hash_dirty_tree.py` reproduces the exact
+scenario: write a cache row under clean HEAD, make an uncommitted
+edit, verify the next read misses, revert, verify the next read hits
+again.
 
 ### 10.2 Ground Truth Provenance
 
