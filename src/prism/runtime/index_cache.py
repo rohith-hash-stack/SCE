@@ -54,6 +54,7 @@ from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo
+from prism.parser.lang_config import DECORATED_WRAPPER_TYPES
 from prism.parser.queries import run_query
 from prism.parser.tree_sitter_loader import ParsedFile, parse_source
 
@@ -278,14 +279,34 @@ def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symb
     whose line moved (the file changed) is definitionally a cache miss
     already handled upstream, so an exact line match is always available
     for anything that reaches this function.
+
+    G38: `SymbolInfo.line_range[0]` is *not* always the captured node's
+    own `start_point` - `ConcreteGraphBuilder._register_definition`
+    (concrete_builder.py:458-463) unwraps to the parent
+    `decorated_definition` node before computing `line_range` for a
+    decorated definition, so a decorated symbol's stored start line is
+    its decorator's line, not its `def`/`class` keyword's line. The
+    `"definitions"` query here captures the bare definition node - the
+    same unwrap has to happen on this side of the join too, or every
+    decorated symbol's start line silently fails to match anything in
+    `by_start_line` and its `_def_nodes` entry is never populated. Only
+    the *lookup key* is unwrapped; the node actually stored is still the
+    plain captured node, exactly matching what a cold build stores
+    (concrete_builder.py:474: `self._def_nodes[qualified_name] = node`,
+    never `outer`).
     """
     if not symbols:
         return
+    lang = parsed.language_id
+    wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
     by_start_line = {s.line_range[0]: s for s in symbols}
-    captures = run_query(parsed.language_id, "definitions", parsed.root_node)
+    captures = run_query(lang, "definitions", parsed.root_node)
     for key in ("def.class", "def.interface", "def.function"):
         for node in captures.get(key, []):
-            start_line = node.start_point[0] + 1
+            outer = node
+            if node.parent is not None and node.parent.type in wrapper_types:
+                outer = node.parent
+            start_line = outer.start_point[0] + 1
             symbol = by_start_line.get(start_line)
             if symbol is not None:
                 builder._def_nodes[symbol.qualified_name] = node
