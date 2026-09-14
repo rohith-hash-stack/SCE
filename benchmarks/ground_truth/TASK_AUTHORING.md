@@ -14,22 +14,41 @@ additional Debug tasks, the 4 blast tasks, or a future repo's tasks.
    `builder.symbol_table.get(qualified_name)`. Never guess a qualified
    name, a line range, or whether a symbol exists. A seed/reference
    symbol that doesn't resolve in the real index is not a real task.
-2. **Verify every pipeline stage is reachable, not just real** (added
-   after Milestone 2 batch 3's review caught two pipelines with a real-
-   but-unreachable terminal stage - see G40 in `docs/design_formalism.md`).
-   Existing in the symbol table is necessary but not sufficient - a
-   symbol with zero real path from the seed is exactly as useless to a
-   retrieval engine as a symbol that doesn't exist at all. For every
-   pipeline stage:
-     1. The symbol exists in the symbol table (item 1 above).
-     2. A reachable edge exists from the *previous* pipeline stage to
-        it - check directly with `builder.graph.out_edges(prev_stage,
-        data=True)` / `in_edges(this_stage, data=True)`, don't assume
-        from reading source alone that a real Python relationship
-        (a call, an inherited method) became a real graph edge.
-     3. The edge chain is `CALLS`, `INSTANTIATES`, `OVERRIDES`, or -
-        for a method inherited rather than directly defined - actually
-        resolves through a real `EXTENDS` edge to its defining class.
+2. **Verify every pipeline stage is transitively reachable from the
+   seed, not just real** (added after Milestone 2 batch 3's review
+   caught two pipelines with a real-but-unreachable terminal stage -
+   see G40 in `docs/design_formalism.md`; *corrected* after two
+   Calibration-round reseed attempts and a full-corpus audit found the
+   original version of this check - direct edges between *consecutive*
+   pipeline symbols - was itself wrong. Most real pipelines are
+   sibling-under-a-common-caller sequences reflecting execution order,
+   not a literal call chain: `_clean_fields` and `_clean_form` are both
+   called by `full_clean`, not one by the other. Requiring a direct
+   edge between every consecutive pair rejected 15 of 20 real,
+   perfectly reachable T02 tasks on a full-corpus re-audit). Existing
+   in the symbol table is necessary but not sufficient - a symbol with
+   zero real path from the seed is exactly as useless to a retrieval
+   engine as a symbol that doesn't exist at all. For task `T` with seed
+   `S` and pipeline `P = [p1, ..., pn]`:
+     1. `p1 == S` - the seed is the pipeline's first symbol.
+     2. Every symbol exists in the symbol table (item 1 above).
+     3. Every `pi` (`i >= 2`) is **transitively** reachable from `S` -
+        a directed path of *any length* exists in `builder.graph`,
+        using only `CALLS`, `INSTANTIATES`, `EXTENDS`, `IMPLEMENTS`,
+        `OVERRIDES`, or `EMBEDS` edges. Check directly (`networkx.
+        has_path(allowed_relations_subgraph, S, pi)`, or equivalent BFS
+        over `builder.graph.out_edges`/`in_edges` filtered to those six
+        relations) - never assume from reading source alone, and never
+        require a *direct* edge between consecutive pipeline entries;
+        pipeline order reflects real execution sequence at the seed's
+        own call site, not a call-chain requirement between neighbors.
+        `READS_STATE` edges (an attribute read/write, e.g. `self.x = ...`
+        in one method, `self.x` read in another) do not count toward
+        reachability at all - a pipeline that only connects via
+        `READS_STATE` is genuinely unreachable and must be rejected or
+        re-seeded at a real, structurally-connected point instead
+        (cross-method instance-state data flow is v1.2 scope; see
+        `reports/pilot/methodology.md`).
         `OVERRIDES` is a real, traversable relation, not merely
         structural metadata: confirmed directly in
         `src/prism/graph/concrete_builder.py`'s `TRAVERSABLE_RELATIONS`
@@ -54,21 +73,22 @@ additional Debug tasks, the 4 blast tasks, or a future repo's tasks.
         not inferred from an unresolved call site). Don't assume
         inheritance "just works" for a dangling call site; check the
         actual edge.
-     4. The symbol is what the call site *actually* resolves to on
-        `builder.graph`, not merely a same-named method on some other
-        class the source's own types would suggest. Confirmed directly
-        (G41): a `self.<attribute>.<method>()` call where `<method>`
-        exists on more than one class in the codebase can resolve to
-        the *wrong* class's definition - a real symbol, on a real
-        reachable edge, but not the one the source's own types say
-        should run. Two confirmed instances: `self.nodelist.render(
-        context)` resolving to `Template.render` instead of `NodeList.
-        render`, and `self.filter_expression.resolve(context)`
-        resolving to `Variable.resolve` instead of `FilterExpression.
-        resolve` - see G41 in `docs/design_formalism.md`. Read the
-        source and check the receiver's actual declared/assigned type,
-        not just whether *a* same-named symbol is reachable.
-   If any stage fails check 1 or 2, trim the pipeline to its last
+     4. Every symbol a path in check 3 passes through is what the real
+        call site *actually* resolves to on `builder.graph`, not merely
+        a same-named method on some other class the source's own types
+        would suggest. Confirmed directly (G41): a `self.<attribute>.
+        <method>()` call where `<method>` exists on more than one class
+        in the codebase can resolve to the *wrong* class's definition -
+        a real symbol, on a real reachable edge, but not the one the
+        source's own types say should run. Two confirmed instances:
+        `self.nodelist.render(context)` resolving to `Template.render`
+        instead of `NodeList.render`, and `self.filter_expression.
+        resolve(context)` resolving to `Variable.resolve` instead of
+        `FilterExpression.resolve` - see G41 in
+        `docs/design_formalism.md`. Read the source and check the
+        receiver's actual declared/assigned type, not just whether *a*
+        same-named symbol is reachable.
+   If any stage fails check 2 or 3, trim the pipeline to its last
    reachable stage and move the unreachable stage to `boundary_symbols`
    instead, with a header-comment note explaining why it's excluded
    (see `django_t02_014_send_mail_pipeline.yaml` for a worked example).
