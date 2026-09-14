@@ -58,3 +58,17 @@ Every item must be checked before the first call goes out.
   `WebFetch` and `curl` during Phase 1 setup, `CONNECT tunnel failed,
   response 403`). The real pilot run must happen from an environment
   where this has been separately verified, not assumed.
+- **Checkpointing**: the checkpoint file (`reports/pilot/checkpoint.json`
+  by default) is saved every 100 completed cells (`CHECKPOINT_INTERVAL`
+  in `benchmarks/runner.py`), plus one final save if the run completes
+  normally. A hard kill (SIGKILL, power loss, Ctrl+C included) mid-batch
+  loses up to 99 completed-but-unsaved cells. Those cells' API calls were
+  already paid for; `--resume` will re-execute them on the next run -
+  wasted cost, not a correctness risk (checkpoint cell keys are
+  idempotent, so a re-run never double-counts). `runner.py` has no
+  signal handler of any kind (confirmed directly - no `signal`/`SIGINT`/
+  `KeyboardInterrupt` handling anywhere in the module), so Ctrl+C and a
+  hard kill behave identically for checkpoint purposes: there is
+  currently no way to force an out-of-cycle save on interruption. The
+  only real mitigation available today is the 100-cell interval itself
+  bounding the loss.
