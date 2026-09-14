@@ -1098,6 +1098,68 @@ A unified cache-layer audit and cold-vs-warm parity test suite is
 scheduled as the first item of v1.1. Until it lands, treat any
 cache-hit path as a potential source of stale or divergent state.
 
+A fifth, differently-categorized cache finding (G42) surfaced during
+Milestone 2a closeout: `tests/test_feature_masks_cache_parity.py`'s
+own real-corpus parity test intermittently failed in full-suite runs
+(passed in isolation, failed roughly 2 of 3 full-suite attempts,
+identical code and corpus each time - the intermittency itself was the
+tell, since a genuine engine bug would fail deterministically).
+Root-caused to `prism.semantics.extractor._FEATURE_MASKS_CACHE`, an
+in-process session cache (along with its five siblings in
+`continuous_dijkstra.py`/`causal_weights.py`) with no per-test
+teardown anywhere in the suite - once any earlier test called
+`compute_feature_masks_cached` on the real Django corpus at the
+current commit, the value stayed cached in memory for the rest of the
+pytest process, available to leak into this later, unrelated test.
+
+Unlike Bookmark 1/G27/G38/G39, **G42 is a test-isolation bug, not an
+engine-correctness bug** - the in-memory cache behaves exactly as
+designed (a real, deliberate performance layer for a long-lived
+process); nothing about how a real caller of this engine would
+observe incorrect behavior. Fixed at both the specific test (clears
+`_FEATURE_MASKS_CACHE` directly before running) and structurally (an
+autouse fixture in `tests/benchmarks/conftest.py` clearing all six
+module-level session caches before and after every test in that
+directory, so a future benchmark test can't trip over the same leak).
+Categorized separately from the four engine-correctness bugs above
+precisely because the fix belongs in test hygiene, not in the engine
+itself - but it's counted alongside them here because it was found by
+the same kind of scrutiny (real-corpus parity checking) this
+subsection already tracks.
+
+Investigating G42 surfaced a sixth, distinct finding: even with
+`_FEATURE_MASKS_CACHE` cleared, the same parity test still diverged
+when run alongside `tests/benchmarks/` unless the on-disk
+`features_v2.db` (`prism.cache.sqlite_cache`, G39's own subject) was
+also cleared first. Direct inspection of the stored row for a
+diverging file (`xregexp.min.js`, a vendored/minified JS fixture)
+found the stored cache *key* matched exactly what current code
+independently recomputes right now - same engine commit, same grammar
+version, same file content hash - yet the stored bitmask *value*
+still differed from a fresh `compute_feature_masks()` call in the same
+process. This rules out a weak or incomplete cache key (the key is
+already maximally strong and correct) and rules out a clean
+key-mismatch bug; the two code paths that are each supposed to compute
+the same bitmask for the same file simply do not agree. Numbered
+**G43**, and re-categorized as engine-correctness, not cache-layer: a
+recurrence of the G27-class problem (`compute_feature_masks_cached`
+not being a pure function of `compute_feature_masks`'s own inputs) in
+the same function pair G27 already touched, manifesting specifically
+on minified JS files (dense, single/double-letter identifiers) most
+likely in the transitive-propagation recompute step this module's own
+docstring documents as deliberately never persisted and always
+recomputed fresh from cached direct bits (see
+`src/prism/cache/sqlite_cache.py`'s module docstring, lines 58-62).
+Deferred to v1.1's scheduled cache-layer audit; does not block the
+pilot, since the pilot's task corpus is Python-only and G43 has only
+been observed on minified JS. The scheduled v1.1 cache-layer audit
+should note both G42 (a reminder to check for analogous
+test-isolation gaps around any *other* module-level cache this
+codebase adds) and G43 (a reminder that the two-pass cached/uncached
+parity guarantee needs a real cross-language regression test, not just
+the Python-fixture coverage `tests/test_feature_masks_cache_parity.py`
+already has).
+
 ### 10.2 Ground Truth Provenance
 
 The 9 existing ground-truth tasks were annotated by Claude, not by two
