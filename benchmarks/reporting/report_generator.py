@@ -29,6 +29,14 @@ class TaskRunRecord:
     engine_name: str
     budget_tokens: int
     tsr_scores: list[float] = field(default_factory=list)  # one per seed run
+    #: The raw LLM response text behind each of `tsr_scores` - index-
+    #: aligned with it (`raw_responses[i]` is what `tsr_scores[i]` was
+    #: computed from), not a single string, since a cell has one call
+    #: per seed and collapsing them into one string would make it
+    #: impossible to compare *which* seed's response produced *which*
+    #: score - the exact "show me seed 1 vs seed 2" need this field
+    #: exists for. Empty for a dry-run record (no calls made at all).
+    raw_responses: list[str] = field(default_factory=list)
     #: cpi_strict, src, bccr_direct, fcc, fpr_gt, fpr_oracle, ... - `None`
     #: (never a fabricated `0.0`) for a metric that is either
     #: uncomputable for this cell (no Oracle package to diverge from) or
@@ -149,6 +157,40 @@ def render_diagnostics_markdown_table(run: EvaluationRun) -> str:
     return format_table(headers, rows)
 
 
+#: Markdown-report truncation length for a raw response preview - the
+#: JSON (`write_json_results`/`TaskRunRecord.raw_responses`) always keeps
+#: the full text; this is a readability limit for the Markdown table
+#: only, not a second, lossy copy of the data.
+RAW_RESPONSE_MARKDOWN_TRUNCATE_CHARS = 200
+
+
+def _truncate_for_markdown(text: str, limit: int = RAW_RESPONSE_MARKDOWN_TRUNCATE_CHARS) -> str:
+    single_line = " ".join(text.split())  # collapse newlines/whitespace - one table cell, one line
+    if len(single_line) <= limit:
+        return single_line
+    return single_line[:limit] + "…"
+
+
+def render_raw_responses_markdown(run: EvaluationRun) -> str:
+    """One row per (task, engine, budget, seed) call that actually
+    happened - `raw_responses[i]` alongside its own `tsr_scores[i]`,
+    truncated to `RAW_RESPONSE_MARKDOWN_TRUNCATE_CHARS` for table
+    readability. A record with no calls (dry-run, or an engine that
+    failed to index/retrieve) contributes no rows. The full,
+    untruncated text is always in the JSON report - this table is a
+    scan aid, not the source of truth."""
+    headers = ["Task", "Engine", "Budget", "Seed Index", "TSR Score", "Response (truncated)"]
+    rows = []
+    for record in run.records:
+        for i, (score, response) in enumerate(zip(record.tsr_scores, record.raw_responses)):
+            rows.append(
+                [record.task_id, record.engine_name, str(record.budget_tokens), str(i), f"{score:.1f}", _truncate_for_markdown(response)]
+            )
+    if not rows:
+        return "No LLM calls were made in this run (dry-run, or every cell failed before reaching the LLM)."
+    return format_table(headers, rows)
+
+
 def write_markdown_report(run: EvaluationRun, path: str | Path, n_resamples: int = 10_000, random_seed: int | None = None) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -185,6 +227,14 @@ def write_markdown_report(run: EvaluationRun, path: str | Path, n_resamples: int
         "structurally inapplicable to topological and lexical baselines "
         "that do not operate over that space - their rows show `—`, never "
         "a fabricated `0.000`.",
+        "",
+        "## Raw LLM Responses",
+        "",
+        f"Truncated to {RAW_RESPONSE_MARKDOWN_TRUNCATE_CHARS} characters for readability - "
+        "the full, untruncated text for every call is in `eval_results_v11.json`'s own "
+        "`raw_responses` field per record.",
+        "",
+        render_raw_responses_markdown(run),
         "",
     ]
     path.write_text("\n".join(lines) + "\n")

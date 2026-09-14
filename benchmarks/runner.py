@@ -90,12 +90,17 @@ def _cell_key(task_id: str, engine_name: str, budget: int, seed: int) -> str:
 
 
 def load_checkpoint(path: str) -> dict:
-    """`{"cells": {cell_key: {"score": float, "prompt_tokens": int,
-    "completion_tokens": int, "cost_usd": float | None}}}` - an absent,
-    unreadable, or corrupt file is treated as "no completed cells yet"
-    (never raises), the same "checkpointing is a resumability
-    convenience, not a correctness dependency" contract this codebase's
-    other caches already establish."""
+    """`{"cells": {cell_key: {"score": float, "raw_response": str,
+    "prompt_tokens": int, "completion_tokens": int, "cost_usd": float |
+    None}}}` - an absent, unreadable, or corrupt file is treated as "no
+    completed cells yet" (never raises), the same "checkpointing is a
+    resumability convenience, not a correctness dependency" contract
+    this codebase's other caches already establish. `raw_response` is
+    read back with `.get("raw_response", "")` at the one call site that
+    resumes a cell, so a checkpoint file written before
+    fix-llm-response-persistence (no `raw_response` key at all) still
+    loads - it just resumes with an empty response string for those
+    older cells, never a `KeyError`."""
     p = Path(path)
     if not p.exists():
         return {"cells": {}}
@@ -363,16 +368,22 @@ def run_evaluation(
                     oracle_selected_by_budget[budget] = candidate_symbols
 
                 tsr_scores: list[float] = []
+                raw_responses: list[str] = []
                 if not dry_run and client is not None:
                     rendered_xml = render(pkg, RenderOptions(include_timestamp=False, include_run_id=False))
 
                     cell_scores: dict[int, float] = {}
+                    cell_responses: dict[int, str] = {}
                     pending_seeds = []
                     for seed in seeds:
                         key = _cell_key(task.task_id, engine.name, budget, seed)
                         cached_cell = checkpoint["cells"].get(key)
                         if cached_cell is not None:
                             cell_scores[seed] = cached_cell["score"]
+                            # `raw_response` didn't exist in checkpoints written
+                            # before fix-llm-response-persistence - "" (not a
+                            # KeyError) for a resumed cell from an older file.
+                            cell_responses[seed] = cached_cell.get("raw_response", "")
                         else:
                             pending_seeds.append(seed)
 
@@ -383,9 +394,11 @@ def run_evaluation(
                         for r in tsr_results:
                             score = score_tsr_response(task, r.call.content, candidate_symbols)
                             cell_scores[r.seed] = score
+                            cell_responses[r.seed] = r.call.content
                             key = _cell_key(task.task_id, engine.name, budget, r.seed)
                             checkpoint["cells"][key] = {
                                 "score": score,
+                                "raw_response": r.call.content,
                                 "prompt_tokens": r.call.prompt_tokens,
                                 "completion_tokens": r.call.completion_tokens,
                                 "cost_usd": r.call.cost_usd,
@@ -396,6 +409,7 @@ def run_evaluation(
                                 print(f"[pilot] {fresh_calls_completed} cells completed - checkpoint saved to {checkpoint_path}")
 
                     tsr_scores = [cell_scores[seed] for seed in seeds]
+                    raw_responses = [cell_responses[seed] for seed in seeds]
 
                 run.records.append(
                     TaskRunRecord(
@@ -404,6 +418,7 @@ def run_evaluation(
                         repo=task.repo,
                         engine_name=engine.name,
                         budget_tokens=budget,
+                        raw_responses=raw_responses,
                         tsr_scores=tsr_scores,
                         diagnostics=compute_diagnostics(
                             pkg, task, feature_stats, oracle_selected=oracle_selected_by_budget.get(budget)
