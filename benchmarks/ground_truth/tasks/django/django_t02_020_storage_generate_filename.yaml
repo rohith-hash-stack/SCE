@@ -1,0 +1,131 @@
+# T02 "Django Debug" - Task 20: storage filename validation
+# (Milestone 2 batch 5, seed 3/15 - subsystem: Static files / Storage).
+#
+# Not the same candidate dropped in batch 3 - that was Storage.save()'s
+# own self._save(...) call, an abstract hook with no implementation in
+# base.py at all (confirmed MISS). This is a different real method on
+# the same real class, generate_filename(), whose own real callee (get_
+# valid_name()) genuinely exists and is genuinely reachable - the
+# earlier finding was about one specific abstract hook, not the whole
+# Storage class.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly).
+#
+# Reachability check (TASK_AUTHORING.md item 2): for every pipeline
+# stage, confirmed (1) presence in builder.symbol_table and (2) a real
+# CALLS out-edge from the previous stage via
+# builder.graph.out_edges(...):
+#
+#   django.core.files.storage.base.Storage.generate_filename  lines 112-124 (django/core/files/storage/base.py)
+#     -> get_valid_name  CALLS  (confirmed real edge)
+#   django.core.files.storage.base.Storage.get_valid_name      lines 56-61
+#     -> get_valid_filename  CALLS  (confirmed real edge)
+#   django.utils.text.get_valid_filename                        lines 301-315 (django/utils/text.py)
+#
+# Real causal chain, read directly from source (base.py lines
+# 112-124): generate_filename() has one guard clause (`if ".." in
+# pathlib.PurePath(dirname).parts: raise SuspiciousFileOperation(...)`)
+# - a failure path, not this pipeline's own trace - then its real
+# `return` statement unconditionally calls `self.get_valid_name(
+# filename)`. get_valid_name() itself (base.py lines 56-61) is a
+# one-line wrapper: `return get_valid_filename(name)`, also
+# unconditional. Explicit assumption this task's prompt states: assume
+# the filename's directory component contains no path-traversal
+# sequence (`..`), so the guard clause does not raise and the real
+# validation call is reached.
+#
+# Seed check (Milestone 2 requirements): Storage is a plain base
+# class, not metaclass-generated; nothing here is async/await; no
+# container-subscript data-flow pattern is involved (pure call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.core.files.storage.base.Storage          (class)  lines 11-201
+#   django.core.exceptions.SuspiciousFileOperation    (class)  lines 43-46
+#
+# SuspiciousFileOperation is the real exception the guard clause raises
+# on the failure path this task's prompt explicitly assumes doesn't
+# happen - listed as boundary, not part of the success-path pipeline.
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_020_storage_generate_filename
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.core.files.storage.base.Storage.generate_filename
+task_type: debug
+prompt: |
+  You are debugging how Django validates a filename before it's passed
+  to a storage backend's save() method, in
+  django/core/files/storage/base.py. Starting from
+  `Storage.generate_filename`, trace the real causal pipeline that
+  validates the filename, in the order each stage is actually reached,
+  up to and including the call that performs the real character-level
+  validation. Assume the filename's directory component contains no
+  path-traversal sequence (`..`), so the guard clause does not raise.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.core.files.storage.base.Storage.generate_filename", "django.core.files.storage.base.Storage.get_valid_name"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.core.files.storage.base.Storage.generate_filename
+    - django.core.files.storage.base.Storage.get_valid_name
+    - django.utils.text.get_valid_filename
+  required_context:
+    - django.core.files.storage.base.Storage
+  boundary_symbols:
+    - django.core.exceptions.SuspiciousFileOperation
+  expected_solution: >
+    generate_filename() checks for a path-traversal attempt (raising on
+    failure); assuming that doesn't happen, it calls get_valid_name(),
+    which is a one-line wrapper calling the real validator,
+    get_valid_filename(). Required context: Storage itself. Boundary:
+    SuspiciousFileOperation, the real exception the guard clause raises
+    on the path this task's prompt explicitly assumes doesn't happen.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.core.files.storage.base.Storage.generate_filename
+    - django.core.files.storage.base.Storage.get_valid_name
+  required_context:
+    - django.core.files.storage.base.Storage
+  boundary_symbols:
+    - django.core.exceptions.SuspiciousFileOperation
+  expected_solution: >
+    generate_filename() calls get_valid_name() to validate the
+    filename. (Treated get_valid_name() as doing the real validation
+    work itself, without checking that it's a one-line wrapper around
+    a separate, real module-level function, get_valid_filename().)
+    Agreed on required context and boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.core.files.storage.base.Storage.generate_filename
+    - django.core.files.storage.base.Storage.get_valid_name
+    - django.utils.text.get_valid_filename
+  required_context:
+    - django.core.files.storage.base.Storage
+  boundary_symbols:
+    - django.core.exceptions.SuspiciousFileOperation
+  expected_solution: >
+    Annotator A's full chain is correct: get_valid_name()'s own source
+    (base.py line 61) is `return get_valid_filename(name)` - a
+    distinct, separately-defined function performing the real
+    character-level validation, and the prompt's own explicit stopping
+    point ("up to and including the call that performs the real
+    character-level validation") requires including it.

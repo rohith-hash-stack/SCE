@@ -1,0 +1,138 @@
+# T02 "Django Debug" - Task 18: HttpResponse construction - headers
+# and cookie jar setup (Milestone 2 batch 5, seed 1/15 - subsystem:
+# HTTP response construction).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly).
+#
+# Reachability check (TASK_AUTHORING.md item 2, corrected after batch
+# 4 to accept OVERRIDES): for every pipeline stage, confirmed (1)
+# presence in builder.symbol_table and (2) a real edge from the
+# previous stage via builder.graph.out_edges(...):
+#
+#   django.http.response.HttpResponse.__init__      lines 377-380 (django/http/response.py)
+#     -> HttpResponseBase.__init__  OVERRIDES  (confirmed real edge -
+#     this is HttpResponse.__init__'s own super().__init__(*args,
+#     **kwargs) call; OVERRIDES is a real, traversable relation, see
+#     TASK_AUTHORING.md item 2.3)
+#   django.http.response.HttpResponseBase.__init__   lines 116-144
+#     -> ResponseHeaders  INSTANTIATES  (confirmed real edge)
+#     -> SimpleCookie  CALLS  (confirmed real edge)
+#   django.http.response.ResponseHeaders              lines 36-99 (class)
+#   django.http.cookie.SimpleCookie                    lines 4-4 (django/http/cookie.py, class re-export)
+#
+# Real causal chain, read directly from source (response.py lines
+# 116-144): HttpResponse's own __init__ is a one-line
+# `super().__init__(*args, **kwargs)`, so the real body is
+# HttpResponseBase.__init__'s. Its first statement is
+# `self.headers = ResponseHeaders(headers)` (unconditional). Several
+# lines of conditional Content-Type logic follow (string/dict
+# operations only, no further real symbol calls), then
+# `self.cookies = SimpleCookie()` (also unconditional, just a later
+# statement in the same method - not gated by anything the Content-
+# Type branch does). No assumption needs to be stated in this task's
+# prompt - both real construction steps are unconditionally reached.
+#
+# Seed check (Milestone 2 requirements): HttpResponse/HttpResponseBase
+# are plain classes, not metaclass-generated; nothing here is
+# async/await; no container-subscript data-flow pattern is involved
+# (pure call-chain, one OVERRIDES hop).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.http.response.HttpResponse           (class)  lines 368-433
+#   django.http.response.HttpResponseBase        (class)  lines 106-365
+#   django.http.response.HttpResponseBase.charset (method) lines 173-175
+#
+# charset is a real one-hop callee referenced inside
+# HttpResponseBase.__init__'s own Content-Type branch (self.charset,
+# a property) - listed as boundary since it's read, not called as part
+# of this pipeline's own two construction steps.
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_018_response_init_headers_cookies
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.http.response.HttpResponse.__init__
+task_type: debug
+prompt: |
+  You are debugging how a Django HttpResponse sets up its headers and
+  cookie jar during construction, in django/http/response.py. Starting
+  from `HttpResponse.__init__`, trace the real causal pipeline that
+  sets these up, in the order each stage is actually reached, up to
+  and including the call that creates the response's cookie jar.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.http.response.HttpResponse.__init__", "django.http.response.HttpResponseBase.__init__"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.http.response.HttpResponse.__init__
+    - django.http.response.HttpResponseBase.__init__
+    - django.http.response.ResponseHeaders
+    - django.http.cookie.SimpleCookie
+  required_context:
+    - django.http.response.HttpResponse
+    - django.http.response.HttpResponseBase
+  boundary_symbols:
+    - django.http.response.HttpResponseBase.charset
+  expected_solution: >
+    HttpResponse.__init__ is a one-line super().__init__() call, so
+    the real work happens in HttpResponseBase.__init__: it constructs
+    ResponseHeaders(headers) first, then (after unrelated Content-Type
+    branch logic) constructs SimpleCookie() for the cookie jar. Required
+    context: both classes - HttpResponse.__init__ delegates entirely to
+    its parent's real body. Boundary: charset, a property read inside
+    the Content-Type branch, not part of this pipeline's own two
+    construction steps.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.http.response.HttpResponse.__init__
+    - django.http.response.HttpResponseBase.__init__
+    - django.http.response.ResponseHeaders
+  required_context:
+    - django.http.response.HttpResponse
+    - django.http.response.HttpResponseBase
+  boundary_symbols:
+    - django.http.response.HttpResponseBase.charset
+  expected_solution: >
+    HttpResponse.__init__ delegates to HttpResponseBase.__init__,
+    which constructs ResponseHeaders(headers). (Missed that
+    SimpleCookie() is a separate, later real construction call in the
+    same method - stopped after the first real statement rather than
+    reading through to the cookie-jar setup the prompt explicitly asks
+    for.) Agreed on required context and boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.http.response.HttpResponse.__init__
+    - django.http.response.HttpResponseBase.__init__
+    - django.http.response.ResponseHeaders
+    - django.http.cookie.SimpleCookie
+  required_context:
+    - django.http.response.HttpResponse
+    - django.http.response.HttpResponseBase
+  boundary_symbols:
+    - django.http.response.HttpResponseBase.charset
+  expected_solution: >
+    Annotator A's full chain is correct: response.py line 134 is
+    `self.cookies = SimpleCookie()` - a distinct, separately-traceable
+    statement in the same method as the headers construction, and the
+    prompt's own explicit stopping point ("up to and including the
+    call that creates the response's cookie jar") requires including
+    it.

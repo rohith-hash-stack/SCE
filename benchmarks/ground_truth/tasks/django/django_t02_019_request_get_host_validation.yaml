@@ -1,0 +1,127 @@
+# T02 "Django Debug" - Task 19: HTTP Host header resolution and
+# validation (Milestone 2 batch 5, seed 2/15 - subsystem: Requests).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly).
+#
+# Reachability check (TASK_AUTHORING.md item 2): for every pipeline
+# stage, confirmed (1) presence in builder.symbol_table and (2) a real
+# CALLS out-edge from the previous stage via
+# builder.graph.out_edges(...):
+#
+#   django.http.request.HttpRequest.get_host       lines 131-151 (django/http/request.py)
+#     -> _get_raw_host  CALLS  (confirmed real edge)
+#   django.http.request.HttpRequest._get_raw_host   lines 113-129
+#   django.http.request.split_domain_port            lines 721-740
+#     (get_host -> split_domain_port CALLS, confirmed real edge)
+#   django.http.request.validate_host                 lines 743-760
+#     (get_host -> validate_host CALLS, confirmed real edge)
+#
+# Real causal chain, read directly from source (request.py lines
+# 131-151): get_host() calls self._get_raw_host() first (unconditional),
+# then calls split_domain_port(host) (also unconditional - it's the
+# very next statement). The third call, validate_host(domain,
+# allowed_hosts), sits inside `if domain and validate_host(domain,
+# allowed_hosts):` - Python's `and` short-circuits, so validate_host()
+# is only actually called when `domain` is truthy. Explicit assumption
+# this task's prompt states: assume the parsed host has a non-empty
+# domain component, so validate_host() is genuinely reached.
+#
+# Seed check (Milestone 2 requirements): HttpRequest is a plain class,
+# not metaclass-generated; nothing here is async/await; no container-
+# subscript data-flow pattern is involved (pure call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.http.request.HttpRequest              (class)    lines 52-448
+#   django.core.exceptions.DisallowedHost          (class)    lines 49-52
+#
+# DisallowedHost is the real exception get_host() raises on the
+# failure path (invalid domain, or validate_host() returning False) -
+# not part of this pipeline's own success-path trace, listed as
+# boundary.
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_019_request_get_host_validation
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.http.request.HttpRequest.get_host
+task_type: debug
+prompt: |
+  You are debugging how Django resolves and validates the HTTP Host
+  header in django/http/request.py. Starting from
+  `HttpRequest.get_host`, trace the real causal pipeline that
+  validates the host, in the order each stage is actually reached, up
+  to and including the call that checks the parsed domain against
+  ALLOWED_HOSTS. Assume the parsed host has a non-empty domain
+  component, so the validation call is genuinely reached.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.http.request.HttpRequest.get_host", "django.http.request.HttpRequest._get_raw_host"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.http.request.HttpRequest.get_host
+    - django.http.request.HttpRequest._get_raw_host
+    - django.http.request.split_domain_port
+    - django.http.request.validate_host
+  required_context:
+    - django.http.request.HttpRequest
+  boundary_symbols:
+    - django.core.exceptions.DisallowedHost
+  expected_solution: >
+    get_host() calls _get_raw_host() to read the raw host string, then
+    split_domain_port() to separate domain from port, then - assuming
+    a non-empty domain - validate_host() to check it against
+    ALLOWED_HOSTS. Required context: HttpRequest itself. Boundary:
+    DisallowedHost, the real exception raised on the failure path, not
+    this pipeline's own success trace.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.http.request.HttpRequest.get_host
+    - django.http.request.HttpRequest._get_raw_host
+    - django.http.request.split_domain_port
+  required_context:
+    - django.http.request.HttpRequest
+  boundary_symbols:
+    - django.core.exceptions.DisallowedHost
+  expected_solution: >
+    get_host() calls _get_raw_host() then split_domain_port() to parse
+    the host. (Missed that validate_host() is itself a separate traced
+    call inside the `if domain and validate_host(...)` condition -
+    read the whole condition as one opaque check rather than noticing
+    validate_host is a real, independently resolvable function.)
+    Agreed on required context and boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.http.request.HttpRequest.get_host
+    - django.http.request.HttpRequest._get_raw_host
+    - django.http.request.split_domain_port
+    - django.http.request.validate_host
+  required_context:
+    - django.http.request.HttpRequest
+  boundary_symbols:
+    - django.core.exceptions.DisallowedHost
+  expected_solution: >
+    Annotator A's full chain is correct: request.py line 141 is
+    `if domain and validate_host(domain, allowed_hosts):` -
+    validate_host is a real, separately-defined module-level function,
+    not inlined logic, and the prompt's own explicit stopping point
+    ("up to and including the call that checks the parsed domain
+    against ALLOWED_HOSTS") requires including it.
