@@ -116,7 +116,7 @@ def test_tsr_scoring_is_correctly_wired_for_a_genuinely_correct_debug_response(m
     _patch_corpus(monkeypatch, python_repo_root)
     correct_response = (
         "```json\n"
-        f'{{"reasoning": "single stage", "pipeline": [{{"symbol": "{_SEED_SYMBOL}", "evidence": "seed"}}]}}'
+        f'{{"reasoning": "single stage", "symbols": ["{_SEED_SYMBOL}"]}}'
         "\n```\n"
     )
     fake_client = _FakeDeepSeekClient(response_text=correct_response)
@@ -134,8 +134,8 @@ def test_tsr_scoring_is_correctly_wired_for_a_genuinely_wrong_debug_response(mon
 
     _patch_corpus(monkeypatch, python_repo_root)
     wrong_response = (
-        '```json\n{"reasoning": "single stage", "pipeline": '
-        '[{"symbol": "some.totally.unrelated.symbol", "evidence": "n/a"}]}\n```\n'
+        '```json\n{"reasoning": "single stage", '
+        '"symbols": ["some.totally.unrelated.symbol"]}\n```\n'
     )
     fake_client = _FakeDeepSeekClient(response_text=wrong_response)
     monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
