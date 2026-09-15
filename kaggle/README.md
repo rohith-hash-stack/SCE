@@ -12,7 +12,13 @@ git clone --branch pilot-execution --single-branch <repo-url>
 
 This branch carries no engine, benchmark, or test changes relative to
 `claude/sce-mcp-local-setup-5qo69f` - it exists only to host this
-Kaggle workflow doc and the Kaggle-side gitignore.
+Kaggle workflow doc.
+
+Pinned commit for the pilot run: 0a35bcd
+
+After cloning, the Kaggle cell should `git reset --hard 0a35bcd` -
+this ensures the run uses exactly this revision regardless of later
+pushes to `pilot-execution`.
 
 ## Where results go
 
