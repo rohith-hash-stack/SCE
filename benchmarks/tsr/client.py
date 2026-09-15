@@ -38,7 +38,9 @@ from benchmarks.openai_client import (
 DEFAULT_MODEL = "deepseek-v4-flash"
 DEFAULT_SEEDS: tuple[int, ...] = (42, 43, 44, 45, 46)
 DEFAULT_TEMPERATURE = 0.0
-DEFAULT_MAX_TOKENS = 2048
+#: 13-20x expected response (contract bounds to ~200-300 tokens).
+#: Model supports 384K. Chosen as cost ceiling, not design target.
+DEFAULT_MAX_TOKENS = 4096
 
 DEEPSEEK_API_KEY_ENV_VAR = "DEEPSEEK_API_KEY"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
