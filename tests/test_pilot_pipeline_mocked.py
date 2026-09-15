@@ -39,14 +39,16 @@ those files use. The one thing that *would* make this file fragile -
 and is deliberately avoided - is asserting an exact `fpr_oracle` value;
 see Test 4's own docstring.
 
-**Updated for fix-prompt-contract/fix-parser**: `PerfectClient`/
-`WrongClient` now emit the structured `{"reasoning": ..., "pipeline":
-[{"symbol": ..., "evidence": ...}, ...]}` object (via
-`_structured_response`), matching `DEBUG_TASK_RESPONSE_CONTRACT` and
-parsed by `benchmarks.tsr.scorer_debug.extract_structured_pipeline`.
-`ProseClient` is unchanged (plain prose, no JSON at all) - it still
-exercises the "no valid JSON present" malformed-input path under the
-new parser exactly as it did under the old one.
+**Updated for fix-prompt-flat-contract/fix-parser-flat**: `PerfectClient`/
+`WrongClient` now emit the flat `{"reasoning": ..., "symbols": [...]}`
+object (via `_flat_response`), matching `DEBUG_TASK_RESPONSE_CONTRACT`
+and parsed by `benchmarks.tsr.scorer_debug.extract_flat_symbols` - not
+the earlier nested `{"pipeline": [{"symbol": ..., "evidence": ...}]}`
+shape, retired after Qwen 2.5 7B Instruct Q8_0 (the Ollama SLM used for
+local format-compliance testing) failed it at Q4 while passing the flat
+shape 10/10. `ProseClient` is unchanged (plain prose, no JSON at all) -
+it still exercises the "no valid JSON present" malformed-input path
+under the new parser exactly as it did under the old one.
 """
 from __future__ import annotations
 
@@ -97,24 +99,24 @@ def _fake_task() -> EvaluationTask:
     )
 
 
-def _structured_response(symbols: list[str]) -> str:
-    """The fix-prompt-contract shape: {"reasoning": ..., "pipeline":
-    [{"symbol": ..., "evidence": ...}, ...]}, fenced - matching
-    DEBUG_TASK_RESPONSE_CONTRACT's own instruction."""
+def _flat_response(symbols: list[str]) -> str:
+    """The flat fix-prompt-flat-contract shape: {"reasoning": ...,
+    "symbols": [...]}, fenced - matching DEBUG_TASK_RESPONSE_CONTRACT's
+    own instruction. Replaces the retired nested {"pipeline": [{"symbol":
+    ..., "evidence": ...}]} shape."""
     obj = {
         "reasoning": "Each stage calls the next in the traced order.",
-        "pipeline": [{"symbol": s, "evidence": "resolved call edge"} for s in symbols],
+        "symbols": symbols,
     }
     return f"```json\n{json.dumps(obj)}\n```"
 
 
 class PerfectClient:
-    """Returns the task's own real ground-truth pipeline as the new
-    structured JSON object, verbatim, for every call regardless of
-    seed."""
+    """Returns the task's own real ground-truth pipeline as the flat
+    JSON object, verbatim, for every call regardless of seed."""
 
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
-        content = _structured_response(_PIPELINE_SYMBOLS)
+        content = _flat_response(_PIPELINE_SYMBOLS)
         return CallResult(
             model=model, content=content, prompt_tokens=1, completion_tokens=1,
             total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
@@ -123,7 +125,7 @@ class PerfectClient:
 
 class WrongClient:
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
-        content = _structured_response(["unrelated.symbol.that.does.not.match"])
+        content = _flat_response(["unrelated.symbol.that.does.not.match"])
         return CallResult(
             model=model, content=content, prompt_tokens=1, completion_tokens=1,
             total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,

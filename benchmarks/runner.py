@@ -69,7 +69,7 @@ from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, DeepSeekClient, 
 from benchmarks.tsr.scorer_architecture import score_architecture
 from benchmarks.tsr.scorer_blast import score_blast
 from benchmarks.tsr.scorer_chain import score_chain
-from benchmarks.tsr.scorer_debug import extract_structured_pipeline, score_debug
+from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_debug
 from benchmarks.tsr.scorer_redundancy import score_redundancy
 
 DEFAULT_BUDGETS = (2000, 4000, 8000)
@@ -432,7 +432,13 @@ def run_evaluation(
                         )
                         for r in tsr_results:
                             score = score_tsr_response(task, r.call.content, candidate_symbols)
-                            if task.task_type == "debug" and extract_structured_pipeline(r.call.content) is None:
+                            response_is_unparseable = False
+                            if task.task_type == "debug":
+                                try:
+                                    extract_flat_symbols(r.call.content)
+                                except ParseError:
+                                    response_is_unparseable = True
+                            if response_is_unparseable:
                                 print(
                                     f"[deepseek] parse-failure task={task.task_id} engine={engine.name} "
                                     f"seed={r.seed} raw_response={r.call.content[:500]!r}",

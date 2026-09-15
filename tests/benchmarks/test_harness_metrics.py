@@ -57,7 +57,7 @@ from benchmarks.reporting.report_generator import (
 from benchmarks.tsr.scorer_architecture import reference_symbol_recall, score_architecture
 from benchmarks.tsr.scorer_blast import extract_mentioned_symbols, precision_recall_f1, score_blast
 from benchmarks.tsr.scorer_chain import score_chain
-from benchmarks.tsr.scorer_debug import extract_structured_pipeline, score_debug
+from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_debug
 from benchmarks.tsr.scorer_redundancy import rubric_score, score_redundancy
 
 
@@ -647,71 +647,93 @@ def test_scorer_architecture_vacuous_empty_reference_set():
     assert score_architecture("anything at all", set()) == 1.0
 
 
-def test_scorer_debug_extracts_fenced_structured_object():
-    text = (
-        'Here is my answer:\n```json\n{"reasoning": "a calls b", '
-        '"pipeline": [{"symbol": "svc.a", "evidence": "line 1"}, '
-        '{"symbol": "svc.b", "evidence": "line 2"}]}\n```\nDone.'
-    )
-    assert extract_structured_pipeline(text) == ["svc.a", "svc.b"]
+def test_flat_contract_parser():
+    """Exact shape {"reasoning": "...", "symbols": ["a.b","a.c"]} - the
+    parser returns the symbols list, in order."""
+    text = '```json\n{"reasoning": "a calls b", "symbols": ["a.b", "a.c"]}\n```'
+    assert extract_flat_symbols(text) == ["a.b", "a.c"]
+
+
+def test_parser_rejects_nested_shape():
+    """The retired nested {"pipeline": [{"symbol": ..., "evidence":
+    ...}]} shape - no "symbols" key at all - raises ParseError, never
+    silently mis-parses (e.g. by returning an empty list, or crashing
+    with a bare KeyError instead of the documented exception type)."""
+    text = '```json\n{"reasoning": "a calls b", "pipeline": [{"symbol": "svc.a", "evidence": "line 1"}]}\n```'
+    with pytest.raises(ParseError):
+        extract_flat_symbols(text)
+
+
+def test_scorer_debug_extracts_fenced_flat_object():
+    text = 'Here is my answer:\n```json\n{"reasoning": "a calls b", "symbols": ["svc.a", "svc.b"]}\n```\nDone.'
+    assert extract_flat_symbols(text) == ["svc.a", "svc.b"]
 
 
 def test_scorer_debug_bare_fence_without_json_tag_also_parses():
-    text = '```\n{"reasoning": "x", "pipeline": [{"symbol": "svc.a", "evidence": "e"}, {"symbol": "svc.b", "evidence": "e"}]}\n```'
-    assert extract_structured_pipeline(text) == ["svc.a", "svc.b"]
+    text = '```\n{"reasoning": "x", "symbols": ["svc.a", "svc.b"]}\n```'
+    assert extract_flat_symbols(text) == ["svc.a", "svc.b"]
 
 
 def test_scorer_debug_unfenced_bare_json_still_parses():
     """Some models return bare JSON despite being asked to fence it -
     DEBUG_TASK_RESPONSE_CONTRACT's own instruction is not always
     followed; the parser must not require the fence."""
-    text = '{"reasoning": "x", "pipeline": [{"symbol": "svc.a", "evidence": "e"}]}'
-    assert extract_structured_pipeline(text) == ["svc.a"]
+    text = '{"reasoning": "x", "symbols": ["svc.a"]}'
+    assert extract_flat_symbols(text) == ["svc.a"]
 
 
-def test_scorer_debug_no_json_at_all_returns_none():
-    assert extract_structured_pipeline("svc.a then svc.b, no JSON here") is None
+def test_scorer_debug_no_json_at_all_raises_parse_error():
+    with pytest.raises(ParseError):
+        extract_flat_symbols("svc.a then svc.b, no JSON here")
 
 
-def test_scorer_debug_malformed_json_returns_none():
-    assert extract_structured_pipeline('```json\n{"pipeline": [svc.a, svc.b]}\n```') is None
+def test_scorer_debug_malformed_json_raises_parse_error():
+    with pytest.raises(ParseError):
+        extract_flat_symbols('```json\n{"symbols": [svc.a, svc.b]}\n```')
 
 
-def test_scorer_debug_missing_pipeline_key_returns_none():
-    assert extract_structured_pipeline('```json\n{"reasoning": "no pipeline field here"}\n```') is None
+def test_scorer_debug_missing_symbols_key_raises_parse_error():
+    with pytest.raises(ParseError):
+        extract_flat_symbols('```json\n{"reasoning": "no symbols field here"}\n```')
 
 
-def test_scorer_debug_bare_array_old_contract_no_longer_parses():
-    """The pre-fix-parser contract (a bare JSON array, no wrapping
-    object) is no longer accepted - `pipeline` must be a JSON object's
-    field, not the top-level value."""
-    assert extract_structured_pipeline('```json\n["svc.a", "svc.b"]\n```') is None
+def test_scorer_debug_symbols_not_a_list_raises_parse_error():
+    with pytest.raises(ParseError):
+        extract_flat_symbols('```json\n{"reasoning": "x", "symbols": "svc.a"}\n```')
+
+
+def test_scorer_debug_non_string_entry_raises_parse_error():
+    with pytest.raises(ParseError):
+        extract_flat_symbols('```json\n{"reasoning": "x", "symbols": ["svc.a", 42]}\n```')
 
 
 def test_scorer_debug_exact_ordered_match_scores_one():
-    text = (
-        '```json\n{"reasoning": "x", "pipeline": '
-        '[{"symbol": "svc.parse_order", "evidence": "e"}, '
-        '{"symbol": "svc.store_order", "evidence": "e"}]}\n```'
-    )
+    text = '```json\n{"reasoning": "x", "symbols": ["svc.parse_order", "svc.store_order"]}\n```'
     assert score_debug(text, ["svc.parse_order", "svc.store_order"]) == 1.0
 
 
 def test_scorer_debug_wrong_order_scores_zero():
-    text = (
-        '```json\n{"reasoning": "x", "pipeline": '
-        '[{"symbol": "svc.store_order", "evidence": "e"}, '
-        '{"symbol": "svc.parse_order", "evidence": "e"}]}\n```'
-    )
+    text = '```json\n{"reasoning": "x", "symbols": ["svc.store_order", "svc.parse_order"]}\n```'
     assert score_debug(text, ["svc.parse_order", "svc.store_order"]) == 0.0
 
 
 def test_scorer_debug_missing_fence_and_json_scores_zero():
+    """score_debug's own contract is unchanged: malformed input scores
+    0.0, never raises - even though extract_flat_symbols underneath now
+    raises ParseError, score_debug catches it."""
     assert score_debug("svc.parse_order runs then svc.store_order.", ["svc.parse_order", "svc.store_order"]) == 0.0
 
 
+def test_scorer_debug_nested_shape_response_scores_zero_not_raises():
+    """A real model response in the retired nested shape must not crash
+    run_evaluation - score_debug catches the ParseError from a nested-
+    shape response too, same as any other malformed input."""
+    text = '```json\n{"reasoning": "x", "pipeline": [{"symbol": "svc.parse_order", "evidence": "e"}]}\n```'
+    assert score_debug(text, ["svc.parse_order"]) == 0.0
+
+
 def test_scorer_debug_vacuous_empty_pipeline_and_empty_array():
-    assert score_debug('```json\n{"reasoning": "x", "pipeline": []}\n```', []) == 1.0
+    assert score_debug('```json\n{"reasoning": "x", "symbols": []}\n```', []) == 1.0
 
 
 # --------------------------------------------------------------------- #
