@@ -111,9 +111,19 @@ def _flat_response(symbols: list[str]) -> str:
     return f"```json\n{json.dumps(obj)}\n```"
 
 
+#: fix-client-env-vars-definitive's runner-side sanity check requires
+#: base_url/model on whatever DeepSeekClient() resolves to, real or
+#: faked - set as class attributes on every fake client below.
+_FAKE_BASE_URL = "http://fake-client.test/v1"
+_FAKE_MODEL = "fake-model"
+
+
 class PerfectClient:
     """Returns the task's own real ground-truth pipeline as the flat
     JSON object, verbatim, for every call regardless of seed."""
+
+    base_url = _FAKE_BASE_URL
+    model = _FAKE_MODEL
 
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
         content = _flat_response(_PIPELINE_SYMBOLS)
@@ -124,6 +134,9 @@ class PerfectClient:
 
 
 class WrongClient:
+    base_url = _FAKE_BASE_URL
+    model = _FAKE_MODEL
+
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
         content = _flat_response(["unrelated.symbol.that.does.not.match"])
         return CallResult(
@@ -133,6 +146,9 @@ class WrongClient:
 
 
 class ProseClient:
+    base_url = _FAKE_BASE_URL
+    model = _FAKE_MODEL
+
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
         content = "The pipeline starts with foo and ends with bar."
         return CallResult(

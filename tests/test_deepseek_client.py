@@ -163,3 +163,66 @@ def test_client_defaults_timeout_to_180s_when_unset(monkeypatch):
     client = DeepSeekClient(api_key="sk-test-dummy")
 
     assert client.timeout == DEFAULT_LLM_TIMEOUT_S == 180.0
+
+
+def test_client_reads_env_vars(monkeypatch):
+    """fix-client-env-vars regression: DeepSeekClient() constructed with
+    no args must reflect LLM_BASE_URL/LLM_MODEL (via LLM_API_KEY_ENV's
+    own indirection for the key) as real instance attributes - not just
+    pass them silently into the underlying openai.OpenAI client where
+    nothing outside this module could ever observe or assert on them."""
+    monkeypatch.setenv("LLM_BASE_URL", "http://example.test/v1")
+    monkeypatch.setenv("LLM_MODEL", "test-model-x")
+    monkeypatch.setenv("LLM_API_KEY_ENV", "TEST_API_KEY")
+    monkeypatch.setenv("TEST_API_KEY", "test-key-123")
+
+    c = DeepSeekClient()
+
+    assert c.base_url == "http://example.test/v1"
+    assert c.model == "test-model-x"
+
+
+def test_client_sets_max_retries_to_zero_on_the_underlying_openai_client(monkeypatch):
+    """max_retries=0 is deliberate (see client.py's own comment): the
+    SDK's own default (2) would let a single slow/hung cell retry the
+    full timeout twice more on top of the first attempt, compounding
+    the hang case rather than helping it - complete()'s own
+    RATE_LIMIT_BACKOFF_SECONDS loop already handles 429s explicitly.
+    Asserted directly against the constructed openai.OpenAI instance
+    (which exposes max_retries as a real attribute), not just inferred
+    from behavior."""
+    client = DeepSeekClient(api_key="sk-test-dummy")
+
+    assert client._client.max_retries == 0
+
+
+def test_client_passes_timeout_to_the_underlying_openai_client(monkeypatch):
+    monkeypatch.setenv(LLM_TIMEOUT_S_ENV_VAR, "42")
+
+    client = DeepSeekClient(api_key="sk-test-dummy")
+
+    assert client._client.timeout == 42.0
+
+
+def test_client_falls_back_to_placeholder_key_for_localhost_ollama(monkeypatch):
+    """A local Ollama endpoint needs no real key - the operator setting
+    LLM_API_KEY_ENV to point at an unset (or never-created) env var
+    must not turn into a MissingDeepSeekAPIKeyError for a localhost
+    base_url. Never applies to a real hosted endpoint - see the
+    sibling test below."""
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("LLM_API_KEY_ENV", "OLLAMA_API_KEY")
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+
+    client = DeepSeekClient()
+
+    assert client._client.api_key == "ollama"
+
+
+def test_client_still_raises_for_missing_key_on_a_non_localhost_endpoint(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.example.com/v1")
+    monkeypatch.setenv("LLM_API_KEY_ENV", "SOME_OTHER_KEY")
+    monkeypatch.delenv("SOME_OTHER_KEY", raising=False)
+
+    with pytest.raises(MissingDeepSeekAPIKeyError, match="SOME_OTHER_KEY"):
+        DeepSeekClient()

@@ -311,7 +311,12 @@ def run_evaluation(
     budgets: list[int],
     tasks_dir: str,
     seeds: tuple[int, ...] = DEFAULT_SEEDS,
-    model: str = DEFAULT_MODEL,
+    #: None, not DEFAULT_MODEL - see benchmarks/tsr/client.py's
+    #: run_tsr_prompt docstring. A hardcoded default here would flow
+    #: through as an explicit, non-None model= on every call, always
+    #: overriding DeepSeekClient's own env-var-resolved self.model
+    #: (LLM_MODEL) - the fix-client-env-vars root cause.
+    model: str | None = None,
     dry_run: bool = False,
     oracle_packages_path: str | None = None,
     use_pragmatic_oracle: bool = False,
@@ -361,6 +366,9 @@ def run_evaluation(
         # `--dry-run` explicitly - that path never reaches here at all
         # (see the `if not dry_run:` guard above), so it is unaffected.
         client = DeepSeekClient()
+        if not hasattr(client, "base_url") or not client.base_url:
+            raise RuntimeError("client.base_url not set — check benchmarks/tsr/client.py __init__")
+        print(f"[runner] using base_url={client.base_url} model={client.model}", file=sys.stderr, flush=True)
 
     checkpoint = load_checkpoint(checkpoint_path) if resume else {"cells": {}}
     fresh_calls_completed = 0
@@ -749,7 +757,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Comma-separated seeds for the TSR protocol, e.g. '42,43' - one real LLM call per seed per "
         f"(task, engine, budget) cell. Default: {','.join(str(s) for s in DEFAULT_SEEDS)} (the spec's own 5-seed list).",
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--model", default=None,
+        help=f"Explicit model override. Default: None - falls back to DeepSeekClient's own "
+        f"env-var-resolved model (LLM_MODEL, else {DEFAULT_MODEL}). Passing a hardcoded default "
+        "here instead of None would always override LLM_MODEL, regardless of its value.",
+    )
     parser.add_argument("--tasks-dir", default=None, help=f"Default: {DEFAULT_TASKS_DIR_TEMPLATE}")
     parser.add_argument("--output", default="reports/")
     parser.add_argument("--dry-run", action="store_true", help="Skip real LLM calls even if an API key is configured")

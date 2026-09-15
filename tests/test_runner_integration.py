@@ -60,6 +60,11 @@ def _patch_corpus(monkeypatch, python_repo_root: str) -> None:
 
 class _FakeDeepSeekClient:
     def __init__(self, response_text: str = "response"):
+        #: fix-client-env-vars-definitive's runner-side sanity check
+        #: requires base_url/model on whatever DeepSeekClient() resolves
+        #: to, real or faked.
+        self.base_url = "http://fake-client.test/v1"
+        self.model = "fake-model"
         self.seeds_seen: list[int] = []
         self._response_text = response_text
 

@@ -63,10 +63,20 @@ def _patch_corpus(monkeypatch, python_repo_root: str) -> None:
     )
 
 
+#: fix-client-env-vars-definitive's runner-side sanity check requires
+#: base_url/model on whatever DeepSeekClient() resolves to, real or
+#: faked - set as class attributes on every fake client below.
+_FAKE_BASE_URL = "http://fake-client.test/v1"
+_FAKE_MODEL = "fake-model"
+
+
 class _FakeDeepSeekClient:
     """Returns a response whose text encodes its own seed, so a test can
     check response-to-seed alignment without depending on real model
     output."""
+
+    base_url = _FAKE_BASE_URL
+    model = _FAKE_MODEL
 
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
         return CallResult(
@@ -109,6 +119,9 @@ def test_checkpoint_persists_and_resumes_raw_response(monkeypatch, python_repo_r
     # A second, --resume run must reuse that stored response (no fresh
     # call) - proven by using a client that would raise if actually called.
     class _ExplodingClient:
+        base_url = _FAKE_BASE_URL
+        model = _FAKE_MODEL
+
         def complete(self, *args, **kwargs):
             raise AssertionError("resume must not re-call the LLM for an already-checkpointed cell")
 
@@ -138,6 +151,9 @@ def test_resume_from_a_pre_fix_checkpoint_with_no_raw_response_key_is_not_a_keye
     checkpoint_path.write_text(json.dumps({"cells": {key: {"score": 1.0, "prompt_tokens": 1, "completion_tokens": 1, "cost_usd": 0.0}}}))
 
     class _FreshCallMarkerClient:
+        base_url = _FAKE_BASE_URL
+        model = _FAKE_MODEL
+
         def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
             return CallResult(
                 model=model, content="a genuinely fresh call happened", prompt_tokens=1, completion_tokens=1,
@@ -164,6 +180,9 @@ def test_markdown_report_shows_truncated_response_and_json_keeps_full_text(monke
     long_text = "x" * (RAW_RESPONSE_MARKDOWN_TRUNCATE_CHARS + 50)
 
     class _LongResponseClient:
+        base_url = _FAKE_BASE_URL
+        model = _FAKE_MODEL
+
         def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
             return CallResult(
                 model=model, content=long_text, prompt_tokens=1, completion_tokens=1,

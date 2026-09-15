@@ -108,13 +108,20 @@ def test_explicit_dry_run_is_unaffected_by_a_missing_api_key(monkeypatch, python
 class _FakeDeepSeekClient:
     """Stands in for `DeepSeekClient` - no network, no `openai` SDK
     involvement - while exercising the exact `complete()` shape
-    `run_tsr_prompt` calls."""
+    `run_tsr_prompt` calls. Also exposes `base_url`/`model` - the
+    fix-client-env-vars-definitive sanity check in `run_evaluation`
+    requires them on whatever `DeepSeekClient()` resolves to, real or
+    faked."""
 
     def __init__(self):
+        self.base_url = "http://fake-client.test/v1"
+        self.model = "fake-model"
         self.seeds_seen: list[int] = []
+        self.models_seen: list[str | None] = []
 
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
         self.seeds_seen.append(seed)
+        self.models_seen.append(model)
         return CallResult(
             model=model, content="response", prompt_tokens=1, completion_tokens=1,
             total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
@@ -152,3 +159,40 @@ def test_each_record_gets_exactly_len_seeds_tsr_scores_end_to_end(monkeypatch, p
     # --pragmatic-oracle was passed) x 1 task x 1 budget.
     assert len(run.records) == 4
     assert sorted(fake_client.seeds_seen) == sorted(list(seeds) * 4)
+
+
+def test_run_evaluation_does_not_override_client_model_when_none_chosen(monkeypatch, python_repo_root):
+    """fix-client-env-vars regression: the reported pilot bug -
+    LLM_BASE_URL/LLM_MODEL/LLM_API_KEY_ENV set to point at a local
+    Ollama instance, but the harness still requested
+    'deepseek-v4-flash' and got a 404. Root cause was here, not in
+    DeepSeekClient: run_evaluation's own `model` parameter (and the
+    --model CLI flag) defaulted to the hardcoded DEFAULT_MODEL, which
+    flowed through run_tsr_prompt into client.complete(model=...) as an
+    explicit, non-None value - permanently overriding
+    DeepSeekClient.complete()'s `resolved_model = model if model is not
+    None else self.model` fallback to the client's own env-var-resolved
+    self.model, no matter what LLM_MODEL was set to.
+
+    Proven directly against the real client.complete() call: with no
+    `model=` argument passed to run_evaluation (the pilot's own CLI
+    invocation, which never passes --model), the fake client must
+    receive `model=None` for every call - never a hardcoded string -
+    so a real DeepSeekClient's self.model (LLM_MODEL-aware) is the
+    thing that actually decides which model gets requested."""
+    import benchmarks.runner as runner_module
+
+    _patch_corpus(monkeypatch, python_repo_root)
+    fake_client = _FakeDeepSeekClient()
+    monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
+
+    run_evaluation(
+        repo="django",
+        budgets=[2000],
+        tasks_dir="unused",
+        seeds=(42,),
+        dry_run=False,
+    )
+
+    assert fake_client.models_seen, "expected at least one complete() call"
+    assert all(m is None for m in fake_client.models_seen), fake_client.models_seen

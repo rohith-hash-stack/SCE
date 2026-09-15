@@ -141,14 +141,34 @@ class DeepSeekClient:
                 "the 'openai' package is not installed. Install it with: pip install -e '.[dev]'"
             ) from exc
         #: Resolved here, inside __init__, never as a default-parameter-
-        #: value expression (those are evaluated once at import time) -
-        #: so LLM_BASE_URL/LLM_MODEL/LLM_API_KEY_ENV set via os.environ
-        #: (directly, or by a test's monkeypatch) before construction are
-        #: honored, and DeepSeek's own defaults are untouched when unset.
-        resolved_base_url = base_url if base_url is not None else os.environ.get(LLM_BASE_URL_ENV_VAR, DEEPSEEK_BASE_URL)
-        api_key_env_var = os.environ.get(LLM_API_KEY_ENV_VAR, DEEPSEEK_API_KEY_ENV_VAR)
-        resolved_api_key = api_key if api_key is not None else _load_api_key(api_key_env_var)
+        #: value expression or at module scope - so LLM_BASE_URL/
+        #: LLM_MODEL/LLM_API_KEY_ENV/LLM_TIMEOUT_S set via os.environ
+        #: (directly, by a test's monkeypatch, or a .env file) before
+        #: construction are honored, and DeepSeek's own defaults are
+        #: untouched when unset. `api_key`/`base_url` params are kept
+        #: (beyond fix-client-env-vars-definitive's own literal __init__
+        #: template) as explicit overrides for callers/tests that want
+        #: one without touching os.environ - existing tests
+        #: (test_client_respects_timeout_env_var and friends) already
+        #: depend on `api_key=` to construct without a real key.
+        _load_dotenv_if_present()
+        self.base_url = base_url if base_url is not None else os.environ.get(LLM_BASE_URL_ENV_VAR, DEEPSEEK_BASE_URL)
         self.model = os.environ.get(LLM_MODEL_ENV_VAR, DEFAULT_MODEL)
+        api_key_env = os.environ.get(LLM_API_KEY_ENV_VAR, DEEPSEEK_API_KEY_ENV_VAR)
+        if api_key is not None:
+            resolved_api_key = api_key
+        else:
+            resolved_api_key = os.environ.get(api_key_env, "")
+            if not resolved_api_key:
+                #: Ollama (and most local OpenAI-compatible servers)
+                #: accept any non-empty bearer token and never validate
+                #: it - this placeholder only applies to localhost, so a
+                #: genuinely missing key for a real hosted endpoint (the
+                #: DeepSeek default included) still raises, unchanged.
+                if "localhost" in self.base_url or "127.0.0.1" in self.base_url:
+                    resolved_api_key = "ollama"
+                else:
+                    raise MissingDeepSeekAPIKeyError(f"Missing API key: set {api_key_env}")
         #: max_retries=0: the SDK's own default (2) would let a single
         #: slow/hung cell retry the full timeout twice more on top of
         #: the first attempt - complete()'s own RATE_LIMIT_BACKOFF_SECONDS
@@ -157,9 +177,19 @@ class DeepSeekClient:
         self.timeout = float(os.environ.get(LLM_TIMEOUT_S_ENV_VAR, str(DEFAULT_LLM_TIMEOUT_S)))
         self._client = OpenAI(
             api_key=resolved_api_key,
-            base_url=resolved_base_url,
+            base_url=self.base_url,
             timeout=self.timeout,
             max_retries=0,
+        )
+        #: Printed unconditionally at construction time, not just on a
+        #: later parse/timeout failure - so a Kaggle run's log shows
+        #: which endpoint/model it actually resolved to before the
+        #: retrieval work (which can run long) that precedes the first
+        #: real call, making a wrong-endpoint run debuggable immediately
+        #: rather than only after the first confusing 404.
+        print(
+            f"[llm] base_url={self.base_url} model={self.model} key_env={api_key_env}",
+            file=sys.stderr, flush=True,
         )
 
     def complete(
@@ -309,7 +339,7 @@ def run_tsr_prompt(
     system_prompt: str,
     rendered_xml: str,
     task_prompt: str,
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
     seeds: tuple[int, ...] = DEFAULT_SEEDS,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS,
@@ -317,7 +347,15 @@ def run_tsr_prompt(
     """Runs the constructed prompt through `client` once per seed in
     `seeds` (5 real API calls at the spec's own defaults) - never
     batched or deduplicated, since a distinct `seed` per request is the
-    entire point of the protocol."""
+    entire point of the protocol.
+
+    `model` defaults to `None`, not `DEFAULT_MODEL` - passed straight
+    through to `client.complete(model, ...)`, whose own `resolved_model
+    = model if model is not None else self.model` falls back to the
+    client's env-var-resolved `self.model` only when `model` is `None`.
+    A hardcoded `DEFAULT_MODEL` default here would silently defeat that
+    fallback for every caller that doesn't explicitly choose a model -
+    exactly the bug `fix-client-env-vars` traced back to."""
     system, user = build_prompt(system_prompt, rendered_xml, task_prompt)
     results = []
     for seed in seeds:
