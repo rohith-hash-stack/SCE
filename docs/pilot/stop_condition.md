@@ -75,18 +75,33 @@ than the primary comparison produces.
   `entry["symbol"]` was ever read out of the old `pipeline` array -
   so dropping it costs nothing.
 - **Rationale**: local SLM format-compliance testing, run before this
-  pilot, against **Qwen 2.5 7B Instruct Q8_0** (Ollama, Kaggle 2x T4,
-  via Cloudflare tunnel) - the flat contract passed 10/10 format
-  checks; the nested contract failed at Q4. Qwen is used only for this
-  pre-pilot format-compliance check, never as the pilot's own model -
-  the pilot's LLM remains `deepseek-v4-flash` per this section's own
-  pinning, unchanged by this switch, and Section 4's "no LLM may be
-  swapped mid-run" rule is unaffected.
+  pilot, against **Qwen 2.5 7B Instruct Q8_0** (Ollama model tag
+  `qwen2.5:7b-instruct-q8_0`; Kaggle 2x T4, via Cloudflare tunnel) - the
+  flat contract passed 10/10 format checks; the nested contract failed
+  at Q4. Qwen is used only for this pre-pilot format-compliance check,
+  never as the pilot's own model - the pilot's LLM remains
+  `deepseek-v4-flash` per this section's own pinning, unchanged by this
+  switch, and Section 4's "no LLM may be swapped mid-run" rule is
+  unaffected.
 - **Request-side enforcement**: every chat-completions call
   (`benchmarks.tsr.client.DeepSeekClient.complete`) now sends
   `response_format={"type": "json_object"}` - a standard
   OpenAI-compatible soft constraint, honored by both DeepSeek's
   endpoint and Ollama's OpenAI-compatible one.
+- **Client timeout policy**: `LLM_TIMEOUT_S` (default 180s) bounds each
+  request; `max_retries=0` on the underlying `openai.OpenAI` client, so
+  the SDK never adds its own retries on top of `complete()`'s explicit
+  `RATE_LIMIT_BACKOFF_SECONDS` 429 handling - the SDK's own default (2
+  retries) would otherwise let one slow/hung cell re-wait the full
+  timeout up to 3x (~9 min at the SDK's 600s default) instead of
+  failing once, quickly, after `LLM_TIMEOUT_S`. On a timeout,
+  `complete()` logs `[llm] TIMEOUT after {timeout}s model={model}
+  seed={seed} - cell skipped` to stderr before raising `LLMCallError` -
+  useful for post-hoc grep of which (task, engine, budget, seed) cells
+  need re-running, since `LLMCallError` still propagates rather than
+  being silently swallowed (no automatic skip-and-continue was added
+  to the runner's own per-cell loop; that's out of this change's
+  scope).
 - **Status**: this is a pre-registered harness change to the response
   contract itself, landed and documented here *before* the pilot runs -
   not a post-hoc adjustment to fit a result, and out of scope for
