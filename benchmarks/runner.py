@@ -363,6 +363,14 @@ def run_evaluation(
 
     checkpoint = load_checkpoint(checkpoint_path) if resume else {"cells": {}}
     fresh_calls_completed = 0
+    #: Aggregate token/cost totals across every cell scored this run -
+    #: both fresh calls and cells reused via --resume, since the
+    #: end-of-run summary is meant to describe the pilot's real
+    #: aggregate usage, not just this one process's fresh-call subset.
+    total_calls_scored = 0
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    total_cost_usd = 0.0
 
     run = EvaluationRun()
 
@@ -407,6 +415,10 @@ def run_evaluation(
                             # before fix-llm-response-persistence - "" (not a
                             # KeyError) for a resumed cell from an older file.
                             cell_responses[seed] = cached_cell.get("raw_response", "")
+                            total_calls_scored += 1
+                            total_prompt_tokens += cached_cell.get("prompt_tokens", 0) or 0
+                            total_completion_tokens += cached_cell.get("completion_tokens", 0) or 0
+                            total_cost_usd += cached_cell.get("cost_usd", 0.0) or 0.0
                         else:
                             pending_seeds.append(seed)
 
@@ -435,6 +447,10 @@ def run_evaluation(
                                 "completion_tokens": r.call.completion_tokens,
                                 "cost_usd": r.call.cost_usd,
                             }
+                            total_calls_scored += 1
+                            total_prompt_tokens += r.call.prompt_tokens
+                            total_completion_tokens += r.call.completion_tokens
+                            total_cost_usd += r.call.cost_usd or 0.0
                             fresh_calls_completed += 1
                             if fresh_calls_completed % CHECKPOINT_INTERVAL == 0:
                                 save_checkpoint(checkpoint_path, checkpoint)
@@ -466,6 +482,22 @@ def run_evaluation(
         # saved once more here so no completed cell is lost to a crash
         # after the loop's own last `% CHECKPOINT_INTERVAL == 0` save.
         save_checkpoint(checkpoint_path, checkpoint)
+
+    if total_calls_scored:
+        avg_prompt = total_prompt_tokens / total_calls_scored
+        avg_completion = total_completion_tokens / total_calls_scored
+        print(
+            f"[deepseek] summary: {total_calls_scored} calls, avg_prompt={avg_prompt:.1f} "
+            f"avg_completion={avg_completion:.1f} total_cost=${total_cost_usd:.4f}",
+            file=sys.stderr,
+        )
+        if avg_completion > 2000:
+            print(
+                f"[deepseek] WARNING: avg_completion={avg_completion:.1f} exceeds 2000 - "
+                "the structured contract's own bound is not being respected by the model's "
+                "responses; investigate before trusting the pilot's cost projections.",
+                file=sys.stderr,
+            )
 
     return run
 
