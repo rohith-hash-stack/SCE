@@ -38,6 +38,15 @@ off the real `TaskRunRecord` dataclass is likewise the same seam
 those files use. The one thing that *would* make this file fragile -
 and is deliberately avoided - is asserting an exact `fpr_oracle` value;
 see Test 4's own docstring.
+
+**Updated for fix-prompt-contract/fix-parser**: `PerfectClient`/
+`WrongClient` now emit the structured `{"reasoning": ..., "pipeline":
+[{"symbol": ..., "evidence": ...}, ...]}` object (via
+`_structured_response`), matching `DEBUG_TASK_RESPONSE_CONTRACT` and
+parsed by `benchmarks.tsr.scorer_debug.extract_structured_pipeline`.
+`ProseClient` is unchanged (plain prose, no JSON at all) - it still
+exercises the "no valid JSON present" malformed-input path under the
+new parser exactly as it did under the old one.
 """
 from __future__ import annotations
 
@@ -50,6 +59,7 @@ from benchmarks.engines.prism_engine_cache import PrismEngineCache
 from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
 from benchmarks.openai_client import CallResult
 from benchmarks.runner import run_evaluation
+from benchmarks.tsr.client import DEFAULT_MAX_TOKENS
 
 _SEEDS = (42, 43, 44, 45, 46)
 
@@ -87,12 +97,24 @@ def _fake_task() -> EvaluationTask:
     )
 
 
+def _structured_response(symbols: list[str]) -> str:
+    """The fix-prompt-contract shape: {"reasoning": ..., "pipeline":
+    [{"symbol": ..., "evidence": ...}, ...]}, fenced - matching
+    DEBUG_TASK_RESPONSE_CONTRACT's own instruction."""
+    obj = {
+        "reasoning": "Each stage calls the next in the traced order.",
+        "pipeline": [{"symbol": s, "evidence": "resolved call edge"} for s in symbols],
+    }
+    return f"```json\n{json.dumps(obj)}\n```"
+
+
 class PerfectClient:
-    """Returns the task's own real ground-truth pipeline as a fenced
-    JSON array, verbatim, for every call regardless of seed."""
+    """Returns the task's own real ground-truth pipeline as the new
+    structured JSON object, verbatim, for every call regardless of
+    seed."""
 
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
-        content = f"```json\n{json.dumps(_PIPELINE_SYMBOLS)}\n```"
+        content = _structured_response(_PIPELINE_SYMBOLS)
         return CallResult(
             model=model, content=content, prompt_tokens=1, completion_tokens=1,
             total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
@@ -101,7 +123,7 @@ class PerfectClient:
 
 class WrongClient:
     def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
-        content = '```json\n["unrelated.symbol.that.does.not.match"]\n```'
+        content = _structured_response(["unrelated.symbol.that.does.not.match"])
         return CallResult(
             model=model, content=content, prompt_tokens=1, completion_tokens=1,
             total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
@@ -200,3 +222,18 @@ def test_4_perfect_answer_yields_sensible_prism_diagnostics(monkeypatch, python_
     assert diag["cpi_fractional"] == 1.0, diag
     assert isinstance(diag["fcc"], float), diag
     assert diag["fpr_oracle"] is None or isinstance(diag["fpr_oracle"], float), diag
+
+
+def test_default_max_tokens_is_the_chosen_safety_ceiling():
+    """Reads DEFAULT_MAX_TOKENS from benchmarks.tsr.client, not a
+    hardcoded literal duplicated here - a change to the constant fails
+    this test rather than silently going unnoticed.
+
+    Named for what the value actually is, not "model max": DeepSeek's
+    documented max output (user-confirmed this session, not
+    independently verifiable - api-docs.deepseek.com and every mirror
+    are EGRESS_BLOCKED here) is far larger than 4096. 4096 is a
+    deliberately chosen cost ceiling (13-20x the structured contract's
+    own expected ~200-300 token response), not the model's true
+    maximum - see fix-max-tokens's own commit message."""
+    assert DEFAULT_MAX_TOKENS == 4096
