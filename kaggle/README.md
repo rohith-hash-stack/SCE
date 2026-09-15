@@ -14,9 +14,9 @@ This branch carries no engine, benchmark, or test changes relative to
 `claude/sce-mcp-local-setup-5qo69f` - it exists only to host this
 Kaggle workflow doc.
 
-Pinned commit for the pilot run: 0a35bcd
+Pinned commit for the pilot run: 41082d8
 
-After cloning, the Kaggle cell should `git reset --hard 0a35bcd` -
+After cloning, the Kaggle cell should `git reset --hard 41082d8` -
 this ensures the run uses exactly this revision regardless of later
 pushes to `pilot-execution`.
 
