@@ -159,24 +159,25 @@ SYSTEM_PROMPT = (
 #: Appended to a T02 debug task's own prompt text (only - never to chain/
 #: blast/architecture/redundancy tasks, each of which has its own
 #: distinct expected response shape, e.g. scorer_blast.py's free-prose
-#: substring convention) before the real LLM call. Replaces the old
-#: implicit "2-4 sentence prose explanation, then a separate fenced JSON
-#: array" contract every T02 task YAML's own prompt text described -
-#: that shape left the prose portion's length effectively unbounded and
-#: gave the model two independent things to get right (the free-form
-#: explanation, and a matching-but-separate fenced array) rather than
-#: one. A single structured object bounds the whole response and makes
-#: extraction unambiguous - `benchmarks.tsr.scorer_debug.
-#: extract_structured_pipeline` parses exactly this shape.
+#: substring convention) before the real LLM call. A flat contract -
+#: {"reasoning": ..., "symbols": [...]} - not the earlier nested
+#: {"reasoning": ..., "pipeline": [{"symbol": ..., "evidence": ...}]}
+#: shape: Qwen 2.5 7B Instruct Q8_0 (the Ollama SLM used for local
+#: format-compliance testing, docs/pilot/stop_condition.md Section 5)
+#: passes 10/10 on the flat shape but fails at Q4 on the nested one -
+#: a pre-registered harness change, not a DeepSeek-specific tweak.
+#: `evidence` was never consumed by anything downstream (verified
+#: directly: only `entry["symbol"]` was ever read out of the old
+#: `pipeline` array) - dropping it costs nothing. `benchmarks.tsr.
+#: scorer_debug.extract_flat_symbols` parses exactly this new shape.
 DEBUG_TASK_RESPONSE_CONTRACT = (
-    "\n\nRespond with a single JSON object, and nothing else, inside one "
-    "fenced code block (```json ... ```), shaped exactly like this:\n\n"
-    '{"reasoning": "2-3 sentences describing how the stages connect", '
-    '"pipeline": [{"symbol": "fully.qualified.symbol.name", "evidence": '
-    '"short justification, e.g. a line number or call-site quote"}, ...]}\n\n'
-    '"pipeline" must list the causal stages in order, one object per '
-    "stage, using only symbols actually present in the provided context "
-    "package."
+    "\n\nOutput a JSON object with:\n"
+    '  "reasoning": "2-3 sentences describing how the stages connect"\n'
+    '  "symbols": ["fully.qualified.name", "fully.qualified.name", ...]\n\n'
+    "The symbols array is ordered: first symbol is the seed, subsequent "
+    "symbols are the causal stages in execution order. Respond with "
+    "this JSON object, and nothing else, inside one fenced code block "
+    "(```json ... ```)."
 )
 
 
