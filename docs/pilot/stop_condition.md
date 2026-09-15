@@ -62,6 +62,38 @@ than the primary comparison produces.
 - **Off-peak scheduling**: the pilot runs off-peak (outside weekday
   01:00–04:00 UTC and 06:00–10:00 UTC) to halve cost.
 
+### 5.1 T02 debug response contract (pre-registered harness change)
+
+- **Contract**: flat JSON object - `{"reasoning": "2-3 sentences",
+  "symbols": ["fully.qualified.name", ...]}` - ordered, first symbol
+  the seed, the rest the causal stages in execution order. Parsed by
+  `benchmarks.tsr.scorer_debug.extract_flat_symbols`
+  (`fix-prompt-flat-contract`, `fix-parser-flat`).
+- **Retired**: the earlier nested `{"reasoning": ..., "pipeline":
+  [{"symbol": ..., "evidence": ...}, ...]}` shape. `evidence` was never
+  consumed by any downstream scoring or reporting code - only
+  `entry["symbol"]` was ever read out of the old `pipeline` array -
+  so dropping it costs nothing.
+- **Rationale**: local SLM format-compliance testing, run before this
+  pilot, against **Qwen 2.5 7B Instruct Q8_0** (Ollama, Kaggle 2x T4,
+  via Cloudflare tunnel) - the flat contract passed 10/10 format
+  checks; the nested contract failed at Q4. Qwen is used only for this
+  pre-pilot format-compliance check, never as the pilot's own model -
+  the pilot's LLM remains `deepseek-v4-flash` per this section's own
+  pinning, unchanged by this switch, and Section 4's "no LLM may be
+  swapped mid-run" rule is unaffected.
+- **Request-side enforcement**: every chat-completions call
+  (`benchmarks.tsr.client.DeepSeekClient.complete`) now sends
+  `response_format={"type": "json_object"}` - a standard
+  OpenAI-compatible soft constraint, honored by both DeepSeek's
+  endpoint and Ollama's OpenAI-compatible one.
+- **Status**: this is a pre-registered harness change to the response
+  contract itself, landed and documented here *before* the pilot runs -
+  not a post-hoc adjustment to fit a result, and out of scope for
+  Section 4's post-hoc-exclusion/threshold-adjustment prohibitions
+  (those govern the pilot's *results*, not the harness's own response
+  format, which this document now pins going forward).
+
 ## 6. Failure to meet any pre-condition
 
 If the pilot cannot be run as specified — the pinned commit changed,
