@@ -92,10 +92,44 @@ def compute_tsr_summary(
     return summary
 
 
+def _merge_with_existing_report(new_records: list[TaskRunRecord], json_path: Path) -> list[TaskRunRecord]:
+    """Reads `json_path`'s own `"records"` (if the file exists and
+    parses as one of these reports) and merges them with `new_records`,
+    keyed by `(task_id, engine_name, budget_tokens)` - a new record
+    overwrites an existing one at the same key (this run's own result
+    for that cell is authoritative, matching how `--resume`'s
+    checkpoint cells already work), every existing record at a
+    different key is preserved untouched. This is what makes a batch
+    run's *report* accumulate the same way `--resume`'s checkpoint
+    already does, rather than each batch's report clobbering the
+    previous one - see `benchmarks.runner.run_evaluation`'s own
+    per-invocation `EvaluationRun` (built fresh from only that
+    invocation's `--seeds`), which is exactly why this merge has to
+    happen here rather than being unnecessary.
+    """
+    merged: dict[tuple[str, str, int], TaskRunRecord] = {}
+    if json_path.exists():
+        try:
+            payload = json.loads(json_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+        raw_records = payload.get("records", []) if isinstance(payload, dict) else []
+        for raw in raw_records:
+            try:
+                record = TaskRunRecord(**raw)
+            except TypeError:
+                continue  # a record shape from an incompatible/older schema - skip, never crash
+            merged[(record.task_id, record.engine_name, record.budget_tokens)] = record
+    for record in new_records:
+        merged[(record.task_id, record.engine_name, record.budget_tokens)] = record
+    return list(merged.values())
+
+
 def write_json_results(run: EvaluationRun, path: str | Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"records": [asdict(record) for record in run.records]}
+    merged_records = _merge_with_existing_report(run.records, path)
+    payload = {"records": [asdict(record) for record in merged_records]}
     path.write_text(json.dumps(payload, indent=2))
 
 
@@ -194,6 +228,16 @@ def render_raw_responses_markdown(run: EvaluationRun) -> str:
 def write_markdown_report(run: EvaluationRun, path: str | Path, n_resamples: int = 10_000, random_seed: int | None = None) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Same accumulation as write_json_results, via the canonical sibling
+    # JSON results file (write_reports's own hardcoded filename
+    # convention - already the sole source of truth this function has
+    # no other way to merge against, since markdown can't be read back
+    # into records). Called after write_json_results in the real
+    # write_reports orchestration, so the sibling is already the fully
+    # merged set by the time this runs - the merge here is then a
+    # harmless no-op re-union, not redundant work with a different
+    # answer.
+    run = EvaluationRun(records=_merge_with_existing_report(run.records, path.with_name("eval_results_v11.json")))
     lines = [
         "# Prism v1.1+ Empirical Benchmark Results",
         "",
@@ -298,8 +342,12 @@ def write_failure_analysis(run: EvaluationRun, path: str | Path, **kwargs) -> li
     """Writes `failure_analysis.md` and returns the same failure list
     (so a caller/test can assert on it directly rather than re-parsing
     the Markdown)."""
-    failures = identify_failures(run, **kwargs)
     path = Path(path)
+    # Same accumulation as write_json_results/write_markdown_report -
+    # see write_markdown_report's own comment for why the sibling JSON
+    # results file is the merge source.
+    run = EvaluationRun(records=_merge_with_existing_report(run.records, path.with_name("eval_results_v11.json")))
+    failures = identify_failures(run, **kwargs)
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = ["# Failure Analysis", ""]
     if not failures:

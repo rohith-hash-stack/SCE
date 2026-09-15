@@ -6,6 +6,7 @@ layer - no network, no LLM API calls anywhere in this file.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -744,6 +745,78 @@ def test_write_json_and_markdown_reports(tmp_path):
     write_markdown_report(run, tmp_path / "eval_results_v11.md", random_seed=1)
     assert (tmp_path / "eval_results_v11.json").exists()
     assert "TSR" in (tmp_path / "eval_results_v11.md").read_text()
+
+
+def test_report_merge_accumulates_across_batches(tmp_path):
+    """A second write_json_results call, at a different (task_id,
+    engine_name, budget_tokens) key, must not clobber the first batch's
+    own record - reports/pilot/eval_results_v11.json must accumulate
+    across batch runs the same way --resume's checkpoint already does,
+    not overwrite."""
+    json_path = tmp_path / "eval_results_v11.json"
+
+    batch_1 = EvaluationRun(
+        records=[TaskRunRecord(task_id="t1", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000, tsr_scores=[1.0])]
+    )
+    write_json_results(batch_1, json_path)
+
+    batch_2 = EvaluationRun(
+        records=[TaskRunRecord(task_id="t2", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000, tsr_scores=[0.0])]
+    )
+    write_json_results(batch_2, json_path)
+
+    payload = json.loads(json_path.read_text())
+    keys = {(r["task_id"], r["engine_name"], r["budget_tokens"]) for r in payload["records"]}
+    assert keys == {("t1", "prism_v11", 4000), ("t2", "prism_v11", 4000)}
+
+
+def test_report_merge_overwrites_same_key_rather_than_duplicating(tmp_path):
+    """A later batch re-scoring the SAME (task_id, engine_name,
+    budget_tokens) cell (e.g. a --resume consolidation run) replaces
+    that cell's record rather than appending a duplicate - the newer
+    write is authoritative, matching a checkpoint cell's own
+    overwrite-on-resume semantics."""
+    json_path = tmp_path / "eval_results_v11.json"
+    key = ("t1", "prism_v11", 4000)
+
+    write_json_results(
+        EvaluationRun(records=[TaskRunRecord(task_id="t1", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000, tsr_scores=[0.0])]),
+        json_path,
+    )
+    write_json_results(
+        EvaluationRun(records=[TaskRunRecord(task_id="t1", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000, tsr_scores=[1.0])]),
+        json_path,
+    )
+
+    payload = json.loads(json_path.read_text())
+    matching = [r for r in payload["records"] if (r["task_id"], r["engine_name"], r["budget_tokens"]) == key]
+    assert len(matching) == 1
+    assert matching[0]["tsr_scores"] == [1.0]  # the newer write wins, not appended alongside the old
+
+
+def test_report_merge_covers_markdown_via_the_json_sibling(tmp_path):
+    """write_markdown_report/write_failure_analysis merge too, via the
+    canonical eval_results_v11.json sibling - the same file write_
+    reports (benchmarks/runner.py) always writes first, in the same
+    directory, so a real batch run's .md/failure_analysis.md end up
+    accumulative as well, not just the .json."""
+    json_path = tmp_path / "eval_results_v11.json"
+    md_path = tmp_path / "eval_results_v11.md"
+
+    batch_1 = EvaluationRun(
+        records=[TaskRunRecord(task_id="t1", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000, tsr_scores=[1.0])]
+    )
+    write_json_results(batch_1, json_path)
+    write_markdown_report(batch_1, md_path, random_seed=1)
+
+    batch_2 = EvaluationRun(
+        records=[TaskRunRecord(task_id="t2", task_type="debug", repo="django", engine_name="prism_v11", budget_tokens=4000, tsr_scores=[0.0])]
+    )
+    write_json_results(batch_2, json_path)
+    write_markdown_report(batch_2, md_path, random_seed=1)
+
+    md_text = md_path.read_text()
+    assert "2 (engine, task, budget) cells evaluated." in md_text
 
 
 def test_identify_failures_prism_worse_than_bfs():
