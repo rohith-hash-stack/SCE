@@ -45,6 +45,19 @@ DEFAULT_MAX_TOKENS = 4096
 DEEPSEEK_API_KEY_ENV_VAR = "DEEPSEEK_API_KEY"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
+#: Override knobs for pointing `DeepSeekClient` at any OpenAI-compatible
+#: endpoint (e.g. Ollama's, for local SLM format-compliance testing -
+#: docs/pilot/stop_condition.md Section 5) without touching DeepSeek's
+#: own defaults above. `LLM_API_KEY_ENV` *names* the env var the real
+#: key is read from (so a non-DeepSeek endpoint that needs no key, or a
+#: different key name, doesn't have to overload `DEEPSEEK_API_KEY`
+#: itself). All three are read inside `DeepSeekClient.__init__` - never
+#: at module import time - so a test or caller that sets them via
+#: `monkeypatch`/`os.environ` before constructing the client is honored.
+LLM_BASE_URL_ENV_VAR = "LLM_BASE_URL"
+LLM_MODEL_ENV_VAR = "LLM_MODEL"
+LLM_API_KEY_ENV_VAR = "LLM_API_KEY_ENV"
+
 #: USD per 1,000,000 tokens, peak rate (cache-miss input / output) - from
 #: https://api-docs.deepseek.com/quick_start/pricing. Off-peak (outside
 #: weekday 01:00-04:00 UTC and 06:00-10:00 UTC, per docs/pilot/
@@ -72,24 +85,31 @@ def _load_dotenv_if_present() -> None:
     load_dotenv()  # no-op if no .env file is found; never overrides a real env var
 
 
-def load_deepseek_api_key() -> str:
-    """Read `DEEPSEEK_API_KEY` from the environment, first loading a
-    `.env` file (via python-dotenv) if one is present. Raises
+def _load_api_key(env_var_name: str) -> str:
+    """Read `env_var_name` from the environment, first loading a `.env`
+    file (via python-dotenv) if one is present. Raises
     `MissingDeepSeekAPIKeyError` with setup instructions if the key still
     isn't set - callers should catch this and print `str(exc)` rather
-    than letting a traceback surface."""
+    than letting a traceback surface. Generalizes `load_deepseek_api_key`
+    below (which fixes `env_var_name` to `DEEPSEEK_API_KEY_ENV_VAR`) to
+    any env var name, for `LLM_API_KEY_ENV`'s own indirection."""
     _load_dotenv_if_present()
-    api_key = os.environ.get(DEEPSEEK_API_KEY_ENV_VAR)
+    api_key = os.environ.get(env_var_name)
     if not api_key:
         raise MissingDeepSeekAPIKeyError(
-            f"{DEEPSEEK_API_KEY_ENV_VAR} is not set.\n\n"
+            f"{env_var_name} is not set.\n\n"
             "Set it one of these ways:\n"
-            f"  export {DEEPSEEK_API_KEY_ENV_VAR}=sk-...\n"
+            f"  export {env_var_name}=sk-...\n"
             "  or create a .env file (in the project root) containing:\n"
-            f"    {DEEPSEEK_API_KEY_ENV_VAR}=sk-...\n\n"
+            f"    {env_var_name}=sk-...\n\n"
             "Get a key at https://platform.deepseek.com/api_keys"
         )
     return api_key
+
+
+def load_deepseek_api_key() -> str:
+    """Read `DEEPSEEK_API_KEY` from the environment - see `_load_api_key`."""
+    return _load_api_key(DEEPSEEK_API_KEY_ENV_VAR)
 
 
 class DeepSeekClient:
@@ -103,42 +123,65 @@ class DeepSeekClient:
     unaffected by this pilot's own base URL/API key/retry policy.
     """
 
-    def __init__(self, api_key: str | None = None, base_url: str = DEEPSEEK_BASE_URL) -> None:
+    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
         try:
             from openai import OpenAI
         except ImportError as exc:
             raise OpenAIClientError(
                 "the 'openai' package is not installed. Install it with: pip install -e '.[dev]'"
             ) from exc
-        self._client = OpenAI(api_key=api_key or load_deepseek_api_key(), base_url=base_url)
+        #: Resolved here, inside __init__, never as a default-parameter-
+        #: value expression (those are evaluated once at import time) -
+        #: so LLM_BASE_URL/LLM_MODEL/LLM_API_KEY_ENV set via os.environ
+        #: (directly, or by a test's monkeypatch) before construction are
+        #: honored, and DeepSeek's own defaults are untouched when unset.
+        resolved_base_url = base_url if base_url is not None else os.environ.get(LLM_BASE_URL_ENV_VAR, DEEPSEEK_BASE_URL)
+        api_key_env_var = os.environ.get(LLM_API_KEY_ENV_VAR, DEEPSEEK_API_KEY_ENV_VAR)
+        resolved_api_key = api_key if api_key is not None else _load_api_key(api_key_env_var)
+        self.model = os.environ.get(LLM_MODEL_ENV_VAR, DEFAULT_MODEL)
+        self._client = OpenAI(api_key=resolved_api_key, base_url=resolved_base_url)
 
     def complete(
         self,
-        model: str,
-        system: str,
-        user: str,
+        model: str | None = None,
+        system: str = "",
+        user: str = "",
         temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int | None = DEFAULT_MAX_TOKENS,
         seed: int | None = None,
     ) -> CallResult:
-        """One DeepSeek chat-completions call, retrying on HTTP 429
+        """One chat-completions call, retrying on HTTP 429
         (`openai.RateLimitError`) per `RATE_LIMIT_BACKOFF_SECONDS`
         (2s, 4s, 8s, 16s) before giving up and raising `LLMCallError`.
         Logs prompt/completion/total token usage per call to stderr for
         calibration, regardless of outcome.
+
+        `model` defaults to `self.model` (DeepSeek's own `DEFAULT_MODEL`
+        unless `LLM_MODEL` was set at construction time) when omitted -
+        every existing caller passes it explicitly, so this is additive.
+
+        Always sends `response_format={"type": "json_object"}`: a
+        standard OpenAI-compatible chat-completions parameter, accepted
+        by both DeepSeek's endpoint and Ollama's OpenAI-compatible one
+        (confirmed for Ollama; DeepSeek's own docs are unreachable from
+        this environment - egress to api-docs.deepseek.com is blocked -
+        so this relies on it being a standard parameter rather than an
+        independently verified DeepSeek doc check).
         """
         import openai as openai_module
 
+        resolved_model = model if model is not None else self.model
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         attempt = 0
         start = time.perf_counter()
         while True:
             try:
                 response = self._client.chat.completions.create(
-                    model=model,
+                    model=resolved_model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    response_format={"type": "json_object"},
                     **({"seed": seed} if seed is not None else {}),
                 )
                 break
@@ -159,7 +202,7 @@ class DeepSeekClient:
             except openai_module.APIConnectionError as exc:
                 raise LLMCallError(f"could not reach the DeepSeek API (network error): {exc}") from exc
             except openai_module.NotFoundError as exc:
-                raise LLMCallError(f"model '{model}' was not found or is not available to this account: {exc}") from exc
+                raise LLMCallError(f"model '{resolved_model}' was not found or is not available to this account: {exc}") from exc
             except openai_module.APIStatusError as exc:
                 raise LLMCallError(f"DeepSeek API returned an error (status {exc.status_code}): {exc}") from exc
         latency = time.perf_counter() - start
@@ -172,19 +215,19 @@ class DeepSeekClient:
         total_tokens = usage.total_tokens if usage else prompt_tokens + completion_tokens
 
         cost = estimate_cost_usd(
-            model, prompt_tokens, completion_tokens,
-            *_deepseek_pricing_override(model),
+            resolved_model, prompt_tokens, completion_tokens,
+            *_deepseek_pricing_override(resolved_model),
         )
 
         print(
-            f"[deepseek] model={model} seed={seed} prompt_tokens={prompt_tokens} "
+            f"[deepseek] model={resolved_model} seed={seed} prompt_tokens={prompt_tokens} "
             f"completion_tokens={completion_tokens} total_tokens={total_tokens} "
             f"cost_usd={cost} latency_s={latency:.3f}",
             file=sys.stderr,
         )
 
         return CallResult(
-            model=model,
+            model=resolved_model,
             content=content,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,

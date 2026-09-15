@@ -50,14 +50,18 @@ def _rate_limit_error() -> openai.RateLimitError:
 class _FakeCompletions:
     """Raises `openai.RateLimitError` for the first `fail_count` calls,
     then returns a canned successful response - the exact shape
-    `DeepSeekClient.complete()`'s retry loop needs to exercise."""
+    `DeepSeekClient.complete()`'s retry loop needs to exercise. Records
+    the kwargs of the last (successful or not) `.create(...)` call so a
+    test can assert on the request payload actually sent."""
 
     def __init__(self, fail_count: int):
         self.fail_count = fail_count
         self.calls = 0
+        self.last_kwargs: dict | None = None
 
     def create(self, **kwargs):
         self.calls += 1
+        self.last_kwargs = kwargs
         if self.calls <= self.fail_count:
             raise _rate_limit_error()
         return SimpleNamespace(
@@ -121,3 +125,18 @@ def test_complete_returns_none_cost_for_an_unpriced_model():
     result = client.complete("some-future-deepseek-model", "system", "user", seed=42)
 
     assert result.cost_usd is None
+
+
+def test_client_sends_response_format():
+    """The flat contract (fix-prompt-flat-contract) is a soft ask - the
+    request itself must also constrain the response, via the standard
+    OpenAI-compatible `response_format={"type": "json_object"}`
+    parameter, honored by both DeepSeek's endpoint and Ollama's
+    OpenAI-compatible one (the local Qwen 2.5 7B Instruct Q8_0 SLM setup,
+    docs/pilot/stop_condition.md Section 5)."""
+    client, fake_completions = _client_with_fake_completions(fail_count=0)
+
+    client.complete("deepseek-v4-flash", "system", "user", seed=42)
+
+    assert fake_completions.last_kwargs is not None
+    assert fake_completions.last_kwargs.get("response_format") == {"type": "json_object"}
