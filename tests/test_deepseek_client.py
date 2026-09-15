@@ -19,6 +19,8 @@ import pytest
 from benchmarks.openai_client import LLMCallError
 from benchmarks.tsr.client import (
     DEEPSEEK_API_KEY_ENV_VAR,
+    DEFAULT_LLM_TIMEOUT_S,
+    LLM_TIMEOUT_S_ENV_VAR,
     RATE_LIMIT_BACKOFF_SECONDS,
     DeepSeekClient,
     MissingDeepSeekAPIKeyError,
@@ -140,3 +142,24 @@ def test_client_sends_response_format():
 
     assert fake_completions.last_kwargs is not None
     assert fake_completions.last_kwargs.get("response_format") == {"type": "json_object"}
+
+
+def test_client_respects_timeout_env_var(monkeypatch):
+    """LLM_TIMEOUT_S is read inside __init__ (never at import time), so
+    a value set before construction is honored - self.timeout must
+    reflect it exactly, not just the OpenAI() constructor call
+    underneath it (which this test can't introspect without reaching
+    into SDK internals)."""
+    monkeypatch.setenv(LLM_TIMEOUT_S_ENV_VAR, "42")
+
+    client = DeepSeekClient(api_key="sk-test-dummy")
+
+    assert client.timeout == 42.0
+
+
+def test_client_defaults_timeout_to_180s_when_unset(monkeypatch):
+    monkeypatch.delenv(LLM_TIMEOUT_S_ENV_VAR, raising=False)
+
+    client = DeepSeekClient(api_key="sk-test-dummy")
+
+    assert client.timeout == DEFAULT_LLM_TIMEOUT_S == 180.0

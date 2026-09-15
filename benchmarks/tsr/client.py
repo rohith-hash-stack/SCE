@@ -58,6 +58,16 @@ LLM_BASE_URL_ENV_VAR = "LLM_BASE_URL"
 LLM_MODEL_ENV_VAR = "LLM_MODEL"
 LLM_API_KEY_ENV_VAR = "LLM_API_KEY_ENV"
 
+#: Request timeout (seconds) for the underlying `openai.OpenAI` client.
+#: `max_retries=0` on that client is deliberate: `complete()`'s own
+#: RATE_LIMIT_BACKOFF_SECONDS loop already handles 429s explicitly, so
+#: the SDK's own default (2 retries) would compound a hang - each retry
+#: re-waits the full timeout, so a single slow/hung cell could otherwise
+#: take up to ~3x LLM_TIMEOUT_S (~9 min at the SDK's 600s default)
+#: instead of failing once, quickly, after LLM_TIMEOUT_S.
+LLM_TIMEOUT_S_ENV_VAR = "LLM_TIMEOUT_S"
+DEFAULT_LLM_TIMEOUT_S = 180.0
+
 #: USD per 1,000,000 tokens, peak rate (cache-miss input / output) - from
 #: https://api-docs.deepseek.com/quick_start/pricing. Off-peak (outside
 #: weekday 01:00-04:00 UTC and 06:00-10:00 UTC, per docs/pilot/
@@ -139,7 +149,18 @@ class DeepSeekClient:
         api_key_env_var = os.environ.get(LLM_API_KEY_ENV_VAR, DEEPSEEK_API_KEY_ENV_VAR)
         resolved_api_key = api_key if api_key is not None else _load_api_key(api_key_env_var)
         self.model = os.environ.get(LLM_MODEL_ENV_VAR, DEFAULT_MODEL)
-        self._client = OpenAI(api_key=resolved_api_key, base_url=resolved_base_url)
+        #: max_retries=0: the SDK's own default (2) would let a single
+        #: slow/hung cell retry the full timeout twice more on top of
+        #: the first attempt - complete()'s own RATE_LIMIT_BACKOFF_SECONDS
+        #: loop is what actually handles 429s, deliberately, so SDK-level
+        #: retries would only compound the hang case, not help it.
+        self.timeout = float(os.environ.get(LLM_TIMEOUT_S_ENV_VAR, str(DEFAULT_LLM_TIMEOUT_S)))
+        self._client = OpenAI(
+            api_key=resolved_api_key,
+            base_url=resolved_base_url,
+            timeout=self.timeout,
+            max_retries=0,
+        )
 
     def complete(
         self,
@@ -199,6 +220,18 @@ class DeepSeekClient:
                     f"DeepSeek rejected the API key (authentication error): {exc}. "
                     f"Check that {DEEPSEEK_API_KEY_ENV_VAR} is correct and active."
                 ) from exc
+            except openai_module.APITimeoutError as exc:
+                #: Caught ahead of the broader APIConnectionError below -
+                #: APITimeoutError is a subclass of it, and except clauses
+                #: match in order. seed is in scope here (complete()'s own
+                #: parameter), so the required log line is emitted at the
+                #: point of the timeout, not at the caller.
+                print(
+                    f"[llm] TIMEOUT after {self.timeout:.0f}s model={resolved_model} "
+                    f"seed={seed} - cell skipped",
+                    file=sys.stderr,
+                )
+                raise LLMCallError(f"request to '{resolved_model}' timed out after {self.timeout:.0f}s: {exc}") from exc
             except openai_module.APIConnectionError as exc:
                 raise LLMCallError(f"could not reach the DeepSeek API (network error): {exc}") from exc
             except openai_module.NotFoundError as exc:
