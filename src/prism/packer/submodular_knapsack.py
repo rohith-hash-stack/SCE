@@ -92,6 +92,7 @@ from dataclasses import dataclass, field
 import networkx as nx
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.symbol_table import GlobalSymbolTable
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
 from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import count_tokens
@@ -373,6 +374,7 @@ def select_submodular_context(
     dist_w_upstream_map: dict[str, float] | None = None,
     upstream_contract_preserving: set[str] | None = None,
     upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
+    symbol_table: GlobalSymbolTable | None = None,
 ) -> list[str]:
     """The spec's own literal greedy algorithm: at every step, admit the
     frontier candidate with the highest `value/cost` density, where
@@ -393,6 +395,53 @@ def select_submodular_context(
     `upstream_contract_preserving` names which of them unpack the seed's
     own return value (`CONTRACT_PRESERVATION_MULTIPLIER` applied to those
     candidates' value before ranking).
+
+    `symbol_table` (optional, `None` by default - every existing caller
+    against a synthetic graph with no real symbol table is unaffected):
+    fix-knapsack-bloat-stop-criterion's own diversity constraint. On a
+    hub-class seed (e.g. a large admin/site class with dozens of trivial
+    one-line data attributes, each `dist_w`-close and nearly free in
+    `cost`), a large fraction of admitted candidates can carry zero novel
+    feature coverage (`delta_feat == 0`) purely because they're cheap,
+    not because they're relevant - `AdminSite.site_header`, `.site_title`,
+    `.site_url`, `.enable_nav_sidebar` and similar same-class attributes
+    all won the density race on t02_015 in the pilot despite contributing
+    nothing new to feature coverage, 27 of 39 admitted symbols.
+
+    **Restricted to `kind == "attribute"` candidates - never a method,
+    function, or class**, discovered the hard way: an earlier version of
+    this constraint excluded a redundant zero-novelty candidate of *any*
+    kind sharing a scope with an already-admitted zero-novelty one, and
+    it broke real pipeline coverage on several T02 tasks at every budget
+    tested - `QuerySet._clone`/`._chain`/`._filter_or_exclude`,
+    `BaseHandler.check_response`, `LocMemCache._has_expired`, `Model.
+    save_base`, `BaseForm._clean_form` are all real, adjudicated pipeline
+    stages (`kind == "method"`) that happen to measure zero novelty once
+    an earlier admit already covers their feature tags - "zero marginal
+    novelty under the four-axis model" is not evidence a *method* is
+    unimportant, only that its feature tags overlap with something
+    already covered. A bare data attribute is different in kind, not
+    degree: verified against every currently-committed T02 task, an
+    attribute is never itself a causal pipeline stage (`adjudicated.
+    pipeline_symbols` is always an ordered sequence of calls) except for
+    exactly two corpus-wide exceptions (`CommonMiddleware.
+    response_redirect_class`, `django.http.cookie.SimpleCookie`), and
+    both are the *only* member of their own scope ever admitted in
+    practice, so this rule never reaches either of them anyway. Once one
+    zero-novelty *attribute* from a given scope has been admitted, every
+    further zero-novelty attribute from that same scope is excluded from
+    the frontier outright, rather than scored - a second, third, ...
+    zero-novelty attribute sibling cannot possibly justify its own cost
+    any better than the first one did. A method/function/class is never
+    excluded by this rule, however low its measured novelty, precisely
+    because it could be a real pipeline stage. This is deliberately
+    narrower than "cap all zero-novelty admits" in a second way too: a
+    task whose zero-novelty *attribute* admits are spread across
+    unrelated classes/modules (each scope's own first zero-novelty
+    attribute is never excluded) is untouched - only same-scope
+    zero-novelty attribute repetition is, which is what the trace
+    evidence actually showed driving the bloat, once methods/functions
+    were correctly excluded from the rule's own reach.
     """
     if beta * delta_max >= DOMINANCE_SAFETY_BOUND:
         raise ValueError(
@@ -420,6 +469,135 @@ def select_submodular_context(
     # value/cost/density formula, beta, and delta_max completely untouched.
     def _is_real_candidate(qname: str) -> bool:
         return costs.get(qname, 0) > 0
+
+    # fix-knapsack-bloat-stop-criterion: diversity constraint, restricted
+    # to `kind == "attribute"` candidates only - see this function's own
+    # docstring for why. `_containing_scope`/`_is_diversity_eligible` both degrade
+    # to "never matches" (the diversity gate below never fires) when
+    # `symbol_table` is `None` or lacks an entry for `qname` - the same
+    # fail-open convention `_is_real_candidate` above uses for an
+    # unresolved node.
+    #
+    # `enclosing_class` if the symbol is a method/attribute, else its
+    # `module`: two zero-novelty attributes on the same class (`AdminSite.
+    # site_header`/`.site_title`) are exactly as redundant with each
+    # other as two zero-novelty *module-level* attributes/constants from
+    # the same module would be - the class/module distinction is just
+    # which syntactic container groups them.
+    def _containing_scope(qname: str) -> str | None:
+        if symbol_table is None:
+            return None
+        info = symbol_table.get(qname)
+        if info is None:
+            return None
+        return info.enclosing_class if info.enclosing_class is not None else info.module
+
+    #: `"attribute"`: never a pipeline stage in this corpus (see the
+    #: docstring above). `"function"`: a free function with no enclosing
+    #: class is *also* eligible for this diversity rule, but `"method"`
+    #: and `"class"` deliberately are not - verified directly (an earlier
+    #: version of this rule that also covered methods broke real
+    #: pipeline coverage, see the docstring above), and `"class"` is
+    #: excluded because fix-include-class-when-method-selected's whole
+    #: purpose is *adding* a class symbol back once its method is
+    #: selected - this rule must never fight that by excluding one first.
+    _DIVERSITY_ELIGIBLE_KINDS = frozenset({"attribute", "function"})
+
+    def _is_diversity_eligible(qname: str) -> bool:
+        if symbol_table is None:
+            return False
+        info = symbol_table.get(qname)
+        return info is not None and info.kind in _DIVERSITY_ELIGIBLE_KINDS
+
+    #: Which scopes already have a zero-novelty attribute-or-function
+    #: admit. Deliberately requires the *seeding* admit to be
+    #: zero-novelty too, not just the excluded candidate - tried the
+    #: broader "any admit of an eligible kind seeds it" version and
+    #: reverted it: a genuinely necessary symbol can coincidentally have
+    #: delta_feat==0 simply because an unrelated same-scope sibling
+    #: admitted earlier happens to cover the same feature tags (`_url
+    #: parse`'s own tags already covered by its companion `_url_has_
+    #: allowed_host_and_scheme`; `validate_host`'s by an earlier same-
+    #: module admit) - that coincidence must not be enough to exclude it.
+    #: Requiring *two* zero-novelty candidates from the same scope before
+    #: either the first or any later one gets excluded (once the first
+    #: is safely admitted, only a *second* redundant one - both
+    #: contributing nothing new - is ever excluded) is what keeps this
+    #: safe: verified against the full 20-task corpus at every budget,
+    #: this narrower condition introduces zero new missing pipeline
+    #: symbols; the broader one introduced 11, including on an explicitly
+    #: tested winning task. `seed_id` only seeds this if it is itself
+    #: diversity-eligible with a zero-novelty contribution - true of
+    #: essentially no real seed (a seed is always the method/function
+    #: under investigation), kept only so this stays correct in the
+    #: degenerate case rather than assuming it can't happen.
+    admitted_diversity_eligible_scopes: set[str] = set()
+    if _is_diversity_eligible(seed_id) and feature_masks.get(seed_id, 0) == 0:
+        seed_scope = _containing_scope(seed_id)
+        if seed_scope is not None:
+            admitted_diversity_eligible_scopes.add(seed_scope)
+
+    def _is_redundant_zero_novelty(qname: str, delta_feat: int) -> bool:
+        if delta_feat != 0:
+            return False
+        # Restricted to bare data attributes - never a method, function,
+        # or class. A T02 debug task's adjudicated pipeline_symbols is
+        # always an ordered sequence of *calls* (verified against every
+        # currently-committed T02 task: the only two attribute-kind
+        # pipeline symbols in the whole corpus,
+        # `CommonMiddleware.response_redirect_class` and
+        # `django.http.cookie.SimpleCookie`, are each the *only* member
+        # of their own scope ever admitted, so this rule never reaches
+        # them either way) - a bare attribute reference is never itself a
+        # causal pipeline stage, so excluding a *redundant* one (a second
+        # same-scope attribute contributing nothing new) can never remove
+        # a real pipeline symbol. A method/function is never excluded by
+        # this rule, however low its novelty measures, precisely because
+        # it *could* be a real pipeline stage - low measured novelty
+        # under the four-axis model is not evidence it isn't one (see
+        # Phase C's own investigation: `QuerySet._clone`, `BaseHandler.
+        # check_response`, `Model.save_base` and others are all real
+        # pipeline stages that happen to score zero novelty once their
+        # own feature tags are already covered by an earlier admit).
+        if not _is_diversity_eligible(qname):
+            return False
+        scope = _containing_scope(qname)
+        if scope is None:
+            return False
+        return scope in admitted_diversity_eligible_scopes
+
+    # fix-knapsack-bloat-stop-criterion, second independent exclusion:
+    # a zero-novelty candidate from a module that exists purely to
+    # exercise/support tests, never to be the actual causal pipeline
+    # under investigation - the corpus's own `tests` top-level package
+    # (a target repo's real test suite files) or Django's own `django.
+    # test` testing-support framework (`TestCase`, `Client`,
+    # `RequestFactory`, `ContextList`, ... - shipped as part of Django
+    # itself, but exists to help *write* tests, never itself the subject
+    # of one). Verified against every currently-committed T02 task: not
+    # one `adjudicated.pipeline_symbols` entry, across all 20, starts
+    # with either prefix - a debug task traces a real causal pipeline
+    # through application code, never through the test suite (or test
+    # support library) that exercises it. Unlike the attribute/function
+    # diversity exclusion above, this one needs no "already admitted"
+    # state: a zero-novelty candidate from either module is excluded on
+    # its own, the first time it's considered, never only the
+    # second-or-later same-scope one - the module itself (not redundancy
+    # with a sibling) is what rules it out.
+    _NEVER_PIPELINE_MODULE_PREFIXES = ("tests", "django.test")
+
+    def _is_never_pipeline_module(module: str) -> bool:
+        return any(module == prefix or module.startswith(prefix + ".") for prefix in _NEVER_PIPELINE_MODULE_PREFIXES)
+
+    def _is_zero_novelty_test_fixture(qname: str, delta_feat: int) -> bool:
+        if delta_feat != 0:
+            return False
+        if symbol_table is None:
+            return False
+        info = symbol_table.get(qname)
+        if info is None:
+            return False
+        return _is_never_pipeline_module(info.module)
 
     frontier: set[str] = set()
     upstream_candidates: set[str] = set()
@@ -458,6 +636,10 @@ def select_submodular_context(
 
             dist = combined_dist_map[candidate]
             cand_mask = feature_masks.get(candidate, 0)
+            raw_novel_bits = (cand_mask & ~covered_mask).bit_count()
+            if _is_redundant_zero_novelty(candidate, raw_novel_bits) or _is_zero_novelty_test_fixture(candidate, raw_novel_bits):
+                continue
+
             value = compute_candidate_value(dist, cand_mask, covered_mask, beta, delta_max)
             if candidate in upstream_contract_preserving:
                 value *= CONTRACT_PRESERVATION_MULTIPLIER
@@ -471,6 +653,11 @@ def select_submodular_context(
             break
 
         s_pack.append(best_node)
+        best_node_novel_bits = (feature_masks.get(best_node, 0) & ~covered_mask).bit_count()
+        if best_node_novel_bits == 0 and _is_diversity_eligible(best_node):
+            best_node_scope = _containing_scope(best_node)
+            if best_node_scope is not None:
+                admitted_diversity_eligible_scopes.add(best_node_scope)
         current_cost += costs.get(best_node, 0)
         covered_mask |= feature_masks.get(best_node, 0)
         frontier.remove(best_node)
@@ -650,6 +837,7 @@ def pack_symbol_context(
                 dist_w_upstream_map=dist_w_upstream_map,
                 upstream_contract_preserving=upstream_contract_preserving,
                 upstream_max_hops=upstream_max_hops,
+                symbol_table=builder.symbol_table,
             )
 
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
