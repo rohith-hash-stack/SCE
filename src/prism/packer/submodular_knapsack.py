@@ -494,15 +494,26 @@ def select_submodular_context(
         return info.enclosing_class if info.enclosing_class is not None else info.module
 
     #: `"attribute"`: never a pipeline stage in this corpus (see the
-    #: docstring above). `"function"`: a free function with no enclosing
-    #: class is *also* eligible for this diversity rule, but `"method"`
-    #: and `"class"` deliberately are not - verified directly (an earlier
-    #: version of this rule that also covered methods broke real
-    #: pipeline coverage, see the docstring above), and `"class"` is
-    #: excluded because fix-include-class-when-method-selected's whole
+    #: docstring above). `"method"`, `"function"`, and `"class"`
+    #: deliberately are not - a `"function"` extension was tried (two
+    #: same-module free functions are exactly as redundant with each
+    #: other as two same-class attributes, in the reasoning that
+    #: motivated it) and reverted: `tests/test_pipeline_preservation.py`'s
+    #: `test_generous_budget_packs_the_entire_causal_pipe` fixture has a
+    #: real causal pipeline (`parse_order -> store_order -> emit_audit`)
+    #: where two of those genuinely-necessary stages happen to be
+    #: zero-novelty, same-module, free functions - `emit_audit` got
+    #: wrongly excluded as "redundant" with `clean`, an unrelated
+    #: same-module function admitted earlier, breaking real pipeline
+    #: coverage on an existing, already-passing test. Verifying against
+    #: the real Django T02 corpus alone wasn't enough to catch this - a
+    #: small, single-purpose module where most of its functions genuinely
+    #: are pipeline-relevant isn't well represented among Django's own
+    #: large, multi-purpose modules. `"class"` is excluded for a
+    #: different reason: fix-include-class-when-method-selected's whole
     #: purpose is *adding* a class symbol back once its method is
     #: selected - this rule must never fight that by excluding one first.
-    _DIVERSITY_ELIGIBLE_KINDS = frozenset({"attribute", "function"})
+    _DIVERSITY_ELIGIBLE_KINDS = frozenset({"attribute"})
 
     def _is_diversity_eligible(qname: str) -> bool:
         if symbol_table is None:
