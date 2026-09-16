@@ -1,0 +1,153 @@
+# T02 "Django Debug" - Task 1: request/response middleware chain.
+#
+# Reseeded (v2) after the corrected transitive-reachability audit found
+# the original seed (BaseHandler.load_middleware) genuinely unreachable
+# to get_response: load_middleware's only connection to _get_response is
+# a READS_STATE edge (`get_response = ... self._get_response`, an
+# attribute reference, not a call - get_response() itself invokes
+# self._middleware_chain(request), a runtime-built closure, so no static
+# CALLS edge to _get_response exists either). READS_STATE never counts
+# toward reachability by design (see TASK_AUTHORING.md item 2) - this
+# was a real structural gap, not a scoring bug.
+#
+# New seed: BaseHandler._get_response itself, which sidesteps the
+# closure-invisibility problem entirely (every stage below is a direct,
+# real CALLS edge from the seed, verified against builder.graph).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below, matching benchmarks/corpora/pinned_commits.json's own "django"
+# entry, tag 4.2.30) - every symbol here is a real, indexed
+# django.core.handlers.base.BaseHandler method, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that
+# checkout (qualified names and line ranges below match exactly).
+#
+#   django.core.handlers.base.BaseHandler._get_response                      lines 174-226
+#   django.core.handlers.base.BaseHandler.resolve_request                    lines 300-315
+#   django.core.handlers.base.BaseHandler.make_view_atomic                   lines 345-354
+#   django.core.handlers.base.BaseHandler.process_exception_by_middleware    lines 356-365
+#   django.core.handlers.base.BaseHandler.check_response                    lines 317-341
+#
+# Real causal chain (base.py:174-226): _get_response() calls
+# resolve_request() to get (callback, args, kwargs), make_view_atomic()
+# to wrap the callback for ATOMIC_REQUESTS, then invokes the wrapped
+# callback - on an uncaught exception, process_exception_by_middleware()
+# is called instead (base.py:197), and finally check_response()
+# validates the result isn't None/an uncalled coroutine (base.py:203).
+# The exception-middleware stage is conditional on the except branch -
+# the prompt states this assumption explicitly so the pipeline is
+# unconditionally well-defined (see two-annotator note below).
+#
+# required_context/boundary_symbols (Gap 8), also real and verified:
+#   django.core.handlers.base.BaseHandler                              (class,    lines 20-365)
+#   django.core.handlers.exception.convert_exception_to_response       (function, lines 24-60)
+#   django.db.transaction.atomic                                       (function, lines 316-323)
+#   django.urls.resolvers.get_resolver                                 (function, lines 105-108)
+#   django.core.handlers.base.BaseHandler._get_response_async          (method,   lines 228-298, boundary - real one-hop caller of 3 pipeline stages, the async sibling of the seed)
+#   django.urls.base.set_urlconf                                       (function, lines 128-137, boundary - one-hop callee of resolve_request)
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1, Hripcsak
+# & Rothschild 2005) from annotation_a/annotation_b below, rather than
+# trusting a hand-typed number.
+task_id: django_t02_001_request_middleware_chain
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.core.handlers.base.BaseHandler._get_response
+task_type: debug
+prompt: |
+  You are debugging Django's request-handling entrypoint in
+  django/core/handlers/base.py. Starting from
+  `BaseHandler._get_response`, trace the exact causal pipeline a real
+  HTTP request travels through this method: how the view callback is
+  resolved, how it is wrapped before being invoked, and how the result
+  is validated before being returned. Assume the wrapped callback
+  raises an exception when invoked (the except branch), so the
+  exception-middleware stage is part of the traced pipeline rather than
+  skipped.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.core.handlers.base.BaseHandler._get_response", "django.core.handlers.base.BaseHandler.resolve_request"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.core.handlers.base.BaseHandler._get_response
+    - django.core.handlers.base.BaseHandler.resolve_request
+    - django.core.handlers.base.BaseHandler.make_view_atomic
+    - django.core.handlers.base.BaseHandler.process_exception_by_middleware
+    - django.core.handlers.base.BaseHandler.check_response
+  required_context:
+    - django.core.handlers.base.BaseHandler
+    - django.core.handlers.exception.convert_exception_to_response
+    - django.db.transaction.atomic
+    - django.urls.resolvers.get_resolver
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler._get_response_async
+    - django.urls.base.set_urlconf
+  expected_solution: >
+    The full chain: _get_response() calls resolve_request() to get the
+    view callback, make_view_atomic() to wrap it for ATOMIC_REQUESTS,
+    invokes the wrapped callback (falling back to
+    process_exception_by_middleware() on an uncaught exception), then
+    check_response() validates the result isn't None/an uncalled
+    coroutine. Required context: the BaseHandler class,
+    convert_exception_to_response (used to wrap every middleware/
+    handler in load_middleware), transaction.atomic (used inside
+    make_view_atomic), and get_resolver (used inside resolve_request).
+    Boundary: _get_response_async, the async sibling calling the same
+    three helpers, and set_urlconf, a one-hop callee of resolve_request.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.core.handlers.base.BaseHandler._get_response
+    - django.core.handlers.base.BaseHandler.resolve_request
+    - django.core.handlers.base.BaseHandler.make_view_atomic
+    - django.core.handlers.base.BaseHandler.check_response
+  required_context:
+    - django.core.handlers.base.BaseHandler
+    - django.core.handlers.exception.convert_exception_to_response
+    - django.db.transaction.atomic
+    - django.urls.resolvers.get_resolver
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler._get_response_async
+    - django.urls.base.set_urlconf
+  expected_solution: >
+    _get_response() resolves the view via resolve_request(), wraps it
+    via make_view_atomic(), invokes it, then check_response() validates
+    the result. (Missed that the exception path is a separate,
+    distinctly-traceable stage: process_exception_by_middleware() is
+    only reached if the wrapped callback raises, but the prompt states
+    that assumption explicitly, so it belongs in the traced pipeline.)
+    Agreed on required context and boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.core.handlers.base.BaseHandler._get_response
+    - django.core.handlers.base.BaseHandler.resolve_request
+    - django.core.handlers.base.BaseHandler.make_view_atomic
+    - django.core.handlers.base.BaseHandler.process_exception_by_middleware
+    - django.core.handlers.base.BaseHandler.check_response
+  required_context:
+    - django.core.handlers.base.BaseHandler
+    - django.core.handlers.exception.convert_exception_to_response
+    - django.db.transaction.atomic
+    - django.urls.resolvers.get_resolver
+  boundary_symbols:
+    - django.core.handlers.base.BaseHandler._get_response_async
+    - django.urls.base.set_urlconf
+  expected_solution: >
+    Annotator A's full chain is correct: base.py line 197 (`response =
+    self.process_exception_by_middleware(e, request)`) is a real,
+    separately-traceable stage reached on the exception path, not
+    inlined logic - the prompt states that assumption explicitly, so a
+    correct answer includes it.
