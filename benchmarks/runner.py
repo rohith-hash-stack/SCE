@@ -326,6 +326,7 @@ def run_evaluation(
     force_reclone: bool = False,
     resume: bool = False,
     checkpoint_path: str = DEFAULT_CHECKPOINT_PATH,
+    output_dir: str | None = None,
 ) -> EvaluationRun:
     """The real end-to-end sweep: resolve the pinned corpus, load its
     ground-truth tasks, run every engine at every budget, and (unless
@@ -338,6 +339,15 @@ def run_evaluation(
     diagnostics are always recomputed fresh regardless - they're free
     and deterministic, so there's nothing to gain by caching them; only
     the LLM calls are checkpointed.
+
+    `output_dir`: when set, `write_reports(run, output_dir)` is called
+    at every interval checkpoint save (every `CHECKPOINT_INTERVAL`
+    fresh calls), not just once at the very end via the CLI's own
+    post-return call - so a report reflecting every fully-completed
+    (task, engine, budget) record exists on disk throughout a long run,
+    not only if it reaches the end. `None` (the default) preserves the
+    original behavior for callers - tests included - that don't pass
+    it: no incremental report writes, no output directory touched.
     """
     if repo not in CORPORA:
         raise ValueError(f"unknown repo {repo!r} - registered corpora: {sorted(CORPORA)}")
@@ -494,6 +504,18 @@ def run_evaluation(
                             if fresh_calls_completed % CHECKPOINT_INTERVAL == 0:
                                 save_checkpoint(checkpoint_path, checkpoint)
                                 print(f"[pilot] {fresh_calls_completed} cells completed - checkpoint saved to {checkpoint_path}")
+                                if output_dir is not None:
+                                    #: A partial report at cell 100 is more
+                                    #: useful than no report at all if the
+                                    #: session dies before reaching the end -
+                                    #: reflects every fully-completed
+                                    #: (task, engine, budget) record in `run`
+                                    #: so far (the in-progress cell group that
+                                    #: triggered this exact save isn't in
+                                    #: `run.records` yet - it's only appended
+                                    #: once its own seed loop finishes below).
+                                    write_reports(run, output_dir)
+                                    print(f"[pilot] {fresh_calls_completed} cells completed - reports written to {output_dir}")
 
                     tsr_scores = [cell_scores[seed] for seed in seeds]
                     raw_responses = [cell_responses[seed] for seed in seeds]
@@ -850,6 +872,7 @@ def main(argv: list[str] | None = None) -> int:
             force_reclone=args.force_reclone,
             resume=args.resume,
             checkpoint_path=args.checkpoint,
+            output_dir=args.output,
         )
         write_reports(run, args.output)
         print(f"Reports written to {args.output}")

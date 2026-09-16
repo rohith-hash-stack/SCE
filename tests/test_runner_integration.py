@@ -167,3 +167,68 @@ def test_multiple_budgets_produce_one_record_per_engine_per_budget(monkeypatch, 
     assert budgets_seen == sorted(budgets)
     for budget in budgets:
         assert sum(1 for r in run.records if r.budget_tokens == budget) == 4  # 4 default engines
+
+
+def test_run_evaluation_writes_reports_at_every_checkpoint_interval_when_output_dir_given(monkeypatch, python_repo_root, tmp_path):
+    """fix-report-incremental regression: write_reports used to run
+    exactly once, at the very end of run_evaluation via the CLI's own
+    post-return call - so a session that died mid-run (the real Kaggle
+    pilot's own failure mode) left no report on disk at all, only a
+    checkpoint. `output_dir`, when passed, must make write_reports fire
+    at every interval checkpoint save (CHECKPOINT_INTERVAL fresh
+    calls), not just at the end.
+
+    CHECKPOINT_INTERVAL is patched down to 1 - real interval-crossing
+    behavior verified without needing 100 real cells; a fake client
+    keeps every call free and fast regardless."""
+    import benchmarks.runner as runner_module
+
+    _patch_corpus(monkeypatch, python_repo_root)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _FakeOpenAICompatibleClient)
+    monkeypatch.setattr(runner_module, "CHECKPOINT_INTERVAL", 1)
+
+    write_calls: list[int] = []
+    real_write_reports = runner_module.write_reports
+
+    def _spy_write_reports(run, output_dir):
+        write_calls.append(len(run.records))
+        real_write_reports(run, output_dir)
+
+    monkeypatch.setattr(runner_module, "write_reports", _spy_write_reports)
+
+    output_dir = tmp_path / "out"
+    checkpoint_path = str(tmp_path / "checkpoint.json")
+
+    run_evaluation(
+        repo="django", budgets=[2000], tasks_dir="unused", seeds=(42, 43), dry_run=False,
+        checkpoint_path=checkpoint_path, output_dir=str(output_dir),
+    )
+
+    # 4 default engines x 2 seeds = 8 fresh calls; with CHECKPOINT_INTERVAL=1
+    # every single one triggers a checkpoint save - and now a report write.
+    assert len(write_calls) == 8, write_calls
+    assert (output_dir / "eval_results_v11.json").exists()
+    assert (output_dir / "eval_results_v11.md").exists()
+
+
+def test_run_evaluation_does_not_write_reports_when_output_dir_is_none(monkeypatch, python_repo_root, tmp_path):
+    """The default (`output_dir=None`) must preserve every existing
+    caller's behavior exactly - no output directory touched, no extra
+    write_reports calls - since most callers of run_evaluation (every
+    test in this file included) never pass `output_dir` at all."""
+    import benchmarks.runner as runner_module
+
+    _patch_corpus(monkeypatch, python_repo_root)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _FakeOpenAICompatibleClient)
+    monkeypatch.setattr(runner_module, "CHECKPOINT_INTERVAL", 1)
+
+    write_calls: list[int] = []
+    monkeypatch.setattr(runner_module, "write_reports", lambda run, output_dir: write_calls.append(1))
+
+    checkpoint_path = str(tmp_path / "checkpoint.json")
+    run_evaluation(
+        repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False,
+        checkpoint_path=checkpoint_path,
+    )
+
+    assert write_calls == []
