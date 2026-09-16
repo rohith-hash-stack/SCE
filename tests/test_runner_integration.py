@@ -58,10 +58,10 @@ def _patch_corpus(monkeypatch, python_repo_root: str) -> None:
     )
 
 
-class _FakeDeepSeekClient:
+class _FakeOpenAICompatibleClient:
     def __init__(self, response_text: str = "response"):
         #: fix-client-env-vars-definitive's runner-side sanity check
-        #: requires base_url/model on whatever DeepSeekClient() resolves
+        #: requires base_url/model on whatever OpenAICompatibleClient() resolves
         #: to, real or faked.
         self.base_url = "http://fake-client.test/v1"
         self.model = "fake-model"
@@ -80,8 +80,8 @@ def test_resume_skips_a_checkpointed_cell_and_only_calls_the_client_for_the_rest
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
-    fake_client = _FakeDeepSeekClient()
-    monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
+    fake_client = _FakeOpenAICompatibleClient()
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", lambda: fake_client)
 
     checkpoint_path = str(tmp_path / "checkpoint.json")
     key = _cell_key("fake_t02_001", "prism_v11", 2000, 42)
@@ -124,8 +124,8 @@ def test_tsr_scoring_is_correctly_wired_for_a_genuinely_correct_debug_response(m
         f'{{"reasoning": "single stage", "symbols": ["{_SEED_SYMBOL}"]}}'
         "\n```\n"
     )
-    fake_client = _FakeDeepSeekClient(response_text=correct_response)
-    monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
+    fake_client = _FakeOpenAICompatibleClient(response_text=correct_response)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", lambda: fake_client)
 
     run = run_evaluation(
         repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False,
@@ -142,8 +142,8 @@ def test_tsr_scoring_is_correctly_wired_for_a_genuinely_wrong_debug_response(mon
         '```json\n{"reasoning": "single stage", '
         '"symbols": ["some.totally.unrelated.symbol"]}\n```\n'
     )
-    fake_client = _FakeDeepSeekClient(response_text=wrong_response)
-    monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
+    fake_client = _FakeOpenAICompatibleClient(response_text=wrong_response)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", lambda: fake_client)
 
     run = run_evaluation(
         repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False,
@@ -156,8 +156,8 @@ def test_multiple_budgets_produce_one_record_per_engine_per_budget(monkeypatch, 
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
-    fake_client = _FakeDeepSeekClient()
-    monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
+    fake_client = _FakeOpenAICompatibleClient()
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", lambda: fake_client)
 
     budgets = [500, 2000]
     run = run_evaluation(

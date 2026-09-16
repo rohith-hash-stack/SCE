@@ -64,13 +64,13 @@ def _patch_corpus(monkeypatch, python_repo_root: str) -> None:
 
 
 #: fix-client-env-vars-definitive's runner-side sanity check requires
-#: base_url/model on whatever DeepSeekClient() resolves to, real or
+#: base_url/model on whatever OpenAICompatibleClient() resolves to, real or
 #: faked - set as class attributes on every fake client below.
 _FAKE_BASE_URL = "http://fake-client.test/v1"
 _FAKE_MODEL = "fake-model"
 
 
-class _FakeDeepSeekClient:
+class _FakeOpenAICompatibleClient:
     """Returns a response whose text encodes its own seed, so a test can
     check response-to-seed alignment without depending on real model
     output."""
@@ -89,7 +89,7 @@ def test_raw_responses_are_index_aligned_with_tsr_scores(monkeypatch, python_rep
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
-    monkeypatch.setattr(runner_module, "DeepSeekClient", _FakeDeepSeekClient)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _FakeOpenAICompatibleClient)
 
     seeds = (42, 43, 44)
     run = run_evaluation(repo="django", budgets=[2000], tasks_dir="unused", seeds=seeds, dry_run=False)
@@ -105,7 +105,7 @@ def test_checkpoint_persists_and_resumes_raw_response(monkeypatch, python_repo_r
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
-    monkeypatch.setattr(runner_module, "DeepSeekClient", _FakeDeepSeekClient)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _FakeOpenAICompatibleClient)
     checkpoint_path = str(tmp_path / "checkpoint.json")
 
     run_evaluation(
@@ -125,7 +125,7 @@ def test_checkpoint_persists_and_resumes_raw_response(monkeypatch, python_repo_r
         def complete(self, *args, **kwargs):
             raise AssertionError("resume must not re-call the LLM for an already-checkpointed cell")
 
-    monkeypatch.setattr(runner_module, "DeepSeekClient", _ExplodingClient)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _ExplodingClient)
     resumed = run_evaluation(
         repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False,
         resume=True, checkpoint_path=checkpoint_path,
@@ -160,7 +160,7 @@ def test_resume_from_a_pre_fix_checkpoint_with_no_raw_response_key_is_not_a_keye
                 total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
             )
 
-    monkeypatch.setattr(runner_module, "DeepSeekClient", _FreshCallMarkerClient)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _FreshCallMarkerClient)
     run = run_evaluation(
         repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False,
         resume=True, checkpoint_path=str(checkpoint_path),
@@ -189,7 +189,7 @@ def test_markdown_report_shows_truncated_response_and_json_keeps_full_text(monke
                 total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
             )
 
-    monkeypatch.setattr(runner_module, "DeepSeekClient", _LongResponseClient)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _LongResponseClient)
     run = run_evaluation(repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False)
 
     markdown = render_raw_responses_markdown(run)

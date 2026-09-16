@@ -9,16 +9,19 @@ include_run_id=False))`) before it ever reaches an LLM prompt, so TSR
 differences measure retrieval quality, not prompt formatting.
 
 **Stated honestly**: running a real TSR sweep calls a real, paid LLM API
-(`benchmarks.tsr.client.DeepSeekClient`, the DeepSeek pilot's own client -
-Phase 1 of the DeepSeek pilot setup) - this module never does so
+(`benchmarks.tsr.client.OpenAICompatibleClient`, generic - DeepSeek by
+default, or Ollama/any OpenAI-compatible endpoint via
+LLM_BASE_URL/LLM_MODEL/LLM_API_KEY_ENV) - this module never does so
 silently, and it never silently *skips* doing so either. With
 `--dry-run` passed explicitly, it runs the full retrieval +
 diagnostic-metrics pipeline for real and skips only the LLM call
 itself, leaving `tsr_scores` empty and saying so. Without `--dry-run`,
-a working `DEEPSEEK_API_KEY` (and a reachable `api.deepseek.com`) is
-required - a client-construction failure is a fatal error (exit 1, a
-clear message, no report written), never a silent fallback to
-dry-run-shaped output with exit code 0.
+a working API key for whichever endpoint is configured (a reachable
+`api.deepseek.com` for the DeepSeek default, or a reachable local
+Ollama instance when LLM_BASE_URL points at one) is required - a
+client-construction failure is a fatal error (exit 1, a clear message,
+no report written), never a silent fallback to dry-run-shaped output
+with exit code 0.
 
 **Checkpointing** (Phase 1.4): every completed (task, engine, budget,
 seed) LLM call is recorded in a JSON checkpoint file
@@ -65,7 +68,7 @@ from benchmarks.reporting.report_generator import (
     write_json_results,
     write_markdown_report,
 )
-from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, DeepSeekClient, run_tsr_prompt
+from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, OpenAICompatibleClient, run_tsr_prompt
 from benchmarks.tsr.scorer_architecture import score_architecture
 from benchmarks.tsr.scorer_blast import score_blast
 from benchmarks.tsr.scorer_chain import score_chain
@@ -314,7 +317,7 @@ def run_evaluation(
     #: None, not DEFAULT_MODEL - see benchmarks/tsr/client.py's
     #: run_tsr_prompt docstring. A hardcoded default here would flow
     #: through as an explicit, non-None model= on every call, always
-    #: overriding DeepSeekClient's own env-var-resolved self.model
+    #: overriding OpenAICompatibleClient's own env-var-resolved self.model
     #: (LLM_MODEL) - the fix-client-env-vars root cause.
     model: str | None = None,
     dry_run: bool = False,
@@ -355,17 +358,18 @@ def run_evaluation(
     if not dry_run:
         # `dry_run` is False here precisely because the operator did NOT
         # pass `--dry-run` - they expect real LLM calls. A client-
-        # construction failure (missing DEEPSEEK_API_KEY, the `openai`
-        # package not installed, etc.) must be fatal in that case: this
-        # used to catch the exception and silently fall back to
-        # `dry_run = True`, which produced a full report - exit code 0,
-        # every diagnostic computed normally - with every `tsr_scores`
-        # silently empty and no real signal in the output that no LLM
-        # call was ever made (the "no LLM calls were made" pilot-run
-        # bug). An operator who genuinely wants a dry run passes
-        # `--dry-run` explicitly - that path never reaches here at all
-        # (see the `if not dry_run:` guard above), so it is unaffected.
-        client = DeepSeekClient()
+        # construction failure (missing API key for whichever endpoint
+        # is configured, the `openai` package not installed, etc.) must
+        # be fatal in that case: this used to catch the exception and
+        # silently fall back to `dry_run = True`, which produced a full
+        # report - exit code 0, every diagnostic computed normally -
+        # with every `tsr_scores` silently empty and no real signal in
+        # the output that no LLM call was ever made (the "no LLM calls
+        # were made" pilot-run bug). An operator who genuinely wants a
+        # dry run passes `--dry-run` explicitly - that path never
+        # reaches here at all (see the `if not dry_run:` guard above),
+        # so it is unaffected.
+        client = OpenAICompatibleClient()
         if not hasattr(client, "base_url") or not client.base_url:
             raise RuntimeError("client.base_url not set — check benchmarks/tsr/client.py __init__")
         print(f"[runner] using base_url={client.base_url} model={client.model}", file=sys.stderr, flush=True)
@@ -448,7 +452,7 @@ def run_evaluation(
                                     response_is_unparseable = True
                             if response_is_unparseable:
                                 print(
-                                    f"[deepseek] parse-failure task={task.task_id} engine={engine.name} "
+                                    f"[llm] parse-failure task={task.task_id} engine={engine.name} "
                                     f"seed={r.seed} raw_response={r.call.content[:500]!r}",
                                     file=sys.stderr,
                                 )
@@ -502,13 +506,13 @@ def run_evaluation(
         avg_prompt = total_prompt_tokens / total_calls_scored
         avg_completion = total_completion_tokens / total_calls_scored
         print(
-            f"[deepseek] summary: {total_calls_scored} calls, avg_prompt={avg_prompt:.1f} "
+            f"[llm] summary: {total_calls_scored} calls, avg_prompt={avg_prompt:.1f} "
             f"avg_completion={avg_completion:.1f} total_cost=${total_cost_usd:.4f}",
             file=sys.stderr,
         )
         if avg_completion > 2000:
             print(
-                f"[deepseek] WARNING: avg_completion={avg_completion:.1f} exceeds 2000 - "
+                f"[llm] WARNING: avg_completion={avg_completion:.1f} exceeds 2000 - "
                 "the structured contract's own bound is not being respected by the model's "
                 "responses; investigate before trusting the pilot's cost projections.",
                 file=sys.stderr,
@@ -759,7 +763,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--model", default=None,
-        help=f"Explicit model override. Default: None - falls back to DeepSeekClient's own "
+        help=f"Explicit model override. Default: None - falls back to OpenAICompatibleClient's own "
         f"env-var-resolved model (LLM_MODEL, else {DEFAULT_MODEL}). Passing a hardcoded default "
         "here instead of None would always override LLM_MODEL, regardless of its value.",
     )

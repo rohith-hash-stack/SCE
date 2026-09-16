@@ -4,17 +4,24 @@ a thin, TSR-specific wrapper around the existing, already-tested
 for this module's own 5-run protocol) rather than a second OpenAI SDK
 wrapper.
 
-**Pilot model (Phase 1, DeepSeek pilot setup)**: `DeepSeekClient` below
-talks to DeepSeek's OpenAI-compatible chat completions endpoint (same
-`openai` SDK, different `base_url`) - `deepseek-v4-flash`, the current
-V-series (non-reasoning) identifier confirmed against
-https://api-docs.deepseek.com/quick_start/pricing (the legacy
-`deepseek-chat`/`deepseek-reasoner` names were retired 2026-07-24).
+**Generic client, not DeepSeek-specific**: `OpenAICompatibleClient`
+below talks to any OpenAI-compatible chat completions endpoint (same
+`openai` SDK, `base_url`/`model`/API key all resolved from
+LLM_BASE_URL/LLM_MODEL/LLM_API_KEY_ENV at construction time) - DeepSeek
+and Ollama alike, e.g. the pilot's own qwen2.5:7b-instruct-q8_0 via
+Ollama on Kaggle. `DeepSeekClient` is kept below as a deprecated alias
+for the pre-rename name (`rename-client-generic`); DEFAULT_MODEL
+(`deepseek-v4-flash`) and DEEPSEEK_BASE_URL remain the fallback
+defaults for real DeepSeek usage when LLM_MODEL/LLM_BASE_URL are unset.
 
-**Stated honestly**: real, working code - but no `DEEPSEEK_API_KEY` is
-configured in this environment, and this module never calls the API on
-its own initiative. Running a real TSR sweep is the operator's own
-action, with their own credentials and their own cost. Separately,
+**DeepSeek-specific facts, still accurate as fallback-default context**:
+`deepseek-v4-flash` is the current V-series (non-reasoning) identifier
+confirmed against https://api-docs.deepseek.com/quick_start/pricing
+(the legacy `deepseek-chat`/`deepseek-reasoner` names were retired
+2026-07-24). No `DEEPSEEK_API_KEY` is configured in this development
+environment, and this module never calls the API on its own
+initiative - running a real TSR sweep is the operator's own action,
+with their own credentials and their own cost. Separately,
 `api.deepseek.com` is unreachable from this development environment at
 all (organization egress policy blocks it, independent of any API
 key) - see `docs/pilot/run_checklist.md`.
@@ -51,15 +58,16 @@ DEFAULT_MAX_TOKENS = 2048
 DEEPSEEK_API_KEY_ENV_VAR = "DEEPSEEK_API_KEY"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
-#: Override knobs for pointing `DeepSeekClient` at any OpenAI-compatible
-#: endpoint (e.g. Ollama's, for local SLM format-compliance testing -
-#: docs/pilot/stop_condition.md Section 5) without touching DeepSeek's
-#: own defaults above. `LLM_API_KEY_ENV` *names* the env var the real
-#: key is read from (so a non-DeepSeek endpoint that needs no key, or a
-#: different key name, doesn't have to overload `DEEPSEEK_API_KEY`
-#: itself). All three are read inside `DeepSeekClient.__init__` - never
-#: at module import time - so a test or caller that sets them via
-#: `monkeypatch`/`os.environ` before constructing the client is honored.
+#: Override knobs for pointing `OpenAICompatibleClient` at any
+#: OpenAI-compatible endpoint (e.g. Ollama's, for local SLM
+#: format-compliance testing - docs/pilot/stop_condition.md Section 5)
+#: without touching DeepSeek's own defaults above. `LLM_API_KEY_ENV`
+#: *names* the env var the real key is read from (so a non-DeepSeek
+#: endpoint that needs no key, or a different key name, doesn't have to
+#: overload `DEEPSEEK_API_KEY` itself). All three are read inside
+#: `OpenAICompatibleClient.__init__` - never at module import time - so
+#: a test or caller that sets them via `monkeypatch`/`os.environ`
+#: before constructing the client is honored.
 LLM_BASE_URL_ENV_VAR = "LLM_BASE_URL"
 LLM_MODEL_ENV_VAR = "LLM_MODEL"
 LLM_API_KEY_ENV_VAR = "LLM_API_KEY_ENV"
@@ -128,15 +136,22 @@ def load_deepseek_api_key() -> str:
     return _load_api_key(DEEPSEEK_API_KEY_ENV_VAR)
 
 
-class DeepSeekClient:
-    """The DeepSeek pilot's own LLM client - same `complete()` shape as
+class OpenAICompatibleClient:
+    """The pilot's own LLM client - same `complete()` shape as
     `benchmarks.openai_client.LLMClient` (so `run_tsr_prompt` below works
-    unchanged with either), pointed at DeepSeek's OpenAI-compatible
-    endpoint instead of OpenAI's own. A real, separate client rather than
-    a subclass of `LLMClient`, since `LLMClient` is shared by several
-    OpenAI-only harness tools (`live_eval.py`, `clone_eval.py`,
-    `run_comparison_suite.py`, etc.) that must keep talking to OpenAI
-    unaffected by this pilot's own base URL/API key/retry policy.
+    unchanged with either), pointed at any OpenAI-compatible endpoint
+    (DeepSeek's own, Ollama's, or anything else that speaks the same
+    chat-completions API) instead of OpenAI's own. Not named `LLMClient`
+    itself - that name is already `benchmarks.openai_client.LLMClient`,
+    imported into this module below; reusing it here would silently
+    shadow that import rather than just rename this class. A real,
+    separate client rather than a subclass of `LLMClient`, since
+    `LLMClient` is shared by several OpenAI-only harness tools
+    (`live_eval.py`, `clone_eval.py`, `run_comparison_suite.py`, etc.)
+    that must keep talking to OpenAI unaffected by this pilot's own
+    base URL/API key/retry policy. `DeepSeekClient` (below, at the
+    bottom of this module) is a deprecated alias for this class's
+    pre-rename name.
     """
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
@@ -160,7 +175,12 @@ class DeepSeekClient:
         _load_dotenv_if_present()
         self.base_url = base_url if base_url is not None else os.environ.get(LLM_BASE_URL_ENV_VAR, DEEPSEEK_BASE_URL)
         self.model = os.environ.get(LLM_MODEL_ENV_VAR, DEFAULT_MODEL)
-        api_key_env = os.environ.get(LLM_API_KEY_ENV_VAR, DEEPSEEK_API_KEY_ENV_VAR)
+        #: Stored on self (not just a local) so complete()'s own
+        #: AuthenticationError message can name the env var actually in
+        #: play (e.g. OLLAMA_API_KEY) instead of always hardcoding
+        #: DEEPSEEK_API_KEY regardless of what LLM_API_KEY_ENV pointed at.
+        self.api_key_env = os.environ.get(LLM_API_KEY_ENV_VAR, DEEPSEEK_API_KEY_ENV_VAR)
+        api_key_env = self.api_key_env
         if api_key is not None:
             resolved_api_key = api_key
         else:
@@ -245,16 +265,16 @@ class DeepSeekClient:
             except openai_module.RateLimitError as exc:
                 if attempt >= len(RATE_LIMIT_BACKOFF_SECONDS):
                     raise LLMCallError(
-                        f"DeepSeek rate-limited this request after {len(RATE_LIMIT_BACKOFF_SECONDS)} retries: {exc}"
+                        f"the LLM endpoint rate-limited this request after {len(RATE_LIMIT_BACKOFF_SECONDS)} retries: {exc}"
                     ) from exc
                 delay = RATE_LIMIT_BACKOFF_SECONDS[attempt]
-                print(f"[deepseek] 429, retrying in {delay:.0f}s (attempt {attempt + 1}/{len(RATE_LIMIT_BACKOFF_SECONDS)})", file=sys.stderr)
+                print(f"[llm] 429, retrying in {delay:.0f}s (attempt {attempt + 1}/{len(RATE_LIMIT_BACKOFF_SECONDS)})", file=sys.stderr)
                 time.sleep(delay)
                 attempt += 1
             except openai_module.AuthenticationError as exc:
                 raise LLMCallError(
-                    f"DeepSeek rejected the API key (authentication error): {exc}. "
-                    f"Check that {DEEPSEEK_API_KEY_ENV_VAR} is correct and active."
+                    f"the LLM endpoint rejected the API key (authentication error): {exc}. "
+                    f"Check that {self.api_key_env} is correct and active."
                 ) from exc
             except openai_module.APITimeoutError as exc:
                 #: Caught ahead of the broader APIConnectionError below -
@@ -269,11 +289,11 @@ class DeepSeekClient:
                 )
                 raise LLMCallError(f"request to '{resolved_model}' timed out after {self.timeout:.0f}s: {exc}") from exc
             except openai_module.APIConnectionError as exc:
-                raise LLMCallError(f"could not reach the DeepSeek API (network error): {exc}") from exc
+                raise LLMCallError(f"could not reach the LLM API (network error): {exc}") from exc
             except openai_module.NotFoundError as exc:
-                raise LLMCallError(f"model '{resolved_model}' was not found or is not available to this account: {exc}") from exc
+                raise LLMCallError(f"model '{resolved_model}' was not found or is not available at this endpoint: {exc}") from exc
             except openai_module.APIStatusError as exc:
-                raise LLMCallError(f"DeepSeek API returned an error (status {exc.status_code}): {exc}") from exc
+                raise LLMCallError(f"the LLM API returned an error (status {exc.status_code}): {exc}") from exc
         latency = time.perf_counter() - start
 
         choice = response.choices[0]
@@ -289,7 +309,7 @@ class DeepSeekClient:
         )
 
         print(
-            f"[deepseek] model={resolved_model} seed={seed} prompt_tokens={prompt_tokens} "
+            f"[llm] model={resolved_model} seed={seed} prompt_tokens={prompt_tokens} "
             f"completion_tokens={completion_tokens} total_tokens={total_tokens} "
             f"cost_usd={cost} latency_s={latency:.3f}",
             file=sys.stderr,
@@ -341,7 +361,7 @@ def build_prompt(system_prompt: str, rendered_xml: str, task_prompt: str) -> tup
 
 
 def run_tsr_prompt(
-    client: LLMClient | DeepSeekClient,
+    client: LLMClient | OpenAICompatibleClient,
     system_prompt: str,
     rendered_xml: str,
     task_prompt: str,
@@ -368,3 +388,11 @@ def run_tsr_prompt(
         call = client.complete(model, system, user, temperature=temperature, max_tokens=max_tokens, seed=seed)
         results.append(TSRRunResult(seed=seed, call=call))
     return results
+
+
+#: Deprecated alias - OpenAICompatibleClient's pre-rename name
+#: (rename-client-generic). Not `LLMClient`: that name is already
+#: `benchmarks.openai_client.LLMClient`, imported into this module
+#: above - aliasing to it here would silently shadow that import
+#: rather than rename this class.
+DeepSeekClient = OpenAICompatibleClient  # deprecated alias

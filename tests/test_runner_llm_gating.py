@@ -1,6 +1,6 @@
 """Regression coverage for the pilot-run bug reported after Phase 2/3
 smoke + calibration testing: `run_evaluation` used to catch *any*
-exception from `DeepSeekClient()` construction and silently fall back to
+exception from `OpenAICompatibleClient()` construction and silently fall back to
 `dry_run = True`, producing a full report (exit 0, every diagnostic
 computed normally) with every `tsr_scores` silently empty and no signal
 anywhere in the output that no real LLM call was ever made.
@@ -21,7 +21,7 @@ Also proves the seed-loop mechanism itself was never broken (the
 working client is available, one `TaskRunRecord` is produced per
 (task, engine, budget) and its `tsr_scores` list contains exactly
 `len(seeds)` values - reusing a fake, no-network client in place of
-`DeepSeekClient`, run through the real `run_evaluation` end to end
+`OpenAICompatibleClient`, run through the real `run_evaluation` end to end
 against the real `tests/fixtures/python_repo` corpus (never the real
 Django corpus - fast, no network, no LLM cost).
 """
@@ -105,12 +105,12 @@ def test_explicit_dry_run_is_unaffected_by_a_missing_api_key(monkeypatch, python
     assert all(r.tsr_scores == [] for r in run.records)
 
 
-class _FakeDeepSeekClient:
-    """Stands in for `DeepSeekClient` - no network, no `openai` SDK
+class _FakeOpenAICompatibleClient:
+    """Stands in for `OpenAICompatibleClient` - no network, no `openai` SDK
     involvement - while exercising the exact `complete()` shape
     `run_tsr_prompt` calls. Also exposes `base_url`/`model` - the
     fix-client-env-vars-definitive sanity check in `run_evaluation`
-    requires them on whatever `DeepSeekClient()` resolves to, real or
+    requires them on whatever `OpenAICompatibleClient()` resolves to, real or
     faked."""
 
     def __init__(self):
@@ -138,8 +138,8 @@ def test_each_record_gets_exactly_len_seeds_tsr_scores_end_to_end(monkeypatch, p
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
-    fake_client = _FakeDeepSeekClient()
-    monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
+    fake_client = _FakeOpenAICompatibleClient()
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", lambda: fake_client)
 
     seeds = (42, 43, 44)
     run = run_evaluation(
@@ -166,11 +166,11 @@ def test_run_evaluation_does_not_override_client_model_when_none_chosen(monkeypa
     LLM_BASE_URL/LLM_MODEL/LLM_API_KEY_ENV set to point at a local
     Ollama instance, but the harness still requested
     'deepseek-v4-flash' and got a 404. Root cause was here, not in
-    DeepSeekClient: run_evaluation's own `model` parameter (and the
+    OpenAICompatibleClient: run_evaluation's own `model` parameter (and the
     --model CLI flag) defaulted to the hardcoded DEFAULT_MODEL, which
     flowed through run_tsr_prompt into client.complete(model=...) as an
     explicit, non-None value - permanently overriding
-    DeepSeekClient.complete()'s `resolved_model = model if model is not
+    OpenAICompatibleClient.complete()'s `resolved_model = model if model is not
     None else self.model` fallback to the client's own env-var-resolved
     self.model, no matter what LLM_MODEL was set to.
 
@@ -178,13 +178,13 @@ def test_run_evaluation_does_not_override_client_model_when_none_chosen(monkeypa
     `model=` argument passed to run_evaluation (the pilot's own CLI
     invocation, which never passes --model), the fake client must
     receive `model=None` for every call - never a hardcoded string -
-    so a real DeepSeekClient's self.model (LLM_MODEL-aware) is the
+    so a real OpenAICompatibleClient's self.model (LLM_MODEL-aware) is the
     thing that actually decides which model gets requested."""
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
-    fake_client = _FakeDeepSeekClient()
-    monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
+    fake_client = _FakeOpenAICompatibleClient()
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", lambda: fake_client)
 
     run_evaluation(
         repo="django",

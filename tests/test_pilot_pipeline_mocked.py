@@ -1,7 +1,7 @@
 """Zero-cost validation of the LLM-to-score pipeline before spending
 real money on calibration. Runs `benchmarks.runner.run_evaluation` (the
 real pilot pipeline - real retrieval, real TSR prompt construction, real
-scorer) against ONE synthetic calibration task, with `DeepSeekClient`
+scorer) against ONE synthetic calibration task, with `OpenAICompatibleClient`
 monkeypatched to a fake client that never touches the network. No
 `DEEPSEEK_API_KEY` needed, no cost.
 
@@ -30,7 +30,7 @@ Rule A/B resolved edges, confirmed in `test_symbol_resolution.py`).
 two existing files already do it - not a new seam.
 
 **Fragility note** (flagged per the task's own request): monkeypatching
-`benchmarks.runner.DeepSeekClient`/`resolve`/`load_tasks_from_dir`
+`benchmarks.runner.OpenAICompatibleClient`/`resolve`/`load_tasks_from_dir`
 (module-level names) is the same seam `test_runner_llm_gating.py`/
 `test_runner_integration.py` already depend on - not novel, not
 separately fragile. Reading `record.engine_name`/`record.diagnostics`
@@ -112,7 +112,7 @@ def _flat_response(symbols: list[str]) -> str:
 
 
 #: fix-client-env-vars-definitive's runner-side sanity check requires
-#: base_url/model on whatever DeepSeekClient() resolves to, real or
+#: base_url/model on whatever OpenAICompatibleClient() resolves to, real or
 #: faked - set as class attributes on every fake client below.
 _FAKE_BASE_URL = "http://fake-client.test/v1"
 _FAKE_MODEL = "fake-model"
@@ -167,7 +167,7 @@ def _run_mocked_pilot(monkeypatch, python_repo_root: str, fake_client):
         "load_tasks_from_dir",
         lambda tasks_dir: SimpleNamespace(accepted=[_fake_task()], rejected=[]),
     )
-    monkeypatch.setattr(runner_module, "DeepSeekClient", lambda: fake_client)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", lambda: fake_client)
     return run_evaluation(
         repo="django",
         budgets=[4000],

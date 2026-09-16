@@ -116,7 +116,7 @@ def test_complete_logs_token_usage_and_estimates_cost_from_deepseek_pricing(monk
     assert result.cost_usd == pytest.approx((100 * 0.14 + 50 * 0.28) / 1_000_000)
 
     stderr = capsys.readouterr().err
-    assert "[deepseek]" in stderr
+    assert "[llm]" in stderr
     assert "prompt_tokens=100" in stderr
     assert "completion_tokens=50" in stderr
 
