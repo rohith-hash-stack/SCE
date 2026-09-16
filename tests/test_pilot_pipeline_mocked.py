@@ -247,11 +247,11 @@ def test_default_max_tokens_is_the_chosen_safety_ceiling():
     hardcoded literal duplicated here - a change to the constant fails
     this test rather than silently going unnoticed.
 
-    Named for what the value actually is, not "model max": DeepSeek's
-    documented max output (user-confirmed this session, not
-    independently verifiable - api-docs.deepseek.com and every mirror
-    are EGRESS_BLOCKED here) is far larger than 4096. 4096 is a
-    deliberately chosen cost ceiling (13-20x the structured contract's
-    own expected ~200-300 token response), not the model's true
-    maximum - see fix-max-tokens's own commit message."""
-    assert DEFAULT_MAX_TOKENS == 4096
+    2048, not the original 4096 - fix-maxtokens-2048's own rationale:
+    a real Kaggle pilot run's successful completions ranged 482-1606
+    tokens; 1024 would have truncated legitimate wins (t02_002/t02_005,
+    both ~1600), but 4096 let 33 degenerate off-contract cells run to
+    the cap at ~180-207s each instead of failing at ~90s. 2048 is an
+    evidence-based cap from the observed response distribution, not a
+    theoretical estimate of the model's true output limit."""
+    assert DEFAULT_MAX_TOKENS == 2048

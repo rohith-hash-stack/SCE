@@ -38,9 +38,15 @@ from benchmarks.openai_client import (
 DEFAULT_MODEL = "deepseek-v4-flash"
 DEFAULT_SEEDS: tuple[int, ...] = (42, 43, 44, 45, 46)
 DEFAULT_TEMPERATURE = 0.0
-#: 13-20x expected response (contract bounds to ~200-300 tokens).
-#: Model supports 384K. Chosen as cost ceiling, not design target.
-DEFAULT_MAX_TOKENS = 4096
+#: Cap chosen from observed response distribution (482-1606), not
+#: theoretical estimate - the Kaggle pilot run's own successful
+#: completions ranged 482-1606 tokens; 2048 covers every observed
+#: success with ~25% headroom (1024 would truncate t02_002/t02_005,
+#: both ~1600 tokens; 4096 let degenerate off-contract cells run
+#: ~180-207s instead of failing at ~90s - 33 cells hit the 4096 cap
+#: exactly in that run, each an off-contract completion, not a
+#: legitimate long answer).
+DEFAULT_MAX_TOKENS = 2048
 
 DEEPSEEK_API_KEY_ENV_VAR = "DEEPSEEK_API_KEY"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
