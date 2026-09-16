@@ -135,6 +135,40 @@ def test_checkpoint_persists_and_resumes_raw_response(monkeypatch, python_repo_r
     assert prism_record.tsr_scores == [0.0]
 
 
+def test_checkpoint_persists_selected_symbols_and_cpi(monkeypatch, python_repo_root, tmp_path):
+    """fix-checkpoint-schema-cpi regression: CPI_strict/CPI_fractional
+    were previously undiagnosable from the checkpoint after the fact -
+    the checkpoint schema stored score/raw_response/token counts, never
+    the engine's retrieved symbol set - so a partial or crashed run
+    left no way to compute the gate's second metric at all (the exact
+    gap hit auditing the real Kaggle pilot's 900-cell checkpoint).
+
+    _fake_task()'s own pipeline_symbols is just [_SEED_SYMBOL] - the
+    task's own seed symbol, which every engine trivially retrieves (it
+    is where retrieval starts) - so cpi_strict/cpi_fractional must both
+    be exactly 1.0 for every engine, deterministically, without
+    depending on any particular engine's real retrieval behavior."""
+    import benchmarks.runner as runner_module
+
+    _patch_corpus(monkeypatch, python_repo_root)
+    monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _FakeOpenAICompatibleClient)
+    checkpoint_path = str(tmp_path / "checkpoint.json")
+
+    run_evaluation(
+        repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False, checkpoint_path=checkpoint_path
+    )
+
+    saved = json.loads((tmp_path / "checkpoint.json").read_text())
+    key = _cell_key("fake_t02_001", "prism_v11", 2000, 42)
+    cell = saved["cells"][key]
+
+    assert "selected_symbols" in cell
+    assert isinstance(cell["selected_symbols"], list) and cell["selected_symbols"]
+    assert _SEED_SYMBOL in cell["selected_symbols"]
+    assert cell["cpi_strict"] == 1.0
+    assert cell["cpi_fractional"] == 1.0
+
+
 def test_resume_from_a_pre_fix_checkpoint_with_no_raw_response_key_is_not_a_keyerror(monkeypatch, python_repo_root, tmp_path):
     """Only the prism_v11 cell is pre-checkpointed here - the other 3
     default engines have no checkpoint entry, so they still need a

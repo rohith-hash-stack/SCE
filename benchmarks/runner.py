@@ -459,12 +459,32 @@ def run_evaluation(
                             cell_scores[r.seed] = score
                             cell_responses[r.seed] = r.call.content
                             key = _cell_key(task.task_id, engine.name, budget, r.seed)
+                            #: CPI is only defined for chain/debug tasks
+                            #: (the same gate compute_diagnostics uses,
+                            #: below) - pipeline_symbols defaults to []
+                            #: for blast/architecture/redundancy tasks,
+                            #: and cpi_strict/cpi_fractional's own
+                            #: vacuous-truth convention would silently
+                            #: store a misleading 1.0 ("perfect") for
+                            #: those rather than "not applicable" - None
+                            #: instead, matching fpr_oracle's own
+                            #: absent-comparison-point-is-None convention.
+                            if task.task_type in ("chain", "debug"):
+                                pipeline_syms = task.adjudicated.pipeline_symbols
+                                cell_cpi_strict = cpi_strict(candidate_symbols, pipeline_syms)
+                                cell_cpi_fractional = cpi_fractional(candidate_symbols, pipeline_syms)
+                            else:
+                                cell_cpi_strict = None
+                                cell_cpi_fractional = None
                             checkpoint["cells"][key] = {
                                 "score": score,
                                 "raw_response": r.call.content,
                                 "prompt_tokens": r.call.prompt_tokens,
                                 "completion_tokens": r.call.completion_tokens,
                                 "cost_usd": r.call.cost_usd,
+                                "selected_symbols": sorted(candidate_symbols),
+                                "cpi_strict": cell_cpi_strict,
+                                "cpi_fractional": cell_cpi_fractional,
                             }
                             total_calls_scored += 1
                             total_prompt_tokens += r.call.prompt_tokens
