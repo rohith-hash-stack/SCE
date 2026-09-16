@@ -619,6 +619,24 @@ def test_scorer_blast_exact_f1_match():
     assert score_blast("invoice_generator is affected.", {"svc.invoice_generator", "svc.unrelated"}, {"svc.invoice_generator"}) == 1.0
 
 
+def test_scorer_blast_ignores_extra_symbols_mentioned_outside_ground_truth():
+    """fix-blast-scorer-precision: precision/recall are computed against
+    `ground_truth_callers` only, not the full `candidate_symbols`
+    universe - a response naming every correct caller plus extra
+    symbols that were never in the ground truth must still score 1.0
+    (previously 0.0, since those extra mentions dragged precision below
+    1.0 against the full candidate universe)."""
+    ground_truth = {"svc.caller_a", "svc.caller_b"}
+    candidate_symbols = ground_truth | {
+        "svc.extra_1", "svc.extra_2", "svc.extra_3", "svc.extra_4", "svc.extra_5",
+    }
+    response_text = (
+        "caller_a and caller_b are affected. Also mentioning extra_1, "
+        "extra_2, extra_3, extra_4, and extra_5 for context."
+    )
+    assert score_blast(response_text, candidate_symbols, ground_truth) == 1.0
+
+
 def test_scorer_redundancy_flags_conflation():
     conflated_score = score_redundancy("calculate_tax is the same as calculate_tax_v2.", "svc.calculate_tax", {"svc.calculate_tax_v2"})
     clean_score = score_redundancy("calculate_tax computes a flat rate.", "svc.calculate_tax", {"svc.calculate_tax_v2"})
