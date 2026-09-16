@@ -119,7 +119,7 @@ class _FakeOpenAICompatibleClient:
         self.seeds_seen: list[int] = []
         self.models_seen: list[str | None] = []
 
-    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
         self.seeds_seen.append(seed)
         self.models_seen.append(model)
         return CallResult(

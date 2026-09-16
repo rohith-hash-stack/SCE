@@ -121,12 +121,18 @@ def test_complete_logs_token_usage_and_estimates_cost_from_deepseek_pricing(monk
     assert "completion_tokens=50" in stderr
 
 
-def test_complete_returns_none_cost_for_an_unpriced_model():
+def test_complete_returns_zero_cost_for_an_unpriced_model():
+    """fix-logging-task-and-cost: an unpriced model (no entry in either
+    pricing table, no override) is a real $0.0 cost, not an unknown-cost
+    sentinel - true for a local Ollama model tag in particular, which is
+    genuinely free to run. estimate_cost_usd's own None (`the model
+    isn't in the pricing table and no override was given`) is
+    normalized to 0.0 here rather than surfaced as None."""
     client, _ = _client_with_fake_completions(fail_count=0)
 
     result = client.complete("some-future-deepseek-model", "system", "user", seed=42)
 
-    assert result.cost_usd is None
+    assert result.cost_usd == 0.0
 
 
 def test_client_sends_response_format():

@@ -251,6 +251,8 @@ class OpenAICompatibleClient:
         temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int | None = DEFAULT_MAX_TOKENS,
         seed: int | None = None,
+        task_id: str | None = None,
+        engine: str | None = None,
     ) -> CallResult:
         """One chat-completions call, retrying on HTTP 429
         (`openai.RateLimitError`) per `RATE_LIMIT_BACKOFF_SECONDS`
@@ -261,6 +263,14 @@ class OpenAICompatibleClient:
         `model` defaults to `self.model` (DeepSeek's own `DEFAULT_MODEL`
         unless `LLM_MODEL` was set at construction time) when omitted -
         every existing caller passes it explicitly, so this is additive.
+
+        `task_id`/`engine` are purely cosmetic - included in the `[llm]`
+        log line below (fix-logging-task-and-cost) so a Kaggle log can
+        be grepped for which (task, engine) cell a given call belongs
+        to, since the seed/token counts alone don't say. Neither is sent
+        to the LLM API itself. Both default to `None` (printed as the
+        literal string `None`) for a caller - `run_tsr_prompt`'s own
+        `FakeClient`-based tests included - that doesn't pass them.
 
         Always sends `response_format={"type": "json_object"}`: a
         standard OpenAI-compatible chat-completions parameter, accepted
@@ -329,13 +339,23 @@ class OpenAICompatibleClient:
         completion_tokens = usage.completion_tokens if usage else 0
         total_tokens = usage.total_tokens if usage else prompt_tokens + completion_tokens
 
+        #: estimate_cost_usd returns None when resolved_model isn't in
+        #: any pricing table (e.g. a local Ollama model tag like
+        #: qwen2.5:7b-instruct-q8_0, which is genuinely free to run, not
+        #: unpriced-by-omission) - 0.0 is the honest cost for that case,
+        #: not a missing-data sentinel, so cost_usd is never None
+        #: downstream (the checkpoint JSON, the [llm] log line below,
+        #: run_evaluation's total_cost_usd accumulation).
         cost = estimate_cost_usd(
             resolved_model, prompt_tokens, completion_tokens,
             *_deepseek_pricing_override(resolved_model),
         )
+        if cost is None:
+            cost = 0.0
 
         print(
-            f"[llm] model={resolved_model} seed={seed} prompt_tokens={prompt_tokens} "
+            f"[llm] task={task_id} engine={engine} model={resolved_model} seed={seed} "
+            f"prompt_tokens={prompt_tokens} "
             f"completion_tokens={completion_tokens} total_tokens={total_tokens} "
             f"cost_usd={cost} latency_s={latency:.3f}",
             file=sys.stderr,
@@ -395,6 +415,8 @@ def run_tsr_prompt(
     seeds: tuple[int, ...] = DEFAULT_SEEDS,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    task_id: str | None = None,
+    engine: str | None = None,
 ) -> list[TSRRunResult]:
     """Runs the constructed prompt through `client` once per seed in
     `seeds` (5 real API calls at the spec's own defaults) - never
@@ -407,11 +429,20 @@ def run_tsr_prompt(
     client's env-var-resolved `self.model` only when `model` is `None`.
     A hardcoded `DEFAULT_MODEL` default here would silently defeat that
     fallback for every caller that doesn't explicitly choose a model -
-    exactly the bug `fix-client-env-vars` traced back to."""
+    exactly the bug `fix-client-env-vars` traced back to.
+
+    `task_id`/`engine` (fix-logging-task-and-cost): passed straight
+    through to `client.complete(...)`'s own same-named, purely cosmetic
+    logging parameters - see its docstring. Both default to `None` so
+    an existing caller that only passes positional/`seeds`-style
+    arguments (this module's own tests included) is unaffected."""
     system, user = build_prompt(system_prompt, rendered_xml, task_prompt)
     results = []
     for seed in seeds:
-        call = client.complete(model, system, user, temperature=temperature, max_tokens=max_tokens, seed=seed)
+        call = client.complete(
+            model, system, user, temperature=temperature, max_tokens=max_tokens, seed=seed,
+            task_id=task_id, engine=engine,
+        )
         results.append(TSRRunResult(seed=seed, call=call))
     return results
 

@@ -125,7 +125,7 @@ class PerfectClient:
     base_url = _FAKE_BASE_URL
     model = _FAKE_MODEL
 
-    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
         content = _flat_response(_PIPELINE_SYMBOLS)
         return CallResult(
             model=model, content=content, prompt_tokens=1, completion_tokens=1,
@@ -137,7 +137,7 @@ class WrongClient:
     base_url = _FAKE_BASE_URL
     model = _FAKE_MODEL
 
-    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
         content = _flat_response(["unrelated.symbol.that.does.not.match"])
         return CallResult(
             model=model, content=content, prompt_tokens=1, completion_tokens=1,
@@ -149,7 +149,7 @@ class ProseClient:
     base_url = _FAKE_BASE_URL
     model = _FAKE_MODEL
 
-    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
         content = "The pipeline starts with foo and ends with bar."
         return CallResult(
             model=model, content=content, prompt_tokens=1, completion_tokens=1,

@@ -78,7 +78,7 @@ class _FakeOpenAICompatibleClient:
     base_url = _FAKE_BASE_URL
     model = _FAKE_MODEL
 
-    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
         return CallResult(
             model=model, content=f"response for seed {seed}", prompt_tokens=1, completion_tokens=1,
             total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
@@ -188,7 +188,7 @@ def test_resume_from_a_pre_fix_checkpoint_with_no_raw_response_key_is_not_a_keye
         base_url = _FAKE_BASE_URL
         model = _FAKE_MODEL
 
-        def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+        def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
             return CallResult(
                 model=model, content="a genuinely fresh call happened", prompt_tokens=1, completion_tokens=1,
                 total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,
@@ -217,7 +217,7 @@ def test_markdown_report_shows_truncated_response_and_json_keeps_full_text(monke
         base_url = _FAKE_BASE_URL
         model = _FAKE_MODEL
 
-        def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+        def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
             return CallResult(
                 model=model, content=long_text, prompt_tokens=1, completion_tokens=1,
                 total_tokens=2, cost_usd=0.0, latency_seconds=0.0, seed=seed,

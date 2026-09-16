@@ -516,7 +516,8 @@ def run_evaluation(
                         if task.task_type == "debug":
                             task_prompt = task.prompt + DEBUG_TASK_RESPONSE_CONTRACT
                         tsr_results = run_tsr_prompt(
-                            client, SYSTEM_PROMPT, rendered_xml, task_prompt, model=model, seeds=tuple(pending_seeds)
+                            client, SYSTEM_PROMPT, rendered_xml, task_prompt, model=model, seeds=tuple(pending_seeds),
+                            task_id=task.task_id, engine=engine.name,
                         )
                         for r in tsr_results:
                             score = score_tsr_response(task, r.call.content, candidate_symbols)

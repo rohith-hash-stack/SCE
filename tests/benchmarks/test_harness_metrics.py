@@ -1084,7 +1084,7 @@ def test_seeds_42_43_produces_two_samples_per_cell():
         def __init__(self):
             self.seeds_called = []
 
-        def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+        def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
             self.seeds_called.append(seed)
             return CallResult(
                 model=model, content="response", prompt_tokens=1, completion_tokens=1,
