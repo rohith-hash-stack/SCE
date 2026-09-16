@@ -144,6 +144,23 @@ def test_client_sends_response_format():
     assert fake_completions.last_kwargs.get("response_format") == {"type": "json_object"}
 
 
+def test_client_sends_stop_sequences():
+    """fix-stop-sequences: every real chat-completions call sends the
+    module's STOP_SEQUENCES, so a response that reaches one of its own
+    natural boundaries (a triple newline, right after a closing
+    `]}`, or a closing code fence) stops generating there instead of
+    running to the max_tokens cap - the 31-cell 2048-cap-hit pattern
+    from the previous full pilot run."""
+    from benchmarks.tsr.client import STOP_SEQUENCES
+
+    client, fake_completions = _client_with_fake_completions(fail_count=0)
+
+    client.complete("deepseek-v4-flash", "system", "user", seed=42)
+
+    assert fake_completions.last_kwargs is not None
+    assert fake_completions.last_kwargs.get("stop") == list(STOP_SEQUENCES)
+
+
 def test_client_respects_timeout_env_var(monkeypatch):
     """LLM_TIMEOUT_S is read inside __init__ (never at import time), so
     a value set before construction is honored - self.timeout must

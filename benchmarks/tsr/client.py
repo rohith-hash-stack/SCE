@@ -55,6 +55,31 @@ DEFAULT_TEMPERATURE = 0.0
 #: legitimate long answer).
 DEFAULT_MAX_TOKENS = 2048
 
+#: fix-stop-sequences: the 31-cell 2048-cap-hit pilot run (all 16
+#: prism_v11 + 15 baseline_rag, 0 on the other 3 engines) each paid
+#: 60-120s generating a valid-so-far JSON object past its intended
+#: scope, with no natural stopping point before the token cap - these
+#: three sequences give the model an explicit early exit at its own
+#: contract's real boundaries: a triple newline (the natural
+#: prose/JSON paragraph break the flat `{"reasoning": ..., "symbols":
+#: [...]}` / `{"affected_symbols": [...]}` contracts settle into once
+#: they're actually done), `]}\n` (immediately after a closing
+#: `symbols`/`affected_symbols` array), and a closing code-fence
+#: (```` ``` ````, for the fenced-JSON T02 debug contract). Verified
+#: against every one of the previous full pilot run's 1,769 legitimate
+#: (non-cap-hit) raw responses in reports/pilot/checkpoint.json on
+#: pilot-full-20260916T091808Z: none of the three sequences appears
+#: anywhere in any of them with non-whitespace content after it, so
+#: none would have been truncated - each occurs, when at all, only at
+#: the response's own natural end. (None of the 31 cap-hit responses
+#: contain any of these three sequences either, at least up to the
+#: 2048-token cutoff - they were still degenerately enumerating with
+#: no stopping boundary in sight, so these sequences won't retroactively
+#: explain those particular 31 cells; they only prevent a *future*
+#: response from paying for the same runaway generation once it does
+#: cross one of these boundaries.)
+STOP_SEQUENCES: tuple[str, ...] = ("\n\n\n", "]}\n", "\n```")
+
 DEEPSEEK_API_KEY_ENV_VAR = "DEEPSEEK_API_KEY"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
@@ -259,6 +284,7 @@ class OpenAICompatibleClient:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     response_format={"type": "json_object"},
+                    stop=list(STOP_SEQUENCES),
                     **({"seed": seed} if seed is not None else {}),
                 )
                 break
