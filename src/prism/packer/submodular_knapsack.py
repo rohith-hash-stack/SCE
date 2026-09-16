@@ -86,6 +86,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import sys
 import time
 from dataclasses import dataclass, field
 
@@ -838,6 +839,47 @@ def pack_symbol_context(
                 upstream_contract_preserving=upstream_contract_preserving,
                 upstream_max_hops=upstream_max_hops,
                 symbol_table=builder.symbol_table,
+            )
+
+    # fix-include-class-when-method-selected: once the greedy loop (and
+    # the mandatory-upstream-protection force-add above) settles on
+    # `selected`, promote each admitted method's own containing class
+    # into the pack if it isn't there already and the remaining budget
+    # can afford it. A class carries no measurable feature novelty of
+    # its own under the four-axis model (EmailMultiAlternatives: feature
+    # mask popcount 0, cost 410 vs. its own method's 77) and so never
+    # wins the density race on its own merits inside the loop above,
+    # even though it's the literal symbol a T02 debug task's adjudicated
+    # pipeline names alongside the method. Deterministic (needed classes
+    # visited in ascending qualified-name order) and budget-safe: a
+    # class that would overflow the remaining budget is skipped, not
+    # force-admitted, and logged rather than silently dropped.
+    needed_classes: set[str] = set()
+    for qname in selected:
+        info = builder.symbol_table.get(qname)
+        if info is not None and info.kind == "method" and info.enclosing_class is not None:
+            needed_classes.add(info.enclosing_class)
+
+    selected_set = set(selected)
+    running_cost = sum(costs.get(q, 0) for q in selected)
+    for class_qname in sorted(needed_classes):
+        if class_qname in selected_set:
+            continue
+        if class_qname not in costs:
+            costs.update(_default_costs(builder, [class_qname]))
+        class_cost = costs.get(class_qname, 0)
+        if class_cost <= 0:
+            continue  # not a real, resolvable symbol - nothing to add
+        if running_cost + class_cost <= target_budget:
+            selected.append(class_qname)
+            selected_set.add(class_qname)
+            running_cost += class_cost
+        else:
+            print(
+                f"[knapsack] fix-include-class-when-method-selected: {class_qname!r} "
+                f"needed by an admitted method but the remaining budget ({target_budget - running_cost}) "
+                f"can't afford its cost ({class_cost}) - skipped",
+                file=sys.stderr,
             )
 
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
