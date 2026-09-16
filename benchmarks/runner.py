@@ -361,6 +361,20 @@ def run_evaluation(
     if not tasks:
         print(f"warning: no accepted ground-truth tasks found for repo={repo!r} in {tasks_dir!r}", file=sys.stderr)
 
+    #: Engine count is computed by actually building the engine list for
+    #: the first task (rather than a hardcoded constant) so this stays
+    #: correct if _build_engines' own engine set ever changes - the same
+    #: real function every (task, budget) pair below calls, just called
+    #: once here purely to measure len(engines).
+    num_engines = len(_build_engines(tasks[0], oracle_packages_path, use_pragmatic_oracle)) if tasks else 0
+    total_cells = len(tasks) * num_engines * len(budgets) * len(seeds)
+    print(
+        f"[runner] starting: {total_cells} cells planned "
+        f"({len(tasks)} tasks x {num_engines} engines x "
+        f"{len(budgets)} budgets x {len(seeds)} seeds)",
+        flush=True,
+    )
+
     builder, _tag_matrix = build_pipeline(repo_path)
     feature_stats = compute_corpus_feature_stats(builder)
 
@@ -504,6 +518,10 @@ def run_evaluation(
                             if fresh_calls_completed % CHECKPOINT_INTERVAL == 0:
                                 save_checkpoint(checkpoint_path, checkpoint)
                                 print(f"[pilot] {fresh_calls_completed} cells completed - checkpoint saved to {checkpoint_path}")
+                                print(
+                                    f"[runner] checkpoint: {len(checkpoint['cells'])}/{total_cells} cells",
+                                    flush=True,
+                                )
                                 if output_dir is not None:
                                     #: A partial report at cell 100 is more
                                     #: useful than no report at all if the
@@ -543,6 +561,8 @@ def run_evaluation(
         # saved once more here so no completed cell is lost to a crash
         # after the loop's own last `% CHECKPOINT_INTERVAL == 0` save.
         save_checkpoint(checkpoint_path, checkpoint)
+
+    print(f"[runner] complete: {len(checkpoint['cells'])}/{total_cells} cells", flush=True)
 
     if total_calls_scored:
         avg_prompt = total_prompt_tokens / total_calls_scored
