@@ -28,6 +28,8 @@ from defusedxml import ElementTree as DefusedET
 
 from prism.surface.models import (
     BudgetRef,
+    CausalPath,
+    CausalPathStage,
     ContextPackage,
     CoverageGap,
     CoverageSummary,
@@ -172,6 +174,27 @@ def _parse_metadata(root: Element) -> tuple[EngineRef, SeedRef, BudgetRef, Langu
             key = _get_str(opt, "key", required=True)
             options[key] = _get_str(opt, "value", "")
     return engine, seed, budget, language, options
+
+
+def _parse_causal_path(root: Element) -> CausalPath | None:
+    elem = root.find("causal_path")
+    if elem is None:
+        return None
+    stages = [
+        CausalPathStage(
+            order=_get_int(s, "order", 0),
+            symbol=_get_str(s, "symbol", required=True),
+            distance=_get_float(s, "distance", 0.0),
+            role=_get_str(s, "role", required=True),
+        )
+        for s in elem.findall("stage")
+    ]
+    return CausalPath(
+        seed=_get_str(elem, "seed", required=True),
+        direction=_get_str(elem, "direction", "forward"),
+        stages=stages,
+        truncated=_get_bool(elem, "truncated", False),
+    )
 
 
 def _parse_manifest(root: Element) -> Manifest:
@@ -353,6 +376,7 @@ def parse_context(xml_str: str) -> ContextPackage:
     run_id = _get_str(root, "run_id")
 
     engine, seed, budget, language, options = _parse_metadata(root)
+    causal_path = _parse_causal_path(root)
     manifest = _parse_manifest(root)
     coverage = _parse_coverage(root)
     warnings = _parse_warnings(root)
@@ -366,6 +390,7 @@ def parse_context(xml_str: str) -> ContextPackage:
         budget=budget,
         language=language,
         options=options,
+        causal_path=causal_path,
         manifest=manifest,
         coverage=coverage,
         warnings=warnings,

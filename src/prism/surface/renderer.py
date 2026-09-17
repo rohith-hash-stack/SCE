@@ -17,7 +17,7 @@ silently emit invalid XML over it) and every node body goes through
 
 ### Document shape
 
-    <prism_context generated_at="..." run_id="..." schema_version="1">
+    <prism_context generated_at="..." run_id="..." schema_version="2">
       <metadata>
         <engine commit="..." name="..." version="..."/>
         <seed file="..." line="1" symbol="..."/>
@@ -25,6 +25,7 @@ silently emit invalid XML over it) and every node body goes through
         <language files="3" primary="python" tier="1"/>
         <options><option key="..." value="..."/></options>
       </metadata>
+      <causal_path seed="..." direction="forward"><stage order="1" .../>...</causal_path>
       <manifest ...><compression .../>...<distance_metric .../></manifest>
       <coverage ...><feature .../>...<gap .../>...</coverage>
       <warnings><warning code="..." severity="..."><message>...</message>
@@ -41,6 +42,21 @@ schema) - every sub-model from `prism.surface.models` becomes its own
 child element, its own scalar fields as alphabetically-sorted attributes,
 consistently, so the shape is predictable without needing to special-case
 any one block.
+
+### schema_version 2: `<causal_path>`
+
+Zero or one `<causal_path>` block, immediately after `<metadata>` and
+before `<manifest>` - present exactly when `pkg.causal_path is not
+None` (a single-seed, forward-chain retrieval - `prism.surface.build.
+build_context_package`'s own `include_causal_path=True` default),
+absent entirely for a blast-radius or overview retrieval built with
+`include_causal_path=False`. Never rendered empty - `pkg.causal_path`
+being set already guarantees at least one `<stage>` (the seed itself).
+A `schema_version="1"` consumer that doesn't know this element simply
+never sees it (parsing an older document never fails
+retroactively) and every schema_version 1 document is still exactly the
+schema_version 2 shape minus this one optional block - forward-
+compatible by construction, not by a special-cased migration.
 
 ### Mechanics (spec-mandated, not this module's own choice)
 
@@ -101,7 +117,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from prism.slicer.tokenizer import count_tokens
-from prism.surface.models import ContextPackage, EnvelopeWarning
+from prism.surface.models import CausalPath, ContextPackage, EnvelopeWarning
 
 _COMPRESSION_LEVELS = ("L0_full", "L1_pruned", "L2_skeleton", "L3_alias")
 _SEVERITY_RANK = {"high": 2, "medium": 1, "low": 0}
@@ -114,7 +130,7 @@ class RenderOptions(BaseModel):
     include_run_id: bool = False
     include_bodies: bool = True
     max_body_lines: Optional[int] = None
-    schema_version: int = 1
+    schema_version: int = 2
 
 
 # --------------------------------------------------------------------- #
@@ -228,6 +244,17 @@ def _render_metadata(pkg: ContextPackage, options: RenderOptions) -> str:
     option_items = [_leaf("option", {"key": key, "value": pkg.options[key]}) for key in sorted(pkg.options)]
     options_elem = _container("options", {}, option_items, depth=3, options=options)
     return _container("metadata", {}, [engine, seed, budget, language, options_elem], depth=2, options=options)
+
+
+def _render_causal_path(causal_path: CausalPath, options: RenderOptions) -> str:
+    stage_items = [
+        _leaf("stage", {"order": s.order, "symbol": s.symbol, "distance": s.distance, "role": s.role})
+        for s in causal_path.stages
+    ]
+    attrs: dict[str, object] = {"seed": causal_path.seed, "direction": causal_path.direction}
+    if causal_path.truncated:
+        attrs["truncated"] = True
+    return _container("causal_path", attrs, stage_items, depth=2, options=options)
 
 
 def _render_manifest(pkg: ContextPackage, options: RenderOptions) -> str:
@@ -405,15 +432,18 @@ def render(pkg: ContextPackage, options: RenderOptions = RenderOptions()) -> str
     identical `(pkg, options)`. See this module's own docstring for the
     document shape and every ordering/CDATA/token-accounting rule."""
     metadata = _render_metadata(pkg, options)
+    causal_path = _render_causal_path(pkg.causal_path, options) if pkg.causal_path is not None else None
     manifest = _render_manifest(pkg, options)
     coverage = _render_coverage(pkg, options)
     nodes = _render_nodes(pkg, options)
     edges = _render_edges(pkg, options)
     root_open = _root_open(pkg, options)
 
+    leading_sections = [metadata] + ([causal_path] if causal_path is not None else [])
+
     # First pass: everything except <warnings>/<trailer>, purely to get
     # an accurate token count to decide BUDGET_OVERFLOW against.
-    provisional_body = _join_children([metadata, manifest, coverage, nodes, edges], depth=1, options=options)
+    provisional_body = _join_children([*leading_sections, manifest, coverage, nodes, edges], depth=1, options=options)
     provisional_tokens = count_tokens(root_open + provisional_body)
 
     warnings = list(pkg.warnings)
@@ -432,7 +462,7 @@ def render(pkg: ContextPackage, options: RenderOptions = RenderOptions()) -> str
         )
 
     warnings_xml = _render_warnings(warnings, options)
-    body_items = [metadata, manifest, coverage, warnings_xml, nodes, edges]
+    body_items = [*leading_sections, manifest, coverage, warnings_xml, nodes, edges]
     body_without_trailer = _join_children(body_items, depth=1, options=options)
     actual_tokens = count_tokens(root_open + body_without_trailer)
     sha256 = hashlib.sha256((root_open + body_without_trailer).encode("utf-8")).hexdigest()
