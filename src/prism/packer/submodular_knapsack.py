@@ -399,7 +399,12 @@ def select_submodular_context(
 
     `symbol_table` (optional, `None` by default - every existing caller
     against a synthetic graph with no real symbol table is unaffected):
-    fix-knapsack-bloat-stop-criterion's own diversity constraint. On a
+    used by exactly one narrow rule, `_is_zero_novelty_test_fixture` (see
+    fix-knapsack-bloat-stop-criterion below) - `SymbolInfo.module` is how
+    that rule recognizes a `tests.*`/`django.test*` candidate. The K=5
+    novelty-adaptive stop itself needs no symbol table at all.
+
+    **fix-knapsack-bloat-stop-criterion - novelty-adaptive stop**: on a
     hub-class seed (e.g. a large admin/site class with dozens of trivial
     one-line data attributes, each `dist_w`-close and nearly free in
     `cost`), a large fraction of admitted candidates can carry zero novel
@@ -407,42 +412,94 @@ def select_submodular_context(
     not because they're relevant - `AdminSite.site_header`, `.site_title`,
     `.site_url`, `.enable_nav_sidebar` and similar same-class attributes
     all won the density race on t02_015 in the pilot despite contributing
-    nothing new to feature coverage, 27 of 39 admitted symbols.
+    nothing new to feature coverage, 27 of 39 admitted symbols - and
+    nothing in the loop stopped it short of the budget itself running out.
 
-    **Restricted to `kind == "attribute"` candidates - never a method,
-    function, or class**, discovered the hard way: an earlier version of
-    this constraint excluded a redundant zero-novelty candidate of *any*
-    kind sharing a scope with an already-admitted zero-novelty one, and
-    it broke real pipeline coverage on several T02 tasks at every budget
-    tested - `QuerySet._clone`/`._chain`/`._filter_or_exclude`,
-    `BaseHandler.check_response`, `LocMemCache._has_expired`, `Model.
-    save_base`, `BaseForm._clean_form` are all real, adjudicated pipeline
-    stages (`kind == "method"`) that happen to measure zero novelty once
-    an earlier admit already covers their feature tags - "zero marginal
-    novelty under the four-axis model" is not evidence a *method* is
-    unimportant, only that its feature tags overlap with something
-    already covered. A bare data attribute is different in kind, not
-    degree: verified against every currently-committed T02 task, an
-    attribute is never itself a causal pipeline stage (`adjudicated.
-    pipeline_symbols` is always an ordered sequence of calls) except for
-    exactly two corpus-wide exceptions (`CommonMiddleware.
-    response_redirect_class`, `django.http.cookie.SimpleCookie`), and
-    both are the *only* member of their own scope ever admitted in
-    practice, so this rule never reaches either of them anyway. Once one
-    zero-novelty *attribute* from a given scope has been admitted, every
-    further zero-novelty attribute from that same scope is excluded from
-    the frontier outright, rather than scored - a second, third, ...
-    zero-novelty attribute sibling cannot possibly justify its own cost
-    any better than the first one did. A method/function/class is never
-    excluded by this rule, however low its measured novelty, precisely
-    because it could be a real pipeline stage. This is deliberately
-    narrower than "cap all zero-novelty admits" in a second way too: a
-    task whose zero-novelty *attribute* admits are spread across
-    unrelated classes/modules (each scope's own first zero-novelty
-    attribute is never excluded) is untouched - only same-scope
-    zero-novelty attribute repetition is, which is what the trace
-    evidence actually showed driving the bloat, once methods/functions
-    were correctly excluded from the rule's own reach.
+    Rejecting every `delta_feat == 0` candidate outright was considered
+    and rejected: t02_020, a task where Prism's pilot TSR was 1.0, has
+    3 of its 5 real, necessary admits at zero novelty (each one's own
+    feature tags already covered by an earlier admit) - a blanket
+    rejection would gut it. Instead: a running counter of *consecutive*
+    zero-novelty admits, reset to `0` the instant a candidate with
+    `delta_feat > 0` is admitted. Once the counter reaches
+    `NOVELTY_STREAK_STOP_K` (`5`), zero-novelty candidates stop being
+    admissible *for as long as the streak stays unbroken* - not a
+    one-time permanent stop: the very next novel admit resets the
+    counter to `0` and zero-novelty candidates become admissible again,
+    up to another run of 5. `K=5` was chosen directly against the corpus
+    this bug was found in: t02_020's own longest consecutive
+    zero-novelty run, at every budget swept, is 2 - nowhere near 5, so
+    this task is untouched by construction, while t02_015's hub-class
+    bloat produces runs well past 5 once its handful of genuinely novel
+    candidates are exhausted. A candidate with real, positive novelty is
+    *never* excluded by this rule regardless of streak state - only a
+    `delta_feat == 0` candidate can ever be turned away, and only while
+    a streak is currently active.
+
+    **fix-frontier-eager-expansion**: a private helper like `QuerySet.
+    _clone` (or `django.utils.http._urlparse`, two hops past its own
+    seed) is only ever reachable as a successor of its own companion
+    (`QuerySet._chain`) - the precedence constraint means it cannot enter
+    the frontier before `_chain` is admitted, and `_chain` itself is
+    often only reachable several hops into some other admission's own
+    chain of successors. Under the plain loop above, once such a helper
+    finally enters the frontier, it still has to out-density every
+    *other* frontier member accumulated from every unrelated branch of
+    the graph too, in whatever future round the outer loop gets to it -
+    and its own real density, while nonzero, is rarely competitive
+    against that whole-frontier field, so a tight budget is spent
+    elsewhere long before its turn could ever come.
+
+    `_run_cascade`, called both on the seed's own initial successors
+    (the seed is admitted unconditionally, so its own successors deserve
+    the same treatment as any later admission's) and, inside the main
+    loop, on each round's `best_node`, addresses this by scoring a
+    just-admitted node's own newly-exposed successors immediately -
+    against each other, not the whole frontier - and admitting winners
+    right away, in the same round: continuing a causal chain the packer
+    just decided was worth admitting takes priority over competing
+    unrelated branches for the remainder of that round.
+
+    Each *generation* of successors exposed this way gets its own
+    admission cap of `CASCADE_GENERATION_CAP` (`2`), not a single budget
+    shared across the whole recursive cascade and not capped to exactly
+    1: a shared budget lets an early, high-fan-out generation (the
+    seed's own direct successors) exhaust it before a later generation
+    (reached only once one of those successors is itself admitted) ever
+    gets a turn, starving exactly the private helper this fix exists to
+    reach; a cap of exactly 1 avoids that starvation but only ever
+    admits the single best sibling, missing a real second-place private
+    helper sitting just behind its highest-density sibling (`_urlparse`'s
+    own immediate parent, `_url_has_allowed_host_and_scheme`, ranks
+    second among the seed's own two direct successors). A successor that
+    doesn't win its own generation's mini-competition simply waits for a
+    normal future round, exactly as it would without this fix.
+
+    Cascade candidates are exempt from the K=5 novelty streak above -
+    they are v's structurally-coupled successors exposed by an admission
+    within this very round, not the general frontier's open-ended
+    density competition that streak is guarding against, and each
+    generation's own small cap already bounds how many can get in this
+    way - but they are still subject to `_is_zero_novelty_test_fixture`
+    (a hard rule independent of any streak or cap: a `tests.*` call site
+    is never part of a causal pipeline no matter how it was discovered).
+    Fully deterministic: the same `sorted(...)`-based tie-break the main
+    loop already uses.
+
+    **`_is_zero_novelty_test_fixture`** (used by both the main loop and
+    `_run_cascade`): a second, independent admissibility rule, not part
+    of the K=5 streak and not counted by it. django's own test suite
+    calls straight into almost every seed from hundreds of `tests.*` /
+    `django.test*` call sites, each a real graph edge but never part of
+    the causal pipeline a debug task is about. Left ungated, a zero-
+    novelty test method competes for admission like any other zero-
+    novelty candidate and can consume a tight budget's remaining
+    headroom before the K=5 streak - which only counts *consecutive*
+    admits and keeps resetting as one test method's own new call edges
+    keep exposing more same-shaped siblings - ever meaningfully engages,
+    crowding out real, low-novelty pipeline symbols (like a seed's own
+    containing class) that fix-include-class-when-method-selected needs
+    the leftover budget to still promote afterward.
     """
     if beta * delta_max >= DOMINANCE_SAFETY_BOUND:
         raise ValueError(
@@ -471,153 +528,159 @@ def select_submodular_context(
     def _is_real_candidate(qname: str) -> bool:
         return costs.get(qname, 0) > 0
 
-    # fix-knapsack-bloat-stop-criterion: diversity constraint, restricted
-    # to `kind == "attribute"` candidates only - see this function's own
-    # docstring for why. `_containing_scope`/`_is_diversity_eligible` both degrade
-    # to "never matches" (the diversity gate below never fires) when
-    # `symbol_table` is `None` or lacks an entry for `qname` - the same
-    # fail-open convention `_is_real_candidate` above uses for an
-    # unresolved node.
-    #
-    # `enclosing_class` if the symbol is a method/attribute, else its
-    # `module`: two zero-novelty attributes on the same class (`AdminSite.
-    # site_header`/`.site_title`) are exactly as redundant with each
-    # other as two zero-novelty *module-level* attributes/constants from
-    # the same module would be - the class/module distinction is just
-    # which syntactic container groups them.
-    def _containing_scope(qname: str) -> str | None:
-        if symbol_table is None:
-            return None
-        info = symbol_table.get(qname)
-        if info is None:
-            return None
-        return info.enclosing_class if info.enclosing_class is not None else info.module
+    # fix-knapsack-bloat-stop-criterion: novelty-adaptive stop - see this
+    # function's own docstring for the full reasoning and the K=5 choice.
+    # A running streak of *consecutive* delta_feat==0 admits; reset to 0
+    # the moment a delta_feat>0 candidate is admitted. While the streak
+    # is at or past this threshold, a delta_feat==0 candidate is not
+    # admissible this round - it simply isn't scored, exactly like a
+    # candidate that fails the budget check above.
+    NOVELTY_STREAK_STOP_K = 5
+    consecutive_zero_novelty_admits = 0
 
-    #: `"attribute"`: never a pipeline stage in this corpus (see the
-    #: docstring above). `"method"`, `"function"`, and `"class"`
-    #: deliberately are not - a `"function"` extension was tried (two
-    #: same-module free functions are exactly as redundant with each
-    #: other as two same-class attributes, in the reasoning that
-    #: motivated it) and reverted: `tests/test_pipeline_preservation.py`'s
-    #: `test_generous_budget_packs_the_entire_causal_pipe` fixture has a
-    #: real causal pipeline (`parse_order -> store_order -> emit_audit`)
-    #: where two of those genuinely-necessary stages happen to be
-    #: zero-novelty, same-module, free functions - `emit_audit` got
-    #: wrongly excluded as "redundant" with `clean`, an unrelated
-    #: same-module function admitted earlier, breaking real pipeline
-    #: coverage on an existing, already-passing test. Verifying against
-    #: the real Django T02 corpus alone wasn't enough to catch this - a
-    #: small, single-purpose module where most of its functions genuinely
-    #: are pipeline-relevant isn't well represented among Django's own
-    #: large, multi-purpose modules. `"class"` is excluded for a
-    #: different reason: fix-include-class-when-method-selected's whole
-    #: purpose is *adding* a class symbol back once its method is
-    #: selected - this rule must never fight that by excluding one first.
-    _DIVERSITY_ELIGIBLE_KINDS = frozenset({"attribute"})
+    def _is_novelty_streak_blocked(delta_feat: int) -> bool:
+        return delta_feat == 0 and consecutive_zero_novelty_admits >= NOVELTY_STREAK_STOP_K
 
-    def _is_diversity_eligible(qname: str) -> bool:
-        if symbol_table is None:
-            return False
-        info = symbol_table.get(qname)
-        return info is not None and info.kind in _DIVERSITY_ELIGIBLE_KINDS
-
-    #: Which scopes already have a zero-novelty attribute-or-function
-    #: admit. Deliberately requires the *seeding* admit to be
-    #: zero-novelty too, not just the excluded candidate - tried the
-    #: broader "any admit of an eligible kind seeds it" version and
-    #: reverted it: a genuinely necessary symbol can coincidentally have
-    #: delta_feat==0 simply because an unrelated same-scope sibling
-    #: admitted earlier happens to cover the same feature tags (`_url
-    #: parse`'s own tags already covered by its companion `_url_has_
-    #: allowed_host_and_scheme`; `validate_host`'s by an earlier same-
-    #: module admit) - that coincidence must not be enough to exclude it.
-    #: Requiring *two* zero-novelty candidates from the same scope before
-    #: either the first or any later one gets excluded (once the first
-    #: is safely admitted, only a *second* redundant one - both
-    #: contributing nothing new - is ever excluded) is what keeps this
-    #: safe: verified against the full 20-task corpus at every budget,
-    #: this narrower condition introduces zero new missing pipeline
-    #: symbols; the broader one introduced 11, including on an explicitly
-    #: tested winning task. `seed_id` only seeds this if it is itself
-    #: diversity-eligible with a zero-novelty contribution - true of
-    #: essentially no real seed (a seed is always the method/function
-    #: under investigation), kept only so this stays correct in the
-    #: degenerate case rather than assuming it can't happen.
-    admitted_diversity_eligible_scopes: set[str] = set()
-    if _is_diversity_eligible(seed_id) and feature_masks.get(seed_id, 0) == 0:
-        seed_scope = _containing_scope(seed_id)
-        if seed_scope is not None:
-            admitted_diversity_eligible_scopes.add(seed_scope)
-
-    def _is_redundant_zero_novelty(qname: str, delta_feat: int) -> bool:
-        if delta_feat != 0:
-            return False
-        # Restricted to bare data attributes - never a method, function,
-        # or class. A T02 debug task's adjudicated pipeline_symbols is
-        # always an ordered sequence of *calls* (verified against every
-        # currently-committed T02 task: the only two attribute-kind
-        # pipeline symbols in the whole corpus,
-        # `CommonMiddleware.response_redirect_class` and
-        # `django.http.cookie.SimpleCookie`, are each the *only* member
-        # of their own scope ever admitted, so this rule never reaches
-        # them either way) - a bare attribute reference is never itself a
-        # causal pipeline stage, so excluding a *redundant* one (a second
-        # same-scope attribute contributing nothing new) can never remove
-        # a real pipeline symbol. A method/function is never excluded by
-        # this rule, however low its novelty measures, precisely because
-        # it *could* be a real pipeline stage - low measured novelty
-        # under the four-axis model is not evidence it isn't one (see
-        # Phase C's own investigation: `QuerySet._clone`, `BaseHandler.
-        # check_response`, `Model.save_base` and others are all real
-        # pipeline stages that happen to score zero novelty once their
-        # own feature tags are already covered by an earlier admit).
-        if not _is_diversity_eligible(qname):
-            return False
-        scope = _containing_scope(qname)
-        if scope is None:
-            return False
-        return scope in admitted_diversity_eligible_scopes
-
-    # fix-knapsack-bloat-stop-criterion, second independent exclusion:
-    # a zero-novelty candidate from a module that exists purely to
-    # exercise/support tests, never to be the actual causal pipeline
-    # under investigation - the corpus's own `tests` top-level package
-    # (a target repo's real test suite files) or Django's own `django.
-    # test` testing-support framework (`TestCase`, `Client`,
-    # `RequestFactory`, `ContextList`, ... - shipped as part of Django
-    # itself, but exists to help *write* tests, never itself the subject
-    # of one). Verified against every currently-committed T02 task: not
-    # one `adjudicated.pipeline_symbols` entry, across all 20, starts
-    # with either prefix - a debug task traces a real causal pipeline
-    # through application code, never through the test suite (or test
-    # support library) that exercises it. Unlike the attribute/function
-    # diversity exclusion above, this one needs no "already admitted"
-    # state: a zero-novelty candidate from either module is excluded on
-    # its own, the first time it's considered, never only the
-    # second-or-later same-scope one - the module itself (not redundancy
-    # with a sibling) is what rules it out.
+    # A second, independent admissibility rule (not part of the K=5 streak
+    # above, and not reset or tracked by it): a zero-novelty candidate
+    # from a test-fixture module (`tests.*`, `django.test*`) is never
+    # admissible on its own zero-novelty merits, streak or no streak.
+    # django's own test suite calls straight into the seed from hundreds
+    # of `tests.*` call sites, each a real graph edge but never itself
+    # part of the causal pipeline a debug task is about; left ungated,
+    # these compete for admission purely as one more zero-novelty
+    # candidate and can consume most of a tight budget before the K=5
+    # streak ever has a chance to engage (K counts *consecutive* admits,
+    # and a redundant test method's own new call edges keep exposing more
+    # same-shaped siblings, so the streak keeps resetting on genuinely
+    # fresh-looking-but-still-irrelevant test methods long before 5 in a
+    # row triggers) - crowding out real, low-novelty pipeline symbols
+    # (like a seed's own containing class) Fix 2 needs the budget to
+    # still promote afterward. Needs `symbol_table` for `SymbolInfo.module`
+    # - the one live use of that parameter in this function.
     _NEVER_PIPELINE_MODULE_PREFIXES = ("tests", "django.test")
 
     def _is_never_pipeline_module(module: str) -> bool:
         return any(module == prefix or module.startswith(prefix + ".") for prefix in _NEVER_PIPELINE_MODULE_PREFIXES)
 
     def _is_zero_novelty_test_fixture(qname: str, delta_feat: int) -> bool:
-        if delta_feat != 0:
-            return False
-        if symbol_table is None:
+        if delta_feat != 0 or symbol_table is None:
             return False
         info = symbol_table.get(qname)
-        if info is None:
-            return False
-        return _is_never_pipeline_module(info.module)
+        return info is not None and _is_never_pipeline_module(info.module)
 
     frontier: set[str] = set()
     upstream_candidates: set[str] = set()
     combined_dist_map = dict(dist_w_map)
+
+    # fix-frontier-eager-expansion: score a just-admitted node's own
+    # outgoing neighbors immediately and admit eligible ones into *this
+    # same* round rather than only adding them to the frontier for the
+    # next one - see this function's own docstring for the private-
+    # helper problem this addresses (QuerySet._clone is only ever
+    # discovered as a successor of _chain, itself often only discovered
+    # several hops into another admission's own cascade - a private
+    # helper's one shot at competing has to arrive together with its own
+    # discovery, however many hops into this round that is, and has to
+    # be a real competition among more than one sibling, or the single
+    # highest-density sibling always wins and nothing else ever gets
+    # in). `_run_cascade` is called both for the seed's own initial
+    # direct successors (the seed is admitted unconditionally, so its
+    # successors deserve the same eager treatment as any later
+    # admission's - django.utils.http._urlparse is only ever discovered
+    # two hops past the seed, and its own immediate parent has to win
+    # this same eager treatment first) and, inside the main loop below,
+    # for each round's own `best_node`.
+    #
+    # Each *generation* of newly-discovered successors gets its own
+    # small, fixed admission cap (`CASCADE_GENERATION_CAP = 2`) - small
+    # enough that one generation's cascade can't alone consume a
+    # meaningful share of the budget, but wide enough for a real
+    # second-place sibling (a private helper with a low novelty/cost
+    # ratio, sitting just behind its highest-density sibling) to also
+    # get in. Not a single budget shared across the whole recursive
+    # cascade, and not capped to exactly 1: a *shared* budget lets an
+    # early, high-fan-out generation (e.g. the seed's own direct
+    # successors) exhaust it before a later generation (reached only
+    # once one of those successors is itself admitted) ever gets a turn;
+    # a per-generation cap of exactly 1 reliably avoided that starvation
+    # but only ever admits the single best sibling, missing exactly the
+    # second-place private helper this fix exists to reach. Whatever
+    # doesn't win its own generation's mini-competition simply waits in
+    # the frontier for a normal future round, exactly as before.
+    #
+    # These candidates are v's structurally-coupled successors exposed
+    # by admissions within this very round - not the general frontier's
+    # open-ended density competition the novelty-adaptive stop above is
+    # guarding against - so they are exempt from
+    # `_is_novelty_streak_blocked` (though still subject to
+    # `_is_zero_novelty_test_fixture`, a hard rule independent of any
+    # streak or cap): each generation's own cap is already the limit,
+    # exactly how Fix 2's class promotion below is also a bounded,
+    # rule-based addition ungated by novelty.
+    CASCADE_GENERATION_CAP = 2
+
+    def _discover_successors(node: str) -> set[str]:
+        batch: set[str] = set()
+        for succ in graph.successors(node):
+            if succ not in s_pack and succ not in frontier:
+                if dist_w_map.get(succ, float("inf")) <= max_hops and _is_real_candidate(succ):
+                    frontier.add(succ)
+                    combined_dist_map.setdefault(succ, dist_w_map[succ])
+                    batch.add(succ)
+        return batch
+
+    def _run_cascade(first_generation: set[str]) -> None:
+        nonlocal current_cost, covered_mask, consecutive_zero_novelty_admits
+        pending_generations: list[set[str]] = [first_generation] if first_generation else []
+
+        while pending_generations:
+            generation = pending_generations.pop(0)
+            generation_budget = min(len(generation), CASCADE_GENERATION_CAP)
+            admitted_in_generation = 0
+            pool = set(generation)
+
+            while admitted_in_generation < generation_budget and pool:
+                cascade_node = None
+                cascade_density = -1.0
+                for candidate in sorted(pool & frontier):
+                    cost = costs.get(candidate, 0)
+                    if current_cost + cost > target_budget:
+                        continue
+                    dist = combined_dist_map[candidate]
+                    cand_mask = feature_masks.get(candidate, 0)
+                    raw_novel_bits = (cand_mask & ~covered_mask).bit_count()
+                    if _is_zero_novelty_test_fixture(candidate, raw_novel_bits):
+                        continue
+                    value = compute_candidate_value(dist, cand_mask, covered_mask, beta, delta_max)
+                    if candidate in upstream_contract_preserving:
+                        value *= CONTRACT_PRESERVATION_MULTIPLIER
+                    density = value / max(cost, 1)
+                    if density > cascade_density:
+                        cascade_density = density
+                        cascade_node = candidate
+
+                if cascade_node is None:
+                    break
+
+                s_pack.append(cascade_node)
+                cascade_novel_bits = (feature_masks.get(cascade_node, 0) & ~covered_mask).bit_count()
+                if cascade_novel_bits == 0:
+                    consecutive_zero_novelty_admits += 1
+                else:
+                    consecutive_zero_novelty_admits = 0
+                current_cost += costs.get(cascade_node, 0)
+                covered_mask |= feature_masks.get(cascade_node, 0)
+                frontier.remove(cascade_node)
+                pool.discard(cascade_node)
+                admitted_in_generation += 1
+
+                next_generation = _discover_successors(cascade_node)
+                if next_generation:
+                    pending_generations.append(next_generation)
+
     if seed_id in graph:
-        for neighbor in graph.successors(seed_id):
-            if dist_w_map.get(neighbor, float("inf")) <= max_hops and _is_real_candidate(neighbor):
-                frontier.add(neighbor)
+        seed_generation = _discover_successors(seed_id)
         if dist_w_upstream_map is not None:
             for pred in graph.predecessors(seed_id):
                 if dist_w_upstream_map.get(pred, float("inf")) <= upstream_max_hops and _is_real_candidate(pred):
@@ -625,7 +688,8 @@ def select_submodular_context(
                     existing = combined_dist_map.get(pred)
                     upstream_dist = dist_w_upstream_map[pred]
                     combined_dist_map[pred] = min(existing, upstream_dist) if existing is not None else upstream_dist
-    frontier |= upstream_candidates
+        frontier |= upstream_candidates
+        _run_cascade(seed_generation)
 
     while frontier:
         best_node = None
@@ -649,7 +713,7 @@ def select_submodular_context(
             dist = combined_dist_map[candidate]
             cand_mask = feature_masks.get(candidate, 0)
             raw_novel_bits = (cand_mask & ~covered_mask).bit_count()
-            if _is_redundant_zero_novelty(candidate, raw_novel_bits) or _is_zero_novelty_test_fixture(candidate, raw_novel_bits):
+            if _is_novelty_streak_blocked(raw_novel_bits) or _is_zero_novelty_test_fixture(candidate, raw_novel_bits):
                 continue
 
             value = compute_candidate_value(dist, cand_mask, covered_mask, beta, delta_max)
@@ -666,19 +730,19 @@ def select_submodular_context(
 
         s_pack.append(best_node)
         best_node_novel_bits = (feature_masks.get(best_node, 0) & ~covered_mask).bit_count()
-        if best_node_novel_bits == 0 and _is_diversity_eligible(best_node):
-            best_node_scope = _containing_scope(best_node)
-            if best_node_scope is not None:
-                admitted_diversity_eligible_scopes.add(best_node_scope)
+        if best_node_novel_bits == 0:
+            consecutive_zero_novelty_admits += 1
+        else:
+            consecutive_zero_novelty_admits = 0
         current_cost += costs.get(best_node, 0)
         covered_mask |= feature_masks.get(best_node, 0)
         frontier.remove(best_node)
 
-        for succ in graph.successors(best_node):
-            if succ not in s_pack and succ not in frontier:
-                if dist_w_map.get(succ, float("inf")) <= max_hops and _is_real_candidate(succ):
-                    frontier.add(succ)
-                    combined_dist_map.setdefault(succ, dist_w_map[succ])
+        # fix-frontier-eager-expansion: see this function's docstring and
+        # `_run_cascade`'s own definition above for the full reasoning -
+        # `best_node`'s own newly-discovered successors get the same
+        # eager, capped, generation-based treatment as the seed's own.
+        _run_cascade(_discover_successors(best_node))
 
     # Mandatory upstream protection: "the packer must guarantee that at
     # least the most causally coupled direct caller of s is evaluated and
@@ -861,37 +925,41 @@ def pack_symbol_context(
     # mask popcount 0, cost 410 vs. its own method's 77) and so never
     # wins the density race on its own merits inside the loop above,
     # even though it's the literal symbol a T02 debug task's adjudicated
-    # pipeline names alongside the method. Deterministic (needed classes
-    # visited in ascending qualified-name order) and budget-safe: a
-    # class that would overflow the remaining budget is skipped, not
-    # force-admitted, and logged rather than silently dropped.
-    needed_classes: set[str] = set()
-    for qname in selected:
-        info = builder.symbol_table.get(qname)
-        if info is not None and info.kind == "method" and info.enclosing_class is not None:
-            needed_classes.add(info.enclosing_class)
-
+    # pipeline names alongside the method.
+    #
+    # A single left-to-right pass over `selected` in its existing
+    # (admission) order, rather than an appended batch at the end: the
+    # containing class is inserted immediately before the *first* of its
+    # own methods encountered in that order (a parent class precedes its
+    # method in the rendered output), and only once per class even if
+    # several of its methods were admitted. Deterministic and
+    # budget-safe: a class that would overflow the remaining budget is
+    # skipped, not force-admitted, and logged rather than silently
+    # dropped.
     selected_set = set(selected)
     running_cost = sum(costs.get(q, 0) for q in selected)
-    for class_qname in sorted(needed_classes):
-        if class_qname in selected_set:
-            continue
-        if class_qname not in costs:
-            costs.update(_default_costs(builder, [class_qname]))
-        class_cost = costs.get(class_qname, 0)
-        if class_cost <= 0:
-            continue  # not a real, resolvable symbol - nothing to add
-        if running_cost + class_cost <= target_budget:
-            selected.append(class_qname)
-            selected_set.add(class_qname)
-            running_cost += class_cost
-        else:
-            print(
-                f"[knapsack] fix-include-class-when-method-selected: {class_qname!r} "
-                f"needed by an admitted method but the remaining budget ({target_budget - running_cost}) "
-                f"can't afford its cost ({class_cost}) - skipped",
-                file=sys.stderr,
-            )
+    promoted_classes: set[str] = set()
+    reordered_selected: list[str] = []
+    for qname in selected:
+        info = builder.symbol_table.get(qname)
+        class_qname = info.enclosing_class if info is not None and info.kind == "method" else None
+        if class_qname is not None and class_qname not in selected_set and class_qname not in promoted_classes:
+            if class_qname not in costs:
+                costs.update(_default_costs(builder, [class_qname]))
+            class_cost = costs.get(class_qname, 0)
+            if class_cost > 0 and running_cost + class_cost <= target_budget:
+                reordered_selected.append(class_qname)
+                promoted_classes.add(class_qname)
+                running_cost += class_cost
+            elif class_cost > 0:
+                print(
+                    f"[knapsack] fix-include-class-when-method-selected: {class_qname!r} "
+                    f"needed by an admitted method but the remaining budget ({target_budget - running_cost}) "
+                    f"can't afford its cost ({class_cost}) - skipped",
+                    file=sys.stderr,
+                )
+        reordered_selected.append(qname)
+    selected = reordered_selected
 
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
     items = [
