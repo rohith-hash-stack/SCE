@@ -37,6 +37,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -78,10 +80,60 @@ from benchmarks.tsr.scorer_redundancy import score_redundancy
 DEFAULT_BUDGETS = (2000, 4000, 8000)
 DEFAULT_TASKS_DIR_TEMPLATE = "benchmarks/ground_truth/tasks/{repo}"
 
+#: This repo's own root (not the target corpus checkout `repo_path`
+#: resolves to, e.g. the Django clone) - the `git -C` target for
+#: `_push_checkpoint`, since reports/pilot/ lives here, not in the
+#: corpus being evaluated.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 #: Phase 1.4: checkpoint saved after every this-many fresh (task, engine,
 #: budget, seed) LLM calls, plus once more at the end of the run.
 CHECKPOINT_INTERVAL = 100
 DEFAULT_CHECKPOINT_PATH = "reports/pilot/checkpoint.json"
+
+#: Names the env var read for Fix 2's incremental checkpoint push - no
+#: default, deliberately: pushing to the wrong branch by accident (or
+#: to `pilot-execution`/`main` because some fallback branch name felt
+#: reasonable) is worse than not pushing at all. Unset means "don't
+#: push" - the checkpoint file on disk is still safe either way; this
+#: is a best-effort durability improvement on top of it, not something
+#: a run depends on to be correct.
+PILOT_RESULTS_BRANCH_ENV_VAR = "PILOT_RESULTS_BRANCH"
+
+
+def _push_checkpoint(fresh_calls_completed: int) -> None:
+    """Commits and pushes `reports/pilot/` to `$PILOT_RESULTS_BRANCH`
+    after a checkpoint save, so a Kaggle session dying mid-run loses at
+    most `CHECKPOINT_INTERVAL` cells' worth of progress instead of
+    everything since the notebook's own end-of-run push. A no-op (no
+    subprocess call at all) when `PILOT_RESULTS_BRANCH` isn't set.
+
+    Every git subprocess call is wrapped in one `try`/`except`: a
+    network failure, a rejected push, git not being configured, or
+    nothing new to commit must never crash the pilot run itself -
+    `save_checkpoint`'s own write to disk already happened by the time
+    this is called, so a failed push here only costs this one
+    incremental durability improvement, not the run.
+    """
+    branch = os.environ.get(PILOT_RESULTS_BRANCH_ENV_VAR)
+    if not branch:
+        return
+    try:
+        subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "add", "-f", "reports/pilot/"],
+            check=True, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "commit", "-m", f"checkpoint {fresh_calls_completed} cells"],
+            check=True, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "push", "origin", f"HEAD:{branch}"],
+            check=True, capture_output=True, text=True,
+        )
+        print(f"[runner] checkpoint pushed to {branch!r} ({fresh_calls_completed} cells)", flush=True)
+    except Exception as exc:
+        print(f"[runner] checkpoint push to {branch!r} failed (continuing): {exc}", file=sys.stderr, flush=True)
 
 
 def _cell_key(task_id: str, engine_name: str, budget: int, seed: int) -> str:
@@ -361,6 +413,20 @@ def run_evaluation(
     if not tasks:
         print(f"warning: no accepted ground-truth tasks found for repo={repo!r} in {tasks_dir!r}", file=sys.stderr)
 
+    #: Engine count is computed by actually building the engine list for
+    #: the first task (rather than a hardcoded constant) so this stays
+    #: correct if _build_engines' own engine set ever changes - the same
+    #: real function every (task, budget) pair below calls, just called
+    #: once here purely to measure len(engines).
+    num_engines = len(_build_engines(tasks[0], oracle_packages_path, use_pragmatic_oracle)) if tasks else 0
+    total_cells = len(tasks) * num_engines * len(budgets) * len(seeds)
+    print(
+        f"[runner] starting: {total_cells} cells planned "
+        f"({len(tasks)} tasks x {num_engines} engines x "
+        f"{len(budgets)} budgets x {len(seeds)} seeds)",
+        flush=True,
+    )
+
     builder, _tag_matrix = build_pipeline(repo_path)
     feature_stats = compute_corpus_feature_stats(builder)
 
@@ -450,7 +516,8 @@ def run_evaluation(
                         if task.task_type == "debug":
                             task_prompt = task.prompt + DEBUG_TASK_RESPONSE_CONTRACT
                         tsr_results = run_tsr_prompt(
-                            client, SYSTEM_PROMPT, rendered_xml, task_prompt, model=model, seeds=tuple(pending_seeds)
+                            client, SYSTEM_PROMPT, rendered_xml, task_prompt, model=model, seeds=tuple(pending_seeds),
+                            task_id=task.task_id, engine=engine.name,
                         )
                         for r in tsr_results:
                             score = score_tsr_response(task, r.call.content, candidate_symbols)
@@ -503,7 +570,12 @@ def run_evaluation(
                             fresh_calls_completed += 1
                             if fresh_calls_completed % CHECKPOINT_INTERVAL == 0:
                                 save_checkpoint(checkpoint_path, checkpoint)
+                                _push_checkpoint(fresh_calls_completed)
                                 print(f"[pilot] {fresh_calls_completed} cells completed - checkpoint saved to {checkpoint_path}")
+                                print(
+                                    f"[runner] checkpoint: {len(checkpoint['cells'])}/{total_cells} cells",
+                                    flush=True,
+                                )
                                 if output_dir is not None:
                                     #: A partial report at cell 100 is more
                                     #: useful than no report at all if the
@@ -543,6 +615,9 @@ def run_evaluation(
         # saved once more here so no completed cell is lost to a crash
         # after the loop's own last `% CHECKPOINT_INTERVAL == 0` save.
         save_checkpoint(checkpoint_path, checkpoint)
+        _push_checkpoint(fresh_calls_completed)
+
+    print(f"[runner] complete: {len(checkpoint['cells'])}/{total_cells} cells", flush=True)
 
     if total_calls_scored:
         avg_prompt = total_prompt_tokens / total_calls_scored

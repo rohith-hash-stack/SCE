@@ -27,6 +27,18 @@ Do not push results to `pilot-execution` - keep the workflow branch and
 the results branch separate so re-running the notebook never conflicts
 with, or overwrites, a prior run's committed output.
 
+**fix-push-inside-runner**: `benchmarks.runner.run_evaluation` now
+commits and pushes `reports/pilot/` to `$PILOT_RESULTS_BRANCH` itself,
+after every checkpoint save (every `CHECKPOINT_INTERVAL` fresh LLM
+calls, plus once more at the end) - not just once at the very end of
+the run. Set `PILOT_RESULTS_BRANCH=pilot-results` (or this run's own
+results branch name) in the notebook *before* invoking the runner; if
+it's left unset, no push happens at all (the checkpoint file on disk is
+still written normally either way). The notebook's own former
+end-of-run push step is no longer needed - remove it, since the runner
+now covers every checkpoint interval that step used to miss if the
+session died mid-run.
+
 ## Notebook environment
 
 The notebook must run with **GPU T4 x2** enabled (Kaggle accelerator

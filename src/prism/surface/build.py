@@ -55,8 +55,11 @@ from prism.traversal._data_flow_common import _bindings, _call_arguments, _decl_
 from prism.traversal.causal_weights import LAMBDA_DATA_FLOW, LAMBDA_GUARD, compute_causal_edges
 from prism.traversal.continuous_dijkstra import compute_topological_distances
 from prism.parser.tree_sitter_loader import node_text
+from prism.surface.causal_path import compute_causal_path
 from prism.surface.models import (
     BudgetRef,
+    CausalPath,
+    CausalPathStage,
     ContextPackage,
     CoverageGap,
     CoverageSummary,
@@ -229,11 +232,20 @@ def build_context_package(
     max_hops: float = DEFAULT_MAX_HOPS,
     run_id: str | None = None,
     generated_at: str | None = None,
+    include_causal_path: bool = True,
 ) -> ContextPackage:
     """Runs the causal engine (`pack_symbol_context`) and wraps its real
     output in a `ContextPackage`. Raises `KeyError` if `seed_id` isn't in
     `builder.symbol_table` - callers (the MCP tool layer) are expected to
-    check that first and raise their own, more specific error."""
+    check that first and raise their own, more specific error.
+
+    `include_causal_path` (default `True`, the T02/chain/debug-style
+    single-seed-forward-chain use case this envelope was designed
+    around): set `False` for a blast-radius (upstream callers, not a
+    forward chain) or overview (broad, multi-concern) retrieval, where a
+    single forward `<causal_path>` either doesn't apply or would mislead
+    - `prism.surface.models.ContextPackage.causal_path` stays `None`
+    rather than ever emitting an empty `<causal_path>` block."""
     contracts = contracts or {}
     seed_info = builder.symbol_table.get(seed_id)
     if seed_info is None:
@@ -309,6 +321,19 @@ def build_context_package(
             )
         )
 
+    causal_path = None
+    if include_causal_path:
+        causal_edge_pairs = [(e.from_node, e.to_node) for e in edges if e.type in ("CALLS", "INSTANTIATES")]
+        stages, truncated = compute_causal_path(seed_id, packed_ids, causal_edge_pairs, dist_w_map, feature_masks, _output_kind)
+        causal_path = CausalPath(
+            seed=seed_id,
+            stages=[
+                CausalPathStage(order=i, symbol=symbol, distance=distance, role=role)
+                for i, (symbol, distance, role) in enumerate(stages, start=1)
+            ],
+            truncated=truncated,
+        )
+
     compression_counts: dict[str, int] = {}
     for node in nodes:
         compression_counts[node.compression] = compression_counts.get(node.compression, 0) + 1
@@ -350,6 +375,7 @@ def build_context_package(
         budget=BudgetRef(tokens=target_budget, tokenizer=active_backend(), exact=is_exact()),
         language=LanguageRef(tier=tier_digit, primary=primary_language, files=len(files_seen)),
         options={"engine": ENGINE_NAME, "max_hops": str(max_hops)},
+        causal_path=causal_path,
         manifest=manifest,
         coverage=coverage,
         warnings=warnings,

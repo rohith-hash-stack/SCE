@@ -36,7 +36,20 @@ def precision_recall_f1(predicted: set[str], ground_truth: set[str]) -> tuple[fl
 def score_blast(response_text: str, candidate_symbols: set[str], ground_truth_callers: set[str]) -> float:
     """`1.0` iff the LLM's extracted caller set has `F1 == 1.0` against
     `G*_callers` (exact match, not partial credit - Type 2's own binary
-    scoring rule), else `0.0`."""
-    predicted = extract_mentioned_symbols(response_text, candidate_symbols)
+    scoring rule), else `0.0`.
+
+    Precision/recall are computed against `ground_truth_callers` only -
+    `extract_mentioned_symbols` is deliberately called with
+    `ground_truth_callers` as its own candidate set, not the broader
+    `candidate_symbols` (the full packed-context universe, still
+    accepted here for call-site/signature compatibility but otherwise
+    unused). A response that mentions every ground-truth caller plus
+    other, non-ground-truth symbols from the packed context (test
+    helpers, unrelated callers, etc.) is not penalized for those extra
+    mentions: the task only asks the LLM to name every real caller, not
+    to recite the packed context back verbatim minus everything
+    irrelevant, so a symbol the response mentions that was never a
+    candidate answer shouldn't cost precision."""
+    predicted = extract_mentioned_symbols(response_text, ground_truth_callers)
     _precision, _recall, f1 = precision_recall_f1(predicted, ground_truth_callers)
     return 1.0 if f1 == 1.0 else 0.0

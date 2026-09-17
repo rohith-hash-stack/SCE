@@ -121,12 +121,18 @@ def test_complete_logs_token_usage_and_estimates_cost_from_deepseek_pricing(monk
     assert "completion_tokens=50" in stderr
 
 
-def test_complete_returns_none_cost_for_an_unpriced_model():
+def test_complete_returns_zero_cost_for_an_unpriced_model():
+    """fix-logging-task-and-cost: an unpriced model (no entry in either
+    pricing table, no override) is a real $0.0 cost, not an unknown-cost
+    sentinel - true for a local Ollama model tag in particular, which is
+    genuinely free to run. estimate_cost_usd's own None (`the model
+    isn't in the pricing table and no override was given`) is
+    normalized to 0.0 here rather than surfaced as None."""
     client, _ = _client_with_fake_completions(fail_count=0)
 
     result = client.complete("some-future-deepseek-model", "system", "user", seed=42)
 
-    assert result.cost_usd is None
+    assert result.cost_usd == 0.0
 
 
 def test_client_sends_response_format():
@@ -142,6 +148,23 @@ def test_client_sends_response_format():
 
     assert fake_completions.last_kwargs is not None
     assert fake_completions.last_kwargs.get("response_format") == {"type": "json_object"}
+
+
+def test_client_sends_stop_sequences():
+    """fix-stop-sequences: every real chat-completions call sends the
+    module's STOP_SEQUENCES, so a response that reaches one of its own
+    natural boundaries (a triple newline, right after a closing
+    `]}`, or a closing code fence) stops generating there instead of
+    running to the max_tokens cap - the 31-cell 2048-cap-hit pattern
+    from the previous full pilot run."""
+    from benchmarks.tsr.client import STOP_SEQUENCES
+
+    client, fake_completions = _client_with_fake_completions(fail_count=0)
+
+    client.complete("deepseek-v4-flash", "system", "user", seed=42)
+
+    assert fake_completions.last_kwargs is not None
+    assert fake_completions.last_kwargs.get("stop") == list(STOP_SEQUENCES)
 
 
 def test_client_respects_timeout_env_var(monkeypatch):

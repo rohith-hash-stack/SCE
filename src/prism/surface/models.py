@@ -149,13 +149,28 @@ class EdgeEntry(_Frozen):
     back_edge: bool = False
 
 
+class CausalPathStage(_Frozen):
+    order: int
+    symbol: str
+    distance: float
+    role: Literal["entry", "transform", "sink", "return"]
+
+
+class CausalPath(_Frozen):
+    seed: str
+    direction: Literal["forward"] = "forward"
+    stages: list[CausalPathStage]
+    truncated: bool = False
+
+
 class ContextPackage(_Frozen):
-    schema_version: int = 1
+    schema_version: int = 2
     engine: EngineRef
     seed: SeedRef
     budget: BudgetRef
     language: LanguageRef
     options: dict[str, str] = Field(default_factory=dict)
+    causal_path: Optional[CausalPath] = None
     manifest: Manifest
     coverage: CoverageSummary
     warnings: list[EnvelopeWarning] = Field(default_factory=list)

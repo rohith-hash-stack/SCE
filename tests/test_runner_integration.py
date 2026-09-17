@@ -68,7 +68,7 @@ class _FakeOpenAICompatibleClient:
         self.seeds_seen: list[int] = []
         self._response_text = response_text
 
-    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None):
+    def complete(self, model, system, user, temperature=0.0, max_tokens=None, seed=None, task_id=None, engine=None):
         self.seeds_seen.append(seed)
         return CallResult(
             model=model, content=self._response_text, prompt_tokens=1, completion_tokens=1,

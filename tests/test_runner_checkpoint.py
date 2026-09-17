@@ -1,13 +1,16 @@
 """Phase 1.4 (DeepSeek pilot setup) regression coverage for
 `benchmarks.runner`'s checkpointing helpers: `_cell_key`,
-`load_checkpoint`, `save_checkpoint`. Pure, filesystem-only - no network,
-no LLM client, no real corpus.
+`load_checkpoint`, `save_checkpoint`, `_push_checkpoint`. Pure,
+filesystem-only - no network, no LLM client, no real corpus (the git
+subprocess calls in `_push_checkpoint`'s own tests are mocked, never
+real).
 """
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
-from benchmarks.runner import _cell_key, load_checkpoint, save_checkpoint
+from benchmarks.runner import _cell_key, _push_checkpoint, load_checkpoint, save_checkpoint
 
 
 def test_cell_key_is_a_plain_pipe_joined_string():
@@ -56,3 +59,43 @@ def test_save_checkpoint_creates_parent_directories(tmp_path):
     save_checkpoint(str(path), {"cells": {}})
 
     assert path.exists()
+
+
+def test_push_checkpoint_is_a_noop_when_env_var_unset(monkeypatch):
+    """fix-push-inside-runner: no PILOT_RESULTS_BRANCH means no push at
+    all - not even an attempted subprocess call - since there's no
+    default branch to push to."""
+    monkeypatch.delenv("PILOT_RESULTS_BRANCH", raising=False)
+
+    with patch("benchmarks.runner.subprocess.run") as mock_run:
+        _push_checkpoint(100)
+
+    mock_run.assert_not_called()
+
+
+def test_push_checkpoint_attempts_subprocess_when_env_var_set(monkeypatch):
+    """With PILOT_RESULTS_BRANCH set, _push_checkpoint attempts the
+    add/commit/push subprocess calls - mocked here, never a real git
+    invocation."""
+    monkeypatch.setenv("PILOT_RESULTS_BRANCH", "fake-results-branch")
+
+    with patch("benchmarks.runner.subprocess.run") as mock_run:
+        _push_checkpoint(100)
+
+    assert mock_run.called
+    commands = [call.args[0] for call in mock_run.call_args_list]
+    assert any(cmd[:2] == ["git", "-C"] and "add" in cmd for cmd in commands)
+    assert any(cmd[:2] == ["git", "-C"] and "commit" in cmd for cmd in commands)
+    assert any(cmd[:2] == ["git", "-C"] and "push" in cmd for cmd in commands)
+    push_cmd = next(cmd for cmd in commands if "push" in cmd)
+    assert push_cmd[-1] == "HEAD:fake-results-branch"
+
+
+def test_push_checkpoint_swallows_subprocess_failure(monkeypatch):
+    """A failed git call (network down, nothing to commit, rejected
+    push) must never propagate out of _push_checkpoint - the pilot run
+    itself must survive it."""
+    monkeypatch.setenv("PILOT_RESULTS_BRANCH", "fake-results-branch")
+
+    with patch("benchmarks.runner.subprocess.run", side_effect=OSError("no network")):
+        _push_checkpoint(100)  # must not raise
