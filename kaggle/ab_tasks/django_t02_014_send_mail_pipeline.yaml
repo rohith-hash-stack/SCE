@@ -1,0 +1,190 @@
+# T02 "Django Debug" - Task 14: send_mail's real delivery pipeline
+# (Milestone 2 batch 3, seed 3/15 - subsystem: Mail).
+#
+# Not on the originally-suggested subsystem list (template rendering,
+# CSRF, static files, admin, HTTP lifecycle, transactions) - three
+# candidates from that list were investigated and dropped first (see
+# below), and mail was picked as a clean substitute, the same way
+# django_t02_010/011 substituted i18n/Permissions for CSRF/static files
+# in batch 2.
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; each
+# has a real, *reachable* CALLS/INSTANTIATES out-edge to the next stage
+# in builder.graph - see the reachability check below, added after
+# batch-3 review caught the pipeline's original terminal stage was
+# unreachable).
+#
+#   django.core.mail.send_mail                              lines 54-87   (django/core/mail/__init__.py)
+#   django.core.mail.get_connection                          lines 42-51   (django/core/mail/__init__.py)
+#   django.core.mail.message.EmailMultiAlternatives           lines 433-494 (django/core/mail/message.py, class)
+#   django.core.mail.message.EmailMultiAlternatives.attach_alternative lines 474-478 (django/core/mail/message.py)
+#
+# Real causal chain, read directly from source (__init__.py lines
+# 75-86): `connection = connection or get_connection(...)` - get_
+# connection() only runs when no connection was already passed in (the
+# function's own `connection=None` default, the common case). `mail =
+# EmailMultiAlternatives(...)` is unconditional. `if html_message:
+# mail.attach_alternative(html_message, "text/html")` - only runs when
+# an HTML alternative body was provided (also a `None` default). Two
+# explicit assumptions this task's prompt states: no connection was
+# passed in, and an HTML alternative body is provided - together they
+# make every stage in this 4-symbol pipeline real, reached code.
+#
+# Reachability check (batch-3 review, G40): the real next source
+# statement is `return mail.send()`. EmailMultiAlternatives does not
+# itself define send() - it inherits it from EmailMessage (message.py
+# lines 293-299), and a real EXTENDS edge from EmailMultiAlternatives
+# to EmailMessage does exist in builder.graph. But `mail.send()`'s own
+# call site resolves to `EmailMultiAlternatives.send`, a symbol that
+# does not exist anywhere in the real indexed table (confirmed
+# directly - MISS), and nothing in this codebase's call-resolution
+# falls back through the real EXTENDS edge to find the actual
+# inherited definition. Checked exhaustively: EmailMessage.send has
+# zero in-edges from send_mail, from EmailMultiAlternatives, or from
+# anywhere reachable in this pipeline (its only real in-edges are from
+# unrelated test methods that call it directly on their own EmailMessage-
+# typed variables). So although EmailMessage.send is a real, indexed
+# symbol, it is unreachable from this seed via any real graph
+# traversal - putting it in pipeline_symbols would make the pipeline's
+# terminal stage unwinnable for every engine under test, the same
+# failure mode django_t02_013's review caught and rejected for a
+# different reason (an attribute with no alias to the class it points
+# to). This is now tracked as G40 - inheritance-unaware self.method()
+# call resolution - in design_formalism.md's Known Limitations section;
+# not fixed here (task authoring only, no engine changes). This
+# pipeline is trimmed to stop at attach_alternative, its last real,
+# reachable stage; EmailMessage.send moves to boundary_symbols instead,
+# documented as the semantically-correct next step that the current
+# call graph cannot represent.
+#
+# Seed check (Milestone 2 requirements): send_mail is a plain
+# module-level function, not metaclass-generated; nothing here is
+# async/await; no container-subscript data-flow pattern is involved
+# (pure call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.core.mail.message.EmailMessage                  (class)  lines 191-430
+#   django.core.mail.message.EmailMessage.recipients         (method) lines 286-291
+#   django.core.mail.message.EmailMessage.get_connection      (method) lines 252-257
+#   django.core.mail.message.EmailMessage.send                (method) lines 293-299 - real and indexed,
+#     but NOT reachable from this seed via builder.graph (see above);
+#     listed as boundary, not pipeline, for exactly that reason.
+#
+# Candidates investigated and dropped before landing on this task and
+# django_t02_012/013: django.template.base.Template.render (a real
+# but nonsensical cycle - render() calls _render(), which builder.graph
+# shows calling render() right back; the true target of _render()'s
+# self.nodelist.render(context) call is NodeList.render, a distinct
+# real symbol the resolver mis-attributed to Template's own render()
+# instead - a genuine engine artifact, not usable as ground truth);
+# django.contrib.admin.options.BaseModelAdmin.get_fields (its own
+# _get_form_for_get_fields() call is explicitly "implemented in
+# subclasses" per the method's own comment - ModelAdmin and
+# InlineModelAdmin each define a distinct, real
+# _get_form_for_get_fields, and which one runs depends on the concrete
+# subclass instantiated, not resolvable from BaseModelAdmin alone - the
+# same class of dynamic-dispatch ambiguity already excluded elsewhere);
+# django.core.files.storage.base.Storage.save (its own self._save(...)
+# call is a documented abstract hook with no implementation anywhere in
+# base.py, only in concrete storage backends - _save is confirmed
+# absent from the real indexed table).
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_014_send_mail_pipeline
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.core.mail.send_mail
+task_type: debug
+prompt: |
+  You are debugging Django's `send_mail` convenience wrapper in
+  django/core/mail/__init__.py. Starting from `send_mail`, trace the
+  real causal pipeline a call travels through, in the order each stage
+  is actually reached, up to and including the call that attaches the
+  HTML alternative body. Assume no explicit `connection` argument was
+  passed in (the default), and that an HTML alternative body is
+  provided via `html_message`.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.core.mail.send_mail", "django.core.mail.get_connection"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.core.mail.send_mail
+    - django.core.mail.get_connection
+    - django.core.mail.message.EmailMultiAlternatives
+    - django.core.mail.message.EmailMultiAlternatives.attach_alternative
+  required_context:
+    - django.core.mail.message.EmailMessage
+  boundary_symbols:
+    - django.core.mail.message.EmailMessage.recipients
+    - django.core.mail.message.EmailMessage.get_connection
+    - django.core.mail.message.EmailMessage.send
+  expected_solution: >
+    send_mail() calls get_connection() since no connection was passed
+    in, constructs an EmailMultiAlternatives message, then attaches the
+    HTML alternative since one was provided. Required context:
+    EmailMessage, which EmailMultiAlternatives extends. Boundary:
+    recipients() and get_connection() (the instance method, distinct
+    from the module-level function of the same simple name), plus
+    send() - the real next step, but not reachable from this seed
+    through the current call graph (EmailMultiAlternatives inherits
+    send() from EmailMessage, and nothing in this codebase's call
+    resolution follows that inheritance edge).
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.core.mail.send_mail
+    - django.core.mail.get_connection
+    - django.core.mail.message.EmailMultiAlternatives
+  required_context:
+    - django.core.mail.message.EmailMessage
+  boundary_symbols:
+    - django.core.mail.message.EmailMessage.recipients
+    - django.core.mail.message.EmailMessage.get_connection
+    - django.core.mail.message.EmailMessage.send
+  expected_solution: >
+    send_mail() calls get_connection(), then constructs an
+    EmailMultiAlternatives message. (Missed that attaching the HTML
+    alternative is itself a separate traced call, attach_alternative()
+    - assumed html_message is just a constructor argument rather than
+    checking the actual source, which handles it as a conditional
+    post-construction step.) Agreed on required context and boundary
+    symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.core.mail.send_mail
+    - django.core.mail.get_connection
+    - django.core.mail.message.EmailMultiAlternatives
+    - django.core.mail.message.EmailMultiAlternatives.attach_alternative
+  required_context:
+    - django.core.mail.message.EmailMessage
+  boundary_symbols:
+    - django.core.mail.message.EmailMessage.recipients
+    - django.core.mail.message.EmailMessage.get_connection
+    - django.core.mail.message.EmailMessage.send
+  expected_solution: >
+    Annotator A's full chain is correct: __init__.py lines 84-85 show
+    `if html_message: mail.attach_alternative(html_message,
+    "text/html")` as its own distinct statement, not a constructor
+    argument - EmailMultiAlternatives's own __init__ (message.py) takes
+    no html_message parameter at all, confirming this must be a
+    separate, later, real call. The prompt's own explicit stopping
+    point ("up to and including the call that attaches the HTML
+    alternative body") requires including it.

@@ -1,0 +1,138 @@
+# T02 "Django Debug" - Task 11: user permission-check backend dispatch
+# (Milestone 2 batch 2, seed 3/15 - subsystem: Permissions).
+#
+# Grounded in the real pinned Django 4.2.30 checkout (pinned_commit
+# below) - every symbol here is real and indexed, verified against the
+# real symbol table produced by prism.cli.build_pipeline on that exact
+# checkout (qualified names and line ranges below match exactly; each
+# has a real CALLS out-edge to the next stage in builder.graph).
+#
+#   django.contrib.auth.models.PermissionsMixin.has_perm  lines 298-311 (django/contrib/auth/models.py)
+#   django.contrib.auth.models._user_has_perm              lines 212-224 (django/contrib/auth/models.py)
+#   django.contrib.auth.get_backends                       lines 37-38  (django/contrib/auth/__init__.py)
+#
+# Real causal chain, read directly from source (models.py lines
+# 298-311, 212-224): has_perm() first checks
+# `if self.is_active and self.is_superuser: return True` - only
+# reaching `_user_has_perm(self, perm, obj)` when that short-circuit
+# does *not* apply. _user_has_perm() then calls `auth.get_backends()`
+# to enumerate the configured authentication backends, before
+# iterating over them and calling `backend.has_perm(user, perm, obj)`
+# on each. Explicit assumption this task's prompt states: assume the
+# user is not an active superuser (the has_perm short-circuit does not
+# apply), so the real backend-checking path is reached. Explicit
+# stopping point: the prompt stops at get_backends() - the next real
+# statement, `backend.has_perm(user, perm, obj)` inside the loop, is a
+# call through whichever backend get_backends() actually yields
+# (BaseBackend.has_perm and ModelBackend.has_perm are both real,
+# distinct definitions in this codebase - the simple name "has_perm" is
+# genuinely ambiguous across configured backends) and is not statically
+# resolvable to one target, so it is deliberately excluded from the
+# traced pipeline - the same class of stopping point
+# django_t02_006_auth_get_user_resolution's load_backend already uses
+# for the analogous backend.get_user() dispatch.
+#
+# Seed check (Milestone 2 requirements): PermissionsMixin is a plain
+# mixin class, not itself metaclass-generated (it is normally combined
+# with AbstractBaseUser, which does carry Django's ModelBase metaclass
+# through its own Model ancestry, but PermissionsMixin's own methods
+# here do not depend on any metaclass-generated behavior); nothing here
+# is async/await; no container-subscript data-flow pattern is involved
+# (pure call-chain).
+#
+# required_context/boundary_symbols, also real and verified:
+#   django.contrib.auth.models.PermissionsMixin            (class)  lines 242-331
+#   django.contrib.auth.backends.BaseBackend.has_perm        (method) lines 31-32
+#   django.contrib.auth.backends.ModelBackend.has_perm        (method) lines 112-113
+#
+# cohen_kappa is intentionally omitted - benchmarks.ground_truth.loader
+# computes it for real (Positive Specific Agreement / Dice-F1) from
+# annotation_a/annotation_b below.
+task_id: django_t02_011_permissions_backend_check
+repo: django
+pinned_commit: 3396992e837d5146270ea8112bb622c83fa4a919
+seed_symbol: django.contrib.auth.models.PermissionsMixin.has_perm
+task_type: debug
+prompt: |
+  You are debugging Django's permission-check dispatch in
+  django/contrib/auth/models.py. Starting from
+  `PermissionsMixin.has_perm`, trace the real causal pipeline that
+  determines which authentication backends will be consulted for the
+  permission check, in the order each stage is actually reached, up to
+  and including the call that enumerates those backends. Assume the
+  user is not an active superuser, so the real backend-checking path is
+  reached. Do not trace into any individual backend's own `has_perm`
+  call - which backend's implementation actually runs, and how many
+  are consulted, is resolved dynamically at runtime, not statically in
+  this pipeline.
+
+  Your symbols array should contain exactly 3 entries, no repeats.
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+  Then, on its own line, emit a fenced JSON code block containing an
+  ordered array of the fully-qualified symbol names in that causal
+  order - only symbols actually present in the provided context package
+  may appear, e.g.:
+
+  ```json
+  ["django.contrib.auth.models.PermissionsMixin.has_perm", "django.contrib.auth.models._user_has_perm"]
+  ```
+
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+    - django.contrib.auth.models.PermissionsMixin.has_perm
+    - django.contrib.auth.models._user_has_perm
+    - django.contrib.auth.get_backends
+  required_context:
+    - django.contrib.auth.models.PermissionsMixin
+  boundary_symbols:
+    - django.contrib.auth.backends.BaseBackend.has_perm
+    - django.contrib.auth.backends.ModelBackend.has_perm
+  expected_solution: >
+    has_perm() short-circuits for active superusers; assuming that
+    doesn't apply, it calls _user_has_perm(), which calls
+    get_backends() to enumerate the configured backends before looping
+    over them. Required context: PermissionsMixin itself. Boundary:
+    BaseBackend.has_perm and ModelBackend.has_perm, the two real,
+    distinct backend implementations the dynamic per-backend loop could
+    reach - not statically traceable to one target, so excluded from
+    the pipeline.
+
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+    - django.contrib.auth.models.PermissionsMixin.has_perm
+    - django.contrib.auth.models._user_has_perm
+  required_context:
+    - django.contrib.auth.models.PermissionsMixin
+  boundary_symbols:
+    - django.contrib.auth.backends.BaseBackend.has_perm
+    - django.contrib.auth.backends.ModelBackend.has_perm
+  expected_solution: >
+    has_perm() calls _user_has_perm() once the superuser short-circuit
+    doesn't apply. (Missed that backend enumeration is itself a
+    separate traced call, get_backends() - stopped one stage early,
+    treating "loop over backends" as a single implicit step rather than
+    naming the real function that produces the list to loop over.)
+    Agreed on required context and boundary symbols.
+
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+    - django.contrib.auth.models.PermissionsMixin.has_perm
+    - django.contrib.auth.models._user_has_perm
+    - django.contrib.auth.get_backends
+  required_context:
+    - django.contrib.auth.models.PermissionsMixin
+  boundary_symbols:
+    - django.contrib.auth.backends.BaseBackend.has_perm
+    - django.contrib.auth.backends.ModelBackend.has_perm
+  expected_solution: >
+    Annotator A's full chain is correct: _user_has_perm's own source
+    (models.py line 216) is `for backend in auth.get_backends():` -
+    get_backends() is a distinct, separately-traceable call that
+    produces the real list being iterated, not inlined logic, and the
+    prompt's own explicit stopping point ("up to and including the call
+    that enumerates those backends") requires including it.
