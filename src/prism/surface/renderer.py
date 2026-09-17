@@ -48,7 +48,8 @@ any one block.
 Zero or one `<causal_path>` block, immediately after `<metadata>` and
 before `<manifest>` - present exactly when `pkg.causal_path is not
 None` (a single-seed, forward-chain retrieval - `prism.surface.build.
-build_context_package`'s own `include_causal_path=True` default),
+build_context_package`'s own `include_causal_path` default, `True`
+unless overridden by the `PRISM_ENABLE_CAUSAL_PATH` env var),
 absent entirely for a blast-radius or overview retrieval built with
 `include_causal_path=False`. Never rendered empty - `pkg.causal_path`
 being set already guarantees at least one `<stage>` (the seed itself).
