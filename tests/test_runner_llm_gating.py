@@ -73,7 +73,7 @@ def _patch_corpus(monkeypatch, python_repo_root: str) -> None:
     )
 
 
-def test_client_construction_failure_is_fatal_without_dry_run(monkeypatch, python_repo_root):
+def test_client_construction_failure_is_fatal_without_dry_run(monkeypatch, python_repo_root, tmp_path):
     monkeypatch.delenv(DEEPSEEK_API_KEY_ENV_VAR, raising=False)
     monkeypatch.setattr("benchmarks.tsr.client._load_dotenv_if_present", lambda: None)
     _patch_corpus(monkeypatch, python_repo_root)
@@ -85,10 +85,11 @@ def test_client_construction_failure_is_fatal_without_dry_run(monkeypatch, pytho
             tasks_dir="unused",
             seeds=(42,),
             dry_run=False,
+            checkpoint_path=str(tmp_path / "checkpoint.json"),
         )
 
 
-def test_explicit_dry_run_is_unaffected_by_a_missing_api_key(monkeypatch, python_repo_root):
+def test_explicit_dry_run_is_unaffected_by_a_missing_api_key(monkeypatch, python_repo_root, tmp_path):
     monkeypatch.delenv(DEEPSEEK_API_KEY_ENV_VAR, raising=False)
     monkeypatch.setattr("benchmarks.tsr.client._load_dotenv_if_present", lambda: None)
     _patch_corpus(monkeypatch, python_repo_root)
@@ -99,6 +100,7 @@ def test_explicit_dry_run_is_unaffected_by_a_missing_api_key(monkeypatch, python
         tasks_dir="unused",
         seeds=(42,),
         dry_run=True,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
     )
 
     assert run.records
@@ -128,7 +130,7 @@ class _FakeOpenAICompatibleClient:
         )
 
 
-def test_each_record_gets_exactly_len_seeds_tsr_scores_end_to_end(monkeypatch, python_repo_root):
+def test_each_record_gets_exactly_len_seeds_tsr_scores_end_to_end(monkeypatch, python_repo_root, tmp_path):
     """The "seed aggregation bug" report's own claim (125 expected cells,
     20 produced) turned out to be explained entirely by Problem 1 (the
     client silently never got constructed, so the seed loop never ran at
@@ -148,6 +150,7 @@ def test_each_record_gets_exactly_len_seeds_tsr_scores_end_to_end(monkeypatch, p
         tasks_dir="unused",
         seeds=seeds,
         dry_run=False,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
     )
 
     assert run.records, "expected at least one (task, engine, budget) record"
@@ -161,7 +164,7 @@ def test_each_record_gets_exactly_len_seeds_tsr_scores_end_to_end(monkeypatch, p
     assert sorted(fake_client.seeds_seen) == sorted(list(seeds) * 4)
 
 
-def test_run_evaluation_does_not_override_client_model_when_none_chosen(monkeypatch, python_repo_root):
+def test_run_evaluation_does_not_override_client_model_when_none_chosen(monkeypatch, python_repo_root, tmp_path):
     """fix-client-env-vars regression: the reported pilot bug -
     LLM_BASE_URL/LLM_MODEL/LLM_API_KEY_ENV set to point at a local
     Ollama instance, but the harness still requested
@@ -192,6 +195,7 @@ def test_run_evaluation_does_not_override_client_model_when_none_chosen(monkeypa
         tasks_dir="unused",
         seeds=(42,),
         dry_run=False,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
     )
 
     assert fake_client.models_seen, "expected at least one complete() call"

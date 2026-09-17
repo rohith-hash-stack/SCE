@@ -157,7 +157,7 @@ class ProseClient:
         )
 
 
-def _run_mocked_pilot(monkeypatch, python_repo_root: str, fake_client):
+def _run_mocked_pilot(monkeypatch, python_repo_root: str, fake_client, tmp_path):
     import benchmarks.runner as runner_module
 
     PrismEngineCache._process_graph_cache.clear()
@@ -175,11 +175,12 @@ def _run_mocked_pilot(monkeypatch, python_repo_root: str, fake_client):
         seeds=_SEEDS,
         dry_run=False,
         use_pragmatic_oracle=True,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
     )
 
 
-def test_1_perfect_answer_scores_1_0_for_every_engine(monkeypatch, python_repo_root):
-    run = _run_mocked_pilot(monkeypatch, python_repo_root, PerfectClient())
+def test_1_perfect_answer_scores_1_0_for_every_engine(monkeypatch, python_repo_root, tmp_path):
+    run = _run_mocked_pilot(monkeypatch, python_repo_root, PerfectClient(), tmp_path)
 
     assert run.records, "expected at least one (task, engine, budget) record"
     assert len(run.records) == 5, [r.engine_name for r in run.records]  # PragmaticOracle + 4 baseline/prism
@@ -188,8 +189,8 @@ def test_1_perfect_answer_scores_1_0_for_every_engine(monkeypatch, python_repo_r
         assert record.tsr_scores == [1.0] * len(_SEEDS), (record.engine_name, record.tsr_scores)
 
 
-def test_2_wrong_answer_scores_0_0_for_every_engine(monkeypatch, python_repo_root):
-    run = _run_mocked_pilot(monkeypatch, python_repo_root, WrongClient())
+def test_2_wrong_answer_scores_0_0_for_every_engine(monkeypatch, python_repo_root, tmp_path):
+    run = _run_mocked_pilot(monkeypatch, python_repo_root, WrongClient(), tmp_path)
 
     assert len(run.records) == 5
     for record in run.records:
@@ -197,8 +198,8 @@ def test_2_wrong_answer_scores_0_0_for_every_engine(monkeypatch, python_repo_roo
         assert record.tsr_scores == [0.0] * len(_SEEDS), (record.engine_name, record.tsr_scores)
 
 
-def test_3_malformed_prose_output_fails_gracefully(monkeypatch, python_repo_root):
-    run = _run_mocked_pilot(monkeypatch, python_repo_root, ProseClient())  # must not raise
+def test_3_malformed_prose_output_fails_gracefully(monkeypatch, python_repo_root, tmp_path):
+    run = _run_mocked_pilot(monkeypatch, python_repo_root, ProseClient(), tmp_path)  # must not raise
 
     assert len(run.records) == 5
     for record in run.records:
@@ -206,7 +207,7 @@ def test_3_malformed_prose_output_fails_gracefully(monkeypatch, python_repo_root
         assert record.tsr_scores == [0.0] * len(_SEEDS), (record.engine_name, record.tsr_scores)
 
 
-def test_4_perfect_answer_yields_sensible_prism_diagnostics(monkeypatch, python_repo_root):
+def test_4_perfect_answer_yields_sensible_prism_diagnostics(monkeypatch, python_repo_root, tmp_path):
     """Sanity check on the Prism v1.1 record's diagnostics, not on TSR
     scoring. cpi_strict/cpi_fractional/fcc are checked as hard
     assertions - CPI measures whether Prism's own *retrieval* covers
@@ -231,7 +232,7 @@ def test_4_perfect_answer_yields_sensible_prism_diagnostics(monkeypatch, python_
     would make this test fail for the right harness and the wrong
     reason. Reported as a real diagnostic value instead.
     """
-    run = _run_mocked_pilot(monkeypatch, python_repo_root, PerfectClient())
+    run = _run_mocked_pilot(monkeypatch, python_repo_root, PerfectClient(), tmp_path)
 
     prism_record = next(r for r in run.records if r.engine_name == "prism_v11")
     diag = prism_record.diagnostics

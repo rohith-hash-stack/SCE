@@ -115,7 +115,7 @@ def test_resume_skips_a_checkpointed_cell_and_only_calls_the_client_for_the_rest
     assert seed_to_response[42] == "cached"
 
 
-def test_tsr_scoring_is_correctly_wired_for_a_genuinely_correct_debug_response(monkeypatch, python_repo_root):
+def test_tsr_scoring_is_correctly_wired_for_a_genuinely_correct_debug_response(monkeypatch, python_repo_root, tmp_path):
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
@@ -129,12 +129,13 @@ def test_tsr_scoring_is_correctly_wired_for_a_genuinely_correct_debug_response(m
 
     run = run_evaluation(
         repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
     )
     for record in run.records:
         assert record.tsr_scores == [1.0], record.engine_name
 
 
-def test_tsr_scoring_is_correctly_wired_for_a_genuinely_wrong_debug_response(monkeypatch, python_repo_root):
+def test_tsr_scoring_is_correctly_wired_for_a_genuinely_wrong_debug_response(monkeypatch, python_repo_root, tmp_path):
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
@@ -147,12 +148,13 @@ def test_tsr_scoring_is_correctly_wired_for_a_genuinely_wrong_debug_response(mon
 
     run = run_evaluation(
         repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
     )
     for record in run.records:
         assert record.tsr_scores == [0.0], record.engine_name
 
 
-def test_multiple_budgets_produce_one_record_per_engine_per_budget(monkeypatch, python_repo_root):
+def test_multiple_budgets_produce_one_record_per_engine_per_budget(monkeypatch, python_repo_root, tmp_path):
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
@@ -162,6 +164,7 @@ def test_multiple_budgets_produce_one_record_per_engine_per_budget(monkeypatch, 
     budgets = [500, 2000]
     run = run_evaluation(
         repo="django", budgets=budgets, tasks_dir="unused", seeds=(42,), dry_run=False,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
     )
     budgets_seen = sorted({r.budget_tokens for r in run.records})
     assert budgets_seen == sorted(budgets)

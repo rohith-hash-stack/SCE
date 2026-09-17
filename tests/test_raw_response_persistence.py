@@ -85,14 +85,17 @@ class _FakeOpenAICompatibleClient:
         )
 
 
-def test_raw_responses_are_index_aligned_with_tsr_scores(monkeypatch, python_repo_root):
+def test_raw_responses_are_index_aligned_with_tsr_scores(monkeypatch, python_repo_root, tmp_path):
     import benchmarks.runner as runner_module
 
     _patch_corpus(monkeypatch, python_repo_root)
     monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _FakeOpenAICompatibleClient)
 
     seeds = (42, 43, 44)
-    run = run_evaluation(repo="django", budgets=[2000], tasks_dir="unused", seeds=seeds, dry_run=False)
+    run = run_evaluation(
+        repo="django", budgets=[2000], tasks_dir="unused", seeds=seeds, dry_run=False,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
+    )
 
     assert run.records
     for record in run.records:
@@ -224,7 +227,10 @@ def test_markdown_report_shows_truncated_response_and_json_keeps_full_text(monke
             )
 
     monkeypatch.setattr(runner_module, "OpenAICompatibleClient", _LongResponseClient)
-    run = run_evaluation(repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False)
+    run = run_evaluation(
+        repo="django", budgets=[2000], tasks_dir="unused", seeds=(42,), dry_run=False,
+        checkpoint_path=str(tmp_path / "checkpoint.json"),
+    )
 
     markdown = render_raw_responses_markdown(run)
     assert long_text not in markdown  # never the full, untruncated text in the table

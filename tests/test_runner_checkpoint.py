@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+import pytest
+
 from benchmarks.runner import _cell_key, _push_checkpoint, load_checkpoint, save_checkpoint
 
 
@@ -99,3 +101,26 @@ def test_push_checkpoint_swallows_subprocess_failure(monkeypatch):
 
     with patch("benchmarks.runner.subprocess.run", side_effect=OSError("no network")):
         _push_checkpoint(100)  # must not raise
+
+
+def test_default_checkpoint_path_is_never_written_by_tests():
+    """fix-test-checkpoint-isolation: proves the session-wide guard
+    (`tests/conftest.py`'s autouse `_guard_default_pilot_checkpoint_path`
+    fixture) actually fires - a direct `save_checkpoint(DEFAULT_
+    CHECKPOINT_PATH, ...)` call (exactly what a test that forgets its
+    own `checkpoint_path=` would fall back to) must raise instead of
+    touching the real pilot-1 baseline file, and the error must name
+    this test so a real violation elsewhere in the suite is easy to
+    trace back to its source.
+
+    This is the guard's own self-test, not a scan of the rest of the
+    suite: the fixture protects every other test by construction
+    (session-scoped, autouse, active before any test body runs), so
+    there is nothing this one test could additionally observe about
+    another test's own execution - proving the interception mechanism
+    itself is real and armed is the actual coverage gap worth closing.
+    """
+    import benchmarks.runner as runner_module
+
+    with pytest.raises(AssertionError, match="pilot-1 baseline checkpoint"):
+        runner_module.save_checkpoint(runner_module.DEFAULT_CHECKPOINT_PATH, {"cells": {}})
