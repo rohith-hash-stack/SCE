@@ -4,6 +4,12 @@ This file starts tracking from the post-audit remediation batch below - it
 is not a retroactive reconstruction of this project's full commit
 history (see `git log` for that), only a forward record from here on.
 
+## Phase 1B — causal path block
+
+Added `<causal_path>` envelope element. Neutral in A/B test
+(ΔTSR +3.3pp, CI includes zero, 0 cells regressed). Shipped as
+infrastructure for downstream features.
+
 ## Unreleased
 
 Remediation of gaps found by a post-implementation verification audit of
