@@ -240,3 +240,29 @@ def test_causal_path_roundtrip(tmp_path):
     roundtripped = parse_context(xml)
     assert roundtripped.causal_path == pkg.causal_path
     assert roundtripped.schema_version == 2
+
+
+# --------------------------------------------------------------------- #
+# 8. PRISM_ENABLE_CAUSAL_PATH env-var toggle
+# --------------------------------------------------------------------- #
+def test_causal_path_env_var_toggle(tmp_path, monkeypatch):
+    """`include_causal_path`'s default (only its default - an explicit
+    `True`/`False` argument always wins) tracks `PRISM_ENABLE_CAUSAL_PATH`,
+    re-read fresh on every call: unset or `"1"` -> present, `"0"` ->
+    absent, back to `"1"` -> present again - the toggle an A/B harness
+    flips between two runs of the same process, not a value baked in at
+    import time."""
+    repo = _linear_chain_repo(tmp_path, "k", 3)
+    builder, _ = build_pipeline(str(repo))
+
+    monkeypatch.delenv("PRISM_ENABLE_CAUSAL_PATH", raising=False)
+    pkg = build_context_package(builder, "chain.k0", str(repo), target_budget=100_000, max_hops=20.0)
+    assert pkg.causal_path is not None
+
+    monkeypatch.setenv("PRISM_ENABLE_CAUSAL_PATH", "0")
+    pkg = build_context_package(builder, "chain.k0", str(repo), target_budget=100_000, max_hops=20.0)
+    assert pkg.causal_path is None
+
+    monkeypatch.setenv("PRISM_ENABLE_CAUSAL_PATH", "1")
+    pkg = build_context_package(builder, "chain.k0", str(repo), target_budget=100_000, max_hops=20.0)
+    assert pkg.causal_path is not None

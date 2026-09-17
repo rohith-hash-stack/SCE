@@ -223,6 +223,18 @@ def _coverage_summary(feature_masks: dict[str, int], reachable_ids: set[str], pa
     )
 
 
+def _causal_path_enabled() -> bool:
+    """The env-var-controlled *default* for `include_causal_path` below -
+    read fresh on every call (never cached at import time), so an A/B
+    harness can flip `PRISM_ENABLE_CAUSAL_PATH` between two runs of the
+    same process without touching any code. Unset, or anything other
+    than `"0"`/`"false"`/`"False"`, means enabled - matching `include_
+    causal_path`'s own previous unconditional-`True` default, so a
+    caller that has never heard of this env var sees no behavior
+    change."""
+    return os.environ.get("PRISM_ENABLE_CAUSAL_PATH", "1") not in ("0", "false", "False")
+
+
 def build_context_package(
     builder: ConcreteGraphBuilder,
     seed_id: str,
@@ -232,20 +244,26 @@ def build_context_package(
     max_hops: float = DEFAULT_MAX_HOPS,
     run_id: str | None = None,
     generated_at: str | None = None,
-    include_causal_path: bool = True,
+    include_causal_path: bool | None = None,
 ) -> ContextPackage:
     """Runs the causal engine (`pack_symbol_context`) and wraps its real
     output in a `ContextPackage`. Raises `KeyError` if `seed_id` isn't in
     `builder.symbol_table` - callers (the MCP tool layer) are expected to
     check that first and raise their own, more specific error.
 
-    `include_causal_path` (default `True`, the T02/chain/debug-style
-    single-seed-forward-chain use case this envelope was designed
-    around): set `False` for a blast-radius (upstream callers, not a
+    `include_causal_path` (default `None`, resolved per call to `_causal_
+    path_enabled()` - i.e. `PRISM_ENABLE_CAUSAL_PATH`, `"1"`/unset unless
+    a caller says otherwise): the T02/chain/debug-style single-seed-
+    forward-chain use case this envelope was designed around. Pass
+    `False` explicitly for a blast-radius (upstream callers, not a
     forward chain) or overview (broad, multi-concern) retrieval, where a
     single forward `<causal_path>` either doesn't apply or would mislead
-    - `prism.surface.models.ContextPackage.causal_path` stays `None`
+    - that explicit `True`/`False` always wins over the env var, which
+    only ever supplies the default. Either way,
+    `prism.surface.models.ContextPackage.causal_path` stays `None`
     rather than ever emitting an empty `<causal_path>` block."""
+    if include_causal_path is None:
+        include_causal_path = _causal_path_enabled()
     contracts = contracts or {}
     seed_info = builder.symbol_table.get(seed_id)
     if seed_info is None:
