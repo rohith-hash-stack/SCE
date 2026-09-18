@@ -112,6 +112,38 @@ RELATION_STRUCTURAL_WEIGHT: dict[str, float] = {
 # "CALLS" entry, the same way a `confidence="CONFIRMED_RUNTIME"` edge's
 # discount multiplies on top of its base structural weight rather than
 # hard-coding a combined constant.
+#
+# Phase C weight-reconciliation audit, stated precisely rather than left
+# implicit: the dominance this constant actually proves is exactly
+# 1-hop, not N-hop. `1/0.60 ~= 1.667` is less than `2 * 1.0 = 2.0` (two
+# confident CALLS hops), so a single tentative guess *would* currently
+# outrank a genuinely-resolved 2-hop structural path - the "same-or-
+# fewer-hop" phrasing above is accurate as written (a tentative edge
+# never beats a 1-hop or 0-hop neighbor) but should not be read as a
+# 2-hop or N-hop guarantee, which this value does not provide.
+# `prism.graph.weights.W_TENTATIVE` (15.0, an *absolute* floor designed
+# to dominate up to `MAX_INHERITANCE_DEPTH` structural hops under a
+# completely different, additive cost model) is not a drop-in
+# replacement for this *multiplicative* discount - substituting it here
+# would require rebuilding this module's whole cost composition (every
+# other discount here - CONFIRMED_RUNTIME, GAMMA_UNOBSERVED,
+# RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT - multiplies into one shared
+# `structural_weight` before a single `1/structural_weight` inversion;
+# W_TENTATIVE's own derivation assumes it is the *only* cost on its
+# edge, dominating a path built from separately-summed hop costs, not
+# one more multiplier composed with several others). Left unchanged
+# rather than force-fit: no real Go corpus/ground-truth exists in this
+# repo today to verify a stronger discount doesn't regress the only
+# consumer this constant currently has (Go's own single-candidate
+# fallback), and existing tests (tests/test_go_struct_embedding.py,
+# tests/test_distance_metric.py) only assert relative orderings
+# (< RELATION_STRUCTURAL_WEIGHT["CALLS"], < RELATION_TENTATIVE_DYNAMIC_
+# CALL_WEIGHT) that a stronger discount would trivially still satisfy,
+# so they provide no evidence either way. See
+# tests/phase_c/test_traversal_layer.py's own
+# test_tentative_call_weight_dominance for a test that verifies exactly
+# the 1-hop guarantee this value provides, and documents (rather than
+# hides) the 2-hop gap directly.
 RELATION_TENTATIVE_CALL_WEIGHT = 0.60
 
 # Item 9 (second post-implementation audit): Bayesian Confidence

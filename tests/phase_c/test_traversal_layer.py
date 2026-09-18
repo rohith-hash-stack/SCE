@@ -274,3 +274,58 @@ def test_multi_seed_single_element_list_matches_plain_string(tmp_path):
     as_string = compute_topological_distances(builder, "mod.f0")
     as_list = compute_topological_distances(builder, ["mod.f0"])
     assert as_string == as_list
+
+
+# ============================================================
+# Commit 4: RELATION_TENTATIVE_CALL_WEIGHT reconciliation
+# (prism.slicer.distance.DistanceEngine - see that module's own
+# updated audit comment on RELATION_TENTATIVE_CALL_WEIGHT for the full
+# reasoning: it proves exactly 1-hop dominance, not N-hop, and
+# prism.graph.weights.W_TENTATIVE is not a drop-in replacement for it
+# under a completely different, additive cost model.)
+# ============================================================
+
+def test_tentative_call_weight_dominance():
+    """A single confident CALLS hop strictly outranks (lower Dijkstra
+    cost than) a single TENTATIVE_CALL hop from the same seed - the
+    real, currently-provided guarantee of RELATION_TENTATIVE_CALL_WEIGHT."""
+    from prism.graph.concrete_builder import ConcreteGraphBuilder
+    from prism.graph.metamodel import SemanticMetamodel
+    from prism.slicer.distance import DistanceConfig, DistanceEngine
+
+    builder = ConcreteGraphBuilder("/tmp/repo")
+    builder.graph.add_node("seed")
+    builder.graph.add_node("confident_target")
+    builder.graph.add_node("tentative_target")
+    builder.graph.add_edge("seed", "confident_target", relation="CALLS")
+    builder.graph.add_edge("seed", "tentative_target", relation="CALLS", kind="TENTATIVE_CALL")
+
+    engine = DistanceEngine(SemanticMetamodel(), {}, DistanceConfig())
+    distances = engine.compute_all("seed", builder.graph)
+    assert distances["confident_target"] < distances["tentative_target"]
+
+
+def test_tag_bonus_does_not_invert_structural_monotonicity():
+    """seed -> u (1 hop, worst-case tag mismatch) and seed -> mid -> v
+    (2 hops, perfect tag match with the seed). Even at maximum tag-bonus
+    advantage for the farther node and maximum penalty for the nearer
+    one, u must still rank closer than v - Topological Monotonicity's
+    own proof (prism/slicer/distance.py's _d_hybrid docstring), verified
+    directly rather than trusted."""
+    import networkx as nx
+    from prism.graph.metamodel import SemanticMetamodel
+    from prism.slicer.distance import DistanceConfig, DistanceEngine
+
+    g = nx.DiGraph()
+    g.add_edge("seed", "u", relation="CALLS")
+    g.add_edge("seed", "mid", relation="CALLS")
+    g.add_edge("mid", "v", relation="CALLS")
+
+    tag_matrix = {
+        "seed": {"#route_handler"},
+        "u": set(),  # 1 hop, zero tag overlap with seed - worst-case mismatch
+        "v": {"#route_handler"},  # 2 hops, identical tags to seed - perfect match
+    }
+    engine = DistanceEngine(SemanticMetamodel(), tag_matrix, DistanceConfig())
+    distances = engine.compute_all("seed", g)
+    assert distances["u"] < distances["v"]
