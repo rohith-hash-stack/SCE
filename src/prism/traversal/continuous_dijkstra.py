@@ -206,7 +206,8 @@ def build_causal_graph(builder: ConcreteGraphBuilder) -> nx.DiGraph:
 
 def compute_topological_distances(
     builder: ConcreteGraphBuilder,
-    seed: str | list[str],
+    seed: str | None = None,
+    seeds: list[str] | None = None,
     d_max: float | None = None,
     direction: str = "forward",
 ) -> dict[str, float]:
@@ -217,23 +218,29 @@ def compute_topological_distances(
     as "not reachable/not the seed", the same convention `DistanceEngine.
     compute_all` uses). Empty dict if `seed` isn't in the graph at all.
 
-    `seed` (Phase C, Query Reach 3.5 - Multi-Source Seeding): a single
-    `str` (every existing caller's own shape, completely unaffected) or
-    a `list[str]` - multiple seeds initialized into the same Dijkstra
-    frontier at distance 0.0 simultaneously, so
+    `seed` / `seeds` (Phase C, Query Reach 3.5 - Multi-Source Seeding):
+    exactly one of the two must be given. `seed` (a single `str`) is
+    every existing caller's own shape, completely unaffected - it
+    normalizes to `seeds=[seed]` internally. `seeds` (a `list[str]`)
+    initializes multiple seeds into the same Dijkstra frontier at
+    distance 0.0 simultaneously, so
     `dist(v) = min(dist(s1, v), dist(s2, v), ...)` for every reachable
     `v`, computed in one real multi-source search
     (`nx.multi_source_dijkstra_path_length`, confirmed to return
     byte-identical results to the single-source function for a
     single-element list before this was wired in - not merely assumed
     equivalent) rather than one single-source search per seed unioned
-    afterward. Raises `ValueError` for an empty list - never silently
-    returns `{}` for "no seeds", which would be indistinguishable from
-    "seeds provided but none reachable". A seed not present in the graph
-    is dropped rather than raising (matching the single-seed function's
-    own existing "empty dict if seed isn't in the graph" convention,
-    extended naturally to "the reachable set of whichever seeds are
-    real"); if none of the seeds are in the graph, `{}` is returned.
+    afterward.
+
+    Both `seed` and `seeds` given, or both left as `None`, or `seeds`
+    given as an empty list - all three raise `ValueError` rather than
+    guessing which one the caller meant or silently returning `{}` (an
+    empty result would be indistinguishable from "seeds provided but
+    none reachable"). A seed not present in the graph is dropped rather
+    than raising (matching the original single-seed function's own
+    "empty dict if seed isn't in the graph" convention, extended
+    naturally to "the reachable set of whichever seeds are real"); if
+    none of the seeds are in the graph, `{}` is returned.
     Every seed's own distance to itself is popped from the result,
     exactly as it already was for the single-seed case.
 
@@ -302,9 +309,12 @@ def compute_topological_distances(
     if direction not in ("forward", "reverse", "both"):
         raise ValueError(f"direction must be 'forward', 'reverse', or 'both', got {direction!r}")
 
-    seeds = [seed] if isinstance(seed, str) else list(seed)
-    if not seeds:
-        raise ValueError("seeds cannot be empty")
+    if seed is not None and seeds is not None:
+        raise ValueError("Specify exactly one of 'seed' or 'seeds', not both.")
+    resolved_seeds = [seed] if seed is not None else seeds
+    if not resolved_seeds:
+        raise ValueError("Must provide at least one seed symbol.")
+    seeds = resolved_seeds
 
     dist_key = _distance_cache_key(builder, seeds, d_max=d_max, direction=direction).digest()
     cached = _DISTANCE_CACHE.get(dist_key)

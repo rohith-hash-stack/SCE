@@ -196,7 +196,7 @@ def test_multi_seed_distance_computation(tmp_path):
 
     dist_s1 = compute_topological_distances(builder, "mod.s1")
     dist_s2 = compute_topological_distances(builder, "mod.s2")
-    multi = compute_topological_distances(builder, ["mod.s1", "mod.s2"])
+    multi = compute_topological_distances(builder, seeds=["mod.s1", "mod.s2"])
 
     assert multi["mod.shared"] == min(dist_s1["mod.shared"], dist_s2["mod.shared"])
     assert multi["mod.shared"] == 1.0  # via s1's direct 1-hop edge, not s2's 2-hop one
@@ -224,7 +224,7 @@ def test_multi_seed_nearest_seed_distance(tmp_path):
     builder, _tag_matrix = build_pipeline(str(repo))
     dist_near = compute_topological_distances(builder, "mod.near")
     dist_far = compute_topological_distances(builder, "mod.far")
-    multi = compute_topological_distances(builder, ["mod.near", "mod.far"])
+    multi = compute_topological_distances(builder, seeds=["mod.near", "mod.far"])
     for node in set(dist_near) | set(dist_far):
         expected = min(dist_near.get(node, float("inf")), dist_far.get(node, float("inf")))
         assert multi.get(node) == expected
@@ -237,8 +237,8 @@ def test_multi_seed_empty_list_raises_error(tmp_path):
     builder, _tag_matrix = build_pipeline(str(repo))
     import pytest
 
-    with pytest.raises(ValueError, match="seeds cannot be empty"):
-        compute_topological_distances(builder, [])
+    with pytest.raises(ValueError, match="at least one seed"):
+        compute_topological_distances(builder, seeds=[])
 
 
 def test_multi_seed_tie_breaking_determinism(tmp_path):
@@ -260,8 +260,8 @@ def test_multi_seed_tie_breaking_determinism(tmp_path):
         "    return 1\n"
     )
     builder, _tag_matrix = build_pipeline(str(repo))
-    first = compute_topological_distances(builder, ["mod.s1", "mod.s2"])
-    second = compute_topological_distances(builder, ["mod.s2", "mod.s1"])  # reversed input order
+    first = compute_topological_distances(builder, seeds=["mod.s1", "mod.s2"])
+    second = compute_topological_distances(builder, seeds=["mod.s2", "mod.s1"])  # reversed input order
     assert first["mod.shared"] == 1.0
     assert first == second
 
@@ -272,7 +272,7 @@ def test_multi_seed_single_element_list_matches_plain_string(tmp_path):
     _write_call_chain(repo, 3)
     builder, _tag_matrix = build_pipeline(str(repo))
     as_string = compute_topological_distances(builder, "mod.f0")
-    as_list = compute_topological_distances(builder, ["mod.f0"])
+    as_list = compute_topological_distances(builder, seeds=["mod.f0"])
     assert as_string == as_list
 
 
