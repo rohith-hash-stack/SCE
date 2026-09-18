@@ -97,3 +97,73 @@ def test_corpus_pipeline_symbols_within_d_max():
                 violations.append((task.task_id, sym, d))
 
     assert violations == []
+
+
+# ============================================================
+# Commit 2: directionality (forward / reverse / both)
+# ============================================================
+
+def test_reverse_traversal_finds_callers(tmp_path):
+    """a() calls b() - reverse traversal from b reaches a (its caller),
+    which forward traversal from b would never reach."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "def a():\n"
+        "    return b()\n"
+        "\n"
+        "def b():\n"
+        "    return 1\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    forward_from_b = compute_topological_distances(builder, "mod.b", direction="forward")
+    assert "mod.a" not in forward_from_b
+
+    reverse_from_b = compute_topological_distances(builder, "mod.b", direction="reverse")
+    assert reverse_from_b.get("mod.a") == 1.0
+
+
+def test_both_direction_produces_minimal_union(tmp_path):
+    """seed -> mid -> target (2 hops forward) and target -> seed directly
+    (1 hop reverse, i.e. target calls seed) - "both" must report the
+    cheaper 1.0, not the 2.0 forward-only distance."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "def seed():\n"
+        "    return mid()\n"
+        "\n"
+        "def mid():\n"
+        "    return 1\n"
+        "\n"
+        "def target():\n"
+        "    return seed()\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    forward_only = compute_topological_distances(builder, "mod.seed", direction="forward")
+    assert forward_only.get("mod.target") is None  # not forward-reachable at all
+
+    both = compute_topological_distances(builder, "mod.seed", direction="both")
+    assert both["mod.mid"] == 1.0
+    assert both["mod.target"] == 1.0  # via the 1-hop reverse edge, not absent
+
+
+def test_direction_invalid_value_raises_value_error(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text("def f():\n    return 1\n")
+    builder, _tag_matrix = build_pipeline(str(repo))
+    import pytest
+
+    with pytest.raises(ValueError, match="direction"):
+        compute_topological_distances(builder, "mod.f", direction="sideways")
+
+
+def test_direction_forward_default_preserves_exact_prior_behavior(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_call_chain(repo, 4)
+    builder, _tag_matrix = build_pipeline(str(repo))
+    default_call = compute_topological_distances(builder, "mod.f0")
+    explicit_forward = compute_topological_distances(builder, "mod.f0", direction="forward")
+    assert default_call == explicit_forward

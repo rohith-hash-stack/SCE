@@ -131,6 +131,7 @@ class _DistanceCacheKey:
     lambda_data_flow: float
     lambda_guard: float
     d_max: float | None = None
+    direction: str = "forward"
 
     def digest(self) -> str:
         raw = "|".join(
@@ -142,12 +143,15 @@ class _DistanceCacheKey:
                 repr(self.lambda_data_flow),
                 repr(self.lambda_guard),
                 repr(self.d_max),
+                self.direction,
             )
         )
         return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _distance_cache_key(builder: ConcreteGraphBuilder, seed: str, d_max: float | None = None) -> _DistanceCacheKey:
+def _distance_cache_key(
+    builder: ConcreteGraphBuilder, seed: str, d_max: float | None = None, direction: str = "forward"
+) -> _DistanceCacheKey:
     graph_key = _graph_cache_key(builder)
     return _DistanceCacheKey(
         repo_path=graph_key.repo_path,
@@ -157,6 +161,7 @@ def _distance_cache_key(builder: ConcreteGraphBuilder, seed: str, d_max: float |
         lambda_data_flow=LAMBDA_DATA_FLOW,
         lambda_guard=LAMBDA_GUARD,
         d_max=d_max,
+        direction=direction,
     )
 
 
@@ -192,7 +197,7 @@ def build_causal_graph(builder: ConcreteGraphBuilder) -> nx.DiGraph:
 
 
 def compute_topological_distances(
-    builder: ConcreteGraphBuilder, seed: str, d_max: float | None = None
+    builder: ConcreteGraphBuilder, seed: str, d_max: float | None = None, direction: str = "forward"
 ) -> dict[str, float]:
     """`{node: dist_w(seed, node)}` - every node forward-reachable from
     `seed` in the causal graph, via Dijkstra over `c(e) = 1/W(u, v)`
@@ -227,27 +232,63 @@ def compute_topological_distances(
     been run against (gin/trpc/express have no ground-truth tasks yet to
     verify against at all).
 
-    Cached, seed-and-d_max-keyed (`_DistanceCacheKey` - see its own
-    docstring for the exact key shape). **The cache is never consulted
-    or written without `seed` as part of the key** - this is the one
-    constraint stated with the most force in the whole Blocker 1 plan (a
-    seed-less key would silently return a *different* seed's distances),
-    so it is structural here: `_distance_cache_key` takes `seed` as a
-    required positional argument, and there is no other code path into
-    `_DISTANCE_CACHE`. `d_max` is included in the same key for the
-    identical reason - a `d_max=5.0` result cached under a key that
-    doesn't distinguish it from the unbounded result would silently
-    return a truncated map to a caller that asked for the full one, or
-    vice versa.
+    `direction` (Phase C, Query Reach 3.4): `"forward"` (the default,
+    byte-identical to every prior call - the causal graph's own outgoing
+    edges, i.e. callees/instantiated classes/etc.) - `"reverse"`
+    (incoming edges - callers/instantiators, via `graph.reverse(copy=
+    False)`, a networkx view, not a rebuilt graph) - or `"both"` (the
+    point-wise minimum of the forward and reverse distance maps, per
+    node - a node reachable both 2 hops forward and 1 hop reverse gets
+    the 1-hop distance). Raises `ValueError` for anything else, rather
+    than silently falling back to forward.
+
+    Simplification, stated honestly: `build_causal_graph`'s own edges
+    already carry no `relation` label (only a pre-baked scalar `weight`
+    - see that function's own docstring), so "reverse only inverts
+    traversable functional relations, not metadata/non-directional
+    edges" (the general concern that distinction exists for elsewhere in
+    this codebase) is not separately re-checked here - every edge this
+    causal graph contains is already a structural-or-synthetic-causal
+    edge by construction (never e.g. a raw `READS_STATE` edge filtered
+    in some other way), so reversing the whole graph reverses exactly
+    the same edge set forward traversal already uses, nothing more. A
+    future audit of exactly which relations `compute_causal_edges` folds
+    in (it does not currently filter by `TRAVERSABLE_RELATIONS` before
+    weighting - confirmed by reading it directly) is a real, separate
+    question this phase does not attempt to resolve.
+
+    Cached, seed-and-d_max-and-direction-keyed (`_DistanceCacheKey` -
+    see its own docstring for the exact key shape). **The cache is never
+    consulted or written without `seed` as part of the key** - this is
+    the one constraint stated with the most force in the whole Blocker 1
+    plan (a seed-less key would silently return a *different* seed's
+    distances), so it is structural here: `_distance_cache_key` takes
+    `seed` as a required positional argument, and there is no other code
+    path into `_DISTANCE_CACHE`. `d_max`/`direction` are included in the
+    same key for the identical reason - two different call shapes
+    against the identical `(repo, seed)` must never share a cache entry.
     """
-    dist_key = _distance_cache_key(builder, seed, d_max=d_max).digest()
+    if direction not in ("forward", "reverse", "both"):
+        raise ValueError(f"direction must be 'forward', 'reverse', or 'both', got {direction!r}")
+
+    dist_key = _distance_cache_key(builder, seed, d_max=d_max, direction=direction).digest()
     cached = _DISTANCE_CACHE.get(dist_key)
     if cached is not None:
         return cached
     graph = build_causal_graph(builder)
     if seed not in graph:
         return {}
-    distances = nx.single_source_dijkstra_path_length(graph, seed, cutoff=d_max, weight="weight")
+
+    if direction == "both":
+        forward = nx.single_source_dijkstra_path_length(graph, seed, cutoff=d_max, weight="weight")
+        reverse = nx.single_source_dijkstra_path_length(graph.reverse(copy=False), seed, cutoff=d_max, weight="weight")
+        distances = dict(forward)
+        for node, dist in reverse.items():
+            if node not in distances or dist < distances[node]:
+                distances[node] = dist
+    else:
+        traversal_graph = graph if direction == "forward" else graph.reverse(copy=False)
+        distances = nx.single_source_dijkstra_path_length(traversal_graph, seed, cutoff=d_max, weight="weight")
     distances.pop(seed, None)
     _DISTANCE_CACHE[dist_key] = distances
     return distances
