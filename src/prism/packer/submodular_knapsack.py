@@ -95,6 +95,7 @@ import networkx as nx
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
+from prism.semantics.bitmask import FeatureBit
 from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import count_tokens
 from prism.traversal._cache_keys import snapshot_file_hash_set
@@ -345,6 +346,79 @@ def _compute_max_dominant_seed_distance(beta: float, delta_max: int) -> int:
 MAX_DOMINANT_SEED_DISTANCE = _compute_max_dominant_seed_distance(DEFAULT_BETA, DEFAULT_DELTA_MAX)
 
 
+#: Phase E (empirical corpus diagnosis, not the brief's original "K=5
+#: causes premature stop" hypothesis - see the phase-e-distance-immunity-
+#: and-k10 commit message for the full evidence): a real, direct downstream
+#: successor of the seed (`dist_w <= PHASE_E_IMMUNE_DIST`) is never turned
+#: away by the zero-novelty streak below, and admitting one at zero novelty
+#: neither increments nor resets the streak counter - it is simply outside
+#: what that counter tracks. `1.0` matches `MAX_DOMINANT_SEED_DISTANCE`
+#: (the largest seed distance this module's own dominance proof already
+#: covers unconditionally), so this rule never contradicts that proof, only
+#: extends its practical effect (a direct successor should never lose to
+#: the streak gate) to the exact distance band the proof already treats as
+#: privileged.
+PHASE_E_IMMUNE_DIST = 1.0
+
+#: Phase E, Mechanism C: raised from the original `NOVELTY_STREAK_STOP_K`
+#: (5) - see `select_submodular_context`'s own docstring for why 5 was
+#: calibrated against t02_020/t02_015 specifically, and the phase-e commit
+#: message for why 10 (paired with the distance-1 immunity above and the
+#: scope gate below) still holds t02_020 harmless while giving genuinely
+#: relevant same-distance-cohort chains more room before the stop engages.
+MAX_ZERO_NOVELTY_K = 10
+
+#: Phase E, Mechanism B (empirical finding - see the phase-e-upstream-
+#: crowding-and-scope-gate commit message): a *scope-gated admissibility*
+#: rule, not the brief's originally-specified "scoring floor." A floor
+#: bolted onto `compute_candidate_value` would need its own dominance
+#: proof alongside the already-proven, hypothesis-tested `beta*delta_max <
+#: DOMINANCE_SAFETY_BOUND` bound `tests/test_v11_invariants.py` locks in -
+#: this rule leaves that formula, and every one of its existing proofs,
+#: completely untouched. Instead, a candidate beyond `SCOPE_GATE_MIN_DIST`
+#: hops is never even *admitted into the frontier* unless it shares the
+#: seed's own package prefix (first 3 dot-components, the same Prefix_3
+#: rule `prism.surface.causal_path`'s own subsystem scope rule already
+#: uses) or at least one of the seed's own real-I/O substance bits (the
+#: same narrow 4-bit mask that module already reuses in preference to the
+#: full 7-bit `SUBSTANCE_BITS`, for the identical reason: `SINK_PURE_
+#: COMPUTE` is a near-universal default that would make the overlap check
+#: trivially true for almost any two symbols). `2.0` matches `_urlparse`'s
+#: own real seed distance in the t02_017 diagnosis (same module as its
+#: seed regardless, so the gate is moot for it either way) - the gate only
+#: ever engages *beyond* the distance a same-chain successor can reach in
+#: two structurally-connected hops, never at or before it.
+SCOPE_GATE_MIN_DIST = 2.0
+
+_PHASE_E_SUBSTANCE_SINK_MASK = int(
+    FeatureBit.SINK_NETWORK_IO | FeatureBit.SINK_DATABASE_IO | FeatureBit.SINK_FILESYSTEM_IO | FeatureBit.SINK_PROCESS_IO
+)
+
+
+def _module_prefix3(module: str) -> str:
+    return ".".join(module.split(".")[:3])
+
+
+#: Phase E, Mechanism A (empirical finding - see the phase-e-upstream-
+#: crowding-and-scope-gate commit message): `prism.packer.blast_radius.
+#: compute_upstream_callers` returns *every* direct caller within
+#: `upstream_max_hops` - by design, for the "who relies on this contract"
+#: question it answers. But every such caller lands in the same narrow
+#: `dist_w_upstream` band (`[0.667, 1.25]` per that module's own
+#: docstring), so on a seed with many callers (a generic, widely-used
+#: utility - `url_has_allowed_host_and_scheme` in the t02_017 diagnosis),
+#: dozens of comparably-scored, often causally-irrelevant callers can
+#: crowd the general frontier and starve the seed's own downstream causal
+#: chain of every remaining budget slot, round after round. Capping how
+#: many upstream candidates ever enter the *competitive* frontier (ordered
+#: by strongest coupling - ascending `dist_w_upstream` - first) bounds
+#: that crowding without touching the separate, still-unconditional
+#: "mandatory upstream protection" force-add below, which only ever needs
+#: the single strongest-coupled caller and so is always inside this cap by
+#: construction.
+UPSTREAM_FRONTIER_CAP = 3
+
+
 def compute_candidate_value(
     dist_w: float, candidate_mask: int, covered_mask: int, beta: float = DEFAULT_BETA, delta_max: int = DEFAULT_DELTA_MAX
 ) -> float:
@@ -399,10 +473,33 @@ def select_submodular_context(
 
     `symbol_table` (optional, `None` by default - every existing caller
     against a synthetic graph with no real symbol table is unaffected):
-    used by exactly one narrow rule, `_is_zero_novelty_test_fixture` (see
-    fix-knapsack-bloat-stop-criterion below) - `SymbolInfo.module` is how
-    that rule recognizes a `tests.*`/`django.test*` candidate. The K=5
-    novelty-adaptive stop itself needs no symbol table at all.
+    used by `_is_zero_novelty_test_fixture` (see fix-knapsack-bloat-stop-
+    criterion below - `SymbolInfo.module` is how that rule recognizes a
+    `tests.*`/`django.test*` candidate) and, since Phase E, by
+    `_is_in_scope`'s own `Prefix_3` half (see `SCOPE_GATE_MIN_DIST`'s
+    module-level docstring) - `None` makes both rules a no-op, exactly
+    the same "unaffected without a real symbol table" contract the
+    novelty-adaptive stop itself already had and still has.
+
+    **Phase E (empirical corpus diagnosis - see the phase-e-distance-
+    immunity-and-k10 and phase-e-upstream-crowding-and-scope-gate commit
+    messages for the full evidence, not summarized a second time here):
+    three additions layered onto the mechanisms below, tuned against a
+    real regression the original `K=5` design did not anticipate -
+    genuinely relevant same-distance-cohort candidates (a seed's own
+    direct downstream successors, or dozens of comparably-scored upstream
+    callers) losing the density race to distant, structurally-unrelated
+    candidates that happen to carry a fresh novel bit each round (the
+    `d>=2` dominance counterexample this module's own top-level docstring
+    already proves is real, not hypothetical, at the default constants).**
+    `MAX_ZERO_NOVELTY_K` (10, was `NOVELTY_STREAK_STOP_K`=5) and the
+    `PHASE_E_IMMUNE_DIST` (1.0) streak immunity below hold t02_020
+    harmless (see the original K=5 derivation's own numbers - its longest
+    zero-novelty run stays at 2, nowhere near either threshold) while
+    giving a real causal chain more room; `SCOPE_GATE_MIN_DIST`/
+    `UPSTREAM_FRONTIER_CAP` bound exactly the two crowding-out mechanisms
+    the diagnosis found, without touching `compute_candidate_value` or
+    either of its already-proven dominance/submodularity guarantees.
 
     **fix-knapsack-bloat-stop-criterion - novelty-adaptive stop**: on a
     hub-class seed (e.g. a large admin/site class with dozens of trivial
@@ -529,17 +626,38 @@ def select_submodular_context(
         return costs.get(qname, 0) > 0
 
     # fix-knapsack-bloat-stop-criterion: novelty-adaptive stop - see this
-    # function's own docstring for the full reasoning and the K=5 choice.
-    # A running streak of *consecutive* delta_feat==0 admits; reset to 0
-    # the moment a delta_feat>0 candidate is admitted. While the streak
-    # is at or past this threshold, a delta_feat==0 candidate is not
+    # function's own docstring for the full reasoning. Phase E raised the
+    # threshold to MAX_ZERO_NOVELTY_K (10, was 5) and added the distance-1
+    # immunity below - see that constant's own docstring. A running streak
+    # of *consecutive* delta_feat==0 admits; reset to 0 the moment a
+    # delta_feat>0 candidate is admitted. While the streak is at or past
+    # this threshold, a delta_feat==0 *non-immune* candidate is not
     # admissible this round - it simply isn't scored, exactly like a
     # candidate that fails the budget check above.
-    NOVELTY_STREAK_STOP_K = 5
     consecutive_zero_novelty_admits = 0
 
-    def _is_novelty_streak_blocked(delta_feat: int) -> bool:
-        return delta_feat == 0 and consecutive_zero_novelty_admits >= NOVELTY_STREAK_STOP_K
+    def _is_streak_immune(dist: float) -> bool:
+        return dist <= PHASE_E_IMMUNE_DIST
+
+    def _is_novelty_streak_blocked(delta_feat: int, dist: float) -> bool:
+        return delta_feat == 0 and not _is_streak_immune(dist) and consecutive_zero_novelty_admits >= MAX_ZERO_NOVELTY_K
+
+    # Phase E, Mechanism B: see SCOPE_GATE_MIN_DIST's own module-level
+    # docstring. Seed's own module/substance are resolved once here since
+    # every candidate's in-scope check compares against them.
+    _seed_info = symbol_table.get(seed_id) if symbol_table is not None else None
+    _seed_module = _seed_info.module if _seed_info is not None else ""
+    _seed_substance = feature_masks.get(seed_id, 0) & _PHASE_E_SUBSTANCE_SINK_MASK
+
+    def _is_in_scope(qname: str, dist: float) -> bool:
+        if symbol_table is None or dist <= SCOPE_GATE_MIN_DIST:
+            return True
+        info = symbol_table.get(qname)
+        candidate_module = info.module if info is not None else ""
+        if candidate_module and _seed_module and _module_prefix3(candidate_module) == _module_prefix3(_seed_module):
+            return True
+        candidate_substance = feature_masks.get(qname, 0) & _PHASE_E_SUBSTANCE_SINK_MASK
+        return bool(candidate_substance & _seed_substance)
 
     # A second, independent admissibility rule (not part of the K=5 streak
     # above, and not reset or tracked by it): a zero-novelty candidate
@@ -624,7 +742,8 @@ def select_submodular_context(
         batch: set[str] = set()
         for succ in graph.successors(node):
             if succ not in s_pack and succ not in frontier:
-                if dist_w_map.get(succ, float("inf")) <= max_hops and _is_real_candidate(succ):
+                dist = dist_w_map.get(succ, float("inf"))
+                if dist <= max_hops and _is_real_candidate(succ) and _is_in_scope(succ, dist):
                     frontier.add(succ)
                     combined_dist_map.setdefault(succ, dist_w_map[succ])
                     batch.add(succ)
@@ -666,7 +785,11 @@ def select_submodular_context(
                 s_pack.append(cascade_node)
                 cascade_novel_bits = (feature_masks.get(cascade_node, 0) & ~covered_mask).bit_count()
                 if cascade_novel_bits == 0:
-                    consecutive_zero_novelty_admits += 1
+                    # Phase E distance-1 immunity: an immune zero-novelty
+                    # admit is simply outside what the streak tracks -
+                    # neither increments nor resets it.
+                    if not _is_streak_immune(combined_dist_map[cascade_node]):
+                        consecutive_zero_novelty_admits += 1
                 else:
                     consecutive_zero_novelty_admits = 0
                 current_cost += costs.get(cascade_node, 0)
@@ -682,12 +805,23 @@ def select_submodular_context(
     if seed_id in graph:
         seed_generation = _discover_successors(seed_id)
         if dist_w_upstream_map is not None:
-            for pred in graph.predecessors(seed_id):
-                if dist_w_upstream_map.get(pred, float("inf")) <= upstream_max_hops and _is_real_candidate(pred):
-                    upstream_candidates.add(pred)
-                    existing = combined_dist_map.get(pred)
-                    upstream_dist = dist_w_upstream_map[pred]
-                    combined_dist_map[pred] = min(existing, upstream_dist) if existing is not None else upstream_dist
+            # Phase E, Mechanism A: gather every real candidate within
+            # upstream_max_hops (unchanged), but only let the top
+            # UPSTREAM_FRONTIER_CAP by strongest coupling (ascending
+            # dist_w_upstream, qualified-name tiebreak for determinism)
+            # ever join the competitive frontier - see that constant's
+            # own module-level docstring.
+            upstream_pool = sorted(
+                (
+                    (dist_w_upstream_map[pred], pred)
+                    for pred in graph.predecessors(seed_id)
+                    if dist_w_upstream_map.get(pred, float("inf")) <= upstream_max_hops and _is_real_candidate(pred)
+                )
+            )
+            for upstream_dist, pred in upstream_pool[:UPSTREAM_FRONTIER_CAP]:
+                upstream_candidates.add(pred)
+                existing = combined_dist_map.get(pred)
+                combined_dist_map[pred] = min(existing, upstream_dist) if existing is not None else upstream_dist
         frontier |= upstream_candidates
         _run_cascade(seed_generation)
 
@@ -713,7 +847,7 @@ def select_submodular_context(
             dist = combined_dist_map[candidate]
             cand_mask = feature_masks.get(candidate, 0)
             raw_novel_bits = (cand_mask & ~covered_mask).bit_count()
-            if _is_novelty_streak_blocked(raw_novel_bits) or _is_zero_novelty_test_fixture(candidate, raw_novel_bits):
+            if _is_novelty_streak_blocked(raw_novel_bits, dist) or _is_zero_novelty_test_fixture(candidate, raw_novel_bits):
                 continue
 
             value = compute_candidate_value(dist, cand_mask, covered_mask, beta, delta_max)
@@ -731,7 +865,10 @@ def select_submodular_context(
         s_pack.append(best_node)
         best_node_novel_bits = (feature_masks.get(best_node, 0) & ~covered_mask).bit_count()
         if best_node_novel_bits == 0:
-            consecutive_zero_novelty_admits += 1
+            # Phase E distance-1 immunity - see the matching comment in
+            # _run_cascade above.
+            if not _is_streak_immune(combined_dist_map[best_node]):
+                consecutive_zero_novelty_admits += 1
         else:
             consecutive_zero_novelty_admits = 0
         current_cost += costs.get(best_node, 0)
@@ -743,6 +880,51 @@ def select_submodular_context(
         # `best_node`'s own newly-discovered successors get the same
         # eager, capped, generation-based treatment as the seed's own.
         _run_cascade(_discover_successors(best_node))
+
+    # Phase E: mandatory downstream direct-successor protection - mirrors
+    # "mandatory upstream protection" immediately below, and runs first so
+    # a real structural successor claims remaining budget ahead of any
+    # upstream candidate (Mechanism A's own "downstream callees take
+    # priority over upstream ancestors" directive). PHASE_E_IMMUNE_DIST
+    # already guarantees a dist<=1.0 successor is never *blocked* by the
+    # novelty streak, but the seed's own generation-0 cascade only admits
+    # CASCADE_GENERATION_CAP (2) winners of its own immediate mini-
+    # competition - a seed with 3+ real direct successors (t02_019's
+    # HttpRequest.get_host has _get_raw_host, DisallowedHost, and
+    # validate_host, all at dist_w=1.0) leaves the rest to the open loop,
+    # where a genuinely tight budget can still exhaust itself on other
+    # admissions first. This closes that gap the same way the upstream
+    # guarantee already does for its own single strongest caller: force-
+    # add, budget permitting, never overriding the ceiling.
+    #
+    # Deliberately post-loop and budget-permitting-only, not a pre-loop
+    # unconditional front-load: an earlier version of this fix ran before
+    # the seed's own cascade/general loop and admitted every real dist<=
+    # 1.0 successor unconditionally, bypassing CASCADE_GENERATION_CAP
+    # entirely - that consumed budget breadth-first on however many
+    # direct successors a seed happens to have, starving genuinely
+    # necessary *deeper* chain members (QuerySet._clone, _urlparse) that
+    # need that same budget and regressed 10 more tests than it fixed
+    # (verified: 11/22 passing vs. this version's 21/22). Left as a
+    # last-resort, budget-permitting guarantee, it fixes exactly the gap
+    # found without that collateral damage - see the phase-e commit
+    # message for the full comparison.
+    if seed_id in graph:
+        for succ in sorted(graph.successors(seed_id)):
+            if succ in s_pack:
+                continue
+            dist = dist_w_map.get(succ, float("inf"))
+            if dist > PHASE_E_IMMUNE_DIST or not _is_real_candidate(succ):
+                continue
+            cost = costs.get(succ, 0)
+            if current_cost + cost > target_budget:
+                continue
+            novel_bits = (feature_masks.get(succ, 0) & ~covered_mask).bit_count()
+            if _is_zero_novelty_test_fixture(succ, novel_bits):
+                continue
+            s_pack.append(succ)
+            current_cost += cost
+            covered_mask |= feature_masks.get(succ, 0)
 
     # Mandatory upstream protection: "the packer must guarantee that at
     # least the most causally coupled direct caller of s is evaluated and
