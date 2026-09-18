@@ -38,6 +38,7 @@ from prism.packer.submodular_knapsack import (
     DEFAULT_MAX_HOPS,
     ROLE_SEED,
     SubmodularPackResult,
+    _signature_stub,
     pack_symbol_context,
 )
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
@@ -356,7 +357,7 @@ def build_context_package(
                 id=item.symbol,
                 role=item.role,
                 distance=0.0 if item.role == ROLE_SEED else item.dist_w,
-                compression=_RESOLUTION_TO_LEVEL[0],
+                compression=item.compression,
                 cost=item.cost,
                 symbol_name=item.symbol.rsplit(".", 1)[-1],
                 symbol_kind=info.kind,
@@ -372,7 +373,15 @@ def build_context_package(
                     role=_axis_labels(mask, ROLE_BITS),
                 ),
                 contract=_derive_contract(item.symbol, builder, packed_ids) if item.role != ROLE_SEED else None,
-                body=_node_body(builder, item.symbol),
+                # fix-stub-pack-distance-1-tight-budget (Zero-Debt
+                # Hardening Pass, Task 1): a stub-packed item's `body`
+                # must be the same signature-only text its cost was
+                # actually priced against (`_signature_stub`, computed
+                # once in submodular_knapsack.py's own fixup and
+                # recomputed identically here - deterministic given the
+                # same source, so never out of sync with `item.cost`),
+                # not the full body `_node_body` would return.
+                body=_node_body(builder, item.symbol) if item.compression == "L0_full" else (_signature_stub(builder, item.symbol) or ""),
             )
         )
 

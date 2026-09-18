@@ -979,6 +979,11 @@ class SubmodularPackedItem:
     feature_mask: int
     dist_w: float
     role: str = ROLE_TRANSITIVE
+    #: "L0_full" (the whole real body, every existing caller's only
+    #: value until fix-stub-pack-distance-1-tight-budget below) or
+    #: "L2_skeleton" (a signature-only stub - see `_signature_stub`) -
+    #: matches `prism.surface.build._RESOLUTION_TO_LEVEL`'s own values.
+    compression: str = "L0_full"
 
 
 @dataclass
@@ -1015,6 +1020,55 @@ def _default_costs(builder: ConcreteGraphBuilder, symbols: list[str]) -> dict[st
         snippet = "\n".join(lines[max(start - 1, 0):end])
         costs[qname] = max(count_tokens(snippet), 1)
     return costs
+
+
+#: How many of a real symbol's own leading source lines `_signature_stub`
+#: will scan looking for the line that closes its declaration (the first
+#: one ending in `:` - handles a wrapped multi-line signature, not just
+#: the common single-line case). Bounds the stub itself: a pathological
+#: signature can't grow the "cheap" fallback past this many lines.
+_SIGNATURE_STUB_MAX_HEADER_LINES = 10
+
+
+def _signature_stub(builder: ConcreteGraphBuilder, qname: str) -> str | None:
+    """A minimal, signature-only stand-in for `qname`'s full L0 body:
+    its own declaration line(s) - `def foo(...):`/`class Foo(...):`,
+    including a wrapped multi-line parameter list - plus a `...`
+    placeholder in place of the real body. Used only by fix-stub-pack-
+    distance-1-tight-budget below, when a real symbol's full cost
+    doesn't fit the remaining budget but this reduced form might.
+    Returns `None` under exactly the same conditions `_default_costs`
+    treats as "no real source to price" (no symbol-table entry, no
+    parsed file, an empty line range) - never a guess.
+    """
+    info = builder.symbol_table.get(qname)
+    if info is None:
+        return None
+    parsed = builder.parsed_file(info.file)
+    if parsed is None:
+        return None
+    source = parsed.source.decode("utf-8", errors="replace")
+    lines = source.splitlines()
+    start, end = info.line_range
+    snippet_lines = lines[max(start - 1, 0):end]
+    if not snippet_lines:
+        return None
+
+    header_lines: list[str] = []
+    for line in snippet_lines[:_SIGNATURE_STUB_MAX_HEADER_LINES]:
+        header_lines.append(line)
+        if line.rstrip().endswith(":"):
+            break
+    else:
+        # No line closed the declaration within the scan window (or the
+        # symbol's own first line already has no trailing colon, e.g. a
+        # non-def/class kind) - fall back to just the first line itself
+        # rather than silently including a large, unbounded chunk.
+        header_lines = snippet_lines[:1]
+
+    first_line = header_lines[0]
+    body_indent = " " * (len(first_line) - len(first_line.lstrip()) + 4)
+    return "\n".join(header_lines) + f"\n{body_indent}..."
 
 
 def pack_symbol_context(
@@ -1129,6 +1183,7 @@ def pack_symbol_context(
     # budget-safe: a class that would overflow the remaining budget is
     # skipped, not force-admitted, and logged rather than silently
     # dropped.
+    direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
     selected_set = set(selected)
     running_cost = sum(costs.get(q, 0) for q in selected)
     promoted_classes: set[str] = set()
@@ -1143,6 +1198,7 @@ def pack_symbol_context(
             if class_cost > 0 and running_cost + class_cost <= target_budget:
                 reordered_selected.append(class_qname)
                 promoted_classes.add(class_qname)
+                selected_set.add(class_qname)
                 running_cost += class_cost
             elif class_cost > 0:
                 print(
@@ -1154,7 +1210,57 @@ def pack_symbol_context(
         reordered_selected.append(qname)
     selected = reordered_selected
 
-    direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
+    # fix-stub-pack-distance-1-tight-budget (Zero-Debt Hardening Pass,
+    # Task 1): a distance-1 direct successor of the seed - a real,
+    # structurally adjacent pipeline stage, exactly the shape a T02
+    # debug task's own adjudicated pipeline names - can still lose the
+    # main greedy loop's density race entirely to a crowd of lower-
+    # value same-distance-cohort candidates (see fix-knapsack-bloat-
+    # stop-criterion's own t02_015 case above) and never make `selected`
+    # at all, even at a budget where its mere presence matters far more
+    # than the full fidelity of its body. Once the loop and the class-
+    # promotion fixup above have both settled, any direct successor
+    # still missing gets one more chance: pack a minimal signature-only
+    # stub (`_signature_stub` - the declaration line(s) plus a `...`
+    # placeholder body, `compression="L2_skeleton"`) if ITS reduced
+    # cost fits the remaining budget, even though the full L0 body
+    # didn't. Silently downgraded to a skip (not force-admitted) if even
+    # the stub doesn't fit - the same budget-safe, logged-not-dropped
+    # contract fix-include-class-when-method-selected already
+    # established, extended here from "complete omission" to "try a
+    # cheaper representation first."
+    stub_compression: dict[str, str] = {}
+    for succ in sorted(direct_successors):
+        if succ in selected_set:
+            continue
+        full_cost = costs.get(succ, 0)
+        if full_cost <= 0:
+            continue
+        remaining = target_budget - running_cost
+        if full_cost <= remaining:
+            # Would already have been admitted by the greedy loop on its
+            # own merits; this fixup only concerns itself with a
+            # candidate the loop genuinely couldn't afford.
+            continue
+        stub_text = _signature_stub(builder, succ)
+        if stub_text is None:
+            continue
+        stub_cost = max(count_tokens(stub_text), 1)
+        if stub_cost <= remaining:
+            selected.append(succ)
+            selected_set.add(succ)
+            costs[succ] = stub_cost
+            stub_compression[succ] = "L2_skeleton"
+            running_cost += stub_cost
+        else:
+            print(
+                f"[knapsack] fix-stub-pack-distance-1-tight-budget: {succ!r} "
+                f"is a direct pipeline successor but neither its full cost "
+                f"({full_cost}) nor its signature-only stub cost ({stub_cost}) "
+                f"fit the remaining budget ({remaining}) - skipped",
+                file=sys.stderr,
+            )
+
     items = [
         SubmodularPackedItem(
             symbol=qname,
@@ -1162,6 +1268,7 @@ def pack_symbol_context(
             feature_mask=feature_masks.get(qname, 0),
             dist_w=0.0 if qname == seed_id else dist_w_map.get(qname, dist_w_upstream_map.get(qname, 0.0)),
             role=_classify_role(qname, seed_id, direct_successors, dist_w_map, dist_w_upstream_map),
+            compression=stub_compression.get(qname, "L0_full"),
         )
         for qname in selected
     ]
