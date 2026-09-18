@@ -14,6 +14,8 @@ from prism.graph.symbol_table import GlobalSymbolTable
 from prism.language_tiers import TIER_1_ONLY_LANGUAGES
 from prism.packer.submodular_knapsack import pack_symbol_context
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
+from prism.query.errors import QueryValidationError
+from prism.query.schema import VALID_TASK_TYPES, PrismQuery
 from prism.semantics.bitmask import describe_mask
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.index_cache import load_pipeline_from_cache, save_pipeline_to_cache
@@ -340,8 +342,16 @@ def query(
     help="Continuous Dijkstra distance horizon (Section 2.4/Part 2) - a candidate farther than this from the "
     "seed is never considered, however cheap or feature-rich.",
 )
+@click.option(
+    "--task-type", "task_type", type=click.Choice(sorted(VALID_TASK_TYPES)), default=None,
+    help="Phase G: validated via PrismQuery against the real, canonical 5-value task_type enum "
+    "(benchmarks.ground_truth.schema.EvaluationTask.task_type). Accepted and validated here for the same "
+    "query-contract guarantee build_context_package's own task_type param already provides - this command "
+    "renders pack_symbol_context's raw pack (never a <causal_path> block, unlike build_context_package), so "
+    "it does not yet gate anything within this specific command's own output.",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit the packed context as JSON instead of a text listing.")
-def causal_query(repo_path: str, symbol: str, budget: int, max_hops: float, as_json: bool) -> None:
+def causal_query(repo_path: str, symbol: str, budget: int, max_hops: float, task_type: str | None, as_json: bool) -> None:
     """v1.1 Causal Coupling & Submodular Coverage: pack SYMBOL's context
     using the Continuous Dijkstra topological distance (causally-coupled
     data-flow/guard edges shorten graph distance) and the bitwise
@@ -350,6 +360,18 @@ def causal_query(repo_path: str, symbol: str, budget: int, max_hops: float, as_j
     pipeline, not a replacement for it (see docs/design_formalism.md
     Section 8 for why both exist side by side).
     """
+    # Phase G, Invariant 1: validate the query contract (budget, task_type)
+    # before any indexing work runs - PrismQuery.__post_init__ raises
+    # QueryValidationError for a non-positive/over-cap budget or an
+    # unrecognized task_type (click's own Choice already rejects the
+    # latter before this point, but PrismQuery is still the single,
+    # reusable validation gate every real caller of this query shape - CLI,
+    # MCP, a future one - should go through, not a CLI-only duplicate).
+    try:
+        PrismQuery(budget=budget, seed=symbol, task_type=task_type, d_max=max_hops)
+    except QueryValidationError as exc:
+        raise SystemExit(f"error: {exc}")
+
     builder, tag_matrix = build_pipeline(repo_path)
     if symbol not in builder.symbol_table:
         raise SystemExit(f"error: seed symbol '{symbol}' was not found in the concrete graph (unknown or external symbol)")
