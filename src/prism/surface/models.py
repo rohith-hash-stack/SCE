@@ -165,6 +165,14 @@ class CausalPath(_Frozen):
 
 class ContextPackage(_Frozen):
     schema_version: int = 2
+    #: Phase F (Blocker B3 / Issue #26): the task_type build_context_package
+    #: was called with, if any - None for every pre-Phase-F caller and any
+    #: caller without a benchmark-task context (identical default/meaning
+    #: to that function's own task_type parameter). Round-tripped through
+    #: prism.surface.renderer/parser as a schema_version>=2 root attribute
+    #: only - never rendered under schema_version=1, matching that
+    #: version's own unchanged, legacy root shape.
+    task_type: Optional[str] = None
     engine: EngineRef
     seed: SeedRef
     budget: BudgetRef

@@ -374,6 +374,12 @@ def parse_context(xml_str: str) -> ContextPackage:
     schema_version = _get_int(root, "schema_version", 1)
     generated_at = _get_str(root, "generated_at")
     run_id = _get_str(root, "run_id")
+    # Phase F: task_type is a real ContextPackage field (schema_version>=2
+    # root attribute, omitted when None) - budget_total/budget_consumed
+    # are deliberately not round-tripped here, the same precedent
+    # <trailer>'s own sha256/token_count already set (derived/
+    # informational rendering output, not model state).
+    task_type = _get_str(root, "task_type")
 
     engine, seed, budget, language, options = _parse_metadata(root)
     causal_path = _parse_causal_path(root)
@@ -385,6 +391,7 @@ def parse_context(xml_str: str) -> ContextPackage:
 
     return ContextPackage(
         schema_version=schema_version,
+        task_type=task_type,
         engine=engine,
         seed=seed,
         budget=budget,

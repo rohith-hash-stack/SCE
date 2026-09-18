@@ -101,7 +101,18 @@ _OUTPUT_BIT_TO_KIND: dict[FeatureBit, str] = {
 
 
 def _relative_path(repo_root: str, file_path: str) -> str:
-    return os.path.relpath(file_path, repo_root)
+    """Phase F (Issue #30 - "file_path must be POSIX-normalized"):
+    `os.path.relpath` returns backslash-separated components on Windows -
+    every `NodeEntry.file`/`SeedRef.file` this module ever produces goes
+    into the public XML envelope, so a Windows build host would leak
+    backslash paths into an otherwise-portable document. The same
+    backslash-to-forward-slash normalization `prism.scanner.path_norm.
+    get_module_parts` already applies for module-name derivation, reused
+    here for consistency rather than a second, possibly-drifting
+    convention. A no-op on POSIX (`os.path.relpath` never contains a
+    backslash there), so this changes nothing observable in this
+    environment - real, but only externally visible on Windows."""
+    return os.path.relpath(file_path, repo_root).replace("\\", "/")
 
 
 def _axis_labels(mask: int, axis_bits: frozenset) -> str:
@@ -423,6 +434,7 @@ def build_context_package(
         warnings.append(EnvelopeWarning(code="LANGUAGE_TIER_3", severity="low", message=f"{primary_language} is Tier 3 (lexical/package-level linking only)"))
 
     return ContextPackage(
+        task_type=task_type,
         engine=EngineRef(name=ENGINE_NAME, version=ENGINE_VERSION, commit="unknown"),
         seed=SeedRef(symbol=seed_id, file=_relative_path(repo_root, seed_info.file), line=seed_info.line_range[0]),
         budget=BudgetRef(tokens=target_budget, tokenizer=active_backend(), exact=is_exact()),

@@ -419,12 +419,38 @@ def _render_edges(pkg: ContextPackage, options: RenderOptions) -> str:
     return _container("edges", {}, items, depth=2, options=options)
 
 
-def _root_open(pkg: ContextPackage, options: RenderOptions) -> str:
+def _root_attrs(pkg: ContextPackage, options: RenderOptions, budget_consumed: int | None = None) -> dict[str, object]:
+    """Phase F (Blocker B3 / Issue #26 - dynamic schema versioning): the
+    real, structural difference between `schema_version` 1 and 2 this
+    module previously lacked - `schema_version` was already a root
+    attribute, but nothing in `render()` ever branched on its value.
+    `schema_version=1` keeps this module's exact pre-Phase-F root shape
+    (there is no earlier, genuinely-flatter historical predecessor in
+    this codebase to revert node/edge rendering to, so that half of the
+    brief's own "legacy envelope structure" wording is not reinvented
+    here - see the phase-f-dynamic-schema-versioning commit message).
+    `schema_version=2` (the default) adds three real, new root
+    attributes: `budget_total` (`pkg.budget.tokens`, always present),
+    `budget_consumed` (the actual rendered token count - `None` until
+    `render()` has computed it, see that function's own two-pass
+    handling), and `task_type` (omitted, per `_attrs`'s own convention,
+    when `pkg.task_type` is `None` - every pre-Phase-F caller and any
+    caller without a benchmark-task context)."""
     attrs: dict[str, object] = {"schema_version": options.schema_version}
     if options.include_timestamp and pkg.generated_at is not None:
         attrs["generated_at"] = pkg.generated_at
     if options.include_run_id and pkg.run_id is not None:
         attrs["run_id"] = pkg.run_id
+    if options.schema_version >= 2:
+        attrs["budget_total"] = pkg.budget.tokens
+        if budget_consumed is not None:
+            attrs["budget_consumed"] = budget_consumed
+        if pkg.task_type is not None:
+            attrs["task_type"] = pkg.task_type
+    return attrs
+
+
+def _root_open(attrs: dict[str, object]) -> str:
     return f"<prism_context{_attrs(attrs)}>"
 
 
@@ -433,19 +459,32 @@ def render(pkg: ContextPackage, options: RenderOptions = RenderOptions()) -> str
     identical `(pkg, options)`. See this module's own docstring for the
     document shape and every ordering/CDATA/token-accounting rule."""
     metadata = _render_metadata(pkg, options)
-    causal_path = _render_causal_path(pkg.causal_path, options) if pkg.causal_path is not None else None
+    # Phase F Invariant 2: causal_path.stages is never empty via the real
+    # production path (prism.surface.causal_path.compute_causal_path_
+    # stages always returns >= 1 stage, the seed itself) - `and pkg.
+    # causal_path.stages` is a defensive, currently-unreachable-in-
+    # production guard that makes the renderer's own contract explicit
+    # and directly testable, rather than relying on an invariant this
+    # module doesn't itself enforce.
+    has_causal_path = pkg.causal_path is not None and bool(pkg.causal_path.stages)
+    causal_path = _render_causal_path(pkg.causal_path, options) if has_causal_path else None
     manifest = _render_manifest(pkg, options)
     coverage = _render_coverage(pkg, options)
     nodes = _render_nodes(pkg, options)
     edges = _render_edges(pkg, options)
-    root_open = _root_open(pkg, options)
+    # Phase F: budget_consumed (schema_version>=2 only) is itself derived
+    # from the rendered token count, which in turn depends on the root
+    # element's own byte length - the same provisional/final two-pass
+    # split render() already uses to decide BUDGET_OVERFLOW, applied a
+    # second time here rather than introduced as a new pattern.
+    root_open_provisional = _root_open(_root_attrs(pkg, options))
 
     leading_sections = [metadata] + ([causal_path] if causal_path is not None else [])
 
     # First pass: everything except <warnings>/<trailer>, purely to get
     # an accurate token count to decide BUDGET_OVERFLOW against.
     provisional_body = _join_children([*leading_sections, manifest, coverage, nodes, edges], depth=1, options=options)
-    provisional_tokens = count_tokens(root_open + provisional_body)
+    provisional_tokens = count_tokens(root_open_provisional + provisional_body)
 
     warnings = list(pkg.warnings)
     already_flagged = any(w.code == "BUDGET_OVERFLOW" for w in warnings)
@@ -465,7 +504,14 @@ def render(pkg: ContextPackage, options: RenderOptions = RenderOptions()) -> str
     warnings_xml = _render_warnings(warnings, options)
     body_items = [*leading_sections, manifest, coverage, warnings_xml, nodes, edges]
     body_without_trailer = _join_children(body_items, depth=1, options=options)
-    actual_tokens = count_tokens(root_open + body_without_trailer)
+    # Same documented undercount the module's own docstring already
+    # states for BUDGET_OVERFLOW: actual_tokens (and therefore
+    # budget_consumed) is measured against root_open_provisional, not the
+    # final root_open its own value will appear in - immaterial in
+    # practice (a handful of attribute-value bytes), stated plainly
+    # rather than pretended away.
+    actual_tokens = count_tokens(root_open_provisional + body_without_trailer)
+    root_open = _root_open(_root_attrs(pkg, options, budget_consumed=actual_tokens))
     sha256 = hashlib.sha256((root_open + body_without_trailer).encode("utf-8")).hexdigest()
 
     trailer = _leaf(
