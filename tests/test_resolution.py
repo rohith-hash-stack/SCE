@@ -135,10 +135,6 @@ def test_g41_receiver_named_after_its_real_type_still_resolves_correctly(tmp_pat
 
 # --- Defensive control: genuine single-candidate ambiguity stays unresolved ---
 
-@pytest.mark.xfail(
-    reason="G44: unique-candidate calls silently unlinked when receiver type is untrackable. Deferred to v1.2.",
-    strict=True,
-)
 def test_single_candidate_for_a_name_does_not_get_silently_dropped_or_guessed(tmp_path):
     """Only one `finalize` method exists repo-wide, but its receiver type
     still can't be tracked (plain-parameter passthrough) - `_resolve_

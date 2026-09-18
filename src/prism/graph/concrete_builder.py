@@ -1712,12 +1712,58 @@ class ConcreteGraphBuilder:
         functions/methods share this call's bare simple name, that's
         genuine polysemy (`Close()`, `Validate()`, ...) worth scoring
         rather than silently dropping - see
-        `prism.graph.symbol_table.score_candidate`. A single (or zero)
-        same-named candidate is an ordinary resolution gap, unrelated to
-        this task, and is left exactly as before (silently unlinked).
+        `prism.graph.symbol_table.score_candidate`. Zero same-named
+        candidates is an ordinary resolution gap, unrelated to this task,
+        and is left exactly as before (silently unlinked) - the callee is
+        presumably external/builtin, and there is nothing repo-local to
+        even consider.
+
+        Phase B (G44): exactly one same-named candidate repo-wide used to
+        also fall through to the same silent-unlink path as zero - a
+        completely unresolved receiver whose method name happens to be
+        unique across the whole repo is a real, common case (this is
+        the *only* place in the Python/JS resolution path this can occur;
+        for count>=2 the scored path below already exists and already has
+        its own real, tested "genuinely ambiguous -> UnresolvedPolymorphic
+        sentinel" behavior when scoring can't clear the threshold - G44's
+        "never guess among multiple candidates" is already satisfied
+        there and is deliberately left untouched by this change, not
+        replaced with a blunter "count>1 -> zero edges" rule that would
+        have discarded that existing, more informative sentinel).
         """
         simple_name = segments[-1]
         candidates = self.symbol_table.candidates_for_simple_name(simple_name)
+        if len(candidates) == 1:
+            # G44 Conservative Candidate Fallback: a repo-wide receiver-
+            # type-unknown call whose method name is unique - link it,
+            # but as a best-effort guess, not a confidently-resolved
+            # call. Reuses kind="TENTATIVE_CALL", the same already-wired
+            # RELATION_TENTATIVE_CALL_WEIGHT=0.60 discount the Go-only
+            # unique-receiver fallback already uses (see that fallback's
+            # own docstring) - never a new, unrecognized kind that
+            # prism.slicer.distance would otherwise price at full CALLS
+            # confidence by default.
+            #
+            # Invariant 4.4 scope guard: never bridge across unrelated
+            # subsystems on a bare repo-wide name match alone. Checked
+            # here via top-level package/module prefix only
+            # (_shares_package_scope) - the brief's other permitted
+            # bridge condition ("substance tag overlap") is NOT checked:
+            # four-axis tags (prism.semantics.substance et al.) are
+            # computed from the *completed* concrete graph, since Role
+            # depends on real fan-in/fan-out counts - they do not exist
+            # yet during this Pass 2 call-resolution walk, which is what
+            # builds that same graph. A known, documented gap, not a
+            # silently-skipped check.
+            candidate = candidates[0]
+            caller_info = self.symbol_table.get(caller_qname)
+            if caller_info is not None and not _shares_package_scope(caller_info.module, candidate.module):
+                return
+            target = candidate.qualified_name
+            if target not in self.graph:
+                self.graph.add_node(target, external=False)
+            self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL")
+            return
         if len(candidates) < 2:
             return
 
@@ -2138,3 +2184,16 @@ def _parse_package_or_namespace(parsed: ParsedFile) -> str | None:
                 if child.type in ("qualified_name", "identifier"):
                     return node_text(child, parsed.source)
     return None
+
+
+def _shares_package_scope(caller_module: str, candidate_module: str) -> bool:
+    """G44's scope guard (Invariant 4.4): `caller_module` and
+    `candidate_module` share the same top-level package/namespace segment
+    (`"django.contrib.auth"` and `"django.forms"` both start with
+    `"django"`; `"django.contrib.auth"` and `"stripe_client"` do not) - a
+    coarse, cheap proxy for "the same subsystem", available at Pass 2 call-
+    resolution time (unlike substance-tag overlap, which needs the
+    completed graph - see this function's one caller). The same module
+    trivially shares scope with itself.
+    """
+    return caller_module.split(".")[0] == candidate_module.split(".")[0]

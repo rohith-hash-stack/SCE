@@ -217,3 +217,105 @@ def test_attribute_chain_ambiguous_yields_reduced_confidence(tmp_path):
     assert builder.graph.has_edge("mod.Client.run", "mod.MockService.call")
     edge = builder.graph.get_edge_data("mod.Client.run", "mod.MockService.call")
     assert edge.get("kind") == "TENTATIVE_CALL"
+
+
+# ============================================================
+# G44: repo-wide fallback for a fully unresolved receiver
+# ============================================================
+
+def test_g44_unique_candidate_links_at_tentative_weight(tmp_path):
+    """An unresolved receiver (unknown/untyped `obj`) whose method name
+    is unique repo-wide - links, but as kind=TENTATIVE_CALL, not a
+    confidently-resolved call."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "class Widget:\n"
+        "    def render_unique_widget_view(self):\n"
+        "        return 'ok'\n"
+        "\n"
+        "def run(obj):\n"
+        "    return obj.render_unique_widget_view()\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    assert builder.graph.has_edge("mod.run", "mod.Widget.render_unique_widget_view")
+    edge = builder.graph.get_edge_data("mod.run", "mod.Widget.render_unique_widget_view")
+    assert edge.get("kind") == "TENTATIVE_CALL"
+
+
+def test_g44_multiple_candidates_leave_existing_sentinel_path_untouched():
+    """count>1 for a fully-untyped receiver, both candidates scoring
+    below POLYSEMY_THRESHOLD, is the pre-existing scored polysemy path's
+    own job (test_genuine_ambiguity_emits_sentinel_with_both_candidates
+    in tests/test_polysemy_and_dynamic_hazards.py) - it must keep
+    producing its own UnresolvedPolymorphic sentinel edge exactly as
+    before. G44 only ever fires for the count==1 case that used to be
+    silently dropped (see test_g44_unique_candidate_links_at_tentative_
+    weight above); it never replaces this sentinel with "zero edges" -
+    doing so would have discarded a real, tested, more informative
+    diagnostic (see the phase-b-g44 commit message for the concrete
+    regression this would otherwise have caused)."""
+    builder = ConcreteGraphBuilder("/tmp/repo")
+    from prism.graph.symbol_table import SymbolInfo
+
+    for qname, mod in [("pkg_a.Thing.get", "pkg_a"), ("pkg_b.Other.get", "pkg_b")]:
+        builder.symbol_table._symbols[qname] = SymbolInfo(
+            qualified_name=qname, kind="method", file=f"{mod}.py",
+            line_range=(1, 2), language_id="python", module=mod,
+        )
+        builder.symbol_table._simple_name_index.setdefault("get", []).append(qname)
+    builder.symbol_table._symbols["caller.run"] = SymbolInfo(
+        qualified_name="caller.run", kind="function", file="caller.py",
+        line_range=(1, 2), language_id="python", module="caller",
+    )
+    builder.graph.add_node("caller.run")
+
+    class _FakeCallNode:
+        def child_by_field_name(self, name):
+            return None
+
+        start_point = (0, 0)
+
+    class _FakeParsed:
+        path = "caller.py"
+
+    from prism.graph.symbol_table import LocalImportMap
+
+    builder._resolve_ambiguous_call(
+        "caller.run", _FakeCallNode(), _FakeParsed(), "caller", LocalImportMap(), ["obj", "get"]
+    )
+    edges = list(builder.graph.out_edges("caller.run", data=True))
+    assert len(edges) == 1
+    _src, target, data = edges[0]
+    assert data.get("relation") == "CALLS"
+    assert data.get("kind") is None  # a sentinel edge, not a tentative guess
+    target_data = builder.graph.nodes[target]
+    assert target_data.get("sentinel_type") == "unresolved_polymorphic"
+    assert set(target_data.get("candidates", [])) == {"pkg_a.Thing.get", "pkg_b.Other.get"}
+    # Neither real candidate itself got a spurious direct edge.
+    assert not builder.graph.has_edge("caller.run", "pkg_a.Thing.get")
+    assert not builder.graph.has_edge("caller.run", "pkg_b.Other.get")
+
+
+def test_g44_scoped_polysemy_still_resolves_via_normal_scored_edge(tmp_path):
+    """A call that clears POLYSEMY_THRESHOLD through the pre-existing
+    scored path is completely unaffected by G44 - it never even reaches
+    the count==1/count>=2 branches this phase touches."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod_a").mkdir()
+    (repo / "mod_b").mkdir()
+    (repo / "mod_a" / "__init__.py").write_text("")
+    (repo / "mod_b" / "__init__.py").write_text("")
+    (repo / "mod_a" / "checks.py").write_text("def validate(x, y):\n    return x == y\n")
+    (repo / "mod_b" / "checks.py").write_text("def validate(x):\n    return bool(x)\n")
+    (repo / "caller.py").write_text(
+        "from mod_a.checks import validate\n"
+        "\n"
+        "def run(a, b):\n"
+        "    return validate(a, b)\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    assert builder.graph.has_edge("caller.run", "mod_a.checks.validate")
+    edge = builder.graph.get_edge_data("caller.run", "mod_a.checks.validate")
+    assert edge.get("kind") is None
