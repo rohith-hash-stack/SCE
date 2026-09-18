@@ -319,3 +319,103 @@ def test_g44_scoped_polysemy_still_resolves_via_normal_scored_edge(tmp_path):
     assert builder.graph.has_edge("caller.run", "mod_a.checks.validate")
     edge = builder.graph.get_edge_data("caller.run", "mod_a.checks.validate")
     assert edge.get("kind") is None
+
+
+# ============================================================
+# Data-flow wiring: async/await unwrapping in the real, already-wired
+# tree-sitter data-flow system (prism.traversal._data_flow_common),
+# feeding prism.traversal.causal_weights.compute_all_data_flow_edges -
+# NOT a new relation="DATA_FLOW" graph edge (see the phase-b-data-flow-
+# wiring commit message for why: prism.slicer.distance's
+# TRAVERSABLE_RELATIONS would never traverse an edge kind it doesn't
+# recognize, and a second, independently-computed data-flow system
+# would silently disagree with this one over time).
+# ============================================================
+
+def test_async_await_assignment_unwrapped(tmp_path):
+    """x = await f() binds x to f's resolved symbol, exactly as the
+    un-awaited x = f() already did before this fix."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "async def f():\n"
+        "    return 1\n"
+        "\n"
+        "async def g(x):\n"
+        "    return x + 1\n"
+        "\n"
+        "async def run():\n"
+        "    x = await f()\n"
+        "    return await g(x)\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    from prism.traversal.data_flow_py import compute_python_data_flow_edges
+
+    edges = compute_python_data_flow_edges(builder)
+    assert edges.get(("mod.f", "mod.g")) == 0.9
+
+
+def test_async_await_argument_unwrapped(tmp_path):
+    """g(await f()) - a directly-nested awaited call argument - records
+    full-confidence data flow from f to g, same tier as the un-awaited
+    g(f()) form."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "async def f():\n"
+        "    return 1\n"
+        "\n"
+        "async def g(x):\n"
+        "    return x + 1\n"
+        "\n"
+        "async def run():\n"
+        "    return await g(await f())\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    from prism.traversal.data_flow_py import compute_python_data_flow_edges
+
+    edges = compute_python_data_flow_edges(builder)
+    assert edges.get(("mod.f", "mod.g")) == 1.0
+
+
+def test_chained_async_data_flow(tmp_path):
+    """x = await f(); y = await g(x); await h(y) establishes sequential
+    flow across all three functions - f -> g and g -> h both present."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "async def f():\n"
+        "    return 1\n"
+        "\n"
+        "async def g(x):\n"
+        "    return x + 1\n"
+        "\n"
+        "async def h(y):\n"
+        "    return y * 2\n"
+        "\n"
+        "async def run():\n"
+        "    x = await f()\n"
+        "    y = await g(x)\n"
+        "    return await h(y)\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    from prism.traversal.data_flow_py import compute_python_data_flow_edges
+
+    edges = compute_python_data_flow_edges(builder)
+    assert edges.get(("mod.f", "mod.g")) == 0.9
+    assert edges.get(("mod.g", "mod.h")) == 0.9
+
+
+def test_phase_a_isolated_suite_remains_green():
+    """Phase A's own standalone data_flow.py (ast-based, unwired into
+    the real tree-sitter pipeline by design) and its test suite are
+    completely untouched by this fix - run it directly as a regression
+    guard against Commit 5 accidentally reaching into Phase A's module."""
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/phase_a/", "-q"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

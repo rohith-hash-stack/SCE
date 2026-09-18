@@ -32,6 +32,7 @@ from prism.parser.lang_config import (
     ATTR_OBJECT_FIELD,
     ATTRIBUTE_NODE_TYPE,
     AUGMENTED_ASSIGNMENT_NODE_TYPE,
+    AWAIT_NODE_TYPES,
     CALL_NODE_TYPE,
     IDENTIFIER_NODE_TYPES,
     SHORT_VAR_DECL_NODE_TYPE,
@@ -50,6 +51,26 @@ from prism.parser.tree_sitter_loader import ParsedFile, node_text
 #: are just as meaningless as "the thing a downstream call cares about"
 #: in Python/TS).
 _NEVER_PROVENANCE_NAMES = frozenset({"err", "_", "ctx"})
+
+
+def _unwrap_await(node: Node, lang: str) -> Node:
+    """Phase B: `x = await f()` and `g(await f())` wrap the real call
+    node one level inside an `await`/`await_expression` node - both this
+    module's assignment-binding check (`value.type == call_type`) and its
+    call-argument check (`arg.type == call_type`) compare the *await
+    wrapper's* own type, which is never `call_type`, so an awaited
+    producer/consumer silently failed to bind at all before this fix
+    (confirmed empirically: `compute_python_data_flow_edges` returned an
+    empty dict for `x = await f(); await g(x)`, while the equivalent
+    unwrapped `x = f(); g(x)` already worked). Returns the await node's
+    one real (named) child - the awaited expression itself - or `node`
+    unchanged if it isn't an await node in the first place (including
+    every language with an empty `AWAIT_NODE_TYPES` entry, e.g. Go).
+    """
+    if node.type not in AWAIT_NODE_TYPES.get(lang, set()):
+        return node
+    named = [c for c in node.children if c.is_named]
+    return named[0] if len(named) == 1 else node
 
 
 def _node_key(node: Node) -> tuple[int, int]:
@@ -218,6 +239,7 @@ def extract_data_flow(
                     continue
                 if value is None:
                     continue
+                value = _unwrap_await(value, lang)
                 if value.type == call_type:
                     producer_id = resolved_call_sites.get(_node_key(value))
                     if producer_id:
@@ -260,6 +282,7 @@ def extract_data_flow(
         if not consumer_id:
             continue
         for arg in _call_arguments(node, lang):
+            arg = _unwrap_await(arg, lang)
             if arg.type == call_type:
                 producer_id = resolved_call_sites.get(_node_key(arg))
                 if producer_id:
