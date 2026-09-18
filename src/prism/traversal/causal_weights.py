@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from tree_sitter import Node
 
-from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.concrete_builder import TRAVERSABLE_RELATIONS, ConcreteGraphBuilder
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
 from prism.semantics._ast_utils import conditional_nodes, top_level_statements, try_nodes
@@ -327,9 +327,27 @@ def compute_causal_edges(
     data_flow = compute_all_data_flow_edges(builder)
     guards = compute_guard_indicator_edges(builder)
 
+    # Zero-Debt Hardening Pass (Task 2): `builder.graph` carries every real
+    # relation Pass 2 ever adds, including READS_STATE (a bare attribute
+    # read) - deliberately excluded from TRAVERSABLE_RELATIONS elsewhere
+    # in this codebase (prism.graph.concrete_builder's own successor-
+    # discovery, prism.traversal.task_reachability's allowed-relation
+    # subgraph) for a real, documented reason (TRAVERSABLE_RELATIONS's
+    # own docstring: "a bare attribute read pulls in unrelated attribute
+    # nodes with no comparable... failure mode to justify the trade").
+    # This function skipped that filter entirely: `causal_edge_weight`'s
+    # own `BASE_RELATION_WEIGHT.get(relation, 1.0)` silently fell back to
+    # the *full* CALLS/INSTANTIATES base weight (1.00) for any relation
+    # it didn't recognize, so a READS_STATE edge reached build_causal_
+    # graph's own Dijkstra traversal at full execution weight - the exact
+    # thing every other traversable-relation gate in this codebase
+    # already exists to prevent. Filtering here brings this function in
+    # line with those two other, already-established enforcement points.
     weights: dict[tuple[str, str], float] = {}
     for u, v, data in builder.graph.edges(data=True):
         relation = data.get("relation", "CALLS")
+        if relation not in TRAVERSABLE_RELATIONS:
+            continue
         i_dataflow = data_flow.get((u, v), 0.0)
         i_guard = guards.get((u, v), 0.0)
         weights[(u, v)] = causal_edge_weight(relation, i_dataflow, i_guard)
