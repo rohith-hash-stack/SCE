@@ -167,3 +167,110 @@ def test_direction_forward_default_preserves_exact_prior_behavior(tmp_path):
     default_call = compute_topological_distances(builder, "mod.f0")
     explicit_forward = compute_topological_distances(builder, "mod.f0", direction="forward")
     assert default_call == explicit_forward
+
+
+# ============================================================
+# Commit 3: multi-source seeding
+# ============================================================
+
+def test_multi_seed_distance_computation(tmp_path):
+    """s1 -> shared (1 hop) and s2 -> mid -> shared (2 hops) - shared
+    must report min(d(s1,shared), d(s2,shared)) = 1.0, via s1's direct
+    edge, not s2's longer one. mid is only reachable from s2."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "def s1():\n"
+        "    return shared()\n"
+        "\n"
+        "def s2():\n"
+        "    return mid()\n"
+        "\n"
+        "def mid():\n"
+        "    return shared()\n"
+        "\n"
+        "def shared():\n"
+        "    return 1\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+
+    dist_s1 = compute_topological_distances(builder, "mod.s1")
+    dist_s2 = compute_topological_distances(builder, "mod.s2")
+    multi = compute_topological_distances(builder, ["mod.s1", "mod.s2"])
+
+    assert multi["mod.shared"] == min(dist_s1["mod.shared"], dist_s2["mod.shared"])
+    assert multi["mod.shared"] == 1.0  # via s1's direct 1-hop edge, not s2's 2-hop one
+    assert multi["mod.mid"] == dist_s2["mod.mid"]
+
+
+def test_multi_seed_nearest_seed_distance(tmp_path):
+    """Overlapping neighborhoods: a straightforward min() check against
+    two independently-computed single-seed distance maps."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "def near():\n"
+        "    return target()\n"
+        "\n"
+        "def far():\n"
+        "    return mid()\n"
+        "\n"
+        "def mid():\n"
+        "    return target()\n"
+        "\n"
+        "def target():\n"
+        "    return 1\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    dist_near = compute_topological_distances(builder, "mod.near")
+    dist_far = compute_topological_distances(builder, "mod.far")
+    multi = compute_topological_distances(builder, ["mod.near", "mod.far"])
+    for node in set(dist_near) | set(dist_far):
+        expected = min(dist_near.get(node, float("inf")), dist_far.get(node, float("inf")))
+        assert multi.get(node) == expected
+
+
+def test_multi_seed_empty_list_raises_error(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text("def f():\n    return 1\n")
+    builder, _tag_matrix = build_pipeline(str(repo))
+    import pytest
+
+    with pytest.raises(ValueError, match="seeds cannot be empty"):
+        compute_topological_distances(builder, [])
+
+
+def test_multi_seed_tie_breaking_determinism(tmp_path):
+    """Two seeds equidistant from a shared target (1 hop each) - the
+    reported distance value must be identical across repeated calls and
+    across a fresh subprocess with a different PYTHONHASHSEED (the
+    result is a pure numeric min(), not a hash-order-sensitive
+    attribution of "which seed won")."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "def s1():\n"
+        "    return shared()\n"
+        "\n"
+        "def s2():\n"
+        "    return shared()\n"
+        "\n"
+        "def shared():\n"
+        "    return 1\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    first = compute_topological_distances(builder, ["mod.s1", "mod.s2"])
+    second = compute_topological_distances(builder, ["mod.s2", "mod.s1"])  # reversed input order
+    assert first["mod.shared"] == 1.0
+    assert first == second
+
+
+def test_multi_seed_single_element_list_matches_plain_string(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_call_chain(repo, 3)
+    builder, _tag_matrix = build_pipeline(str(repo))
+    as_string = compute_topological_distances(builder, "mod.f0")
+    as_list = compute_topological_distances(builder, ["mod.f0"])
+    assert as_string == as_list

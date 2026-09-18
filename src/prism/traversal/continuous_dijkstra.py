@@ -150,14 +150,22 @@ class _DistanceCacheKey:
 
 
 def _distance_cache_key(
-    builder: ConcreteGraphBuilder, seed: str, d_max: float | None = None, direction: str = "forward"
+    builder: ConcreteGraphBuilder, seed: str | list[str], d_max: float | None = None, direction: str = "forward"
 ) -> _DistanceCacheKey:
+    # Phase C (multi-seed): a canonical, order-independent key for the
+    # seed set - {"a", "b"} and {"b", "a"} are the same query and must
+    # hash identically. A single-element list ("+".join(sorted(["a"])))
+    # reduces to exactly "a", the same digest a plain string seed always
+    # produced, so every pre-Phase-C cache entry for a single seed is
+    # still a real hit, not silently invalidated.
+    seeds = [seed] if isinstance(seed, str) else seed
+    seed_key = "+".join(sorted(seeds))
     graph_key = _graph_cache_key(builder)
     return _DistanceCacheKey(
         repo_path=graph_key.repo_path,
         engine_commit_hash=graph_key.engine_commit_hash,
         file_hash_set=graph_key.file_hash_set,
-        seed=seed,
+        seed=seed_key,
         lambda_data_flow=LAMBDA_DATA_FLOW,
         lambda_guard=LAMBDA_GUARD,
         d_max=d_max,
@@ -197,7 +205,10 @@ def build_causal_graph(builder: ConcreteGraphBuilder) -> nx.DiGraph:
 
 
 def compute_topological_distances(
-    builder: ConcreteGraphBuilder, seed: str, d_max: float | None = None, direction: str = "forward"
+    builder: ConcreteGraphBuilder,
+    seed: str | list[str],
+    d_max: float | None = None,
+    direction: str = "forward",
 ) -> dict[str, float]:
     """`{node: dist_w(seed, node)}` - every node forward-reachable from
     `seed` in the causal graph, via Dijkstra over `c(e) = 1/W(u, v)`
@@ -205,6 +216,26 @@ def compute_topological_distances(
     implicit - every consumer of this map already treats "not present"
     as "not reachable/not the seed", the same convention `DistanceEngine.
     compute_all` uses). Empty dict if `seed` isn't in the graph at all.
+
+    `seed` (Phase C, Query Reach 3.5 - Multi-Source Seeding): a single
+    `str` (every existing caller's own shape, completely unaffected) or
+    a `list[str]` - multiple seeds initialized into the same Dijkstra
+    frontier at distance 0.0 simultaneously, so
+    `dist(v) = min(dist(s1, v), dist(s2, v), ...)` for every reachable
+    `v`, computed in one real multi-source search
+    (`nx.multi_source_dijkstra_path_length`, confirmed to return
+    byte-identical results to the single-source function for a
+    single-element list before this was wired in - not merely assumed
+    equivalent) rather than one single-source search per seed unioned
+    afterward. Raises `ValueError` for an empty list - never silently
+    returns `{}` for "no seeds", which would be indistinguishable from
+    "seeds provided but none reachable". A seed not present in the graph
+    is dropped rather than raising (matching the single-seed function's
+    own existing "empty dict if seed isn't in the graph" convention,
+    extended naturally to "the reachable set of whichever seeds are
+    real"); if none of the seeds are in the graph, `{}` is returned.
+    Every seed's own distance to itself is popped from the result,
+    exactly as it already was for the single-seed case.
 
     `d_max` (Phase C, Issue #110): `None` (the default) preserves the
     exact prior behavior - the full, unfiltered reachable set, with no
@@ -271,24 +302,48 @@ def compute_topological_distances(
     if direction not in ("forward", "reverse", "both"):
         raise ValueError(f"direction must be 'forward', 'reverse', or 'both', got {direction!r}")
 
-    dist_key = _distance_cache_key(builder, seed, d_max=d_max, direction=direction).digest()
+    seeds = [seed] if isinstance(seed, str) else list(seed)
+    if not seeds:
+        raise ValueError("seeds cannot be empty")
+
+    dist_key = _distance_cache_key(builder, seeds, d_max=d_max, direction=direction).digest()
     cached = _DISTANCE_CACHE.get(dist_key)
     if cached is not None:
         return cached
     graph = build_causal_graph(builder)
-    if seed not in graph:
+    present_seeds = [s for s in seeds if s in graph]
+    if not present_seeds:
         return {}
 
     if direction == "both":
-        forward = nx.single_source_dijkstra_path_length(graph, seed, cutoff=d_max, weight="weight")
-        reverse = nx.single_source_dijkstra_path_length(graph.reverse(copy=False), seed, cutoff=d_max, weight="weight")
+        forward = _dijkstra_path_lengths(graph, present_seeds, d_max)
+        reverse = _dijkstra_path_lengths(graph.reverse(copy=False), present_seeds, d_max)
         distances = dict(forward)
         for node, dist in reverse.items():
             if node not in distances or dist < distances[node]:
                 distances[node] = dist
     else:
         traversal_graph = graph if direction == "forward" else graph.reverse(copy=False)
-        distances = nx.single_source_dijkstra_path_length(traversal_graph, seed, cutoff=d_max, weight="weight")
-    distances.pop(seed, None)
+        distances = _dijkstra_path_lengths(traversal_graph, present_seeds, d_max)
+    for s in seeds:
+        distances.pop(s, None)
     _DISTANCE_CACHE[dist_key] = distances
     return distances
+
+
+def _dijkstra_path_lengths(graph: nx.DiGraph, sources: list[str], d_max: float | None) -> dict[str, float]:
+    """Dispatches to `nx.single_source_dijkstra_path_length` for exactly
+    one source - the identical call shape every pre-Phase-C invocation
+    already used (confirmed byte-identical to the multi-source function
+    given a single-element list before this was introduced, but kept as
+    its own call for a real, separate reason: `tests/test_distance_
+    cache_seed_separation.py` monkeypatches `nx.single_source_dijkstra_
+    path_length` specifically to count real Dijkstra invocations versus
+    cache hits - switching the single-seed path to always call the
+    multi-source function would have silently broken that test's own
+    instrumentation, not just its assertions) - or `nx.multi_source_
+    dijkstra_path_length` for two or more.
+    """
+    if len(sources) == 1:
+        return nx.single_source_dijkstra_path_length(graph, sources[0], cutoff=d_max, weight="weight")
+    return nx.multi_source_dijkstra_path_length(graph, sources, cutoff=d_max, weight="weight")
