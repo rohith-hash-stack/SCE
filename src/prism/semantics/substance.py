@@ -334,13 +334,29 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
         if symbol.kind not in ("function", "method"):
             continue
         qname = symbol.qualified_name
-        own_bits = direct.get(qname, FeatureBit(0))
+        # Zero-Debt Hardening Pass (Task 4): SINK_PURE_COMPUTE means "no
+        # real sink, direct or transitive" - it is this function's own
+        # *fallback*, never itself a sink to propagate. Masked out of
+        # both own_bits and callee_bits before combining/OR-ing, per this
+        # module's own docstring ("if B has ... a non-empty direct SINK
+        # mask, that mask propagates" - PURE_COMPUTE is definitionally
+        # the empty-sink case, not a sink). Without this mask, a thin
+        # wrapper (<=3 statements) around a PURE_COMPUTE-tagged callee
+        # would have that "no sink" bit itself OR-ed into the caller as
+        # if it were a real propagated sink - a genuine, deterministic
+        # divergence from prism.semantics.extractor.compute_feature_
+        # masks_cached's own inline transitive-propagation block, which
+        # already applied this exact mask - found via that cached/
+        # uncached parity test's own real, reproducible (not flaky, once
+        # PYTHONHASHSEED is pinned) failure on specific real-corpus
+        # symbols (django's vendored xregexp.min.js).
+        own_bits = direct.get(qname, FeatureBit(0)) & ~FeatureBit.SINK_PURE_COMPUTE
         transitive_bits = FeatureBit(0)
         if qname in builder.graph:
             for _u, callee, data in builder.graph.out_edges(qname, data=True):
                 if data.get("relation", "CALLS") not in ("CALLS", "INSTANTIATES"):
                     continue
-                callee_bits = direct.get(callee)
+                callee_bits = direct.get(callee, FeatureBit(0)) & ~FeatureBit.SINK_PURE_COMPUTE
                 if not callee_bits:
                     continue
                 if wrapper_statement_counts.get(callee, 99) <= _TRANSITIVE_WRAPPER_MAX_STATEMENTS:

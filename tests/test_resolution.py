@@ -13,11 +13,31 @@ the deterministic instance map (e.g. a constructor parameter assigned
 through with no `SomeClass(...)` call site, `self.x = x`) falls through
 to `_resolve_ambiguous_call` (concrete_builder.py:~1622), which picks
 among every same-simple-name candidate in the repo by a namespace/
-locality/arity *score* - not by the receiver's actual type. Demonstrated
-here with a minimal, deterministic repro: two same-named methods on
-unrelated classes, only their definition order in the file swapped -
-resolution flips with it. This is real, receiver-type-blind resolution,
-not a hypothetical.
+locality/arity *score* - not by the receiver's actual type. This is
+real, receiver-type-blind resolution, not a hypothetical, still true
+after the Zero-Debt Hardening Pass's own Task 4 change below.
+
+**Zero-Debt Hardening Pass, Task 4 update**: `_resolve_ambiguous_call`'s
+own tie-break, on a genuine score tie among candidates, used to be
+"whichever candidate happened to come first in `candidates_for_simple_
+name`'s own list" - itself Pass 1's symbol-registration order, never
+guaranteed stable (a real, separate bug: it made `prism.semantics.
+extractor.compute_feature_masks_cached`'s cold/warm parity
+nondeterministic on repos with many same-named symbols, e.g. minified
+JS vendor files). Fixed by sorting candidates canonically (by qualified
+name) before scoring. This is a genuine, real improvement - deterministic
+beats order-dependent - but it is *alphabetical* determinism, not
+receiver-type-awareness: G41 itself remains exactly as receiver-type-
+blind as before, deferred to v1.2 exactly as before. The two tests below
+were updated accordingly, not to claim a fix that didn't happen -
+`test_g41_ambiguous_receiver_resolution_is_now_order_independent` now
+demonstrates the real, new order-independence with the original class
+names (where alphabetical order happens to match this example's own
+"receiver name suggests the right type" naming), while
+`test_g41_receiver_named_after_its_real_type_still_resolves_correctly`
+was moved onto a *different* class-name pair, chosen so alphabetical
+tie-breaking does *not* coincidentally satisfy it, so it keeps failing
+for the right (real, still-open) reason.
 """
 from __future__ import annotations
 
@@ -88,13 +108,18 @@ _G41_TEMPLATE = (
 )
 
 
-def test_g41_ambiguous_receiver_resolution_is_order_dependent(tmp_path):
+def test_g41_ambiguous_receiver_resolution_is_now_order_independent(tmp_path):
     """Same two classes, same call site, only the definition order
-    swapped between the two source files - the resolved target flips.
-    A real receiver-type-directed resolver would pick the same answer
-    (whichever is "correct") regardless of source order; this proves
-    the current fallback is order-sensitive, i.e. not receiver-type-
-    directed at all."""
+    swapped between the two source files - Zero-Debt Hardening Pass
+    Task 4's canonical (alphabetical-by-qualified-name) tie-break in
+    `_resolve_ambiguous_call` means the resolved target no longer flips
+    with source order, a real, verifiable improvement over the old
+    "whichever candidate happened to register first" behavior this test
+    used to characterize (see this module's own top-level docstring).
+    Still not receiver-type-directed - see the sibling xfail test right
+    below for a class-name pair where alphabetical order and "the type
+    the receiver's own name suggests" disagree, and resolution is still
+    wrong."""
     source_a = _G41_TEMPLATE.format(first="NodeList", second="Template")
     source_b = _G41_TEMPLATE.format(first="Template", second="NodeList")
 
@@ -104,12 +129,37 @@ def test_g41_ambiguous_receiver_resolution_is_order_dependent(tmp_path):
     resolved_a = {s for s in succ_a if s.endswith(".render")}
     resolved_b = {s for s in succ_b if s.endswith(".render")}
 
-    assert resolved_a == {"mod.NodeList.render"}
-    assert resolved_b == {"mod.Template.render"}
     # Both call sites are textually identical (`self.nodelist.render(context)`)
-    # and `nodelist` is unambiguously the parameter name in both files - a
-    # type-directed resolver would resolve both to NodeList.render.
-    assert resolved_a != resolved_b
+    # and "NodeList" < "Template" alphabetically, so the canonical
+    # tie-break now picks NodeList.render in both files, regardless of
+    # which one was declared first.
+    assert resolved_a == {"mod.NodeList.render"}
+    assert resolved_b == {"mod.NodeList.render"}
+    assert resolved_a == resolved_b
+
+
+# A second class-name pair, deliberately chosen so the receiver's own
+# name (`zetalist`, suggesting `Zeta`) and alphabetical order (`Alpha` <
+# `Zeta`) disagree - the canonical tie-break below always picks `Alpha`,
+# the *wrong* one by the receiver-name signal, keeping the xfail test
+# below a genuine, still-open characterization of G41's real receiver-
+# type-blindness rather than a coincidental alphabetical pass.
+_G41_TYPE_MISMATCH_TEMPLATE = (
+    "class {first}:\n"
+    "    def render(self, context):\n"
+    "        return 'first'\n"
+    "\n\n"
+    "class {second}:\n"
+    "    def render(self, context):\n"
+    "        return 'second'\n"
+    "\n\n"
+    "class Worker:\n"
+    "    def __init__(self, zetalist):\n"
+    "        self.zetalist = zetalist\n"
+    "\n"
+    "    def run(self, context):\n"
+    "        return self.zetalist.render(context)\n"
+)
 
 
 @pytest.mark.xfail(
@@ -117,20 +167,23 @@ def test_g41_ambiguous_receiver_resolution_is_order_dependent(tmp_path):
     strict=True,
 )
 def test_g41_receiver_named_after_its_real_type_still_resolves_correctly(tmp_path):
-    """KNOWN GAP (G41), asserted as the correct/desired behavior: when
-    Template is declared *before* NodeList in the file, the receiver
-    `self.nodelist.render(...)` should still resolve to NodeList.render
+    """KNOWN GAP (G41), asserted as the correct/desired behavior: the
+    receiver `self.zetalist.render(...)` should resolve to Zeta.render
     (the class the parameter name and usage clearly indicate), not
-    Template.render. Currently fails - `_resolve_ambiguous_call` has no
+    Alpha.render. Currently fails - `_resolve_ambiguous_call` has no
     signal from the receiver's own name/assignment, only namespace/
-    locality/arity scoring, which favors whichever candidate sorts
-    first. This is the same failure mode as the real
-    `self.nodelist.render(context)` -> `Template.render` misresolution
-    documented in TASK_AUTHORING.md/G41."""
-    source = _G41_TEMPLATE.format(first="Template", second="NodeList")
+    locality/arity scoring plus (since Task 4) a canonical alphabetical
+    tie-break, which favors `Alpha` over `Zeta` regardless of which is
+    declared first. Deliberately not the NodeList/Template pair the
+    sibling order-independence test above uses - that pair's own
+    alphabetical order happens to agree with its receiver-name signal
+    (a coincidence Task 4 exposed), which would make this assertion pass
+    for the wrong reason and silently stop characterizing the real,
+    still-open gap."""
+    source = _G41_TYPE_MISMATCH_TEMPLATE.format(first="Alpha", second="Zeta")
     succ = _successors(tmp_path, source, "mod.Worker.run")
     resolved = {s for s in succ if s.endswith(".render")}
-    assert resolved == {"mod.NodeList.render"}
+    assert resolved == {"mod.Zeta.render"}
 
 
 # --- Defensive control: genuine single-candidate ambiguity stays unresolved ---

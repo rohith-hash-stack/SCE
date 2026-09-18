@@ -1771,9 +1771,27 @@ class ConcreteGraphBuilder:
         call_args_count = len(args_node.named_children) if args_node is not None else 0
         caller_file = parsed.path
 
+        # Zero-Debt Hardening Pass (Task 4): `score_candidate` is a
+        # discrete weighted sum over a small number of possible inputs
+        # (namespace in {0,1}, locality in {1.0, 0.6, 0.2}, a discrete
+        # arity match) - two candidates neither the caller's own file/
+        # package nor an imported module score *identically*, which is
+        # the common case, not an edge case, for a call site whose real
+        # candidates are all equally unrelated (every function sharing a
+        # bare 1-2 character name across a minified JS vendor file, say -
+        # exactly the scenario this real, measured nondeterminism was
+        # found in: prism.semantics.extractor.compute_feature_masks_
+        # cached's own cache-parity test flaking on symbols reached
+        # through exactly this ambiguous-call path). `> best_score`
+        # alone leaves a tie's winner to whichever candidate happened to
+        # be first in `candidates` - itself Pass 1's own symbol-
+        # registration order, never guaranteed stable run to run. Sorting
+        # candidates canonically first makes the winner of a genuine tie
+        # deterministic (the alphabetically-first qualified name),
+        # without changing which candidate wins a real, non-tied score.
         best_candidate: SymbolInfo | None = None
         best_score = -1.0
-        for candidate in candidates:
+        for candidate in sorted(candidates, key=lambda c: c.qualified_name):
             ns = namespace_match(candidate, module, import_map)
             loc = locality_distance(candidate, caller_file, module)
             param_count = self._param_count(candidate.qualified_name, candidate.language_id, candidate.kind == "method")
@@ -1797,7 +1815,7 @@ class ConcreteGraphBuilder:
                 sentinel_id,
                 sentinel_type="unresolved_polymorphic",
                 identifier=simple_name,
-                candidates=[c.qualified_name for c in candidates],
+                candidates=sorted(c.qualified_name for c in candidates),
                 call_site_file=caller_file,
                 call_site_line=line,
                 external=True,
