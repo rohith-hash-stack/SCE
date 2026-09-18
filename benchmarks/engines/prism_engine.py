@@ -67,9 +67,15 @@ class PrismEngine(AbstractRetrievalEngine):
         self._builder, _tag_matrix = build_pipeline(repo_path)
         self._contracts = compute_or_load_contracts(self._builder, repo_path)
 
-    def retrieve(self, seed_symbol: str, budget_tokens: int) -> ContextPackage:
+    def retrieve(self, seed_symbol: str, budget_tokens: int, task_type: str | None = None) -> ContextPackage:
         if self._builder is None or self._repo_root is None:
             raise RuntimeError("PrismEngine.retrieve called before index()")
         return build_context_package(
-            self._builder, seed_symbol, self._repo_root, budget_tokens, contracts=self._contracts, max_hops=self._max_hops
+            self._builder,
+            seed_symbol,
+            self._repo_root,
+            budget_tokens,
+            contracts=self._contracts,
+            max_hops=self._max_hops,
+            task_type=task_type,
         )

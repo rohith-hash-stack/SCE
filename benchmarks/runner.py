@@ -478,7 +478,7 @@ def run_evaluation(
                 continue
             for budget in budgets:
                 try:
-                    pkg = engine.retrieve(task.seed_symbol, budget)
+                    pkg = engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
                 except Exception as exc:
                     print(f"warning: {engine.name}.retrieve({task.seed_symbol!r}, {budget}) failed: {exc}", file=sys.stderr)
                     continue
@@ -680,7 +680,7 @@ def _cpi_for_lambda_config(builder, tasks: list[EvaluationTask], budget: int, la
         engine = PrismEngine.from_builder(builder, repo_root=getattr(builder, "repo_root", "."))
         strict_scores, fractional_scores = [], []
         for task in pipeline_tasks:
-            pkg = engine.retrieve(task.seed_symbol, budget)
+            pkg = engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
             selected = selected_symbols(pkg)
             strict_scores.append(cpi_strict(selected, task.adjudicated.pipeline_symbols))
             fractional_scores.append(cpi_fractional(selected, task.adjudicated.pipeline_symbols))
@@ -740,7 +740,7 @@ def check_beta_delta_max_invariant(builder, tasks: list[EvaluationTask], budget:
         beyond = {sym: d for sym, d in distances.items() if round(d) > MAX_DOMINANT_SEED_DISTANCE}
 
         engine = PrismEngine.from_builder(builder, repo_root=getattr(builder, "repo_root", "."))
-        pkg = engine.retrieve(task.seed_symbol, budget)
+        pkg = engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
         selected_order = [n.id for n in pkg.nodes]
 
         for sym in one_hop:
@@ -792,7 +792,7 @@ def run_mu1_sweep(builder, tasks: list[EvaluationTask], budget: int) -> dict[flo
             total_callers = 0
             for task in blast_tasks:
                 engine = PrismEngine.from_builder(builder, repo_root=getattr(builder, "repo_root", "."))
-                pkg = engine.retrieve(task.seed_symbol, budget)
+                pkg = engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
                 order = [n.id for n in pkg.nodes]
                 for caller in task.adjudicated.critical_callers:
                     total_callers += 1

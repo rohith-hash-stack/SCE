@@ -235,6 +235,29 @@ def _causal_path_enabled() -> bool:
     return os.environ.get("PRISM_ENABLE_CAUSAL_PATH", "1") not in ("0", "false", "False")
 
 
+#: Phase D Invariant 1 (Blockers B2 / Issues #37-38): task types shaped
+#: like T13's own blast-radius/overview retrieval - many candidate
+#: upstream callers or a broad multi-concern scan, never "the" single
+#: forward story a causal_path tells. Real values only (benchmarks.
+#: ground_truth.schema.EvaluationTask.task_type's own literal enum is
+#: exactly {"chain", "blast", "redundancy", "architecture", "debug"} -
+#: "T13"/"T02" are filename conventions, never real task_type strings,
+#: so they are deliberately not listed here).
+_BLAST_STYLE_TASK_TYPES = frozenset({"blast", "architecture", "redundancy"})
+
+
+def causal_path_applies_to_task_type(task_type: str | None) -> bool:
+    """`task_type=None` (unknown, or a caller with no benchmark-task
+    context at all - an ad-hoc MCP query, say) defaults to `True` - the
+    causal_path feature's own pre-Phase-D behavior, completely
+    unaffected for any caller that never supplies a task type. A real
+    T02-style task ("chain"/"debug") also returns `True`. Only the
+    T13-style task types above return `False`."""
+    if task_type is None:
+        return True
+    return task_type not in _BLAST_STYLE_TASK_TYPES
+
+
 def build_context_package(
     builder: ConcreteGraphBuilder,
     seed_id: str,
@@ -245,25 +268,35 @@ def build_context_package(
     run_id: str | None = None,
     generated_at: str | None = None,
     include_causal_path: bool | None = None,
+    task_type: str | None = None,
 ) -> ContextPackage:
     """Runs the causal engine (`pack_symbol_context`) and wraps its real
     output in a `ContextPackage`. Raises `KeyError` if `seed_id` isn't in
     `builder.symbol_table` - callers (the MCP tool layer) are expected to
     check that first and raise their own, more specific error.
 
-    `include_causal_path` (default `None`, resolved per call to `_causal_
-    path_enabled()` - i.e. `PRISM_ENABLE_CAUSAL_PATH`, `"1"`/unset unless
-    a caller says otherwise): the T02/chain/debug-style single-seed-
-    forward-chain use case this envelope was designed around. Pass
-    `False` explicitly for a blast-radius (upstream callers, not a
-    forward chain) or overview (broad, multi-concern) retrieval, where a
-    single forward `<causal_path>` either doesn't apply or would mislead
-    - that explicit `True`/`False` always wins over the env var, which
-    only ever supplies the default. Either way,
+    `include_causal_path` (default `None`, resolved per call to
+    `_causal_path_enabled() and causal_path_applies_to_task_type(task_
+    type)` - i.e. `PRISM_ENABLE_CAUSAL_PATH` AND a T02-shaped task type,
+    unless a caller says otherwise): the T02/chain/debug-style
+    single-seed-forward-chain use case this envelope was designed
+    around. Pass `False` explicitly for a blast-radius (upstream
+    callers, not a forward chain) or overview (broad, multi-concern)
+    retrieval, where a single forward `<causal_path>` either doesn't
+    apply or would mislead - that explicit `True`/`False` always wins
+    over both the env var and `task_type` (Phase D: task_type is only
+    ever consulted when `include_causal_path` is left `None`, exactly
+    the same precedence the env var already had). Either way,
     `prism.surface.models.ContextPackage.causal_path` stays `None`
-    rather than ever emitting an empty `<causal_path>` block."""
+    rather than ever emitting an empty `<causal_path>` block.
+
+    `task_type` (Phase D, Invariant 1): see `causal_path_applies_to_
+    task_type`'s own docstring. `None` (the default - every pre-Phase-D
+    caller, and any caller without a benchmark-task context at all)
+    means "no task-type gating", identical to the function's own
+    pre-Phase-D behavior."""
     if include_causal_path is None:
-        include_causal_path = _causal_path_enabled()
+        include_causal_path = _causal_path_enabled() and causal_path_applies_to_task_type(task_type)
     contracts = contracts or {}
     seed_info = builder.symbol_table.get(seed_id)
     if seed_info is None:

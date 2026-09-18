@@ -197,7 +197,7 @@ class PrismEngineCache(AbstractRetrievalEngine):
         self._feature_masks = feature_masks
         PrismEngineCache._process_graph_cache[digest] = (self._inner._builder, self._inner._contracts, feature_masks)
 
-    def retrieve(self, seed_symbol: str, budget_tokens: int) -> ContextPackage:
+    def retrieve(self, seed_symbol: str, budget_tokens: int, task_type: str | None = None) -> ContextPackage:
         if self._feature_masks is None:
             raise RuntimeError("PrismEngineCache.retrieve called before index()")
 
@@ -222,7 +222,7 @@ class PrismEngineCache(AbstractRetrievalEngine):
         build_module.compute_feature_masks_cached = lambda builder, repo_root: cached_masks
         knapsack_module.compute_feature_masks_cached = lambda builder, repo_root: cached_masks
         try:
-            return self._inner.retrieve(seed_symbol, budget_tokens)
+            return self._inner.retrieve(seed_symbol, budget_tokens, task_type=task_type)
         finally:
             build_module.compute_feature_masks_cached = original_build_fn
             knapsack_module.compute_feature_masks_cached = original_knapsack_fn

@@ -105,7 +105,7 @@ class BaselineBFSEngine(AbstractRetrievalEngine):
         self._repo_root = repo_path
         self._builder, _tag_matrix = build_pipeline(repo_path)
 
-    def retrieve(self, seed_symbol: str, budget_tokens: int) -> ContextPackage:
+    def retrieve(self, seed_symbol: str, budget_tokens: int, task_type: str | None = None) -> ContextPackage:
         if self._builder is None or self._repo_root is None:
             raise RuntimeError("BaselineBFSEngine.retrieve called before index()")
         builder = self._builder

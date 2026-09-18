@@ -102,7 +102,7 @@ class OracleEngine(AbstractRetrievalEngine):
         self._repo_root = repo_path
         self._contracts = compute_or_load_contracts(self._builder, repo_path)
 
-    def retrieve(self, seed_symbol: str, budget_tokens: int) -> ContextPackage:
+    def retrieve(self, seed_symbol: str, budget_tokens: int, task_type: str | None = None) -> ContextPackage:
         if self._builder is None or self._repo_root is None:
             raise RuntimeError("OracleEngine.retrieve called before index()")
         builder = self._builder
@@ -256,7 +256,7 @@ class PragmaticOracle(AbstractRetrievalEngine):
             PrismEngineCache._process_graph_cache[self._cache_digest] = (self._builder, self._contracts, self._feature_masks)
         self._repo_root = repo_path
 
-    def retrieve(self, seed_symbol: str, budget_tokens: int) -> ContextPackage:
+    def retrieve(self, seed_symbol: str, budget_tokens: int, task_type: str | None = None) -> ContextPackage:
         if self._builder is None or self._repo_root is None or self._feature_masks is None:
             raise RuntimeError("PragmaticOracle.retrieve called before index()")
         builder = self._builder

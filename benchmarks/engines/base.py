@@ -20,8 +20,18 @@ class AbstractRetrievalEngine(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def retrieve(self, seed_symbol: str, budget_tokens: int) -> ContextPackage:
-        """Retrieves and populates a canonical ContextPackage object."""
+    def retrieve(self, seed_symbol: str, budget_tokens: int, task_type: str | None = None) -> ContextPackage:
+        """Retrieves and populates a canonical ContextPackage object.
+
+        `task_type` (Phase D, Invariant 1): the calling task's own
+        `EvaluationTask.task_type` ("chain"/"blast"/"redundancy"/
+        "architecture"/"debug"), or `None` if unavailable/inapplicable.
+        Only `PrismEngine`/`PrismEngineCache` (the two engines that call
+        `prism.surface.build.build_context_package`) act on it - other
+        engines accept it purely so `benchmarks.runner`'s own engine
+        loop can pass it uniformly to every engine without a per-engine
+        special case.
+        """
         raise NotImplementedError
 
 
