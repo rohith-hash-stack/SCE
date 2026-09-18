@@ -343,7 +343,15 @@ def _render_one_node(node, options: RenderOptions) -> str:
     returns_item = []
     if node.signature.returns is not None:
         returns_item = [_leaf("returns", {"type": node.signature.returns.type, "kind": node.signature.returns.kind})]
-    signature = _container("signature", {}, [*param_items, *returns_item], depth=4, options=options)
+    docstring_item = []
+    if node.signature.docstring is not None:
+        # CDATA, matching `body` below - a real docstring routinely
+        # contains newlines, indentation, and characters (`<`, `&`, an
+        # embedded code example) that would otherwise need per-character
+        # XML escaping and lose exactly the internal structure Issue #35
+        # was about preserving in the first place.
+        docstring_item = [_leaf("docstring", {}, text=_cdata(node.signature.docstring))]
+    signature = _container("signature", {}, [*param_items, *returns_item, *docstring_item], depth=4, options=options)
 
     features = _leaf(
         "features",

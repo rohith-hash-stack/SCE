@@ -25,6 +25,7 @@ linking.
 """
 from __future__ import annotations
 
+import inspect
 import re
 from dataclasses import dataclass, field
 
@@ -93,6 +94,14 @@ class BehavioralContract:
     effects: list[str] = field(default_factory=list)
     cyclomatic_complexity: int = 1
     doc_summary: str | None = None
+    #: Phase H (Issue #35): the full docstring, PEP-257/`inspect.cleandoc`-
+    #: normalized (leading/trailing blank-line margin trimmed, internal
+    #: lines dedented by the docstring's own common indentation only -
+    #: never flattened to one line) - distinct from `doc_summary` above,
+    #: which is deliberately a single-sentence, single-line, truncated
+    #: summary for compact display and stays exactly as it was for every
+    #: existing caller of it (`_is_deprecated`, `serializers.markdown`).
+    docstring: str | None = None
     visibility: str = "public"  # "public" | "private" | "exported"
     is_deprecated: bool = False
     #: Higher-Order Function & Callback Signature Contracts
@@ -115,6 +124,7 @@ class BehavioralContract:
             "effects": self.effects,
             "cyclomatic_complexity": self.cyclomatic_complexity,
             "doc_summary": self.doc_summary,
+            "docstring": self.docstring,
             "visibility": self.visibility,
             "is_deprecated": self.is_deprecated,
             "hof_callbacks": [c.to_dict() for c in self.hof_callbacks],
@@ -133,6 +143,7 @@ class BehavioralContract:
             effects=list(d.get("effects", [])),
             cyclomatic_complexity=d.get("cyclomatic_complexity", 1),
             doc_summary=d.get("doc_summary"),
+            docstring=d.get("docstring"),
             visibility=d.get("visibility", "public"),
             is_deprecated=d.get("is_deprecated", False),
             hof_callbacks=[HofCallbackContract(**c) for c in d.get("hof_callbacks", [])],
@@ -178,6 +189,7 @@ class ContractExtractor:
         state_mutations = self._state_mutations(def_node, parsed)
         complexity = self._cyclomatic_complexity(def_node, lang)
         doc_summary = self._doc_summary(def_node, parsed)
+        docstring = self._normalize_docstring(def_node, parsed)
         visibility = self._visibility(def_node, parsed, enclosing_class, qualified_name)
         is_deprecated = self._is_deprecated(def_node, parsed, doc_summary)
 
@@ -203,6 +215,7 @@ class ContractExtractor:
             effects=effects,
             cyclomatic_complexity=complexity,
             doc_summary=doc_summary,
+            docstring=docstring,
             visibility=visibility,
             is_deprecated=is_deprecated,
             hof_callbacks=hof_callbacks,
@@ -419,6 +432,47 @@ class ContractExtractor:
         if len(first) > DOC_SUMMARY_MAX_CHARS:
             first = first[: DOC_SUMMARY_MAX_CHARS - 1].rstrip() + "…"
         return first or None
+
+    def _normalize_docstring(self, def_node: Node, parsed: ParsedFile) -> str | None:
+        """Phase H (Issue #35): the full docstring, normalized without
+        collapsing it to one line the way `_doc_summary` deliberately
+        does. Python uses `inspect.cleandoc`'s own well-established
+        PEP-257 algorithm - strip the literal's own quote delimiters,
+        then trim only the leading/trailing blank-line margin and the
+        docstring's own *common* leading indentation, leaving any
+        relative indentation between internal lines (an indented
+        `Example:`/`Args:` block, say) exactly as written. JS/TS strips
+        the `/** ... */` delimiters and each line's own leading `*`
+        line-continuation marker before the same `cleandoc` pass -
+        `_doc_summary`'s per-line `.strip()` is intentionally not reused
+        here, since it would throw away exactly the indentation this
+        function exists to keep.
+        """
+        lang = parsed.language_id
+        raw = self._raw_doc_text(def_node, parsed, lang)
+        if not raw:
+            return None
+        if lang == LanguageID.PYTHON:
+            text = _PYTHON_DOCSTRING_QUOTES_RE.sub("", raw)
+        else:
+            text = raw.strip()
+            if text.startswith("/**"):
+                text = text[3:]
+            elif text.startswith("/*"):
+                text = text[2:]
+            if text.endswith("*/"):
+                text = text[:-2]
+            delimited_lines = []
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("*"):
+                    stripped = stripped[1:]
+                    if stripped.startswith(" "):
+                        stripped = stripped[1:]
+                delimited_lines.append(stripped)
+            text = "\n".join(delimited_lines)
+        cleaned = inspect.cleandoc(text) if text.strip() else ""
+        return cleaned or None
 
     @staticmethod
     def _raw_doc_text(def_node: Node, parsed: ParsedFile, lang: str) -> str | None:

@@ -138,7 +138,7 @@ def _node_signature(qname: str, contracts: dict[str, BehavioralContract], output
         return NodeSignature(returns=NodeSignatureReturn(type=None, kind=_output_kind(output_mask)))
     params = [NodeSignatureParam(name=p.name, type=p.type, optional=p.default is not None) for p in contract.params]
     returns = NodeSignatureReturn(type=contract.return_type, kind=_output_kind(output_mask))
-    return NodeSignature(params=params, returns=returns)
+    return NodeSignature(params=params, returns=returns, docstring=contract.docstring)
 
 
 def _node_body(builder: ConcreteGraphBuilder, qname: str) -> str:

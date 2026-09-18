@@ -274,7 +274,9 @@ def _parse_signature(elem: Element | None) -> NodeSignature:
     returns = None
     if returns_elem is not None:
         returns = NodeSignatureReturn(type=_get_str(returns_elem, "type"), kind=_get_str(returns_elem, "kind", required=True))
-    return NodeSignature(params=params, returns=returns)
+    docstring_elem = elem.find("docstring")
+    docstring = docstring_elem.text if docstring_elem is not None else None
+    return NodeSignature(params=params, returns=returns, docstring=docstring)
 
 
 def _parse_features(elem: Element | None) -> NodeFeatures:

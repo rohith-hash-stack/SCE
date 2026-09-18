@@ -105,6 +105,11 @@ class NodeSignatureReturn(_Frozen):
 class NodeSignature(_Frozen):
     params: list[NodeSignatureParam] = Field(default_factory=list)
     returns: Optional[NodeSignatureReturn] = None
+    #: Phase H (Issue #35): the full, PEP-257-normalized docstring (see
+    #: `prism.graph.contracts.BehavioralContract.docstring`) - `None`
+    #: when the symbol has no contract or no real docstring, exactly
+    #: like every other optional field here.
+    docstring: Optional[str] = None
 
 
 class NodeFeatures(_Frozen):
