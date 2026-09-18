@@ -375,7 +375,9 @@ def build_context_package(
     causal_path = None
     if include_causal_path:
         causal_edge_pairs = [(e.from_node, e.to_node) for e in edges if e.type in ("CALLS", "INSTANTIATES")]
-        stages, truncated = compute_causal_path(seed_id, packed_ids, causal_edge_pairs, dist_w_map, feature_masks, _output_kind)
+        stages, truncated = compute_causal_path(
+            seed_id, packed_ids, causal_edge_pairs, dist_w_map, feature_masks, _output_kind, builder.symbol_table.get
+        )
         causal_path = CausalPath(
             seed=seed_id,
             stages=[
