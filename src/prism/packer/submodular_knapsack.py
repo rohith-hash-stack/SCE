@@ -1064,7 +1064,18 @@ def pack_symbol_context(
         with _profile_phase("feature_masks"):
             feature_masks = compute_feature_masks_cached(builder, builder.repo_root)
         with _profile_phase("compute_topological_distances"):
-            dist_w_map = compute_topological_distances(builder, seed_id)
+            # Zero-Debt Hardening Pass, Task 3: compute_topological_
+            # distances now defaults its own d_max to 5.0 (was None/
+            # unbounded). d_max is passed explicitly as this function's
+            # own max_hops here so the candidate_symbols filter below
+            # (`dist_w_map[n] <= max_hops`) keeps seeing every node it
+            # would have before - identical selected output for every
+            # existing caller (default max_hops=6.0 or any explicit
+            # override) - while gaining the early-termination perf win
+            # d_max was designed to provide instead of silently
+            # re-capping every caller at 5.0 regardless of its own
+            # max_hops.
+            dist_w_map = compute_topological_distances(builder, seed_id, d_max=max_hops)
         with _profile_phase("upstream_callers"):
             upstream_callers = compute_upstream_callers(builder, seed_id)
         dist_w_upstream_map = {symbol: caller.dist_w_upstream for symbol, caller in upstream_callers.items()}

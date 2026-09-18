@@ -17,6 +17,16 @@ from prism.traversal._cache_keys import graph_cache_key
 
 from benchmarks.engines.prism_engine import PrismEngine
 
+# Zero-Debt Hardening Pass, Task 3: build_context_package/pack_symbol_
+# context now thread their own max_hops through compute_topological_
+# distances as an explicit d_max (previously they called it with no
+# d_max at all, so the distance cache key's own d_max field was always
+# None - the function's pre-Task-3 default). PrismEngine defaults to
+# DEFAULT_MAX_HOPS, so that is what the real distance cache key looks
+# like today; the direct _distance_cache_key probes below must use the
+# same value or they check a key retrieve() never actually populates.
+from prism.packer.submodular_knapsack import DEFAULT_MAX_HOPS
+
 _SOURCE = (
     "def parse_order(raw):\n    return validate_order(raw)\n\n\n"
     "def validate_order(data):\n    return price_order(data)\n\n\n"
@@ -64,7 +74,7 @@ def test_session_cache_across_three_retrieves_two_seeds_two_budgets(tmp_path):
     # retrieve #1: everything must be a real miss beforehand.
     state_before_1 = _repo_keyed_cache_state(str(repo))
     assert not any(state_before_1.values()), state_before_1
-    dist_key_a = continuous_dijkstra._distance_cache_key(engine._builder, seed_a).digest()
+    dist_key_a = continuous_dijkstra._distance_cache_key(engine._builder, seed_a, d_max=DEFAULT_MAX_HOPS).digest()
     assert dist_key_a not in continuous_dijkstra._DISTANCE_CACHE
 
     pkg1 = engine.retrieve(seed_a, 4000)
@@ -88,7 +98,7 @@ def test_session_cache_across_three_retrieves_two_seeds_two_budgets(tmp_path):
     # hit (seed-independent). Distances must be a real MISS for seed_b
     # - this is the critical assertion: distances must never bleed
     # from seed_a into seed_b.
-    dist_key_b = continuous_dijkstra._distance_cache_key(engine._builder, seed_b).digest()
+    dist_key_b = continuous_dijkstra._distance_cache_key(engine._builder, seed_b, d_max=DEFAULT_MAX_HOPS).digest()
     assert dist_key_b not in continuous_dijkstra._DISTANCE_CACHE
 
     pkg3 = engine.retrieve(seed_b, 4000)
@@ -115,7 +125,7 @@ def test_repo_keyed_caches_invalidate_on_file_change(tmp_path):
 
     state_before_touch = _repo_keyed_cache_state(str(repo))
     assert all(state_before_touch.values())
-    dist_key_before = continuous_dijkstra._distance_cache_key(engine._builder, "x.parse_order").digest()
+    dist_key_before = continuous_dijkstra._distance_cache_key(engine._builder, "x.parse_order", d_max=DEFAULT_MAX_HOPS).digest()
     assert dist_key_before in continuous_dijkstra._DISTANCE_CACHE
 
     # Touch the source file (real content change) and re-index.
@@ -128,7 +138,7 @@ def test_repo_keyed_caches_invalidate_on_file_change(tmp_path):
     # explicitly evicted); the NEW key must be a real miss.
     state_after_touch = _repo_keyed_cache_state(str(repo))
     assert not any(state_after_touch.values()), "a changed file must produce a new key, not reuse the stale one"
-    dist_key_after = continuous_dijkstra._distance_cache_key(engine_after_touch._builder, "x.parse_order").digest()
+    dist_key_after = continuous_dijkstra._distance_cache_key(engine_after_touch._builder, "x.parse_order", d_max=DEFAULT_MAX_HOPS).digest()
     assert dist_key_after not in continuous_dijkstra._DISTANCE_CACHE
     assert dist_key_after != dist_key_before, "distances must also invalidate - a file change can alter reachability"
 

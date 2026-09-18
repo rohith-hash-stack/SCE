@@ -315,7 +315,19 @@ def build_context_package(
 
     pack_result: SubmodularPackResult = pack_symbol_context(builder, seed_id, target_budget, max_hops=max_hops)
     feature_masks = compute_feature_masks_cached(builder, repo_root)
-    dist_w_map = compute_topological_distances(builder, seed_id)
+    # Zero-Debt Hardening Pass, Task 3: compute_topological_distances now
+    # defaults its own d_max to 5.0 (was None/unbounded). This call's
+    # dist_w_map feeds reachable_ids (-> manifest.considered_nodes/
+    # reachable_nodes), the causal path's sink tie-break, and the
+    # back_edge flag below - all of which are meant to reflect "reachable
+    # within this call's own max_hops", the same bound pack_symbol_
+    # context (called just above) already uses to build packed_ids. d_max
+    # is passed explicitly here so a caller with a real max_hops override
+    # (e.g. tests/test_causal_path.py's max_hops=20.0 deep-chain case)
+    # keeps getting the full search it asks for, instead of being
+    # silently capped at the new global default of 5.0 regardless of
+    # what it requested.
+    dist_w_map = compute_topological_distances(builder, seed_id, d_max=max_hops)
     reachable_ids = set(dist_w_map) | {seed_id}
     packed_ids = set(pack_result.selected)
 

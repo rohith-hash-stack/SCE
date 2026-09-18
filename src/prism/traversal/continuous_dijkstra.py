@@ -208,7 +208,7 @@ def compute_topological_distances(
     builder: ConcreteGraphBuilder,
     seed: str | None = None,
     seeds: list[str] | None = None,
-    d_max: float | None = None,
+    d_max: float | None = 5.0,
     direction: str = "forward",
 ) -> dict[str, float]:
     """`{node: dist_w(seed, node)}` - every node forward-reachable from
@@ -244,18 +244,26 @@ def compute_topological_distances(
     Every seed's own distance to itself is popped from the result,
     exactly as it already was for the single-seed case.
 
-    `d_max` (Phase C, Issue #110): `None` (the default) preserves the
-    exact prior behavior - the full, unfiltered reachable set, with no
-    Dijkstra-internal bound - so every existing caller (`prism.surface.
-    build.build_context_package`, `prism.packer.submodular_knapsack.
-    pack_symbol_context`, `benchmarks.runner`) is completely unaffected.
-    A caller that passes a real `d_max` gets the search itself stopped
-    once the frontier's minimum distance exceeds it (`cutoff=d_max` on
-    `nx.single_source_dijkstra_path_length`, which already implements
-    exactly this early-termination semantics natively - no hand-rolled
-    priority-queue loop needed), avoiding wasted exploration of a large
-    repo's distant, irrelevant majority when only a small neighborhood
-    around the seed is ever going to matter.
+    `d_max` (Phase C, Issue #110; promoted to a real default of `5.0` by
+    the Zero-Debt Hardening Pass, Task 3, superseding Phase C's original
+    "keep `None` as the default" decision): every caller that does not
+    explicitly override `d_max` (`prism.surface.build.
+    build_context_package`, `prism.packer.submodular_knapsack.
+    pack_symbol_context`, `benchmarks.runner`) now gets its search bounded
+    to distance 5.0 by default. This is safe against every real
+    ground-truth pipeline symbol in this repo's one corpus with ground
+    truth (Django, 24 accepted tasks - see the docstring paragraph below:
+    max observed seed-to-pipeline-symbol distance is 3.0, well under the
+    new 5.0 default), and was re-verified end-to-end (including the slow
+    real-corpus suite) before being flipped. A caller that wants the
+    exact prior unbounded behavior must now pass `d_max=None` explicitly.
+    The search itself is stopped once the frontier's minimum distance
+    exceeds `d_max` (`cutoff=d_max` on `nx.single_source_dijkstra_path_
+    length`, which already implements exactly this early-termination
+    semantics natively - no hand-rolled priority-queue loop needed),
+    avoiding wasted exploration of a large repo's distant, irrelevant
+    majority when only a small neighborhood around the seed is ever going
+    to matter.
 
     Empirically verified safe against every real ground-truth pipeline
     symbol in the one corpus this repo currently has ground truth for

@@ -35,13 +35,19 @@ def _write_call_chain(repo: Path, length: int) -> None:
 def test_dijkstra_terminates_at_d_max_5(tmp_path):
     """A linear call chain f0->f1->...->f7 (each CALLS hop costs exactly
     1.0) gives exact integer distances 1.0..7.0 from f0. With d_max=5.0,
-    nodes at distance <= 5.0 remain; distance 7.0 (and 6.0) are excluded."""
+    nodes at distance <= 5.0 remain; distance 7.0 (and 6.0) are excluded.
+
+    `d_max=None` is passed explicitly for the "unbounded" case: Zero-Debt
+    Hardening Pass, Task 3 promoted `d_max=5.0` to this function's own
+    default (superseding this same test's original assumption that the
+    default meant unbounded), so "unbounded" must now be requested
+    explicitly rather than obtained by omitting the argument."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _write_call_chain(repo, 8)
     builder, _tag_matrix = build_pipeline(str(repo))
 
-    unbounded = compute_topological_distances(builder, "mod.f0")
+    unbounded = compute_topological_distances(builder, "mod.f0", d_max=None)
     assert unbounded["mod.f7"] == 7.0
     assert unbounded["mod.f5"] == 5.0
 
@@ -53,19 +59,31 @@ def test_dijkstra_terminates_at_d_max_5(tmp_path):
     assert bounded["mod.f3"] == 3.0
 
 
-def test_d_max_none_preserves_exact_prior_behavior(tmp_path):
-    """d_max=None (the default, matching every existing real caller)
-    must produce byte-identical results to calling with no d_max
-    argument at all - no accidental behavior change for
-    prism.surface.build/prism.packer.submodular_knapsack/benchmarks.runner."""
+def test_default_d_max_matches_explicit_5(tmp_path):
+    """Zero-Debt Hardening Pass, Task 3: `d_max=5.0` is now this
+    function's own default (was `None`/unbounded - see this module's own
+    superseded `test_d_max_none_preserves_exact_prior_behavior`, renamed
+    from this test's own prior name). Every real production caller
+    (`prism.surface.build`, `prism.packer.submodular_knapsack`) threads
+    its own `max_hops` through as `d_max` explicitly rather than relying
+    on this default, so this default only matters for a caller that
+    passes neither - this test verifies calling with no `d_max` argument
+    at all is now byte-identical to passing `d_max=5.0` explicitly, not
+    to `d_max=None`."""
     repo = tmp_path / "repo"
     repo.mkdir()
-    _write_call_chain(repo, 5)
+    _write_call_chain(repo, 8)
     builder, _tag_matrix = build_pipeline(str(repo))
 
     default_call = compute_topological_distances(builder, "mod.f0")
+    explicit_5 = compute_topological_distances(builder, "mod.f0", d_max=5.0)
+    assert default_call == explicit_5
+
     explicit_none = compute_topological_distances(builder, "mod.f0", d_max=None)
-    assert default_call == explicit_none
+    assert default_call != explicit_none, (
+        "sanity check that this chain is long enough (8 nodes, max distance "
+        "7.0) to actually distinguish the bounded default from unbounded"
+    )
 
 
 def test_corpus_pipeline_symbols_within_d_max():
