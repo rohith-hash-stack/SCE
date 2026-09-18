@@ -39,8 +39,9 @@ from prism.parser.lang_config import (
     flatten_reference_chain,
     iter_scoped_nodes,
 )
+from prism.parser.cache import parse_file_cached
 from prism.parser.queries import run_query
-from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
 from prism.graph.call_site import (
     DynamicEdgeSentinel,
     compute_call_site_context,
@@ -361,7 +362,7 @@ class ConcreteGraphBuilder:
             # Exception`) - an unexpected error class should still
             # surface as a real bug, not be silently swallowed here.
             try:
-                parsed = parse_file(path)
+                parsed = parse_file_cached(path)
                 if parsed is None:
                     continue
                 self._parsed_files[path] = parsed
