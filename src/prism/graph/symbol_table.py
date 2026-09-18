@@ -223,12 +223,28 @@ class InstanceTypeMap:
     """local variable -> fully-qualified class name, scoped to one function."""
 
     bindings: dict[str, str] = field(default_factory=dict)
+    #: Phase B (G41): names bound to two *different* classes across
+    #: separate assignments - branching initialization (`if cond: self.x
+    #: = Real() else: self.x = Mock()`, or two different methods of the
+    #: same class each assigning a different concrete type to the same
+    #: attribute name). `resolve()` still returns the most recent
+    #: binding unchanged - every existing caller keeps its current
+    #: behavior - but a caller that also checks `is_ambiguous` can choose
+    #: to link with reduced confidence instead of treating this as a
+    #: clean, single-type resolution.
+    ambiguous: set[str] = field(default_factory=set)
 
     def bind(self, var_name: str, qualified_class: str) -> None:
+        existing = self.bindings.get(var_name)
+        if existing is not None and existing != qualified_class:
+            self.ambiguous.add(var_name)
         self.bindings[var_name] = qualified_class
 
     def resolve(self, var_name: str) -> str | None:
         return self.bindings.get(var_name)
+
+    def is_ambiguous(self, var_name: str) -> bool:
+        return var_name in self.ambiguous
 
 
 # --------------------------------------------------------------------- #

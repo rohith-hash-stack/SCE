@@ -135,3 +135,85 @@ def test_diamond_inheritance_deterministic_order(tmp_path):
     ancestors = builder._mro_ancestors("mod.D")
     assert ancestors == ["mod.B", "mod.A", "mod.C"]
     assert ancestors.count("mod.A") == 1
+
+
+# ============================================================
+# G41: attribute-chain disambiguation
+# ============================================================
+
+def test_attribute_chain_resolved_via_init_binding(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "class Service:\n"
+        "    def call(self):\n"
+        "        return 'ok'\n"
+        "\n"
+        "class Client:\n"
+        "    def __init__(self):\n"
+        "        self.service = Service()\n"
+        "    def run(self):\n"
+        "        return self.service.call()\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    assert builder.graph.has_edge("mod.Client.run", "mod.Service.call")
+    edge = builder.graph.get_edge_data("mod.Client.run", "mod.Service.call")
+    assert edge.get("kind") is None  # clean single-type resolution, full confidence
+
+
+def test_attribute_chain_resolved_via_type_annotation(tmp_path):
+    """A bare type-annotated instance attribute with no constructor call
+    at all (self.service: Service, no `= ...`) - the annotation alone
+    must be enough to bind the receiver's type."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "class Service:\n"
+        "    def call(self):\n"
+        "        return 'ok'\n"
+        "\n"
+        "class Client:\n"
+        "    def __init__(self):\n"
+        "        self.service: Service\n"
+        "    def run(self):\n"
+        "        return self.service.call()\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    assert builder.graph.has_edge("mod.Client.run", "mod.Service.call")
+    edge = builder.graph.get_edge_data("mod.Client.run", "mod.Service.call")
+    assert edge.get("kind") is None
+
+
+def test_attribute_chain_ambiguous_yields_reduced_confidence(tmp_path):
+    """self.service is bound to two different concrete classes across two
+    methods (branching initialization) - the call must still resolve
+    (never silently dropped), but marked as reduced-confidence, not a
+    clean single-type resolution."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "class RealService:\n"
+        "    def call(self):\n"
+        "        return 'real'\n"
+        "\n"
+        "class MockService:\n"
+        "    def call(self):\n"
+        "        return 'mock'\n"
+        "\n"
+        "class Client:\n"
+        "    def use_real(self):\n"
+        "        self.service = RealService()\n"
+        "    def use_mock(self):\n"
+        "        self.service = MockService()\n"
+        "    def run(self):\n"
+        "        return self.service.call()\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    # Last-bound wins (same "most recent assignment" convention
+    # InstanceTypeMap.bind already used before this phase) - the
+    # invariant under test is *reduced confidence*, not which of the two
+    # branching candidates gets picked.
+    assert not builder.graph.has_edge("mod.Client.run", "mod.RealService.call")
+    assert builder.graph.has_edge("mod.Client.run", "mod.MockService.call")
+    edge = builder.graph.get_edge_data("mod.Client.run", "mod.MockService.call")
+    assert edge.get("kind") == "TENTATIVE_CALL"

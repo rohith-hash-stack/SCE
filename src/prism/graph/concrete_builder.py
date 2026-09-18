@@ -194,6 +194,12 @@ class ConcreteGraphBuilder:
         #: sequential (one call-node fully resolved before the next
         #: starts) throughout this class - not a general-purpose pattern.
         self._last_resolution_was_tentative = False
+        #: Phase B (G41): set by `_resolve_segments` immediately before it
+        #: returns via an attribute-chain resolution (`self.<attr>.<method>`)
+        #: whose receiver was bound to more than one concrete class across
+        #: different assignments - same single-flag/single-threaded
+        #: convention as `_last_resolution_was_tentative` above.
+        self._last_resolution_was_ambiguous = False
         #: Item 3: `go_call_resolution_ratio` diagnostic numerator/
         #: denominator - see that property's own docstring.
         self._go_receiver_call_sites_total = 0
@@ -1071,16 +1077,41 @@ class ConcreteGraphBuilder:
                 continue
             for assign in iter_scoped_nodes(method_node, {assign_type}, parsed.language_id):
                 target = assign.child_by_field_name("left")
-                value = assign.child_by_field_name("right")
-                if target is None or value is None:
-                    continue
-                ctor_segments = _constructor_call_segments(value, parsed.language_id, parsed.source)
-                if ctor_segments is None:
+                if target is None:
                     continue
                 target_segments = flatten_reference_chain(target, parsed.source, parsed.language_id)
                 if not target_segments or len(target_segments) != 2 or target_segments[0] not in self_tokens:
                     continue
-                resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+                value = assign.child_by_field_name("right")
+                if value is not None:
+                    ctor_segments = _constructor_call_segments(value, parsed.language_id, parsed.source)
+                    if ctor_segments is None:
+                        continue
+                    resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+                else:
+                    # Phase B (G41): a bare type-annotated attribute with
+                    # no constructor call at all (`self.attr:
+                    # ServiceClient`, tree-sitter-python's "assignment"
+                    # node with a "type" field but no "right" child) -
+                    # the annotation alone is enough to bind the
+                    # receiver's type when it names a single, simple
+                    # class directly. A subscripted/generic annotation
+                    # (`Optional[ServiceClient]`, `list[ServiceClient]`)
+                    # is not attempted - its own "type" child is not a
+                    # bare `identifier`, so it falls through and is left
+                    # unresolved rather than guessed.
+                    # tree-sitter-python wraps the annotation in its own
+                    # "type" grammar node (`type_node.type == "type"`),
+                    # one level above the actual `identifier` - confirmed
+                    # directly against the parse tree, not assumed.
+                    type_node = assign.child_by_field_name("type")
+                    if type_node is not None and len(type_node.named_children) == 1:
+                        type_node = type_node.named_children[0]
+                    if type_node is None or type_node.type != "identifier":
+                        continue
+                    resolved_class = self._resolve_reference_chain(
+                        [node_text(type_node, parsed.source)], module, import_map
+                    )
                 if self._is_known_class(resolved_class):
                     instance_map.bind(".".join(target_segments), resolved_class)
         return instance_map
@@ -1573,6 +1604,18 @@ class ConcreteGraphBuilder:
                 # (never as cheap as a normal CALLS edge).
                 if self._last_resolution_was_tentative:
                     edge_kwargs["kind"] = "TENTATIVE_CALL"
+                # Phase B (G41): an attribute-chain call resolved through
+                # a receiver bound to more than one concrete class - same
+                # reduced-confidence marker as the Go tentative-receiver
+                # guess above (see _resolve_segments's own comment for
+                # why this reuses TENTATIVE_CALL rather than a separate,
+                # unwired kind). The two conditions are mutually
+                # exclusive in practice (one is Go-only, this one only
+                # fires through class_instance_map/func_instance_map,
+                # which the Go path never populates) but `elif` makes
+                # that non-overlap explicit rather than relying on it.
+                elif self._last_resolution_was_ambiguous:
+                    edge_kwargs["kind"] = "TENTATIVE_CALL"
             self.graph.add_edge(caller_qname, target, **edge_kwargs)
 
         self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
@@ -1792,6 +1835,7 @@ class ConcreteGraphBuilder:
         lang: str | None = None,
     ) -> str | None:
         self._last_resolution_was_tentative = False
+        self._last_resolution_was_ambiguous = False
         if len(segments) == 1:
             return self._resolve_reference_chain(segments, module, import_map)
 
@@ -1800,8 +1844,30 @@ class ConcreteGraphBuilder:
         receiver_key = ".".join(receiver_segments)
 
         if receiver_segments[0] in self_tokens:
-            candidate = func_instance_map.resolve(receiver_key) or class_instance_map.resolve(receiver_key)
+            # Phase B (G41): `func_instance_map` wins over `class_instance_map`
+            # on a hit, same precedence as before - ambiguity is checked
+            # against whichever map actually supplied the candidate, not
+            # both unconditionally (a name ambiguous in one scope but not
+            # the one that actually resolved it should not be flagged).
+            if func_instance_map.resolve(receiver_key) is not None:
+                candidate = func_instance_map.resolve(receiver_key)
+                ambiguous = func_instance_map.is_ambiguous(receiver_key)
+            else:
+                candidate = class_instance_map.resolve(receiver_key)
+                ambiguous = class_instance_map.is_ambiguous(receiver_key)
             if candidate:
+                if ambiguous:
+                    # G41 Invariant 3: branching initialization bound
+                    # `self.<attr>` to more than one concrete class -
+                    # reduced confidence, not a clean single-type
+                    # resolution. Reuses the existing kind="TENTATIVE_CALL"
+                    # marker (see phase-b-g44's commit for why: any kind
+                    # `prism.slicer.distance` doesn't recognize silently
+                    # defaults to full CALLS-level confidence, the opposite
+                    # of "reduced" - there is no separate "AMBIGUOUS_CHAIN"
+                    # discount wired into that module, and adding one is
+                    # out of Phase B's scope).
+                    self._last_resolution_was_ambiguous = True
                 return f"{candidate}.{method}"
             if len(receiver_segments) == 1 and enclosing_class:
                 direct = f"{enclosing_class}.{method}"
