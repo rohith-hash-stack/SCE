@@ -47,6 +47,7 @@ from prism.graph.call_site import (
     detect_call_site_hazard,
     dynamic_edge_sentinel_id,
 )
+from prism.graph.weights import MAX_INHERITANCE_DEPTH
 from prism.graph.symbol_table import (
     ExportRegistry,
     GlobalSymbolTable,
@@ -1300,14 +1301,28 @@ class ConcreteGraphBuilder:
     # -- OVERRIDES + Python C3-ish MRO (Issue #9) ------------------------- #
     def _mro_ancestors(self, class_qname: str) -> list[str]:
         """`class_qname`'s own ancestor chain via its `EXTENDS` edges,
-        nearest-first, depth-first, left-to-right in declared base order,
-        each visited at most once - a practical approximation of Python's
-        real C3 linearization: exact for single inheritance and for
-        ordinary (non-diamond) multiple inheritance, which is the
-        overwhelming majority of real code; a genuine diamond
-        (`class D(B, C)` where both `B` and `C` extend `A`) may order
-        differently from true C3's consistency-corrected linearization -
-        out of scope for this pass, not silently claimed as exact.
+        nearest-first, depth-first, each visited at most once - a
+        practical approximation of Python's real C3 linearization: exact
+        for single inheritance and for ordinary (non-diamond) multiple
+        inheritance, which is the overwhelming majority of real code; a
+        genuine diamond (`class D(B, C)` where both `B` and `C` extend
+        `A`) may order differently from true C3's consistency-corrected
+        linearization - out of scope for this pass, not silently claimed
+        as exact. `A` itself is still yielded exactly once either way
+        (from whichever of `B`/`C` reaches it first in canonical sibling
+        order below) - `seen` already guarantees that; a true diamond
+        does not require multiple visits to resolve correctly, only a
+        genuine cycle (`A` extends `B` extends `A`) needs the recursion
+        to stop, which the same `seen` set also already does (a cyclic
+        `EXTENDS` graph can't happen in real Python source, but a
+        synthetic/test graph built by hand can construct one).
+
+        Phase B (G40) determinism: sibling bases at each level are
+        expanded in canonical `(file, line, qualified_name)` order rather
+        than raw graph edge-insertion order, so the same source always
+        produces the same traversal order regardless of how EXTENDS edges
+        happened to be added to the graph or in what order files were
+        scanned.
         """
         ordered: list[str] = []
         seen: set[str] = {class_qname}
@@ -1319,15 +1334,36 @@ class ConcreteGraphBuilder:
         # raise a real `RecursionError` elsewhere in this module
         # (`iter_scoped_nodes`, `src/prism/parser/lang_config.py`) well
         # before Python's default stack limit in a real call-stack
-        # context. An explicit cap here, matching that same
-        # `MAX_SCOPED_NODE_DEPTH`, stops walking rather than crashing.
-        max_depth = 300
+        # context.
+        #
+        # Phase B (G40): the cap is now `MAX_INHERITANCE_DEPTH` (10), not
+        # the original 300 - a deliberate narrowing, not just a tighter
+        # anti-crash margin. `_link_overrides`/self.method() resolution
+        # (this method's only two callers) will no longer resolve an
+        # override or an inherited method past 10 EXTENDS hops from the
+        # starting class, where they previously would have up to 300. A
+        # single-inheritance hierarchy genuinely 11+ levels deep (rare,
+        # but not impossible in real frameworks) silently stops
+        # resolving beyond level 10 - see the commit introducing this
+        # change for the concrete trade-off being made.
+        max_depth = MAX_INHERITANCE_DEPTH
+
+        def _sibling_sort_key(qname: str) -> tuple[str, int, str]:
+            info = self.symbol_table.get(qname)
+            if info is None:
+                return ("", 0, qname)
+            return (info.file, info.line_range[0], qname)
 
         def visit(node: str, depth: int) -> None:
             if depth >= max_depth:
                 return
-            for _source, target, data in self.graph.out_edges(node, data=True):
-                if data.get("relation") != "EXTENDS" or target in seen:
+            siblings = {
+                target
+                for _source, target, data in self.graph.out_edges(node, data=True)
+                if data.get("relation") == "EXTENDS"
+            }
+            for target in sorted(siblings, key=_sibling_sort_key):
+                if target in seen:
                     continue
                 seen.add(target)
                 ordered.append(target)

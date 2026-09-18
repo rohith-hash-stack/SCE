@@ -8,6 +8,8 @@ derivation only; tests against real Dijkstra behavior
 (test_tentative_call_loses_to_one_confident_hop) exercise the actual,
 already-wired `prism.slicer.distance` cost model instead.
 """
+from prism.cli import build_pipeline
+from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.weights import (
     EDGE_WEIGHTS,
     MAX_EDGE_COST,
@@ -35,3 +37,101 @@ def test_w_tentative_dominance_bound():
     # the "against all possible edge weights" check.
     recomputed_max = max(1.0 / w for w in EDGE_WEIGHTS.values())
     assert recomputed_max == MAX_EDGE_COST
+
+
+# ============================================================
+# G40: inherited-method resolution (hardened _mro_ancestors, live path)
+# ============================================================
+
+def test_inherited_method_resolves_single_level(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "class Base:\n"
+        "    def greet(self):\n"
+        "        return 'hi'\n"
+        "\n"
+        "class Derived(Base):\n"
+        "    def run(self):\n"
+        "        return self.greet()\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    assert builder.graph.has_edge("mod.Derived.run", "mod.Base.greet")
+
+
+def test_deep_mixin_chain_resolves_depth_8(tmp_path):
+    """8 stacked mixins (M8..M1 each extending the next), M1 extends the
+    Root which defines the method; Caller extends M8. Root is 9 EXTENDS
+    hops from Caller - within MAX_INHERITANCE_DEPTH (10) - so self.target()
+    must still resolve to Root.target."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    lines = ["class Root:", "    def target(self):", "        return 'ok'", ""]
+    lines += ["class M1(Root):", "    pass", ""]
+    for i in range(2, 9):
+        lines += [f"class M{i}(M{i - 1}):", "    pass", ""]
+    lines += ["class Caller(M8):", "    def run(self):", "        return self.target()"]
+    (repo / "mod.py").write_text("\n".join(lines) + "\n")
+    builder, _tag_matrix = build_pipeline(str(repo))
+    assert builder.graph.has_edge("mod.Caller.run", "mod.Root.target")
+
+
+def test_inheritance_depth_cap_exceeded(tmp_path):
+    """The same shape as the depth-8 test, but 3 levels deeper: Root is
+    now 12 EXTENDS hops from Caller, past MAX_INHERITANCE_DEPTH (10) - the
+    method must NOT resolve to Root.target (rejected, not found)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    lines = ["class Root:", "    def target(self):", "        return 'ok'", ""]
+    lines += ["class M1(Root):", "    pass", ""]
+    for i in range(2, 12):
+        lines += [f"class M{i}(M{i - 1}):", "    pass", ""]
+    lines += ["class Caller(M11):", "    def run(self):", "        return self.target()"]
+    (repo / "mod.py").write_text("\n".join(lines) + "\n")
+    builder, _tag_matrix = build_pipeline(str(repo))
+    assert not builder.graph.has_edge("mod.Caller.run", "mod.Root.target")
+    # Confirmed rejected, not silently resolved to some other real symbol:
+    # the unresolved "Caller.target" name (never actually defined on
+    # Caller) is not itself in the symbol table.
+    assert "mod.Caller.target" not in builder.symbol_table
+
+
+def test_inheritance_circular_reference_terminates():
+    """A synthetic cyclic EXTENDS graph (A extends B extends A) - can't
+    arise from real Python source (B must exist before `class A(B)` can
+    reference it), but a hand-built graph can construct one; _mro_ancestors
+    must terminate rather than recurse forever."""
+    builder = ConcreteGraphBuilder("/tmp/repo")
+    builder.graph.add_node("m.A")
+    builder.graph.add_node("m.B")
+    builder.graph.add_edge("m.A", "m.B", relation="EXTENDS")
+    builder.graph.add_edge("m.B", "m.A", relation="EXTENDS")
+    ancestors = builder._mro_ancestors("m.A")
+    assert ancestors == ["m.B"]
+
+
+def test_diamond_inheritance_deterministic_order(tmp_path):
+    """D(B, C) where both B and C extend A: A must appear exactly once,
+    and sibling order must be canonical (file, line, name) - B is
+    declared before C in the source, so B's branch (and therefore A) is
+    explored before C's."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "class A:\n"
+        "    def m(self):\n"
+        "        pass\n"
+        "\n"
+        "class B(A):\n"
+        "    pass\n"
+        "\n"
+        "class C(A):\n"
+        "    pass\n"
+        "\n"
+        "class D(B, C):\n"
+        "    pass\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(repo))
+    ancestors = builder._mro_ancestors("mod.D")
+    assert ancestors == ["mod.B", "mod.A", "mod.C"]
+    assert ancestors.count("mod.A") == 1
