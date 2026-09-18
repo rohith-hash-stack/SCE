@@ -217,6 +217,23 @@ class LocalImportMap:
     def resolve(self, local_name: str) -> str | None:
         return self.aliases.get(local_name)
 
+    # Phase H (Issue #46): this is the whole alias-resolution mechanism -
+    # `import my_package.core as mod` / `from utils.tools import helper
+    # as h` are both recorded here as `aliases[local_name] = canonical_
+    # target` (`_handle_python_import_name`, `concrete_builder.py`), and
+    # `ConcreteGraphBuilder._resolve_reference_chain` consults `resolve()`
+    # first, before the caller's own module or any wildcard import - a
+    # `mod.run()`/`h()` call site resolves directly to its real qualified
+    # target and never reaches `_resolve_ambiguous_call` (G44)'s scoring
+    # fallback at all. Verified directly against the real resolution
+    # pipeline, including against a same-simple-name decoy elsewhere in
+    # the repo (an alias always wins, not just "usually scores highest") -
+    # see tests/phase_h/test_engine_extensibility.py's
+    # test_import_as_alias_resolves_directly/test_from_import_alias_
+    # resolves_directly. No production behavior change was needed here;
+    # this comment exists so the connection to Issue #46 is documented
+    # rather than left to be independently rediscovered.
+
 
 @dataclass
 class InstanceTypeMap:
