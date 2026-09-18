@@ -86,18 +86,25 @@ _DISTANCE_CACHE: _LRUCache[dict[str, float]] = _LRUCache(maxsize=100)
 @dataclass(frozen=True)
 class _DistanceCacheKey:
     """`(repo_path, engine_commit_hash, file_hash_set, seed_symbol,
-    distance_metric_params)` - the cache-key matrix's own literal shape
-    for `compute_topological_distances`. `distance_metric_params` here
-    is `(LAMBDA_DATA_FLOW, LAMBDA_GUARD)` - the two real inputs to
-    `edge_cost`/`causal_edge_weight` this function's own Dijkstra run
-    actually depends on. The matrix's third named parameter, `DIST_MAX`,
-    has no corresponding input to this function today -
-    `compute_topological_distances` takes no hop-limit argument and
-    always returns the full unfiltered reachable set (`prism.packer.
-    submodular_knapsack.pack_symbol_context` filters the *result* by
-    `max_hops` afterward, a downstream concern, not an input to the
-    distance computation itself) - there is no real value to include
-    for it without fabricating one, so it is omitted rather than faked.
+    distance_metric_params, d_max)` - the cache-key matrix's own literal
+    shape for `compute_topological_distances`, plus `d_max` (Phase C).
+    `distance_metric_params` here is `(LAMBDA_DATA_FLOW, LAMBDA_GUARD)` -
+    the two real inputs to `edge_cost`/`causal_edge_weight` this
+    function's own Dijkstra run actually depends on.
+
+    The matrix's third named parameter, `DIST_MAX`, previously had no
+    corresponding input to this function at all - `compute_topological_
+    distances` took no hop-limit argument and always returned the full
+    unfiltered reachable set. Phase C added a real `d_max` parameter
+    (Issue #110), so this key now includes it for real: a `d_max=5.0`
+    call and an unbounded (`d_max=None`) call against the identical
+    `(repo, seed)` must never share a cache entry - the same "never
+    silently return a mismatched result" reasoning `seed` itself is
+    already held to below. `None` (the default, matching every existing
+    caller) hashes to a fixed, stable sentinel string distinct from any
+    real float value, so a pre-Phase-C cache entry is simply never a hit
+    against the new key shape (a clean miss and recompute, not a
+    collision) rather than needing an explicit migration.
 
     **Deliberately excludes `grammar_version`/`tag_rule_version`**,
     matching the matrix's own row for this function exactly - flagged
@@ -123,6 +130,7 @@ class _DistanceCacheKey:
     seed: str
     lambda_data_flow: float
     lambda_guard: float
+    d_max: float | None = None
 
     def digest(self) -> str:
         raw = "|".join(
@@ -133,12 +141,13 @@ class _DistanceCacheKey:
                 self.seed,
                 repr(self.lambda_data_flow),
                 repr(self.lambda_guard),
+                repr(self.d_max),
             )
         )
         return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _distance_cache_key(builder: ConcreteGraphBuilder, seed: str) -> _DistanceCacheKey:
+def _distance_cache_key(builder: ConcreteGraphBuilder, seed: str, d_max: float | None = None) -> _DistanceCacheKey:
     graph_key = _graph_cache_key(builder)
     return _DistanceCacheKey(
         repo_path=graph_key.repo_path,
@@ -147,6 +156,7 @@ def _distance_cache_key(builder: ConcreteGraphBuilder, seed: str) -> _DistanceCa
         seed=seed,
         lambda_data_flow=LAMBDA_DATA_FLOW,
         lambda_guard=LAMBDA_GUARD,
+        d_max=d_max,
     )
 
 
@@ -181,7 +191,9 @@ def build_causal_graph(builder: ConcreteGraphBuilder) -> nx.DiGraph:
     return graph
 
 
-def compute_topological_distances(builder: ConcreteGraphBuilder, seed: str) -> dict[str, float]:
+def compute_topological_distances(
+    builder: ConcreteGraphBuilder, seed: str, d_max: float | None = None
+) -> dict[str, float]:
     """`{node: dist_w(seed, node)}` - every node forward-reachable from
     `seed` in the causal graph, via Dijkstra over `c(e) = 1/W(u, v)`
     edge costs. `seed` itself is never included (distance 0 to itself is
@@ -189,24 +201,53 @@ def compute_topological_distances(builder: ConcreteGraphBuilder, seed: str) -> d
     as "not reachable/not the seed", the same convention `DistanceEngine.
     compute_all` uses). Empty dict if `seed` isn't in the graph at all.
 
-    Cached, seed-keyed (`_DistanceCacheKey` - see its own docstring for
-    the exact key shape and the one known gap versus the cache-key
-    matrix's own design for this function). **The cache is never
-    consulted or written without `seed` as part of the key** - this is
-    the one constraint stated with the most force in the whole Blocker
-    1 plan (a seed-less key would silently return a *different* seed's
-    distances), so it is structural here: `_distance_cache_key` takes
-    `seed` as a required positional argument, and there is no other
-    code path into `_DISTANCE_CACHE`.
+    `d_max` (Phase C, Issue #110): `None` (the default) preserves the
+    exact prior behavior - the full, unfiltered reachable set, with no
+    Dijkstra-internal bound - so every existing caller (`prism.surface.
+    build.build_context_package`, `prism.packer.submodular_knapsack.
+    pack_symbol_context`, `benchmarks.runner`) is completely unaffected.
+    A caller that passes a real `d_max` gets the search itself stopped
+    once the frontier's minimum distance exceeds it (`cutoff=d_max` on
+    `nx.single_source_dijkstra_path_length`, which already implements
+    exactly this early-termination semantics natively - no hand-rolled
+    priority-queue loop needed), avoiding wasted exploration of a large
+    repo's distant, irrelevant majority when only a small neighborhood
+    around the seed is ever going to matter.
+
+    Empirically verified safe against every real ground-truth pipeline
+    symbol in the one corpus this repo currently has ground truth for
+    (Django, 24 accepted tasks): the maximum distance from any task's
+    seed to any of its own adjudicated `pipeline_symbols` is exactly
+    3.0, none unreachable - see tests/phase_c/test_traversal_layer.py's
+    own corpus-safety test, which re-verifies this directly against the
+    live corpus rather than trusting this docstring's claim. `d_max=5.0`
+    (this module's own recommended default for a caller that wants the
+    bound) is not itself hard-coded here - callers that want it opt in
+    explicitly - this function makes no claim about corpora it has never
+    been run against (gin/trpc/express have no ground-truth tasks yet to
+    verify against at all).
+
+    Cached, seed-and-d_max-keyed (`_DistanceCacheKey` - see its own
+    docstring for the exact key shape). **The cache is never consulted
+    or written without `seed` as part of the key** - this is the one
+    constraint stated with the most force in the whole Blocker 1 plan (a
+    seed-less key would silently return a *different* seed's distances),
+    so it is structural here: `_distance_cache_key` takes `seed` as a
+    required positional argument, and there is no other code path into
+    `_DISTANCE_CACHE`. `d_max` is included in the same key for the
+    identical reason - a `d_max=5.0` result cached under a key that
+    doesn't distinguish it from the unbounded result would silently
+    return a truncated map to a caller that asked for the full one, or
+    vice versa.
     """
-    dist_key = _distance_cache_key(builder, seed).digest()
+    dist_key = _distance_cache_key(builder, seed, d_max=d_max).digest()
     cached = _DISTANCE_CACHE.get(dist_key)
     if cached is not None:
         return cached
     graph = build_causal_graph(builder)
     if seed not in graph:
         return {}
-    distances = nx.single_source_dijkstra_path_length(graph, seed, weight="weight")
+    distances = nx.single_source_dijkstra_path_length(graph, seed, cutoff=d_max, weight="weight")
     distances.pop(seed, None)
     _DISTANCE_CACHE[dist_key] = distances
     return distances
