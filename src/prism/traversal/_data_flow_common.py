@@ -44,7 +44,7 @@ from prism.parser.lang_config import (
     iter_scoped_nodes,
     super_call_method_name,
 )
-from prism.parser.tree_sitter_loader import ParsedFile, node_text
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
 
 #: Never bound into data-flow provenance, in any language - an error/
 #: context placeholder, not a real payload value (Go's own
@@ -52,6 +52,18 @@ from prism.parser.tree_sitter_loader import ParsedFile, node_text
 #: are just as meaningless as "the thing a downstream call cares about"
 #: in Python/TS).
 _NEVER_PROVENANCE_NAMES = frozenset({"err", "_", "ctx"})
+
+#: Phase J: Go's channel send statement (`ch <- value`) - Go-only, since
+#: channels are Go's own concurrency primitive with no equivalent
+#: construct in any other language this module covers.
+_CHANNEL_SEND_NODE_TYPE: dict[str, str] = {LanguageID.GO: "send_statement"}
+
+#: A channel *receive* (`<-ch`) is not its own distinct grammar node -
+#: tree-sitter-go folds it into the generic `unary_expression` alongside
+#: every other prefix operator (`-x`, `!x`, `*x`, `&x`) - so recognizing
+#: one takes checking the operator field's own text, not just the node
+#: type. Scoped to Go for the same reason as the send type above.
+_CHANNEL_RECEIVE_OPERATOR = "<-"
 
 
 def _unwrap_await(node: Node, lang: str) -> Node:
@@ -221,6 +233,24 @@ def extract_data_flow(
     a variable pass with one level of provenance chaining
     (`y = u(x); v(y)`, and `clean = raw.strip()` re-binding an existing
     provenance chain), 0.7 for an attribute-access pass (`v(y.data)`).
+
+    Phase J (Go channels): `ch <- produce()` binds the same `provenance`
+    dict this function already tracks for ordinary variables, keyed by
+    the channel's own identifier name; `x := <-ch` reads it back out the
+    same way a plain variable re-binding already does. Deliberately
+    scoped to *this one function body only* - a channel handed off to a
+    goroutine launched elsewhere (`go worker(ch)`), or received from in
+    a different function entirely, is channels' own single most common
+    real-world use and is NOT modeled here: cross-function/cross-
+    goroutine flow would require tracking which goroutine ultimately
+    receives from a channel value passed across function boundaries,
+    which is real, open-ended, speculative inference this module's own
+    "don't guess" principle (see the module docstring) refuses to
+    attempt. The narrower, single-function case (a channel created,
+    sent to, and received from all in one place - a real, if less
+    common, Go idiom) is still a genuine, non-speculative win: every
+    edge here still traces back to an actually-resolved call site,
+    exactly like every other edge this function produces.
     """
     lang = parsed.language_id
     src = parsed.source
@@ -236,14 +266,34 @@ def extract_data_flow(
     sub_key_field = SUBSCRIPT_KEY_FIELD.get(lang)
     ident_types = IDENTIFIER_NODE_TYPES.get(lang, set())
     decl_types = _decl_node_types(lang)
+    send_type = _CHANNEL_SEND_NODE_TYPE.get(lang)
     if not call_type:
         return []
 
     provenance: dict[str, str] = {}
     edges: list[tuple[str, str, float]] = []
 
-    relevant_types = decl_types | {call_type}
+    relevant_types = decl_types | {call_type} | ({send_type} if send_type else set())
     for node in iter_scoped_nodes(def_node, relevant_types, lang):
+        if send_type and node.type == send_type:
+            # `ch <- value` - bind `ch`'s own provenance the same way an
+            # ordinary `ch = value` assignment would, so a later `<-ch`
+            # receive (handled in the decl branch below) can read it
+            # back out.
+            channel_node = node.child_by_field_name("channel")
+            value = node.child_by_field_name("value")
+            if channel_node is None or value is None or channel_node.type not in ident_types:
+                continue
+            channel_name = node_text(channel_node, src)
+            if value.type == call_type:
+                producer_id = resolved_call_sites.get(_node_key(value))
+                if producer_id:
+                    provenance[channel_name] = producer_id
+            elif value.type in ident_types:
+                value_name = node_text(value, src)
+                if value_name in provenance:
+                    provenance[channel_name] = provenance[value_name]
+            continue
         if node.type in decl_types:
             for name, value in _bindings(node, lang, src):
                 if name in _NEVER_PROVENANCE_NAMES:
@@ -251,6 +301,22 @@ def extract_data_flow(
                 if value is None:
                     continue
                 value = _unwrap_await(value, lang)
+                if (
+                    lang == LanguageID.GO
+                    and value.type == "unary_expression"
+                    and (operator := value.child_by_field_name("operator")) is not None
+                    and node_text(operator, src) == _CHANNEL_RECEIVE_OPERATOR
+                ):
+                    # `x := <-ch` - a channel receive, read back from
+                    # whatever provenance the send-statement branch
+                    # above bound to `ch`'s own name, exactly like a
+                    # provenance-chaining variable re-bind.
+                    operand = value.child_by_field_name("operand")
+                    if operand is not None and operand.type in ident_types:
+                        operand_name = node_text(operand, src)
+                        if operand_name in provenance:
+                            provenance[name] = provenance[operand_name]
+                    continue
                 if value.type == call_type:
                     producer_id = resolved_call_sites.get(_node_key(value))
                     if producer_id:

@@ -226,6 +226,19 @@ def _call_kind(call_node: Node, def_node: Node, lang: str) -> str:
         # this call is a sub-expression of a larger discarded one
         # (`foo() and bar()`), since either way nothing captures the value.
         return "fire_and_forget"
+    if stmt is not None and stmt.type == "go_statement":
+        # Phase J: Go's `go f()` launches `f()` as a new goroutine -
+        # the caller never captures a return value from it (a goroutine
+        # has none to give back synchronously) and does not wait for it
+        # to complete, the same "launched and discarded from this call
+        # site's own point of view" semantics `expression_statement`
+        # above already captures for every other language - reusing
+        # that same `call_kind` rather than inventing a fifth value no
+        # existing consumer (`prism.slicer.distance`, e.g.) would
+        # recognize, matching this module's own established convention
+        # of never introducing a kind that silently falls back to full
+        # confidence elsewhere.
+        return "fire_and_forget"
     return "sync"
 
 
