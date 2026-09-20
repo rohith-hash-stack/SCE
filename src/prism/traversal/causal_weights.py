@@ -354,7 +354,16 @@ def compute_causal_edges(
 
     synthetic_edges: set[tuple[str, str]] = set()
     all_indicator_pairs = set(data_flow) | set(guards)
-    for u, v in all_indicator_pairs:
+    # Phase I determinism audit: iterating the raw set would insert
+    # into `weights` (a dict) in a hash-seed-dependent order, which
+    # `continuous_dijkstra.build_causal_graph` then carries straight
+    # into `graph.add_edge` call order - no observed output currently
+    # depends on it (every real frontier consumer already re-sorts, and
+    # Dijkstra's own distances are traversal-order-invariant), but
+    # fixing it here keeps this function's own dict-population order
+    # canonical rather than relying on every future consumer to keep
+    # re-deriving that invariant independently.
+    for u, v in sorted(all_indicator_pairs):
         if builder.graph.has_edge(u, v):
             continue
         if u not in builder.symbol_table or v not in builder.symbol_table:

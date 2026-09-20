@@ -935,7 +935,14 @@ def select_submodular_context(
     # still fits in whatever budget remains, it is force-admitted here
     # rather than left to chance.
     if upstream_candidates:
-        best_upstream = min(upstream_candidates, key=lambda u: dist_w_upstream_map.get(u, float("inf")))
+        # Phase I determinism audit: `upstream_candidates` is a `set`,
+        # so an exact `dist_w_upstream` tie between two callers left the
+        # winner hash-seed dependent (`min` only compares strictly-less,
+        # never breaking a tie itself) - the one real gap among this
+        # function's own tie-break points, every other one of which
+        # already pairs its distance key with the qualified name
+        # ascending (see the B1 comment above). Matched here too.
+        best_upstream = min(upstream_candidates, key=lambda u: (dist_w_upstream_map.get(u, float("inf")), u))
         if best_upstream not in s_pack and current_cost + costs.get(best_upstream, 0) <= target_budget:
             s_pack.append(best_upstream)
 
