@@ -116,6 +116,20 @@ def grammar_version() -> str:
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
 
+def engine_and_grammar_version() -> str:
+    """`f"{engine_commit_hash()}:{grammar_version()}"` - the one value a
+    cache keyed only on a *target* repo's own content should also
+    include whenever it persists something this engine's own code (or
+    an external tree-sitter grammar package) computed, so a real change
+    to either is a real cache miss rather than an indefinitely-stale
+    hit (Phase I, Issue #115). Shared by `prism.runtime.index_cache`
+    and `prism.runtime.contract_cache` - both had this exact gap before
+    Phase I; a fix in one that isn't mirrored in the other just
+    reintroduces the same bug class one module over.
+    """
+    return f"{engine_commit_hash()}:{grammar_version()}"
+
+
 #: Bookmark 1 Item 1: duplicated from `prism.cli.IGNORED_DIRS` rather
 #: than imported - `prism.cli` imports `prism.surface.build`, which
 #: imports `prism.semantics.extractor`, which imports this module, so

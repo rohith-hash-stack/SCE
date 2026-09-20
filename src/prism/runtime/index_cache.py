@@ -57,6 +57,7 @@ from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo
 from prism.parser.lang_config import DECORATED_WRAPPER_TYPES
 from prism.parser.queries import run_query
 from prism.parser.tree_sitter_loader import ParsedFile, parse_source
+from prism.traversal._cache_keys import engine_and_grammar_version
 
 try:
     import networkx as nx
@@ -66,8 +67,20 @@ except ImportError:  # pragma: no cover - networkx is a hard dependency elsewher
 #: Bumped whenever the serialized snapshot's shape changes - an old cache
 #: written by a prior schema version is just another cache miss (rebuild
 #: and overwrite), never a crash trying to deserialize a shape this
-#: version doesn't expect.
-_SCHEMA_VERSION = 1
+#: version doesn't expect. Bumped to 2 for Phase I (Issue #115): the
+#: `snapshot` table gained the `engine_version` column below - this
+#: module's cache key previously covered only the *target* repo's own
+#: file content hashes, never this engine's own source. A real,
+#: confirmed consequence: fixing a call-resolution bug in `concrete_
+#: builder.py` (an uncommitted local edit, not a change to any file
+#: under `repo_root`) left every already-indexed repo silently serving
+#: its *old*, pre-fix graph from this cache indefinitely, across
+#: process restarts, until something touched one of the target repo's
+#: own files - the exact "cross-test/cross-run state leakage" failure
+#: mode Issue #115 names. `engine_and_grammar_version` (`prism.
+#: traversal._cache_keys`) already exists and solves exactly this for
+#: the traversal-layer caches - reused here rather than reimplemented.
+_SCHEMA_VERSION = 2
 
 
 def index_cache_path(repo_root: str) -> Path:
@@ -132,11 +145,23 @@ def _connect(repo_root: str) -> sqlite3.Connection:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, content_hash TEXT NOT NULL)"
     )
+    # A `snapshot` table left over from before the Phase I `engine_
+    # version` column existed has the wrong shape - `CREATE TABLE IF
+    # NOT EXISTS` below is a no-op against it (the table already
+    # "exists"), which would otherwise leave every subsequent INSERT/
+    # SELECT referencing `engine_version` failing against columns that
+    # were never added. Detected directly via `PRAGMA table_info`
+    # rather than inferred from `_SCHEMA_VERSION` alone, so this self-
+    # heals even if a build somehow skipped a version bump.
+    existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(snapshot)").fetchall()}
+    if existing_columns and "engine_version" not in existing_columns:
+        conn.execute("DROP TABLE snapshot")
     conn.execute(
         "CREATE TABLE IF NOT EXISTS snapshot ("
         "id INTEGER PRIMARY KEY CHECK (id = 1), "
         "schema_version INTEGER NOT NULL, "
         "language_tier TEXT NOT NULL, "
+        "engine_version TEXT NOT NULL, "
         "graph_json TEXT NOT NULL, "
         "symbols_json TEXT NOT NULL, "
         "tag_matrix_json TEXT NOT NULL, "
@@ -235,12 +260,13 @@ def save_pipeline_to_cache(
                 )
                 conn.execute("DELETE FROM snapshot")
                 conn.execute(
-                    "INSERT INTO snapshot (id, schema_version, language_tier, graph_json, symbols_json, "
-                    "tag_matrix_json, index_errors_json, go_receiver_total, go_receiver_resolved) "
-                    "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO snapshot (id, schema_version, language_tier, engine_version, graph_json, "
+                    "symbols_json, tag_matrix_json, index_errors_json, go_receiver_total, go_receiver_resolved) "
+                    "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         _SCHEMA_VERSION,
                         language_tier,
+                        engine_and_grammar_version(),
                         json.dumps(graph_data),
                         json.dumps(symbols),
                         json.dumps({k: sorted(v) for k, v in tag_matrix.items()}),
@@ -336,7 +362,7 @@ def load_pipeline_from_cache(
             if cached != current:
                 return None
             row = conn.execute(
-                "SELECT schema_version, language_tier, graph_json, symbols_json, tag_matrix_json, "
+                "SELECT schema_version, language_tier, engine_version, graph_json, symbols_json, tag_matrix_json, "
                 "index_errors_json, go_receiver_total, go_receiver_resolved FROM snapshot WHERE id = 1"
             ).fetchone()
         finally:
@@ -344,10 +370,10 @@ def load_pipeline_from_cache(
         if row is None:
             return None
         (
-            schema_version, cached_tier, graph_json, symbols_json,
+            schema_version, cached_tier, cached_engine_version, graph_json, symbols_json,
             tag_matrix_json, index_errors_json, go_total, go_resolved,
         ) = row
-        if schema_version != _SCHEMA_VERSION or cached_tier != language_tier:
+        if schema_version != _SCHEMA_VERSION or cached_tier != language_tier or cached_engine_version != engine_and_grammar_version():
             return None
 
         graph_data = json.loads(graph_json)

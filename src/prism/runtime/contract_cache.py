@@ -28,6 +28,7 @@ from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract, compute_contracts
+from prism.traversal._cache_keys import engine_and_grammar_version
 
 
 def contract_cache_path(repo_root: str) -> Path:
@@ -37,11 +38,20 @@ def contract_cache_path(repo_root: str) -> Path:
 def compute_signature(builder: ConcreteGraphBuilder) -> str:
     """A cheap (mtime, size) fingerprint of every source file the builder
     actually indexed - changes whenever a file is added, removed, or
-    modified, without needing to hash file contents."""
+    modified, without needing to hash file contents. Also folds in
+    `engine_and_grammar_version()` (Phase I, Issue #115): this engine's
+    own extraction logic (`ContractExtractor`) is just as much a real
+    input to the cached value as the target repo's own files are - a
+    fix to it (adding `BehavioralContract.docstring`, say) must be a
+    real cache miss for an already-indexed repo, not silently invisible
+    until one of that repo's own files happens to change. Mirrors
+    `prism.runtime.index_cache`'s identical fix, using the same shared
+    helper rather than a second, independently-drifting one.
+    """
     files: set[str] = set()
     for symbol in builder.symbol_table:
         files.add(symbol.file)
-    parts: list[str] = []
+    parts: list[str] = [f"engine:{engine_and_grammar_version()}"]
     for path in sorted(files):
         try:
             stat = os.stat(path)
