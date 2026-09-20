@@ -695,7 +695,21 @@ class ConcreteGraphBuilder:
         # gated by this tuple) stays a safe no-op for Go regardless -
         # `ASSIGNMENT_NODE_TYPE` has no Go entry, so it returns an
         # empty map immediately.
-        instance_binding_langs = (LanguageID.PYTHON, LanguageID.JAVA, LanguageID.CSHARP, LanguageID.GO)
+        #
+        # Phase J: JS/TS/TSX joined this tuple once `_constructor_call_
+        # segments` learned `new_expression` and `_LOCAL_VAR_DECLARATOR_
+        # TYPE` gained entries for them (both above) - before that, this
+        # gate being false meant `_build_function_instance_map`/
+        # `_build_class_instance_map` never ran for these languages at
+        # all, so a call through ANY locally-typed variable
+        # (`const c = new Circle(); c.area()`) produced no CALLS edge
+        # whatsoever, even for a method declared directly on the
+        # constructed class with no inheritance involved - a total gap,
+        # not merely "the MRO walk doesn't apply to TS."
+        instance_binding_langs = (
+            LanguageID.PYTHON, LanguageID.JAVA, LanguageID.CSHARP, LanguageID.GO,
+            LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX,
+        )
         for qualified_name in file_symbols:
             symbol = self.symbol_table.get(qualified_name)
             def_node = self._def_nodes[qualified_name]
@@ -2196,6 +2210,19 @@ class ConcreteGraphBuilder:
 _LOCAL_VAR_DECLARATOR_TYPE: dict[str, str] = {
     LanguageID.JAVA: "variable_declarator",
     LanguageID.CSHARP: "variable_declarator",
+    # Phase J: JS/TS/TSX's `const c = new Circle()`/`let c = new Circle()`
+    # is the same "typed local variable declaration" shape as Java/C#'s
+    # own `variable_declarator` (tree-sitter's grammar happens to reuse
+    # the identical node-type name), not a bare reassignment
+    # (`ASSIGNMENT_NODE_TYPE`, which only matches `c = new Circle()`
+    # with no preceding `const`/`let`/`var`) - both loops in
+    # `_build_function_instance_map` already run for every language in
+    # `instance_binding_langs` below, so adding this entry is what
+    # actually turns the existing declarator-scanning loop on for these
+    # three languages, rather than needing a separate one.
+    LanguageID.JAVASCRIPT: "variable_declarator",
+    LanguageID.TYPESCRIPT: "variable_declarator",
+    LanguageID.TSX: "variable_declarator",
 }
 
 
@@ -2271,13 +2298,31 @@ def _go_composite_literal_type(value_node: Node, source: bytes) -> str | None:
 def _constructor_call_segments(value: Node, lang: str, source: bytes) -> list[str] | None:
     """The dotted segments naming the class a constructor-shaped
     assignment's right-hand side invokes, for Rule A instance binding -
-    either a bare call (`Foo()`, Python/JS's constructor idiom) or
-    Java/C#'s `object_creation_expression` (`new Foo()`), the only way
-    either language actually constructs objects.
+    a bare call (`Foo()`, Python's own constructor idiom - it has no
+    separate `new` keyword), JS/TS's own `new_expression` (`new Foo()`/
+    `new pkg.Foo()`), or Java/C#'s `object_creation_expression` (also
+    `new Foo()`, but its own distinct grammar node) - the only ways any
+    of these languages actually construct objects.
     """
     call_type = CALL_NODE_TYPE.get(lang)
     if value.type == call_type:
         ctor = value.child_by_field_name("function")
+        return flatten_reference_chain(ctor, source, lang) if ctor is not None else None
+    if value.type == "new_expression":
+        # Phase J: JS/TS's own `new Foo()`/`new pkg.Foo()` - a distinct
+        # grammar node from both the bare-call idiom above (Python) and
+        # `object_creation_expression` below (Java/C#), previously
+        # unhandled entirely, which meant `const c = new Circle()`
+        # never bound `c`'s type at all - confirmed as a real, total
+        # gap (not merely "MRO not walked"): even a call to a method
+        # declared directly on `Circle` itself, no inheritance
+        # involved, produced no CALLS edge. `flatten_reference_chain`
+        # handles the identifier/attribute-chain constructor target
+        # (`Foo`/`pkg.Foo`) the same way the bare-call branch already
+        # does - a generic type argument (`new Foo<T>()`) is not
+        # handled by that helper and correctly falls through to `None`
+        # rather than being guessed at.
+        ctor = value.child_by_field_name("constructor")
         return flatten_reference_chain(ctor, source, lang) if ctor is not None else None
     if value.type == "object_creation_expression":
         type_node = value.child_by_field_name("type")
