@@ -421,3 +421,55 @@ def call_callee_segments(call_node: Node, source: bytes, lang: str) -> list[str]
     if func_node is None:
         return None
     return flatten_reference_chain(func_node, source, lang)
+
+
+def is_super_call_node(node: Node, lang: str, source: bytes) -> bool:
+    """Whether `node` is itself a Python `super(...)` call expression
+    (Phase I) - the zero-arg or explicit 2-arg form both parse
+    identically as far as this check cares, since only the callee's own
+    identity matters, not its arguments. Python-only: JS/Java/C# have
+    their own, structurally different `super` semantics (`super.method()`
+    is an ordinary attribute access there, not a call whose result is
+    then attributed into) and are out of scope for this helper.
+    """
+    if lang != LanguageID.PYTHON or node.type != CALL_NODE_TYPE[lang]:
+        return False
+    func_node = node.child_by_field_name("function")
+    if func_node is None or func_node.type not in IDENTIFIER_NODE_TYPES[lang]:
+        return False
+    return node_text(func_node, source) == "super"
+
+
+def super_call_method_name(call_node: Node, source: bytes, lang: str) -> str | None:
+    """Phase I: if `call_node`'s own callee is `super().<method>(...)` -
+    an attribute access whose object is itself a bare `super(...)` call -
+    the method's simple name; `None` for every other call shape
+    (including a bare `super(...)` call with no further attribute access
+    at all).
+
+    `super` has no fixed target `flatten_reference_chain` could ever
+    resolve on its own - it names "the enclosing class's own nearest MRO
+    ancestor that defines this method," not a stable identifier/import
+    binding - so `flatten_reference_chain` correctly returns `None` for
+    this whole shape (its root is a call, not a name: "a dynamic root"
+    by that function's own docstring). A caller that *can* resolve it
+    (one with access to the call site's own enclosing class, e.g.
+    `ConcreteGraphBuilder._resolve_super_method`'s MRO walk) detects the
+    shape via this helper instead of receiving `None`/an unresolvable
+    chain and either dropping the call site or - the real, confirmed bug
+    this helper fixes - falling through to an unrelated bare-name lookup
+    for a symbol that happens to be named exactly "super" elsewhere in
+    the repo.
+    """
+    if lang != LanguageID.PYTHON:
+        return None
+    func_node = call_node.child_by_field_name("function")
+    if func_node is None or func_node.type != ATTRIBUTE_NODE_TYPE[lang]:
+        return None
+    obj_node = func_node.child_by_field_name(ATTR_OBJECT_FIELD[lang])
+    if obj_node is None or not is_super_call_node(obj_node, lang, source):
+        return None
+    prop_node = func_node.child_by_field_name(ATTR_PROPERTY_FIELD[lang])
+    if prop_node is None:
+        return None
+    return node_text(prop_node, source)

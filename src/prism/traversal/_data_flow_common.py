@@ -42,6 +42,7 @@ from prism.parser.lang_config import (
     VARIABLE_DECLARATOR_NODE_TYPE,
     call_callee_segments,
     iter_scoped_nodes,
+    super_call_method_name,
 )
 from prism.parser.tree_sitter_loader import ParsedFile, node_text
 
@@ -121,9 +122,19 @@ def _resolve_call_sites(def_node: Node, parsed: ParsedFile, qualified_name: str,
     resolved: dict[tuple[int, int], str] = {}
     for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
         segments = call_callee_segments(call_node, parsed.source, lang)
-        if not segments:
+        # Phase I: `super().<method>(...)` has no ordinary reference-
+        # chain segments at all (its root is a call, not a name -
+        # `flatten_reference_chain` always returns `None` for it) even
+        # though `ConcreteGraphBuilder` now correctly resolves and
+        # links it (see `_resolve_super_method`) - without this
+        # fallback, a real `super().clean(value)` provenance/binding
+        # check here would silently see nothing to match against `by_
+        # simple_name`, even though the exact edge it's looking for is
+        # sitting right there in `builder.graph.out_edges`.
+        trailing_name = segments[-1] if segments else super_call_method_name(call_node, parsed.source, lang)
+        if trailing_name is None:
             continue
-        candidates = by_simple_name.get(segments[-1])
+        candidates = by_simple_name.get(trailing_name)
         if candidates and len(set(candidates)) == 1:
             resolved[_node_key(call_node)] = candidates[0]
     return resolved

@@ -37,7 +37,9 @@ from prism.parser.lang_config import (
     call_callee_segments,
     find_all,
     flatten_reference_chain,
+    is_super_call_node,
     iter_scoped_nodes,
+    super_call_method_name,
 )
 from prism.parser.cache import parse_file_cached
 from prism.parser.queries import run_query
@@ -1062,6 +1064,31 @@ class ConcreteGraphBuilder:
             if resolved is not None:
                 return ".".join([resolved, *rest]) if rest else resolved
 
+        # Phase I: a second, structurally distinct barrel case the fix
+        # above doesn't cover - `root` resolved correctly as a *package*
+        # (`from django import forms` -> `resolved_root = "django.forms"`,
+        # a real module, not a re-exported symbol), but the attribute
+        # accessed on it (`forms.DateField`) is only reachable through
+        # that package's own `__init__.py` re-exporting it (`from
+        # django.forms.fields import *`) - `DateField`'s real qualified
+        # name is `django.forms.fields.DateField`, never `django.forms.
+        # DateField` itself. Confirmed as a real, repo-wide gap: this
+        # exact shape (`<package>.<ReExportedClass>()`) is Django's own
+        # single most common way of constructing a forms.Field subclass,
+        # and every such call site previously left its receiver variable
+        # completely unbound (the instantiation target itself was never
+        # found in `symbol_table`), so downstream method calls on it
+        # (`f.clean(...)`) had no known type to resolve against at all.
+        # `resolved_root` is itself the "module" `resolve_export` needs
+        # here - a different call shape from the block above (which
+        # checks whether `from_import`'s own *containing* module
+        # re-exports `from_import`'s trailing segment as a symbol), not
+        # a broadening of it.
+        if rest and target not in self.symbol_table:
+            resolved_attr = resolve_export(resolved_root, rest[0], self.export_registry, self.symbol_table)
+            if resolved_attr is not None:
+                return ".".join([resolved_attr, *rest[1:]]) if len(rest) > 1 else resolved_attr
+
         return target
 
     def _build_class_instance_map(
@@ -1404,6 +1431,38 @@ class ConcreteGraphBuilder:
         visit(class_qname, 0)
         return ordered
 
+    # -- Python `super()` call resolution (Phase I) ------------------------ #
+    #
+    # `_is_super_call_node`/`_super_call_method_name` themselves now live
+    # in `prism.parser.lang_config` (`is_super_call_node`/`super_call_
+    # method_name`) - `prism.traversal._data_flow_common._resolve_call_
+    # sites` needed the exact same detection (it independently re-derives
+    # call-site resolution from `call_callee_segments` for provenance
+    # purposes, rather than trusting this module's own graph edges) and
+    # can't import it from here (this module already imports from
+    # `lang_config`, not the reverse). This class only keeps the part
+    # that's genuinely its own: resolving the method name against a real
+    # enclosing class's MRO, which only a `ConcreteGraphBuilder` (holding
+    # the whole repo's `symbol_table`/`EXTENDS` graph) can do.
+
+    def _resolve_super_method(self, enclosing_class: str | None, method_name: str) -> str | None:
+        """`super().<method_name>(...)`'s real target: the nearest MRO
+        ancestor of `enclosing_class` that actually defines `method_
+        name` - the same "nearest ancestor with a same-named method"
+        lookup `_link_overrides` already uses to build `OVERRIDES`
+        edges, reapplied here to resolve a real `CALLS` edge instead.
+        `None` if there's no enclosing class (a `super()` call outside
+        any method is not valid Python, but this pass doesn't assume
+        the source it's given is error-free) or no ancestor defines it.
+        """
+        if enclosing_class is None:
+            return None
+        for ancestor in self._mro_ancestors(enclosing_class):
+            candidate = f"{ancestor}.{method_name}"
+            if candidate in self.symbol_table:
+                return candidate
+        return None
+
     def _link_overrides(self) -> None:
         """For every class with at least one `EXTENDS` ancestor, an
         `OVERRIDES` edge from each of its own directly-declared methods to
@@ -1565,6 +1624,37 @@ class ConcreteGraphBuilder:
             hazard = detect_call_site_hazard(call_node, lang, parsed.source, parsed.path)
             if hazard is not None:
                 self._emit_dynamic_edge_sentinel(caller_qname, hazard)
+                continue
+            # Phase I: Python `super()` needs its own handling on both
+            # sides of this pair before falling into the ordinary
+            # segments-based path below. `super(...)` itself (the inner
+            # call in `super().clean(value)`, but also visited here in
+            # its own right by `iter_scoped_nodes`) is never an
+            # ordinary resolvable call site - suppressed outright so it
+            # can never fall through to the G44 bare-name fallback and
+            # bind to an unrelated same-named symbol elsewhere in the
+            # repo (confirmed as a real, repo-wide bug: every `super()`
+            # call was resolving to `django.template.loader_tags.
+            # BlockNode.super`, a real but wholly unrelated Django
+            # symbol that happens to share the bare name "super").
+            # `super().<method>(...)` (an attribute call whose object
+            # is that inner call) is resolved separately here, against
+            # the enclosing class's own MRO - `flatten_reference_chain`
+            # always returns `None` for it otherwise (its root is a
+            # call, "a dynamic root" by that function's own docstring),
+            # so without this the real target was simply never captured
+            # at all.
+            if is_super_call_node(call_node, lang, parsed.source):
+                continue
+            super_method_name = super_call_method_name(call_node, parsed.source, lang)
+            if super_method_name is not None:
+                super_target = self._resolve_super_method(enclosing_class, super_method_name)
+                if super_target is not None:
+                    if super_target not in self.graph:
+                        self.graph.add_node(super_target, external=super_target not in self.symbol_table)
+                    edge_kwargs = {"relation": "CALLS"}
+                    edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
+                    self.graph.add_edge(caller_qname, super_target, **edge_kwargs)
                 continue
             segments = call_callee_segments(call_node, parsed.source, lang)
             if not segments:
@@ -1970,6 +2060,29 @@ class ConcreteGraphBuilder:
                 promoted = self._go_promoted_method(candidate, method)
                 if promoted is not None:
                     return promoted
+            if direct_candidate not in self.symbol_table:
+                # Phase I: Issue #9's "phantom method" fix (see the
+                # `self.<method>()` branch above, lines ~2006-2018)
+                # generalized from "self" to any instance-typed local
+                # variable/parameter this class already tracks via
+                # `func_instance_map`/`class_instance_map`. `f =
+                # DateField(); f.clean(x)`, where `DateField` inherits
+                # `clean` from `Field` without overriding it, previously
+                # returned the guessed-but-nonexistent `DateField.clean`
+                # unconditionally (registered as an `external` node) -
+                # confirmed as a real, repo-wide undercount: Django's
+                # own `django.forms.fields.Field.clean` blast-radius
+                # ground truth task (37 real callers, mostly exactly
+                # this "typed local variable calling an inherited
+                # method" shape) was only finding 2 before this fix. A
+                # no-op for Go (no EXTENDS/IMPLEMENTS edges are ever
+                # built there - `_mro_ancestors` always returns `[]`),
+                # so this never interferes with the Go-specific
+                # promoted-method check just above.
+                for ancestor in self._mro_ancestors(candidate):
+                    inherited = f"{ancestor}.{method}"
+                    if inherited in self.symbol_table:
+                        return inherited
             return direct_candidate
 
         resolved_receiver = self._resolve_reference_chain(receiver_segments, module, import_map)
