@@ -12,11 +12,10 @@ from prism.graph.hierarchy import compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.language_tiers import TIER_1_ONLY_LANGUAGES
-from prism.packer.submodular_knapsack import pack_symbol_context
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
 from prism.query.errors import QueryValidationError
 from prism.query.schema import VALID_TASK_TYPES, PrismQuery
-from prism.semantics.bitmask import describe_mask
+from prism.surface.renderer import render as render_envelope
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.index_cache import load_pipeline_from_cache, save_pipeline_to_cache
 from prism.runtime.reconciler import (
@@ -56,6 +55,31 @@ IGNORED_DIRS = {
 #: lower-precision (CST-only) language mixed in.
 LANGUAGE_TIER_PERMISSIVE = "permissive"
 LANGUAGE_TIER_TIER1_ONLY = "tier1-only"
+
+#: Phase K, Invariant 3: the one deterministic exit-code mapping every
+#: query/retrieval command's own domain-error handling goes through,
+#: rather than each command hand-rolling its own `SystemExit` call with
+#: a different, inconsistent code (before this phase: `query` never
+#: validated its budget at all; `causal-query` validated via
+#: `PrismQuery` but surfaced every failure - a bad budget or an unknown
+#: seed alike - as exit code 1 via `raise SystemExit(f"error: {exc}")`,
+#: since `SystemExit` given a non-int argument always exits 1 and prints
+#: that argument to stderr, regardless of what the message says).
+EXIT_INVALID_ARGUMENT = 2
+EXIT_SYMBOL_NOT_FOUND = 3
+
+
+def _fail(message: str, code: int) -> None:
+    """Prints `error: {message}` to stderr and exits with `code` - see
+    `EXIT_INVALID_ARGUMENT`/`EXIT_SYMBOL_NOT_FOUND` above for the two
+    domain-specific codes; a command with its own different failure
+    class (a stale trace, an out-of-range `--runtime-bias`) still calls
+    this with `code=1` (the general runtime/extraction-error code) for
+    the same consistent stderr formatting, rather than echoing and
+    raising `SystemExit` separately itself.
+    """
+    click.echo(f"error: {message}", err=True)
+    raise SystemExit(code)
 
 
 def _resolve_legacy_go_bare_seed(builder: ConcreteGraphBuilder, symbol: str) -> str | None:
@@ -230,6 +254,16 @@ def query(
 ) -> None:
     """Extract a variable-resolution context package for SYMBOL (a fully
     qualified name, e.g. `src.controllers.checkout.process_checkout`)."""
+    # Phase K, Invariant 3: budget validation via the same PrismQuery
+    # contract gate `causal-query` already used (Phase G) - previously
+    # this command had none at all, silently accepting `--budget 0` or
+    # a negative budget and rendering a degraded-but-"successful"
+    # document instead of rejecting the request outright.
+    try:
+        PrismQuery(budget=budget, seed=symbol)
+    except QueryValidationError as exc:
+        _fail(str(exc), EXIT_INVALID_ARGUMENT)
+
     builder, tag_matrix = build_pipeline(repo_path, language_tier)
 
     if symbol not in builder.symbol_table:
@@ -256,10 +290,9 @@ def query(
         else:
             click.echo(f"error: symbol '{symbol}' not found in {repo_path}", err=True)
             click.echo("hint: run `prism index REPO_PATH --debug-json` to list known symbols.", err=True)
-            raise SystemExit(1)
+            raise SystemExit(EXIT_SYMBOL_NOT_FOUND)
     if not 0.0 <= runtime_bias <= 1.0:
-        click.echo(f"error: --runtime-bias must be between 0.0 and 1.0, got {runtime_bias}", err=True)
-        raise SystemExit(1)
+        _fail(f"--runtime-bias must be between 0.0 and 1.0, got {runtime_bias}", EXIT_INVALID_ARGUMENT)
 
     repo_root = os.path.abspath(repo_path)
     contracts = compute_or_load_contracts(builder, repo_root)
@@ -333,6 +366,48 @@ def query(
         click.echo(text)
 
 
+def _causal_query_json(package) -> str:
+    """Phase K, Invariant 2: 'metadata, symbol list, and token counts' -
+    built from the real `ContextPackage` `PrismEngine.retrieve` returns,
+    not a second, independently-shaped dict."""
+    return json.dumps({
+        "seed": package.seed.symbol,
+        "budget": {"tokens": package.budget.tokens, "tokenizer": package.budget.tokenizer, "exact": package.budget.exact},
+        "manifest": {
+            "packed_nodes": package.manifest.packed_nodes,
+            "considered_nodes": package.manifest.considered_nodes,
+            "reachable_nodes": package.manifest.reachable_nodes,
+        },
+        "symbols": [
+            {"id": n.id, "role": n.role, "distance": n.distance, "cost": n.cost, "compression": n.compression}
+            for n in package.nodes
+        ],
+        "causal_path": (
+            [{"order": s.order, "symbol": s.symbol, "distance": s.distance, "role": s.role} for s in package.causal_path.stages]
+            if package.causal_path is not None else None
+        ),
+    }, indent=2)
+
+
+def _causal_query_summary(package) -> str:
+    lines = [
+        f"Causal context for {package.seed.symbol} (budget {package.budget.tokens} tokens, "
+        f"tokenizer={package.budget.tokenizer}):",
+        f"  Symbols packed: {package.manifest.packed_nodes} (of {package.manifest.considered_nodes} considered, "
+        f"{package.manifest.reachable_nodes} reachable)",
+    ]
+    for node in package.nodes:
+        marker = "seed" if node.role == "seed" else f"dist={node.distance:.3f}"
+        lines.append(f"    {node.id}  [{node.role}, {marker}, cost={node.cost}, {node.compression}]")
+    if package.causal_path is not None:
+        lines.append(f"  Causal steps ({'truncated' if package.causal_path.truncated else 'complete'}):")
+        for stage in package.causal_path.stages:
+            lines.append(f"    {stage.order}. {stage.symbol} [{stage.role}, dist={stage.distance:.3f}]")
+    else:
+        lines.append("  Causal steps: (none - <causal_path> not included for this task_type)")
+    return "\n".join(lines)
+
+
 @main.command(name="causal-query")
 @click.argument("repo_path", type=click.Path(exists=True, file_okay=False))
 @click.argument("symbol")
@@ -345,13 +420,19 @@ def query(
 @click.option(
     "--task-type", "task_type", type=click.Choice(sorted(VALID_TASK_TYPES)), default=None,
     help="Phase G: validated via PrismQuery against the real, canonical 5-value task_type enum "
-    "(benchmarks.ground_truth.schema.EvaluationTask.task_type). Accepted and validated here for the same "
-    "query-contract guarantee build_context_package's own task_type param already provides - this command "
-    "renders pack_symbol_context's raw pack (never a <causal_path> block, unlike build_context_package), so "
-    "it does not yet gate anything within this specific command's own output.",
+    "(benchmarks.ground_truth.schema.EvaluationTask.task_type) - gates the <causal_path> block "
+    "build_context_package renders (Phase K: this command now calls it directly).",
 )
-@click.option("--json", "as_json", is_flag=True, help="Emit the packed context as JSON instead of a text listing.")
-def causal_query(repo_path: str, symbol: str, budget: int, max_hops: float, task_type: str | None, as_json: bool) -> None:
+@click.option(
+    "--format", "output_format", type=click.Choice(["xml", "json", "summary"]), default="xml", show_default=True,
+    help="Phase K, Invariant 2: 'xml' emits the canonical <prism_context> envelope (prism.surface.renderer."
+    "render) - the same shape prism.slice's MCP tool produces; 'json' the equivalent packed-context metadata; "
+    "'summary' a short human-readable listing.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Deprecated alias for --format json.")
+def causal_query(
+    repo_path: str, symbol: str, budget: int, max_hops: float, task_type: str | None, output_format: str, as_json: bool,
+) -> None:
     """v1.1 Causal Coupling & Submodular Coverage: pack SYMBOL's context
     using the Continuous Dijkstra topological distance (causally-coupled
     data-flow/guard edges shorten graph distance) and the bitwise
@@ -360,44 +441,49 @@ def causal_query(repo_path: str, symbol: str, budget: int, max_hops: float, task
     pipeline, not a replacement for it (see docs/design_formalism.md
     Section 8 for why both exist side by side).
     """
-    # Phase G, Invariant 1: validate the query contract (budget, task_type)
-    # before any indexing work runs - PrismQuery.__post_init__ raises
-    # QueryValidationError for a non-positive/over-cap budget or an
-    # unrecognized task_type (click's own Choice already rejects the
-    # latter before this point, but PrismQuery is still the single,
-    # reusable validation gate every real caller of this query shape - CLI,
-    # MCP, a future one - should go through, not a CLI-only duplicate).
+    if as_json:
+        output_format = "json"
+    # Phase G, Invariant 1 (Phase K, Invariant 3): validate the query
+    # contract (budget, task_type) before any indexing work runs -
+    # PrismQuery.__post_init__ raises QueryValidationError for a non-
+    # positive/over-cap budget or an unrecognized task_type (click's own
+    # Choice already rejects the latter before this point, but PrismQuery
+    # is still the single, reusable validation gate every real caller of
+    # this query shape - CLI, MCP, a future one - should go through, not
+    # a CLI-only duplicate). Exit code 2: a rejected query contract is an
+    # invalid-argument error, not a general runtime one.
     try:
         PrismQuery(budget=budget, seed=symbol, task_type=task_type, d_max=max_hops)
     except QueryValidationError as exc:
-        raise SystemExit(f"error: {exc}")
+        _fail(str(exc), EXIT_INVALID_ARGUMENT)
 
-    builder, tag_matrix = build_pipeline(repo_path)
+    builder, _tag_matrix = build_pipeline(repo_path)
     if symbol not in builder.symbol_table:
-        raise SystemExit(f"error: seed symbol '{symbol}' was not found in the concrete graph (unknown or external symbol)")
+        _fail(f"seed symbol '{symbol}' was not found in the concrete graph (unknown or external symbol)", EXIT_SYMBOL_NOT_FOUND)
 
-    result = pack_symbol_context(builder, symbol, budget, max_hops=max_hops)
+    # Phase K, Invariant 4: wired directly through prism.engine.
+    # PrismEngine (Phase H) and build_context_package - the exact same
+    # pipeline prism.slice's MCP tool already uses - rather than this
+    # command rendering pack_symbol_context's own raw SubmodularPackResult
+    # three independently-shaped ways. Imported here, not at module
+    # level: prism.engine itself imports build_pipeline from this very
+    # module (prism.cli), so a top-level import would be circular -
+    # the same lazy-import pattern this file already uses for `prism
+    # mcp`'s own `prism.mcp.server.run_server` import, for the same
+    # layering reason.
+    from prism.engine import PrismEngine
 
-    if as_json:
-        click.echo(json.dumps({
-            "seed": result.seed,
-            "budget": result.budget,
-            "total_cost": result.total_cost,
-            "selected": result.selected,
-            "items": [
-                {"symbol": i.symbol, "cost": i.cost, "feature_mask": i.feature_mask, "dist_w": i.dist_w}
-                for i in result.items
-            ],
-            "covered_features": describe_mask(result.covered_mask),
-        }, indent=2))
-        return
+    repo_root = os.path.abspath(repo_path)
+    contracts = compute_or_load_contracts(builder, repo_root)
+    engine = PrismEngine(builder, repo_root, contracts=contracts)
+    package = engine.retrieve(symbol, budget, task_type=task_type, max_hops=max_hops)
 
-    click.echo(f"Causal context for {result.seed} (budget {result.budget}, used {result.total_cost}):")
-    for item in result.items:
-        marker = "seed" if item.symbol == result.seed else f"dist_w={item.dist_w:.3f}"
-        click.echo(f"  {item.symbol}  [{marker}, cost={item.cost}]")
-        click.echo(f"      features: {', '.join(describe_mask(item.feature_mask)) or '(none)'}")
-    click.echo(f"Coverage: {', '.join(describe_mask(result.covered_mask)) or '(none)'}")
+    if output_format == "xml":
+        click.echo(render_envelope(package))
+    elif output_format == "json":
+        click.echo(_causal_query_json(package))
+    else:
+        click.echo(_causal_query_summary(package))
 
 
 @main.command(
