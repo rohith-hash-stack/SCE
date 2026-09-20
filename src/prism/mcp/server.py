@@ -54,12 +54,26 @@ from prism.language_tiers import precision_tier_for
 from prism.mcp.auth import enforce as enforce_auth
 from prism.mcp.cache import GraphCache, RepoNotFoundError
 from prism.mcp.security import SecurityError, validate_symbol_name, validate_tag, validate_token_budget
+from prism.packer.submodular_knapsack import DEFAULT_MAX_HOPS
+from prism.query.errors import QueryValidationError
+from prism.query.schema import PrismQuery
 from prism.serializers.markdown import render_markdown
 from prism.slicer.blueprint import mine_sibling_blueprint
 from prism.slicer.knapsack import ContextKnapsackPacker
 from prism.slicer.tokenizer import count_tokens
 from prism.surface.build import _node_body, build_context_package
 from prism.surface.renderer import RenderOptions, render
+
+#: Phase K, Invariant 1: the Continuous Dijkstra distance horizon
+#: `prism.slice`/`prism.explain` now expose directly, matching the
+#: `d_max=5.0` default `prism.traversal.continuous_dijkstra.compute_
+#: topological_distances` itself was promoted to (Zero-Debt Hardening
+#: Pass). Threaded through as `build_context_package`'s own `max_hops`
+#: parameter - an explicit `d_max=None` falls back to the packer's own
+#: separate DEFAULT_MAX_HOPS bound (6.0) rather than being passed
+#: through as a literal `None`, which `build_context_package`'s
+#: `max_hops: float` parameter does not accept.
+DEFAULT_D_MAX = 5.0
 
 DEFAULT_TOKEN_BUDGET = 2000
 
@@ -414,10 +428,13 @@ def _authorization_header(ctx: Context | None) -> str | None:
 
 def _build_envelope_response(
     repo_path: str,
-    seed_symbol: str,
+    seed_symbol: str | None,
+    seeds: list[str] | None,
     budget_tokens: int,
     language_tier: str,
     format: str,
+    task_type: str | None,
+    d_max: float | None,
     include_warnings: bool,
     api_key: str | None,
     ctx: Context | None,
@@ -432,19 +449,50 @@ def _build_envelope_response(
     if detail_level not in ("summary", "manifest", "full"):
         raise MCPError(code=-32602, message=f"detail_level must be 'summary', 'manifest', or 'full' - got {detail_level!r}")
 
+    # Phase K, Invariant 1: seed/seeds mutual exclusivity + task_type/
+    # d_max validation via the same PrismQuery contract gate the CLI's
+    # causal-query command uses (Phase G) - one real validation path for
+    # both surfaces, not a second, MCP-only reimplementation.
+    try:
+        query = PrismQuery(budget=budget_tokens, seed=seed_symbol, seeds=seeds, task_type=task_type, d_max=d_max)
+    except QueryValidationError as exc:
+        raise MCPError(code=-32602, message=str(exc)) from exc
+
+    resolved = query.resolved_seeds
+    if len(resolved) > 1:
+        # The underlying packing engine (pack_symbol_context) only ever
+        # packs from one seed - accepting `seeds` with more than one
+        # entry and silently picking (or merging) one would be a guess
+        # this codebase's own "don't guess" principle refuses to make.
+        # Real multi-seed packing is a genuine engine feature, not a
+        # surface-layer polish item - out of scope for this phase.
+        raise MCPError(
+            code=-32602,
+            message=(
+                f"seeds={resolved!r}: {len(resolved)} seeds were given, but multi-seed packing is not yet "
+                "supported by the underlying engine (pack_symbol_context packs from exactly one seed) - "
+                "pass a single seed_symbol, or seeds=[<one symbol>]."
+            ),
+        )
+    resolved_seed = resolved[0]
+    effective_d_max = d_max if d_max is not None else DEFAULT_MAX_HOPS
+
     enforce_auth(_authorization_header(ctx), api_key)
 
     repo_ctx = _repo_context_for_surface(repo_path)
-    _resolve_seed_or_raise(repo_ctx, seed_symbol)
+    _resolve_seed_or_raise(repo_ctx, resolved_seed)
 
-    seed_cost = count_tokens(_node_body(repo_ctx.builder, seed_symbol))
+    seed_cost = count_tokens(_node_body(repo_ctx.builder, resolved_seed))
     if seed_cost > budget_tokens:
         raise MCPError(
             code=-32003,
-            message=f"seed '{seed_symbol}' alone costs {seed_cost} tokens, exceeding budget_tokens={budget_tokens}",
+            message=f"seed '{resolved_seed}' alone costs {seed_cost} tokens, exceeding budget_tokens={budget_tokens}",
         )
 
-    pkg = build_context_package(repo_ctx.builder, seed_symbol, repo_ctx.repo_root, budget_tokens, contracts=repo_ctx.contracts)
+    pkg = build_context_package(
+        repo_ctx.builder, resolved_seed, repo_ctx.repo_root, budget_tokens, contracts=repo_ctx.contracts,
+        max_hops=effective_d_max, task_type=task_type,
+    )
     pkg = _filter_by_language_tier(pkg, language_tier)
     pkg = _apply_detail_level(pkg, detail_level)
     if not include_warnings:
@@ -458,16 +506,19 @@ def _build_envelope_response(
 @server.tool(name="prism.slice")
 def prism_slice(
     repo_path: str,
-    seed_symbol: str,
+    seed_symbol: str | None = None,
+    seeds: list[str] | None = None,
     budget_tokens: int = 4000,
     language_tier: str = "auto",
     format: str = "xml",
+    task_type: str | None = None,
+    d_max: float | None = DEFAULT_D_MAX,
     include_warnings: bool = True,
     api_key: str | None = None,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
     """Return a `<prism_context>` envelope (v1.1+ Agent Surface, `prism.
-    surface`) packing `seed_symbol`'s causally-coupled context - both
+    surface`) packing a seed's causally-coupled context - both
     downstream dependencies and upstream blast-radius callers (`prism.
     packer.submodular_knapsack.pack_symbol_context`) - deterministically
     serialized (`prism.surface.renderer.render`) or as an equivalent JSON
@@ -480,12 +531,31 @@ def prism_slice(
             sandbox.
         seed_symbol: Fully qualified symbol name, exactly as indexed.
             Unknown names return `-32002` with fuzzy-matched candidates.
+            Exactly one of `seed_symbol`/`seeds` must be given (Phase K,
+            matching `PrismQuery`'s own Phase C/G mutual-exclusivity
+            contract) - `-32602` otherwise.
+        seeds: A single-element list is equivalent to `seed_symbol` -
+            offered for API parity with `PrismQuery.seeds`. More than
+            one element returns `-32602`: the underlying packing engine
+            only ever packs from one seed, and this tool refuses to
+            guess how several would combine rather than silently using
+            just the first or merging them.
         budget_tokens: 500-128000. A seed whose own body alone exceeds
             this returns `-32003`.
         language_tier: "auto", or restrict `<nodes>`/`<edges>` to one
             precision tier ("1"/"2"/"3") - the seed is always kept.
         format: "xml" (the canonical envelope) or "json" (the same
             `ContextPackage`, JSON-serialized).
+        task_type: One of "chain"/"blast"/"redundancy"/"architecture"/
+            "debug" (`prism.query.schema.VALID_TASK_TYPES`), or `None`
+            for no gating. Governs whether a `<causal_path>` block is
+            included (`build_context_package`'s own `task_type` param -
+            see `causal_path_applies_to_task_type`).
+        d_max: Continuous Dijkstra distance horizon - a candidate
+            farther than this from the seed is never considered.
+            Defaults to 5.0, matching the production default `compute_
+            topological_distances` itself uses; `None` falls back to
+            the packer's own separate `DEFAULT_MAX_HOPS` (6.0).
         include_warnings: When `False`, drops this package's own derived
             warnings before rendering - a genuine `BUDGET_OVERFLOW`
             (computed at render time) is never suppressed.
@@ -493,16 +563,21 @@ def prism_slice(
             configured - see `prism.mcp.auth`'s own module docstring for
             why this exists as a tool argument, not only a header.
     """
-    return _build_envelope_response(repo_path, seed_symbol, budget_tokens, language_tier, format, include_warnings, api_key, ctx)
+    return _build_envelope_response(
+        repo_path, seed_symbol, seeds, budget_tokens, language_tier, format, task_type, d_max, include_warnings, api_key, ctx,
+    )
 
 
 @server.tool(name="prism.explain")
 def prism_explain(
     repo_path: str,
-    seed_symbol: str,
+    seed_symbol: str | None = None,
+    seeds: list[str] | None = None,
     budget_tokens: int = 4000,
     language_tier: str = "auto",
     format: str = "xml",
+    task_type: str | None = None,
+    d_max: float | None = DEFAULT_D_MAX,
     include_warnings: bool = True,
     detail_level: str = "full",
     api_key: str | None = None,
@@ -518,7 +593,8 @@ def prism_explain(
         (all other arguments: see `prism.slice`.)
     """
     return _build_envelope_response(
-        repo_path, seed_symbol, budget_tokens, language_tier, format, include_warnings, api_key, ctx, detail_level=detail_level
+        repo_path, seed_symbol, seeds, budget_tokens, language_tier, format, task_type, d_max, include_warnings, api_key, ctx,
+        detail_level=detail_level,
     )
 
 
