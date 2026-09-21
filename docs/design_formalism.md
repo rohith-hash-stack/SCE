@@ -1403,3 +1403,94 @@ open questions:
   with an explicit ordering-tolerance parameter) before concluding an
   engine failed a task it was never actually given a fair chance to
   answer correctly.
+
+### 10.4 SymbolRole / test-symbol gate - shipped with one disclosed regression
+
+Phase B backlog item 1 (test-symbol cost demotion, Sec 10.3) landed as
+`SymbolRole` (`prism.graph.symbol_table`) - a deterministic,
+AST/naming-convention-based role classification (`IMPLEMENTATION`/
+`VERIFICATION`/`INTERFACE`), computed once in `ConcreteGraphBuilder.
+_register_definition` - plus an unconditional admissibility gate
+(`_is_role_mismatched_verification`, `prism.packer.submodular_
+knapsack`) that excludes a VERIFICATION-role candidate from an
+IMPLEMENTATION seed's package regardless of novelty score, replacing a
+hardcoded `("tests", "django.test")` module-path blacklist that had a
+real, measured gap (a test symbol scoring nonzero novelty sailed
+straight through the old, `delta_feat == 0`-gated check).
+
+A real, independent bug was found and fixed in the same pass:
+`prism.runtime.index_cache`'s hand-written `SymbolInfo` serializer/
+deserializer predated the `role` field and silently dropped it on
+every cache round-trip - even a brand-new one, not merely a stale
+pre-fix entry. `_SCHEMA_VERSION` was bumped 2 -> 3 so every existing
+on-disk cache rebuilds through the corrected serializer; a regression
+test (`tests/test_index_cache.py::test_cache_hit_round_trips_symbol_
+role`) guards the specific field-level gap class, not just whole-cache
+staleness.
+
+**The gate itself ships with one disclosed, unresolved regression**,
+found only once the cache fix let it actually run for the first time
+(every earlier "22/22" verification of this gate was against the
+broken cache, which silently no-op'd it): `tests/test_prism_selection_
+regressions.py::test_prism_retrieves_private_helper_in_pipeline[t02_017
+-_urlparse]` fails - **21/22, not 22/22** - and this was a deliberate,
+informed decision to ship anyway (not an oversight), covered in detail
+here rather than only in a commit message:
+
+1. The SymbolRole taxonomy and the unconditional VERIFICATION gate work
+   exactly as designed: on the real, pinned Django checkout,
+   `tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.
+   test_allowed_hosts_str` is correctly classified VERIFICATION and is
+   now excluded from `django_t02_017`'s package at every budget - the
+   original, confirmed bug (a test file crowding out real ground-truth
+   symbols at budget=2000) is closed.
+2. In doing so, at the 2000-token tier specifically, excluding the test
+   candidate from the main greedy loop's *competitive* rounds changes
+   which other real successors win those earlier rounds -
+   `django.http.request.split_domain_port` and `django.views.i18n.
+   set_language` now win rounds the test symbol previously contested,
+   consuming budget earlier in the sequence. By the time `django.utils.
+   http._url_has_allowed_host_and_scheme` (a real dist-1 successor of
+   the seed) is admitted and its own cascade would admit its one real
+   private helper, `_urlparse` (216 tokens, confirmed to be the *only*
+   real candidate in that cascade generation - its lone sibling,
+   `unicodedata.category`, costs 0 and was never a real candidate at
+   all) - only 97 tokens remain. This is a pure budget shortfall, not a
+   density competition `_urlparse` had any real rival in.
+3. Two automated fix attempts were tried and both failed for the same
+   underlying reason, verified directly against the real corpus rather
+   than assumed: a post-loop "mandatory protection" pass (mirroring the
+   existing Phase E direct-successor protection, extended one hop to
+   cover cascade-discovered private helpers, capped at
+   `CASCADE_GENERATION_CAP` to avoid the exact breadth-first-starvation
+   regression an earlier, broader version of the *existing* Phase E
+   mechanism already caused once - see that code's own comment) cannot
+   fix this, because by the time *any* post-loop pass runs, the main
+   loop has already consumed the relevant budget in a different order -
+   there is no leftover budget for a budget-permitting-only mechanism
+   to use. Fixing this for real would require either evicting an
+   already-admitted, lower-priority symbol to make room (a materially
+   more invasive change, explicitly not authorized) or restructuring
+   the gate to not exclude VERIFICATION candidates from competitive
+   rounds (which reopens the original bug this work closed). Both
+   attempts were reverted rather than shipped half-working; the gate
+   itself was kept exactly as designed.
+
+**This defines the core problem the Phase B Subgraph Processor (Sec
+10.3) needs to actually solve**: pure greedy novelty/density scoring,
+order-sensitive by construction, cannot on its own guarantee a
+structurally important private helper survives budget pressure once
+its neighborhood's competitive landscape changes - not even via an
+unlimited number of narrowly-scoped post-hoc protection passes. A
+causal-spine-aware prioritization that supersedes density scoring
+under tight budget (identifying `_urlparse`-shaped private helpers as
+structurally protected *before* the greedy loop runs, not patching
+around its output afterward) is what the Subgraph Processor design
+needs to provide - this is the concrete, empirically-grounded case for
+it, not a hypothetical one.
+
+Both fixes described in point 3 above were reverted; the working tree
+carries only the validated `SymbolRole` taxonomy, the unconditional
+gate at its original four admission sites, and the cache-serialization
+fix. `django_t02_017`'s 21/22 result is a knowingly accepted, disclosed
+trade-off, not a silently shipped regression.

@@ -80,6 +80,44 @@ def test_cache_hit_round_trips_edge_and_node_attributes(tmp_path):
         assert isinstance(node["tags"], set)
 
 
+def test_cache_hit_round_trips_symbol_role(tmp_path):
+    """Regression test for a real bug found verifying Phase B Step 1
+    against a cached build of the real Django corpus: `symbols_json`'s
+    write side (`save_pipeline_to_cache`) and read side (`load_pipeline_
+    from_cache`) both hand-list `SymbolInfo`'s fields rather than
+    round-tripping the dataclass generically - adding `SymbolInfo.role`
+    did not flow through this cache automatically, so a `use_cache=True`
+    build silently served `SymbolRole.IMPLEMENTATION` (the dataclass
+    default) for a real VERIFICATION-role symbol, even on a brand-new,
+    just-written cache entry (not merely a stale pre-fix one - confirmed
+    directly by deleting the cache directory first and still observing
+    the wrong role on the very first `use_cache=True` build afterward).
+    `_SCHEMA_VERSION` was bumped 2 -> 3 alongside the fix so every
+    existing on-disk cache correctly rebuilds through the corrected
+    serializer instead of silently keeping this bug for any repo already
+    indexed before the fix landed.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(
+        "import unittest\n\n"
+        "def helper():\n"
+        "    return 1\n\n\n"
+        "class HelperTests(unittest.TestCase):\n"
+        "    def test_helper_returns_one(self):\n"
+        "        self.assertEqual(helper(), 1)\n"
+    )
+    build_pipeline(str(repo))  # cold write
+    builder, _tag_matrix = build_pipeline(str(repo))  # warm cache-hit read
+
+    from prism.graph.symbol_table import SymbolRole
+
+    assert builder.symbol_table.get("mod.helper").role == SymbolRole.IMPLEMENTATION
+    assert builder.symbol_table.get("mod.HelperTests").role == SymbolRole.VERIFICATION
+    assert builder.symbol_table.get("mod.HelperTests.test_helper_returns_one").role == SymbolRole.VERIFICATION
+    assert builder.graph.nodes["mod.HelperTests.test_helper_returns_one"]["role"] == SymbolRole.VERIFICATION
+
+
 def test_cache_invalidates_when_file_content_changes(tmp_path):
     repo = _order_repo(tmp_path)
     build_pipeline(str(repo))

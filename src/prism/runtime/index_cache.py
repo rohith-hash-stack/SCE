@@ -53,7 +53,7 @@ import sqlite3
 from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
-from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo
+from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo, SymbolRole
 from prism.parser.lang_config import DECORATED_WRAPPER_TYPES
 from prism.parser.queries import run_query
 from prism.parser.tree_sitter_loader import ParsedFile, parse_source
@@ -80,7 +80,23 @@ except ImportError:  # pragma: no cover - networkx is a hard dependency elsewher
 #: mode Issue #115 names. `engine_and_grammar_version` (`prism.
 #: traversal._cache_keys`) already exists and solves exactly this for
 #: the traversal-layer caches - reused here rather than reimplemented.
-_SCHEMA_VERSION = 2
+#:
+#: Bumped 2 -> 3 for `SymbolRole` (Phase B Step 1): the `symbols_json`
+#: serializer/deserializer below hand-lists `SymbolInfo`'s own fields
+#: rather than round-tripping the dataclass generically, so adding
+#: `SymbolInfo.role` did *not* automatically flow through this cache -
+#: confirmed directly, a `use_cache=True` build served
+#: `SymbolRole.IMPLEMENTATION` (the dataclass default) for a real
+#: VERIFICATION-role symbol even on a brand-new, just-written cache
+#: entry, at the same commit whose own `engine_and_grammar_version()`
+#: check should have invalidated any *older* entry - this is a
+#: field-level serialization gap, not a version-key gap, and only a
+#: schema bump (forcing every existing on-disk cache to rebuild through
+#: the now-fixed serializer) closes it; a defensive `entry.get("role",
+#: ...)` fallback on the read side alone would have silently kept
+#: masking the same bug for any repo whose cache was written before
+#: this fix landed.
+_SCHEMA_VERSION = 3
 
 
 def index_cache_path(repo_root: str) -> Path:
@@ -246,6 +262,7 @@ def save_pipeline_to_cache(
                 "language_id": s.language_id,
                 "module": s.module,
                 "enclosing_class": s.enclosing_class,
+                "role": s.role.value,
             }
             for s in builder.symbol_table
         ]
@@ -393,6 +410,7 @@ def load_pipeline_from_cache(
                     language_id=entry["language_id"],
                     module=entry["module"],
                     enclosing_class=entry["enclosing_class"],
+                    role=SymbolRole(entry["role"]),
                 )
             )
 
