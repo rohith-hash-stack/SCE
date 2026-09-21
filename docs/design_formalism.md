@@ -1183,6 +1183,43 @@ an implicit set of blind spots:
   and precision gaps were not independent in this design, a real
   coupling worth remembering if this idea is revisited rather than
   re-discovered the hard way a second time.
+- **Module 5 / `W_TENTATIVE` (`prism.graph.weights`) - formally deferred
+  to Phase C, not an unwired oversight.** This module is a reference
+  derivation only: it computes the absolute edge cost a tentative call
+  edge would need to strictly dominate any structural path up to
+  `MAX_INHERITANCE_DEPTH` hops, but nothing in the live traversal path
+  imports it - `prism.slicer.distance.DistanceEngine._weighted_undirected`
+  prices a `TENTATIVE_CALL` edge with its own, already-tuned relative
+  discount (`RELATION_TENTATIVE_CALL_WEIGHT = 0.60`) instead. The module
+  exists so a future traversal-layer refactor (Phase C) has the real
+  algebraic derivation already worked out, without this phase silently
+  overwriting a tuned, tested constant it has no authority to change.
+  Verified active (not skipped): `test_w_tentative_dominance_bound`
+  (`tests/phase_b/test_graph_resolution.py`) asserts `W_TENTATIVE == 15.0`
+  and that it strictly exceeds the worst-case structural path cost.
+- **`prism.graph.subgraph_validator` - fully implemented and tested,
+  deliberately held unwired pending its Phase B consumer.** A
+  deterministic, AST/symbol-grounded gatekeeper between high-recall
+  candidate extraction and any consumer that needs a structurally-
+  verified closure - by its own module docstring, "a Transformation
+  Action DAG planner, a mutation engine, or a serialization layer,"
+  none of which exist yet in MVP v1. Confirmed zero production consumers
+  (no import of `SubgraphValidator`/`validate_subgraph` anywhere under
+  `src/` outside the module itself); exercised only by its own
+  `tests/graph/test_subgraph_validator.py`. Built ahead of its consumer
+  on purpose, so Phase B's mutation planner has a ready-made, already-
+  tested gatekeeper rather than one built under schedule pressure later.
+- **Single-Seed Architectural Boundary - the frozen MVP v1 retrieval
+  shape, not merely today's only tested path.** Both
+  `pack_symbol_context` (`prism.packer.submodular_knapsack`) and
+  `build_context_package` (`prism.surface.build`) take one
+  `seed_id: str`, never a collection - there is no `seed_ids: list[str]`
+  anywhere in the codebase. `build_context_package`'s own docstring
+  names this directly: the envelope is designed around "the T02/chain/
+  debug-style single-seed-forward-chain use case." Multi-hypothesis
+  joint packing (ranking and packing several candidate seeds together,
+  as opposed to the caller picking one seed and retrying) is out of
+  scope for v1.1 and scoped for Phase B.
 
 ### 10.1 Cache layer - audit history
 
