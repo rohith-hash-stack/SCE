@@ -1345,3 +1345,61 @@ of the `django_t02_003` ambiguity, and the exact prompt wording
 before/after - is in `reports/pilot/methodology.md`'s own "Ground
 Truth Provenance" section; this is the condensed pointer to it from
 the design document itself.
+
+### 10.3 Phase B backlog - empirical findings from the targeted Kaggle re-sweep
+
+A targeted re-sweep (`pilot-resweep-20260921T072845Z`, on `cd329f7`, the
+MVP v1 code freeze commit) re-ran the 13 previously-failing Django T02
+tasks live against `qwen2.5-coder:14b-instruct-q8_0` via a local Ollama
+instance - a deliberate deviation from Section 10.2's GPT-4o pin, since
+the goal was a free, targeted check of Fix #1/Fix #2's retrieval impact,
+not a cross-model-agreement pilot measurement. Full results in
+`reports/pilot_resweep_debrief.md`. It validated retrieval recall
+(`cpi_strict = 1.0` on 20 of 21 residual failing cells, including full
+pipeline coverage on `django_t02_005_model_save_signals` at every budget)
+and surfaced three concrete gaps, now Phase B backlog items rather than
+open questions:
+
+- **Test-Symbol Cost Demotion.** `django_t02_017_redirect_url_safety_check`
+  at budget=2000 crowded out two real ground-truth symbols
+  (`django.utils.http._urlparse`, `escape_leading_slashes`) in favor of
+  `tests.utils_tests.test_http.URLHasAllowedHostAndSchemeTests.
+  test_allowed_hosts_str` - a test file competing for budget against
+  production pipeline symbols on equal footing. `prism.packer.
+  submodular_knapsack`'s cost/value model has no notion of a symbol
+  living under a test path; Phase B should add either a structural cost
+  penalty or an outright eviction filter for non-production/test-path
+  symbols during knapsack budgeting, so test code stops displacing real
+  pipeline symbols at tight budgets.
+- **Context Noise Pruning (the Subgraph Processor).** Across six tasks
+  where Prism had full `cpi_strict = 1.0` retrieval coverage but Oracle
+  succeeded and Prism still failed (004, 006, 009, 012, 013, 017 at
+  budget>=4000), the consistent correlate was elevated `fpr_oracle`/
+  `fpr_gt` - 38%-91% of Prism's selected symbols were non-ground-truth,
+  against Oracle's flat 0%. Circumstantial, not proven causal, but
+  consistent across six independent tasks. Phase B should evaluate
+  topological/reachability-based pruning ahead of context serialization
+  (island pruning on unreachable components, degree-2 pass-through path
+  condensation, personalized-PageRank-based hub down-weighting anchored
+  at the seed) to lower `fpr_gt` and narrow the gap toward Oracle's
+  noise-free packages - see the architecture review discussion of the
+  proposed Subgraph Processor for the fuller design-space treatment
+  (recall reuse the same distance metric already computed for packing;
+  never hard-delete on a heuristic relevance score, only on provable
+  unreachability; downgrade detail rather than removing presence,
+  consistent with Fix #2's own resolved design).
+- **Evaluation Contract Hardening.** The dominant failure mode in the
+  re-sweep was not retrieval at all: `django_t02_003`, `_005`, `_014`,
+  and `_016` all scored TSR=0.000 at every budget **for every engine
+  including Oracle**, with Oracle's context being the complete,
+  noise-free ground truth. The model's own reasoning text was
+  semantically correct in these cases; it simply did not produce a
+  `symbols` array that survived the harness's exact-match
+  `DEBUG_TASK_RESPONSE_CONTRACT` scoring. This is a real ceiling no
+  retrieval-side fix can move. Before Pilot 4, the benchmark harness
+  itself needs hardening against this prompt-following variance -
+  candidates include a more tolerant extraction pass (e.g. schema
+  validation with a repair/retry step, or fuzzy JSON-array matching
+  with an explicit ordering-tolerance parameter) before concluding an
+  engine failed a task it was never actually given a fair chance to
+  answer correctly.
