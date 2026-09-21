@@ -1,0 +1,25 @@
+# Failure Analysis
+
+21 failure(s) detected:
+
+- **django_t02_004_url_resolve_traversal** (budget=2000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_004_url_resolve_traversal** (budget=4000): prism TSR (0.000) < baseline_bfs_forward TSR (1.000)
+- **django_t02_004_url_resolve_traversal** (budget=4000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_004_url_resolve_traversal** (budget=8000): prism TSR (0.000) < baseline_bfs_forward TSR (1.000)
+- **django_t02_004_url_resolve_traversal** (budget=8000): prism TSR (0.000) < baseline_bfs_bidirectional TSR (1.000)
+- **django_t02_004_url_resolve_traversal** (budget=8000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_006_auth_get_user_resolution** (budget=2000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_006_auth_get_user_resolution** (budget=4000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_006_auth_get_user_resolution** (budget=8000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_009_queryset_filter_clone** (budget=2000): prism TSR (0.000) < baseline_bfs_forward TSR (1.000)
+- **django_t02_009_queryset_filter_clone** (budget=2000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_009_queryset_filter_clone** (budget=4000): prism TSR (0.000) < baseline_bfs_forward TSR (1.000)
+- **django_t02_009_queryset_filter_clone** (budget=4000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_012_wsgi_entrypoint_dispatch** (budget=2000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_013_common_middleware_slash_redirect** (budget=2000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_013_common_middleware_slash_redirect** (budget=4000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_013_common_middleware_slash_redirect** (budget=8000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_017_redirect_url_safety_check** (budget=2000): prism TSR (0.000) < baseline_bfs_bidirectional TSR (1.000)
+- **django_t02_017_redirect_url_safety_check** (budget=2000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_017_redirect_url_safety_check** (budget=4000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
+- **django_t02_017_redirect_url_safety_check** (budget=8000): prism TSR (0.000) more than 20% below oracle TSR (1.000)
