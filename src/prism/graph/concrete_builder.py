@@ -203,6 +203,16 @@ class ConcreteGraphBuilder:
         #: different assignments - same single-flag/single-threaded
         #: convention as `_last_resolution_was_tentative` above.
         self._last_resolution_was_ambiguous = False
+        #: Builtin-Receiver Exclusion fix: set by `_resolve_segments`
+        #: immediately before it returns `None` because the receiver was
+        #: tracked as a Python builtin container/primitive
+        #: (`InstanceTypeMap.is_builtin`), never a real class - checked by
+        #: `_resolve_calls_in_function` to suppress the G44 bare-name/
+        #: polysemy fallback for that call entirely (the receiver is
+        #: definitively known, not merely unresolved), the same "return
+        #: None but flag why" convention `_last_resolution_was_tentative`/
+        #: `_last_resolution_was_ambiguous` above already establish.
+        self._last_resolution_was_builtin_receiver = False
         #: Item 3: `go_call_resolution_ratio` diagnostic numerator/
         #: denominator - see that property's own docstring.
         self._go_receiver_call_sites_total = 0
@@ -1128,8 +1138,15 @@ class ConcreteGraphBuilder:
                 if value is not None:
                     ctor_segments = _constructor_call_segments(value, parsed.language_id, parsed.source)
                     if ctor_segments is None:
+                        if _is_builtin_container_expr(value, parsed.language_id, parsed.source):
+                            instance_map.bind_builtin(".".join(target_segments))
                         continue
                     resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+                    if not self._is_known_class(resolved_class) and _is_builtin_container_expr(
+                        value, parsed.language_id, parsed.source
+                    ):
+                        instance_map.bind_builtin(".".join(target_segments))
+                        continue
                 else:
                     # Phase B (G41): a bare type-annotated attribute with
                     # no constructor call at all (`self.attr:
@@ -1512,10 +1529,14 @@ class ConcreteGraphBuilder:
                     continue
                 ctor_segments = _constructor_call_segments(value, lang, parsed.source)
                 if ctor_segments is None:
+                    if _is_builtin_container_expr(value, lang, parsed.source):
+                        instance_map.bind_builtin(node_text(target, parsed.source))
                     continue
                 resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
                 if self._is_known_class(resolved_class):
                     instance_map.bind(node_text(target, parsed.source), resolved_class)
+                elif _is_builtin_container_expr(value, lang, parsed.source):
+                    instance_map.bind_builtin(node_text(target, parsed.source))
 
         # Java/C# construct almost exclusively through a *typed local
         # variable declaration* (`OrderValidator v = new OrderValidator();`),
@@ -1685,7 +1706,17 @@ class ConcreteGraphBuilder:
                 segments, module, enclosing_class, import_map, class_instance_map, func_instance_map, self_tokens, lang
             )
             if target is None:
-                self._resolve_ambiguous_call(caller_qname, call_node, parsed, module, import_map, segments)
+                # Builtin-Receiver Exclusion fix: a receiver definitively
+                # known to be a Python builtin container/primitive is not
+                # "unresolved" in the sense the G44 bare-name/polysemy
+                # fallback exists for - there is no real target to guess
+                # at, and guessing was exactly the bug (a call like
+                # `field_names.add(...)` binding to an unrelated same-
+                # named method elsewhere in the repo). Suppressed the
+                # same way the `super()` call-site is suppressed just
+                # above, for the same "never let this reach G44" reason.
+                if not self._last_resolution_was_builtin_receiver:
+                    self._resolve_ambiguous_call(caller_qname, call_node, parsed, module, import_map, segments)
                 continue
             if lang == LanguageID.GO and len(segments) >= 2 and import_map.resolve(segments[0]) is None:
                 self._go_receiver_call_sites_resolved += 1
@@ -2005,6 +2036,7 @@ class ConcreteGraphBuilder:
     ) -> str | None:
         self._last_resolution_was_tentative = False
         self._last_resolution_was_ambiguous = False
+        self._last_resolution_was_builtin_receiver = False
         if len(segments) == 1:
             return self._resolve_reference_chain(segments, module, import_map)
 
@@ -2038,6 +2070,17 @@ class ConcreteGraphBuilder:
                     # out of Phase B's scope).
                     self._last_resolution_was_ambiguous = True
                 return f"{candidate}.{method}"
+            if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
+                # Builtin-Receiver Exclusion fix: `self.<attr>` is known
+                # to hold a Python builtin container/primitive
+                # (`self.field_names = set()`), never a real class -
+                # `<attr>.<method>()` must never fall through to the
+                # enclosing class's own MRO lookup below (which exists
+                # for the different case of `self.<method>()` itself)
+                # or, back in `_resolve_calls_in_function`, to the G44
+                # bare-name/polysemy fallback.
+                self._last_resolution_was_builtin_receiver = True
+                return None
             if len(receiver_segments) == 1 and enclosing_class:
                 direct = f"{enclosing_class}.{method}"
                 if direct in self.symbol_table:
@@ -2058,6 +2101,21 @@ class ConcreteGraphBuilder:
             return None
 
         candidate = func_instance_map.resolve(receiver_key) or class_instance_map.resolve(receiver_key)
+        if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
+            # Builtin-Receiver Exclusion fix: a local variable known to
+            # hold a Python builtin container/primitive
+            # (`field_names = set()`) - never a real class, so
+            # `<var>.<method>()` must never fall through to
+            # `_resolve_reference_chain`'s module-level lookup below or,
+            # back in `_resolve_calls_in_function`, to the G44 bare-name/
+            # polysemy fallback (the real bug this fix targets: a call
+            # like `field_names.add(...)`/`field_names.difference(...)`
+            # was resolving, with high confidence, to an unrelated
+            # same-named method elsewhere in a large corpus - e.g.
+            # `GeometryCollection.add`/`QuerySet.difference` for a call
+            # inside `django.db.models.base.Model.save`).
+            self._last_resolution_was_builtin_receiver = True
+            return None
         if candidate:
             direct_candidate = f"{candidate}.{method}"
             # Item 5/7 (second post-implementation audit): a Go struct's
@@ -2293,6 +2351,68 @@ def _go_composite_literal_type(value_node: Node, source: bytes) -> str | None:
     if node is None or node.type != "composite_literal":
         return None
     return _go_type_identifier_text(node.child_by_field_name("type"), source)
+
+
+#: Builtin-Receiver Exclusion fix: Python's own literal-display and
+#: comprehension node types that always construct a builtin container or
+#: primitive, never a repo-defined class - confirmed directly against a
+#: real tree-sitter-python parse (`set()`, not `{1, 2}` empty-set
+#: literal syntax, is the only builtin container with no dedicated
+#: literal node; it is always a `call` node, handled separately by
+#: `_BUILTIN_FACTORY_NAMES` below).
+_PYTHON_BUILTIN_LITERAL_NODE_TYPES = frozenset({
+    "dictionary", "list", "tuple", "string",
+    "set_comprehension", "list_comprehension", "dictionary_comprehension", "generator_expression",
+})
+
+#: Bare (unqualified) builtin factory call names - `set()`, `list()`, ...
+#: Checked only when the call resolves to nothing else real (see
+#: `_is_builtin_container_expr`), so a local class that happens to share
+#: one of these names is never misclassified as the builtin.
+_BUILTIN_FACTORY_NAMES = frozenset({"set", "list", "dict", "tuple", "frozenset", "bytearray", "bytes", "str"})
+
+#: `collections.<name>(...)`-qualified factories - restricted to this
+#: exact, literal module prefix (not resolved through import aliasing)
+#: to avoid ever misclassifying an unrelated same-named local class.
+_COLLECTIONS_BUILTIN_FACTORY_NAMES = frozenset({"deque", "defaultdict", "OrderedDict", "Counter", "ChainMap"})
+
+
+def _is_builtin_container_expr(value: Node, lang: str, source: bytes) -> bool:
+    """`True` iff `value` (an assignment's RHS) is a Python expression
+    that is *always* a builtin container/primitive - a literal display,
+    a comprehension, or a bare/`collections.`-qualified factory call
+    (`set()`, `collections.deque()`) - never a real, repo-indexed class.
+    Python-only: verified directly against tree-sitter-python's real
+    node shapes; other languages' equivalent literals are out of scope
+    for this fix (not silently claimed equally precise, matching this
+    module's own established per-language-coverage disclosure convention
+    elsewhere).
+
+    Callers must try the ordinary `_constructor_call_segments`/
+    `_resolve_reference_chain`/`_is_known_class` resolution path *first*
+    and only fall back to this check on that path's failure - protecting
+    the rare case of a real, indexed local class that happens to share a
+    builtin factory's bare name (e.g. a repo defining its own `Counter`
+    class), which the ordinary path will correctly resolve before this
+    purely name-based heuristic is ever consulted.
+    """
+    if lang != LanguageID.PYTHON:
+        return False
+    if value.type in _PYTHON_BUILTIN_LITERAL_NODE_TYPES:
+        return True
+    if value.type != CALL_NODE_TYPE.get(lang):
+        return False
+    callee = value.child_by_field_name("function")
+    if callee is None:
+        return False
+    segments = flatten_reference_chain(callee, source, lang)
+    if not segments:
+        return False
+    if len(segments) == 1 and segments[0] in _BUILTIN_FACTORY_NAMES:
+        return True
+    if len(segments) == 2 and segments[0] == "collections" and segments[1] in _COLLECTIONS_BUILTIN_FACTORY_NAMES:
+        return True
+    return False
 
 
 def _constructor_call_segments(value: Node, lang: str, source: bytes) -> list[str] | None:

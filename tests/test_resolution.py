@@ -208,3 +208,146 @@ def test_single_candidate_for_a_name_does_not_get_silently_dropped_or_guessed(tm
     )
     succ = _successors(tmp_path, source, "mod.Worker.run")
     assert "mod.Report.finalize" in succ
+
+
+# --- Builtin-Receiver Exclusion fix ---------------------------------------
+#
+# A narrower, fully-decidable slice of G41's general receiver-type-
+# blindness (still correctly deferred to v1.2 above): when a local
+# variable or `self.<attr>` is assigned from a Python builtin-container
+# literal, comprehension, or bare/`collections.`-qualified factory call
+# in the *same* scope (`field_names = set()`), its real type is not
+# merely untracked - it is definitively known, and definitely not any
+# repo-defined class. `_resolve_segments`/`InstanceTypeMap.is_builtin`
+# now short-circuit this specific case before it ever reaches
+# `_resolve_ambiguous_call`'s scoring, which previously happened to bind
+# it to an unrelated same-named method elsewhere in the repo with no
+# receiver-type check at all. Confirmed as a real, live bug via a direct
+# trace against the real pinned Django 4.2.30 checkout: `Model.save`'s
+# own `field_names = set()` / `field_names.difference(deferred_fields)`
+# (django/db/models/base.py) resolved to `GeometryCollection.add` /
+# `QuerySet.difference` - two unrelated, unrelated-module Django symbols
+# - both admitted into the packed context at the seed's own `dist=1.0`
+# priority tier.
+
+def test_builtin_set_receiver_add_call_is_not_misresolved(tmp_path):
+    source = (
+        "class GeometryCollection:\n"
+        "    def add(self, x):\n"
+        "        return x\n"
+        "\n\n"
+        "def process(items):\n"
+        "    field_names = set()\n"
+        "    for item in items:\n"
+        "        field_names.add(item)\n"
+        "    return field_names\n"
+    )
+    succ = _successors(tmp_path, source, "mod.process")
+    assert "mod.GeometryCollection.add" not in succ
+    assert not any(s.endswith(".add") for s in succ)
+
+
+def test_builtin_set_receiver_difference_call_is_not_misresolved(tmp_path):
+    source = (
+        "class QuerySet:\n"
+        "    def difference(self, other):\n"
+        "        return self\n"
+        "\n\n"
+        "def process(deferred_fields):\n"
+        "    field_names = set()\n"
+        "    field_names.add('a')\n"
+        "    return field_names.difference(deferred_fields)\n"
+    )
+    succ = _successors(tmp_path, source, "mod.process")
+    assert "mod.QuerySet.difference" not in succ
+    assert not any(s.endswith(".difference") for s in succ)
+
+
+def test_builtin_receiver_exclusion_covers_literal_display_and_comprehension(tmp_path):
+    """Not just bare factory calls (`set()`) - a dict/list literal display
+    and a comprehension must be recognized too, since both are real,
+    common ways Python code builds a container that later calls `.get`/
+    `.append`/etc. on it."""
+    source = (
+        "class Registry:\n"
+        "    def get(self, key):\n"
+        "        return None\n"
+        "\n"
+        "    def append(self, value):\n"
+        "        return None\n"
+        "\n\n"
+        "def via_dict_literal(keys):\n"
+        "    cache = {}\n"
+        "    return cache.get('x')\n"
+        "\n\n"
+        "def via_list_comprehension(items):\n"
+        "    bucket = [x for x in items]\n"
+        "    bucket.append(1)\n"
+        "    return bucket\n"
+    )
+    dict_succ = _successors(tmp_path, source, "mod.via_dict_literal", subdir="repo_dict")
+    list_succ = _successors(tmp_path, source, "mod.via_list_comprehension", subdir="repo_list")
+    assert "mod.Registry.get" not in dict_succ
+    assert "mod.Registry.append" not in list_succ
+
+
+def test_builtin_receiver_exclusion_covers_self_attribute(tmp_path):
+    """`self.<attr> = set()` inside `__init__`, then `self.<attr>.add(...)`
+    elsewhere in the class - the `class_instance_map`/self-prefixed
+    resolution path, not just plain local variables."""
+    source = (
+        "class Sink:\n"
+        "    def add(self, x):\n"
+        "        return x\n"
+        "\n\n"
+        "class Collector:\n"
+        "    def __init__(self):\n"
+        "        self.seen = set()\n"
+        "\n"
+        "    def record(self, item):\n"
+        "        self.seen.add(item)\n"
+        "        return self.seen\n"
+    )
+    succ = _successors(tmp_path, source, "mod.Collector.record")
+    assert "mod.Sink.add" not in succ
+    assert not any(s.endswith(".add") for s in succ)
+
+
+def test_builtin_receiver_exclusion_zero_false_positive_on_real_class(tmp_path):
+    """The fix must never suppress resolution for a receiver that is
+    genuinely untyped (not provably a builtin) - it should still reach
+    the existing G41/G44 fallback and resolve normally, exactly as
+    before this fix (a real, positive control against over-broad
+    pruning)."""
+    source = (
+        "class Manager:\n"
+        "    def add(self, x):\n"
+        "        return x\n"
+        "\n\n"
+        "def process_with_real_manager(m):\n"
+        "    m.add(5)\n"
+        "    return m\n"
+    )
+    succ = _successors(tmp_path, source, "mod.process_with_real_manager")
+    assert "mod.Manager.add" in succ
+
+
+def test_builtin_receiver_exclusion_reassignment_to_real_class_wins(tmp_path):
+    """A name first bound to a builtin container, then reassigned to a
+    real, known class within the same scope, must resolve against the
+    *real* class - `InstanceTypeMap.bind`/`bind_builtin` are symmetric,
+    most-recent-assignment-wins, matching the existing `ambiguous`
+    convention for a plain class-to-class rebind."""
+    source = (
+        "class Real:\n"
+        "    def add(self, x):\n"
+        "        return x\n"
+        "\n\n"
+        "def process(flag):\n"
+        "    bucket = set()\n"
+        "    bucket = Real()\n"
+        "    bucket.add(1)\n"
+        "    return bucket\n"
+    )
+    succ = _successors(tmp_path, source, "mod.process")
+    assert "mod.Real.add" in succ

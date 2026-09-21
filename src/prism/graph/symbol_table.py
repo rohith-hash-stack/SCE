@@ -250,18 +250,45 @@ class InstanceTypeMap:
     #: to link with reduced confidence instead of treating this as a
     #: clean, single-type resolution.
     ambiguous: set[str] = field(default_factory=set)
+    #: Builtin-Receiver Exclusion fix: names known, from a real literal
+    #: display, comprehension, or bare builtin-factory call in the same
+    #: scope (`field_names = set()` / `= {}` / `= [x for x in y]` /
+    #: `= collections.deque()`), to hold a Python builtin container/
+    #: primitive - never a real, indexed class. Deliberately a separate
+    #: set from `bindings` rather than a fake "qualified_class" entry:
+    #: there is no real class to resolve `.<method>` against, so a
+    #: caller must check `is_builtin` *before* falling back to bare-name/
+    #: polysemy resolution for a receiver this set names, and must never
+    #: treat membership here as "unresolved, keep trying" (see
+    #: `ConcreteGraphBuilder._resolve_segments`/`_resolve_calls_in_function`).
+    builtin_bindings: set[str] = field(default_factory=set)
 
     def bind(self, var_name: str, qualified_class: str) -> None:
         existing = self.bindings.get(var_name)
         if existing is not None and existing != qualified_class:
             self.ambiguous.add(var_name)
         self.bindings[var_name] = qualified_class
+        # A real class binding always supersedes a stale builtin marking
+        # from an earlier assignment to the same name (most-recent-
+        # assignment-wins, matching `ambiguous`'s own convention above).
+        self.builtin_bindings.discard(var_name)
+
+    def bind_builtin(self, var_name: str) -> None:
+        self.builtin_bindings.add(var_name)
+        # Symmetric with `bind()`: a fresh builtin-container assignment
+        # supersedes any earlier real-class binding/ambiguity flag for
+        # the same name.
+        self.bindings.pop(var_name, None)
+        self.ambiguous.discard(var_name)
 
     def resolve(self, var_name: str) -> str | None:
         return self.bindings.get(var_name)
 
     def is_ambiguous(self, var_name: str) -> bool:
         return var_name in self.ambiguous
+
+    def is_builtin(self, var_name: str) -> bool:
+        return var_name in self.builtin_bindings
 
 
 # --------------------------------------------------------------------- #
