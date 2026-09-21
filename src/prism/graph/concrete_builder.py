@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 
 import networkx as nx
@@ -33,8 +34,10 @@ from prism.parser.lang_config import (
     CALL_NODE_TYPE,
     CLASS_NODE_TYPES,
     DECORATED_WRAPPER_TYPES,
+    RETURN_STATEMENT_NODE_TYPE,
     SELF_TOKEN_TEXT,
     call_callee_segments,
+    collect_decorator_texts,
     find_all,
     flatten_reference_chain,
     is_super_call_node,
@@ -57,6 +60,7 @@ from prism.graph.symbol_table import (
     InstanceTypeMap,
     LocalImportMap,
     SymbolInfo,
+    SymbolRole,
     arity_match,
     locality_distance,
     namespace_match,
@@ -481,6 +485,9 @@ class ConcreteGraphBuilder:
             outer = node.parent
 
         line_range = (outer.start_point[0] + 1, outer.end_point[0] + 1)
+        enclosing_class_info = self.symbol_table.get(enclosing_class) if enclosing_class is not None else None
+        enclosing_class_role = enclosing_class_info.role if enclosing_class_info is not None else None
+        role = _classify_symbol_role(node, is_class, parsed, name, enclosing_class_role)
         symbol = SymbolInfo(
             qualified_name=qualified_name,
             kind=kind,
@@ -489,6 +496,7 @@ class ConcreteGraphBuilder:
             language_id=lang,
             module=module,
             enclosing_class=enclosing_class,
+            role=role,
         )
         self.symbol_table.add(symbol)
         self._def_nodes[qualified_name] = node
@@ -500,6 +508,7 @@ class ConcreteGraphBuilder:
             language_id=lang,
             module=module,
             enclosing_class=enclosing_class,
+            role=role,
         )
         if enclosing_class is not None and kind == "method":
             self._methods_by_class.setdefault(enclosing_class, []).append(qualified_name)
@@ -2375,6 +2384,201 @@ _BUILTIN_FACTORY_NAMES = frozenset({"set", "list", "dict", "tuple", "frozenset",
 #: exact, literal module prefix (not resolved through import aliasing)
 #: to avoid ever misclassifying an unrelated same-named local class.
 _COLLECTIONS_BUILTIN_FACTORY_NAMES = frozenset({"deque", "defaultdict", "OrderedDict", "Counter", "ChainMap"})
+
+
+# -- Symbol Role Classification (Phase B: repo-agnostic test-symbol -------- #
+# demotion, replacing the hardcoded `_NEVER_PIPELINE_MODULE_PREFIXES`
+# module-path blacklist that used to live in
+# `prism.packer.submodular_knapsack`). Every pattern below is a naming
+# *convention* shared across mainstream xUnit-style test frameworks in
+# multiple languages, or a structural AST-shape check - never a literal
+# repository path, package name, or framework name (e.g. never
+# `"django.test"` or `"tests/"`). See `SymbolRole`'s own docstring
+# (`prism.graph.symbol_table`) for why this replaced a path-substring
+# check: the old check only fired when a candidate's knapsack novelty
+# score was exactly zero, so a test symbol that happened to carry a
+# fresh four-axis feature bit sailed straight through it - the confirmed
+# root cause of the django_t02_017 budget-crowding case. This
+# classification is unconditional on novelty, closing that gap by
+# construction rather than by widening the old check's threshold.
+#
+# Honesty note (not overclaimed): "this is a test" is itself a naming
+# convention in every mainstream language - there is no purely
+# structural AST primitive for it the way there is for, say, "has a
+# return statement." What these patterns avoid is a specific
+# repository's or framework's literal string (`"django.test"`); they
+# still rely on *conventions* (`TestCase`-suffixed base classes,
+# `test_`-prefixed names, `assert`-prefixed calls) that are common to
+# unittest/pytest/JUnit/xUnit/Go's `testing` package alike, not to one
+# specific project.
+_TEST_BASE_CLASS_PATTERN = re.compile(r"^Test|TestCase$")
+_TEST_DECORATOR_PATTERN = re.compile(
+    r"^(pytest\.)?(fixture|mark\.\w+)$|^parametrize$"
+    r"|^(Test|Fact|Theory|Before|After|BeforeEach|AfterEach|BeforeClass|AfterClass)$"
+)
+_TEST_NAME_PATTERN = re.compile(r"^test_|Test$")
+#: Matches Python/JS/TS `assert*`, `self.assert*`, and Go's `t.Fatal(f)?`/
+#: `t.Error(f)?` (trailing-segment match via `call_callee_segments`, the
+#: same convention `prism.tagger.rules.CALL_SINK_RULES` already uses).
+_ASSERTION_CALL_PATTERN = re.compile(r"^assert|^(Fatal|Error)f?$")
+_ASSERTION_DENSITY_THRESHOLD = 0.15
+#: Go's `func TestXxx(t *testing.T)` / `BenchmarkXxx(b *testing.B)` -
+#: structural signal (parameter type text), not a naming-only guess,
+#: since Go has neither decorators nor test base classes to check instead.
+_GO_TEST_PARAM_TYPE_PATTERN = re.compile(r"testing\.(T|B)\b")
+_GO_TEST_FUNC_NAME_PREFIXES = ("Test", "Benchmark", "Example")
+
+
+def _is_test_shaped_base_classes(class_node: Node, parsed: ParsedFile) -> bool:
+    """Python-only (the one language here with a real `superclasses`
+    field exposing base-class references directly) - any base class
+    whose own simple name matches `_TEST_BASE_CLASS_PATTERN`
+    (`unittest.TestCase`, `django.test.TestCase`, a bare `TestX`
+    mixin, pytest's `Test*` class convention). Only the base's simple
+    name is checked - `flatten_reference_chain` is used purely to strip
+    any qualifying prefix (`unittest.TestCase` -> `TestCase`), never
+    resolved to a qualified target, so an unresolvable/aliased import
+    doesn't suppress the signal the way full resolution would.
+    """
+    if parsed.language_id != LanguageID.PYTHON:
+        return False
+    superclasses = class_node.child_by_field_name("superclasses")
+    if superclasses is None:
+        return False
+    for child in superclasses.named_children:
+        if child.type == "keyword_argument":
+            continue
+        segments = flatten_reference_chain(child, parsed.source, LanguageID.PYTHON)
+        simple_name = segments[-1] if segments else node_text(child, parsed.source)
+        if _TEST_BASE_CLASS_PATTERN.search(simple_name):
+            return True
+    return False
+
+
+def _is_go_test_function(node: Node, name: str, parsed: ParsedFile) -> bool:
+    """`func TestXxx(t *testing.T)` / `BenchmarkXxx(b *testing.B)` /
+    `ExampleXxx()` - Go's own idiomatic test-function shape. Checks both
+    the name-prefix convention *and* (for Test/Benchmark) the real
+    parameter type text, so an ordinary function that merely happens to
+    start with "Test" but takes no `*testing.T` isn't misclassified.
+    """
+    if parsed.language_id != LanguageID.GO or not name.startswith(_GO_TEST_FUNC_NAME_PREFIXES):
+        return False
+    if name.startswith("Example"):
+        return True  # Example functions take no testing.T/B parameter at all
+    params = node.child_by_field_name("parameters")
+    if params is None:
+        return False
+    return bool(_GO_TEST_PARAM_TYPE_PATTERN.search(node_text(params, parsed.source)))
+
+
+def _is_assertion_shaped_body(body: Node | None, lang: str, source: bytes) -> bool:
+    """`True` if `body` is a function body whose call sites are
+    substantially assertion calls (`_ASSERTION_DENSITY_THRESHOLD` of all
+    call sites in the body), or that asserts at all while never
+    returning a value - the "assertion density vs. return presence"
+    pair of signals: a real implementation function usually returns
+    something and rarely calls `assert*`/`t.Fatal` more than
+    incidentally; a verification function usually does the reverse.
+    """
+    if body is None:
+        return False
+    call_type = CALL_NODE_TYPE.get(lang)
+    if call_type is None:
+        return False
+    calls = find_all(body, {call_type})
+    if not calls:
+        return False
+    assertion_calls = 0
+    for call in calls:
+        segments = call_callee_segments(call, source, lang)
+        if segments and _ASSERTION_CALL_PATTERN.match(segments[-1]):
+            assertion_calls += 1
+    if assertion_calls == 0:
+        return False
+    if (assertion_calls / len(calls)) >= _ASSERTION_DENSITY_THRESHOLD:
+        return True
+    has_return = bool(find_all(body, {RETURN_STATEMENT_NODE_TYPE}))
+    return not has_return
+
+
+#: A Python body of exactly `pass`, `...`, a docstring followed by
+#: either, or a bare `raise NotImplementedError(...)` (optionally after
+#: a docstring) - an abstract/declaration-only method, not a real
+#: implementation. Other languages' equivalent shapes (Java/C#
+#: interface methods with no body at all) are covered by the
+#: `body is None` branch below instead.
+_INTERFACE_TRAILING_TYPES = frozenset({"pass_statement", "ellipsis"})
+
+
+def _is_interface_shaped_body(body: Node | None, lang: str, source: bytes) -> bool:
+    if body is None:
+        return True
+    if lang != LanguageID.PYTHON:
+        return False
+    stmts = [c for c in body.named_children if c.type != "comment"]
+    if not stmts:
+        return False
+    # Skip a leading docstring (a bare string-literal expression statement).
+    if stmts[0].type == "expression_statement" and len(stmts[0].named_children) == 1 and stmts[0].named_children[0].type == "string":
+        stmts = stmts[1:]
+    if len(stmts) != 1:
+        return False
+    only = stmts[0]
+    if only.type == "pass_statement":
+        return True
+    if only.type == "expression_statement" and only.named_children and only.named_children[0].type == "ellipsis":
+        return True
+    if only.type == "raise_statement" and "NotImplementedError" in node_text(only, source):
+        return True
+    return False
+
+
+def _classify_symbol_role(
+    node: Node,
+    is_class: bool,
+    parsed: ParsedFile,
+    name: str,
+    enclosing_class_role: SymbolRole | None,
+) -> SymbolRole:
+    """Deterministic, AST/naming-convention-based role classification -
+    see the module-level comment above `_TEST_BASE_CLASS_PATTERN` for
+    why this exists and what it deliberately does and doesn't claim.
+    Called once per symbol from `_register_definition`, in the same
+    Pass-1 pass every other `SymbolInfo` field is already computed in.
+    """
+    lang = parsed.language_id
+
+    if is_class:
+        if _is_test_shaped_base_classes(node, parsed):
+            return SymbolRole.VERIFICATION
+        if _TEST_NAME_PATTERN.search(name):
+            return SymbolRole.VERIFICATION
+        return SymbolRole.IMPLEMENTATION
+
+    # A method on a test-shaped class is verification code regardless of
+    # its own name/decorators/body shape (a plain `setUp`/helper method
+    # included) - the class-level signal dominates.
+    if enclosing_class_role == SymbolRole.VERIFICATION:
+        return SymbolRole.VERIFICATION
+
+    if any(_TEST_DECORATOR_PATTERN.match(text) for text in collect_decorator_texts(node, parsed)):
+        return SymbolRole.VERIFICATION
+
+    if _is_go_test_function(node, name, parsed):
+        return SymbolRole.VERIFICATION
+
+    body = node.child_by_field_name("body")
+    if _is_assertion_shaped_body(body, lang, parsed.source):
+        return SymbolRole.VERIFICATION
+
+    if _TEST_NAME_PATTERN.search(name):
+        return SymbolRole.VERIFICATION
+
+    if _is_interface_shaped_body(body, lang, parsed.source):
+        return SymbolRole.INTERFACE
+
+    return SymbolRole.IMPLEMENTATION
 
 
 def _is_builtin_container_expr(value: Node, lang: str, source: bytes) -> bool:

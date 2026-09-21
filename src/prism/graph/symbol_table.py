@@ -14,6 +14,35 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class SymbolRole(str, Enum):
+    """A symbol's behavioral role, orthogonal to `SymbolInfo.kind`
+    (class/function/method/interface/attribute - its *structural* shape).
+    Computed once during Pass 1 (`ConcreteGraphBuilder._register_definition`)
+    from deterministic AST/naming signals - no LLM, no embeddings, no
+    hardcoded repo- or framework-specific path/package strings (see
+    `prism.graph.concrete_builder`'s own role-classification helpers for
+    the exact signal set and why a pure path-substring blacklist - the
+    mechanism this replaces - has a real, measured gap a structural
+    signal does not).
+
+    `IMPLEMENTATION` is the default for every symbol that doesn't
+    positively match a `VERIFICATION`/`INTERFACE` signal - production
+    code is the common case, not a specially-detected one.
+    """
+
+    IMPLEMENTATION = "implementation"
+    #: A test/assertion-bearing symbol (an xUnit-style test method or
+    #: function, a pytest fixture, a Go `TestXxx(t *testing.T)` function) -
+    #: a real graph node with real edges, never itself part of a debug/
+    #: chain task's own causal pipeline.
+    VERIFICATION = "verification"
+    #: An abstract/declaration-only symbol with no real executable body
+    #: (`pass`/`...`/`raise NotImplementedError` in Python, or no body at
+    #: all) - a contract, not an implementation of one.
+    INTERFACE = "interface"
 
 
 def path_to_module(file_path: str, repo_root: str) -> str:
@@ -39,6 +68,7 @@ class SymbolInfo:
     language_id: str
     module: str
     enclosing_class: str | None = None
+    role: SymbolRole = SymbolRole.IMPLEMENTATION
 
 
 class GlobalSymbolTable:

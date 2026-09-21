@@ -17,12 +17,12 @@ from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
     CALL_NODE_TYPE,
     CATCH_NODE_TYPES,
-    DECORATED_WRAPPER_TYPES,
     RAISE_NODE_TYPE,
     RETURN_STATEMENT_NODE_TYPE,
     SELF_TOKEN_TEXT,
     TRY_NODE_TYPES,
     call_callee_segments,
+    collect_decorator_texts,
     find_all,
     flatten_reference_chain,
     iter_scoped_nodes,
@@ -262,53 +262,14 @@ class TaggingEngine:
             builder.graph.nodes[node]["tags"] = union
 
     # -- helpers ---------------------------------------------------------- #
-    _ANNOTATION_CONTAINER_TYPES = {"modifiers", "attribute_list"}
-    _ANNOTATION_NODE_TYPES = {"annotation", "marker_annotation", "attribute"}
-
     def _collect_decorator_texts(self, def_node: Node, parsed: ParsedFile) -> list[str]:
-        lang = parsed.language_id
-        if lang in (LanguageID.JAVA, LanguageID.CSHARP):
-            return self._collect_annotation_texts(def_node, parsed)
-
-        wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
-        if def_node.parent is None or def_node.parent.type not in wrapper_types:
-            return []
-        texts: list[str] = []
-        for deco in def_node.parent.children:
-            if deco.type != "decorator":
-                continue
-            target = None
-            for c in deco.children:
-                if c.type != "@":
-                    target = c
-                    break
-            if target is None:
-                continue
-            if target.type == CALL_NODE_TYPE.get(lang):
-                target = target.child_by_field_name("function") or target
-            segments = flatten_reference_chain(target, parsed.source, lang)
-            texts.append(".".join(segments) if segments else node_text(target, parsed.source))
-        return texts
-
-    def _collect_annotation_texts(self, def_node: Node, parsed: ParsedFile) -> list[str]:
-        """Java annotations (`@PreAuthorize`) and C# attributes
-        (`[Authorize]`) are inline children of the definition itself - a
-        `modifiers`/`attribute_list` node holding one or more
-        `annotation`/`marker_annotation`/`attribute` nodes - not a separate
-        wrapper node around the definition the way Python's
-        `@decorator\\ndef f()` is. `attribute_list` can itself hold several
-        attributes (`[HttpPost, Authorize]`), each its own `attribute` node.
-        """
-        texts: list[str] = []
-        for container in def_node.children:
-            if container.type not in self._ANNOTATION_CONTAINER_TYPES:
-                continue
-            for node in container.children:
-                if node.type not in self._ANNOTATION_NODE_TYPES:
-                    continue
-                name_node = node.child_by_field_name("name")
-                texts.append(node_text(name_node if name_node is not None else node, parsed.source))
-        return texts
+        # Moved to `prism.parser.lang_config.collect_decorator_texts` - that
+        # module's own docstring states this exact sharing intent (avoid
+        # duplicating tree-sitter plumbing between this engine and
+        # `concrete_builder`'s symbol-role classification). Kept as a thin
+        # wrapper so every existing call site/test in this class is
+        # unaffected.
+        return collect_decorator_texts(def_node, parsed)
 
     def _extract_exception_name(self, raise_node: Node, parsed: ParsedFile) -> str | None:
         lang = parsed.language_id

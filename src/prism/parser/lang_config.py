@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from tree_sitter import Node
 
-from prism.parser.tree_sitter_loader import LanguageID, node_text
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
 
 CALL_NODE_TYPE = {
     LanguageID.PYTHON: "call",
@@ -473,3 +473,68 @@ def super_call_method_name(call_node: Node, source: bytes, lang: str) -> str | N
     if prop_node is None:
         return None
     return node_text(prop_node, source)
+
+
+# -- Decorator / annotation text collection -------------------------------- #
+# Moved here (was `prism.tagger.engine.TaggingEngine`'s own private methods)
+# per this module's own stated purpose: shared tree-sitter plumbing for both
+# `concrete_builder` and `tagger.engine`, so symbol-role classification
+# (`ConcreteGraphBuilder._register_definition`) and tag rules
+# (`prism.tagger.rules.DECORATOR_RULES`) read decorator/annotation text the
+# same way instead of each re-walking the tree independently.
+ANNOTATION_CONTAINER_TYPES = {"modifiers", "attribute_list"}
+ANNOTATION_NODE_TYPES = {"annotation", "marker_annotation", "attribute"}
+
+
+def collect_decorator_texts(def_node: Node, parsed: ParsedFile) -> list[str]:
+    """Every decorator/annotation/attribute attached to `def_node`, as
+    dotted text (`"pytest.fixture"`, `"PreAuthorize"`) - Python's
+    `@decorator` wrapper node for Python, Java annotations / C# attributes
+    (inline `modifiers`/`attribute_list` children of the definition itself)
+    for those two. Empty for every other language - JS/TS/Go have no
+    decorator-equivalent construct in this grammar's own node-type tables.
+    """
+    lang = parsed.language_id
+    if lang in (LanguageID.JAVA, LanguageID.CSHARP):
+        return collect_annotation_texts(def_node, parsed)
+
+    wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
+    if def_node.parent is None or def_node.parent.type not in wrapper_types:
+        return []
+    texts: list[str] = []
+    for deco in def_node.parent.children:
+        if deco.type != "decorator":
+            continue
+        target = None
+        for c in deco.children:
+            if c.type != "@":
+                target = c
+                break
+        if target is None:
+            continue
+        if target.type == CALL_NODE_TYPE.get(lang):
+            target = target.child_by_field_name("function") or target
+        segments = flatten_reference_chain(target, parsed.source, lang)
+        texts.append(".".join(segments) if segments else node_text(target, parsed.source))
+    return texts
+
+
+def collect_annotation_texts(def_node: Node, parsed: ParsedFile) -> list[str]:
+    """Java annotations (`@PreAuthorize`) and C# attributes (`[Authorize]`)
+    are inline children of the definition itself - a `modifiers`/
+    `attribute_list` node holding one or more `annotation`/
+    `marker_annotation`/`attribute` nodes - not a separate wrapper node
+    around the definition the way Python's `@decorator\\ndef f()` is.
+    `attribute_list` can itself hold several attributes
+    (`[HttpPost, Authorize]`), each its own `attribute` node.
+    """
+    texts: list[str] = []
+    for container in def_node.children:
+        if container.type not in ANNOTATION_CONTAINER_TYPES:
+            continue
+        for node in container.children:
+            if node.type not in ANNOTATION_NODE_TYPES:
+                continue
+            name_node = node.child_by_field_name("name")
+            texts.append(node_text(name_node if name_node is not None else node, parsed.source))
+    return texts

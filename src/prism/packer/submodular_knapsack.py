@@ -94,7 +94,7 @@ import networkx as nx
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
-from prism.graph.symbol_table import GlobalSymbolTable
+from prism.graph.symbol_table import GlobalSymbolTable, SymbolRole
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
 from prism.semantics.bitmask import FeatureBit
 from prism.semantics.extractor import compute_feature_masks_cached
@@ -474,10 +474,10 @@ def select_submodular_context(
 
     `symbol_table` (optional, `None` by default - every existing caller
     against a synthetic graph with no real symbol table is unaffected):
-    used by `_is_zero_novelty_test_fixture` (see fix-knapsack-bloat-stop-
-    criterion below - `SymbolInfo.module` is how that rule recognizes a
-    `tests.*`/`django.test*` candidate) and, since Phase E, by
-    `_is_in_scope`'s own `Prefix_3` half (see `SCOPE_GATE_MIN_DIST`'s
+    used by `_is_role_mismatched_verification` (see fix-knapsack-bloat-
+    stop-criterion below - `SymbolInfo.role` is how that rule recognizes
+    a VERIFICATION-role candidate) and, since Phase E, by `_is_in_scope`'s
+    own `Prefix_3` half (see `SCOPE_GATE_MIN_DIST`'s
     module-level docstring) - `None` makes both rules a no-op, exactly
     the same "unaffected without a real symbol table" contract the
     novelty-adaptive stop itself already had and still has.
@@ -578,26 +578,28 @@ def select_submodular_context(
     within this very round, not the general frontier's open-ended
     density competition that streak is guarding against, and each
     generation's own small cap already bounds how many can get in this
-    way - but they are still subject to `_is_zero_novelty_test_fixture`
-    (a hard rule independent of any streak or cap: a `tests.*` call site
-    is never part of a causal pipeline no matter how it was discovered).
+    way - but they are still subject to `_is_role_mismatched_verification`
+    (a hard rule independent of any streak, cap, or novelty score: a
+    VERIFICATION-role candidate is never part of an IMPLEMENTATION seed's
+    causal pipeline no matter how it was discovered).
     Fully deterministic: the same `sorted(...)`-based tie-break the main
     loop already uses.
 
-    **`_is_zero_novelty_test_fixture`** (used by both the main loop and
-    `_run_cascade`): a second, independent admissibility rule, not part
-    of the K=5 streak and not counted by it. django's own test suite
-    calls straight into almost every seed from hundreds of `tests.*` /
-    `django.test*` call sites, each a real graph edge but never part of
-    the causal pipeline a debug task is about. Left ungated, a zero-
-    novelty test method competes for admission like any other zero-
-    novelty candidate and can consume a tight budget's remaining
-    headroom before the K=5 streak - which only counts *consecutive*
-    admits and keeps resetting as one test method's own new call edges
-    keep exposing more same-shaped siblings - ever meaningfully engages,
-    crowding out real, low-novelty pipeline symbols (like a seed's own
+    **`_is_role_mismatched_verification`** (used by both the main loop
+    and `_run_cascade`): a second, independent admissibility rule, not
+    part of the K=5 streak and not counted by it, and - unlike the
+    hardcoded module-path blacklist it replaced - not gated on the
+    candidate's novelty score either. A test suite calls straight into
+    almost every seed from hundreds of real call sites, each a real
+    graph edge but never part of the causal pipeline a debug task is
+    about. Left ungated, a test method competes for admission like any
+    other candidate and can consume a tight budget's remaining headroom
+    - crowding out real, low-novelty pipeline symbols (like a seed's own
     containing class) that fix-include-class-when-method-selected needs
-    the leftover budget to still promote afterward.
+    the leftover budget to still promote afterward. See
+    `prism.graph.symbol_table.SymbolRole`'s own docstring for the
+    django_t02_017 case this closes that the old, novelty-gated version
+    did not.
     """
     if beta * delta_max >= DOMINANCE_SAFETY_BOUND:
         raise ValueError(
@@ -648,6 +650,7 @@ def select_submodular_context(
     # every candidate's in-scope check compares against them.
     _seed_info = symbol_table.get(seed_id) if symbol_table is not None else None
     _seed_module = _seed_info.module if _seed_info is not None else ""
+    _seed_role = _seed_info.role if _seed_info is not None else SymbolRole.IMPLEMENTATION
     _seed_substance = feature_masks.get(seed_id, 0) & _PHASE_E_SUBSTANCE_SINK_MASK
 
     def _is_in_scope(qname: str, dist: float) -> bool:
@@ -660,33 +663,27 @@ def select_submodular_context(
         candidate_substance = feature_masks.get(qname, 0) & _PHASE_E_SUBSTANCE_SINK_MASK
         return bool(candidate_substance & _seed_substance)
 
-    # A second, independent admissibility rule (not part of the K=5 streak
-    # above, and not reset or tracked by it): a zero-novelty candidate
-    # from a test-fixture module (`tests.*`, `django.test*`) is never
-    # admissible on its own zero-novelty merits, streak or no streak.
-    # django's own test suite calls straight into the seed from hundreds
-    # of `tests.*` call sites, each a real graph edge but never itself
-    # part of the causal pipeline a debug task is about; left ungated,
-    # these compete for admission purely as one more zero-novelty
-    # candidate and can consume most of a tight budget before the K=5
-    # streak ever has a chance to engage (K counts *consecutive* admits,
-    # and a redundant test method's own new call edges keep exposing more
-    # same-shaped siblings, so the streak keeps resetting on genuinely
-    # fresh-looking-but-still-irrelevant test methods long before 5 in a
-    # row triggers) - crowding out real, low-novelty pipeline symbols
-    # (like a seed's own containing class) Fix 2 needs the budget to
-    # still promote afterward. Needs `symbol_table` for `SymbolInfo.module`
-    # - the one live use of that parameter in this function.
-    _NEVER_PIPELINE_MODULE_PREFIXES = ("tests", "django.test")
-
-    def _is_never_pipeline_module(module: str) -> bool:
-        return any(module == prefix or module.startswith(prefix + ".") for prefix in _NEVER_PIPELINE_MODULE_PREFIXES)
-
-    def _is_zero_novelty_test_fixture(qname: str, delta_feat: int) -> bool:
-        if delta_feat != 0 or symbol_table is None:
+    # A hard, unconditional admissibility rule - independent of novelty
+    # score, streak state, or budget: a VERIFICATION-role candidate is
+    # never part of an IMPLEMENTATION-role seed's own causal pipeline.
+    # Replaces a hardcoded module-path blacklist
+    # (`_NEVER_PIPELINE_MODULE_PREFIXES = ("tests", "django.test")`) that
+    # used to live here, gated behind `delta_feat == 0` - a test symbol
+    # scoring nonzero novelty (a fresh four-axis feature bit) sailed
+    # straight through that gate, the confirmed root cause of the
+    # django_t02_017 budget-crowding case (a test file crowding out two
+    # real ground-truth pipeline symbols at budget=2000). `SymbolRole`
+    # (`prism.graph.symbol_table`, computed once during Pass 1 from
+    # deterministic AST/naming-convention signals - never a literal repo
+    # or framework path) closes that gap by construction: this check no
+    # longer depends on novelty at all, so it can't be out-raced by it.
+    # Needs `symbol_table` for `SymbolInfo.role` - the one live use of
+    # that parameter in this function.
+    def _is_role_mismatched_verification(qname: str) -> bool:
+        if symbol_table is None or _seed_role != SymbolRole.IMPLEMENTATION:
             return False
         info = symbol_table.get(qname)
-        return info is not None and _is_never_pipeline_module(info.module)
+        return info is not None and info.role == SymbolRole.VERIFICATION
 
     frontier: set[str] = set()
     upstream_candidates: set[str] = set()
@@ -733,10 +730,10 @@ def select_submodular_context(
     # open-ended density competition the novelty-adaptive stop above is
     # guarding against - so they are exempt from
     # `_is_novelty_streak_blocked` (though still subject to
-    # `_is_zero_novelty_test_fixture`, a hard rule independent of any
-    # streak or cap): each generation's own cap is already the limit,
-    # exactly how Fix 2's class promotion below is also a bounded,
-    # rule-based addition ungated by novelty.
+    # `_is_role_mismatched_verification`, a hard rule independent of any
+    # streak, cap, or novelty score): each generation's own cap is
+    # already the limit, exactly how Fix 2's class promotion below is
+    # also a bounded, rule-based addition ungated by novelty.
     CASCADE_GENERATION_CAP = 2
 
     def _discover_successors(node: str) -> set[str]:
@@ -769,8 +766,7 @@ def select_submodular_context(
                         continue
                     dist = combined_dist_map[candidate]
                     cand_mask = feature_masks.get(candidate, 0)
-                    raw_novel_bits = (cand_mask & ~covered_mask).bit_count()
-                    if _is_zero_novelty_test_fixture(candidate, raw_novel_bits):
+                    if _is_role_mismatched_verification(candidate):
                         continue
                     value = compute_candidate_value(dist, cand_mask, covered_mask, beta, delta_max)
                     if candidate in upstream_contract_preserving:
@@ -848,7 +844,7 @@ def select_submodular_context(
             dist = combined_dist_map[candidate]
             cand_mask = feature_masks.get(candidate, 0)
             raw_novel_bits = (cand_mask & ~covered_mask).bit_count()
-            if _is_novelty_streak_blocked(raw_novel_bits, dist) or _is_zero_novelty_test_fixture(candidate, raw_novel_bits):
+            if _is_novelty_streak_blocked(raw_novel_bits, dist) or _is_role_mismatched_verification(candidate):
                 continue
 
             value = compute_candidate_value(dist, cand_mask, covered_mask, beta, delta_max)
@@ -920,8 +916,7 @@ def select_submodular_context(
             cost = costs.get(succ, 0)
             if current_cost + cost > target_budget:
                 continue
-            novel_bits = (feature_masks.get(succ, 0) & ~covered_mask).bit_count()
-            if _is_zero_novelty_test_fixture(succ, novel_bits):
+            if _is_role_mismatched_verification(succ):
                 continue
             s_pack.append(succ)
             current_cost += cost
@@ -934,7 +929,13 @@ def select_submodular_context(
     # to admitting the single most-tightly-coupled upstream caller (the
     # smallest dist_w_upstream, i.e. the strongest W_upstream) and it
     # still fits in whatever budget remains, it is force-admitted here
-    # rather than left to chance.
+    # rather than left to chance. Still subject to
+    # `_is_role_mismatched_verification`, unlike an earlier version of
+    # this fix - a VERIFICATION-role caller (a test method calling
+    # straight into the seed) is the single most common real-world shape
+    # of "strongest upstream caller" that is never actually part of a
+    # causal pipeline, so an unconditional force-admit here would defeat
+    # the whole point of the gate added elsewhere in this function.
     if upstream_candidates:
         # Phase I determinism audit: `upstream_candidates` is a `set`,
         # so an exact `dist_w_upstream` tie between two callers left the
@@ -944,7 +945,11 @@ def select_submodular_context(
         # already pairs its distance key with the qualified name
         # ascending (see the B1 comment above). Matched here too.
         best_upstream = min(upstream_candidates, key=lambda u: (dist_w_upstream_map.get(u, float("inf")), u))
-        if best_upstream not in s_pack and current_cost + costs.get(best_upstream, 0) <= target_budget:
+        if (
+            best_upstream not in s_pack
+            and current_cost + costs.get(best_upstream, 0) <= target_budget
+            and not _is_role_mismatched_verification(best_upstream)
+        ):
             s_pack.append(best_upstream)
 
     return s_pack
