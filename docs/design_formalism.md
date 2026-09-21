@@ -1130,6 +1130,59 @@ an implicit set of blind spots:
   `_enforce_render_budget` cannot shrink it further and returns the
   smallest package it could produce, rather than ever dropping a symbol
   to hit the number exactly.
+- **Deterministic query-intent classification - investigated and
+  rejected, not merely deferred.** A prototype was built (outside this
+  repo, never wired into any production code path) to test whether a
+  user's raw NL query could be routed to an action intent (CREATE/
+  UPDATE/DELETE/SUMMARIZE/DEBUG/... a ~20-value taxonomy, several
+  members deliberately named to match `prism.query.schema.
+  VALID_TASK_TYPES`) via a fixed weighted tag-lexicon and pure
+  arithmetic - no LLM, no embeddings, matching Prism's own stated
+  pipeline constraint. It partially worked: clear imperative requests
+  ("delete this unused function", "why is X throwing a KeyError")
+  classified correctly and deterministically, including under real
+  negation ("don't delete this, just comment it out") once clause-
+  scoped negation detection was added, with 100% precision on a
+  58-query hand-labeled set once the confidence threshold was properly
+  measured rather than guessed (the first, ungrounded threshold guess
+  cut coverage from a reachable 69% to 40% for no accuracy gain - a
+  concrete instance of "measure, don't guess" mattering in practice,
+  not just as a stated principle).
+
+  It broke on a second, adversarial batch: **38.5% precision (5/13
+  confident answers correct)**, with every failure falling into one of
+  three query *shapes*, not vocabulary gaps a bigger lexicon would fix:
+  - **Descriptive statements read as requests** - "This function used
+    to update the cache automatically..." scored a confident UPDATE;
+    it is a statement about past behavior, not a request at all.
+  - **Capability/decision questions read as commands** - "Can you
+    delete files directly?" and "Should I delete this or deprecate
+    it?" both scored confident DELETE; neither is asking for deletion
+    to happen now.
+  - **Hypothetical framing** - "Suppose this method gets renamed - what
+    else would need to change?" scored UPDATE instead of a blast-
+    radius-shaped question.
+
+  The root cause is structural, not a coverage gap: **the prototype has
+  no concept of grammatical mood** (imperative vs. descriptive/
+  interrogative) - a keyword scanner votes on any cue it sees regardless
+  of whether the sentence is a command, a statement of fact, or a
+  question about capability. No amount of lexicon tuning fixes this;
+  distinguishing "is this actually a request" from "does this sentence
+  merely mention an action" requires real language understanding - i.e.
+  exactly the LLM dependency this approach was trying to avoid. A
+  related, non-obvious finding worth preserving: several of the
+  prototype's apparent negation-handling "wins" against contrastive
+  phrasing ("rather than deleting this...", "instead of updating
+  this...") turned out to be **accidental** - the cue regexes matched
+  whole words only and didn't cover `-ing`/`-ed` suffixes, so "deleting"
+  /"updating" were silently invisible to the scorer for an unrelated
+  reason, not because contrastive framing was understood. Fixing that
+  stemming gap in isolation would likely have turned several of those
+  "correct" results into new, confident wrong answers - coverage gaps
+  and precision gaps were not independent in this design, a real
+  coupling worth remembering if this idea is revisited rather than
+  re-discovered the hard way a second time.
 
 ### 10.1 Cache layer - audit history
 
