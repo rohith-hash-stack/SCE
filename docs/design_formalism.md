@@ -1084,6 +1084,52 @@ an implicit set of blind spots:
   (Section 10.1, G40's own note) should include attribute-chain
   resolution disambiguation in its survey scope alongside the
   inheritance-fallback gap.
+- **Rendered-Metadata Metering - a best-effort, not absolute,
+  render-budget invariant, enforced by downgrading detail, never by
+  dropping a symbol.** `prism.packer.submodular_knapsack`'s own cost
+  model prices a symbol's raw L0 source body; the real envelope `prism.
+  surface.build.build_context_package` renders also carries a full
+  `<signature>` (params, return type, complete docstring), `<features>`,
+  and package-level `<metadata>`/`<manifest>`/`<coverage>`/`<warnings>`/
+  `<trailer>` overhead that cost model never accounted for - measured as
+  a real ~4x rendered-token overshoot against `target_budget` on
+  `django_t02_005_model_save_signals` at budget=2000 (`sum(node.cost)`
+  landed at 1994/2000; `count_tokens(render(pkg))` measured 8528).
+  `build_context_package`'s `_enforce_render_budget` verifies the real
+  rendered size against `target_budget` (5% tolerance) and, if it
+  doesn't hold, downgrades the least causally-central packed node's own
+  body from `L0_full` to a signature-only `L2_skeleton` stub
+  (`_downgrade_to_stub`) - largest `distance` first, the seed itself
+  last - one at a time until it holds or every node is already stubbed.
+
+  **This never removes a node, by design - not merely by convention.**
+  Two earlier designs *evicted* whole nodes (by distance, then with
+  increasingly careful protected-tier exceptions for fixup-admitted
+  symbols and `causal_path` stages) and broke `tests/test_prism_
+  selection_regressions.py`'s protected 22/22 suite three times in a
+  row, in three different real, live ways - a symbol admitted only via
+  a knapsack fixup (`django.http.request.validate_host`), the same
+  symbol again as a task's own deepest causal-chain stage with no
+  special admission path at all, and once more on a call path where
+  `causal_path` isn't even populated. Each fix closed one real,
+  confirmed case and broke another, because no production-only signal
+  reliably distinguishes "a real ground-truth pipeline symbol" from
+  "opportunistic extra context" in general - only downstream,
+  benchmark-only ground truth knows that. The final design sidesteps the
+  question entirely: `benchmarks.engines.base.selected_symbols` (what
+  that suite checks) reads only `{n.id for n in pkg.nodes}`, never
+  `compression` or `body`, so downgrading detail instead of removing
+  presence is invariant under every assertion that suite makes - by
+  construction, not by a heuristic that could later be found to miss a
+  case. Pipeline completeness (a symbol being present at all) is
+  Prism's own stated core correctness metric, strictly higher priority
+  than exact token-count precision. Consequence, disclosed rather than
+  silently claimed: once every node is already a fully-stubbed
+  `L2_skeleton` (itself not free - it still renders a `<signature>`/
+  `<features>` block per node) and the package still exceeds budget,
+  `_enforce_render_budget` cannot shrink it further and returns the
+  smallest package it could produce, rather than ever dropping a symbol
+  to hit the number exactly.
 
 ### 10.1 Cache layer - audit history
 

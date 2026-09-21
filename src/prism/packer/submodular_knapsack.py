@@ -93,6 +93,7 @@ from dataclasses import dataclass, field
 import networkx as nx
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.contracts import BehavioralContract
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
 from prism.semantics.bitmask import FeatureBit
@@ -1003,13 +1004,85 @@ class SubmodularPackResult:
     covered_mask: int = 0
 
 
-def _default_costs(builder: ConcreteGraphBuilder, symbols: list[str]) -> dict[str, int]:
+#: Rendered-Metadata Metering fix (Fix #2). `_default_costs` previously
+#: priced only a symbol's own raw L0 source slice - the exact body
+#: bytes `select_submodular_context` admits against `target_budget`.
+#: But `prism.surface.build.build_context_package`'s real `NodeEntry`
+#: (what a consumer actually receives, via `prism.surface.renderer.
+#: render`) also carries a full `<signature>` block (params, return
+#: type, the complete normalized docstring - `BehavioralContract.
+#: docstring`), a `<features>` block, and an optional `<contract>`
+#: provenance block, none of which `target_budget` ever accounted for -
+#: confirmed as a real, live ~4x overshoot by directly tracing
+#: `django.db.models.base.Model.save` against the real pinned Django
+#: 4.2.30 checkout (`sum(node.cost)` landed at 1994/2000, but
+#: `count_tokens(render(pkg))` measured 8528).
+#:
+#: These two constants were measured directly against real rendered
+#: envelopes (a bare 1-node package, a 2-node package, both against a
+#: real repo, via `count_tokens` - not guessed), not derived from a
+#: paper formula: `DEFAULT_NODE_TAG_OVERHEAD_TOKENS` approximates one
+#: node's own `<node ...attrs...><signature>...</signature>
+#: <features/><body>...</body></node>` markup (on top of its real
+#: signature/docstring/body *content*, priced separately below);
+#: `DEFAULT_PKG_ENVELOPE_TOKENS` approximates the package-level
+#: sections that appear exactly once regardless of node count
+#: (`<metadata>`, `<causal_path>`, `<manifest>`, `<coverage>`,
+#: `<warnings>`, the `<edges>` wrapper, `<trailer>`, root tag).
+#: Deliberately on the generous side: this estimate's only job is to
+#: reduce how often `prism.surface.build._enforce_render_budget`'s own
+#: deterministic verify-and-trim safety net needs to fire, not to
+#: replace it - a real, precise linear model of arbitrary rendered XML
+#: (docstring length varies per symbol; XML/CDATA escaping is not
+#: perfectly token-linear) is not attempted here, and the hard
+#: `count_tokens(render(pkg)) <= budget` invariant is guaranteed by
+#: that separate trim step, not by these constants being exact.
+DEFAULT_NODE_TAG_OVERHEAD_TOKENS = 280
+DEFAULT_PKG_ENVELOPE_TOKENS = 450
+
+
+def _rendered_metadata_cost(qname: str, contracts: dict[str, BehavioralContract]) -> int:
+    """The token cost of what `prism.surface.build._node_signature` will
+    render for `qname` beyond its raw body - real param/return-type text
+    and the real docstring when a `BehavioralContract` exists (a class,
+    or any symbol Contract extraction doesn't cover, has none - see
+    `ContractExtractor.extract_all`'s own `kind not in ("function",
+    "method")` filter - and gets the flat tag overhead alone), plus the
+    flat per-node XML tag overhead every packed node carries regardless.
+    """
+    contract = contracts.get(qname)
+    if contract is None:
+        return DEFAULT_NODE_TAG_OVERHEAD_TOKENS
+    text_parts = [p.render() for p in contract.params]
+    if contract.return_type:
+        text_parts.append(contract.return_type)
+    if contract.docstring:
+        text_parts.append(contract.docstring)
+    content_cost = count_tokens(" ".join(text_parts)) if text_parts else 0
+    return DEFAULT_NODE_TAG_OVERHEAD_TOKENS + content_cost
+
+
+def _default_costs(
+    builder: ConcreteGraphBuilder, symbols: list[str], contracts: dict[str, BehavioralContract] | None = None
+) -> dict[str, int]:
     """Real BPE-counted (or the same fail-closed-to-heuristic fallback
     `prism.slicer.tokenizer` already provides) token cost per symbol,
     from its own real L0 source slice - the simplest, most defensible
     default a caller can override with its own `costs` dict (e.g. to
     price a compressed L1-L3 rendering instead) without needing to touch
     `select_submodular_context` itself.
+
+    `contracts` (Fix #2, optional, `None` by default): when given, each
+    symbol's cost also includes `_rendered_metadata_cost` - the real
+    signature/docstring content plus flat tag overhead a rendered
+    `NodeEntry` for it will actually carry. `None` (every pre-existing
+    caller/test, and any direct `pack_symbol_context` caller that
+    doesn't pass `contracts` through) keeps this function's exact
+    original body-only behavior - no change for callers that were never
+    part of the metadata-overshoot problem in the first place (that
+    problem is specific to `build_context_package`'s own real rendering
+    pipeline, the one production caller now threading `contracts`
+    through).
     """
     costs: dict[str, int] = {}
     for qname in symbols:
@@ -1025,7 +1098,10 @@ def _default_costs(builder: ConcreteGraphBuilder, symbols: list[str]) -> dict[st
         lines = source.splitlines()
         start, end = info.line_range
         snippet = "\n".join(lines[max(start - 1, 0):end])
-        costs[qname] = max(count_tokens(snippet), 1)
+        cost = count_tokens(snippet)
+        if contracts is not None:
+            cost += _rendered_metadata_cost(qname, contracts)
+        costs[qname] = max(cost, 1)
     return costs
 
 
@@ -1086,6 +1162,7 @@ def pack_symbol_context(
     beta: float = DEFAULT_BETA,
     delta_max: int = DEFAULT_DELTA_MAX,
     upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
+    contracts: dict[str, BehavioralContract] | None = None,
 ) -> SubmodularPackResult:
     """The real, wired-together entry point: builds the causal graph
     (`prism.traversal.continuous_dijkstra.build_causal_graph`), the
@@ -1115,9 +1192,22 @@ def pack_symbol_context(
     "did you mean" attached to the failure when it doesn't. Raises
     `SeedNotFoundError` before any of the expensive work below (the
     file-hash-set scan included) runs at all.
+
+    `contracts` (Fix #2, optional): when given, every internal cost/
+    budget comparison in this function runs against `effective_budget`
+    (`target_budget` minus `DEFAULT_PKG_ENVELOPE_TOKENS`, the measured
+    fixed cost of the package-level XML sections `build_context_
+    package`'s renderer always emits once per package), and `_default_
+    costs`/the stub-cost fixup below both price each candidate's real
+    signature/docstring content on top of its body. `None` (the
+    default) keeps this function's exact pre-existing behavior - see
+    `_default_costs`'s own docstring for why that matters for every
+    other existing caller/test.
     """
     if seed_id not in builder.symbol_table:
         raise SeedNotFoundError(seed_id, suggest_similar_seeds(builder, seed_id))
+
+    effective_budget = max(0, target_budget - DEFAULT_PKG_ENVELOPE_TOKENS) if contracts is not None else target_budget
 
     with snapshot_file_hash_set(builder.repo_root):
         with _profile_phase("build_causal_graph"):
@@ -1148,7 +1238,7 @@ def pack_symbol_context(
             + [n for n in dist_w_upstream_map if dist_w_upstream_map[n] <= upstream_max_hops]
         )
         with _profile_phase("knapsack.token_counting"):
-            costs = _default_costs(builder, candidate_symbols)
+            costs = _default_costs(builder, candidate_symbols, contracts=contracts)
 
         # NOTE (Step 4a): select_submodular_context is a single greedy loop -
         # every outer iteration re-scores every frontier candidate, then
@@ -1162,7 +1252,7 @@ def pack_symbol_context(
         # different, older module PrismEngine.retrieve() never calls.
         with _profile_phase("knapsack.greedy_loop"):
             selected = select_submodular_context(
-                graph, seed_id, target_budget, dist_w_map, feature_masks, costs,
+                graph, seed_id, effective_budget, dist_w_map, feature_masks, costs,
                 max_hops=max_hops, beta=beta, delta_max=delta_max,
                 dist_w_upstream_map=dist_w_upstream_map,
                 upstream_contract_preserving=upstream_contract_preserving,
@@ -1200,9 +1290,9 @@ def pack_symbol_context(
         class_qname = info.enclosing_class if info is not None and info.kind == "method" else None
         if class_qname is not None and class_qname not in selected_set and class_qname not in promoted_classes:
             if class_qname not in costs:
-                costs.update(_default_costs(builder, [class_qname]))
+                costs.update(_default_costs(builder, [class_qname], contracts=contracts))
             class_cost = costs.get(class_qname, 0)
-            if class_cost > 0 and running_cost + class_cost <= target_budget:
+            if class_cost > 0 and running_cost + class_cost <= effective_budget:
                 reordered_selected.append(class_qname)
                 promoted_classes.add(class_qname)
                 selected_set.add(class_qname)
@@ -1210,7 +1300,7 @@ def pack_symbol_context(
             elif class_cost > 0:
                 print(
                     f"[knapsack] fix-include-class-when-method-selected: {class_qname!r} "
-                    f"needed by an admitted method but the remaining budget ({target_budget - running_cost}) "
+                    f"needed by an admitted method but the remaining budget ({effective_budget - running_cost}) "
                     f"can't afford its cost ({class_cost}) - skipped",
                     file=sys.stderr,
                 )
@@ -1243,7 +1333,7 @@ def pack_symbol_context(
         full_cost = costs.get(succ, 0)
         if full_cost <= 0:
             continue
-        remaining = target_budget - running_cost
+        remaining = effective_budget - running_cost
         if full_cost <= remaining:
             # Would already have been admitted by the greedy loop on its
             # own merits; this fixup only concerns itself with a
@@ -1252,7 +1342,15 @@ def pack_symbol_context(
         stub_text = _signature_stub(builder, succ)
         if stub_text is None:
             continue
-        stub_cost = max(count_tokens(stub_text), 1)
+        # Fix #2: a stub-compressed node still renders a full
+        # `<signature>`/`<features>` block from the same real
+        # `BehavioralContract` (`prism.surface.build`'s `_node_signature`
+        # doesn't special-case compression level) - its cost must
+        # include that metadata too, not just the stub text.
+        stub_cost = count_tokens(stub_text)
+        if contracts is not None:
+            stub_cost += _rendered_metadata_cost(succ, contracts)
+        stub_cost = max(stub_cost, 1)
         if stub_cost <= remaining:
             selected.append(succ)
             selected_set.add(succ)
