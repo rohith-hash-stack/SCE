@@ -1,8 +1,8 @@
-"""Phase B spike, Step 1: Approach B ("Frontier Index + Spine Hydration")
-vs. the existing single-zone baseline, on the 3 target Django tasks
-(django_t02_005, django_t02_009, django_t02_017) at budgets 2000/4000/
-8000, seeds 42/43, against a local OpenAI-compatible endpoint (Ollama +
-qwen2.5-coder by default, matching the 3rd resweep's own setup).
+"""Phase B spike: Approach B ("Frontier Index + Spine Hydration") and
+Approach C ("Forked Spine Pruning in Knapsack") vs. the existing
+single-zone baseline, on the 3 target Django tasks (django_t02_005,
+django_t02_009, django_t02_017) at budgets 2000/4000/8000, seeds 42/43,
+against a real OpenAI-compatible endpoint.
 
 Isolated under benchmarks/experiments/ by design - reuses real scoring
 machinery (score_tsr_response, cpi_strict, fpr, _ground_truth_universe)
@@ -10,7 +10,11 @@ so numbers are directly comparable to prior resweeps, but touches no
 production selection/scoring code and writes results only under
 benchmarks/experiments/results/, never reports/pilot/ or
 reports/pilot-resweep-*/ - the protected suite and checkpoint.json are
-untouched by construction, not by discipline alone.
+untouched by construction, not by discipline alone. Approach C's own
+selection fork lives in benchmarks/experiments/knapsack_spine_variant.py
+- production's real submodular_knapsack.py is never imported for
+anything but its own already-tested helpers (compute_candidate_value,
+_default_costs, etc.), never modified.
 
 Usage:
     python -m benchmarks.experiments.run_spike --dry-run   # plumbing only, no LLM calls
@@ -27,12 +31,15 @@ from pathlib import Path
 
 from benchmarks.corpora.resolver import resolve
 from benchmarks.engines.prism_engine import PrismEngine
+from benchmarks.experiments.knapsack_spine_variant import build_context_package_spine_variant
 from benchmarks.ground_truth.loader import load_tasks_from_dir
 from benchmarks.metrics.cpi import cpi_strict
 from benchmarks.metrics.fpr import fpr
 from benchmarks.runner import DEBUG_TASK_RESPONSE_CONTRACT, SYSTEM_PROMPT, _ground_truth_universe, score_tsr_response
 from benchmarks.tsr.client import OpenAICompatibleClient, run_tsr_prompt
 from prism.surface.renderer import RenderOptions, render
+
+APPROACHES = ("baseline", "B_two_zone", "C_spine_variant")
 
 TARGET_TASKS = (
     "django_t02_005_model_save_signals",
@@ -101,11 +108,21 @@ def _frontier_index_for(builder, pkg) -> list[dict[str, str]]:
     return entries
 
 
-def run_cell(client: OpenAICompatibleClient, engine: PrismEngine, task, budget: int, seed: int, two_zone: bool) -> dict:
-    pkg = engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
+def _package_for(engine: PrismEngine, task, budget: int, approach: str):
+    if approach == "C_spine_variant":
+        return build_context_package_spine_variant(
+            engine._builder, task.seed_symbol, engine._repo_root, budget,
+            contracts=engine._contracts, task_type=task.task_type,
+        )
+    return engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
+
+
+def run_cell(client: OpenAICompatibleClient, engine: PrismEngine, task, budget: int, seed: int, approach: str) -> dict:
+    assert approach in APPROACHES, approach
+    pkg = _package_for(engine, task, budget, approach)
     candidate_symbols = {n.id for n in pkg.nodes}
 
-    if two_zone:
+    if approach == "B_two_zone":
         frontier = _frontier_index_for(engine._builder, pkg)
         options = RenderOptions(include_timestamp=False, include_run_id=False, two_zone=True, frontier_index=frontier)
     else:
@@ -117,7 +134,7 @@ def run_cell(client: OpenAICompatibleClient, engine: PrismEngine, task, budget: 
     if task.task_type == "debug":
         task_prompt = task.prompt + DEBUG_TASK_RESPONSE_CONTRACT
 
-    engine_label = f"prism_v11_{'two_zone' if two_zone else 'baseline'}"
+    engine_label = f"prism_v11_{approach}"
     t0 = time.monotonic()
     results = run_tsr_prompt(
         client, SYSTEM_PROMPT, rendered_xml, task_prompt,
@@ -130,7 +147,7 @@ def run_cell(client: OpenAICompatibleClient, engine: PrismEngine, task, budget: 
     ground_truth = _ground_truth_universe(task)
     return {
         "task_id": task.task_id,
-        "approach": "B_two_zone" if two_zone else "baseline_single_zone",
+        "approach": "baseline_single_zone" if approach == "baseline" else approach,
         "budget": budget,
         "seed": seed,
         "tsr": score,
@@ -154,11 +171,20 @@ def main() -> int:
     )
     parser.add_argument("--budgets", default=None, help=f"Comma-separated subset of budgets (default: {BUDGETS})")
     parser.add_argument("--seeds", default=None, help=f"Comma-separated subset of seeds (default: {SEEDS})")
+    parser.add_argument(
+        "--approaches", default=None,
+        help=f"Comma-separated subset of approaches to run (default: all {APPROACHES}).",
+    )
     args = parser.parse_args()
 
     target_tasks = tuple(args.tasks.split(",")) if args.tasks else TARGET_TASKS
     budgets = tuple(int(b) for b in args.budgets.split(",")) if args.budgets else BUDGETS
     seeds = tuple(int(s) for s in args.seeds.split(",")) if args.seeds else SEEDS
+    approaches = tuple(args.approaches.split(",")) if args.approaches else APPROACHES
+    unknown_approaches = [a for a in approaches if a not in APPROACHES]
+    if unknown_approaches:
+        print(f"error: unknown approaches {unknown_approaches} - valid: {APPROACHES}", file=sys.stderr)
+        return 1
 
     repo_path = str(resolve("django"))
     load_result = load_tasks_from_dir(TASKS_DIR)
@@ -176,18 +202,16 @@ def main() -> int:
         for task_id in target_tasks:
             task = tasks_by_id[task_id]
             for budget in budgets:
-                pkg = engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
-                for two_zone in (False, True):
-                    frontier = _frontier_index_for(engine._builder, pkg) if two_zone else []
-                    options = (
-                        RenderOptions(include_timestamp=False, include_run_id=False, two_zone=True, frontier_index=frontier)
-                        if two_zone
-                        else RenderOptions(include_timestamp=False, include_run_id=False)
-                    )
+                for approach in approaches:
+                    pkg = _package_for(engine, task, budget, approach)
+                    frontier = _frontier_index_for(engine._builder, pkg) if approach == "B_two_zone" else []
+                    if approach == "B_two_zone":
+                        options = RenderOptions(include_timestamp=False, include_run_id=False, two_zone=True, frontier_index=frontier)
+                    else:
+                        options = RenderOptions(include_timestamp=False, include_run_id=False)
                     xml = render(pkg, options)
-                    zone_label = "two_zone " if two_zone else "baseline"
                     print(
-                        f"[dry-run] {task_id} budget={budget} {zone_label} "
+                        f"[dry-run] {task_id} budget={budget} approach={approach:<15} "
                         f"spine_nodes={len(pkg.nodes)} frontier_nodes={len(frontier)} xml_bytes={len(xml)}"
                     )
         print("\n[dry-run] plumbing OK - no LLM calls made.")
@@ -199,8 +223,8 @@ def main() -> int:
         task = tasks_by_id[task_id]
         for budget in budgets:
             for seed in seeds:
-                for two_zone in (False, True):
-                    row = run_cell(client, engine, task, budget, seed, two_zone)
+                for approach in approaches:
+                    row = run_cell(client, engine, task, budget, seed, approach)
                     print(
                         f"[spike] {row['task_id']} approach={row['approach']} budget={row['budget']} seed={row['seed']} "
                         f"tsr={row['tsr']} cpi_strict={row['cpi_strict']} fpr_gt={row['fpr_gt']:.3f} "
