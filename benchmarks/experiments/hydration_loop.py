@@ -464,7 +464,7 @@ def run_hydration_cell(client: OpenAICompatibleClient, engine, task, budget: int
         seeds=(seed,), task_id=task.task_id, engine="prism_v11_A_hydration_turn2",
     )
     turn2_call = results[0].call
-    total_latency_s = time.monotonic() - t0
+    total_wall_clock_s = time.monotonic() - t0
 
     score = score_tsr_response(task, turn2_call.content, candidate_symbols)
     ground_truth = _ground_truth_universe(task)
@@ -480,7 +480,18 @@ def run_hydration_cell(client: OpenAICompatibleClient, engine, task, budget: int
         "turn1_prompt_tokens": turn1_call.prompt_tokens,
         "turn2_prompt_tokens": turn2_call.prompt_tokens,
         "completion_tokens": turn1_call.completion_tokens + turn2_call.completion_tokens,
-        "llm_latency_s": round(total_latency_s, 3),
+        # LLM-only wall time (sum of both calls' own latency_seconds) -
+        # comparable to baseline/B_two_zone's own "llm_latency_s", which
+        # only ever times run_tsr_prompt itself, not any package-build
+        # work around it. total_wall_clock_s (below) is the fuller
+        # figure the spec's own "track total wall-clock time across both
+        # turns" asked for - kept as a separate field rather than
+        # overloading llm_latency_s with package-construction time
+        # (compute_causal_edges/data_flow_edges/guard_edges, paid by
+        # every approach here, just not counted in their own
+        # llm_latency_s since their own t0 starts after retrieval).
+        "llm_latency_s": round(turn1_call.latency_seconds + turn2_call.latency_seconds, 3),
+        "total_wall_clock_s": round(total_wall_clock_s, 3),
         "spine_size": len(candidate_symbols),
         "requested_count": len(requested_symbols),
         "skipped_hallucinated": len(skipped),
