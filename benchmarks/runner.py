@@ -74,7 +74,7 @@ from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, OpenAICompatible
 from benchmarks.tsr.scorer_architecture import score_architecture
 from benchmarks.tsr.scorer_blast import score_blast
 from benchmarks.tsr.scorer_chain import score_chain
-from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_debug
+from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_debug, score_debug_causal
 from benchmarks.tsr.scorer_redundancy import score_redundancy
 
 DEFAULT_BUDGETS = (2000, 4000, 8000)
@@ -330,10 +330,22 @@ def compute_diagnostics(
     return diagnostics
 
 
-def score_tsr_response(task: EvaluationTask, response_text: str, candidate_symbols: set[str]) -> float:
+def score_tsr_response(
+    task: EvaluationTask, response_text: str, candidate_symbols: set[str], scorer: str = "strict"
+) -> float:
+    """`scorer` ("strict" default, or "causal") only ever changes the
+    "debug" branch below - `score_debug` (exact ordered-list match) vs
+    `score_debug_causal` (ordered-subsequence containment with a
+    hallucination gate, threading the same `candidate_symbols` this
+    function already receives for the "blast" branch). Every other
+    task_type is unaffected regardless of `scorer`'s value - chain/
+    blast/architecture/redundancy tasks have no `score_debug`/
+    `score_debug_causal` distinction to make."""
     if task.task_type == "chain":
         return score_chain(response_text, task.adjudicated.pipeline_symbols)
     if task.task_type == "debug":
+        if scorer == "causal":
+            return score_debug_causal(response_text, task.adjudicated.pipeline_symbols, candidate_symbols)
         return score_debug(response_text, task.adjudicated.pipeline_symbols)
     if task.task_type == "blast":
         return score_blast(response_text, candidate_symbols, task.adjudicated.critical_callers)
@@ -379,6 +391,7 @@ def run_evaluation(
     resume: bool = False,
     checkpoint_path: str = DEFAULT_CHECKPOINT_PATH,
     output_dir: str | None = None,
+    scorer: str = "strict",
 ) -> EvaluationRun:
     """The real end-to-end sweep: resolve the pinned corpus, load its
     ground-truth tasks, run every engine at every budget, and (unless
@@ -400,6 +413,10 @@ def run_evaluation(
     not only if it reaches the end. `None` (the default) preserves the
     original behavior for callers - tests included - that don't pass
     it: no incremental report writes, no output directory touched.
+
+    `scorer` ("strict" default, or "causal"): passed straight through
+    to `score_tsr_response` for every debug-type task's own TSR call -
+    see that function's own docstring for exactly what changes.
     """
     if repo not in CORPORA:
         raise ValueError(f"unknown repo {repo!r} - registered corpora: {sorted(CORPORA)}")
@@ -520,7 +537,7 @@ def run_evaluation(
                             task_id=task.task_id, engine=engine.name,
                         )
                         for r in tsr_results:
-                            score = score_tsr_response(task, r.call.content, candidate_symbols)
+                            score = score_tsr_response(task, r.call.content, candidate_symbols, scorer=scorer)
                             response_is_unparseable = False
                             if task.task_type == "debug":
                                 try:
@@ -907,6 +924,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=f"Checkpoint file path (read with --resume, written to after every {CHECKPOINT_INTERVAL} fresh calls "
         f"and once more at the end of the run). Default: {DEFAULT_CHECKPOINT_PATH}",
     )
+    parser.add_argument(
+        "--scorer",
+        choices=["strict", "causal"],
+        default="strict",
+        help="Debug-task TSR scorer: 'strict' (score_debug, exact ordered-list match - the original, default "
+        "behavior) or 'causal' (score_debug_causal, ordered-subsequence containment with a hallucination gate). "
+        "Only ever changes debug-type tasks' own scoring - every other task_type is unaffected either way.",
+    )
     return parser
 
 
@@ -948,6 +973,7 @@ def main(argv: list[str] | None = None) -> int:
             resume=args.resume,
             checkpoint_path=args.checkpoint,
             output_dir=args.output,
+            scorer=args.scorer,
         )
         write_reports(run, args.output)
         print(f"Reports written to {args.output}")
