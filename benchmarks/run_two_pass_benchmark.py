@@ -53,6 +53,8 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -68,8 +70,10 @@ from benchmarks.metrics.cpi import cpi_end_to_end, cpi_turn1_selection
 from benchmarks.metrics.fpr import fpr
 from benchmarks.openai_client import OpenAIClientError
 from benchmarks.runner import (
+    CHECKPOINT_INTERVAL,
     DEBUG_TASK_RESPONSE_CONTRACT,
     DEFAULT_TASKS_DIR_TEMPLATE,
+    PROJECT_ROOT,
     SYSTEM_PROMPT,
     _ground_truth_universe,
     load_checkpoint,
@@ -81,6 +85,61 @@ from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_
 
 DEFAULT_BUDGETS = (2000, 4000)
 DEFAULT_CHECKPOINT_PATH = "reports/pilot/checkpoint_two_pass.json"
+
+#: Pilot-4 prep, Fix 4: names the env var read for this module's own
+#: incremental checkpoint push - deliberately a distinct name from
+#: `benchmarks.runner`'s `PILOT_RESULTS_BRANCH` (never shared), so a
+#: single-pass pilot run and a two-pass one can push their own separate
+#: checkpoints to their own separate branches in the same environment
+#: without one silently overriding the other. Same "no default,
+#: deliberately" contract as `PILOT_RESULTS_BRANCH_ENV_VAR` - unset
+#: means "don't push", never a guessed fallback branch.
+TWO_PASS_RESULTS_BRANCH_ENV_VAR = "TWO_PASS_RESULTS_BRANCH"
+
+
+def _push_checkpoint_two_pass(fresh_calls_completed: int) -> None:
+    """Commits and pushes `reports/` to `$TWO_PASS_RESULTS_BRANCH` after
+    a checkpoint save, so a Kaggle session dying mid-run loses at most
+    `CHECKPOINT_INTERVAL` cells' worth of progress instead of
+    everything since the notebook's own end-of-run push - the exact
+    same durability gap `benchmarks.runner._push_checkpoint` already
+    closes for the single-pass harness, copied here since this module
+    had no equivalent at all before this fix. A no-op (no subprocess
+    call at all) when `TWO_PASS_RESULTS_BRANCH` isn't set.
+
+    `reports/` (not `reports/pilot/`, `_push_checkpoint`'s own narrower
+    path): this module's own checkpoint can live under `reports/pilot/`
+    (this file's own `DEFAULT_CHECKPOINT_PATH`) or `reports/pilot_two_
+    pass_full/` (`benchmarks.scripts.kaggle_full_pilot_sweep`'s own
+    default) depending on which caller is running - `reports/` covers
+    either without this function needing to know which.
+
+    Every git subprocess call is wrapped in one `try`/`except`: a
+    network failure, a rejected push, git not being configured, or
+    nothing new to commit must never crash the run itself -
+    `save_checkpoint`'s own write to disk already happened by the time
+    this is called, so a failed push here only costs this one
+    incremental durability improvement, not the run.
+    """
+    branch = os.environ.get(TWO_PASS_RESULTS_BRANCH_ENV_VAR)
+    if not branch:
+        return
+    try:
+        subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "add", "-f", "reports/"],
+            check=True, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "commit", "-m", f"two-pass checkpoint {fresh_calls_completed} cells"],
+            check=True, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "push", "origin", f"HEAD:{branch}"],
+            check=True, capture_output=True, text=True,
+        )
+        print(f"[two_pass] checkpoint pushed to {branch!r} ({fresh_calls_completed} cells)", flush=True)
+    except Exception as exc:
+        print(f"[two_pass] checkpoint push to {branch!r} failed (continuing): {exc}", file=sys.stderr, flush=True)
 
 #: Mirrors `benchmarks.experiments.hydration_loop`'s own Turn-1 prompt
 #: (`experiment/noise-filtering-spike`, commit 7c352a5's v3) - the exact
@@ -124,6 +183,14 @@ class TwoPassCellResult:
     turn2_prompt_tokens: int | None = None
     completion_tokens: int | None = None
     cost_usd: float | None = None
+    #: The resolved model tag that actually priced this cell (`CallResult.
+    #: model` - after the client's own env-var/default resolution, never
+    #: the raw `--model` argument, which can be `None`) - carried through
+    #: so a downstream summary/cost report can say exactly which pricing
+    #: table entry (`benchmarks.tsr.client._known_model_pricing_override`)
+    #: applied, instead of assuming. Empty string for a --dry-run cell
+    #: (no LLM call happened at all).
+    model: str = ""
     turn1_response: str = ""
     turn2_response: str = ""
 
@@ -220,6 +287,7 @@ def run_two_pass_cell(
         turn1_prompt_tokens=turn1_call.prompt_tokens, turn2_prompt_tokens=turn2_call.prompt_tokens,
         completion_tokens=turn1_call.completion_tokens + turn2_call.completion_tokens,
         cost_usd=(turn1_call.cost_usd or 0.0) + (turn2_call.cost_usd or 0.0),
+        model=turn2_call.model,
         turn1_response=turn1_call.content, turn2_response=turn2_call.content,
     )
 
@@ -272,6 +340,7 @@ def run_two_pass_evaluation(
     checkpoint = load_checkpoint(checkpoint_path) if resume else {"cells": {}}
     results: list[TwoPassCellResult] = []
     effective_seeds: tuple[int | None, ...] = seeds if not dry_run else (None,)
+    fresh_calls_completed = 0
 
     for task in debug_tasks:
         for budget in budgets:
@@ -286,9 +355,21 @@ def run_two_pass_evaluation(
                 checkpoint["cells"][key] = dataclasses.asdict(result)
                 if not dry_run:
                     save_checkpoint(checkpoint_path, checkpoint)
+                    fresh_calls_completed += 1
+                    if fresh_calls_completed % CHECKPOINT_INTERVAL == 0:
+                        _push_checkpoint_two_pass(fresh_calls_completed)
 
     if not dry_run:
         save_checkpoint(checkpoint_path, checkpoint)
+        if fresh_calls_completed % CHECKPOINT_INTERVAL != 0:
+            # A final, sub-interval batch of fresh cells (the common
+            # case - the total cell count rarely lands on an exact
+            # multiple of CHECKPOINT_INTERVAL) - pushed once more here
+            # so no completed cell is lost to a crash after the loop's
+            # own last "% CHECKPOINT_INTERVAL == 0" push, mirroring
+            # benchmarks.runner.run_evaluation's own same-shaped
+            # end-of-run push.
+            _push_checkpoint_two_pass(fresh_calls_completed)
     return results
 
 

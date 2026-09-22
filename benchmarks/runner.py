@@ -74,7 +74,7 @@ from benchmarks.tsr.client import DEFAULT_MODEL, DEFAULT_SEEDS, OpenAICompatible
 from benchmarks.tsr.scorer_architecture import score_architecture
 from benchmarks.tsr.scorer_blast import score_blast
 from benchmarks.tsr.scorer_chain import score_chain
-from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_debug
+from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_debug, score_debug_causal
 from benchmarks.tsr.scorer_redundancy import score_redundancy
 
 DEFAULT_BUDGETS = (2000, 4000, 8000)
@@ -147,15 +147,20 @@ def _cell_key(task_id: str, engine_name: str, budget: int, seed: int) -> str:
 def load_checkpoint(path: str) -> dict:
     """`{"cells": {cell_key: {"score": float, "raw_response": str,
     "prompt_tokens": int, "completion_tokens": int, "cost_usd": float |
-    None}}}` - an absent, unreadable, or corrupt file is treated as "no
-    completed cells yet" (never raises), the same "checkpointing is a
-    resumability convenience, not a correctness dependency" contract
-    this codebase's other caches already establish. `raw_response` is
-    read back with `.get("raw_response", "")` at the one call site that
-    resumes a cell, so a checkpoint file written before
-    fix-llm-response-persistence (no `raw_response` key at all) still
-    loads - it just resumes with an empty response string for those
-    older cells, never a `KeyError`."""
+    None, "selected_symbols": list[str], "cpi_strict": float | None,
+    "cpi_fractional": float | None, "model": str}}}` - an absent,
+    unreadable, or corrupt file is treated as "no completed cells yet"
+    (never raises), the same "checkpointing is a resumability
+    convenience, not a correctness dependency" contract this codebase's
+    other caches already establish. `raw_response` is read back with
+    `.get("raw_response", "")` at the one call site that resumes a
+    cell, so a checkpoint file written before fix-llm-response-
+    persistence (no `raw_response` key at all) still loads - it just
+    resumes with an empty response string for those older cells, never
+    a `KeyError`. `model` (pilot-4 prep, Fix 3) is likewise absent from
+    any cell written before this field existed - a resumed cell is read
+    as-is, never backfilled, so an older checkpoint's own cells simply
+    stay without it."""
     p = Path(path)
     if not p.exists():
         return {"cells": {}}
@@ -330,10 +335,22 @@ def compute_diagnostics(
     return diagnostics
 
 
-def score_tsr_response(task: EvaluationTask, response_text: str, candidate_symbols: set[str]) -> float:
+def score_tsr_response(
+    task: EvaluationTask, response_text: str, candidate_symbols: set[str], scorer: str = "strict"
+) -> float:
+    """`scorer` ("strict" default, or "causal") only ever changes the
+    "debug" branch below - `score_debug` (exact ordered-list match) vs
+    `score_debug_causal` (ordered-subsequence containment with a
+    hallucination gate, threading the same `candidate_symbols` this
+    function already receives for the "blast" branch). Every other
+    task_type is unaffected regardless of `scorer`'s value - chain/
+    blast/architecture/redundancy tasks have no `score_debug`/
+    `score_debug_causal` distinction to make."""
     if task.task_type == "chain":
         return score_chain(response_text, task.adjudicated.pipeline_symbols)
     if task.task_type == "debug":
+        if scorer == "causal":
+            return score_debug_causal(response_text, task.adjudicated.pipeline_symbols, candidate_symbols)
         return score_debug(response_text, task.adjudicated.pipeline_symbols)
     if task.task_type == "blast":
         return score_blast(response_text, candidate_symbols, task.adjudicated.critical_callers)
@@ -379,6 +396,8 @@ def run_evaluation(
     resume: bool = False,
     checkpoint_path: str = DEFAULT_CHECKPOINT_PATH,
     output_dir: str | None = None,
+    scorer: str = "strict",
+    task_type: str = "all",
 ) -> EvaluationRun:
     """The real end-to-end sweep: resolve the pinned corpus, load its
     ground-truth tasks, run every engine at every budget, and (unless
@@ -400,6 +419,16 @@ def run_evaluation(
     not only if it reaches the end. `None` (the default) preserves the
     original behavior for callers - tests included - that don't pass
     it: no incremental report writes, no output directory touched.
+
+    `scorer` ("strict" default, or "causal"): passed straight through
+    to `score_tsr_response` for every debug-type task's own TSR call -
+    see that function's own docstring for exactly what changes.
+
+    `task_type` ("all" default, or "debug"): "debug" restricts `tasks`
+    to `task_type == "debug"` entries only (T02-shaped, the only type
+    the two-pass candidate index/manifest mechanism was ever validated
+    against) - "all" preserves this function's original behavior
+    (every accepted task for `repo`, T02 debug and T13 blast alike).
     """
     if repo not in CORPORA:
         raise ValueError(f"unknown repo {repo!r} - registered corpora: {sorted(CORPORA)}")
@@ -407,6 +436,8 @@ def run_evaluation(
 
     load_result = load_tasks_from_dir(tasks_dir)
     tasks = [t for t in load_result.accepted if t.repo == repo]
+    if task_type == "debug":
+        tasks = [t for t in tasks if t.task_type == "debug"]
     if load_result.rejected:
         for task_id, reason in load_result.rejected:
             print(f"warning: task {task_id!r} rejected: {reason}", file=sys.stderr)
@@ -520,7 +551,7 @@ def run_evaluation(
                             task_id=task.task_id, engine=engine.name,
                         )
                         for r in tsr_results:
-                            score = score_tsr_response(task, r.call.content, candidate_symbols)
+                            score = score_tsr_response(task, r.call.content, candidate_symbols, scorer=scorer)
                             response_is_unparseable = False
                             if task.task_type == "debug":
                                 try:
@@ -562,6 +593,20 @@ def run_evaluation(
                                 "selected_symbols": sorted(candidate_symbols),
                                 "cpi_strict": cell_cpi_strict,
                                 "cpi_fractional": cell_cpi_fractional,
+                                #: The resolved model tag that actually
+                                #: answered this cell (CallResult.model,
+                                #: after the client's own env-var/default
+                                #: resolution - never the raw model=
+                                #: argument, which can be None). A cell
+                                #: reused via --resume is never rewritten
+                                #: here at all (it's read, never touched,
+                                #: in the cached_cell branch above), so an
+                                #: older checkpoint's own resumed cells
+                                #: simply keep whatever they already have
+                                #: (absent, for a cell written before this
+                                #: field existed) rather than this being
+                                #: backfilled or recomputed.
+                                "model": r.call.model,
                             }
                             total_calls_scored += 1
                             total_prompt_tokens += r.call.prompt_tokens
@@ -907,6 +952,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=f"Checkpoint file path (read with --resume, written to after every {CHECKPOINT_INTERVAL} fresh calls "
         f"and once more at the end of the run). Default: {DEFAULT_CHECKPOINT_PATH}",
     )
+    parser.add_argument(
+        "--scorer",
+        choices=["strict", "causal"],
+        default="strict",
+        help="Debug-task TSR scorer: 'strict' (score_debug, exact ordered-list match - the original, default "
+        "behavior) or 'causal' (score_debug_causal, ordered-subsequence containment with a hallucination gate). "
+        "Only ever changes debug-type tasks' own scoring - every other task_type is unaffected either way.",
+    )
+    parser.add_argument(
+        "--task-type",
+        choices=["debug", "all"],
+        default="all",
+        help="'all' (default): every accepted ground-truth task for --repo, unchanged from this flag's absence. "
+        "'debug': restrict to task_type == 'debug' (T02-shaped) tasks only.",
+    )
     return parser
 
 
@@ -948,6 +1008,8 @@ def main(argv: list[str] | None = None) -> int:
             resume=args.resume,
             checkpoint_path=args.checkpoint,
             output_dir=args.output,
+            scorer=args.scorer,
+            task_type=args.task_type,
         )
         write_reports(run, args.output)
         print(f"Reports written to {args.output}")

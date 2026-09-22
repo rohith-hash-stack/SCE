@@ -122,6 +122,9 @@ def test_pack_symbol_context_still_resolves_a_real_exact_seed(tmp_path):
     assert result.selected
 
 
+# Wall-clock threshold on real-corpus indexing.
+# Load-sensitive; may fail under concurrent test runs.
+# Not a regression when it does.
 def test_fuzzy_match_performance_on_real_corpus():
     """Performance target: fuzzy match on 50k symbols < 50ms."""
     from benchmarks.corpora.resolver import resolve

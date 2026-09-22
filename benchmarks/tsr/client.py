@@ -118,6 +118,25 @@ DEEPSEEK_PRICING_PER_MILLION_TOKENS: dict[str, tuple[float, float]] = {
     "deepseek-v4-flash": (0.14, 0.28),
 }
 
+#: Track 4 (full pilot sweep, Kaggle's own hosted Qwen endpoint): matched
+#: by *prefix*, not exact string, since a real model tag varies by
+#: parameter count/quantization (`qwen2.5-coder:14b-instruct-q8_0`,
+#: `qwen2.5-coder-32b-instruct`, etc.) and pinning to one exact string
+#: would silently fall through to the $0.00 case below for every other
+#: real tag. The rate itself is a chosen estimate (parity with
+#: DeepSeek's own per-token rate above, the closest real reference this
+#: table already has), not a verified invoice - Kaggle has no rate card
+#: this codebase can read directly. **If the endpoint behind a given run
+#: is genuinely free to run (e.g. a local Kaggle-hosted Ollama/vLLM
+#: instance, no metered API behind it), this override reports a real
+#: dollar figure for something that actually cost nothing - a deliberate
+#: choice for sweep planning/comparison purposes (see this run's own
+#: `[llm]` log line and the checkpoint's own `model` field for exactly
+#: which tag priced a given cell), not a claim about what Kaggle was
+#: actually billed.**
+QWEN_CODER_PRICING_PER_MILLION_TOKENS: tuple[float, float] = (0.20, 0.60)
+QWEN_CODER_MODEL_PREFIXES: tuple[str, ...] = ("qwen2.5-coder", "qwen2-coder")
+
 #: 429 backoff schedule (seconds) - four retries, then the call fails.
 RATE_LIMIT_BACKOFF_SECONDS: tuple[float, ...] = (2.0, 4.0, 8.0, 16.0)
 
@@ -340,15 +359,17 @@ class OpenAICompatibleClient:
         total_tokens = usage.total_tokens if usage else prompt_tokens + completion_tokens
 
         #: estimate_cost_usd returns None when resolved_model isn't in
-        #: any pricing table (e.g. a local Ollama model tag like
-        #: qwen2.5:7b-instruct-q8_0, which is genuinely free to run, not
-        #: unpriced-by-omission) - 0.0 is the honest cost for that case,
-        #: not a missing-data sentinel, so cost_usd is never None
-        #: downstream (the checkpoint JSON, the [llm] log line below,
-        #: run_evaluation's total_cost_usd accumulation).
+        #: any pricing table (DeepSeek/Qwen-coder-prefixed models are
+        #: priced via _known_model_pricing_override above; a genuinely
+        #: unlisted tag - e.g. a local Ollama model with no real
+        #: metered cost behind it - still isn't unpriced-by-omission) -
+        #: 0.0 is the honest cost for that case, not a missing-data
+        #: sentinel, so cost_usd is never None downstream (the
+        #: checkpoint JSON, the [llm] log line below, run_evaluation's
+        #: total_cost_usd accumulation).
         cost = estimate_cost_usd(
             resolved_model, prompt_tokens, completion_tokens,
-            *_deepseek_pricing_override(resolved_model),
+            *_known_model_pricing_override(resolved_model),
         )
         if cost is None:
             cost = 0.0
@@ -373,20 +394,25 @@ class OpenAICompatibleClient:
         )
 
 
-def _deepseek_pricing_override(model: str) -> tuple[float | None, float | None]:
+def _known_model_pricing_override(model: str) -> tuple[float | None, float | None]:
     """`estimate_cost_usd`'s own pricing table (`openai_client.
-    PRICING_PER_MILLION_TOKENS`) doesn't know about DeepSeek models - this
-    resolves against `DEEPSEEK_PRICING_PER_MILLION_TOKENS` instead and
-    hands the result back as the `price_in_override`/`price_out_override`
-    pair `estimate_cost_usd` already accepts, rather than duplicating its
-    division-by-1e6 arithmetic here. `(None, None)` for an unlisted model
-    - `estimate_cost_usd` itself falls through to its own (also empty for
-    DeepSeek models) table and returns `None`, never a guessed cost.
+    PRICING_PER_MILLION_TOKENS`) doesn't know about DeepSeek or Qwen
+    models - this resolves against `DEEPSEEK_PRICING_PER_MILLION_TOKENS`
+    (exact match) then `QWEN_CODER_PRICING_PER_MILLION_TOKENS` (prefix
+    match against `QWEN_CODER_MODEL_PREFIXES`) instead, and hands the
+    result back as the `price_in_override`/`price_out_override` pair
+    `estimate_cost_usd` already accepts, rather than duplicating its
+    division-by-1e6 arithmetic here. `(None, None)` for anything else -
+    `estimate_cost_usd` itself falls through to its own (also empty for
+    both) table and returns `None`, never a guessed cost.
     """
     pricing = DEEPSEEK_PRICING_PER_MILLION_TOKENS.get(model)
-    if pricing is None:
-        return None, None
-    return pricing
+    if pricing is not None:
+        return pricing
+    model_lower = model.lower()
+    if any(model_lower.startswith(prefix) for prefix in QWEN_CODER_MODEL_PREFIXES):
+        return QWEN_CODER_PRICING_PER_MILLION_TOKENS
+    return None, None
 
 
 @dataclass

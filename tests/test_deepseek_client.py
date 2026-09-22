@@ -135,6 +135,34 @@ def test_complete_returns_zero_cost_for_an_unpriced_model():
     assert result.cost_usd == 0.0
 
 
+@pytest.mark.parametrize(
+    "model",
+    ["qwen2.5-coder:14b-instruct-q8_0", "qwen2.5-coder-32b-instruct", "QWEN2.5-CODER-7B"],
+)
+def test_complete_estimates_cost_from_qwen_coder_pricing(model):
+    """Track 4 (full pilot sweep): a Qwen-coder-prefixed model tag - any
+    real tag, any casing, any quantization/parameter-count suffix - now
+    prices via QWEN_CODER_PRICING_PER_MILLION_TOKENS instead of falling
+    through to the $0.0 unpriced-model case."""
+    client, _ = _client_with_fake_completions(fail_count=0)
+
+    result = client.complete(model, "system", "user", seed=42)
+
+    assert result.cost_usd == pytest.approx((100 * 0.20 + 50 * 0.60) / 1_000_000)
+
+
+def test_complete_still_returns_zero_cost_for_a_non_qwen_unpriced_model():
+    """The Qwen-coder prefix match must not widen into a catch-all - a
+    genuinely unpriced, non-Qwen-coder model tag still gets the honest
+    $0.0 (see test_complete_returns_zero_cost_for_an_unpriced_model's
+    own docstring for why that's correct, not a gap)."""
+    client, _ = _client_with_fake_completions(fail_count=0)
+
+    result = client.complete("qwen2.5:7b-instruct-q8_0", "system", "user", seed=42)  # NOT "qwen2.5-coder"
+
+    assert result.cost_usd == 0.0
+
+
 def test_client_sends_response_format():
     """The flat contract (fix-prompt-flat-contract) is a soft ask - the
     request itself must also constrain the response, via the standard
