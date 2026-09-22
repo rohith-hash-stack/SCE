@@ -337,22 +337,50 @@ def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symb
     plain captured node, exactly matching what a cold build stores
     (concrete_builder.py:474: `self._def_nodes[qualified_name] = node`,
     never `outer`).
+
+    G-cache-1: a bare `{start_line: symbol}` dict (the join key this
+    docstring describes above) silently drops every symbol past the
+    first whenever two or more symbols in the same file share a start
+    line - not a hypothetical: a minified/bundled source (e.g. a vendored
+    jQuery build) routinely has dozens of one-liner function definitions
+    packed onto a single physical line, and only the last one registered
+    would ever survive the dict overwrite, leaving every other same-line
+    symbol's `_def_nodes` entry permanently unpopulated on a cache hit
+    (silently - `def_node()` just returns `None` for it downstream, no
+    error, no log line). Fixed by keeping a *list* of same-line
+    candidates and consuming it in the same left-to-right document order
+    `_collect_definitions_in_file` itself registers symbols in (it merges
+    all three capture groups and sorts by `start_byte` before
+    registering) - reproducing that same merge+sort here keeps the
+    capture/symbol pairing correct even when several symbols collide on
+    one line, since the Nth capture on a given line is always matched to
+    the Nth symbol registered on that line.
     """
     if not symbols:
         return
     lang = parsed.language_id
     wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
-    by_start_line = {s.line_range[0]: s for s in symbols}
+    by_start_line: dict[int, list] = {}
+    for s in symbols:
+        by_start_line.setdefault(s.line_range[0], []).append(s)
     captures = run_query(lang, "definitions", parsed.root_node)
+    outer_nodes = []
     for key in ("def.class", "def.interface", "def.function"):
         for node in captures.get(key, []):
             outer = node
             if node.parent is not None and node.parent.type in wrapper_types:
                 outer = node.parent
-            start_line = outer.start_point[0] + 1
-            symbol = by_start_line.get(start_line)
-            if symbol is not None:
-                builder._def_nodes[symbol.qualified_name] = node
+            outer_nodes.append((node, outer))
+    outer_nodes.sort(key=lambda pair: pair[1].start_byte)
+    for node, outer in outer_nodes:
+        start_line = outer.start_point[0] + 1
+        candidates = by_start_line.get(start_line)
+        if not candidates:
+            continue
+        symbol = candidates.pop(0)
+        if not candidates:
+            del by_start_line[start_line]
+        builder._def_nodes[symbol.qualified_name] = node
 
 
 def load_pipeline_from_cache(
