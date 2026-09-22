@@ -651,4 +651,13 @@ def run_hydration_cell(client: OpenAICompatibleClient, engine, task, budget: int
         "requested_count": len(requested_symbols),
         "skipped_hallucinated": len(skipped),
         "turn1_parsed_ok": parsed_ok,
+        # Raw response text for both turns - added for the django_t02_005/
+        # django_t02_009 diagnostic re-run (neither was ever persisted
+        # before this, so every prior grid's own completions are gone;
+        # see the debrief's own "Diagnostic limitation, stated plainly"
+        # note). Kept in every row from here on, not just the diagnostic
+        # cells, so this gap doesn't recur for whatever regression is
+        # found next.
+        "turn1_response": turn1_call.content,
+        "turn2_response": turn2_call.content,
     }
