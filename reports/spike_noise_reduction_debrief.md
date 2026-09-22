@@ -9,7 +9,7 @@ any of the three approaches below)
 `django_t02_017_redirect_url_safety_check`) x 3 budgets (2000/4000/8000) x 2
 seeds (42/43) = 18 cells per approach
 **Total real spend across the spike (all sanity checks, diagnostics, and full
-sweeps, including the Approach A v2 follow-up below):** ~$0.50
+sweeps, including the Approach A v2/v3 follow-ups below):** ~$0.54
 **`reports/pilot/checkpoint.json` hash:** unchanged throughout
 (`589e42386e58c528f7a24b1083d4b097ea66ac28984317eb471ca9a02e11aa81`)
 
@@ -34,15 +34,21 @@ on the same matrix.
 | C - Spine Variant (forked selection, topological tiering) | 0.111 | 0.778 | 0.739 | 18.7 | - |
 | A v1 - Two-Pass Hydration, name-only manifest | 0.333 | 0.333 | 0.000 | 3.0 | 8379 |
 | A v2 - Two-Pass Hydration, signatures + resolved calls | 0.389 | 0.833 | 0.133 | 3.8 | 47060 |
+| A v3 - Two-Pass Hydration, hop=3 + scope-filtered manifest | 0.500 | 0.667 | 0.000 | 3.4 | 4167 |
 
 B, C, and A v1 each fall short of the goal that motivated this spike: **suppress
 `fpr_gt` without dropping `cpi_strict`.** B doesn't move either metric at all (by
 design). C moves `fpr_gt` a little at the cost of `cpi_strict`. A v1 eliminates
-`fpr_gt` completely but at a much larger `cpi_strict` cost than C. **A v2 is the
-closest anything in this spike gets** - `cpi_strict` recovers to within 0.056 of
-baseline while `fpr_gt` stays well under the 0.50 target and `tsr` beats every
-other approach tested - but at a real, large token cost (~6x baseline) that makes
-it an accuracy result, not yet an economical one. See Approach A v2 below and the
+`fpr_gt` completely but at a much larger `cpi_strict` cost than C. A v2 recovers
+`cpi_strict` to within 0.056 of baseline while keeping `fpr_gt` well under the
+0.50 target and beating every other approach's `tsr` - but at a real, large
+token cost (~6x baseline). **A v3 is the best-balanced result of the entire
+spike**: `tsr` improves further still (0.500, more than double baseline's
+0.222), `fpr_gt` returns to a clean 0.000, and mean tokens (4167) land *below*
+baseline's own single-turn cost (7597) - at the price of `cpi_strict` settling
+back to 0.667 (still well above v1's 0.333, below v2's 0.833). No single variant
+dominates on every metric; see Approach A v3 below, the "Structural Recall vs.
+Selection Recall" finding, and the
 Synthesis.
 
 ---
@@ -383,12 +389,100 @@ scope filter does even better on 2 of 3 tasks (`django_t02_017`: 409 -> 11
 candidates, ~98.7% reduction, still `recall=1.000`; `django_t02_005`: ~75%
 reduction) but is markedly weaker on `django_t02_009` specifically (148
 candidates vs. `hop=3`'s 25) - neither lever alone is uniformly best across all
-3 tasks. `hop=3` is the safer, more consistent floor; combining it with the
-scope filter (not yet tested) is the natural next measurement before any
-further live spend.
+3 tasks. `hop=3` is the safer, more consistent floor.
+
+**Finding 3: combining `hop=3` and the scope filter beats both levers alone, on
+every task measured.** `_combined_hop_scope_filtered` (within the `hop<=3`
+candidate set, keep a candidate if it shares the seed's own top-level-3 module
+namespace *or* sits within a 3-hop chain of concrete `CALLS`/`INSTANTIATES`
+edges from the seed - transitively, not just 1-hop-from-the-seed like the
+`scope_filtered` variant above) still keeps `recall=1.000` on all 3 tasks:
+
+| task | unbounded (tokens) | hop=3 alone | scope alone | **hop=3 + scope** |
+| :--- | :--- | :--- | :--- | :--- |
+| django_t02_005 | 23465 | ~13823 (41%) | ~5854 (75%) | **~1548 (93.4%)** |
+| django_t02_009 | 35736 | ~2392 (93%) | ~9310 (74%) | **~1271 (96.4%)** |
+| django_t02_017 | 73380 | ~3525 (95%) | ~940 (98.7%) | **~711 (99.0%)** |
 
 Full per-variant data: `benchmarks/experiments/results/manifest_sizing.json`.
-Commit: `1a94688`.
+Commits: `1a94688` (findings 1-2), `465474b` (finding 3).
+
+---
+
+## Approach A v3: Hop=3 + Scope-Filtered Manifest
+
+**Mechanism:** same two-turn protocol, same `hydration_loop.py`, but
+`_build_candidate_index`'s own candidate universe is capped at `max_hops=3`
+(was `DEFAULT_MAX_HOPS=6.0`) and further reduced by
+`_combined_hop_scope_filtered` - the exact filter validated offline immediately
+above, ported into the live driver only after that validation passed. Dry-run
+validated (no LLM calls) before any paid spend: candidate counts matched the
+offline analysis exactly (`django_t02_005`=29, `django_t02_009`=14,
+`django_t02_017`=6).
+
+**Result (18 cells, $0.0358 for the 36-cell 2-approach grid - vs. v2's $0.1515
+for the identical grid shape, real, direct confirmation of the projected 93-99%
+reduction):**
+
+| approach | tsr | cpi_strict | fpr_gt | mean tokens |
+| :--- | :--- | :--- | :--- | :--- |
+| baseline | 0.222 | 0.889 | 0.778 | 7597 |
+| A v1 (name-only) | 0.333 | 0.333 | 0.000 | 8379 |
+| A v2 (signatures + calls) | 0.389 | 0.833 | 0.133 | 47060 |
+| A v3 (hop=3 + scope) | 0.500 | 0.667 | 0.000 | 4167 |
+
+`tsr` (0.500) is the best result of the entire spike - more than double
+baseline's own 0.222. `fpr_gt` returns to a clean 0.000 (matching v1). Mean
+tokens (4167) land *below* baseline's own single-turn cost (7597), at 91% less
+than v2's for the same grid. **Not a uniform win, though**: `cpi_strict`
+settles at 0.667 - well above v1's 0.333, but a real drop from v2's 0.833.
+
+Per task:
+
+| task | baseline cpi/tsr | A v2 cpi/tsr | A v3 cpi/tsr |
+| :--- | :--- | :--- | :--- |
+| django_t02_005 | 1.000 / 0.000 | 1.000 / 0.000 | 1.000 / 0.000 |
+| django_t02_009 | 1.000 / 0.000 | 1.000 / 0.667 | 0.000 / 0.333 |
+| django_t02_017 | 0.667 / 0.667 | 0.500 / 0.500 | **1.000 / 1.000** |
+
+- **`django_t02_017`: solved.** `cpi=1.0`/`tsr=1.0` on all 6 cells, every
+  budget, every seed - the seed/budget-dependent flakiness v2 showed here is
+  gone. A 6-candidate manifest apparently gives the model an unambiguous
+  enough view to answer consistently, where v2's 409-candidate one didn't.
+- **`django_t02_009`: a genuine regression, and a real finding in its own
+  right - "Structural Recall vs. Selection Recall."** The offline sizing
+  analysis confirmed `recall=1.000` for this exact 14-candidate set - the
+  pipeline symbol (`_clone`) *is present* in the manifest Turn 1 saw. But
+  `requested_count` drops from v2's 5 to v3's 4, and `cpi_strict` falls back to
+  0.0 (matching v1, worse than v2's 1.0) - the model simply didn't choose to
+  request it this time, despite it being available. **Retaining a ground-truth
+  symbol in the candidate index (structural recall) does not guarantee the LLM
+  selects it (selection recall)** without something that specifically cues it
+  as part of the chain - a smaller, cleaner manifest removed exactly the
+  "noise" that, in v2's case, happened to also carry chain-continuation
+  signal the model was implicitly using. `tsr` partially recovers at
+  budget>=4000 (0.0 at budget=2000, 1.0 at 4000/8000 for both seeds).
+- **`django_t02_005`: unchanged, still unexplained.** `cpi=1.0` (full recall)
+  but `tsr=0.0` on all 6 cells - identical to both v1 and v2. Every manifest
+  variant tried in this spike gets this task's context selection right and its
+  final answer wrong; the root cause is in Turn 2's own response, not in
+  candidate selection, and remains undiagnosed (see the diagnostic note below -
+  the raw completion text for these specific historical calls was never
+  persisted, so this could not be inspected after the fact without a fresh,
+  small paid re-run).
+
+**Diagnostic limitation, stated plainly**: `run_hydration_cell` never saved
+either turn's raw response text, only scores and token counts - so the
+`django_t02_005`/`django_t02_009` anomalies above are diagnosed from the
+*numbers* (recall, requested_count, per-cell scores), not from reading what the
+model actually said. A genuine "zero LLM spend" inspection of those specific
+historical completions is not possible; the content no longer exists anywhere
+to inspect. A small, targeted re-run with response logging added would be
+needed to see the actual reasoning/response text - not yet done as of this
+writing.
+
+Commits: `7c352a5` (v3 implementation, dry-run validated), `8723323` (36-cell
+result, $0.0358).
 
 ---
 
@@ -397,53 +491,58 @@ Commit: `1a94688`.
 **The core trade-off, stated plainly:** pure graph topology (Approach C) has
 real structure but no semantic discrimination; pure LLM name-filtering (A v1)
 has real semantic judgment but, given only names, no access to the content that
-judgment actually needs. **A v2 confirms the fix directly**: giving the model
-real structural content - signatures and resolved call targets, still no
-docstring dependency, still fully deterministic - closes most of the gap A v1
-left open, recovering `cpi_strict` to within 0.056 of baseline while keeping
-`fpr_gt` well under the `<0.50` target. The problem had (at least) two separable
-halves - deciding what's structurally reachable, and judging what's actually
-relevant - and A v2 is the first mechanism in this spike to address both at
-once, at the cost of a large, currently-unoptimized token bill (~6x baseline for
-Turn 1 alone).
+judgment actually needs. **A v2 confirmed the fix**: giving the model real
+structural content - signatures and resolved call targets, still no docstring
+dependency, still fully deterministic - closes most of the gap A v1 left open.
+**A v3 confirmed the cost of that fix could come down 91% (measured, not
+estimated) without losing the fix**: `hop=3` + scope-filtered candidate pruning
+(itself verified offline, for real, against a documented `hop=2` failure case
+before being wired into a live grid) took Turn 1 from ~44K tokens back to
+~4.2K - and, on this run, *improved* `tsr` further (0.500, the best of the
+entire spike) while restoring `fpr_gt` to a clean 0.000.
 
-**What's left, now that the mechanism itself works**: making it economical.
-`django_t02_017`'s own 409-candidate universe (all of it sent in Turn 1,
-regardless of budget) is the direct driver of the ~6x cost - most of those
-candidates are structurally reachable but not part of any real causal chain from
-the seed. Two independent levers, not mutually exclusive:
+**No single variant is a strict win, and that's the real, final finding of this
+spike.** v2 has the best `cpi_strict` (0.833); v3 has the best `tsr` (0.500)
+and the best token economy (4167, under baseline's own 7597); v1 has a tie for
+best `fpr_gt` (0.000, matched by v3). The "Structural Recall vs. Selection
+Recall" distinction found in v3's own `django_t02_009` regression is the
+concrete mechanism behind this: shrinking the candidate index to exactly what's
+structurally necessary does not guarantee the model's own Turn 1 selection
+recovers everything in it - a symbol can be present, confirmed by direct
+recall measurement, and still not get requested. Manifest size and model
+selection accuracy are related but not the same axis, and no variant tried
+here has controlled for both at once.
 
-1. **Candidate-universe pruning** - hop-depth capping or a same-module/package
-   scope filter. Measured (Offline Manifest-Sizing Analysis, above): `hop=3` is
-   the safer, consistent floor (`recall=1.000` on all 3 tasks, 41-95% token
-   reduction); `hop=2` is unsafe as a blanket default (drops a real pipeline
-   symbol on `django_t02_009`); the scope filter does better than `hop=3` on 2
-   of 3 tasks but worse on the third - combining both is the natural next
-   measurement.
-2. **Format-level slimming** - measured and found *not* to help: a condensed
-   YAML-flow format costs more bytes than the current pipe-delimited one, not
-   fewer (spelled-out field names and indentation outweigh the one dropped
-   field). Not worth pursuing further as specified.
+**What's left**: `django_t02_005`'s `tsr=0.0`-despite-full-recall regression is
+unexplained across all three A variants and baseline alike, and (see A v3's own
+section) cannot be diagnosed further without a small, targeted re-run that logs
+raw response content - not yet done. `django_t02_009`'s v3 regression is
+diagnosed at the level of *what changed* (`requested_count` 5->4) but not *why*
+the model chose to stop one symbol short, for the same reason. Both are real,
+open threads, not closed by this synthesis.
 
 **If single-turn knapsack packing remains the production path instead**,
 candidate scoring needs to blend topological distance with a lightweight
 *semantic* relevance signal (docstring/signature token overlap with the seed, or
 caller-callee token overlap) rather than either pure density (today) or pure
-distance (Approach C) alone - A v2's own result is itself evidence that such a
-signal exists and is usable; the open question there is how to fold it into a
-single-pass scoring formula rather than a second LLM turn.
+distance (Approach C) alone - A v2/v3's own results are themselves evidence
+that such a signal exists and is usable; the open question there is how to fold
+it into a single-pass scoring formula rather than a second LLM turn.
 
 ## Disposition
 
 - `experiment/noise-filtering-spike` stays intact, unmerged, as the audit trail
-  for all four approach variants' real commits and real data.
-- Approach A v2 is the most promising result of this spike and is not yet
-  production-ready: its own token cost needs to come down before it's a
-  realistic single-turn alternative. The Offline Manifest-Sizing Analysis
-  above found the real lever (`hop=3` candidate pruning, not format slimming)
-  and its real, measured reduction (41-95% depending on task) - a next live
-  grid built on `hop=3` pruning (and possibly `hop=3` + scope filtering
-  combined) is the natural follow-up, not yet executed as of this writing.
+  for all five approach variants' (B, C, A v1/v2/v3) real commits and real
+  data.
+- Approach A v3 is the most token-economical strong result of this spike
+  (best `tsr`, clean `fpr_gt`, sub-baseline token cost) but is not a strict
+  improvement over v2 (`cpi_strict` is lower) - which variant to build on
+  depends on whether `tsr`/cost or `cpi_strict` is the priority for whatever
+  uses this next. Two concrete open threads remain, both requiring a small
+  targeted re-run with response-content logging (not yet built) rather than
+  further offline analysis: `django_t02_005`'s persistent `tsr=0.0`-despite-
+  full-recall regression, and *why* (not just *that*) `django_t02_009`
+  regressed under v3.
 - **A high-priority production bug is flagged, not fixed, on this branch**:
   `prism.runtime.index_cache`'s whole-pipeline cache
   (`prism.cli.build_pipeline`'s `use_cache=True` default) returns inconsistent

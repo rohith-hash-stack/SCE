@@ -1517,6 +1517,7 @@ architectural conclusion.
 | C (Spine Variant) | 0.111 | 0.778 | 0.739 | - |
 | A v1 (Two-Pass Hydration, name-only) | 0.333 | 0.333 | 0.000 | 8379 |
 | A v2 (Two-Pass Hydration, signatures + calls) | 0.389 | 0.833 | 0.133 | 47060 |
+| A v3 (Two-Pass Hydration, hop=3 + scope-filtered) | 0.500 | 0.667 | 0.000 | 4167 |
 
 - **Approach B** (`RenderOptions.two_zone` - a lightweight
   `<ReachableFrontier>` index alongside the existing spine, rendering
@@ -1586,7 +1587,37 @@ architectural conclusion.
   accuracy result, not yet an economical one - candidate-universe
   pruning and/or a more compact per-candidate format are the
   identified next step (see the debrief's own sizing-analysis
-  addendum), not yet executed as of this writing.
+  addendum).
+- **Approach A v3** (same protocol; `_build_candidate_index`'s own
+  candidate universe capped at `max_hops=3` and further reduced by
+  `_combined_hop_scope_filtered` - a candidate survives if it shares
+  the seed's own top-level-3 module namespace, or sits within a 3-hop
+  chain of concrete `CALLS`/`INSTANTIATES` edges from the seed,
+  transitively; verified offline, recall=1.000 on all 3 tasks, before
+  being wired into a live grid): **`tsr` (0.500) is the best result of
+  the entire spike** - more than double baseline's own 0.222 - `fpr_gt`
+  returns to a clean 0.000, and mean tokens (4167) land *below*
+  baseline's own single-turn cost, at 91% less than v2's for the
+  identical grid shape (real, measured, not projected: $0.0358 vs.
+  $0.1515). **Not a uniform win over v2**: `cpi_strict` settles at
+  0.667 (above v1's 0.333, below v2's 0.833). `django_t02_017` is fully
+  solved (1.0/1.0 on all 6 cells, the v2 seed/budget flakiness gone).
+  `django_t02_009` regresses to `cpi_strict=0.0` despite the offline
+  analysis confirming `recall=1.000` for this exact candidate set - the
+  pipeline symbol (`_clone`) is present in the manifest, but
+  `requested_count` drops from v2's 5 to v3's 4 and the model simply
+  doesn't request it. **This is the "Structural Recall vs. Selection
+  Recall" finding**: a symbol being reachable/present in the candidate
+  index does not guarantee the model's own Turn 1 selection includes it
+  - manifest size and model selection accuracy are related but not the
+  same axis, and no variant in this spike controls for both at once.
+  `django_t02_005` keeps the same unexplained `tsr=0.0`-despite-full-
+  recall regression every variant (v1, v2, v3, baseline) shares -
+  diagnosing it, or the `django_t02_009` regression's own *why* (not
+  just *that*), requires a small re-run with raw response-content
+  logging (not built - `run_hydration_cell` never persisted either
+  turn's response text, only scores and token counts), not further
+  offline analysis.
 
 **A real, pre-existing production bug was found and flagged (not
 fixed) during A v2's own validation**: `prism.runtime.index_cache`'s
@@ -1613,12 +1644,23 @@ itself as of this writing.
 **The core trade-off, stated plainly**: pure graph topology (C) has
 structure but no semantic discrimination; pure LLM name-filtering (A
 v1) has semantic judgment but, given only names, no access to the
-content that judgment needs. **A v2 closes most of that gap directly**,
-confirming that the two halves of the problem (deciding what's
-structurally reachable, judging what's actually relevant) can be solved
-together once the model is given real structural content, not just
-identifiers, to reason from - at a token cost that is itself now the
-open design question.
+content that judgment needs. A v2 closed most of that gap, confirming
+the two halves of the problem (deciding what's structurally reachable,
+judging what's actually relevant) can be solved together once the model
+gets real structural content, not just identifiers, to reason from. A
+v3 confirmed the resulting token cost could come down 91% (measured)
+without losing the fix - and, on this run, improved `tsr` further while
+restoring `fpr_gt` to a clean 0.000.
+
+**No single variant is a strict win, which is itself the final finding
+of this spike.** v2 has the best `cpi_strict`; v3 has the best `tsr`
+and the best token economy; v1 ties v3 on `fpr_gt`. The Structural-
+Recall-vs-Selection-Recall finding (v3's own `django_t02_009`
+regression) is the concrete mechanism: a smaller candidate index can
+keep every ground-truth symbol technically present while still not
+being enough to make the model actually request all of them - manifest
+size and model selection accuracy are related but not identical, and
+no variant tried here controls for both simultaneously.
 
 **The Phase B synthesis, for whichever path is picked up next**:
 
@@ -1631,29 +1673,27 @@ open design question.
    is itself evidence such a signal exists and is usable; the open
    question is folding it into a single-pass scoring formula rather
    than a second LLM turn.
-2. If a multi-turn/frontier-manifest protocol is revisited, A v2's own
-   result is the starting point, not v1's: signatures and resolved
-   call targets, not bare qualified names, are what let the model
-   judge relevance correctly. Turn 1's token cost is the real
-   remaining design question - measured (not estimated) via a
-   follow-up, no-LLM-call sizing analysis
-   (`benchmarks/experiments/inspect_manifest_sizing.py`, commit
-   `1a94688`): format-level slimming does not help (a condensed
-   YAML-flow encoding costs *more* bytes than the current
-   pipe-delimited one); candidate-universe pruning is the real lever,
-   and hop-depth alone is not uniformly safe - `hop=2` drops a real
-   pipeline symbol on one of the 3 tasks (`django_t02_009`'s `_clone`),
-   while `hop=3` keeps full recall on all 3 with large reduction on two
-   of them (93-95%) and a smaller one on the third (41%, an unusually
-   dense/shallow seed neighborhood). A same-module scope filter beats
-   `hop=3` on 2 of 3 tasks but is markedly weaker on the third -
-   neither lever alone is uniformly best; combining them is the next
-   measurement before any further live-grid spend.
+2. If a multi-turn/frontier-manifest protocol is revisited, A v3 (not
+   v1 or v2 alone) is the starting point: signatures and resolved call
+   targets are what let the model judge relevance correctly (v2's own
+   finding), and a `hop=3` + same-module-or-real-call-chain scope
+   filter is what makes that affordable (v3's own finding - 91%
+   measured Turn 1 reduction, verified offline against a documented
+   `hop=2` failure case before any live spend). The remaining open
+   question is not cost - it's closing the Structural-Recall-vs-
+   Selection-Recall gap v3 itself exposed: getting the model to
+   actually request every candidate its own manifest makes available,
+   not just some of them.
 
-No further live-grid implementation followed the sizing analysis as of
-this writing; all four approach variants plus the sizing script stay
-isolated on `experiment/noise-filtering-spike` (unmerged) as a
-documented audit trail, and the Subgraph Processor (Sec 10.3/10.4)
+All five approach variants (B, C, A v1/v2/v3) plus the sizing script
+stay isolated on `experiment/noise-filtering-spike` (unmerged) as a
+documented audit trail. `django_t02_005`'s `tsr=0.0`-despite-full-
+recall regression (shared by every variant, baseline included) and
+`django_t02_009`'s v3-specific selection-recall regression both remain
+open, undiagnosed at the level of *why* - the next real step is a
+small re-run with raw response-content logging (not built;
+`run_hydration_cell` never persisted either turn's response text), not
+further offline analysis. The Subgraph Processor (Sec 10.3/10.4)
 remains unimplemented pending a design that addresses point 1 or 2
 above. The `prism.runtime.index_cache` bug found above remains a
 separate, unfixed, high-priority production issue.
