@@ -392,6 +392,7 @@ def run_evaluation(
     checkpoint_path: str = DEFAULT_CHECKPOINT_PATH,
     output_dir: str | None = None,
     scorer: str = "strict",
+    task_type: str = "all",
 ) -> EvaluationRun:
     """The real end-to-end sweep: resolve the pinned corpus, load its
     ground-truth tasks, run every engine at every budget, and (unless
@@ -417,6 +418,12 @@ def run_evaluation(
     `scorer` ("strict" default, or "causal"): passed straight through
     to `score_tsr_response` for every debug-type task's own TSR call -
     see that function's own docstring for exactly what changes.
+
+    `task_type` ("all" default, or "debug"): "debug" restricts `tasks`
+    to `task_type == "debug"` entries only (T02-shaped, the only type
+    the two-pass candidate index/manifest mechanism was ever validated
+    against) - "all" preserves this function's original behavior
+    (every accepted task for `repo`, T02 debug and T13 blast alike).
     """
     if repo not in CORPORA:
         raise ValueError(f"unknown repo {repo!r} - registered corpora: {sorted(CORPORA)}")
@@ -424,6 +431,8 @@ def run_evaluation(
 
     load_result = load_tasks_from_dir(tasks_dir)
     tasks = [t for t in load_result.accepted if t.repo == repo]
+    if task_type == "debug":
+        tasks = [t for t in tasks if t.task_type == "debug"]
     if load_result.rejected:
         for task_id, reason in load_result.rejected:
             print(f"warning: task {task_id!r} rejected: {reason}", file=sys.stderr)
@@ -932,6 +941,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "behavior) or 'causal' (score_debug_causal, ordered-subsequence containment with a hallucination gate). "
         "Only ever changes debug-type tasks' own scoring - every other task_type is unaffected either way.",
     )
+    parser.add_argument(
+        "--task-type",
+        choices=["debug", "all"],
+        default="all",
+        help="'all' (default): every accepted ground-truth task for --repo, unchanged from this flag's absence. "
+        "'debug': restrict to task_type == 'debug' (T02-shaped) tasks only.",
+    )
     return parser
 
 
@@ -974,6 +990,7 @@ def main(argv: list[str] | None = None) -> int:
             checkpoint_path=args.checkpoint,
             output_dir=args.output,
             scorer=args.scorer,
+            task_type=args.task_type,
         )
         write_reports(run, args.output)
         print(f"Reports written to {args.output}")
