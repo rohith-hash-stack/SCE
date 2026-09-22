@@ -64,7 +64,27 @@ class PrismEngine(AbstractRetrievalEngine):
 
     def index(self, repo_path: str) -> None:
         self._repo_root = repo_path
-        self._builder, _tag_matrix = build_pipeline(repo_path)
+        # use_cache=False (experiment/noise-filtering-spike only, not a
+        # production change): prism.runtime.index_cache's whole-pipeline
+        # cache (build_pipeline's own use_cache=True default) was found,
+        # empirically, to return genuinely inconsistent (builder,
+        # tag_matrix) results across separate process invocations of the
+        # identical pinned corpus - a real seed's own reachable candidate
+        # count varied 409 vs 402 across repeated runs with no other
+        # variable changed (ruled out: file-discovery order - discover_
+        # files already sorts; PYTHONHASHSEED - fixing it to 0 did not
+        # stabilize the result; concurrent-process cache races - the
+        # instability reproduced across strictly sequential runs too).
+        # 3 consecutive use_cache=False runs agreed exactly (409, 409,
+        # 409); this is the same class of bug as the SymbolInfo.role
+        # cache-serialization gap fixed in 07ff0cd, a different instance
+        # in the same caching layer - flagged as a follow-up production
+        # issue, not fixed here (out of scope for this spike branch,
+        # which touches no prism.* production code). Every approach in
+        # this spike depends on a deterministic graph, so this is set
+        # here, in the shared benchmark engine, not just in Approach A's
+        # own code.
+        self._builder, _tag_matrix = build_pipeline(repo_path, use_cache=False)
         self._contracts = compute_or_load_contracts(self._builder, repo_path)
 
     def retrieve(self, seed_symbol: str, budget_tokens: int, task_type: str | None = None) -> ContextPackage:
