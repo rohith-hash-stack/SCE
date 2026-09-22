@@ -124,6 +124,14 @@ class TwoPassCellResult:
     turn2_prompt_tokens: int | None = None
     completion_tokens: int | None = None
     cost_usd: float | None = None
+    #: The resolved model tag that actually priced this cell (`CallResult.
+    #: model` - after the client's own env-var/default resolution, never
+    #: the raw `--model` argument, which can be `None`) - carried through
+    #: so a downstream summary/cost report can say exactly which pricing
+    #: table entry (`benchmarks.tsr.client._known_model_pricing_override`)
+    #: applied, instead of assuming. Empty string for a --dry-run cell
+    #: (no LLM call happened at all).
+    model: str = ""
     turn1_response: str = ""
     turn2_response: str = ""
 
@@ -220,6 +228,7 @@ def run_two_pass_cell(
         turn1_prompt_tokens=turn1_call.prompt_tokens, turn2_prompt_tokens=turn2_call.prompt_tokens,
         completion_tokens=turn1_call.completion_tokens + turn2_call.completion_tokens,
         cost_usd=(turn1_call.cost_usd or 0.0) + (turn2_call.cost_usd or 0.0),
+        model=turn2_call.model,
         turn1_response=turn1_call.content, turn2_response=turn2_call.content,
     )
 
