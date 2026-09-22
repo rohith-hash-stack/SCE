@@ -1,8 +1,8 @@
 """Phase B spike: Approach B ("Frontier Index + Spine Hydration") and
-Approach C ("Forked Spine Pruning in Knapsack") vs. the existing
-single-zone baseline, on the 3 target Django tasks (django_t02_005,
-django_t02_009, django_t02_017) at budgets 2000/4000/8000, seeds 42/43,
-against a real OpenAI-compatible endpoint.
+Approach A ("Two-Pass Hydration Protocol") vs. the existing single-zone
+baseline, on the 3 target Django tasks (django_t02_005, django_t02_009,
+django_t02_017) at budgets 2000/4000/8000, seeds 42/43, against a real
+OpenAI-compatible endpoint.
 
 Isolated under benchmarks/experiments/ by design - reuses real scoring
 machinery (score_tsr_response, cpi_strict, fpr, _ground_truth_universe)
@@ -10,11 +10,16 @@ so numbers are directly comparable to prior resweeps, but touches no
 production selection/scoring code and writes results only under
 benchmarks/experiments/results/, never reports/pilot/ or
 reports/pilot-resweep-*/ - the protected suite and checkpoint.json are
-untouched by construction, not by discipline alone. Approach C's own
-selection fork lives in benchmarks/experiments/knapsack_spine_variant.py
-- production's real submodular_knapsack.py is never imported for
-anything but its own already-tested helpers (compute_candidate_value,
-_default_costs, etc.), never modified.
+untouched by construction, not by discipline alone.
+
+Approach C ("Forked Spine Pruning in Knapsack") was tried and dropped -
+see benchmarks/experiments/knapsack_spine_variant.py's own docstring and
+commit 1f66771 for the full negative-result diagnosis (fpr_gt barely
+moved, cpi_strict regressed). That module is kept as a documented
+artifact but is no longer in the default APPROACHES rotation. Approach
+A's own two-pass driver lives in benchmarks/experiments/hydration_loop.py
+- like Approach C, it reuses production's own already-tested helpers by
+import and never modifies submodular_knapsack.py/build.py.
 
 Usage:
     python -m benchmarks.experiments.run_spike --dry-run   # plumbing only, no LLM calls
@@ -31,7 +36,7 @@ from pathlib import Path
 
 from benchmarks.corpora.resolver import resolve
 from benchmarks.engines.prism_engine import PrismEngine
-from benchmarks.experiments.knapsack_spine_variant import build_context_package_spine_variant
+from benchmarks.experiments.hydration_loop import build_context_package_requested, run_hydration_cell, _build_candidate_index
 from benchmarks.ground_truth.loader import load_tasks_from_dir
 from benchmarks.metrics.cpi import cpi_strict
 from benchmarks.metrics.fpr import fpr
@@ -39,7 +44,7 @@ from benchmarks.runner import DEBUG_TASK_RESPONSE_CONTRACT, SYSTEM_PROMPT, _grou
 from benchmarks.tsr.client import OpenAICompatibleClient, run_tsr_prompt
 from prism.surface.renderer import RenderOptions, render
 
-APPROACHES = ("baseline", "B_two_zone", "C_spine_variant")
+APPROACHES = ("baseline", "B_two_zone", "A_hydration")
 
 TARGET_TASKS = (
     "django_t02_005_model_save_signals",
@@ -109,16 +114,17 @@ def _frontier_index_for(builder, pkg) -> list[dict[str, str]]:
 
 
 def _package_for(engine: PrismEngine, task, budget: int, approach: str):
-    if approach == "C_spine_variant":
-        return build_context_package_spine_variant(
-            engine._builder, task.seed_symbol, engine._repo_root, budget,
-            contracts=engine._contracts, task_type=task.task_type,
-        )
+    """Single-package approaches only (baseline, B_two_zone) -
+    A_hydration needs two LLM turns to even decide what to render, so it
+    is never routed through this helper; see `run_cell`/the dry-run loop
+    below for how it's handled instead."""
     return engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
 
 
 def run_cell(client: OpenAICompatibleClient, engine: PrismEngine, task, budget: int, seed: int, approach: str) -> dict:
     assert approach in APPROACHES, approach
+    if approach == "A_hydration":
+        return run_hydration_cell(client, engine, task, budget, seed)
     pkg = _package_for(engine, task, budget, approach)
     candidate_symbols = {n.id for n in pkg.nodes}
 
@@ -203,6 +209,24 @@ def main() -> int:
             task = tasks_by_id[task_id]
             for budget in budgets:
                 for approach in approaches:
+                    if approach == "A_hydration":
+                        manifest, candidate_universe = _build_candidate_index(engine._builder, task.seed_symbol)
+                        # No real Turn 1 call in a dry run - validate Turn 2's
+                        # own plumbing with the seed-only "request" a
+                        # completely-failed/empty Turn 1 parse would produce,
+                        # the one input build_context_package_requested must
+                        # handle gracefully no matter what Turn 1 returns.
+                        pkg, skipped = build_context_package_requested(
+                            engine._builder, task.seed_symbol, engine._repo_root, budget, [], candidate_universe,
+                            contracts=engine._contracts, task_type=task.task_type,
+                        )
+                        xml = render(pkg, RenderOptions(include_timestamp=False, include_run_id=False))
+                        print(
+                            f"[dry-run] {task_id} budget={budget} approach={approach:<15} "
+                            f"candidate_universe={len(candidate_universe)} manifest_bytes={len(manifest)} "
+                            f"spine_nodes={len(pkg.nodes)} xml_bytes={len(xml)}"
+                        )
+                        continue
                     pkg = _package_for(engine, task, budget, approach)
                     frontier = _frontier_index_for(engine._builder, pkg) if approach == "B_two_zone" else []
                     if approach == "B_two_zone":
