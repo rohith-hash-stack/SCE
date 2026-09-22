@@ -1494,3 +1494,105 @@ carries only the validated `SymbolRole` taxonomy, the unconditional
 gate at its original four admission sites, and the cache-serialization
 fix. `django_t02_017`'s 21/22 result is a knowingly accepted, disclosed
 trade-off, not a silently shipped regression.
+
+### 10.5 Noise-reduction spike (Approaches A/B/C) - three real answers, no working fix
+
+Sec 10.4's own closing finding named the concrete question: can a
+mechanism that runs *before* the greedy loop (not a post-hoc protection
+pass) suppress context noise (`fpr_gt`) without costing recall
+(`cpi_strict`)? Three genuinely different paradigms were built and
+measured against a real LLM (`gpt-4o-mini`, live OpenAI API - not a
+simulation or a local SLM) on the same 3-task/3-budget/2-seed matrix
+(`django_t02_005`, `django_t02_009`, `django_t02_017`), isolated on
+`experiment/noise-filtering-spike` (never merged - production code was
+never modified by any of the three). Full detail, per-cell data, and
+the diagnostic root-cause work for each is in
+`reports/spike_noise_reduction_debrief.md`; this entry records the
+architectural conclusion.
+
+| Approach | Mean TSR | Mean CPI Strict | Mean FPR GT | Mean Tokens |
+| :--- | :--- | :--- | :--- | :--- |
+| Baseline | 0.222 | 0.889 | 0.778 | 7597 |
+| B (Two-Zone Rendering) | 0.222 | 0.889 | 0.778 | 8275 |
+| C (Spine Variant) | 0.111 | 0.778 | 0.739 | - |
+| A (Two-Pass Hydration) | 0.333 | 0.333 | 0.000 | 8379 |
+
+- **Approach B** (`RenderOptions.two_zone` - a lightweight
+  `<ReachableFrontier>` index alongside the existing spine, rendering
+  only, no selection change): `cpi_strict`/`fpr_gt` are byte-identical
+  to baseline in every paired cell, exactly as designed - rendering
+  more of the graph without changing which nodes get admitted cannot
+  move either metric. Costs a real, unconditional ~9% token overhead
+  for that extra visibility, with no measured noise benefit.
+- **Approach C** (`select_submodular_context_spine_variant` - Tier 1
+  spine nodes admitted unconditionally in ascending topological
+  distance, Tier 2 density-competitive with peripheral-leaf
+  demotion/eviction under tight budget): `fpr_gt` moved in the intended
+  direction but far short of the `<0.50` target (0.778 -> 0.739), while
+  `cpi_strict` regressed (0.889 -> 0.778) - the opposite of the goal.
+  Root cause, directly diagnosed (`django_t02_017`, budget=4000, now
+  fails on *both* seeds where baseline passed both): Tier 1's
+  admission order is pure topological distance with **zero semantic
+  value discrimination**. A seed with multiple parallel spine branches
+  (here, a URL-parsing chain and an apparently-unrelated i18n/
+  translation chain, both genuinely reachable within `max_hops`) lets
+  the less-relevant branch's same/lower-distance nodes exhaust the
+  budget in ascending-distance-then-name order before the genuinely
+  relevant deeper node (`_urlparse`, `dist_w=2.0`) gets its turn - a
+  new instance of the same hub-crowding failure class production's own
+  novelty-streak/scope-gate mechanisms exist to prevent, occurring
+  inside a tier that has no defense against it by construction. Dropped
+  rather than patched further (see the module's own docstring and
+  commit `1f66771`) - a further fix would only re-derive the existing
+  knapsack's own density/streak machinery at higher complexity, inside
+  a new tier, for no clear gain over just using the knapsack directly.
+- **Approach A** (`hydration_loop.py` - Turn 1 sends a compact
+  `qualified_name|role|kind` manifest of the full reachable candidate
+  universe and asks the LLM which symbols matter; Turn 2 renders only
+  what it named): `fpr_gt = 0.0000` on every one of 18 cells - complete
+  elimination, converting `django_t02_005` from TSR 0.0 (baseline, with
+  full `cpi_strict=1.0` - real evidence noise itself was costing the
+  task, not missing recall) to TSR 1.0. But `cpi_strict` collapses to
+  0.333 (worse than Approach C's own regression) on `django_t02_009`
+  and `django_t02_017` specifically - 0.0 on every cell of both, every
+  budget, every seed. Root cause: Turn 1's manifest carries no semantic
+  *content* (no body, signature, or docstring - only an identifier
+  string), so a task whose real pipeline isn't guessable from symbol
+  names alone leaves the model requesting 2-3 "obviously named"
+  candidates and stopping there (`requested_count` is flat at ~2.3
+  across all three budgets, confirming budget never reaches this
+  decision at all - Turn 1 has no way to know how much room it has).
+
+**The core trade-off, stated plainly**: pure graph topology (C) has
+structure but no semantic discrimination; pure LLM name-filtering (A)
+has semantic judgment but, given only names, no access to the content
+that judgment needs. Neither alone gets both halves of "suppress
+`fpr_gt` without dropping `cpi_strict`" - each failure is different and
+diagnostic, not a shared bug, which is itself the finding: the two
+halves of the problem (deciding what's structurally reachable, judging
+what's actually relevant) were each solved by a different one of these
+two mechanisms, and neither solved both.
+
+**The Phase B synthesis, for whichever path is picked up next**:
+
+1. If single-turn packing remains the production path, knapsack
+   candidate scoring needs to blend topological distance with a
+   lightweight *semantic* relevance signal (docstring/signature token
+   overlap with the seed, or caller-callee token overlap - something
+   content-derived, not just structural centrality) rather than either
+   pure density (today) or pure distance (C) alone.
+2. If a multi-turn/frontier-manifest protocol is revisited, Turn 1's
+   manifest needs to carry lightweight content - an L2-style signature
+   or a docstring summary, not a bare qualified name - so the model has
+   something to judge relevance *from*, not just a string to
+   pattern-match against. The token cost of that richer manifest is the
+   real design question a future attempt would need to answer (Turn 1
+   alone already cost ~6-7K tokens at a bare-name index and
+   `max_hops=6.0` - see the debrief for the real, measured number
+   against the ~120-200 token original estimate).
+
+No further implementation work followed this spike; all three
+approaches stay isolated on `experiment/noise-filtering-spike`
+(unmerged) as a documented audit trail, and the Subgraph Processor
+(Sec 10.3/10.4) remains unimplemented pending a design that addresses
+point 1 or 2 above.
