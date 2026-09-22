@@ -61,6 +61,7 @@ from prism.packer.submodular_knapsack import (
     SubmodularPackResult,
     _classify_role,
     _default_costs,
+    _signature_stub,
     suggest_similar_seeds,
 )
 from prism.semantics.bitmask import FORM_BITS, OUTPUT_BITS, ROLE_BITS, SUBSTANCE_BITS
@@ -113,10 +114,76 @@ from prism.surface.renderer import RenderOptions, render
 TURN1_SYSTEM_PROMPT = (
     "You are a senior software engineer investigating a codebase. You will be given a compact "
     "<candidate_index> - every symbol reachable from a seed function, one per line as "
-    "qualified_name|role|kind (role is one of seed/callee/caller/transitive) - followed by a real "
-    "task. Identify which of these symbols are actually on the direct execution path relevant to "
-    "answering the task. Only name symbols that appear in the index - never invent one."
+    "qualified_name|role|kind|signature|calls=[...] (role is one of seed/callee/caller/transitive; "
+    "signature is the symbol's own raw declaration line; calls lists the names it directly invokes "
+    "in its own body, deterministically extracted, never a docstring or comment) - followed by a "
+    "real task. Examine the symbol signatures and their direct call targets to trace the complete "
+    "causal execution path from the seed to termination. Request all necessary intermediate and "
+    "helper symbols required to form an unbroken execution chain. Only name symbols that appear in "
+    "the index - never invent one."
 )
+
+#: v2 (generic AST signatures + call sinks): the relations
+#: `ConcreteGraphBuilder.graph` (the real, directly AST-derived
+#: structural graph - not `build_causal_graph`'s own augmented one,
+#: which also mixes in synthetic causal-coupling edges) uses for an
+#: actual invocation/instantiation, as opposed to `READS_STATE` or any
+#: other non-call structural edge - so `calls=[...]` reflects only what
+#: a symbol's own AST body literally invokes, language-agnostically
+#: (every language `ConcreteGraphBuilder` supports resolves calls into
+#: this same graph the same way), never a synthetic/inferred coupling.
+_CALL_RELATIONS = ("CALLS", "INSTANTIATES")
+#: Caps one symbol's own `calls=[...]` list, independent of the overall
+#: candidate-count cap `_build_candidate_index` already has none of - a
+#: real hub symbol (e.g. `HttpRequest`) can have dozens of real outgoing
+#: calls; capping keeps one row from dominating the manifest the same
+#: way `_HUB_DEGREE_CAP` already bounds Approach B's own frontier index.
+_MAX_CALLS_PER_SYMBOL = 12
+
+
+def _declaration_line(builder: ConcreteGraphBuilder, qname: str) -> str | None:
+    """`qname`'s own raw declaration line(s) - reuses `_signature_stub`
+    (production, unmodified) and drops its trailing `...` body
+    placeholder, since Turn 1 only wants the real signature text, not a
+    renderable stub. Returns `None` under the same "no real source to
+    describe" conditions `_signature_stub` itself does.
+    """
+    stub = _signature_stub(builder, qname)
+    if stub is None:
+        return None
+    return stub.rsplit("\n", 1)[0]
+
+
+def _outgoing_call_names(builder: ConcreteGraphBuilder, qname: str) -> list[str]:
+    """The bare (unqualified) names `qname`'s own AST body directly
+    calls or instantiates, deterministic and sorted - a raw structural
+    fact from `builder.graph`, not a docstring or any natural-language
+    summary. Qualified (the same dotted id a candidate_index row's own
+    identity uses), not the bare simple name: two different classes in
+    a 409-symbol universe can easily share a method name (`.get()`), and
+    a bare name in one row's `calls=[...]` would be genuinely ambiguous
+    against which of several same-named candidate rows it means -
+    qualified names let the model cross-reference a call target directly
+    against another row's own id, exactly the chain-following the Turn 1
+    prompt asks for. An unresolved/ambiguous call target
+    (`<ambiguous:...>`, `<dynamic:...>` -
+    `symbol_table.unresolved_polymorphic_node_id`/
+    `dynamic_edge_sentinel_id`'s own sentinel shapes) is dropped rather
+    than rendered as a real name - a genuine "something is called here
+    but resolution failed" case, not a symbol Turn 2 could ever resolve
+    against `candidate_universe` anyway.
+    """
+    if qname not in builder.graph:
+        return []
+    names: set[str] = set()
+    for succ in builder.graph.successors(qname):
+        if succ.startswith("<"):
+            continue
+        edge = builder.graph.get_edge_data(qname, succ) or {}
+        if edge.get("relation") not in _CALL_RELATIONS:
+            continue
+        names.add(succ)
+    return sorted(names)[:_MAX_CALLS_PER_SYMBOL]
 
 
 def _build_candidate_index(
@@ -126,11 +193,18 @@ def _build_candidate_index(
     universe `pack_symbol_context`'s own body builds (seed + every
     forward-reachable node within `max_hops` + every upstream caller
     within `upstream_max_hops`), rendered as one compact
-    `qualified_name|role|kind` line per real (symbol-table-resolved)
-    candidate. Budget-independent by construction, same as `dist_w_map`
-    itself - see this module's own docstring for why that's expected,
-    not a gap: what budget affects here is Turn 2's own render cap, not
-    which symbols are reachable in the first place.
+    `qualified_name|role|kind|signature|calls=[...]` line per real
+    (symbol-table-resolved) candidate. v2 (generic AST signatures + call
+    sinks): adds the symbol's own raw declaration line and its direct
+    AST call targets - both deterministic, language-agnostic structural
+    facts (`_declaration_line`/`_outgoing_call_names`, both reused from
+    production, neither dependent on a human-written docstring) - on top
+    of v1's bare `qualified_name|role|kind` line, so Turn 1 has more
+    than an identifier string to judge relevance from. Budget-
+    independent by construction, same as `dist_w_map` itself - see this
+    module's own docstring for why that's expected, not a gap: what
+    budget affects here is Turn 2's own render cap, not which symbols
+    are reachable in the first place.
     """
     graph = build_causal_graph(builder)
     dist_w_map = compute_topological_distances(builder, seed_id, d_max=max_hops)
@@ -147,7 +221,17 @@ def _build_candidate_index(
         if info is None:
             continue
         role = _classify_role(qname, seed_id, direct_successors, dist_w_map, dist_w_upstream_map)
-        lines.append(f"{qname}|{role}|{info.kind}")
+        # A wrapped multi-line signature (_declaration_line can return
+        # several header lines joined by "\n" - see _signature_stub's
+        # own docstring) must collapse to one physical text line here,
+        # or it silently breaks this manifest's own "one candidate per
+        # line" contract - found by a real num_lines (493) vs.
+        # candidate_universe (402) mismatch during validation, not
+        # assumed away.
+        raw_signature = _declaration_line(builder, qname) or ""
+        signature = " ".join(raw_signature.split())
+        calls = _outgoing_call_names(builder, qname)
+        lines.append(f"{qname}|{role}|{info.kind}|{signature}|calls=[{','.join(calls)}]")
         resolved.add(qname)
     manifest = "<candidate_index>\n" + "\n".join(lines) + "\n</candidate_index>"
     return manifest, resolved
@@ -158,7 +242,9 @@ def _turn1_user_prompt(manifest: str, task_prompt: str) -> str:
         f"{manifest}\n\nTask:\n{task_prompt}\n\n"
         'Respond with a JSON object: {"thought_process": "1-2 sentences on why", '
         '"requested_symbols": ["qualified.name", ...]} - requested_symbols ordered seed first, '
-        "then the causal stages in execution order. Respond with this JSON object and nothing else."
+        "then the causal stages in execution order, using each symbol's own full qualified_name "
+        "exactly as given in the index (never a bare name from a calls=[...] list). Respond with "
+        "this JSON object and nothing else."
     )
 
 
