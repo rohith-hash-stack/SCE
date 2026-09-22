@@ -1391,3 +1391,98 @@ def pack_symbol_context(
         seed=seed_id, budget=target_budget, selected=selected, items=items,
         total_cost=total_cost, covered_mask=covered_mask,
     )
+
+
+def pack_symbol_context_requested(
+    builder: ConcreteGraphBuilder,
+    seed_id: str,
+    requested_symbols: list[str],
+    candidate_universe: set[str],
+) -> tuple[SubmodularPackResult, list[str]]:
+    """Track 2 (Phase B Two-Pass Engine Integration), Turn 2's own
+    "selection": no knapsack, no density competition - the seed plus
+    whichever of `requested_symbols` resolve to a real member of
+    `candidate_universe` (`prism.packer.candidate_index.
+    build_candidate_manifest`'s own Turn-1 manifest - a name the caller's
+    own upstream selection invented that was never in it is dropped, not
+    silently rendered as if real). Returns `(result, skipped)`; `skipped`
+    is every requested name that didn't resolve, for logging/diagnostics.
+
+    Graduated verbatim from the noise-reduction spike's Approach A
+    (`benchmarks/experiments/hydration_loop.py` on `experiment/
+    noise-filtering-spike`, commit 511eb84's `pack_symbol_context_
+    requested`) - the spike's own live grid (`reports/spike_noise_
+    reduction_debrief.md`) is what validated this "ask, don't
+    re-derive" selection strategy in the first place, against the same
+    `_default_costs` real BPE pricing every other pack function here
+    uses; the only thing forked is *which* symbols end up in the pack,
+    never how any of them are priced or rendered.
+    """
+    if seed_id not in builder.symbol_table:
+        raise SeedNotFoundError(seed_id, suggest_similar_seeds(builder, seed_id))
+
+    selected: list[str] = [seed_id]
+    seen = {seed_id}
+    skipped: list[str] = []
+    for qname in requested_symbols:
+        if qname in seen:
+            continue
+        if qname not in candidate_universe or builder.symbol_table.get(qname) is None:
+            skipped.append(qname)
+            continue
+        selected.append(qname)
+        seen.add(qname)
+
+    with snapshot_file_hash_set(builder.repo_root):
+        graph = build_causal_graph(builder)
+        feature_masks = compute_feature_masks_cached(builder, builder.repo_root)
+        dist_w_map = compute_topological_distances(builder, seed_id, d_max=DEFAULT_MAX_HOPS)
+        upstream_callers = compute_upstream_callers(builder, seed_id)
+        dist_w_upstream_map = {symbol: caller.dist_w_upstream for symbol, caller in upstream_callers.items()}
+        costs = _default_costs(builder, selected)
+
+    # fix-include-class-when-method-selected (same fixup `pack_symbol_
+    # context` above gets from `select_submodular_context`): a class the
+    # caller's own requested_symbols omitted but one of its own admitted
+    # methods needs is still promoted in - a Turn-1 manifest asks for
+    # causal chain symbols, never container classes explicitly, so Turn
+    # 2 has to backfill the same way every other production pack path
+    # already does, for a consistent rendered `ContextPackage` shape.
+    direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
+    selected_set = set(selected)
+    running_cost = sum(costs.get(q, 0) for q in selected)
+    promoted_classes: set[str] = set()
+    reordered_selected: list[str] = []
+    for qname in selected:
+        info = builder.symbol_table.get(qname)
+        class_qname = info.enclosing_class if info is not None and info.kind == "method" else None
+        if class_qname is not None and class_qname not in selected_set and class_qname not in promoted_classes:
+            if class_qname not in costs:
+                costs.update(_default_costs(builder, [class_qname]))
+            class_cost = costs.get(class_qname, 0)
+            if class_cost > 0:
+                reordered_selected.append(class_qname)
+                promoted_classes.add(class_qname)
+                selected_set.add(class_qname)
+                running_cost += class_cost
+        reordered_selected.append(qname)
+    selected = reordered_selected
+
+    items = [
+        SubmodularPackedItem(
+            symbol=qname,
+            cost=costs.get(qname, 0),
+            feature_mask=feature_masks.get(qname, 0),
+            dist_w=0.0 if qname == seed_id else dist_w_map.get(qname, dist_w_upstream_map.get(qname, 0.0)),
+            role=_classify_role(qname, seed_id, direct_successors, dist_w_map, dist_w_upstream_map),
+            compression="L0_full",
+        )
+        for qname in selected
+    ]
+    total_cost = sum(item.cost for item in items)
+    covered_mask = 0
+    for item in items:
+        covered_mask |= item.feature_mask
+
+    result = SubmodularPackResult(seed=seed_id, budget=0, selected=selected, items=items, total_cost=total_cost, covered_mask=covered_mask)
+    return result, skipped

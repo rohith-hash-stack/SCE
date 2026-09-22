@@ -28,8 +28,10 @@ from typing import Callable
 from prism.cli import build_pipeline
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
+from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS, build_candidate_manifest
+from prism.packer.submodular_knapsack import DEFAULT_UPSTREAM_MAX_HOPS
 from prism.runtime.contract_cache import compute_or_load_contracts
-from prism.surface.build import build_context_package
+from prism.surface.build import build_context_package, build_context_package_requested
 from prism.surface.models import ContextPackage
 
 
@@ -49,6 +51,11 @@ class QueryContext:
 
 PreTraversalHook = Callable[[QueryContext], None]
 PostPackingHook = Callable[[ContextPackage], None]
+#: `(manifest_text, task_prompt) -> requested_symbols` - the caller's own
+#: LLM turn, injected rather than called by `PrismEngine` itself. See
+#: `PrismEngine.retrieve_two_pass`'s own docstring for why the engine
+#: never makes this call directly.
+RequestSymbolsCallback = Callable[[str, str], list[str]]
 
 
 class PrismEngine:
@@ -132,3 +139,113 @@ class PrismEngine:
             hook(copy.deepcopy(pkg))
 
         return pkg
+
+    # -- Track 2 (Phase B Two-Pass Engine Integration) -- #
+    #
+    # Graduated from the noise-reduction spike's Approach A v3 (hop=3 +
+    # scope-filtered manifest, `experiment/noise-filtering-spike`'s own
+    # `benchmarks/experiments/hydration_loop.py`) once it was proven out
+    # live: tsr=0.500 (best of the spike), fpr_gt=0.000, mean tokens 91%
+    # below the prior v2 manifest - see `reports/spike_noise_reduction_
+    # debrief.md` and `docs/design_formalism.md` Sec 10.5. The two turns
+    # below are `prism.packer.candidate_index.build_candidate_manifest`
+    # (Turn 1) and `prism.surface.build.build_context_package_requested`
+    # (Turn 2), the same split `hydration_loop.py` itself established.
+
+    def build_candidate_manifest(
+        self,
+        seed_id: str,
+        max_hops: float = CANDIDATE_INDEX_MAX_HOPS,
+        upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
+    ) -> tuple[str, set[str]]:
+        """Turn 1: `(manifest_text, candidate_universe)` for `seed_id` -
+        every symbol reachable within `max_hops` (default 3, the
+        spike's own validated floor) and the scope rule, rendered as
+        one compact line each. No LLM call happens here or anywhere
+        else in this class - see `retrieve_two_pass`'s own docstring."""
+        return build_candidate_manifest(self._builder, seed_id, max_hops=max_hops, upstream_max_hops=upstream_max_hops)
+
+    def retrieve_requested(
+        self,
+        seed_id: str,
+        budget_tokens: int,
+        requested_symbols: list[str],
+        candidate_universe: set[str],
+        task_type: str | None = None,
+    ) -> tuple[ContextPackage, list[str]]:
+        """Turn 2: hydrates whichever of `requested_symbols` resolve
+        against `candidate_universe` (Turn 1's own manifest - a name
+        that never appeared there is dropped, not rendered; returned as
+        the second, `skipped` element) into a real, rendered
+        `ContextPackage`, capped to `budget_tokens` by the same
+        `_enforce_render_budget` `retrieve()` itself goes through - the
+        seed and its direct causal neighbors are never downgraded to a
+        signature-only stub even under a tight budget (`prism.surface.
+        build._PROTECTED_DOWNGRADE_ROLES`), the fix for the real
+        `django_t02_009` @ budget=2000 failure mode the spike diagnosed.
+        Goes through the same pre/post hooks `retrieve()` does, so a
+        registered hook sees a two-pass query exactly like any other."""
+        query_ctx = QueryContext(
+            seed_id=seed_id, repo_root=self._repo_root, budget_tokens=budget_tokens, task_type=task_type,
+        )
+        for hook in self._pre_traversal_hooks:
+            hook(copy.deepcopy(query_ctx))
+
+        pkg, skipped = build_context_package_requested(
+            self._builder, seed_id, self._repo_root, budget_tokens, requested_symbols, candidate_universe,
+            contracts=self._contracts, task_type=task_type,
+        )
+
+        for hook in self._post_packing_hooks:
+            hook(copy.deepcopy(pkg))
+
+        return pkg, skipped
+
+    def retrieve_two_pass(
+        self,
+        seed_id: str,
+        budget_tokens: int,
+        request_symbols: RequestSymbolsCallback,
+        task_prompt: str = "",
+        task_type: str | None = None,
+        max_hops: float = CANDIDATE_INDEX_MAX_HOPS,
+        upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
+    ) -> tuple[ContextPackage, dict[str, object]]:
+        """The first-class two-pass execution path: runs Turn 1
+        (`build_candidate_manifest`), hands the manifest and
+        `task_prompt` to the caller-supplied `request_symbols` callback,
+        then runs Turn 2 (`retrieve_requested`) against whatever it
+        returns.
+
+        `request_symbols` is always the caller's own - this engine
+        never holds or calls an LLM client itself, the same boundary
+        `register_pre_traversal_hook`/`register_post_packing_hook`
+        already keep (a hook observes, this callback answers, neither
+        one lives inside `prism.engine`). A caller wires it to whatever
+        model/prompt shape it owns (`benchmarks.tsr.client.
+        OpenAICompatibleClient`'s own `complete()` in the spike/harness
+        case, an MCP tool's own client elsewhere) and is responsible for
+        parsing that model's response into the `list[str]` this
+        callback must return - `prism.packer.submodular_knapsack.
+        pack_symbol_context_requested` already treats any name absent
+        from the candidate universe as hallucinated and drops it, so a
+        permissive parse on the caller's side is safe.
+
+        Returns `(pkg, diagnostics)` - `diagnostics` carries
+        `candidate_count`, `requested_count`, and `skipped_hallucinated`
+        (the exact names, not just a count), useful for the same kind of
+        logging `hydration_loop.py`'s own result rows already captured.
+        """
+        manifest_text, candidate_universe = self.build_candidate_manifest(
+            seed_id, max_hops=max_hops, upstream_max_hops=upstream_max_hops,
+        )
+        requested_symbols = request_symbols(manifest_text, task_prompt)
+        pkg, skipped = self.retrieve_requested(
+            seed_id, budget_tokens, requested_symbols, candidate_universe, task_type=task_type,
+        )
+        diagnostics = {
+            "candidate_count": len(candidate_universe),
+            "requested_count": len(requested_symbols),
+            "skipped_hallucinated": skipped,
+        }
+        return pkg, diagnostics

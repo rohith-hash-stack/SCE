@@ -36,10 +36,13 @@ from prism.graph.contracts import BehavioralContract
 from prism.language_tiers import precision_tier_for
 from prism.packer.submodular_knapsack import (
     DEFAULT_MAX_HOPS,
+    ROLE_CALLEE,
+    ROLE_CALLER,
     ROLE_SEED,
     SubmodularPackResult,
     _signature_stub,
     pack_symbol_context,
+    pack_symbol_context_requested,
 )
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.semantics.bitmask import (
@@ -280,6 +283,21 @@ def causal_path_applies_to_task_type(task_type: str | None) -> bool:
 #: under this bound deterministically, it is never a soft target.
 _RENDER_BUDGET_TOLERANCE = 0.05
 
+#: Track 2 (Phase B Two-Pass Engine Integration): the seed and its direct
+#: causal neighbors (`ROLE_CALLEE`/`ROLE_CALLER` - one real hop away via
+#: `pack_symbol_context`'s own `_classify_role`, never a `dist_w` cutoff,
+#: since `dist_w` is guard/data-flow-weighted and not always exactly 1.0
+#: for a genuine direct edge) are never eligible for `_enforce_render_
+#: budget`'s own stub-downgrade below, at any budget. Traced directly to
+#: a real scoring failure during the noise-reduction spike's Approach A
+#: v3 diagnostics (`django_t02_009` @ budget=2000, `reports/spike_noise_
+#: reduction_debrief.md`'s own Closing Note): at that budget every node,
+#: including the seed itself, was eventually downgraded to `L2_skeleton`,
+#: stripping the literal call-site text a 1-hop neighbor's own body held
+#: - not a missing symbol (membership was correct throughout), a missing
+#: *detail* the model still needed to answer correctly.
+_PROTECTED_DOWNGRADE_ROLES = frozenset({ROLE_SEED, ROLE_CALLEE, ROLE_CALLER})
+
 
 def _downgrade_to_stub(pkg: ContextPackage, builder: ConcreteGraphBuilder, node_id: str) -> ContextPackage | None:
     """`pkg` with `node_id`'s own body downgraded from `L0_full` to the
@@ -327,6 +345,20 @@ def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: Con
     `distance` first, the seed itself last - one at a time until it
     holds or every node is already stubbed.
 
+    **Never downgrades the seed or a direct (1-hop) causal neighbor.**
+    `_PROTECTED_DOWNGRADE_ROLES` (`ROLE_SEED`/`ROLE_CALLEE`/`ROLE_CALLER`)
+    are excluded from `candidates` below entirely - only `ROLE_TRANSITIVE`
+    nodes are ever eligible for stub-downgrade. This raises the floor the
+    "never guaranteed" disclosure two paragraphs down already applies to:
+    a package with many real 1-hop neighbors and few/no transitive ones
+    can now legitimately stay over budget *sooner* (once every transitive
+    node is exhausted, not only once every node including the seed is) -
+    an explicit, accepted tradeoff, not an oversight: pipeline
+    completeness of a symbol's *detail*, not just its presence, matters
+    for the seed and its direct neighbors specifically, per the real
+    `django_t02_009` @ budget=2000 failure this protects against (see
+    `_PROTECTED_DOWNGRADE_ROLES`'s own docstring).
+
     **Never removes a node.** An earlier version evicted nodes entirely
     (by distance, then by increasingly careful protected-tier
     exceptions) and broke `tests/test_prism_selection_regressions.py`'s
@@ -372,9 +404,19 @@ def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: Con
         rendered = render(pkg, RenderOptions(include_timestamp=False, include_run_id=False))
         if count_tokens(rendered) <= limit:
             return pkg
-        candidates = [n for n in pkg.nodes if n.compression == "L0_full" and n.id not in exhausted]
+        candidates = [
+            n for n in pkg.nodes
+            if n.compression == "L0_full" and n.id not in exhausted and n.role not in _PROTECTED_DOWNGRADE_ROLES
+        ]
         if not candidates:
             return pkg
+        # `n.id != pkg.seed.symbol` no longer does any real work as a tie-
+        # break - the seed is categorically excluded from `candidates`
+        # above now - but is kept rather than pulled out as a defensive
+        # no-op: nothing about `_PROTECTED_DOWNGRADE_ROLES` guarantees
+        # `pkg.seed.symbol`'s own role is always exactly `ROLE_SEED` for
+        # every possible caller of this function (only `_classify_role`
+        # itself guarantees that), and this costs nothing if it is.
         worst = max(candidates, key=lambda n: (n.id != pkg.seed.symbol, n.distance))
         downgraded = _downgrade_to_stub(pkg, builder, worst.id)
         if downgraded is None:
@@ -604,3 +646,177 @@ def build_context_package(
     # downgrading node detail, never by removing a symbol - see
     # _enforce_render_budget's own docstring for why that's deliberate.
     return _enforce_render_budget(pkg, target_budget, builder)
+
+
+def build_context_package_requested(
+    builder: ConcreteGraphBuilder,
+    seed_id: str,
+    repo_root: str,
+    target_budget: int,
+    requested_symbols: list[str],
+    candidate_universe: set[str],
+    contracts: dict[str, BehavioralContract] | None = None,
+    task_type: str | None = None,
+) -> tuple[ContextPackage, list[str]]:
+    """Track 2 (Phase B Two-Pass Engine Integration), Turn 2's own
+    package build. Forked from `build_context_package` immediately
+    above - identical rendering body, verbatim, except `pack_result`
+    comes from `pack_symbol_context_requested` (Turn 1's manifest plus
+    a caller's own resolved `requested_symbols`) instead of any
+    knapsack call. `_enforce_render_budget` (shared, unmodified by this
+    function) still runs at the end, so an over-requesting caller still
+    gets capped/trimmed to `target_budget` exactly like `build_context_
+    package`'s own knapsack-driven callers - the budget axis stays
+    comparable even though nothing upstream of it here was knapsack-
+    admitted against it, and the seed/1-hop-neighbor downgrade
+    protection (`_PROTECTED_DOWNGRADE_ROLES`) applies identically since
+    both paths funnel through the same `_enforce_render_budget`.
+    Returns `(pkg, skipped)` - `skipped` is every requested name that
+    didn't resolve against `candidate_universe`.
+
+    Graduated verbatim from the noise-reduction spike's Approach A
+    (`benchmarks/experiments/hydration_loop.py`'s own `build_context_
+    package_requested`, commit 511eb84) - the spike's own live grid
+    validated this two-pass protocol (`reports/spike_noise_reduction_
+    debrief.md`); this port changes only import paths, never the
+    rendering body itself.
+    """
+    contracts = contracts or {}
+    seed_info = builder.symbol_table.get(seed_id)
+    if seed_info is None:
+        raise KeyError(seed_id)
+    include_causal_path = _causal_path_enabled() and causal_path_applies_to_task_type(task_type)
+
+    pack_result, skipped = pack_symbol_context_requested(builder, seed_id, requested_symbols, candidate_universe)
+    feature_masks = compute_feature_masks_cached(builder, repo_root)
+    dist_w_map = compute_topological_distances(builder, seed_id, d_max=DEFAULT_MAX_HOPS)
+    reachable_ids = set(dist_w_map) | {seed_id}
+    packed_ids = set(pack_result.selected)
+
+    edge_weights, synthetic_edges = compute_causal_edges(builder)
+    from prism.traversal.causal_weights import compute_all_data_flow_edges, compute_guard_indicator_edges
+
+    data_flow_edges = {(u, v) for (u, v) in compute_all_data_flow_edges(builder)}
+    guard_edges = {(u, v) for (u, v) in compute_guard_indicator_edges(builder)}
+
+    nodes: list[NodeEntry] = []
+    languages_seen: dict[str, int] = {}
+    files_seen: set[str] = set()
+    for item in pack_result.items:
+        info = builder.symbol_table.get(item.symbol)
+        if info is None:
+            continue
+        files_seen.add(info.file)
+        languages_seen[info.language_id] = languages_seen.get(info.language_id, 0) + 1
+        mask = feature_masks.get(item.symbol, 0)
+        nodes.append(
+            NodeEntry(
+                id=item.symbol,
+                role=item.role,
+                distance=0.0 if item.role == ROLE_SEED else item.dist_w,
+                compression=item.compression,
+                cost=item.cost,
+                symbol_name=item.symbol.rsplit(".", 1)[-1],
+                symbol_kind=info.kind,
+                language=info.language_id,
+                file=_relative_path(repo_root, info.file),
+                line=info.line_range[0],
+                end_line=info.line_range[1],
+                signature=_node_signature(item.symbol, contracts, mask),
+                features=NodeFeatures(
+                    substance=_axis_labels(mask, SUBSTANCE_BITS),
+                    form=_axis_labels(mask, FORM_BITS),
+                    output=_axis_labels(mask, OUTPUT_BITS),
+                    role=_axis_labels(mask, ROLE_BITS),
+                ),
+                contract=_derive_contract(item.symbol, builder, packed_ids) if item.role != ROLE_SEED else None,
+                body=_node_body(builder, item.symbol),
+            )
+        )
+
+    edges: list[EdgeEntry] = []
+    for (u, v), weight in edge_weights.items():
+        if u not in packed_ids or v not in packed_ids:
+            continue
+        relation = builder.graph.get_edge_data(u, v, default={}).get("relation", "CALLS") if builder.graph.has_edge(u, v) else "CALLS"
+        u_dist = 0.0 if u == seed_id else dist_w_map.get(u, float("inf"))
+        v_dist = 0.0 if v == seed_id else dist_w_map.get(v, float("inf"))
+        edges.append(
+            EdgeEntry(
+                from_node=u,
+                to_node=v,
+                type=relation if relation in ("CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMENTS", "OVERRIDES", "EMBEDS") else "CALLS",
+                weight=weight,
+                data_flow=(u, v) in data_flow_edges,
+                guard=(u, v) in guard_edges,
+                back_edge=v_dist < u_dist,
+            )
+        )
+
+    causal_path = None
+    if include_causal_path:
+        causal_edge_pairs = [(e.from_node, e.to_node) for e in edges if e.type in ("CALLS", "INSTANTIATES")]
+        stages, truncated = compute_causal_path(
+            seed_id, packed_ids, causal_edge_pairs, dist_w_map, feature_masks, _output_kind, builder.symbol_table.get
+        )
+        causal_path = CausalPath(
+            seed=seed_id,
+            stages=[
+                CausalPathStage(order=i, symbol=symbol, distance=distance, role=role)
+                for i, (symbol, distance, role) in enumerate(stages, start=1)
+            ],
+            truncated=truncated,
+        )
+
+    compression_counts: dict[str, int] = {}
+    for node in nodes:
+        compression_counts[node.compression] = compression_counts.get(node.compression, 0) + 1
+    compression = [ManifestCompression(level=level, count=compression_counts[level]) for level in _RESOLUTION_TO_LEVEL.values() if level in compression_counts]
+
+    manifest = Manifest(
+        packed_nodes=len(nodes),
+        considered_nodes=len(reachable_ids),
+        reachable_nodes=len(reachable_ids),
+        compression=compression,
+        distance_metric=ManifestDistanceMetric(
+            name="causal_dijkstra", lambda_data_flow=LAMBDA_DATA_FLOW, lambda_guard=LAMBDA_GUARD, dist_max=DEFAULT_MAX_HOPS
+        ),
+    )
+
+    coverage = _coverage_summary(feature_masks, reachable_ids, packed_ids)
+
+    primary_language = seed_info.language_id
+    tier = precision_tier_for(primary_language)
+    tier_digit = tier.value[-1] if tier is not None else "3"
+
+    warnings: list[EnvelopeWarning] = []
+    if not is_exact():
+        warnings.append(
+            EnvelopeWarning(
+                code="TOKENIZER_FALLBACK",
+                severity="medium",
+                message=f"real BPE tokenizer unavailable, using {active_backend()} - token counts are approximate",
+            )
+        )
+    if tier_digit == "2":
+        warnings.append(EnvelopeWarning(code="LANGUAGE_TIER_2", severity="low", message=f"{primary_language} is Tier 2 (structural/lexical linking only)"))
+    elif tier_digit == "3":
+        warnings.append(EnvelopeWarning(code="LANGUAGE_TIER_3", severity="low", message=f"{primary_language} is Tier 3 (lexical/package-level linking only)"))
+
+    pkg = ContextPackage(
+        task_type=task_type,
+        engine=EngineRef(name=f"{ENGINE_NAME}_two_pass", version=ENGINE_VERSION, commit="unknown"),
+        seed=SeedRef(symbol=seed_id, file=_relative_path(repo_root, seed_info.file), line=seed_info.line_range[0]),
+        budget=BudgetRef(tokens=target_budget, tokenizer=active_backend(), exact=is_exact()),
+        language=LanguageRef(tier=tier_digit, primary=primary_language, files=len(files_seen)),
+        options={"engine": f"{ENGINE_NAME}_two_pass", "max_hops": str(DEFAULT_MAX_HOPS)},
+        causal_path=causal_path,
+        manifest=manifest,
+        coverage=coverage,
+        warnings=warnings,
+        nodes=nodes,
+        edges=edges,
+        run_id=None,
+        generated_at=None,
+    )
+    return _enforce_render_budget(pkg, target_budget, builder), skipped
