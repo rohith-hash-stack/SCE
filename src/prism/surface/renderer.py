@@ -115,7 +115,7 @@ import hashlib
 import re
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from prism.slicer.tokenizer import count_tokens
 from prism.surface.models import CausalPath, ContextPackage, EnvelopeWarning
@@ -132,6 +132,23 @@ class RenderOptions(BaseModel):
     include_bodies: bool = True
     max_body_lines: Optional[int] = None
     schema_version: int = 2
+    #: Experimental spike (benchmarks/experiments/, Approach B - "Frontier
+    #: Index + Spine Hydration"), default off. When True, `_render_nodes`
+    #: splits into two top-level sibling elements instead of one `<nodes>`:
+    #: `<ReachableFrontier>` (a lightweight id/role/kind index built from
+    #: `frontier_index` below - candidates the packer explored but did not
+    #: admit, never part of `pkg.nodes` itself) and `<HydratedSpine>` (the
+    #: existing `pkg.nodes`, rendered exactly as `_render_one_node` always
+    #: has - same L0_full/L2_skeleton compression tiers, unchanged).
+    #: Deliberately not a `ContextPackage`/`SubmodularPackResult` field -
+    #: the frontier set is a local variable inside `select_submodular_
+    #: context`, discarded on return; keeping it out of the production
+    #: data model means this experiment can be deleted without touching
+    #: any real schema. `two_zone=False` (the default) must leave every
+    #: existing caller's output byte-identical - see
+    #: test_two_zone_default_off_is_byte_identical.
+    two_zone: bool = False
+    frontier_index: list[dict[str, str]] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------- #
@@ -398,9 +415,36 @@ def _render_one_node(node, options: RenderOptions) -> str:
     )
 
 
-def _render_nodes(pkg: ContextPackage, options: RenderOptions) -> str:
+def _render_frontier_entry(entry: dict[str, str]) -> str:
+    return _leaf("symbol", {"id": entry.get("id", ""), "role": entry.get("role", ""), "kind": entry.get("kind", "")})
+
+
+def _render_reachable_frontier(options: RenderOptions) -> str:
+    items = [_render_frontier_entry(e) for e in sorted(options.frontier_index, key=lambda e: e.get("id", ""))]
+    return _container("ReachableFrontier", {}, items, depth=2, options=options)
+
+
+def _render_hydrated_spine(pkg: ContextPackage, options: RenderOptions) -> str:
     items = [_render_one_node(n, options) for n in _sorted_nodes(pkg)]
-    return _container("nodes", {}, items, depth=2, options=options)
+    return _container("HydratedSpine", {}, items, depth=2, options=options)
+
+
+def _render_nodes(pkg: ContextPackage, options: RenderOptions) -> str:
+    if not options.two_zone:
+        items = [_render_one_node(n, options) for n in _sorted_nodes(pkg)]
+        return _container("nodes", {}, items, depth=2, options=options)
+    # Two top-level sibling elements where the caller (`render()`) expects
+    # a single already-fully-rendered string for its own `body_items`
+    # list - `_join_children` there only pads the *start* of whatever we
+    # return, so the second element's own leading pad has to be added
+    # here, matching depth=1 (one level below `<prism_context>`, the same
+    # depth every other top-level section renders at).
+    frontier = _render_reachable_frontier(options)
+    spine = _render_hydrated_spine(pkg, options)
+    if not options.pretty:
+        return frontier + spine
+    pad = " " * (options.indent * 1)
+    return frontier + "\n" + pad + spine
 
 
 def _sorted_edges(pkg: ContextPackage) -> list:
