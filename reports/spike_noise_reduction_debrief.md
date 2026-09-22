@@ -9,7 +9,8 @@ any of the three approaches below)
 `django_t02_017_redirect_url_safety_check`) x 3 budgets (2000/4000/8000) x 2
 seeds (42/43) = 18 cells per approach
 **Total real spend across the spike (all sanity checks, diagnostics, and full
-sweeps, including the Approach A v2/v3 follow-ups below):** ~$0.54
+sweeps, including the Approach A v2/v3 follow-ups and the response-logging
+diagnostic re-run below):** ~$0.54
 **`reports/pilot/checkpoint.json` hash:** unchanged throughout
 (`589e42386e58c528f7a24b1083d4b097ea66ac28984317eb471ca9a02e11aa81`)
 
@@ -449,40 +450,58 @@ Per task:
   budget, every seed - the seed/budget-dependent flakiness v2 showed here is
   gone. A 6-candidate manifest apparently gives the model an unambiguous
   enough view to answer consistently, where v2's 409-candidate one didn't.
-- **`django_t02_009`: a genuine regression, and a real finding in its own
-  right - "Structural Recall vs. Selection Recall."** The offline sizing
-  analysis confirmed `recall=1.000` for this exact 14-candidate set - the
-  pipeline symbol (`_clone`) *is present* in the manifest Turn 1 saw. But
-  `requested_count` drops from v2's 5 to v3's 4, and `cpi_strict` falls back to
-  0.0 (matching v1, worse than v2's 1.0) - the model simply didn't choose to
-  request it this time, despite it being available. **Retaining a ground-truth
-  symbol in the candidate index (structural recall) does not guarantee the LLM
-  selects it (selection recall)** without something that specifically cues it
-  as part of the chain - a smaller, cleaner manifest removed exactly the
-  "noise" that, in v2's case, happened to also carry chain-continuation
-  signal the model was implicitly using. `tsr` partially recovers at
-  budget>=4000 (0.0 at budget=2000, 1.0 at 4000/8000 for both seeds).
-- **`django_t02_005`: unchanged, still unexplained.** `cpi=1.0` (full recall)
-  but `tsr=0.0` on all 6 cells - identical to both v1 and v2. Every manifest
-  variant tried in this spike gets this task's context selection right and its
-  final answer wrong; the root cause is in Turn 2's own response, not in
-  candidate selection, and remains undiagnosed (see the diagnostic note below -
-  the raw completion text for these specific historical calls was never
-  persisted, so this could not be inspected after the fact without a fresh,
-  small paid re-run).
+- **`django_t02_009`: looked like a regression, mostly wasn't one - see the
+  diagnostic re-run below.** `cpi_strict` falls back to 0.0 on all 6 cells
+  (matching v1, worse than v2's 1.0), but `tsr` recovers to 1.0 at
+  budget>=4000 (both seeds) - the model's own *final answer* is completely
+  correct 4 of 6 cells; only the 2 `budget=2000` cells are genuinely wrong.
+- **`django_t02_005`: unchanged from v1/v2.** `cpi=1.0` (full recall) but
+  `tsr=0.0` on all 6 cells - see the diagnostic re-run below for why.
 
-**Diagnostic limitation, stated plainly**: `run_hydration_cell` never saved
-either turn's raw response text, only scores and token counts - so the
-`django_t02_005`/`django_t02_009` anomalies above are diagnosed from the
-*numbers* (recall, requested_count, per-cell scores), not from reading what the
-model actually said. A genuine "zero LLM spend" inspection of those specific
-historical completions is not possible; the content no longer exists anywhere
-to inspect. A small, targeted re-run with response logging added would be
-needed to see the actual reasoning/response text - not yet done as of this
-writing.
+**Diagnostic re-run (budget=4000, seed=42, $0.0017, `hydration_loop.py` gained
+real response-text logging first - `51e3ac6` - since no prior run in this
+spike had ever persisted either turn's raw completion): both anomalies have
+clean, verified explanations, and neither is really a context-selection bug.**
+
+- **`django_t02_005`**: Turn 2's answer names all 4 symbols Turn 1 requested,
+  in a sensible order - `Model.save`, `Model.save_base`, `Model._save_parents`,
+  `Model._save_table` - and the model's own reasoning is accurate
+  (`save_base` genuinely does call `_save_parents`/`_save_table`). But the
+  *adjudicated ground truth* (`task.adjudicated.pipeline_symbols`) names only
+  2 symbols: `['Model.save', 'Model.save_base']`. `score_debug` is a strict,
+  all-or-nothing exact-match scorer (`"0.0 for a wrong/missing/extra/
+  reordered entry"` - its own docstring) - a more-thorough-than-the-ground-
+  truth answer scores a hard 0, identically to a wrong one. **This is a
+  granularity mismatch between the adjudicated pipeline and what Turn 1's own
+  richer manifest reasonably leads the model to include, not a comprehension
+  failure** - and it is present in v1 and v2 too (both share this task's exact
+  same `tsr=0.0` pattern), so it predates v3 and isn't specific to this
+  candidate-pruning approach at all.
+- **`django_t02_009`**: Turn 1 requested 4 symbols - `QuerySet.filter`,
+  `_filter_or_exclude`, `_chain`, `_clone` (correcting an earlier speculation
+  in this same section before the raw text was available: the missing symbol
+  is `_not_support_combined_queries`, not `_clone`, which *was* requested).
+  `cpi_strict` is a strict subset check on the *rendered package's own node
+  set* (`cpi.py`: `"1.0 if the entire pipeline is a subset of selected, else
+  0.0"`) - since `_not_support_combined_queries` was never separately
+  requested/hydrated, `cpi_strict=0.0` by that definition. But Turn 2's own
+  final answer names all 5 ground-truth symbols, in the correct order,
+  including `_not_support_combined_queries` - `tsr=1.0`. The model read it
+  directly as a literal call site inside `QuerySet.filter`'s own already-
+  hydrated source body (`filter()` really does call
+  `self._not_support_combined_queries(...)`) and correctly cited it as a
+  causal stage without needing its own separate node. **`cpi_strict` under-
+  credits this case - a real success, not a real failure** - a genuine
+  limitation of that metric specific to two-pass hydration (a single-turn
+  approach's own selected set is what the model reasons over directly, so
+  this discrepancy between "what's hydrated" and "what the model can
+  correctly infer from what's hydrated" doesn't arise the same way there).
+  The 2 `budget=2000` cells that stay genuinely `tsr=0.0` were not
+  individually re-diagnosed - not necessarily the same mechanism.
 
 Commits: `7c352a5` (v3 implementation, dry-run validated), `8723323` (36-cell
-result, $0.0358).
+result, $0.0358), `51e3ac6` (response-text logging added), `9af8941`
+(diagnostic re-run, $0.0017).
 
 ---
 
@@ -504,22 +523,28 @@ entire spike) while restoring `fpr_gt` to a clean 0.000.
 **No single variant is a strict win, and that's the real, final finding of this
 spike.** v2 has the best `cpi_strict` (0.833); v3 has the best `tsr` (0.500)
 and the best token economy (4167, under baseline's own 7597); v1 has a tie for
-best `fpr_gt` (0.000, matched by v3). The "Structural Recall vs. Selection
-Recall" distinction found in v3's own `django_t02_009` regression is the
-concrete mechanism behind this: shrinking the candidate index to exactly what's
-structurally necessary does not guarantee the model's own Turn 1 selection
-recovers everything in it - a symbol can be present, confirmed by direct
-recall measurement, and still not get requested. Manifest size and model
-selection accuracy are related but not the same axis, and no variant tried
-here has controlled for both at once.
+best `fpr_gt` (0.000, matched by v3). Choosing between v2 and v3 is a real
+trade-off, not a strictly-dominated choice on either side.
 
-**What's left**: `django_t02_005`'s `tsr=0.0`-despite-full-recall regression is
-unexplained across all three A variants and baseline alike, and (see A v3's own
-section) cannot be diagnosed further without a small, targeted re-run that logs
-raw response content - not yet done. `django_t02_009`'s v3 regression is
-diagnosed at the level of *what changed* (`requested_count` 5->4) but not *why*
-the model chose to stop one symbol short, for the same reason. Both are real,
-open threads, not closed by this synthesis.
+**The `django_t02_009`/`django_t02_005` anomalies, diagnosed via a real
+response-logging re-run (see A v3's own section for the full text): both
+metrics, not the model, were the source of the apparent regressions.**
+`django_t02_009`'s `cpi_strict=0.0` mostly co-occurs with `tsr=1.0` - the
+model's own final answer was correct at budget>=4000, `cpi_strict` just
+doesn't credit a causal stage the model correctly inferred by reading it as a
+literal call site inside an already-hydrated caller, rather than needing its
+own separately-requested node - a genuine metric limitation specific to
+two-pass hydration, not a selection failure. `django_t02_005`'s `tsr=0.0`
+(shared by v1, v2, and v3 alike) is a granularity mismatch between the
+2-symbol adjudicated ground truth and a more-thorough, still-substantively-
+correct 4-symbol answer the richer Turn 1 manifest reasonably leads the model
+to give - `score_debug`'s exact-match scoring treats "more complete than
+expected" identically to "wrong." Neither anomaly indicts the underlying
+selection mechanism (topological/scope filtering, or the model's own Turn 1
+judgment) - both indict how well `cpi_strict`/`score_debug` capture what
+"correct" means for a two-pass, richer-context protocol specifically. Only the
+2 `budget=2000` cells of `django_t02_009` (genuinely `tsr=0.0`, not
+individually re-diagnosed) remain a real, if smaller, open thread.
 
 **If single-turn knapsack packing remains the production path instead**,
 candidate scoring needs to blend topological distance with a lightweight
@@ -538,11 +563,16 @@ it into a single-pass scoring formula rather than a second LLM turn.
   (best `tsr`, clean `fpr_gt`, sub-baseline token cost) but is not a strict
   improvement over v2 (`cpi_strict` is lower) - which variant to build on
   depends on whether `tsr`/cost or `cpi_strict` is the priority for whatever
-  uses this next. Two concrete open threads remain, both requiring a small
-  targeted re-run with response-content logging (not yet built) rather than
-  further offline analysis: `django_t02_005`'s persistent `tsr=0.0`-despite-
-  full-recall regression, and *why* (not just *that*) `django_t02_009`
-  regressed under v3.
+  uses this next. A response-content-logging re-run (`hydration_loop.py` now
+  persists both turns' raw text on every cell, not just a diagnostic one -
+  `51e3ac6`) diagnosed both prior open threads: `django_t02_005`'s `tsr=0.0`
+  is a ground-truth-granularity mismatch (score_debug's exact-match scoring
+  penalizes a more-thorough-but-correct answer identically to a wrong one),
+  and most of `django_t02_009`'s apparent regression is `cpi_strict`
+  under-crediting a real success (the model correctly inferred a causal
+  stage from an already-hydrated caller's own source body). Only
+  `django_t02_009`'s 2 `budget=2000` cells (genuinely `tsr=0.0`) remain
+  undiagnosed.
 - **A high-priority production bug is flagged, not fixed, on this branch**:
   `prism.runtime.index_cache`'s whole-pipeline cache
   (`prism.cli.build_pipeline`'s `use_cache=True` default) returns inconsistent

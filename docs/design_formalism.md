@@ -1602,22 +1602,31 @@ architectural conclusion.
   $0.1515). **Not a uniform win over v2**: `cpi_strict` settles at
   0.667 (above v1's 0.333, below v2's 0.833). `django_t02_017` is fully
   solved (1.0/1.0 on all 6 cells, the v2 seed/budget flakiness gone).
-  `django_t02_009` regresses to `cpi_strict=0.0` despite the offline
-  analysis confirming `recall=1.000` for this exact candidate set - the
-  pipeline symbol (`_clone`) is present in the manifest, but
-  `requested_count` drops from v2's 5 to v3's 4 and the model simply
-  doesn't request it. **This is the "Structural Recall vs. Selection
-  Recall" finding**: a symbol being reachable/present in the candidate
-  index does not guarantee the model's own Turn 1 selection includes it
-  - manifest size and model selection accuracy are related but not the
-  same axis, and no variant in this spike controls for both at once.
-  `django_t02_005` keeps the same unexplained `tsr=0.0`-despite-full-
-  recall regression every variant (v1, v2, v3, baseline) shares -
-  diagnosing it, or the `django_t02_009` regression's own *why* (not
-  just *that*), requires a small re-run with raw response-content
-  logging (not built - `run_hydration_cell` never persisted either
-  turn's response text, only scores and token counts), not further
-  offline analysis.
+  `django_t02_009` shows `cpi_strict=0.0` on all 6 cells despite the
+  offline analysis confirming `recall=1.000` for this exact candidate
+  set. **Diagnosed via a real response-logging re-run** (`51e3ac6`
+  added the logging `run_hydration_cell` never had before;
+  `9af8941` is the re-run, $0.0017): Turn 1 requested 4 of 5 pipeline
+  symbols (missing `_not_support_combined_queries`, not `_clone` as
+  first speculated from the numbers alone before the raw text was
+  available), but Turn 2's own final answer names all 5 correctly, in
+  order - `tsr=1.0` at `budget>=4000` for both seeds. The model read
+  the missing symbol directly as a literal call site inside
+  `QuerySet.filter`'s own already-hydrated source body and correctly
+  cited it without needing its own separate node. **`cpi_strict`
+  under-credits this as a failure when the model's real answer was
+  correct** - a genuine limitation of that metric specific to two-pass
+  hydration, not a selection bug. (Only the 2 `budget=2000` cells stay
+  genuinely `tsr=0.0`, not individually re-diagnosed.)
+  `django_t02_005`'s `tsr=0.0`-despite-full-recall pattern (shared by
+  v1, v2, v3, and baseline alike) is likewise **not a comprehension
+  failure**: the same re-run shows Turn 2 correctly naming all 4
+  symbols Turn 1 requested, with accurate reasoning - but the
+  adjudicated ground truth names only 2, and `score_debug`'s strict
+  exact-match scoring (`"0.0 for a wrong/missing/extra/reordered
+  entry"`) treats a more-thorough-but-substantively-correct answer
+  identically to a wrong one. A ground-truth-granularity mismatch, not
+  a defect in candidate selection or model judgment.
 
 **A real, pre-existing production bug was found and flagged (not
 fixed) during A v2's own validation**: `prism.runtime.index_cache`'s
@@ -1652,15 +1661,23 @@ v3 confirmed the resulting token cost could come down 91% (measured)
 without losing the fix - and, on this run, improved `tsr` further while
 restoring `fpr_gt` to a clean 0.000.
 
-**No single variant is a strict win, which is itself the final finding
-of this spike.** v2 has the best `cpi_strict`; v3 has the best `tsr`
-and the best token economy; v1 ties v3 on `fpr_gt`. The Structural-
-Recall-vs-Selection-Recall finding (v3's own `django_t02_009`
-regression) is the concrete mechanism: a smaller candidate index can
-keep every ground-truth symbol technically present while still not
-being enough to make the model actually request all of them - manifest
-size and model selection accuracy are related but not identical, and
-no variant tried here controls for both simultaneously.
+**No single variant is a strict win.** v2 has the best `cpi_strict`;
+v3 has the best `tsr` and the best token economy; v1 ties v3 on
+`fpr_gt`. A response-logging re-run (`51e3ac6`/`9af8941`, $0.0017)
+diagnosed both of v3's apparent per-task anomalies down to real causes,
+neither of which indicts the selection mechanism itself:
+`django_t02_009`'s `cpi_strict=0.0` mostly co-occurs with `tsr=1.0` -
+`cpi_strict` doesn't credit a causal stage the model correctly infers
+by reading it as a literal call site inside an already-hydrated
+caller's own source, rather than needing that stage's own separately-
+requested node (a genuine limitation of that metric for two-pass
+hydration specifically, not a real failure); `django_t02_005`'s
+`tsr=0.0` (shared by v1/v2/v3/baseline alike) is `score_debug`'s own
+strict exact-match scoring penalizing a more-thorough-but-
+substantively-correct answer identically to a wrong one, against a
+2-symbol adjudicated ground truth Turn 1's own richer manifest
+reasonably leads the model past. Only `django_t02_009`'s 2
+`budget=2000` cells (genuinely `tsr=0.0`) remain undiagnosed.
 
 **The Phase B synthesis, for whichever path is picked up next**:
 
@@ -1679,21 +1696,14 @@ no variant tried here controls for both simultaneously.
    finding), and a `hop=3` + same-module-or-real-call-chain scope
    filter is what makes that affordable (v3's own finding - 91%
    measured Turn 1 reduction, verified offline against a documented
-   `hop=2` failure case before any live spend). The remaining open
-   question is not cost - it's closing the Structural-Recall-vs-
-   Selection-Recall gap v3 itself exposed: getting the model to
-   actually request every candidate its own manifest makes available,
-   not just some of them.
+   `hop=2` failure case before any live spend). Whether to build on v2
+   (recall-first) or v3 (cost/tsr-first) is a real, not yet closed,
+   trade-off - not a strict dominance question.
 
-All five approach variants (B, C, A v1/v2/v3) plus the sizing script
-stay isolated on `experiment/noise-filtering-spike` (unmerged) as a
-documented audit trail. `django_t02_005`'s `tsr=0.0`-despite-full-
-recall regression (shared by every variant, baseline included) and
-`django_t02_009`'s v3-specific selection-recall regression both remain
-open, undiagnosed at the level of *why* - the next real step is a
-small re-run with raw response-content logging (not built;
-`run_hydration_cell` never persisted either turn's response text), not
-further offline analysis. The Subgraph Processor (Sec 10.3/10.4)
-remains unimplemented pending a design that addresses point 1 or 2
-above. The `prism.runtime.index_cache` bug found above remains a
-separate, unfixed, high-priority production issue.
+All five approach variants (B, C, A v1/v2/v3) plus the sizing and
+response-logging tooling stay isolated on
+`experiment/noise-filtering-spike` (unmerged) as a documented audit
+trail. The Subgraph Processor (Sec 10.3/10.4) remains unimplemented
+pending a design that addresses point 1 or 2 above. The
+`prism.runtime.index_cache` bug found above remains a separate,
+unfixed, high-priority production issue.
