@@ -147,12 +147,23 @@ def run_cell(client: OpenAICompatibleClient, engine: PrismEngine, task, budget: 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Verify retrieval/rendering plumbing only - no LLM calls")
+    parser.add_argument(
+        "--tasks", default=None,
+        help=f"Comma-separated subset of task IDs to run (default: all {len(TARGET_TASKS)} target tasks). "
+        "For a small, cost-controlled first real-API sanity check before the full grid.",
+    )
+    parser.add_argument("--budgets", default=None, help=f"Comma-separated subset of budgets (default: {BUDGETS})")
+    parser.add_argument("--seeds", default=None, help=f"Comma-separated subset of seeds (default: {SEEDS})")
     args = parser.parse_args()
+
+    target_tasks = tuple(args.tasks.split(",")) if args.tasks else TARGET_TASKS
+    budgets = tuple(int(b) for b in args.budgets.split(",")) if args.budgets else BUDGETS
+    seeds = tuple(int(s) for s in args.seeds.split(",")) if args.seeds else SEEDS
 
     repo_path = str(resolve("django"))
     load_result = load_tasks_from_dir(TASKS_DIR)
     tasks_by_id = {t.task_id: t for t in load_result.accepted}
-    missing = [t for t in TARGET_TASKS if t not in tasks_by_id]
+    missing = [t for t in target_tasks if t not in tasks_by_id]
     if missing:
         print(f"error: target tasks not found in {TASKS_DIR}: {missing}", file=sys.stderr)
         return 1
@@ -162,9 +173,9 @@ def main() -> int:
     engine.index(repo_path)
 
     if args.dry_run:
-        for task_id in TARGET_TASKS:
+        for task_id in target_tasks:
             task = tasks_by_id[task_id]
-            for budget in BUDGETS:
+            for budget in budgets:
                 pkg = engine.retrieve(task.seed_symbol, budget, task_type=task.task_type)
                 for two_zone in (False, True):
                     frontier = _frontier_index_for(engine._builder, pkg) if two_zone else []
@@ -184,10 +195,10 @@ def main() -> int:
 
     client = OpenAICompatibleClient()
     rows = []
-    for task_id in TARGET_TASKS:
+    for task_id in target_tasks:
         task = tasks_by_id[task_id]
-        for budget in BUDGETS:
-            for seed in SEEDS:
+        for budget in budgets:
+            for seed in seeds:
                 for two_zone in (False, True):
                     row = run_cell(client, engine, task, budget, seed, two_zone)
                     print(
