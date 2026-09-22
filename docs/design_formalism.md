@@ -1616,8 +1616,14 @@ architectural conclusion.
   cited it without needing its own separate node. **`cpi_strict`
   under-credits this as a failure when the model's real answer was
   correct** - a genuine limitation of that metric specific to two-pass
-  hydration, not a selection bug. (Only the 2 `budget=2000` cells stay
-  genuinely `tsr=0.0`, not individually re-diagnosed.)
+  hydration, not a selection bug. The 2 `budget=2000` cells that stay
+  genuinely `tsr=0.0` were diagnosed separately (`884249d`): not
+  truncation (both completions are complete, valid JSON) but
+  `_enforce_render_budget` (real, unmodified) downgrading every node,
+  `QuerySet.filter` included, to `L2_skeleton` at that tighter budget -
+  stripping the exact source line the model needs to infer the missing
+  symbol, present and read correctly at `budget>=4000` where `filter`
+  keeps `L0_full`.
   `django_t02_005`'s `tsr=0.0`-despite-full-recall pattern (shared by
   v1, v2, v3, and baseline alike) is likewise **not a comprehension
   failure**: the same re-run shows Turn 2 correctly naming all 4
@@ -1663,21 +1669,28 @@ restoring `fpr_gt` to a clean 0.000.
 
 **No single variant is a strict win.** v2 has the best `cpi_strict`;
 v3 has the best `tsr` and the best token economy; v1 ties v3 on
-`fpr_gt`. A response-logging re-run (`51e3ac6`/`9af8941`, $0.0017)
-diagnosed both of v3's apparent per-task anomalies down to real causes,
-neither of which indicts the selection mechanism itself:
-`django_t02_009`'s `cpi_strict=0.0` mostly co-occurs with `tsr=1.0` -
-`cpi_strict` doesn't credit a causal stage the model correctly infers
-by reading it as a literal call site inside an already-hydrated
-caller's own source, rather than needing that stage's own separately-
-requested node (a genuine limitation of that metric for two-pass
-hydration specifically, not a real failure); `django_t02_005`'s
+`fpr_gt`. Two response-logging re-runs (`51e3ac6`/`9af8941`, then
+`884249d` for the remaining `budget=2000` cells - $0.0031 total)
+diagnosed every one of v3's apparent per-task anomalies down to real
+causes, none of which indicts the selection mechanism itself:
+`django_t02_009`'s `cpi_strict=0.0` at `budget>=4000` co-occurs with
+`tsr=1.0` - `cpi_strict` doesn't credit a causal stage the model
+correctly infers by reading it as a literal call site inside an
+already-hydrated caller's own source, rather than needing that stage's
+own separately-requested node (a genuine limitation of that metric for
+two-pass hydration specifically, not a real failure); its 2
+`budget=2000` cells (genuinely `tsr=0.0`) trace to a real, confirmed
+mechanism instead - not truncation, but `_enforce_render_budget`
+downgrading every node, `QuerySet.filter` included, to `L2_skeleton`
+at that tighter budget, stripping the exact source line the model
+needs and correctly reads at looser budgets. `django_t02_005`'s
 `tsr=0.0` (shared by v1/v2/v3/baseline alike) is `score_debug`'s own
 strict exact-match scoring penalizing a more-thorough-but-
 substantively-correct answer identically to a wrong one, against a
 2-symbol adjudicated ground truth Turn 1's own richer manifest
-reasonably leads the model past. Only `django_t02_009`'s 2
-`budget=2000` cells (genuinely `tsr=0.0`) remain undiagnosed.
+reasonably leads the model past. Every open thread from this spike is
+closed - see `reports/spike_noise_reduction_debrief.md`'s own Closing
+Note for the full trail.
 
 **The Phase B synthesis, for whichever path is picked up next**:
 

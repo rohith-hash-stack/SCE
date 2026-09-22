@@ -496,8 +496,8 @@ clean, verified explanations, and neither is really a context-selection bug.**
   approach's own selected set is what the model reasons over directly, so
   this discrepancy between "what's hydrated" and "what the model can
   correctly infer from what's hydrated" doesn't arise the same way there).
-  The 2 `budget=2000` cells that stay genuinely `tsr=0.0` were not
-  individually re-diagnosed - not necessarily the same mechanism.
+  The 2 `budget=2000` cells that stay genuinely `tsr=0.0` were diagnosed
+  separately (real, not a truncation artifact) - see the Closing Note below.
 
 Commits: `7c352a5` (v3 implementation, dry-run validated), `8723323` (36-cell
 result, $0.0358), `51e3ac6` (response-text logging added), `9af8941`
@@ -542,9 +542,9 @@ to give - `score_debug`'s exact-match scoring treats "more complete than
 expected" identically to "wrong." Neither anomaly indicts the underlying
 selection mechanism (topological/scope filtering, or the model's own Turn 1
 judgment) - both indict how well `cpi_strict`/`score_debug` capture what
-"correct" means for a two-pass, richer-context protocol specifically. Only the
-2 `budget=2000` cells of `django_t02_009` (genuinely `tsr=0.0`, not
-individually re-diagnosed) remain a real, if smaller, open thread.
+"correct" means for a two-pass, richer-context protocol specifically. The
+2 `budget=2000` cells of `django_t02_009` (genuinely `tsr=0.0`) were diagnosed
+separately - see the Closing Note.
 
 **If single-turn knapsack packing remains the production path instead**,
 candidate scoring needs to blend topological distance with a lightweight
@@ -570,9 +570,9 @@ it into a single-pass scoring formula rather than a second LLM turn.
   penalizes a more-thorough-but-correct answer identically to a wrong one),
   and most of `django_t02_009`'s apparent regression is `cpi_strict`
   under-crediting a real success (the model correctly inferred a causal
-  stage from an already-hydrated caller's own source body). Only
-  `django_t02_009`'s 2 `budget=2000` cells (genuinely `tsr=0.0`) remain
-  undiagnosed.
+  stage from an already-hydrated caller's own source body).
+  `django_t02_009`'s 2 `budget=2000` cells (genuinely `tsr=0.0`) were
+  diagnosed in a follow-up re-run - see the Closing Note below.
 - **A high-priority production bug is flagged, not fixed, on this branch**:
   `prism.runtime.index_cache`'s whole-pipeline cache
   (`prism.cli.build_pipeline`'s `use_cache=True` default) returns inconsistent
@@ -593,3 +593,60 @@ it into a single-pass scoring formula rather than a second LLM turn.
 - `reports/pilot/checkpoint.json` hash confirmed unchanged
   (`589e42386e58c528f7a24b1083d4b097ea66ac28984317eb471ca9a02e11aa81`) before
   and after every commit in this spike.
+
+## Closing Note
+
+Every open thread from Approach A v3's own section is now closed. Summary,
+for a reader who wants the final state without re-reading the full diagnostic
+trail above:
+
+- **`django_t02_005` (`tsr=0.0` on every cell, all of v1/v2/v3/baseline)**:
+  not a real failure. The model's Turn 2 answer is substantively correct - it
+  names the true 2-symbol pipeline plus two more real, legitimate downstream
+  stages the richer manifest reasonably led it to include. `score_debug`'s
+  exact-match scoring (`"0.0 for a wrong/missing/extra/reordered entry"`)
+  can't tell "more thorough than expected" from "wrong" - a ground-truth-
+  granularity limit, not a selection or comprehension bug.
+- **`django_t02_009` at `budget>=4000` (`cpi_strict=0.0`, `tsr=1.0`)**: not a
+  real failure either. The model's final answer is exactly correct, including
+  a symbol (`_not_support_combined_queries`) it never separately requested -
+  read directly from a literal call site inside an already-hydrated caller's
+  own source. `cpi_strict` only credits a symbol with its own hydrated node,
+  so it can't see this kind of correct inference - a real limitation of that
+  metric for two-pass hydration specifically, not present the same way in a
+  single-turn approach whose own selected set is exactly what the model
+  reasons over.
+- **`django_t02_009` at `budget=2000` (`cpi_strict=0.0`, `tsr=0.0`, the one
+  cell genuinely wrong)**: diagnosed directly, not inferred. Ruled out first:
+  not truncation - both completions are complete, valid JSON, nowhere near any
+  output cap. The real cause, confirmed by inspecting each node's own
+  `compression` field: `_enforce_render_budget` (real, unmodified production
+  code) downgrades every admitted node - including the seed,
+  `QuerySet.filter` itself - to `L2_skeleton` (a signature-only stub, no real
+  body) at `budget=2000`, while `filter` keeps `L0_full` at `budget>=4000`.
+  `filter`'s real source is the exact location of the
+  `self._not_support_combined_queries(...)` call the model needs to read to
+  correctly infer that symbol - stripped out at the tighter budget, present at
+  the looser ones. Turn 1's own request is identical at both budgets; Turn 2's
+  render-budget trim is where the two budgets actually diverge.
+
+**The metric-level lesson, stated once, plainly**: `cpi_strict` and
+`score_debug` were both designed against a single-turn, single-render
+protocol, where "what's in the package" and "what the model can correctly
+reason about" are the same thing by construction. Two-pass hydration breaks
+that equivalence in both directions - the model can correctly infer a fact
+from a call site inside a hydrated caller without that fact's own symbol
+ever being separately hydrated (`cpi_strict` then under-counts a success), and
+a richer Turn 1 manifest can lead the model to a more complete, still-correct
+answer than a narrower adjudicated ground truth anticipated (`score_debug`
+then over-penalizes a non-failure). Neither gap reflects on `hop=3` +
+scope-filtered candidate pruning itself, which is confirmed algorithmically
+sound and safe (`recall=1.000` on all 3 tasks, verified both offline and via
+every live cell run against it). Any future work building on Approach A
+should account for this when reading its own `cpi_strict`/`tsr` numbers, not
+just when reading this spike's.
+
+Commit: `884249d` (the `budget=2000` diagnostic re-run and compression-level
+inspection this note summarizes). Spike branch fully pushed and clean as of
+this note; `develop` verified clean and against the protected regression
+suite as of the commit this note itself lands in.
