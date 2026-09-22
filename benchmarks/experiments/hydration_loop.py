@@ -61,6 +61,7 @@ from prism.packer.submodular_knapsack import (
     SubmodularPackResult,
     _classify_role,
     _default_costs,
+    _module_prefix3,
     _signature_stub,
     suggest_similar_seeds,
 )
@@ -186,13 +187,73 @@ def _outgoing_call_names(builder: ConcreteGraphBuilder, qname: str) -> list[str]
     return sorted(names)[:_MAX_CALLS_PER_SYMBOL]
 
 
+#: v3 (hop=3 + scope-filtered candidate universe): the offline sizing
+#: analysis (benchmarks/experiments/inspect_manifest_sizing.py, commit
+#: 465474b) found recall=1.000 on all 3 target tasks at 3 hops - and
+#: that a hop=3 + same-module-or-real-call-chain scope filter beats
+#: either lever alone by a wide margin (93-99% Turn 1 token reduction
+#: vs. v2's unbounded/6-hop manifest) on every task measured, not just
+#: some. hop=2 was measured and rejected (drops a real pipeline symbol,
+#: django_t02_009's _clone) - 3 is the validated floor, not a guess.
+CANDIDATE_INDEX_MAX_HOPS = 3.0
+
+
+def _real_call_chain_reachable(builder: ConcreteGraphBuilder, seed_id: str, max_hops: int = 3, relations: tuple[str, ...] = ("CALLS", "INSTANTIATES")) -> dict[str, int]:
+    """`{node: hop_distance}` for every node reachable from `seed_id` via
+    a chain of concrete `relations` edges in `builder.graph` (the real
+    structural graph, not the causal graph's synthetic-coupling-
+    augmented one), capped at `max_hops` unweighted hops - see
+    `_build_candidate_index`'s own v3 docstring for why this, not the
+    causal graph, is what the scope filter's "directly targeted by a
+    concrete CALLS/INSTANTIATES edge" rule means, applied transitively.
+    """
+    from collections import deque
+
+    visited = {seed_id: 0}
+    queue = deque([seed_id])
+    while queue:
+        node = queue.popleft()
+        depth = visited[node]
+        if depth >= max_hops or node not in builder.graph:
+            continue
+        for succ in builder.graph.successors(node):
+            if succ in visited:
+                continue
+            edge = builder.graph.get_edge_data(node, succ) or {}
+            if edge.get("relation") not in relations:
+                continue
+            visited[succ] = depth + 1
+            queue.append(succ)
+    return visited
+
+
+def _combined_hop_scope_filtered(builder: ConcreteGraphBuilder, seed_id: str, candidates: set[str], max_hops: int = 3) -> set[str]:
+    """Keep a (already hop-limited) candidate if it shares the seed's own
+    top-level-3 module namespace, or sits within a `max_hops`-long chain
+    of concrete `CALLS`/`INSTANTIATES` edges from the seed
+    (`_real_call_chain_reachable`) - verified offline (recall=1.000 on
+    all 3 target tasks, `inspect_manifest_sizing.py`) before being wired
+    into the live Turn 1 manifest here.
+    """
+    seed_info = builder.symbol_table.get(seed_id)
+    seed_prefix = _module_prefix3(seed_info.module) if seed_info is not None else ""
+    real_chain = _real_call_chain_reachable(builder, seed_id, max_hops=max_hops)
+    kept = set()
+    for qname in candidates:
+        if qname == seed_id or qname in real_chain:
+            kept.add(qname)
+            continue
+        info = builder.symbol_table.get(qname)
+        module = info.module if info is not None else ""
+        if _module_prefix3(module) == seed_prefix:
+            kept.add(qname)
+    return kept
+
+
 def _build_candidate_index(
-    builder: ConcreteGraphBuilder, seed_id: str, max_hops: float = DEFAULT_MAX_HOPS, upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS
+    builder: ConcreteGraphBuilder, seed_id: str, max_hops: float = CANDIDATE_INDEX_MAX_HOPS, upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS
 ) -> tuple[str, set[str]]:
-    """`(manifest_text, candidate_universe)` - the identical candidate
-    universe `pack_symbol_context`'s own body builds (seed + every
-    forward-reachable node within `max_hops` + every upstream caller
-    within `upstream_max_hops`), rendered as one compact
+    """`(manifest_text, candidate_universe)`, rendered as one compact
     `qualified_name|role|kind|signature|calls=[...]` line per real
     (symbol-table-resolved) candidate. v2 (generic AST signatures + call
     sinks): adds the symbol's own raw declaration line and its direct
@@ -200,11 +261,18 @@ def _build_candidate_index(
     facts (`_declaration_line`/`_outgoing_call_names`, both reused from
     production, neither dependent on a human-written docstring) - on top
     of v1's bare `qualified_name|role|kind` line, so Turn 1 has more
-    than an identifier string to judge relevance from. Budget-
-    independent by construction, same as `dist_w_map` itself - see this
-    module's own docstring for why that's expected, not a gap: what
-    budget affects here is Turn 2's own render cap, not which symbols
-    are reachable in the first place.
+    than an identifier string to judge relevance from. v3 (this
+    version): the candidate universe itself is capped at `max_hops=3`
+    (was `DEFAULT_MAX_HOPS=6.0`, production's own default reach) and
+    further reduced by `_combined_hop_scope_filtered` - v2's own
+    unbounded, full-reach manifest cost ~44K tokens on average (up to
+    73K) for a mechanism that only ever used a handful of those
+    candidates; v3's offline-verified combined filter keeps
+    `recall=1.000` on every task measured while cutting 93-99% of that
+    cost. Still budget-independent by construction, same as `dist_w_map`
+    itself - see this module's own docstring for why that's expected,
+    not a gap: what budget affects here is Turn 2's own render cap, not
+    which symbols are reachable in the first place.
     """
     graph = build_causal_graph(builder)
     dist_w_map = compute_topological_distances(builder, seed_id, d_max=max_hops)
@@ -213,6 +281,7 @@ def _build_candidate_index(
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
 
     candidates = {seed_id} | {n for n in dist_w_map if dist_w_map[n] <= max_hops} | {n for n in dist_w_upstream_map if dist_w_upstream_map[n] <= upstream_max_hops}
+    candidates = _combined_hop_scope_filtered(builder, seed_id, candidates, max_hops=int(max_hops))
 
     lines = []
     resolved: set[str] = set()
