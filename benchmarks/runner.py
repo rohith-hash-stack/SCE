@@ -147,15 +147,20 @@ def _cell_key(task_id: str, engine_name: str, budget: int, seed: int) -> str:
 def load_checkpoint(path: str) -> dict:
     """`{"cells": {cell_key: {"score": float, "raw_response": str,
     "prompt_tokens": int, "completion_tokens": int, "cost_usd": float |
-    None}}}` - an absent, unreadable, or corrupt file is treated as "no
-    completed cells yet" (never raises), the same "checkpointing is a
-    resumability convenience, not a correctness dependency" contract
-    this codebase's other caches already establish. `raw_response` is
-    read back with `.get("raw_response", "")` at the one call site that
-    resumes a cell, so a checkpoint file written before
-    fix-llm-response-persistence (no `raw_response` key at all) still
-    loads - it just resumes with an empty response string for those
-    older cells, never a `KeyError`."""
+    None, "selected_symbols": list[str], "cpi_strict": float | None,
+    "cpi_fractional": float | None, "model": str}}}` - an absent,
+    unreadable, or corrupt file is treated as "no completed cells yet"
+    (never raises), the same "checkpointing is a resumability
+    convenience, not a correctness dependency" contract this codebase's
+    other caches already establish. `raw_response` is read back with
+    `.get("raw_response", "")` at the one call site that resumes a
+    cell, so a checkpoint file written before fix-llm-response-
+    persistence (no `raw_response` key at all) still loads - it just
+    resumes with an empty response string for those older cells, never
+    a `KeyError`. `model` (pilot-4 prep, Fix 3) is likewise absent from
+    any cell written before this field existed - a resumed cell is read
+    as-is, never backfilled, so an older checkpoint's own cells simply
+    stay without it."""
     p = Path(path)
     if not p.exists():
         return {"cells": {}}
@@ -588,6 +593,20 @@ def run_evaluation(
                                 "selected_symbols": sorted(candidate_symbols),
                                 "cpi_strict": cell_cpi_strict,
                                 "cpi_fractional": cell_cpi_fractional,
+                                #: The resolved model tag that actually
+                                #: answered this cell (CallResult.model,
+                                #: after the client's own env-var/default
+                                #: resolution - never the raw model=
+                                #: argument, which can be None). A cell
+                                #: reused via --resume is never rewritten
+                                #: here at all (it's read, never touched,
+                                #: in the cached_cell branch above), so an
+                                #: older checkpoint's own resumed cells
+                                #: simply keep whatever they already have
+                                #: (absent, for a cell written before this
+                                #: field existed) rather than this being
+                                #: backfilled or recomputed.
+                                "model": r.call.model,
                             }
                             total_calls_scored += 1
                             total_prompt_tokens += r.call.prompt_tokens
