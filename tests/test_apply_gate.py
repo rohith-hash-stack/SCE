@@ -61,15 +61,16 @@ def test_gate_passes_when_both_deltas_clear():
 
 
 def test_gate_expands_when_one_below_threshold():
-    """TSR clears the threshold (20pp); CPI_answer sits in [5, 15) -
-    the literal "one or both deltas in [5, threshold)" EXPAND case."""
+    """TSR clears the threshold (20pp, real effect); CPI_answer sits at
+    10pp - not below the 5pp STOP floor (so not MIXED), not clearing
+    its own 15pp threshold either (so not PASS) - genuinely ambiguous,
+    EXPAND."""
     cells = _paired_cells(20, baseline_tsr=0.0, prism_tsr=0.20, baseline_cpi=0.0, prism_cpi=0.10)
 
     gate_metrics = compute_gate_metrics(cells, BASELINE, PRISM, n_resamples=10_000, bootstrap_seed=42)
     decision, reason = apply_decision_rule(gate_metrics, delta_tsr_threshold=15.0, delta_cpi_threshold=15.0)
 
     assert decision == "EXPAND"
-    assert "in [5, threshold)" in reason
     assert gate_metrics["delta_tsr_pp"] == pytest.approx(20.0)
     assert gate_metrics["delta_cpi_pp"] == pytest.approx(10.0)
 
@@ -119,16 +120,34 @@ def test_gate_undetermined_when_prism_engine_entirely_absent():
     assert decision == "UNDETERMINED"
 
 
-def test_gate_catch_all_expand_for_mixed_pass_and_stop_range():
-    """delta_tsr clears PASS on its own (30pp); delta_cpi is below the
-    5pp STOP floor (2pp) - neither a clean PASS (cpi fails) nor a clean
-    STOP (tsr is nowhere near it), and not literally "in [5, threshold)"
-    for cpi either (2 < 5). The catch-all EXPAND reading this script's
-    own docstring documents."""
+def test_gate_reports_mixed_when_tsr_strong_cpi_weak():
+    """ΔTSR clears its own threshold with a real margin (30pp, CI
+    excludes zero); ΔCPI_answer is below the 5pp STOP floor (2pp) -
+    one metric shows a clear effect, the other shows none. MIXED, not
+    EXPAND (an earlier version of this script had no MIXED outcome and
+    folded this exact case into an EXPAND catch-all)."""
     cells = _paired_cells(20, baseline_tsr=0.0, prism_tsr=0.30, baseline_cpi=0.0, prism_cpi=0.02)
 
     gate_metrics = compute_gate_metrics(cells, BASELINE, PRISM, n_resamples=10_000, bootstrap_seed=42)
     decision, reason = apply_decision_rule(gate_metrics, delta_tsr_threshold=15.0, delta_cpi_threshold=15.0)
 
-    assert decision == "EXPAND"
-    assert "catch-all" in reason
+    assert decision == "MIXED"
+    assert "ΔTSR" in reason and "clear effect" in reason
+    assert "ΔCPI_answer" in reason
+
+
+def test_gate_reports_mixed_when_cpi_strong_tsr_weak():
+    """The mirror image: ΔCPI_answer clears its own threshold with a
+    real margin (25pp, CI excludes zero); ΔTSR is below the 5pp STOP
+    floor (1pp). Still MIXED, with the explanation naming CPI_answer as
+    the metric that showed the effect this time - the reason string
+    must correctly identify *which* metric was which, not just that
+    the outcome is MIXED."""
+    cells = _paired_cells(20, baseline_tsr=0.0, prism_tsr=0.01, baseline_cpi=0.0, prism_cpi=0.25)
+
+    gate_metrics = compute_gate_metrics(cells, BASELINE, PRISM, n_resamples=10_000, bootstrap_seed=42)
+    decision, reason = apply_decision_rule(gate_metrics, delta_tsr_threshold=15.0, delta_cpi_threshold=15.0)
+
+    assert decision == "MIXED"
+    assert "ΔCPI_answer" in reason and "clear effect" in reason
+    assert "ΔTSR" in reason

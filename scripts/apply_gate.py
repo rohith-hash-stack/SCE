@@ -18,27 +18,38 @@ Unlike `scripts/merge_pilot_checkpoints.py` (stdlib-only), this needs
 confidence interval in this project already uses) and so must run from
 inside this repo's own Python environment, not standalone.
 
-**The decision rule, applied literally where the request fully
-specifies it, and one real gap filled in, disclosed here rather than
-silently guessed past**: the four cases given -
+**The decision rule - five outcomes, a complete partition of every
+possible (delta_tsr, delta_cpi, CI) combination** (an earlier version
+of this script had only PASS/EXPAND/STOP/UNDETERMINED, whose given
+rule didn't cover every case - e.g. one delta clearing its own
+threshold while the other sits below the STOP floor - and filled the
+gap with an EXPAND catch-all; MIXED below is the real, named outcome
+for exactly that gap, not a re-labeled catch-all):
 
-    PASS:  both deltas >= threshold AND both CIs exclude zero
-    EXPAND: one or both deltas in [5, threshold)
-    STOP:  both deltas < 5
-    UNDETERMINED: any input missing
+    PASS:  ΔTSR >= threshold AND ΔTSR's CI excludes zero
+           AND ΔCPI_answer >= threshold AND ΔCPI_answer's CI excludes zero
 
-- don't partition every possible (delta_tsr, delta_cpi) pair. A case
-like delta_tsr=20 (clears its own threshold) paired with
-delta_cpi=2 (below 5) is not PASS (CPI doesn't clear its threshold),
-not literally EXPAND ("one or both...in [5, threshold)" - 2 is below
-5, not inside that interval), and not STOP (not *both* below 5). Given
-this is a go/no-go/get-more-data gate, EXPAND is implemented as the
-catch-all for anything that is neither a clean PASS nor a clean STOP -
-the standard shape for a three-way "clear win / clear loss / ambiguous"
-decision rule, and the only reading under which every input produces a
-decision at all. Flagged in this script's own report output whenever
-this catch-all (rather than the literal "one or both in [5,
-threshold)" case) is what produced an EXPAND verdict.
+    STOP:  ΔTSR < 5  AND  ΔCPI_answer < 5
+
+    MIXED: (ΔTSR clears its threshold with its CI excluding zero
+            AND ΔCPI_answer < 5)
+           OR
+           (ΔCPI_answer clears its threshold with its CI excluding zero
+            AND ΔTSR < 5)
+           - one metric shows a clear effect, the other shows none; a
+           real, reportable finding distinct from both PASS (both
+           clear) and EXPAND (neither clearly resolved) - reported
+           with an explicit one-line statement of which metric was
+           which, never folded silently into EXPAND.
+
+    EXPAND: every other combination - genuinely ambiguous either way,
+           more seeds/tasks needed before a decision, the only bucket
+           that's still a judgment call by nature rather than a
+           threshold crossing.
+
+    UNDETERMINED: any input missing (zero cells, or zero paired
+           task_id/budget/seed cells, for either engine) or a CI that
+           couldn't be computed at all.
 """
 from __future__ import annotations
 
@@ -182,28 +193,40 @@ def compute_gate_metrics(
 
 
 def apply_decision_rule(gate_metrics: dict | None, delta_tsr_threshold: float, delta_cpi_threshold: float) -> tuple[str, str]:
-    """`(decision, reason)`. See this module's own docstring for the
-    EXPAND-as-catch-all reading of the given rule."""
+    """`(decision, reason)` - PASS/STOP/MIXED/EXPAND/UNDETERMINED, per
+    this module's own docstring. A complete partition: every
+    (delta_tsr, delta_cpi, CI) combination lands in exactly one of the
+    five branches below, in the order given (PASS and STOP are mutually
+    exclusive by construction - PASS requires both deltas above
+    threshold, STOP requires both below 5 - so their check order
+    doesn't matter; MIXED is checked only once neither of those held)."""
     if gate_metrics is None:
         return "UNDETERMINED", "missing input: zero cells (or zero paired task_id/budget/seed cells) for one or both engines"
 
     dt, dc = gate_metrics["delta_tsr_pp"], gate_metrics["delta_cpi_pp"]
-    tsr_ok = dt >= delta_tsr_threshold and gate_metrics["tsr_excludes_zero"]
-    cpi_ok = dc >= delta_cpi_threshold and gate_metrics["cpi_excludes_zero"]
-    if tsr_ok and cpi_ok:
+    tsr_strong = dt >= delta_tsr_threshold and gate_metrics["tsr_excludes_zero"]
+    cpi_strong = dc >= delta_cpi_threshold and gate_metrics["cpi_excludes_zero"]
+    tsr_weak = dt < STOP_THRESHOLD_PP
+    cpi_weak = dc < STOP_THRESHOLD_PP
+
+    if tsr_strong and cpi_strong:
         return "PASS", f"both deltas >= threshold (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp) and both CIs exclude zero"
 
-    if dt < STOP_THRESHOLD_PP and dc < STOP_THRESHOLD_PP:
+    if tsr_weak and cpi_weak:
         return "STOP", f"both deltas below {STOP_THRESHOLD_PP:.0f}pp (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp)"
 
-    literal_expand = (STOP_THRESHOLD_PP <= dt < delta_tsr_threshold) or (STOP_THRESHOLD_PP <= dc < delta_cpi_threshold)
-    if literal_expand:
-        return "EXPAND", f"one or both deltas in [{STOP_THRESHOLD_PP:.0f}, threshold) (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp)"
-    return (
-        "EXPAND",
-        f"neither a clean PASS nor a clean STOP (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp) - "
-        "catch-all reading of the decision rule, see this script's own module docstring",
-    )
+    if tsr_strong and cpi_weak:
+        return "MIXED", (
+            f"ΔTSR shows a clear effect ({dt:.2f}pp, clears the {delta_tsr_threshold:.0f}pp threshold, CI excludes zero) "
+            f"but ΔCPI_answer does not ({dc:.2f}pp, below the {STOP_THRESHOLD_PP:.0f}pp floor)"
+        )
+    if cpi_strong and tsr_weak:
+        return "MIXED", (
+            f"ΔCPI_answer shows a clear effect ({dc:.2f}pp, clears the {delta_cpi_threshold:.0f}pp threshold, CI excludes zero) "
+            f"but ΔTSR does not ({dt:.2f}pp, below the {STOP_THRESHOLD_PP:.0f}pp floor)"
+        )
+
+    return "EXPAND", f"neither metric clearly resolved (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp) - more data needed"
 
 
 def _fmt_ci(ci: BootstrapCI) -> str:
