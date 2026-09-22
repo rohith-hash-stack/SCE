@@ -9,7 +9,7 @@ any of the three approaches below)
 `django_t02_017_redirect_url_safety_check`) x 3 budgets (2000/4000/8000) x 2
 seeds (42/43) = 18 cells per approach
 **Total real spend across the spike (all sanity checks, diagnostics, and full
-sweeps):** ~$0.18
+sweeps, including the Approach A v2 follow-up below):** ~$0.50
 **`reports/pilot/checkpoint.json` hash:** unchanged throughout
 (`589e42386e58c528f7a24b1083d4b097ea66ac28984317eb471ca9a02e11aa81`)
 
@@ -32,14 +32,18 @@ on the same matrix.
 | Baseline (single-zone, production, unmodified) | 0.222 | 0.889 | 0.778 | 22.2 | 7597 |
 | B - Two-Zone Rendering (frontier index, no selection change) | 0.222 | 0.889 | 0.778 | 22.2 | 8275 |
 | C - Spine Variant (forked selection, topological tiering) | 0.111 | 0.778 | 0.739 | 18.7 | - |
-| A - Two-Pass Hydration (LLM-driven manifest selection) | 0.333 | 0.333 | 0.000 | 3.0 | 8379 |
+| A v1 - Two-Pass Hydration, name-only manifest | 0.333 | 0.333 | 0.000 | 3.0 | 8379 |
+| A v2 - Two-Pass Hydration, signatures + resolved calls | 0.389 | 0.833 | 0.133 | 3.8 | 47060 |
 
-None of the three approaches achieves the goal that motivated this spike:
-**suppress `fpr_gt` without dropping `cpi_strict`.** B doesn't move either metric
-at all (by design - it only changes rendering). C moves `fpr_gt` a little at the
-cost of `cpi_strict`. A eliminates `fpr_gt` completely but at a much larger
-`cpi_strict` cost than C. Each failure is diagnostically different, which is
-itself the finding - see Synthesis below.
+B, C, and A v1 each fall short of the goal that motivated this spike: **suppress
+`fpr_gt` without dropping `cpi_strict`.** B doesn't move either metric at all (by
+design). C moves `fpr_gt` a little at the cost of `cpi_strict`. A v1 eliminates
+`fpr_gt` completely but at a much larger `cpi_strict` cost than C. **A v2 is the
+closest anything in this spike gets** - `cpi_strict` recovers to within 0.056 of
+baseline while `fpr_gt` stays well under the 0.50 target and `tsr` beats every
+other approach tested - but at a real, large token cost (~6x baseline) that makes
+it an accuracy result, not yet an economical one. See Approach A v2 below and the
+Synthesis.
 
 ---
 
@@ -133,7 +137,7 @@ grid it ran in).
 
 ---
 
-## Approach A: Two-Pass Hydration Protocol
+## Approach A v1: Two-Pass Hydration Protocol, name-only manifest
 
 **Mechanism:** `benchmarks/experiments/hydration_loop.py`, no native
 tool-calling dependency (the harness's `OpenAICompatibleClient.complete()` only
@@ -212,44 +216,251 @@ Commits: `511eb84` (implementation, design-estimate finding), `cf883c6`
 
 ---
 
+## Approach A v2: Signatures + Resolved Outgoing Calls
+
+**Mechanism:** same two-turn protocol as v1, same `hydration_loop.py`, but
+`_build_candidate_index`'s manifest line for each candidate gains two
+deterministic, docstring-free fields on top of v1's bare `qualified_name|role|
+kind`: `signature` (the raw declaration line, via `_signature_stub`, production/
+unmodified) and `calls=[...]` (direct AST `CALLS`/`INSTANTIATES` targets from
+`builder.graph` - the real structural graph, not `build_causal_graph`'s
+synthetic-coupling-augmented one, so a symbol reachable only via a synthetic
+edge never gets pointed to by anything's own `calls=[...]` list). Call targets
+are qualified names, not bare ones - a design-review catch before implementation:
+bare names are ambiguous once two candidates in a 400+ symbol universe share a
+method name, and qualified names let the model cross-reference a call target
+directly against another row's own id, which is what the Turn 1 prompt asks it
+to do ("trace the complete causal execution path... via signatures and their
+direct call targets").
+
+**Two real bugs were caught and fixed before spending paid API money on the full
+grid:**
+
+1. A wrapped multi-line signature embedded raw newlines into a single manifest
+   row, breaking the "one candidate per line" format - caught via a real
+   `num_lines` (493) vs. `candidate_universe` (402) mismatch during validation,
+   not assumed. Fixed by collapsing `_declaration_line`'s output to one physical
+   line before embedding.
+2. This sandbox has no real BPE tokenizer available (the offline `tiktoken`
+   asset is missing and the network fallback is proxy-blocked -
+   `active_backend()` reports `"fallback-regex (tiktoken unavailable:
+   ProxyError)"`), so every local `count_tokens()` estimate in this sandbox has
+   been running on a crude regex fallback that tokenizes dotted qualified names
+   very inefficiently - exactly what `calls=[...]` is now full of. A local check
+   briefly reported ~110K "tokens" for one manifest; the real, API-billed number
+   (the only trustworthy source, since OpenAI counts server-side) was 17,757 for
+   what should have been that same manifest. Local byte counts stay reliable in
+   this environment; local token counts do not.
+
+**A third, more serious issue surfaced investigating why that "17,757" number
+wouldn't reproduce consistently: a real, pre-existing production bug in
+`prism.runtime.index_cache`.** `prism.cli.build_pipeline`'s default
+`use_cache=True` path returned genuinely inconsistent `(builder, tag_matrix)`
+results across separate process invocations of the identical pinned Django
+corpus - `django_t02_017`'s own seed's reachable-candidate count varied 409 vs.
+402 across repeated runs with every other variable controlled and ruled out one
+at a time (file-discovery order: `discover_files` already sorts; `PYTHONHASHSEED`
+fixed to `0`: did not stabilize it, 409/402/402 across 3 runs; concurrent-process
+cache races: reproduced across strictly sequential runs too). `use_cache=False`
+gave 3-for-3 identical results (409, 409, 409), re-confirmed through the real
+`PrismEngine` class. This is the same class of bug as the `SymbolInfo.role`
+cache-serialization gap fixed in `07ff0cd` - a different instance in the same
+caching layer. **Not fixed here** (out of scope for a spike branch that touches
+no `prism.*` production code) - `benchmarks/engines/prism_engine.py`'s
+`PrismEngine.index()` was changed, on this branch only, to call `build_pipeline`
+with `use_cache=False`, so every approach in this spike (not just A) runs
+against a deterministic graph from that commit forward. **Flagged here as a
+high-priority production follow-up**, not silently patched.
+
+**Result (18 cells, $0.1515, real API, deterministic graph):**
+
+| approach | tsr | cpi_strict | fpr_gt | mean tokens |
+| :--- | :--- | :--- | :--- | :--- |
+| baseline | 0.222 | 0.889 | 0.778 | 7597 |
+| A v1 (name-only) | 0.333 | 0.333 | 0.000 | 8379 |
+| A v2 (signatures + calls) | 0.389 | 0.833 | 0.133 | 47060 |
+
+`cpi_strict` recovers to 0.833 - within 0.056 of baseline's own 0.889, and far
+above v1's 0.333 - while `fpr_gt` (0.133) stays well under the `<0.50` target and
+baseline's own 0.778. `tsr` (0.389) is the best result of any approach in this
+entire spike, baseline included. This is real, direct confirmation of the
+hypothesis: structural AST evidence (signatures + real call targets) gives the
+model enough signal to trace a causal chain that bare identifier strings alone
+could not.
+
+Per task, the picture is real but not uniform:
+
+| task | baseline cpi/tsr | A v1 cpi/tsr | A v2 cpi/tsr |
+| :--- | :--- | :--- | :--- |
+| django_t02_005 | 1.000 / 0.000 | 1.000 / 1.000 | 1.000 / 0.000 |
+| django_t02_009 | 1.000 / 0.000 | 0.000 / 0.000 | 1.000 / 0.667* |
+| django_t02_017 | 0.667 / 0.667 | 0.000 / 0.000 | 0.500 / 0.500 |
+
+\* `django_t02_009`'s `tsr` is 0.0 at budget=2000 and 1.0 at budgets 4000/8000
+(the 0.667 is the 6-cell mean); every cell keeps `cpi=1.0`, `fpr=0.000`.
+
+- **`django_t02_009`: a clean win.** `cpi_strict` recovers fully (0.0 -> 1.0),
+  `fpr_gt` stays perfect (0.000), and `tsr` beats baseline's own 0.0 outright at
+  the higher budgets. Exactly the result the hypothesis predicted.
+- **`django_t02_017`: real but seed/budget-dependent.** `cpi`/`tsr` hit 1.0/1.0
+  for seed 42 at budgets 2000-4000, but 0.0/0.0 for seed 43 at budget 2000, and
+  **both seeds regress at budget=8000** even though Turn 1's manifest is
+  budget-independent by construction. Directly checked: `requested_count` for
+  the *same* seed value differs between budget cells (3 vs. 2) - since nothing
+  in Turn 1's prompt varies with budget, this is consistent with OpenAI's own
+  disclosed "best-effort, not guaranteed" determinism for the `seed` parameter,
+  not a bug in this code.
+- **`django_t02_005`: an open regression, not explained away.** `cpi_strict`
+  stays perfect (1.0 on all 6 cells, full recall) but `tsr` drops to 0.0 on all
+  6 (v1 had 1.0/1.0 here) and `fpr_gt` rises to 0.400 (some padding beyond the
+  true pipeline). The model has the right symbols available but answers wrong
+  regardless - root cause not further diagnosed within this spike's scope.
+
+**The cost is real and large.** Turn 1 alone averages 44,194 tokens (up to
+73,380 for the most-connected seed, `django_t02_017`'s
+`url_has_allowed_host_and_scheme`) - roughly 6x baseline's *entire* context, for
+one turn. A strong accuracy result, not an economical one as implemented - see
+the Offline Manifest-Sizing Analysis below for the real, measured reduction two
+candidate levers achieve before spending anything further on a live grid.
+
+Commits: `a3039b4` (v2 implementation, qualified-name fix, two bugs caught before
+paid spend), `c1026d0` (cache-determinism fix), `1e7f6fb` (36-cell result,
+$0.1515).
+
+---
+
+## Offline Manifest-Sizing Analysis (no LLM calls)
+
+`benchmarks/experiments/inspect_manifest_sizing.py` measures two proposed
+cost-reduction levers against the same 3 target tasks, without spending
+anything: **format-level slimming** (a condensed YAML-flow manifest line vs.
+the current pipe-delimited one) and **candidate-universe pruning** (hop-depth
+capping at 2/3 hops instead of production's own default 6, and a
+same-top-level-module scope filter reusing `submodular_knapsack.py`'s own
+`_module_prefix3` - not reinvented). Recall is checked directly against
+`task.adjudicated.pipeline_symbols` at every variant, specifically flagging any
+pipeline symbol a pruning level would drop, rather than assuming pruning is
+safe.
+
+**Token counts here are calibrated, not raw local estimates.** This sandbox has
+no real BPE tokenizer available (`active_backend()` reports
+`"fallback-regex (tiktoken unavailable: ProxyError)"`, confirmed while
+validating A v2) - a local `count_tokens()` estimate on dotted-identifier-heavy
+text can be off by multiples of the real number. Instead: each task's own real,
+API-billed Turn 1 token count (from the deterministic-graph grid in `1e7f6fb`)
+is divided by that exact same prompt's real byte length to get a real
+tokens-per-byte ratio, then applied to every other variant's own byte count -
+projected, not measured, but grounded in a real number rather than the
+fallback-regex tokenizer's own unreliable output.
+
+**Finding 1: format-level slimming does not help - it costs more.** The
+condensed format (drops `kind`, switches to YAML-flow) is *larger* than the
+current pipe-delimited format in every case measured (`django_t02_005`
+unbounded: 106,129 -> 115,961 bytes). Spelled-out field names
+(`qname:`/`role:`/`sig:`/`calls:`) plus newlines and indentation cost more than
+the one dropped field (`kind`, which mostly duplicates `role` at this spike's
+own scale) saves. The current pipe-delimited format is already close to as
+compact as this style of encoding gets - this lever is not worth pursuing
+further as specified.
+
+**Finding 2: candidate-universe pruning is the real lever - and hop-depth alone
+is not uniformly safe.**
+
+| task | unbounded (tokens) | hop=2 (tokens, recall) | hop=3 (tokens, recall) | scope-filtered (tokens, recall) |
+| :--- | :--- | :--- | :--- | :--- |
+| django_t02_005 | 448 cand / 23465 | 161 / ~12998 (1.000) | 185 / ~13823 (1.000) | 151 / ~5854 (1.000) |
+| django_t02_009 | 248 cand / 35736 | 18 / ~1862 (**0.800, drops `_clone`**) | 25 / ~2392 (1.000) | 148 / ~9310 (1.000) |
+| django_t02_017 | 409 cand / 73380 | 30 / ~2432 (1.000) | 50 / ~3525 (1.000) | 11 / ~940 (1.000) |
+
+`hop=2` **drops a real pipeline symbol on `django_t02_009`** (`_clone`,
+recall=0.800) - exactly the risk this analysis exists to check for, found for
+real rather than assumed away; `hop=2` is not a safe default. `hop=3` keeps
+`recall=1.000` on all 3 tasks with large real reduction on two of them
+(`django_t02_009`: 93%; `django_t02_017`: 95%) and a more modest one on the
+third (`django_t02_005`: 41% - this seed's own neighborhood is unusually
+dense/shallow, so there's less pruning headroom within 3 hops). The
+scope filter does even better on 2 of 3 tasks (`django_t02_017`: 409 -> 11
+candidates, ~98.7% reduction, still `recall=1.000`; `django_t02_005`: ~75%
+reduction) but is markedly weaker on `django_t02_009` specifically (148
+candidates vs. `hop=3`'s 25) - neither lever alone is uniformly best across all
+3 tasks. `hop=3` is the safer, more consistent floor; combining it with the
+scope filter (not yet tested) is the natural next measurement before any
+further live spend.
+
+Full per-variant data: `benchmarks/experiments/results/manifest_sizing.json`.
+Commit: `1a94688`.
+
+---
+
 ## Synthesis
 
 **The core trade-off, stated plainly:** pure graph topology (Approach C) has
-real structure but no semantic discrimination; pure LLM name-filtering
-(Approach A) has real semantic judgment but, given only names, no access to the
-content that judgment actually needs. Neither alone solves "suppress `fpr_gt`
-without dropping `cpi_strict`" - and, critically, they fail in *different,
-explicable* ways rather than the same way, which is the real finding: the
-problem has (at least) two separable halves - deciding what's structurally
-reachable, and judging what's actually relevant - and each spike solved a
-different half while leaving the other one unaddressed.
+real structure but no semantic discrimination; pure LLM name-filtering (A v1)
+has real semantic judgment but, given only names, no access to the content that
+judgment actually needs. **A v2 confirms the fix directly**: giving the model
+real structural content - signatures and resolved call targets, still no
+docstring dependency, still fully deterministic - closes most of the gap A v1
+left open, recovering `cpi_strict` to within 0.056 of baseline while keeping
+`fpr_gt` well under the `<0.50` target. The problem had (at least) two separable
+halves - deciding what's structurally reachable, and judging what's actually
+relevant - and A v2 is the first mechanism in this spike to address both at
+once, at the cost of a large, currently-unoptimized token bill (~6x baseline for
+Turn 1 alone).
 
-**For whichever path is picked up next** (recorded in
-`docs/design_formalism.md` Sec 10.5):
+**What's left, now that the mechanism itself works**: making it economical.
+`django_t02_017`'s own 409-candidate universe (all of it sent in Turn 1,
+regardless of budget) is the direct driver of the ~6x cost - most of those
+candidates are structurally reachable but not part of any real causal chain from
+the seed. Two independent levers, not mutually exclusive:
 
-1. If single-turn knapsack packing remains the production path, candidate
-   scoring needs to blend topological distance with a lightweight *semantic*
-   relevance signal (docstring/signature token overlap with the seed, or
-   caller-callee token overlap - something content-derived) rather than either
-   pure density (today) or pure distance (Approach C) alone.
-2. If a multi-turn/frontier-manifest protocol is revisited, Turn 1's manifest
-   needs to carry lightweight content - an L2-style signature or a docstring
-   summary, not a bare qualified name - so the model has something to judge
-   relevance *from*. The token cost of that richer manifest is the real open
-   design question (Turn 1 alone already cost ~6-7K tokens at a bare-name
-   index and `max_hops=6.0` - see Approach A's own section above).
+1. **Candidate-universe pruning** - hop-depth capping or a same-module/package
+   scope filter. Measured (Offline Manifest-Sizing Analysis, above): `hop=3` is
+   the safer, consistent floor (`recall=1.000` on all 3 tasks, 41-95% token
+   reduction); `hop=2` is unsafe as a blanket default (drops a real pipeline
+   symbol on `django_t02_009`); the scope filter does better than `hop=3` on 2
+   of 3 tasks but worse on the third - combining both is the natural next
+   measurement.
+2. **Format-level slimming** - measured and found *not* to help: a condensed
+   YAML-flow format costs more bytes than the current pipe-delimited one, not
+   fewer (spelled-out field names and indentation outweigh the one dropped
+   field). Not worth pursuing further as specified.
+
+**If single-turn knapsack packing remains the production path instead**,
+candidate scoring needs to blend topological distance with a lightweight
+*semantic* relevance signal (docstring/signature token overlap with the seed, or
+caller-callee token overlap) rather than either pure density (today) or pure
+distance (Approach C) alone - A v2's own result is itself evidence that such a
+signal exists and is usable; the open question there is how to fold it into a
+single-pass scoring formula rather than a second LLM turn.
 
 ## Disposition
 
 - `experiment/noise-filtering-spike` stays intact, unmerged, as the audit trail
-  for all three approaches' real commits and real data.
-- No further implementation followed this spike. The Subgraph Processor design
-  (`docs/design_formalism.md` Sec 10.3/10.4) remains unimplemented pending a
-  design that addresses synthesis point 1 or 2 above.
+  for all four approach variants' real commits and real data.
+- Approach A v2 is the most promising result of this spike and is not yet
+  production-ready: its own token cost needs to come down before it's a
+  realistic single-turn alternative. The Offline Manifest-Sizing Analysis
+  above found the real lever (`hop=3` candidate pruning, not format slimming)
+  and its real, measured reduction (41-95% depending on task) - a next live
+  grid built on `hop=3` pruning (and possibly `hop=3` + scope filtering
+  combined) is the natural follow-up, not yet executed as of this writing.
+- **A high-priority production bug is flagged, not fixed, on this branch**:
+  `prism.runtime.index_cache`'s whole-pipeline cache
+  (`prism.cli.build_pipeline`'s `use_cache=True` default) returns inconsistent
+  results across separate process invocations of the identical pinned corpus -
+  see Approach A v2's own section above for the full diagnosis. This affects
+  every consumer of `build_pipeline`'s default caching path, not just this
+  spike; `benchmarks/engines/prism_engine.py`'s `use_cache=False` change is a
+  spike-local workaround, not a fix, and does not apply outside this branch.
+- The Subgraph Processor design (`docs/design_formalism.md` Sec 10.3/10.4)
+  remains unimplemented pending a design that addresses one of the synthesis
+  paths above.
 - Protected regression suite: 21/22, the same knowingly-accepted
   `django_t02_017`/`_urlparse` exception documented in Sec 10.4 - none of the
-  three spike approaches touched production code, so this suite's state is
-  unaffected by anything in this document.
+  spike approaches touched `prism.*` production code (the `use_cache=False`
+  change above is in the benchmark harness, `benchmarks/engines/`, not
+  production), so this suite's state is unaffected by anything in this
+  document.
 - `reports/pilot/checkpoint.json` hash confirmed unchanged
   (`589e42386e58c528f7a24b1083d4b097ea66ac28984317eb471ca9a02e11aa81`) before
   and after every commit in this spike.

@@ -1495,18 +1495,18 @@ gate at its original four admission sites, and the cache-serialization
 fix. `django_t02_017`'s 21/22 result is a knowingly accepted, disclosed
 trade-off, not a silently shipped regression.
 
-### 10.5 Noise-reduction spike (Approaches A/B/C) - three real answers, no working fix
+### 10.5 Noise-reduction spike (Approaches A/B/C) - structural AST evidence works, at a real cost
 
 Sec 10.4's own closing finding named the concrete question: can a
 mechanism that runs *before* the greedy loop (not a post-hoc protection
 pass) suppress context noise (`fpr_gt`) without costing recall
-(`cpi_strict`)? Three genuinely different paradigms were built and
+(`cpi_strict`)? Four genuinely different mechanisms were built and
 measured against a real LLM (`gpt-4o-mini`, live OpenAI API - not a
 simulation or a local SLM) on the same 3-task/3-budget/2-seed matrix
 (`django_t02_005`, `django_t02_009`, `django_t02_017`), isolated on
-`experiment/noise-filtering-spike` (never merged - production code was
-never modified by any of the three). Full detail, per-cell data, and
-the diagnostic root-cause work for each is in
+`experiment/noise-filtering-spike` (never merged - production `prism.*`
+code was never modified by any of the four). Full detail, per-cell
+data, and the diagnostic root-cause work for each is in
 `reports/spike_noise_reduction_debrief.md`; this entry records the
 architectural conclusion.
 
@@ -1515,7 +1515,8 @@ architectural conclusion.
 | Baseline | 0.222 | 0.889 | 0.778 | 7597 |
 | B (Two-Zone Rendering) | 0.222 | 0.889 | 0.778 | 8275 |
 | C (Spine Variant) | 0.111 | 0.778 | 0.739 | - |
-| A (Two-Pass Hydration) | 0.333 | 0.333 | 0.000 | 8379 |
+| A v1 (Two-Pass Hydration, name-only) | 0.333 | 0.333 | 0.000 | 8379 |
+| A v2 (Two-Pass Hydration, signatures + calls) | 0.389 | 0.833 | 0.133 | 47060 |
 
 - **Approach B** (`RenderOptions.two_zone` - a lightweight
   `<ReachableFrontier>` index alongside the existing spine, rendering
@@ -1546,7 +1547,7 @@ architectural conclusion.
   commit `1f66771`) - a further fix would only re-derive the existing
   knapsack's own density/streak machinery at higher complexity, inside
   a new tier, for no clear gain over just using the knapsack directly.
-- **Approach A** (`hydration_loop.py` - Turn 1 sends a compact
+- **Approach A v1** (`hydration_loop.py` - Turn 1 sends a compact
   `qualified_name|role|kind` manifest of the full reachable candidate
   universe and asks the LLM which symbols matter; Turn 2 renders only
   what it named): `fpr_gt = 0.0000` on every one of 18 cells - complete
@@ -1562,16 +1563,62 @@ architectural conclusion.
   candidates and stopping there (`requested_count` is flat at ~2.3
   across all three budgets, confirming budget never reaches this
   decision at all - Turn 1 has no way to know how much room it has).
+- **Approach A v2** (same protocol, manifest lines gain a `signature`
+  field - the raw declaration line, via `_signature_stub` - and
+  `calls=[...]`, the symbol's own direct AST `CALLS`/`INSTANTIATES`
+  targets from the real structural graph, qualified names not bare
+  ones, still zero docstring dependency): **`cpi_strict` recovers to
+  0.833**, within 0.056 of baseline's own 0.889 and far above v1's
+  0.333, while `fpr_gt` (0.133) stays well under the `<0.50` target,
+  and `tsr` (0.389) is the best result of any approach in this entire
+  spike, baseline included. Direct confirmation that structural AST
+  evidence - not natural-language docstrings, which may be missing or
+  poor quality in any given repository - gives the model enough signal
+  to trace a causal chain that bare identifier strings alone could not.
+  `django_t02_009` is a clean win (cpi 0.0 -> 1.0, `fpr_gt` stays
+  perfect); `django_t02_017` is real but seed/budget-dependent (traced
+  to OpenAI's own disclosed "best-effort, not guaranteed" `seed`
+  determinism, not a bug here); `django_t02_005` keeps full recall but
+  regresses to `tsr=0.0` on every cell - an open, undiagnosed
+  regression, not explained away. **The cost is real and large**: Turn
+  1 alone averages 44,194 tokens (up to 73,380 for the most-connected
+  seed) - roughly 6x baseline's entire context, for one turn. A strong
+  accuracy result, not yet an economical one - candidate-universe
+  pruning and/or a more compact per-candidate format are the
+  identified next step (see the debrief's own sizing-analysis
+  addendum), not yet executed as of this writing.
+
+**A real, pre-existing production bug was found and flagged (not
+fixed) during A v2's own validation**: `prism.runtime.index_cache`'s
+whole-pipeline cache (`prism.cli.build_pipeline`'s `use_cache=True`
+default) was found to return inconsistent `(builder, tag_matrix)`
+results across separate process invocations of the identical pinned
+corpus - `django_t02_017`'s own seed's reachable-candidate count varied
+409 vs. 402 run to run, with file-discovery order, `PYTHONHASHSEED`,
+and concurrent-process cache races all directly ruled out one at a
+time. `use_cache=False` gave 3-for-3 identical results across both a
+raw `build_pipeline` call and the real `PrismEngine` class. This is the
+same caching layer as the `SymbolInfo.role` cache-serialization gap
+fixed in Sec 10.4/`07ff0cd` - a different instance, not yet fixed here
+(out of scope for a spike branch touching no `prism.*` production
+code) - `benchmarks/engines/prism_engine.py`'s `PrismEngine.index()`
+was changed, on `experiment/noise-filtering-spike` only, to call
+`build_pipeline` with `use_cache=False`, so every approach in that
+spike runs against a deterministic graph from that point forward. This
+is flagged here as a **high-priority production follow-up**: the bug
+affects every consumer of `build_pipeline`'s default caching path, not
+just this spike, and remains unfixed in `prism.runtime.index_cache`
+itself as of this writing.
 
 **The core trade-off, stated plainly**: pure graph topology (C) has
-structure but no semantic discrimination; pure LLM name-filtering (A)
-has semantic judgment but, given only names, no access to the content
-that judgment needs. Neither alone gets both halves of "suppress
-`fpr_gt` without dropping `cpi_strict`" - each failure is different and
-diagnostic, not a shared bug, which is itself the finding: the two
-halves of the problem (deciding what's structurally reachable, judging
-what's actually relevant) were each solved by a different one of these
-two mechanisms, and neither solved both.
+structure but no semantic discrimination; pure LLM name-filtering (A
+v1) has semantic judgment but, given only names, no access to the
+content that judgment needs. **A v2 closes most of that gap directly**,
+confirming that the two halves of the problem (deciding what's
+structurally reachable, judging what's actually relevant) can be solved
+together once the model is given real structural content, not just
+identifiers, to reason from - at a token cost that is itself now the
+open design question.
 
 **The Phase B synthesis, for whichever path is picked up next**:
 
@@ -1580,19 +1627,33 @@ two mechanisms, and neither solved both.
    lightweight *semantic* relevance signal (docstring/signature token
    overlap with the seed, or caller-callee token overlap - something
    content-derived, not just structural centrality) rather than either
-   pure density (today) or pure distance (C) alone.
-2. If a multi-turn/frontier-manifest protocol is revisited, Turn 1's
-   manifest needs to carry lightweight content - an L2-style signature
-   or a docstring summary, not a bare qualified name - so the model has
-   something to judge relevance *from*, not just a string to
-   pattern-match against. The token cost of that richer manifest is the
-   real design question a future attempt would need to answer (Turn 1
-   alone already cost ~6-7K tokens at a bare-name index and
-   `max_hops=6.0` - see the debrief for the real, measured number
-   against the ~120-200 token original estimate).
+   pure density (today) or pure distance (C) alone - A v2's own result
+   is itself evidence such a signal exists and is usable; the open
+   question is folding it into a single-pass scoring formula rather
+   than a second LLM turn.
+2. If a multi-turn/frontier-manifest protocol is revisited, A v2's own
+   result is the starting point, not v1's: signatures and resolved
+   call targets, not bare qualified names, are what let the model
+   judge relevance correctly. Turn 1's token cost is the real
+   remaining design question - measured (not estimated) via a
+   follow-up, no-LLM-call sizing analysis
+   (`benchmarks/experiments/inspect_manifest_sizing.py`, commit
+   `1a94688`): format-level slimming does not help (a condensed
+   YAML-flow encoding costs *more* bytes than the current
+   pipe-delimited one); candidate-universe pruning is the real lever,
+   and hop-depth alone is not uniformly safe - `hop=2` drops a real
+   pipeline symbol on one of the 3 tasks (`django_t02_009`'s `_clone`),
+   while `hop=3` keeps full recall on all 3 with large reduction on two
+   of them (93-95%) and a smaller one on the third (41%, an unusually
+   dense/shallow seed neighborhood). A same-module scope filter beats
+   `hop=3` on 2 of 3 tasks but is markedly weaker on the third -
+   neither lever alone is uniformly best; combining them is the next
+   measurement before any further live-grid spend.
 
-No further implementation work followed this spike; all three
-approaches stay isolated on `experiment/noise-filtering-spike`
-(unmerged) as a documented audit trail, and the Subgraph Processor
-(Sec 10.3/10.4) remains unimplemented pending a design that addresses
-point 1 or 2 above.
+No further live-grid implementation followed the sizing analysis as of
+this writing; all four approach variants plus the sizing script stay
+isolated on `experiment/noise-filtering-spike` (unmerged) as a
+documented audit trail, and the Subgraph Processor (Sec 10.3/10.4)
+remains unimplemented pending a design that addresses point 1 or 2
+above. The `prism.runtime.index_cache` bug found above remains a
+separate, unfixed, high-priority production issue.
