@@ -116,6 +116,62 @@ def _scope_filtered(builder, seed_id: str, candidates: set[str]) -> set[str]:
     return kept
 
 
+def _real_call_chain_reachable(builder, seed_id: str, max_hops: int = 3, relations: tuple[str, ...] = ("CALLS", "INSTANTIATES")) -> dict[str, int]:
+    """`{node: hop_distance}` for every node reachable from `seed_id` via
+    a chain of concrete `relations` edges in `builder.graph` (the real
+    structural graph, not the causal graph's synthetic-coupling-
+    augmented one), capped at `max_hops` unweighted hops - "directly
+    targeted by a concrete outgoing CALLS/INSTANTIATES edge from an
+    admitted node," applied iteratively: a plain BFS over real edges
+    only, so a node several real hops deep still counts as long as
+    every link in the chain is a concrete call/instantiation, but a node
+    only reachable via the causal graph's own synthetic coupling (the
+    i18n/translation branch that sank Approach C, say) never does.
+    """
+    from collections import deque
+
+    visited = {seed_id: 0}
+    queue = deque([seed_id])
+    while queue:
+        node = queue.popleft()
+        depth = visited[node]
+        if depth >= max_hops or node not in builder.graph:
+            continue
+        for succ in builder.graph.successors(node):
+            if succ in visited:
+                continue
+            edge = builder.graph.get_edge_data(node, succ) or {}
+            if edge.get("relation") not in relations:
+                continue
+            visited[succ] = depth + 1
+            queue.append(succ)
+    return visited
+
+
+def _combined_hop_scope_filtered(builder, seed_id: str, candidates: set[str], max_hops: int = 3) -> set[str]:
+    """The combined Hop<=3 + Scope filter: keep a (already hop<=3-limited)
+    candidate if it shares the seed's own top-level-3 module namespace,
+    OR it sits within a `max_hops`-long chain of concrete `CALLS`/
+    `INSTANTIATES` edges from the seed (`_real_call_chain_reachable`) -
+    the "directly targeted... from an admitted node" rule, extended
+    transitively rather than 1-hop-from-the-seed-only like
+    `_scope_filtered` above.
+    """
+    seed_info = builder.symbol_table.get(seed_id)
+    seed_prefix = _module_prefix3(seed_info.module) if seed_info is not None else ""
+    real_chain = _real_call_chain_reachable(builder, seed_id, max_hops=max_hops)
+    kept = set()
+    for qname in candidates:
+        if qname == seed_id or qname in real_chain:
+            kept.add(qname)
+            continue
+        info = builder.symbol_table.get(qname)
+        module = info.module if info is not None else ""
+        if _module_prefix3(module) == seed_prefix:
+            kept.add(qname)
+    return kept
+
+
 def _render_current_format(builder, seed_id: str, candidates: set[str], dist_w_map, dist_w_upstream_map, direct_successors) -> str:
     lines = []
     for qname in sorted(candidates):
@@ -196,6 +252,8 @@ def main() -> int:
         cand_hop3, dw3, dwu3 = _candidate_set_at_hops(builder, seed_id, 3.0)
         variants.append(("hop=3_condensed", cand_hop3, dw3, dwu3, _render_condensed_format))
         variants.append(("scope_filtered_condensed", cand_scope, dist_w_map_u, dist_w_upstream_u, _render_condensed_format))
+        cand_combined = _combined_hop_scope_filtered(builder, seed_id, cand_hop3, max_hops=3)
+        variants.append(("hop3+scope_current", cand_combined, dw3, dwu3, _render_current_format))
 
         print(f"{'variant':<26}{'candidates':>11}{'recall':>9}{'missing_pipeline':>28}{'bytes':>9}{'proj_tokens':>13}")
         for name, cand, dw, dwu, render_fn in variants:
