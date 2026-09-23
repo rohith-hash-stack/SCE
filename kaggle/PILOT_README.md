@@ -35,25 +35,30 @@ the other harness's progress.
 
 ## Pilot-4, patched two-pass (Phase B) — status: strongly promising, not yet final
 
-A patched two-pass evaluation (`feature/two-pass-phase-b-patches`,
-seeds 42-45, Django, `qwen2.5-coder:14b-instruct-q8_0`) completed
-successfully on Kaggle. Its own cell never pushed the result files
-anywhere, but they were rescued from a local copy, independently
-re-verified from scratch (cell counts, headline numbers, a from-scratch
-merge, and a from-scratch gate re-run - all matched exactly), and are
-now preserved on **`two-pass-artifact-preservation`**
-(`reports/pilot-4-patched/`). Full status, the verified results table,
-and the remaining real gaps (seed 46 never run, no second corpus/model
-tested, formal 15pp threshold not cleared): **`docs/pilot/two_pass_phase_b_status.md`**.
+A patched two-pass evaluation (`feature/two-pass-phase-b-patches`, all 5
+seeds 42-46, Django, `qwen2.5-coder:14b-instruct-q8_0`) completed
+successfully on Kaggle and pushed real, durable data to
+**`pilot-4-patched-progress`** (`reports/pilot-4/` and
+`reports/pilot-4-patched/`), independently re-verified from scratch (cell
+counts, headline numbers, a from-scratch merge, and a from-scratch gate
+re-run - all matched exactly). Getting a clean push took two rounds of real
+fixes to the rerun cell itself (missing git identity, an ambiguous push
+refspec, and a restore step that only covered two-pass progress, not
+single-pass) - all fixed on `feature/two-pass-phase-b-patches` before this
+run. Full status, the verified results table, and the remaining real gaps
+(no second corpus/model tested, formal 15pp threshold not cleared):
+**`docs/pilot/two_pass_phase_b_status.md`**.
 
 `kaggle/pilot_4_patched_rerun_and_preserve_cell.py` is still the right
-tool for the seed 46 / additional-corpus gap - it now also includes
-the push step this run was missing, so a rerun won't lose data again:
+starting point for a second corpus or model - it already includes the push
+step and the restore-on-restart logic for both single-pass and two-pass
+progress, so a rerun won't lose data:
 1. Paste it into a Kaggle notebook cell. Same prerequisites as above
    (GPU T4 x2, `GITHUB_TOKEN` secret).
-2. Save & Run All. Runs all 5 seeds for two-pass and tops up
-   single-pass with seed 46 against the already-durable
-   `pilot-4-progress` data. ~2-2.5 hours.
+2. Save & Run All. Runs all 5 seeds for two-pass and single-pass
+   (`--resume` reuses any already-pushed progress on
+   `pilot-4-patched-progress` or the durable `pilot-4-progress` seeds
+   42-45). ~2-2.5 hours on a first run for a new corpus/model.
 3. Pushes both checkpoint files to `pilot-4-patched-progress`
    immediately after each harness run completes, not just at the end.
 4. Prints `sha256sum` for all three output files and runs the sanity
