@@ -13,14 +13,17 @@
 #
 #   1. Adds the missing 5th seed (46) to BOTH single-pass and
 #      two-pass, completing the pilot-4 plan for real.
-#   2. Two-pass has to be run for ALL FIVE seeds here, not just the
-#      new one - the earlier 42-45 two-pass result was never saved
-#      anywhere durable, so there is no real checkpoint to --resume
-#      from. Single-pass is different: its 42-45 result IS safely on
+#   2. Two-pass has to be run for ALL FIVE seeds on a first execution -
+#      the earlier 42-45 two-pass result was never saved anywhere
+#      durable, so there is no real checkpoint to --resume from.
+#      Single-pass is different: its 42-45 result IS safely on
 #      pilot-4-progress, so --resume there only computes seed 46 fresh.
 #   3. Pushes BOTH checkpoint files to a results branch immediately
-#      (PROGRESS_BRANCH below) - the step the earlier cell was
-#      missing - so this can never happen again.
+#      (PROGRESS_BRANCH below) after each harness run, not just at the
+#      end - the step the earlier cell was missing - and restores from
+#      that same branch on startup if it already has data, so a crash
+#      partway through, or a re-run of this exact cell, never re-pays
+#      for LLM calls this script already completed and pushed.
 #
 # Paste this whole file into one Kaggle notebook cell. GPU T4 x2
 # required; GITHUB_TOKEN attached as a Kaggle secret (or env var).
@@ -127,7 +130,22 @@ ollama_log_path = "/kaggle/working/ollama.log"
 if subprocess.run(["pgrep", "-f", "ollama serve"], capture_output=True).returncode != 0:
     run(f"nohup ollama serve > {ollama_log_path} 2>&1 &", check=False)
     time.sleep(10)
-print("[ok] Ollama running", flush=True)
+
+cuda_seen = False
+for _ in range(12):
+    if os.path.exists(ollama_log_path):
+        log_text = open(ollama_log_path).read()
+        if "CUDA" in log_text or "cuda" in log_text:
+            cuda_seen = True
+            break
+    time.sleep(5)
+if not cuda_seen:
+    abort(
+        f"Ollama log at {ollama_log_path} shows no CUDA line after ~70s - GPU not attached to "
+        "Ollama. Aborting before any LLM spend rather than silently running a 5-seed evaluation "
+        "on CPU inference."
+    )
+print("[ok] Ollama running with CUDA", flush=True)
 
 tags = run(["ollama", "list"], check=True, capture=True)
 if MODEL not in (tags.stdout or ""):
@@ -156,7 +174,30 @@ run(
 if os.path.getsize(SINGLE_PASS_CKPT) == 0:
     abort(f"{SINGLE_PASS_CKPT} is empty after fetch - aborting before any LLM spend")
 print(f"[ok] existing single-pass checkpoint fetched ({os.path.getsize(SINGLE_PASS_CKPT)} bytes)", flush=True)
+
+# Restore reports/pilot-4-patched/ from PROGRESS_BRANCH if THIS script has
+# already partially run before and pushed something (a mid-session
+# restart after a crash, or a genuine re-run) - without this, Step 4's
+# own `git checkout PATCH_COMMIT` + `git clean -fdx` above would discard
+# any local progress a prior push_progress() call already made, and
+# --resume below would silently redo (re-pay for) already-completed
+# LLM calls instead of skipping them, even though nothing was actually
+# lost (it's still on the remote branch) - restoring it locally first
+# makes the "a re-run of this cell is safe and cheap" claim below true.
 os.makedirs(TWO_PASS_REPORT_DIR, exist_ok=True)
+branch_check = run(["git", "ls-remote", "--exit-code", "--heads", "origin", PROGRESS_BRANCH], cwd=SCE_DIR, check=False)
+if branch_check.returncode == 0:
+    run(["git", "fetch", "origin", PROGRESS_BRANCH], cwd=SCE_DIR, check=True)
+    restore = run(
+        ["git", "checkout", f"origin/{PROGRESS_BRANCH}", "--", "reports/pilot-4-patched"],
+        cwd=SCE_DIR, check=False,
+    )
+    if restore.returncode == 0:
+        print(f"[ok] restored reports/pilot-4-patched/ from an earlier {PROGRESS_BRANCH} push", flush=True)
+    else:
+        print(f"[warn] {PROGRESS_BRANCH} exists but has no reports/pilot-4-patched/ yet - starting fresh", flush=True)
+else:
+    print(f"[ok] {PROGRESS_BRANCH} does not exist remotely yet - starting fresh", flush=True)
 
 # --------------------------------------------------------------------- #
 # Step 6: install + env
@@ -204,10 +245,12 @@ if sp_result.returncode != 0:
 push_progress("pilot-4-patched: single-pass seed 46 complete")
 
 # --------------------------------------------------------------------- #
-# Step 8: two-pass, ALL FIVE seeds fresh (nothing durable exists yet -
-# the earlier 42-45 run was lost, so this genuinely redoes it, not
-# just seed 46). --resume is still set so a crash mid-way through THIS
-# run, or a re-run of this same cell, is safe and cheap.
+# Step 8: two-pass, all 5 seeds. On a first run this checkpoint starts
+# empty (the earlier 42-45 result was lost, so this genuinely redoes
+# it, not just seed 46) - --resume is a no-op then. On a restart of
+# this same cell after a partial run, the checkpoint was already
+# restored from PROGRESS_BRANCH above, so --resume here really does
+# skip whatever this script already completed and pushed.
 # --------------------------------------------------------------------- #
 two_pass_cmd = [
     sys.executable, "-m", "benchmarks.run_two_pass_benchmark",
