@@ -68,6 +68,43 @@ class TestPromptHelpers:
         assert ok is False
         assert symbols == []
 
+    def test_parse_requested_symbols_without_candidate_universe_still_degrades_to_empty(self):
+        """No `candidate_universe` passed (the default, `None`) - a
+        caller that hasn't opted in to the regex fallback keeps the
+        original, unconditional degrade-to-`[]` behavior, unchanged."""
+        symbols, ok = _parse_requested_symbols('{"requested_symbols": [')
+        assert ok is False
+        assert symbols == []
+
+    def test_parse_requested_symbols_regex_fallback_salvages_real_names(self):
+        """The pilot-4 `django_t02_002_queryset_delete_cascade_pipeline`
+        shape: valid-looking JSON up to a point, then a degenerate
+        repetition loop that runs past `max_tokens` and truncates
+        mid-string - `json.loads` raises, but real, already-real
+        qualified names the model *did* emit before breaking must still
+        be recovered, intersected against the real candidate universe
+        rather than trusted blindly."""
+        truncated = (
+            '{\n  "thought_process": "...",\n  "requested_symbols": [\n'
+            '    "a.b.real_one",\n    "a.b.real_two",\n'
+            '    "a.b.repeat",\n    "a.b.repeat",\n    "a.b.repeat",\n    "a.b.rep'
+        )
+        candidate_universe = {"a.b.real_one", "a.b.real_two", "a.b.unrelated"}
+        symbols, ok = _parse_requested_symbols(truncated, candidate_universe)
+        assert ok is False, "the JSON genuinely did not parse - this must stay an honest False"
+        assert set(symbols) == {"a.b.real_one", "a.b.real_two"}, (
+            "the truncated repeat token (never closed, not a real candidate anyway) must not be salvaged"
+        )
+
+    def test_parse_requested_symbols_regex_fallback_finds_nothing_returns_empty(self):
+        """A parse failure whose text contains no real candidate names
+        at all salvages nothing - an empty list, same as the original
+        behavior, not a crash or a spurious guess."""
+        candidate_universe = {"a.b.real_one"}
+        symbols, ok = _parse_requested_symbols("not json at all", candidate_universe)
+        assert ok is False
+        assert symbols == []
+
 
 @pytest.fixture(scope="module")
 def django_repo_path() -> str:

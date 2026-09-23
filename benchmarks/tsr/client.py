@@ -272,6 +272,7 @@ class OpenAICompatibleClient:
         seed: int | None = None,
         task_id: str | None = None,
         engine: str | None = None,
+        extra_body: dict | None = None,
     ) -> CallResult:
         """One chat-completions call, retrying on HTTP 429
         (`openai.RateLimitError`) per `RATE_LIMIT_BACKOFF_SECONDS`
@@ -298,6 +299,15 @@ class OpenAICompatibleClient:
         this environment - egress to api-docs.deepseek.com is blocked -
         so this relies on it being a standard parameter rather than an
         independently verified DeepSeek doc check).
+
+        `extra_body` (optional, `None` by default - every existing
+        caller unaffected): passed straight through to the underlying
+        `openai` SDK call's own `extra_body` kwarg, merged into the raw
+        JSON request body without SDK-level validation - the documented
+        escape hatch for a vendor-specific field the standard
+        chat-completions schema has no parameter for (e.g. Ollama's own
+        `options.repeat_penalty`, not a DeepSeek-documented field - a
+        caller targeting a non-Ollama endpoint should leave this unset).
         """
         import openai as openai_module
 
@@ -315,6 +325,7 @@ class OpenAICompatibleClient:
                     response_format={"type": "json_object"},
                     stop=list(STOP_SEQUENCES),
                     **({"seed": seed} if seed is not None else {}),
+                    **({"extra_body": extra_body} if extra_body is not None else {}),
                 )
                 break
             except openai_module.RateLimitError as exc:

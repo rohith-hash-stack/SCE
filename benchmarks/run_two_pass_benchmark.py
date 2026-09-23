@@ -54,6 +54,7 @@ import argparse
 import dataclasses
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -85,6 +86,26 @@ from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_
 
 DEFAULT_BUDGETS = (2000, 4000)
 DEFAULT_CHECKPOINT_PATH = "reports/pilot/checkpoint_two_pass.json"
+
+#: Phase B patch (pilot-4 autopsy, `django_t02_002_queryset_delete_
+#: cascade_pipeline`): at temperature=0.0 the model reproducibly (4/4
+#: seeds, byte-identical) degenerated into repeating one already-listed
+#: symbol name (`Collector.add_dependency`) 140 times until `max_tokens`
+#: cut it off mid-string - none of `STOP_SEQUENCES` occurs inside a bare
+#: repetition of one quoted name, so they never fired. Sent only on
+#: Turn 1's own call (`run_two_pass_cell` below) via `complete()`'s
+#: `extra_body` passthrough - Ollama's own repetition-penalty knob, not
+#: a standard chat-completions field, so this has no effect against a
+#: non-Ollama (e.g. DeepSeek) endpoint that ignores unknown body fields,
+#: and is deliberately not applied to Turn 2 or the single-pass runner.
+TURN1_REPEAT_PENALTY = 1.15
+
+#: A dotted qualified name, as every manifest row's own leading field
+#: and every `requested_symbols` entry use it - deliberately the same
+#: character class `candidate_index.py`'s own qualified names are built
+#: from (module segments, class/function names, underscores), not a
+#: generic quoted-string pattern.
+_QUALIFIED_NAME_RE = re.compile(r'"([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)"')
 
 #: Pilot-4 prep, Fix 4: names the env var read for this module's own
 #: incremental checkpoint push - deliberately a distinct name from
@@ -206,15 +227,43 @@ def _turn1_user_prompt(manifest_text: str, task_prompt: str) -> str:
     )
 
 
-def _parse_requested_symbols(response_text: str) -> tuple[list[str], bool]:
+def _parse_requested_symbols(
+    response_text: str, candidate_universe: set[str] | None = None
+) -> tuple[list[str], bool]:
     """`(requested_symbols, parsed_ok)` - mirrors `hydration_loop.py`'s
     own contract: a Turn 1 parse failure degrades Turn 2 to "only the
-    seed" (an empty `requested_symbols` list) rather than aborting the
-    cell."""
+    seed plus its direct callees" (an empty, or regex-salvaged,
+    `requested_symbols` list - `retrieve_requested`'s own direct-callee
+    union covers the rest) rather than aborting the cell.
+
+    `parsed_ok` answers "did the JSON parse," never "did we recover
+    something useful" - a regex salvage still reports `False` here (the
+    JSON genuinely didn't parse; `turn1_parsed_ok` in the checkpoint
+    stays an honest signal of that), even though `requested_symbols`
+    itself may now be non-empty.
+
+    Regex fallback (pilot-4 autopsy, `django_t02_002_queryset_delete_
+    cascade_pipeline`, reproduced identically on 4/4 seeds): a
+    `json.JSONDecodeError` - truncated output, or a degenerate
+    repetition loop hitting `max_tokens` mid-string - previously
+    degraded straight to `[]`, discarding every real symbol name the
+    model *did* emit before it broke. `candidate_universe` (optional,
+    `None` by default - a caller that omits it gets the original,
+    unconditional degrade-to-`[]` behavior unchanged) lets a malformed
+    response still salvage whichever already-real, already-listed
+    qualified names it managed to emit, by intersecting every
+    dotted-name-shaped quoted token in the raw text against the real
+    manifest - never inventing a name, never trusting an unresolvable
+    one.
+    """
     try:
         obj = json.loads(response_text.strip())
     except json.JSONDecodeError:
-        return [], False
+        if not candidate_universe:
+            return [], False
+        salvaged = _QUALIFIED_NAME_RE.findall(response_text)
+        salvaged_symbols = sorted(set(salvaged) & candidate_universe)
+        return salvaged_symbols, False
     if not isinstance(obj, dict):
         return [], False
     symbols = obj.get("requested_symbols")
@@ -255,8 +304,9 @@ def run_two_pass_cell(
     turn1_user = _turn1_user_prompt(manifest_text, task.prompt)
     turn1_call = client.complete(
         model, TURN1_SYSTEM_PROMPT, turn1_user, seed=seed, task_id=task.task_id, engine="prism_two_pass_turn1",
+        extra_body={"options": {"repeat_penalty": TURN1_REPEAT_PENALTY}},
     )
-    requested_symbols, parsed_ok = _parse_requested_symbols(turn1_call.content)
+    requested_symbols, parsed_ok = _parse_requested_symbols(turn1_call.content, candidate_universe)
 
     pkg, skipped = engine.retrieve_requested(
         task.seed_symbol, budget, requested_symbols, candidate_universe, task_type=task.task_type,
@@ -423,6 +473,17 @@ def main(argv: list[str] | None = None) -> int:
     print(render_summary_table(results))
     if args.output:
         output_path = Path(args.output)
+        # Kaggle output-path guard: a caller that passes an existing
+        # directory (observed on pilot-4 - a batch-boundary
+        # `IsADirectoryError` on every one of 4 completed batches, from
+        # a Kaggle cell invocation that passed the bare
+        # `reports/pilot-4` directory as --output) gets a real file
+        # inside it instead of a crash on this purely optional,
+        # end-of-run raw-results dump - the checkpoint itself is already
+        # saved by this point regardless, so this guard only protects a
+        # debug/audit convenience, never pilot data.
+        if output_path.is_dir():
+            output_path = output_path / "eval_results.json"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps([dataclasses.asdict(r) for r in results], indent=2))
         print(f"\nWrote raw results to {output_path}")
