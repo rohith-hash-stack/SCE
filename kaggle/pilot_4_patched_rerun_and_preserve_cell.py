@@ -40,7 +40,10 @@ import time
 # Config
 # --------------------------------------------------------------------- #
 MODEL = "qwen2.5-coder:14b-instruct-q8_0"          # Ollama model tag (LLM_MODEL)
-PATCH_COMMIT = "b75d1c58fe9cc48a8525e4ff876b229cfb212aa9"
+PATCH_COMMIT = "2dad4176601cad3ad57e109236efd7024469edc6"  # HEAD of PATCH_BRANCH: includes b75d1c5's engine patches plus the
+                          # CUDA-check/restart-safety fix to this cell itself - pinning to an
+                          # older commit here would silently check the working copy back to a
+                          # version of *this script* missing that fix before it runs.
 PATCH_BRANCH = "feature/two-pass-phase-b-patches"
 SINGLE_PASS_SOURCE_BRANCH = "pilot-4-progress"      # holds the real, durable seeds 42-45 single-pass data
 PROGRESS_BRANCH = "pilot-4-patched-progress"        # NEW - where THIS run's results get pushed, this time
