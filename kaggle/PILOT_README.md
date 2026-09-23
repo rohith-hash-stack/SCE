@@ -37,29 +37,27 @@ the other harness's progress.
 
 A patched two-pass evaluation (`feature/two-pass-phase-b-patches`,
 seeds 42-45, Django, `qwen2.5-coder:14b-instruct-q8_0`) completed
-successfully on Kaggle, but the cell that ran it never pushed its
-result files anywhere - `checkpoint_two_pass.json` and
-`checkpoint_merged.json` from that run do not exist on any branch in
-this repository. The only record of it is a pasted log transcript, so
-its numbers are unverified against real data. Full status, the exact
-results table with each number labeled JSON-verified vs. log-parsed,
-and the remaining gaps: **`docs/pilot/two_pass_phase_b_status.md`**.
+successfully on Kaggle. Its own cell never pushed the result files
+anywhere, but they were rescued from a local copy, independently
+re-verified from scratch (cell counts, headline numbers, a from-scratch
+merge, and a from-scratch gate re-run - all matched exactly), and are
+now preserved on **`two-pass-artifact-preservation`**
+(`reports/pilot-4-patched/`). Full status, the verified results table,
+and the remaining real gaps (seed 46 never run, no second corpus/model
+tested, formal 15pp threshold not cleared): **`docs/pilot/two_pass_phase_b_status.md`**.
 
-To fix this - rerun and this time actually preserve the result:
-1. Paste `kaggle/pilot_4_patched_rerun_and_preserve_cell.py` into a
-   Kaggle notebook cell. Same prerequisites as above (GPU T4 x2,
-   `GITHUB_TOKEN` secret).
-2. Save & Run All. Runs all 5 seeds for two-pass (the lost 42-45 data
-   has to be redone, not just the missing seed 46) and tops up
-   single-pass with the one real missing seed (46) against the
-   already-durable `pilot-4-progress` data. ~2-2.5 hours.
-3. Unlike the earlier cell, this one pushes both checkpoint files to
-   `pilot-4-patched-progress` immediately after each harness run
-   completes, not just at the end - a crash partway through still
-   leaves real, pushed data behind.
-4. It prints `sha256sum` for all three output files and runs the
-   sanity check + both gate comparisons itself. Bring back the two
-   gate reports, the three hashes, and the parse-failure count.
+`kaggle/pilot_4_patched_rerun_and_preserve_cell.py` is still the right
+tool for the seed 46 / additional-corpus gap - it now also includes
+the push step this run was missing, so a rerun won't lose data again:
+1. Paste it into a Kaggle notebook cell. Same prerequisites as above
+   (GPU T4 x2, `GITHUB_TOKEN` secret).
+2. Save & Run All. Runs all 5 seeds for two-pass and tops up
+   single-pass with seed 46 against the already-durable
+   `pilot-4-progress` data. ~2-2.5 hours.
+3. Pushes both checkpoint files to `pilot-4-patched-progress`
+   immediately after each harness run completes, not just at the end.
+4. Prints `sha256sum` for all three output files and runs the sanity
+   check + both gate comparisons itself.
 
 Single-pass is not deprecated by any of this - it stays the fallback
 comparison baseline until the project's own 15pp gate threshold is

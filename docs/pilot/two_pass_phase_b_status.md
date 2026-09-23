@@ -23,20 +23,25 @@ this evaluation.
 
 | File | Status |
 |---|---|
-| `checkpoint_single_pass.json` (seeds 42-45, 5 engines) | **Real, durable.** Lives on `pilot-4-progress`. Independently re-verified directly from that JSON (see below) - not log-parsed. |
-| `checkpoint_two_pass.json` (patched, seeds 42-45) | **Lost.** The Kaggle cell that produced it never included a push/save step. It is not present in this repository on any branch (every remote branch was checked). The only record of this run is a pasted Kaggle log transcript. |
-| `checkpoint_merged.json` (patched) | **Lost**, same reason - it was derived from the file above. |
+| `checkpoint_single_pass.json` (seeds 42-45, 5 engines) | **Real, durable.** Lives on `pilot-4-progress`. Independently re-verified directly from that JSON. |
+| `checkpoint_two_pass.json` (patched, seeds 42-45) | **Rescued and preserved.** The Kaggle cell that produced it never pushed anything, but the user still had it locally after the session ended. Pulled from that local copy, independently re-verified (structure, cell counts, headline numbers, and a from-scratch merge/gate re-run - see below), then committed to `two-pass-artifact-preservation` (commit `a76f962`, `reports/pilot-4-patched/checkpoint_two_pass.json`). |
+| `checkpoint_merged.json` (patched) | **Rescued and preserved**, same branch/commit. Independently regenerated from the file above plus the trusted single-pass checkpoint and confirmed to match the rescued copy with **zero value differences** across all 1,440 cells. |
 
-Because of this, every two-pass number in this document is labeled either
-**[JSON-verified]** (computed directly from real, checked-in data) or
-**[log-parsed, unverified]** (read out of the pasted log text, never
-independently confirmed against the actual checkpoint). Do not treat a
-log-parsed number as equivalent evidence to a JSON-verified one - it isn't.
+Every two-pass number in this document is now **[JSON-verified]** - computed
+directly from the real, checked-in, independently re-verified data on
+`two-pass-artifact-preservation`, not read out of log text.
 
-`kaggle/pilot_4_patched_rerun_and_preserve_cell.py` reruns the full
-two-pass evaluation (all 5 seeds - the lost 42-45 data has to be redone, not
-just seed 46) with the push step this time, and will make the two-pass row
-below JSON-verified once it's run.
+sha256sum (also recorded in the preservation commit message):
+```
+checkpoint_two_pass.json  7af08cc623effbaba6bbdda30bd94cdf354a071ef46116c269a0fb692439a4c2
+checkpoint_merged.json    f0454b7f92b8396cd9a08af0c1425a1ca1a5a62fa4419bc6396a29196d7ed9af
+eval_results.json         7da754a762abb450c3e9973b0ecc7237429ddc6730e339651f17a22a1501933e
+```
+
+`kaggle/pilot_4_patched_rerun_and_preserve_cell.py` still exists and is
+still the right thing to run for seed 46 / widening the corpus - the
+artifact-loss problem it was built to solve is fixed, but the "4 seeds,
+one corpus, one model" scope limitation below is not.
 
 ## Results table
 
@@ -48,7 +53,7 @@ below JSON-verified once it's run.
 | oracle (reference ceiling, not a competitor) | 240 | 0.961 | 0.983 | not recorded* | 4,450 | [JSON-verified] |
 | prism_v11 (single-pass) | 240 | 0.948 | 0.933 | not recorded* | 7,910 | [JSON-verified] |
 | prism_two_pass, unpatched (pre-fix) | 240 | 0.888 | 0.888 | — | — | [JSON-verified] (`pilot-4-progress`) |
-| **prism_two_pass, patched** | 240 | **0.957** | **0.957** | **0.179** | **~5,733** | **[log-parsed, unverified]** |
+| **prism_two_pass, patched** | 240 | **0.957** | **0.957** | **0.179** | **5,733** | **[JSON-verified]** (`two-pass-artifact-preservation`) |
 
 \* `fpr_gt` was never written to the single-pass checkpoint schema at all
 (confirmed by inspecting the actual field list on a real cell:
@@ -61,28 +66,58 @@ run.
 
 ## Verification report
 
-The single-pass row was independently recomputed, fresh, directly from
-`checkpoint_single_pass.json` on `pilot-4-progress` (not from any earlier
-summary), and matches exactly: n=240, 200/240 perfect, mean TSR 0.9478,
-mean token footprint 7,910.1 across `prism_v11`.
+**Single-pass**: independently recomputed, fresh, directly from
+`checkpoint_single_pass.json` on `pilot-4-progress`, and matches exactly:
+n=240, 200/240 perfect, mean TSR 0.9478, mean token footprint 7,910.1
+across `prism_v11`.
 
-The patched two-pass row (0/240 parse failures, 196/240 perfect, mean score
-0.957, ~5,733 tokens/cell) could not be put through the same process - there
-is no real JSON to recompute from. It is repeated here as-is from the
-earlier log parse, explicitly flagged unverified. **No discrepancy has been
-found, because no independent check has been possible yet.** That is a gap,
-not a confirmation.
+**Two-pass (patched)**: independently recomputed, fresh, directly from the
+rescued `checkpoint_two_pass.json` - not from the log, not from trusting
+the uploaded file as-is. Checks performed, and results:
+
+- JSON structurally valid, both files.
+- 240 cells; seeds 42/43/44/45 at 60 cells each; budgets 2000/4000/8000 at
+  80 cells each; 20 distinct tasks; 0 cells missing any required field;
+  0 cells with a null `tsr`; **0 cells with `turn1_parsed_ok == False`**.
+- Hand-counted headline numbers, computed fresh from the raw cells:
+  196/240 perfect (`tsr == 1.0`), mean `tsr` = 0.9567, mean
+  `cpi_end_to_end` = 0.9567, mean `fpr_gt` = 0.1794, mean token footprint
+  (`turn1_prompt_tokens + turn2_prompt_tokens + completion_tokens`) = 5732.8.
+  **Exact match** to the previously-reported log-parsed figures - no
+  discrepancy found.
+- `checkpoint_merged.json` independently regenerated (via
+  `scripts/merge_pilot_checkpoints.py`, from this file plus the trusted
+  single-pass checkpoint) and diffed value-by-value against the rescued
+  merged file: **0 differences across all 1,440 cells.**
+- Both gate comparisons re-run independently via `scripts/apply_gate.py`:
+  same point estimates and same decisions (EXPAND vs baseline, STOP vs
+  single-pass) as the rescued `gate_vs_*.md` reports. Bootstrap CI bounds
+  differ by roughly 0.02-0.2 percentage points between the two runs
+  despite the script's fixed default seed - a small, already-observed,
+  non-blocking non-determinism in the CI computation; it does not change
+  any point estimate or decision.
+
+**Conclusion: fully verified, not just re-uploaded.** The numbers reported
+throughout this evaluation, before and after this verification pass, agree.
 
 ## Formal gate status
 
 The project's own pre-registered threshold (ΔTSR and ΔCPI_answer both
 ≥15 percentage points over `baseline_bfs_bidirectional`, with a bootstrapped
 95% CI excluding zero) has **not been cleared** by either the unpatched or
-patched two-pass result. The patched run's own gate output (log-parsed,
-same caveat as above) showed ΔTSR ≈7.67pp and ΔCPI_answer ≈12.33pp -
-real, CI-excludes-zero improvements over the unpatched run's ≈0.83pp /
-≈5.50pp, but still short of 15pp. This threshold has not been changed by
-this evaluation and should not be treated as relaxed.
+patched two-pass result. The patched run's own gate output (independently
+re-run against the verified JSON, not log-parsed) shows ΔTSR ≈7.67pp
+(95% CI excludes zero) and ΔCPI_answer ≈12.33pp (95% CI excludes zero) -
+real, confirmed improvements over the unpatched run's ≈0.83pp / ≈5.50pp,
+but still short of 15pp. This threshold has not been changed by this
+evaluation and should not be treated as relaxed.
+
+Against single-pass (`prism_v11`) specifically: ΔTSR ≈0.89pp and
+ΔCPI_answer ≈2.33pp, both with CIs crossing zero - two-pass no longer
+trails single-pass (it did, clearly, before the patch), but it hasn't
+established a statistically confirmed lead over it either. "At least as
+good as single-pass, plausibly slightly ahead" is the honest read, not
+"beats single-pass."
 
 ## Pre-registered generalization criteria
 
@@ -103,16 +138,24 @@ None of these have been checked yet.
 
 ## Remaining gaps before this is a real, generalizable win
 
-1. Patched two-pass `checkpoint_two_pass.json` / `checkpoint_merged.json` do
-   not exist anywhere durable - rerun and push required
-   (`kaggle/pilot_4_patched_rerun_and_preserve_cell.py`).
+1. ~~Patched two-pass artifacts do not exist anywhere durable~~ — **fixed**:
+   rescued, independently re-verified, and preserved on
+   `two-pass-artifact-preservation` (commit `a76f962`).
 2. Seed 46 has never been run for either engine.
 3. Zero corpora other than Django, zero models other than
    `qwen2.5-coder:14b-instruct-q8_0`, have been tested.
-4. The formal 15pp gate threshold has not been cleared.
+4. The formal 15pp gate threshold has not been cleared vs. baseline, and
+   two-pass's edge over single-pass is not yet statistically confirmed
+   (CI crosses zero on both ΔTSR and ΔCPI_answer).
 5. `fpr_gt` is structurally absent from the single-pass checkpoint schema,
    so context-noise can currently only be compared for two-pass in
    isolation, not against single-pass side by side.
+
+`kaggle/pilot_4_patched_rerun_and_preserve_cell.py` is still the right tool
+for gap 2 (it also already includes the push step, so a rerun won't
+reproduce gap 1). Gap 3 needs a second corpus/model run, cost and time
+permitting. Gaps 4-5 are inherent to this evaluation's current scope, not
+things a rerun alone fixes.
 
 ## Adoption status
 
