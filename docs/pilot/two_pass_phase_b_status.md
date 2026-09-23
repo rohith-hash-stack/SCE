@@ -57,20 +57,36 @@ checkpoint_merged.json       d447402c87e2c574f398631d8275a476dd65998996d34989ad0
 
 | Engine | Cells (n) | Mean TSR | Mean CPI_answer | Context Noise (FPR_GT) | Token Footprint | Source |
 |---|---|---|---|---|---|---|
-| baseline_bfs_bidirectional | 300 | 0.880 | 0.833 | not recorded* | 6,943.5 | [JSON-verified] |
-| baseline_bfs_forward | 300 | 0.913 | 0.967 | not recorded* | 5,561.7 | [JSON-verified] |
-| baseline_rag | 300 | 0.571 | 0.017 | not recorded* | 16,287.7 | [JSON-verified] |
-| oracle (reference ceiling, not a competitor) | 300 | 0.961 | 0.983 | not recorded* | 4,449.6 | [JSON-verified] |
-| prism_v11 (single-pass) | 300 | 0.948 | 0.933 | not recorded* | 7,910.1 | [JSON-verified] |
+| baseline_bfs_bidirectional | 300 | 0.880 | 0.833 | 0.679 | 6,943.5 | [JSON-verified] |
+| baseline_bfs_forward | 300 | 0.913 | 0.967 | 0.526 | 5,561.7 | [JSON-verified] |
+| baseline_rag | 300 | 0.571 | 0.017 | 0.962 | 16,287.7 | [JSON-verified] |
+| oracle (reference ceiling, not a competitor) | 300 | 0.961 | 0.983 | 0.000 | 4,449.6 | [JSON-verified] |
+| prism_v11 (single-pass) | 300 | 0.948 | 0.933 | 0.616 | 7,910.1 | [JSON-verified] |
 | prism_two_pass, unpatched (pre-fix, 4 seeds, historical) | 240 | 0.888 | 0.888 | — | — | [JSON-verified] (`pilot-4-progress`) |
 | **prism_two_pass, patched (5 seeds, final)** | 300 | **0.957** | **0.957** | **0.193** | **5,776.8** | **[JSON-verified]** (`pilot-4-patched-progress` @ `594eec9`) |
 
-\* `fpr_gt` was never written to the single-pass checkpoint schema at all
-(confirmed by inspecting the actual field list on a real cell:
-`prompt_tokens`, `completion_tokens`, `cpi_strict`, `cpi_fractional`,
-`score`, `model`, `raw_response`, `selected_symbols` - no `fpr_gt`). This is
-a pre-existing gap in the single-pass harness, not something lost with this
-run.
+`fpr_gt` for the single-pass engines is **not** in `checkpoint_single_pass.
+json` (that file only carries `prompt_tokens`, `completion_tokens`,
+`cpi_strict`, `cpi_fractional`, `score`, `model`, `raw_response`,
+`selected_symbols`) - an earlier version of this document wrongly read that
+checkpoint's absence of the field as "never recorded" and reported it as a
+structural gap. It's real, wrong, and now corrected: `runner.py`'s
+`compute_diagnostics` (line 328) computes `fpr_gt` for every engine, every
+(task, budget) cell, and it lives in the separate report file
+`reports/pilot-4/eval_results_v11.json` (300 records: 20 tasks x 5 engines
+x 3 budgets, `tsr_scores` a 5-element list per record - one per seed;
+`diagnostics.fpr_gt` a single retrieval-only value per record, since
+retrieval doesn't depend on seed). Values above are the mean of that field
+across all 60 (task, budget) points per engine, pulled and verified
+directly from that file. Oracle's `0.000` is real, not a placeholder - its
+selection is built from the annotated ground truth, so it can't diverge
+from it by construction.
+
+**This closes what was previously listed as gap 5 below**: context noise
+*can* be compared side by side after all. Two-pass's 0.193 is roughly 3x
+lower than single-pass Prism's 0.616, and far below every baseline -
+consistent with its lower token footprint (it isn't just packing less, it's
+packing a cleaner, more relevant set).
 
 **Seed 46 breakdown**: mean TSR 0.9567, 49/60 perfect - statistically
 indistinguishable from seeds 42-45 (each also 0.9567, 49/60 perfect). Not
@@ -173,12 +189,14 @@ None of these have been checked yet - all require a second corpus/model.
    two-pass's edge over single-pass is not yet statistically confirmed
    (CI crosses zero on both ΔTSR and ΔCPI_answer) - unchanged by adding
    the 5th seed.
-5. `fpr_gt` is structurally absent from the single-pass checkpoint schema,
-   so context-noise can currently only be compared for two-pass in
-   isolation, not against single-pass side by side.
+5. ~~`fpr_gt` is structurally absent from the single-pass checkpoint
+   schema~~ — **corrected, not a real gap**: it's absent from the
+   checkpoint file specifically, but present and verified in
+   `reports/pilot-4/eval_results_v11.json`. Context noise is compared
+   side by side in the results table above.
 
-Gap 3 needs a second corpus/model run, cost and time permitting. Gaps 4-5
-are inherent to this evaluation's current scope, not things a rerun alone
+Gap 3 needs a second corpus/model run, cost and time permitting. Gap 4 is
+inherent to this evaluation's current scope, not something a rerun alone
 fixes - more seeds on the same corpus/model was never going to move a
 result that's already stable at 5/5 seeds.
 
