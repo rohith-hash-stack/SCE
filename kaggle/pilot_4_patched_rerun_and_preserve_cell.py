@@ -40,10 +40,16 @@ import time
 # Config
 # --------------------------------------------------------------------- #
 MODEL = "qwen2.5-coder:14b-instruct-q8_0"          # Ollama model tag (LLM_MODEL)
-PATCH_COMMIT = "2dad4176601cad3ad57e109236efd7024469edc6"  # HEAD of PATCH_BRANCH: includes b75d1c5's engine patches plus the
-                          # CUDA-check/restart-safety fix to this cell itself - pinning to an
-                          # older commit here would silently check the working copy back to a
-                          # version of *this script* missing that fix before it runs.
+PATCH_COMMIT = "e42bc487fc4194f70b91a9fcda0265493b8dd574"  # HEAD of PATCH_BRANCH as of this edit: includes b75d1c5's engine
+                          # patches, the CUDA-check/restart-safety fix, the git-identity +
+                          # push-refspec fix, and the pilot-4/ (single-pass) progress-restore
+                          # fix - pinning to an older commit here would silently check the
+                          # working copy back to a version of *this script* missing one of
+                          # those fixes before it runs. Whenever this file gets a further fix,
+                          # this value must be bumped again in its own trivial follow-up commit
+                          # (see the commits after b75d1c5 on this branch for the pattern: fix
+                          # the real bug first, then bump this line alone, never both at once -
+                          # a commit can't reference its own hash).
 PATCH_BRANCH = "feature/two-pass-phase-b-patches"
 SINGLE_PASS_SOURCE_BRANCH = "pilot-4-progress"      # holds the real, durable seeds 42-45 single-pass data
 PROGRESS_BRANCH = "pilot-4-patched-progress"        # NEW - where THIS run's results get pushed, this time
