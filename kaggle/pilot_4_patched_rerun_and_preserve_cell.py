@@ -184,27 +184,39 @@ if os.path.getsize(SINGLE_PASS_CKPT) == 0:
     abort(f"{SINGLE_PASS_CKPT} is empty after fetch - aborting before any LLM spend")
 print(f"[ok] existing single-pass checkpoint fetched ({os.path.getsize(SINGLE_PASS_CKPT)} bytes)", flush=True)
 
-# Restore reports/pilot-4-patched/ from PROGRESS_BRANCH if THIS script has
-# already partially run before and pushed something (a mid-session
-# restart after a crash, or a genuine re-run) - without this, Step 4's
-# own `git checkout PATCH_COMMIT` + `git clean -fdx` above would discard
-# any local progress a prior push_progress() call already made, and
-# --resume below would silently redo (re-pay for) already-completed
+# Restore reports/pilot-4/ and reports/pilot-4-patched/ from PROGRESS_BRANCH
+# if THIS script has already partially run before and pushed something (a
+# mid-session restart after a crash, or a genuine re-run) - without this,
+# Step 4's own `git checkout PATCH_COMMIT` + `git clean -fdx` above would
+# discard any local progress a prior push_progress() call already made,
+# and --resume below would silently redo (re-pay for) already-completed
 # LLM calls instead of skipping them, even though nothing was actually
 # lost (it's still on the remote branch) - restoring it locally first
 # makes the "a re-run of this cell is safe and cheap" claim below true.
+#
+# reports/pilot-4/ specifically: the line above already fetched a floor
+# copy from SINGLE_PASS_SOURCE_BRANCH (seeds 42-45 only, guaranteed to
+# exist). If PROGRESS_BRANCH's own reports/pilot-4/checkpoint_single_pass.json
+# is a strict superset of that (e.g. seed 46 completed and pushed by an
+# earlier, partially-successful run of this exact script), restoring it
+# here overrides the floor copy with the more complete one, so --resume
+# below actually skips seed 46 too instead of recomputing it.
 os.makedirs(TWO_PASS_REPORT_DIR, exist_ok=True)
 branch_check = run(["git", "ls-remote", "--exit-code", "--heads", "origin", PROGRESS_BRANCH], cwd=SCE_DIR, check=False)
 if branch_check.returncode == 0:
     run(["git", "fetch", "origin", PROGRESS_BRANCH], cwd=SCE_DIR, check=True)
-    restore = run(
-        ["git", "checkout", f"origin/{PROGRESS_BRANCH}", "--", "reports/pilot-4-patched"],
-        cwd=SCE_DIR, check=False,
-    )
-    if restore.returncode == 0:
-        print(f"[ok] restored reports/pilot-4-patched/ from an earlier {PROGRESS_BRANCH} push", flush=True)
-    else:
-        print(f"[warn] {PROGRESS_BRANCH} exists but has no reports/pilot-4-patched/ yet - starting fresh", flush=True)
+    for restore_path, label in [
+        ("reports/pilot-4", "single-pass reports/pilot-4/ (may now include seed 46)"),
+        ("reports/pilot-4-patched", "two-pass reports/pilot-4-patched/"),
+    ]:
+        restore = run(
+            ["git", "checkout", f"origin/{PROGRESS_BRANCH}", "--", restore_path],
+            cwd=SCE_DIR, check=False,
+        )
+        if restore.returncode == 0:
+            print(f"[ok] restored {label} from an earlier {PROGRESS_BRANCH} push", flush=True)
+        else:
+            print(f"[warn] {PROGRESS_BRANCH} exists but has no {restore_path} yet - keeping current copy", flush=True)
 else:
     print(f"[ok] {PROGRESS_BRANCH} does not exist remotely yet - starting fresh", flush=True)
 
