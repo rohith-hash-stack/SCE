@@ -160,6 +160,12 @@ if MODEL not in (tags.stdout or ""):
 if not os.path.isdir(SCE_DIR):
     clone_url = REPO_URL.replace("https://", f"https://{github_token}@")
     run(["git", "clone", clone_url, SCE_DIR], check=True)
+# Kaggle containers have no git identity configured - `git commit` below
+# fails outright ("Please tell me who you are") without this, and the
+# failure was previously swallowed as a misleading "nothing new to
+# commit" warning, silently skipping every push_progress() call.
+run(["git", "config", "user.email", "vasiganirohithbabu@gmail.com"], cwd=SCE_DIR, check=True)
+run(["git", "config", "user.name", f"{EXPECTED_GITHUB_USER} (Kaggle pilot-4)"], cwd=SCE_DIR, check=True)
 run(["git", "fetch", "origin", PATCH_COMMIT], cwd=SCE_DIR, check=True)
 run(["git", "checkout", PATCH_COMMIT], cwd=SCE_DIR, check=True)
 run(["git", "clean", "-fdx"], cwd=SCE_DIR, check=True)
@@ -223,7 +229,14 @@ def push_progress(commit_message):
     commit_result = run(["git", "commit", "-m", commit_message], cwd=SCE_DIR, check=False)
     if commit_result.returncode != 0:
         print("[warn] nothing new to commit at this checkpoint", flush=True)
-    run(["git", "push", "--force", "origin", f"HEAD:{PROGRESS_BRANCH}"], cwd=SCE_DIR, check=True)
+    # Fully-qualified destination ref, not the short "HEAD:PROGRESS_BRANCH"
+    # form - with the repo in detached HEAD (Step 4 checks out a bare
+    # commit SHA, not a branch) and PROGRESS_BRANCH not yet existing on
+    # the remote, git cannot DWIM-resolve the short form and fails with
+    # "destination you provided is not a full refname" (git's own hint
+    # names this exact fix) - confirmed live in a real run that reached
+    # this line right after a real Step 7 completed and lost the push.
+    run(["git", "push", "--force", "origin", f"HEAD:refs/heads/{PROGRESS_BRANCH}"], cwd=SCE_DIR, check=True)
     print(f"[ok] pushed to {PROGRESS_BRANCH}", flush=True)
 
 
