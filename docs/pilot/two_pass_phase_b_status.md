@@ -55,15 +55,15 @@ checkpoint_merged.json       d447402c87e2c574f398631d8275a476dd65998996d34989ad0
 
 ## Results table (5 seeds, 300 cells per engine, 1800 total)
 
-| Engine | Cells (n) | Mean TSR | Mean CPI_answer | Context Noise (FPR_GT) | Token Footprint | Source |
-|---|---|---|---|---|---|---|
-| baseline_bfs_bidirectional | 300 | 0.880 | 0.833 | 0.679 | 6,943.5 | [JSON-verified] |
-| baseline_bfs_forward | 300 | 0.913 | 0.967 | 0.526 | 5,561.7 | [JSON-verified] |
-| baseline_rag | 300 | 0.571 | 0.017 | 0.962 | 16,287.7 | [JSON-verified] |
-| oracle (reference ceiling, not a competitor) | 300 | 0.961 | 0.983 | 0.000 | 4,449.6 | [JSON-verified] |
-| prism_v11 (single-pass) | 300 | 0.948 | 0.933 | 0.616 | 7,910.1 | [JSON-verified] |
-| prism_two_pass, unpatched (pre-fix, 4 seeds, historical) | 240 | 0.888 | 0.888 | — | — | [JSON-verified] (`pilot-4-progress`) |
-| **prism_two_pass, patched (5 seeds, final)** | 300 | **0.957** | **0.957** | **0.193** | **5,776.8** | **[JSON-verified]** (`pilot-4-patched-progress` @ `594eec9`) |
+| Engine | Cells (n) | Mean TSR | Mean CPI_answer | FPR_GT (vs annotated set) | FPR_Oracle (vs Oracle's own pack) | Token Footprint | Source |
+|---|---|---|---|---|---|---|---|
+| baseline_bfs_bidirectional | 300 | 0.880 | 0.833 | 0.679 | 0.681 | 6,943.5 | [JSON-verified] |
+| baseline_bfs_forward | 300 | 0.913 | 0.967 | 0.526 | 0.527 | 5,561.7 | [JSON-verified] |
+| baseline_rag | 300 | 0.571 | 0.017 | 0.962 | 0.964 | 16,287.7 | [JSON-verified] |
+| oracle (reference ceiling, not a competitor) | 300 | 0.961 | 0.983 | 0.000 | 0.000 | 4,449.6 | [JSON-verified] |
+| prism_v11 (single-pass) | 300 | 0.948 | 0.933 | 0.616 | 0.619 | 7,910.1 | [JSON-verified] |
+| prism_two_pass, unpatched (pre-fix, 4 seeds, historical) | 240 | 0.888 | 0.888 | — | — | — | [JSON-verified] (`pilot-4-progress`) |
+| **prism_two_pass, patched (5 seeds, final)** | 300 | **0.957** | **0.957** | **0.193** | **0.247** | **5,776.8** | **[JSON-verified]** (`pilot-4-patched-progress` @ `594eec9`) |
 
 `fpr_gt` for the single-pass engines is **not** in `checkpoint_single_pass.
 json` (that file only carries `prompt_tokens`, `completion_tokens`,
@@ -71,22 +71,42 @@ json` (that file only carries `prompt_tokens`, `completion_tokens`,
 `selected_symbols`) - an earlier version of this document wrongly read that
 checkpoint's absence of the field as "never recorded" and reported it as a
 structural gap. It's real, wrong, and now corrected: `runner.py`'s
-`compute_diagnostics` (line 328) computes `fpr_gt` for every engine, every
-(task, budget) cell, and it lives in the separate report file
-`reports/pilot-4/eval_results_v11.json` (300 records: 20 tasks x 5 engines
-x 3 budgets, `tsr_scores` a 5-element list per record - one per seed;
-`diagnostics.fpr_gt` a single retrieval-only value per record, since
-retrieval doesn't depend on seed). Values above are the mean of that field
-across all 60 (task, budget) points per engine, pulled and verified
-directly from that file. Oracle's `0.000` is real, not a placeholder - its
-selection is built from the annotated ground truth, so it can't diverge
-from it by construction.
+`compute_diagnostics` (line 328) computes `fpr_gt` **and** `fpr_oracle` for
+every engine, every (task, budget) cell, and both live in the separate
+report file `reports/pilot-4/eval_results_v11.json` (300 records: 20 tasks
+x 5 engines x 3 budgets, `tsr_scores` a 5-element list per record - one per
+seed; `diagnostics.fpr_gt`/`fpr_oracle` a single retrieval-only value per
+record, since retrieval doesn't depend on seed). Single-pass values above
+are the mean of those fields across all 60 (task, budget) points per
+engine, pulled and verified directly from that file. Oracle's `0.000` is
+real, not a placeholder - its selection is built from the annotated ground
+truth, so it can't diverge from it by construction.
+
+`fpr_oracle` (divergence from Oracle's own per-budget package, rather than
+the raw annotated set) is the metric `runner.py`'s own docstring calls "the"
+FPR, precisely because pulling in real, relevant context beyond the narrow
+annotated set isn't a false positive against a domain expert's own answer.
+`run_two_pass_benchmark.py` never computed it for two-pass at all (only
+`fpr_gt`) - closed by an independent, full 300-cell recompute against the
+real pinned Django checkout (`PrismEngine.retrieve_requested`, fed each
+cell's actual parsed Turn-1 request), validated against the checkpoint
+before trusting it: **0/300 cells' recomputed `fpr_gt` differed from the
+recorded value.** Two-pass's `fpr_oracle` (0.247) is a bit higher than its
+own `fpr_gt` (0.193) - Oracle's per-budget package is often a proper subset
+of the full annotated set (budget-capped, and itself has `fpr_gt=0.000`
+without covering every annotated symbol), so comparing against it counts a
+few more things as "extra" than comparing against the full set does. This
+doesn't change the comparison to other engines: two-pass's `fpr_oracle` is
+still roughly **2.5x lower than single-pass Prism's (0.619)** and 2.2-3.9x
+lower than every baseline, both statistically confirmed via the same
+paired-bootstrap methodology the formal gate uses (ΔFPR_oracle vs baseline
+-43.43pp, 95% CI [-46.04, -40.85]; vs single-pass -37.29pp, 95% CI
+[-40.34, -34.25], both excluding zero).
 
 **This closes what was previously listed as gap 5 below**: context noise
-*can* be compared side by side after all. Two-pass's 0.193 is roughly 3x
-lower than single-pass Prism's 0.616, and far below every baseline -
-consistent with its lower token footprint (it isn't just packing less, it's
-packing a cleaner, more relevant set).
+*can* be compared side by side after all, by both definitions. See "Why
+two-pass's context noise isn't zero" below for the root cause of the 0.193/
+0.247 figures.
 
 **Seed 46 breakdown**: mean TSR 0.9567, 49/60 perfect - statistically
 indistinguishable from seeds 42-45 (each also 0.9567, 49/60 perfect). Not
@@ -99,6 +119,64 @@ not reappear anywhere in this 5-seed run: `turn1_parsed_ok == True` on all
 (well under any truncation risk), `tsr == 0.75` on every one. The
 `repeat_penalty` fix holds on real, full-scale data, not just the earlier
 4-seed sample.
+
+## Why two-pass's context noise isn't zero
+
+Investigated directly, not assumed. First pass at this question used the
+wrong JSON field (`symbols` instead of the real `requested_symbols`) and
+wrongly concluded the model's own Turn-1 selection had zero noise - caught
+by checking the raw `turn1_response` text, corrected below.
+
+**Aggregate (all 300 cells)**: comparing Turn 1's own raw requested symbols
+(before any hydration) against ground truth gives a mean proxy noise of
+0.190 - almost identical to the final recorded `fpr_gt` of 0.193. The
+deterministic post-hydration fixups (direct-callee auto-inclusion, class-
+promotion) add only ~0.003, about 1.5% of the total. **The noise is
+overwhelmingly the model's own Turn-1 choice, not the hydration
+machinery.**
+
+**Confirmed with real, named symbols** via the same full-corpus recompute
+used for `fpr_oracle` above, tracing every "extra" (non-ground-truth)
+symbol in 4 real cells to its exact source:
+
+| Task | Extra symbols | From the model's own request | From direct-callee auto-inclusion | Residual (class-promotion, itself traced to a model pick) |
+|---|---|---|---|---|
+| t02_003_form_clean_validation | 9 | 6 | 0 | 3 |
+| t02_012_wsgi_entrypoint_dispatch | 4 | 3 | 0 | 1 |
+| t02_013_common_middleware_slash_redirect | 4 | 2 | 1 | 1 |
+| t02_015_admin_each_context | 4 | 3 | 0 | 1 |
+
+21 total extra symbols across these 4 cells; ~90% trace directly to the
+model's own pick (either requested outright, or its containing class got
+auto-promoted after the model requested one of its methods). Only 1/21
+came from the Phase B direct-callee auto-inclusion fix.
+
+**What's actually being over-included** (most frequent "extra" symbols,
+300-cell aggregate) is real, causally-adjacent Django code, not
+hallucination - **0/300 cells had a hallucinated symbol survive into the
+final selection**:
+- Form-validation siblings (`ComboField.clean`, `FileField.clean`,
+  `Field.clean`, `BaseForm.has_changed`, `BaseForm.add_error`,
+  `ErrorDict`) - genuinely related validation methods, just not the
+  specific 3-6 symbols annotators picked for that narrow task.
+- URL-resolution helpers (`django.urls.base.resolve`/`reverse`/
+  `is_valid_path`/`set_urlconf`, `_get_cached_resolver`) - used pervasively
+  across Django's request pipeline, reasonably included whenever a seed's
+  chain touches URL resolution even if that specific task's ground truth
+  didn't name them.
+- `django.utils.module_loading.import_string` (29 occurrences, the single
+  most over-requested symbol) - Django's generic dynamic-import helper for
+  pluggable backends, shows up whenever a seed's chain loads a configurable
+  class.
+
+**Reading on the 0.193/0.247 figures**: `fpr_gt`/`fpr_oracle` measure
+divergence from a narrow, hand-annotated 3-6-symbol set (or Oracle's own
+budget-capped subset of it) - neither distinguishes "irrelevant" from "real
+Django code the model judged worth including that annotators didn't happen
+to list." This is a materially less alarming story than "19-25% garbage":
+it's the model exercising real judgment about causally-adjacent code, most
+of the time reasonably, occasionally beyond what a narrow annotation
+happened to cover.
 
 ## Verification report
 
