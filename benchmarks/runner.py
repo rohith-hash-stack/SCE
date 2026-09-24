@@ -244,8 +244,26 @@ DEBUG_TASK_RESPONSE_CONTRACT = (
 # --------------------------------------------------------------------- #
 # Core evaluation
 # --------------------------------------------------------------------- #
+#: name -> zero-arg constructor for every non-Oracle engine `_build_engines`
+#: can build. Oracle is never in this registry - it's controlled
+#: separately (`oracle_packages_path`/`use_pragmatic_oracle`) since it
+#: plays a mechanical role no `--engines` selection should be able to drop:
+#: every other engine's `fpr_oracle` depends on Oracle's own package being
+#: computed first, for any engine subset.
+ENGINE_REGISTRY: dict[str, "callable[[], AbstractRetrievalEngine]"] = {
+    # same name="prism_v11" as PrismEngine - see Gap 5 (prism_engine_cache.py)
+    "prism_v11": lambda: PrismEngineCache(),
+    "baseline_rag": lambda: BaselineRAGEngine(),
+    "baseline_bfs_forward": lambda: BaselineBFSEngine(mode="forward"),
+    "baseline_bfs_bidirectional": lambda: BaselineBFSEngine(mode="bidirectional"),
+}
+
+
 def _build_engines(
-    task: EvaluationTask, oracle_packages_path: str | None = None, use_pragmatic_oracle: bool = False
+    task: EvaluationTask,
+    oracle_packages_path: str | None = None,
+    use_pragmatic_oracle: bool = False,
+    engine_names: list[str] | None = None,
 ) -> list[AbstractRetrievalEngine]:
     """Oracle (when configured) is returned *first* - `run_evaluation`
     needs its per-budget selected-symbol set computed before any other
@@ -258,20 +276,32 @@ def _build_engines(
     set - `use_pragmatic_oracle` (Gap 2 Blocker 2 Option B,
     `PragmaticOracle`) is the real, zero-annotation-cost substitute for
     when no hand-curated file exists, which for this repo's own real
-    tasks is always (see `oracle_engine.py`'s own docstring)."""
+    tasks is always (see `oracle_engine.py`'s own docstring).
+
+    `engine_names`: `None` (default) builds every `ENGINE_REGISTRY` engine,
+    unchanged from this parameter's own absence - every existing caller
+    that doesn't pass it keeps today's full 4-engine behavior. A given
+    list restricts to exactly those names, in `ENGINE_REGISTRY`'s own
+    canonical order (not the caller's list order, for a deterministic
+    engine sequence regardless of how `--engines` was typed) - an unknown
+    name raises `ValueError` naming the registered choices, the same
+    fail-fast contract `resolve()` already gives an unknown `--repo`."""
     engines: list[AbstractRetrievalEngine] = []
     if oracle_packages_path is not None:
         engines.append(OracleEngine(oracle_packages_path, task.task_id))
     elif use_pragmatic_oracle:
         engines.append(PragmaticOracle(task))
-    engines.extend(
-        [
-            PrismEngineCache(),  # same name="prism_v11" as PrismEngine - see Gap 5 (prism_engine_cache.py)
-            BaselineRAGEngine(),
-            BaselineBFSEngine(mode="forward"),
-            BaselineBFSEngine(mode="bidirectional"),
-        ]
-    )
+
+    if engine_names is None:
+        selected_names = list(ENGINE_REGISTRY)
+    else:
+        unknown = sorted(set(engine_names) - ENGINE_REGISTRY.keys())
+        if unknown:
+            raise ValueError(
+                f"unknown --engines name(s) {unknown!r} - registered engines: {sorted(ENGINE_REGISTRY)}"
+            )
+        selected_names = [name for name in ENGINE_REGISTRY if name in engine_names]
+    engines.extend(ENGINE_REGISTRY[name]() for name in selected_names)
     return engines
 
 
@@ -398,6 +428,7 @@ def run_evaluation(
     output_dir: str | None = None,
     scorer: str = "strict",
     task_type: str = "all",
+    engine_names: list[str] | None = None,
 ) -> EvaluationRun:
     """The real end-to-end sweep: resolve the pinned corpus, load its
     ground-truth tasks, run every engine at every budget, and (unless
@@ -429,6 +460,13 @@ def run_evaluation(
     the two-pass candidate index/manifest mechanism was ever validated
     against) - "all" preserves this function's original behavior
     (every accepted task for `repo`, T02 debug and T13 blast alike).
+
+    `engine_names`: passed straight through to every `_build_engines` call
+    as its own `engine_names` - `None` (default) is every existing
+    caller's unchanged behavior (all 4 `ENGINE_REGISTRY` engines); a list
+    restricts to exactly those names. Oracle is unaffected either way -
+    see `_build_engines`'s own docstring for why it can't be dropped via
+    this parameter.
     """
     if repo not in CORPORA:
         raise ValueError(f"unknown repo {repo!r} - registered corpora: {sorted(CORPORA)}")
@@ -449,7 +487,7 @@ def run_evaluation(
     #: correct if _build_engines' own engine set ever changes - the same
     #: real function every (task, budget) pair below calls, just called
     #: once here purely to measure len(engines).
-    num_engines = len(_build_engines(tasks[0], oracle_packages_path, use_pragmatic_oracle)) if tasks else 0
+    num_engines = len(_build_engines(tasks[0], oracle_packages_path, use_pragmatic_oracle, engine_names)) if tasks else 0
     total_cells = len(tasks) * num_engines * len(budgets) * len(seeds)
     print(
         f"[runner] starting: {total_cells} cells planned "
@@ -499,7 +537,7 @@ def run_evaluation(
         # per-budget selected-symbol set must exist before any other
         # engine's turn so `fpr_oracle` can be computed for everyone in
         # one pass, with the Oracle itself retrieved exactly once.
-        engines = _build_engines(task, oracle_packages_path, use_pragmatic_oracle)
+        engines = _build_engines(task, oracle_packages_path, use_pragmatic_oracle, engine_names)
         oracle_selected_by_budget: dict[int, set[str]] = {}
         for engine in engines:
             try:
@@ -967,6 +1005,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="'all' (default): every accepted ground-truth task for --repo, unchanged from this flag's absence. "
         "'debug': restrict to task_type == 'debug' (T02-shaped) tasks only.",
     )
+    parser.add_argument(
+        "--engines",
+        default=None,
+        help=f"Comma-separated subset of {sorted(ENGINE_REGISTRY)} to run - default None runs all 4, unchanged "
+        "from this flag's absence. Oracle is controlled separately (--oracle-packages/--pragmatic-oracle) and is "
+        "never affected by this flag - every other engine's fpr_oracle depends on Oracle's own package regardless "
+        "of which of these 4 are selected.",
+    )
     return parser
 
 
@@ -995,6 +1041,7 @@ def main(argv: list[str] | None = None) -> int:
             seeds = resolve_seeds(args.seeds)
         except ValueError as exc:
             parser.error(str(exc))
+        engine_names = args.engines.split(",") if args.engines else None
         run = run_evaluation(
             repo=args.repo,
             budgets=budgets,
@@ -1010,6 +1057,7 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=args.output,
             scorer=args.scorer,
             task_type=args.task_type,
+            engine_names=engine_names,
         )
         write_reports(run, args.output)
         print(f"Reports written to {args.output}")
