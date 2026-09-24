@@ -81,7 +81,7 @@ from benchmarks.runner import (
     resolve_seeds,
     save_checkpoint,
 )
-from benchmarks.tsr.client import DEFAULT_SEEDS, OpenAICompatibleClient, run_tsr_prompt
+from benchmarks.tsr.client import DEFAULT_MAX_TOKENS, DEFAULT_SEEDS, OpenAICompatibleClient, run_tsr_prompt
 from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_debug_causal
 
 DEFAULT_BUDGETS = (2000, 4000)
@@ -96,9 +96,23 @@ DEFAULT_CHECKPOINT_PATH = "reports/pilot/checkpoint_two_pass.json"
 #: Turn 1's own call (`run_two_pass_cell` below) via `complete()`'s
 #: `extra_body` passthrough - Ollama's own repetition-penalty knob, not
 #: a standard chat-completions field, so this has no effect against a
-#: non-Ollama (e.g. DeepSeek) endpoint that ignores unknown body fields,
-#: and is deliberately not applied to Turn 2 or the single-pass runner.
-TURN1_REPEAT_PENALTY = 1.15
+#: non-Ollama endpoint (the DeepSeek *cloud* API, not the locally-served
+#: Ollama `deepseek-coder` model this constant was later re-tuned
+#: against - the two are different things sharing a vendor name) that
+#: ignores unknown body fields, and is deliberately not applied to
+#: Turn 2 or the single-pass runner.
+#:
+#: 1.15 was tuned against `qwen2.5-coder:14b-instruct-q8_0` and fully
+#: eliminated that model's repetition loop (0/300 parse failures, full
+#: pilot-4 grid). A second-model smoke pass (`deepseek-coder:6.7b-
+#: instruct`, seed 42, 20 tasks x 3 budgets) found it insufficient there:
+#: 5/60 Turn-1 parse failures, two distinct repetition shapes neither
+#: seen in the qwen run (a cyclic list-of-names repeat on
+#: `django_t02_005`, a repeated full reasoning sentence on
+#: `django_t02_009`) - the same failure *class*, a different model's own
+#: degenerate-generation tendency, confirming this needs to be a real,
+#: per-run parameter rather than a single hardcoded constant.
+DEFAULT_TURN1_REPEAT_PENALTY = 1.15
 
 #: A dotted qualified name, as every manifest row's own leading field
 #: and every `requested_symbols` entry use it - deliberately the same
@@ -279,6 +293,8 @@ def run_two_pass_cell(
     budget: int,
     seed: int | None,
     model: str | None,
+    turn1_repeat_penalty: float = DEFAULT_TURN1_REPEAT_PENALTY,
+    turn1_num_predict: int = DEFAULT_MAX_TOKENS,
 ) -> TwoPassCellResult:
     """One (task, budget, seed) two-pass cell: Turn 1 manifest + LLM
     request, Turn 2 hydration + scored LLM answer. `client=None` (and
@@ -286,6 +302,26 @@ def run_two_pass_cell(
     run for real (candidate-index build, hydration, render), no LLM
     call happens at all, and `tsr`/`cpi_end_to_end`/token/cost fields
     are `None` - there is no model answer to score.
+
+    `turn1_repeat_penalty`: see `DEFAULT_TURN1_REPEAT_PENALTY`'s own
+    docstring - a real per-run parameter now, not a single value assumed
+    to generalize across models.
+
+    `turn1_num_predict`: Ollama's own native generation-length cap
+    (`options.num_predict`), sent alongside the standard `max_tokens`
+    the `complete()` call already passes. Belt-and-suspenders, not a
+    replacement: the second-model smoke pass that motivated
+    `turn1_repeat_penalty` becoming a parameter also found every one of
+    its 5 repetition-loop cells reported `completion_tokens` *exceeding*
+    `DEFAULT_MAX_TOKENS` (2226-2351 against a 2048 cap) - `max_tokens`
+    alone did not reliably bound generation length for that model/
+    endpoint combination, root cause unconfirmed (a compat-layer
+    token-counting discrepancy and a real enforcement gap are both
+    plausible, and this environment has no way to test Ollama's own
+    behavior directly). Setting Ollama's native option explicitly,
+    rather than relying solely on the OpenAI-compat `max_tokens`
+    translation, costs nothing on an endpoint that honors both and can
+    only help on one that doesn't reliably honor the translated form.
     """
     manifest_text, candidate_universe = engine.build_candidate_manifest(task.seed_symbol)
 
@@ -304,7 +340,7 @@ def run_two_pass_cell(
     turn1_user = _turn1_user_prompt(manifest_text, task.prompt)
     turn1_call = client.complete(
         model, TURN1_SYSTEM_PROMPT, turn1_user, seed=seed, task_id=task.task_id, engine="prism_two_pass_turn1",
-        extra_body={"options": {"repeat_penalty": TURN1_REPEAT_PENALTY}},
+        extra_body={"options": {"repeat_penalty": turn1_repeat_penalty, "num_predict": turn1_num_predict}},
     )
     requested_symbols, parsed_ok = _parse_requested_symbols(turn1_call.content, candidate_universe)
 
@@ -352,6 +388,8 @@ def run_two_pass_evaluation(
     dry_run: bool,
     checkpoint_path: str,
     resume: bool,
+    turn1_repeat_penalty: float = DEFAULT_TURN1_REPEAT_PENALTY,
+    turn1_num_predict: int = DEFAULT_MAX_TOKENS,
 ) -> list[TwoPassCellResult]:
     try:
         repo_path = str(resolve(repo))
@@ -400,7 +438,10 @@ def run_two_pass_evaluation(
                 if cached is not None:
                     results.append(TwoPassCellResult(**cached))
                     continue
-                result = run_two_pass_cell(engine, client, task, budget, seed, model)
+                result = run_two_pass_cell(
+                    engine, client, task, budget, seed, model,
+                    turn1_repeat_penalty=turn1_repeat_penalty, turn1_num_predict=turn1_num_predict,
+                )
                 results.append(result)
                 checkpoint["cells"][key] = dataclasses.asdict(result)
                 if not dry_run:
@@ -453,6 +494,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT_PATH)
     parser.add_argument("--output", default=None, help="Write raw per-cell results as JSON to this path.")
+    parser.add_argument(
+        "--turn1-repeat-penalty", type=float, default=DEFAULT_TURN1_REPEAT_PENALTY,
+        help=f"Ollama options.repeat_penalty for Turn 1 only (no effect on a non-Ollama endpoint). "
+        f"Default {DEFAULT_TURN1_REPEAT_PENALTY} was tuned against qwen2.5-coder:14b-instruct-q8_0 - a "
+        "different model's own repetition tendency may need a different value (see this flag's own "
+        "constant docstring for the deepseek-coder:6.7b-instruct case that motivated making this a "
+        "real parameter).",
+    )
+    parser.add_argument(
+        "--turn1-num-predict", type=int, default=DEFAULT_MAX_TOKENS,
+        help=f"Ollama options.num_predict for Turn 1 only - its own native generation-length cap, sent "
+        f"alongside the standard max_tokens ({DEFAULT_MAX_TOKENS} by default) as a belt-and-suspenders "
+        "bound in case the OpenAI-compat max_tokens translation isn't reliably honored for a given "
+        "model/endpoint. No effect on a non-Ollama endpoint.",
+    )
     return parser
 
 
@@ -465,6 +521,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo, budgets=args.budgets, task_ids=args.tasks, tasks_dir=args.tasks_dir,
             seeds=seeds, model=args.model, dry_run=args.dry_run, checkpoint_path=args.checkpoint,
             resume=args.resume,
+            turn1_repeat_penalty=args.turn1_repeat_penalty, turn1_num_predict=args.turn1_num_predict,
         )
     except (TwoPassBenchmarkError, ValueError, CorpusResolutionError, OpenAIClientError) as exc:
         print(f"error: {exc}", file=sys.stderr)
