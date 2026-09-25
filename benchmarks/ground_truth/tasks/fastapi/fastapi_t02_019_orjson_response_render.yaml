@@ -8,30 +8,29 @@
 #
 #   fastapi.responses.ORJSONResponse.render                                lines 44-48
 #
-# CORRECTION (this header replaces the original version): the run data showed every engine
-# (including oracle) correctly naming orjson.dumps alongside the seed - a factually correct
-# answer matching this task's own expected_solution verbatim - and scoring 0.0 for it, since
-# orjson.dumps is a genuine third-party library function that can never resolve in Prism's own
-# symbol table (it only indexes this repository, never an external dependency). Since it can
-# never legitimately enter pipeline_symbols, the fix is prompt-only: the prompt now explicitly
-# instructs the model to describe the external call in prose but exclude it from the JSON
-# symbols array. pipeline_symbols is unchanged (still correctly [seed] alone).
+# CORRECTION 2 (negative-priming fix, replaces the round-2 prompt): round 2's prompt named
+# "orjson" explicitly as the library to exclude from the JSON array. The rerun showed the model
+# still naming orjson.dumps in the array in most cells (only 2/12 passed). This prompt never
+# names the library; the boundary is stated purely structurally ("a third-party serialization
+# library"). Ground truth is unchanged - only the model-facing prompt text changes.
 task_id: fastapi_t02_019_orjson_response_render
 repo: fastapi
 pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
 seed_symbol: fastapi.responses.ORJSONResponse.render
 task_type: debug
 prompt: 'You are investigating FastAPI''s high-performance JSON response class in fastapi/responses.py.
-  Starting from `ORJSONResponse.render`, identify what it does - a single, self-contained real function
-  that calls only the external orjson library, with no further FastAPI-internal call.
+  Starting from `ORJSONResponse.render`, identify what it does: it serializes the response content by
+  delegating directly to a third-party serialization library''s own function, with no further FastAPI-internal
+  call.
 
 
-  First give a short (2-4 sentence) explanation of what it does, in prose - you may name the inherited/external
-  call in your explanation. Then, on its own line, emit a fenced JSON code block containing an ordered
-  array of the fully-qualified symbol names in the real causal order - only symbols actually present in
-  the provided context package (this repository''s own indexed source) may appear in that array; a call
-  that resolves to an inherited or third-party symbol outside this repository must be described in your
-  prose explanation only, never added to the JSON array, e.g.:
+  First give a short (2-4 sentence) explanation of what it does, in prose.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in the real causal order. Include in that array only symbols whose full definition lives
+  within this repository''s own source. A call into a third-party library must be described in your prose
+  explanation only - do not add it to the JSON array, e.g.:
 
 
   ```json
