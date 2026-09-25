@@ -10,14 +10,17 @@ instead of that answer living only in chat history.
 
 ## Scope (do not read anything below as broader than this)
 
-- **All 5 seeds: 42, 43, 44, 45, 46. Complete for both engines.**
+- **All 5 seeds: 42, 43, 44, 45, 46. Complete for both engines, on both
+  models below.**
 - **One corpus**: Django.
-- **One model**: `qwen2.5-coder:14b-instruct-q8_0`, served locally via Ollama.
+- **Two models now**: `qwen2.5-coder:14b-instruct-q8_0` (below) and
+  `deepseek-coder:6.7b-instruct`, both served locally via Ollama - see
+  "Second model: DeepSeek-Coder 6.7B" further down.
 - **One evaluation type**: T02 debug tasks only (20 tasks, 3 budgets).
 
-Nothing here has been checked against a second corpus or a second model. Any
-claim of generalization beyond this scope is not supported by this
-evaluation.
+Nothing here has been checked against a second corpus, or a same-family
+smaller model. Any claim of generalization beyond this scope (two models,
+one corpus, one task type) is not supported by this evaluation.
 
 ## Artifact status — read this before trusting any two-pass number below
 
@@ -252,31 +255,173 @@ result, on a second corpus and/or model:
 - Token footprint should remain lower than single-pass's on the same cells,
   not just on Django.
 
-None of these have been checked yet - all require a second corpus/model.
+**Checked once, on the second model (DeepSeek-Coder 6.7B, same corpus) - see
+the section below.** Result: **mixed, not a clean pass.** TSR cleared the
+bar (+4.72pp over single-pass, CI excludes zero); CPI_answer did not
+(-5.28pp, CI also excludes zero - a confirmed regression, not just noise);
+token footprint stayed lower than single-pass's (8450.6 vs 9437.2); and a
+new repetition-style failure mode appeared on this model at 13/300 (4.3%)
+cells - not the same failure as `t02_002`, and not present on qwen at all
+(0/300), so "reappear at a materially higher rate" is moot (it wasn't a
+recurrence, it was new), but it is a real, non-zero failure rate this
+criterion set didn't anticipate. A second corpus is still unchecked.
+
+## Second model: DeepSeek-Coder 6.7B (cross-family validation)
+
+**Scope**: same Django corpus, same 20 T02 debug tasks, same 3 budgets
+(2000/4000/8000), same 5 seeds (42-46) as the qwen run above. Model:
+`deepseek-coder:6.7b-instruct`, served locally via Ollama - chosen as a
+cross-family test (different tokenizer/training lineage than
+`qwen2.5-coder`, not just a smaller model in the same family) of whether
+the two-pass protocol itself generalizes, not just whether qwen happened to
+respond well to it. 4 engines: `prism_v11` (single-pass), `prism_two_pass`
+(patched), `baseline_bfs_bidirectional`, `oracle` (`PragmaticOracle`,
+`--pragmatic-oracle`) - `baseline_rag`/`baseline_bfs_forward` dropped from
+this pass to hold GPU budget down; they add no comparison value beyond what
+`baseline_bfs_bidirectional` already provides for gate continuity.
+
+Getting here required two real fixes to the two-pass harness itself, both
+on `feature/two-pass-phase-b-patches` before this run, commit
+`33b165316b2ef9825939af67a69ac31c1076e4d9`:
+`DEFAULT_TURN1_REPEAT_PENALTY` became a CLI-configurable
+`--turn1-repeat-penalty` (qwen's tuned 1.15 proved insufficient for this
+model - a 1-seed smoke pass at 1.15 hit 5/60 (8.3%) Turn-1 parse failures,
+two distinct repetition patterns never seen on qwen), and a new
+`--turn1-num-predict` flag sets Ollama's native `options.num_predict`
+generation cap directly (belt-and-suspenders alongside the standard
+`max_tokens` translation). Re-running just the 6 affected cells at
+`--turn1-repeat-penalty 1.25 --turn1-num-predict 2048` fully resolved one
+failure pattern (`t02_005`, 0 recurrences) but left the other
+(`t02_009`, byte-identical repetition at budgets 4000/8000) unchanged - see
+below.
+
+**Artifact status**: pushed to `pilot-deepseek-progress` (final commit
+`3e54725`, "5-seed run complete, merged + gated"). Independently
+re-verified from the pushed raw checkpoints, not trusted as pushed:
+`checkpoint_single_pass.json` (900 cells: 3 single-pass engines x 300),
+`checkpoint_two_pass.json` (300 cells), `checkpoint_merged.json`
+independently regenerated via `scripts/merge_pilot_checkpoints.py` (1200
+cells: 4 engines x 300) and both gate comparisons independently re-run via
+`scripts/apply_gate.py` against that regenerated file - same point
+estimates as reported below.
+
+### Results table (5 seeds, 300 cells per engine, 1200 total)
+
+| Engine | Cells (n) | Mean TSR | Mean CPI_answer | FPR_GT | FPR_Oracle | Token Footprint |
+|---|---|---|---|---|---|---|
+| baseline_bfs_bidirectional | 300 | 0.765 | 0.833 | 0.679 | 0.681 | 8,161.1 |
+| oracle (reference ceiling, not a competitor) | 300 | 0.854 | 0.983 | 0.000 | 0.000 | 6,108.2 |
+| prism_v11 (single-pass) | 300 | 0.797 | 0.933 | 0.617 | 0.619 | 9,437.2 |
+| **prism_two_pass, patched (5 seeds, final)** | 300 | **0.844** | **0.881** | **0.200** | **0.271** | **8,450.6** |
+
+`fpr_oracle` for the 3 single-pass engines is read directly from
+`reports/pilot-deepseek/eval_results_v11.json`'s `diagnostics.fpr_oracle`
+(180 records: 20 tasks x 3 engines x 3 budgets), the same field/methodology
+used for qwen. Two-pass's `fpr_oracle` (0.271) was recomputed the same way
+as qwen's: a full 300-cell rebuild against the real pinned Django checkout
+(`PragmaticOracle` per task, `PrismEngine.retrieve_requested` fed each
+cell's actual parsed Turn-1 request), validated before trusting it -
+**0/300 cells' recomputed `fpr_gt` differed from the recorded value.**
+Two-pass's `fpr_oracle` (0.271) being a bit higher than its own `fpr_gt`
+(0.200) mirrors the same qwen pattern (Oracle's budget-capped package is
+often a proper subset of the full annotated set), and it's still
+substantially lower than both single-pass Prism (0.619) and the baseline
+(0.681) on this model too.
+
+### Gate decisions (DeepSeek, independently re-run)
+
+**Vs baseline** (`prism_two_pass` vs `baseline_bfs_bidirectional`): ΔTSR
+7.86pp (95% CI [3.52, 12.31], excludes zero), ΔCPI_answer 4.72pp (95% CI
+[0.47, 9.12], excludes zero). **Decision: EXPAND** - both deltas real and
+positive, neither clears the pre-registered 15pp bar. Same decision, and
+nearly the same ΔTSR figure, as qwen's own EXPAND vs baseline (qwen:
++7.67pp/+12.33pp) - the direction of the result held up crossing model
+families.
+
+**Vs single-pass** (`prism_two_pass` vs `prism_v11`): ΔTSR +4.72pp (95% CI
+[1.57, 7.87], excludes zero), ΔCPI_answer **-5.28pp** (95% CI [-8.11,
+-2.25], excludes zero). **Decision: STOP** by the formal threshold (both
+deltas below 15pp), but unlike qwen's version of this same comparison
+(where both CIs crossed zero - genuinely undetermined, not confirmed either
+way), **both of these deltas are statistically confirmed** on DeepSeek: two
+pass is confirmedly better at TSR and confirmedly worse at CPI_answer
+against single-pass on this model, not a wash.
+
+### Root cause: a real trade-off, not just noise
+
+**Two-pass's wider causal context improves solution discovery on a smaller
+model at the expense of concise precision.** DeepSeek-6.7B is small enough
+that the extra causally-adjacent context two-pass's Turn 1 selection pulls
+in (the same real, non-hallucinated over-inclusion pattern documented for
+qwen above - siblings, pervasively-used helpers, adjacent chain steps) more
+often supplies a symbol the model needed to find the right answer at all
+(TSR up), but that same wider context makes the model's final answer less
+precise/concise against the narrow annotated pipeline (CPI_answer down) -
+it has more real, relevant material to sift through and doesn't do so as
+cleanly as a stronger model does. Qwen-14B was capable enough that the same
+extra context didn't cost it CPI_answer (its own vs-single-pass CPI_answer
+delta, +2.33pp, also crossed zero - never confirmed either way, but never
+confirmed negative either). This is a capability-dependent trade-off, not a
+protocol defect: the two-pass mechanism is doing the same thing on both
+models (retrieving more real, causally-adjacent context than single-pass
+does), and which side of the TSR/CPI_answer trade-off dominates depends on
+how well the underlying model uses that extra context.
+
+### `t02_009`: an empirical DeepSeek-6.7B limitation, not a budget cutoff
+
+13/300 cells (4.3%) failed Turn-1 parsing, **all 13 on a single task**
+(`django_t02_009_queryset_filter_clone`), across all three budgets: 3/5
+seeds at budget=2000, 5/5 at budget=4000, 5/5 at budget=8000. This is
+**not a clean budget-dependent cutoff** - if it were purely a function of
+prompt length or generation budget, budget=2000 (the shortest prompt)
+should have been clean; it wasn't (3/5 seeds still failed there). The
+failure is a byte-for-byte-identical sentence-repetition loop
+(`...QuerySet._filter_or_exclude_inplace method also calls
+QuerySet._filter_or_exclude_inplace...`) that reproduced identically
+whether `--turn1-repeat-penalty`/`--turn1-num-predict` were tightened or
+not - confirmed via HTTP-level interception that the request itself
+correctly carried both settings, ruling out a client-side bug. A native
+Ollama `/api/chat` diagnostic testing a wider `repeat_last_n` lookback
+window did not reproduce the failure at all (a `format:"json"`
+grammar-constrained-decoding confound left this inconclusive rather than
+resolved) and separately surfaced manifest-text leaking into a symbol name
+plus off-topic hallucinated symbols under the wider window - a sign that
+over-tuning sampling/grammar constraints to chase this one task risks
+introducing a different, subtler failure mode elsewhere. **Decision: accept
+this as a documented, unmitigated model-specific degeneration limitation of
+deepseek-coder:6.7b-instruct on this one task, not a two-pass protocol
+defect** - the other 19/20 tasks show 0 parse failures across all 5 seeds
+and all 3 budgets, and the `t02_002`-style failure that motivated the
+original `repeat_penalty` fix does not reappear anywhere in this run
+(0/300, same as qwen).
 
 ## Remaining gaps before this is a real, generalizable win
 
 1. ~~Patched two-pass artifacts do not exist anywhere durable~~ — **fixed**:
    the 5-seed run is now genuinely pushed and durable on
-   `pilot-4-patched-progress` (`594eec9`), independently re-verified.
+   `pilot-4-patched-progress` (`594eec9`) and `pilot-deepseek-progress`
+   (`3e54725`), both independently re-verified.
 2. ~~Seed 46 has never been run for either engine~~ — **fixed**: all 5
-   seeds now complete for both engines, seed 46 not an outlier.
-3. Zero corpora other than Django, zero models other than
-   `qwen2.5-coder:14b-instruct-q8_0`, have been tested.
-4. The formal 15pp gate threshold has not been cleared vs. baseline, and
-   two-pass's edge over single-pass is not yet statistically confirmed
-   (CI crosses zero on both ΔTSR and ΔCPI_answer) - unchanged by adding
-   the 5th seed.
+   seeds now complete for both engines, on both models.
+3. **Partially closed**: DeepSeek-Coder 6.7B (cross-family) is now tested -
+   see above. Zero corpora other than Django, and zero same-family-smaller
+   models (`qwen2.5-coder:7b`), have been tested.
+4. The formal 15pp gate threshold has not been cleared vs. baseline on
+   either model. Two-pass's edge over single-pass is confirmed-mixed on
+   DeepSeek (TSR up, CPI_answer down, both CIs excluding zero) and still
+   undetermined on qwen (both CIs crossing zero) - two different, both
+   sub-threshold, outcomes, not the same result twice.
 5. ~~`fpr_gt` is structurally absent from the single-pass checkpoint
    schema~~ — **corrected, not a real gap**: it's absent from the
-   checkpoint file specifically, but present and verified in
-   `reports/pilot-4/eval_results_v11.json`. Context noise is compared
-   side by side in the results table above.
+   checkpoint file specifically, but present and verified in both models'
+   `eval_results_v11.json`. Context noise is compared side by side in both
+   results tables above.
 
-Gap 3 needs a second corpus/model run, cost and time permitting. Gap 4 is
-inherent to this evaluation's current scope, not something a rerun alone
-fixes - more seeds on the same corpus/model was never going to move a
-result that's already stable at 5/5 seeds.
+Gap 3 needs a second corpus and/or the same-family-smaller model run, cost
+and time permitting. Gap 4 is inherent to this evaluation's current scope,
+not something a rerun alone fixes - more seeds on the same corpus/model was
+never going to move a result that's already stable across seeds on both
+models tested.
 
 ## Adoption status
 
@@ -284,4 +429,9 @@ Two-pass is the approach being carried forward for future pilot evaluation
 work on this project, with single-pass kept as the comparison baseline in
 the harness - this is an evaluation-protocol statement, not a code change.
 Nothing in `prism.cli`, the MCP server, or `benchmarks/runner.py` has been
-modified. Single-pass is not deprecated and has no removal planned.
+modified. Single-pass is not deprecated and has no removal planned. The
+DeepSeek run's confirmed CPI_answer regression against single-pass means
+"two-pass strictly at least as good as single-pass" is no longer accurate
+as a blanket claim across models - it is a real, model-dependent trade-off,
+not a rounding error, and should be described as such rather than smoothed
+over.
