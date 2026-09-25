@@ -118,8 +118,127 @@ DEFAULT_TURN1_REPEAT_PENALTY = 1.15
 #: and every `requested_symbols` entry use it - deliberately the same
 #: character class `candidate_index.py`'s own qualified names are built
 #: from (module segments, class/function names, underscores), not a
-#: generic quoted-string pattern.
-_QUALIFIED_NAME_RE = re.compile(r'"([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)"')
+#: generic quoted-string pattern. Matches either delimiter
+#: independently (`"a.b.c"` or `` `a.b.c` ``) - a degenerate DeepSeek
+#: Turn-1 response (`django_t02_009_queryset_filter_clone`, all 5
+#: seeds x 3 budgets) quotes the looping symbol with backticks in its
+#: own prose, never double quotes, so the original quote-only pattern
+#: salvaged nothing from those 13 cells even though a real, already-
+#: listed candidate name was sitting right there in the text. Delimiters
+#: aren't required to match on both sides - harmless, since every
+#: match is still intersected against `candidate_universe` below, so a
+#: stray mismatched pair can only ever fail to resolve to a real
+#: symbol, never fabricate one.
+_QUALIFIED_NAME_RE = re.compile(r'["`]([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)["`]')
+
+#: Layer 1 gateway hardening (pilot-4/deepseek autopsy): the shape of
+#: DeepSeek's `t02_009` degeneration is one full sentence
+#: ("...QuerySet._filter_or_exclude_inplace method also calls
+#: QuerySet._filter_or_exclude_inplace...") repeated verbatim until
+#: truncation - a **word**-level loop, not the single-token loop
+#: `repeat_penalty` targets. 16-32 words comfortably spans one repeated
+#: clause without false-positiving on legitimate short repeats (a
+#: symbol name mentioned twice in normal reasoning is 1-3 words, well
+#: under the floor).
+_DEGENERATE_NGRAM_MIN_WORDS = 16
+_DEGENERATE_NGRAM_MAX_WORDS = 32
+_DEGENERATE_MIN_CONSECUTIVE_REPEATS = 3
+
+#: Layer 2a (runner cap enforcement): Ollama's own `options.num_predict`
+#: and the OpenAI-compat `max_tokens` translation both proved
+#: unreliable against `deepseek-coder:6.7b-instruct` - every one of the
+#: 13 `t02_009` failure cells reported `completion_tokens` 2223-2415
+#: against a 2048 cap on both settings, not just barely over but
+#: consistently 8-18% over. 10% margin: enough to not flag ordinary
+#: token-accounting slack between the OpenAI-compat layer and Ollama's
+#: own count, not so loose it misses a real breach.
+_TURN1_TOKEN_CAP_MARGIN = 1.10
+
+
+def _has_repetition_loop(
+    text: str,
+    min_ngram_words: int = _DEGENERATE_NGRAM_MIN_WORDS,
+    max_ngram_words: int = _DEGENERATE_NGRAM_MAX_WORDS,
+    min_repeats: int = _DEGENERATE_MIN_CONSECUTIVE_REPEATS,
+) -> bool:
+    """True if `text` contains the same word-level n-gram (any length in
+    `[min_ngram_words, max_ngram_words]`) repeated `min_repeats`+ times
+    back-to-back - purely a text-shape signal, independent of whether
+    the text is or isn't valid JSON, so it also catches a degenerate
+    response that happens to still close its JSON cleanly (a plain
+    `JSONDecodeError` check alone would trust that one as fine).
+
+    Word-level (`str.split()`), not token-level - no tokenizer
+    dependency in this harness, and a repeated multi-word clause is
+    exactly the observed DeepSeek failure shape (`t02_009`); a repeated
+    single token/name (the qwen `t02_005` shape, already handled by
+    `repeat_penalty`) is far below the 16-word floor and deliberately
+    not this function's concern.
+    """
+    words = text.split()
+    n = len(words)
+    for ngram_len in range(min_ngram_words, max_ngram_words + 1):
+        span = ngram_len * min_repeats
+        if n < span:
+            continue
+        for start in range(0, n - span + 1):
+            window = words[start : start + ngram_len]
+            pos = start + ngram_len
+            repeats = 1
+            while pos + ngram_len <= n and words[pos : pos + ngram_len] == window:
+                repeats += 1
+                pos += ngram_len
+            if repeats >= min_repeats:
+                return True
+    return False
+
+
+def _salvage_requested_symbols(response_text: str, candidate_universe: set[str] | None) -> list[str]:
+    """Regex-extract every real, already-listed dotted name mentioned
+    anywhere in `response_text` (quoted or backticked), intersected
+    against `candidate_universe` - never inventing a name, never
+    trusting one that isn't in the real manifest. Shared by
+    `_parse_requested_symbols`'s own JSON-failure fallback and
+    `_check_turn1_degeneration`'s Layer 2a cap-breach check below, so
+    both salvage the exact same way."""
+    if not candidate_universe:
+        return []
+    salvaged = _QUALIFIED_NAME_RE.findall(response_text)
+    return sorted(set(salvaged) & candidate_universe)
+
+
+def _check_turn1_degeneration(
+    turn1_content: str,
+    turn1_completion_tokens: int,
+    turn1_num_predict: int,
+    requested_symbols: list[str],
+    candidate_universe: set[str] | None,
+) -> tuple[list[str], bool]:
+    """`(requested_symbols, turn1_degenerate)` - Layer 1 (word-level
+    repetition-loop detection) + Layer 2a (runner-side token-cap
+    enforcement), both independent of `turn1_parsed_ok`: a response can
+    be degenerate and still fail to parse (every one of the 13
+    `t02_009` cells this was built for), or in principle be degenerate
+    yet still close valid JSON. Pulled out of `run_two_pass_cell` as its
+    own pure function specifically so this branching is unit-testable
+    without a fake LLM client.
+
+    A cap breach routes `requested_symbols` through the same salvage
+    extraction a parse failure already goes through - but only ever by
+    appending a not-already-present, real, candidate-universe name,
+    never by replacing the list: an over-length response that
+    nonetheless parsed cleanly already has its own legitimate, ordered
+    selection, and the critical requirement here is that a cap breach
+    can only ADD a real candidate this run would otherwise have missed,
+    never drop or reorder one the structured parse already admitted.
+    """
+    degenerate = _has_repetition_loop(turn1_content)
+    if turn1_completion_tokens > turn1_num_predict * _TURN1_TOKEN_CAP_MARGIN:
+        degenerate = True
+        for name in _salvage_requested_symbols(turn1_content, candidate_universe):
+            if name not in requested_symbols:
+                requested_symbols = [*requested_symbols, name]
+    return requested_symbols, degenerate
 
 #: Pilot-4 prep, Fix 4: names the env var read for this module's own
 #: incremental checkpoint push - deliberately a distinct name from
@@ -214,6 +333,17 @@ class TwoPassCellResult:
     requested_count: int
     skipped_hallucinated: list[str]
     turn1_parsed_ok: bool
+    #: True if Turn 1's raw response showed a word-level repetition
+    #: loop (`_has_repetition_loop`) and/or breached the
+    #: `turn1_num_predict` cap by more than `_TURN1_TOKEN_CAP_MARGIN`
+    #: (Layer 1 / Layer 2a, deepseek `t02_009` autopsy) - a distinct
+    #: signal from `turn1_parsed_ok`: a response can be degenerate and
+    #: still fail to parse (the observed case, 13/13), or in principle
+    #: be degenerate yet still close valid JSON (a shorter repeat that
+    #: didn't run out the token budget) - the two aren't the same
+    #: question, so conflating them into one field would hide which
+    #: failure mode a future analysis is actually looking at.
+    turn1_degenerate: bool = False
     turn1_prompt_tokens: int | None = None
     turn2_prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -266,18 +396,14 @@ def _parse_requested_symbols(
     unconditional degrade-to-`[]` behavior unchanged) lets a malformed
     response still salvage whichever already-real, already-listed
     qualified names it managed to emit, by intersecting every
-    dotted-name-shaped quoted token in the raw text against the real
-    manifest - never inventing a name, never trusting an unresolvable
-    one.
+    dotted-name-shaped quoted-or-backticked token in the raw text
+    against the real manifest (`_salvage_requested_symbols`) - never
+    inventing a name, never trusting an unresolvable one.
     """
     try:
         obj = json.loads(response_text.strip())
     except json.JSONDecodeError:
-        if not candidate_universe:
-            return [], False
-        salvaged = _QUALIFIED_NAME_RE.findall(response_text)
-        salvaged_symbols = sorted(set(salvaged) & candidate_universe)
-        return salvaged_symbols, False
+        return _salvage_requested_symbols(response_text, candidate_universe), False
     if not isinstance(obj, dict):
         return [], False
     symbols = obj.get("requested_symbols")
@@ -343,6 +469,13 @@ def run_two_pass_cell(
         extra_body={"options": {"repeat_penalty": turn1_repeat_penalty, "num_predict": turn1_num_predict}},
     )
     requested_symbols, parsed_ok = _parse_requested_symbols(turn1_call.content, candidate_universe)
+    # Layer 1 (gateway text-shape check) + Layer 2a (runner cap
+    # enforcement) - deepseek `t02_009` autopsy: sampler knobs
+    # (`turn1_repeat_penalty`/`turn1_num_predict` above) fixed the qwen
+    # `t02_005` shape but missed this one.
+    requested_symbols, turn1_degenerate = _check_turn1_degeneration(
+        turn1_call.content, turn1_call.completion_tokens, turn1_num_predict, requested_symbols, candidate_universe,
+    )
 
     pkg, skipped = engine.retrieve_requested(
         task.seed_symbol, budget, requested_symbols, candidate_universe, task_type=task.task_type,
@@ -369,7 +502,7 @@ def run_two_pass_cell(
         cpi_end_to_end=cpi_end_to_end(answer_symbols, task.adjudicated.pipeline_symbols),
         fpr_gt=fpr(candidates, _ground_truth_universe(task)),
         candidate_count=len(candidate_universe), requested_count=len(requested_symbols), skipped_hallucinated=skipped,
-        turn1_parsed_ok=parsed_ok,
+        turn1_parsed_ok=parsed_ok, turn1_degenerate=turn1_degenerate,
         turn1_prompt_tokens=turn1_call.prompt_tokens, turn2_prompt_tokens=turn2_call.prompt_tokens,
         completion_tokens=turn1_call.completion_tokens + turn2_call.completion_tokens,
         cost_usd=(turn1_call.cost_usd or 0.0) + (turn2_call.cost_usd or 0.0),

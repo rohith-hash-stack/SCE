@@ -26,7 +26,12 @@ import pytest
 
 from benchmarks.corpora.resolver import resolve
 from benchmarks.engines.base import selected_symbols
-from benchmarks.run_two_pass_benchmark import _parse_requested_symbols, _turn1_user_prompt
+from benchmarks.run_two_pass_benchmark import (
+    _check_turn1_degeneration,
+    _has_repetition_loop,
+    _parse_requested_symbols,
+    _turn1_user_prompt,
+)
 from prism.engine import PrismEngine
 
 pytestmark = pytest.mark.slow
@@ -104,6 +109,120 @@ class TestPromptHelpers:
         symbols, ok = _parse_requested_symbols("not json at all", candidate_universe)
         assert ok is False
         assert symbols == []
+
+    def test_parse_requested_symbols_regex_fallback_salvages_backtick_quoted_names(self):
+        """The real `django_t02_009_queryset_filter_clone` shape (all 13
+        DeepSeek failure cells): the model's own prose quotes the
+        looping symbol with backticks, never double quotes, so the
+        original quote-only regex salvaged nothing even though a real,
+        already-listed candidate name was sitting right there in the
+        text - `_QUALIFIED_NAME_RE` must now catch both delimiters."""
+        candidate_universe = {
+            "django.db.models.query.QuerySet.filter",
+            "django.db.models.query.QuerySet._filter_or_exclude_inplace",
+        }
+        truncated = (
+            '{"thought_process": "The pipeline starts from '
+            "`django.db.models.query.QuerySet.filter`. The "
+            "`django.db.models.query.QuerySet._filter_or_exclude_inplace` method also calls "
+            "`django.db.models.query.QuerySet._filter_or_exclude_inplace` to perform the actual filtering"
+        )
+        symbols, ok = _parse_requested_symbols(truncated, candidate_universe)
+        assert ok is False, "truncated mid-string - json.loads must still genuinely fail"
+        assert set(symbols) == candidate_universe
+
+    def test_parse_requested_symbols_backtick_salvage_still_ignores_unknown_names(self):
+        candidate_universe = {"a.b.real"}
+        text = '{"thought_process": "See `a.b.real` and also `a.b.not_a_real_candidate`"'
+        symbols, ok = _parse_requested_symbols(text, candidate_universe)
+        assert ok is False
+        assert symbols == ["a.b.real"]
+
+
+class TestRepetitionLoopDetection:
+    """Layer 1 gateway hardening: `_has_repetition_loop` is a pure
+    text-shape check, independent of `_parse_requested_symbols` - it
+    must fire on the DeepSeek `t02_009` shape (a long clause repeated
+    verbatim) without false-positiving on the qwen `t02_005` shape (a
+    short repeated name/token, already handled by `repeat_penalty` and
+    deliberately below this function's word-count floor)."""
+
+    def test_clean_text_no_loop(self):
+        assert _has_repetition_loop("A perfectly normal sentence with no repetition at all.") is False
+
+    def test_short_repeated_phrase_below_floor_not_flagged(self):
+        text = "QuerySet filter clone " * 5
+        assert _has_repetition_loop(text) is False
+
+    def test_long_phrase_repeated_three_times_detected(self):
+        unit = " ".join(f"word{i}" for i in range(20))  # 20 words, within [16, 32]
+        text = f"{unit} {unit} {unit}"
+        assert _has_repetition_loop(text) is True
+
+    def test_long_phrase_repeated_only_twice_not_enough(self):
+        unit = " ".join(f"word{i}" for i in range(20))
+        text = f"{unit} {unit}"
+        assert _has_repetition_loop(text) is False
+
+    def test_real_t02_009_shaped_text_detected(self):
+        unit = (
+            "The QuerySet._filter_or_exclude_inplace method also calls "
+            "QuerySet._filter_or_exclude_inplace to perform the actual "
+            "filtering operation in place safely and correctly every time"
+        )
+        text = "The pipeline starts from QuerySet.filter. " + (unit + " ") * 4
+        assert _has_repetition_loop(text) is True
+
+
+class TestTurn1DegenerationCheck:
+    """Layer 1 + Layer 2a combined, as `run_two_pass_cell` actually
+    calls them - pulled into its own function specifically so this is
+    testable without a fake LLM client."""
+
+    def test_clean_short_response_not_flagged(self):
+        symbols, degenerate = _check_turn1_degeneration(
+            '{"requested_symbols": ["a.b"]}', 500, 2048, ["a.b"], {"a.b"},
+        )
+        assert degenerate is False
+        assert symbols == ["a.b"]
+
+    def test_repetition_without_cap_breach_flagged_but_not_mutated(self):
+        """Repetition alone (no cap breach) is recorded as degenerate
+        for observability, but must not trigger the salvage-append -
+        that's Layer 2a's own trigger, deliberately kept separate."""
+        unit = " ".join(f"word{i}" for i in range(20))
+        text = f"{unit} {unit} {unit}"
+        symbols, degenerate = _check_turn1_degeneration(text, 500, 2048, ["a.b"], {"a.b"})
+        assert degenerate is True
+        assert symbols == ["a.b"]
+
+    def test_cap_breach_flags_and_appends_salvaged_names_without_dropping_existing(self):
+        candidate_universe = {"a.b.existing", "a.b.new_from_salvage"}
+        text = '{"thought_process": "mentions `a.b.new_from_salvage` here"'
+        symbols, degenerate = _check_turn1_degeneration(
+            text, 2300, 2048, ["a.b.existing"], candidate_universe,
+        )
+        assert degenerate is True
+        assert symbols == ["a.b.existing", "a.b.new_from_salvage"], (
+            "a cap breach must ADD a real salvaged name, never drop the one already present"
+        )
+
+    def test_cap_breach_does_not_duplicate_already_present_names(self):
+        candidate_universe = {"a.b.existing"}
+        text = '{"thought_process": "mentions `a.b.existing` again"'
+        symbols, degenerate = _check_turn1_degeneration(
+            text, 2300, 2048, ["a.b.existing"], candidate_universe,
+        )
+        assert degenerate is True
+        assert symbols == ["a.b.existing"]
+
+    def test_cap_breach_margin_boundary(self):
+        """2048 * 1.10 = 2252.8 - strictly above the margin, not at or
+        below it."""
+        _, at_margin = _check_turn1_degeneration('{"requested_symbols": []}', 2252, 2048, [], set())
+        assert at_margin is False
+        _, over_margin = _check_turn1_degeneration('{"requested_symbols": []}', 2253, 2048, [], set())
+        assert over_margin is True
 
 
 @pytest.fixture(scope="module")
