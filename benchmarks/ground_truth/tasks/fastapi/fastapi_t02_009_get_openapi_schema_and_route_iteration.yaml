@@ -1,0 +1,74 @@
+# T02 "FastAPI Debug" - fastapi_t02_009_get_openapi_schema_and_route_iteration
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout (313723494be79d4b24ccaa60e4f6d1f96c150fed) -
+# every symbol below real and indexed, verified directly against prism.cli.
+# build_pipeline's own symbol table; every pipeline_symbols edge verified
+# transitively reachable via networkx.has_path over the TRAVERSABLE_RELATIONS-
+# filtered subgraph (CALLS/INSTANTIATES/EXTENDS/IMPLEMENTS/OVERRIDES/EMBEDS).
+#
+#   fastapi.openapi.utils.get_openapi                                      lines 477-569
+#   fastapi._compat.get_compat_model_name_map                              lines 475-477
+#   fastapi._compat.get_definitions                                        lines 479-494
+#   fastapi.openapi.utils.get_fields_from_routes                           lines 446-474
+#   fastapi.openapi.utils.get_openapi_path                                 lines 254-443
+#
+# One real, plausible annotator_b omission (verified: dropping 'fastapi._compat.get_compat_model_name_map' still
+# leaves a structurally coherent, just incomplete, pipeline).
+task_id: fastapi_t02_009_get_openapi_schema_and_route_iteration
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.openapi.utils.get_openapi
+task_type: debug
+prompt: You are investigating FastAPI's top-level OpenAPI schema generation, cross-file between fastapi/openapi/utils.py
+  and fastapi/_compat.py. Starting from `get_openapi`, trace how it collects every route's Pydantic fields,
+  builds the shared model name map and JSON Schema definitions, and then iterates each route to build
+  its own OpenAPI path entry.
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.openapi.utils.get_openapi
+  - fastapi._compat.get_compat_model_name_map
+  - fastapi._compat.get_definitions
+  - fastapi.openapi.utils.get_fields_from_routes
+  - fastapi.openapi.utils.get_openapi_path
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: get_openapi() first calls get_fields_from_routes() to collect every route's real
+    Pydantic fields, then get_compat_model_name_map() to build a unique name for each distinct model,
+    then get_definitions() to produce the real JSON Schema definitions dict, and finally calls get_openapi_path()
+    once per route to build that route's own OpenAPI operation entry.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.openapi.utils.get_openapi
+  - fastapi._compat.get_definitions
+  - fastapi.openapi.utils.get_fields_from_routes
+  - fastapi.openapi.utils.get_openapi_path
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: Correctly identified get_definitions() and the per-route get_openapi_path() loop,
+    but missed that get_compat_model_name_map() is a separate, real prior stage - folded its effect into
+    get_definitions() instead.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.openapi.utils.get_openapi
+  - fastapi._compat.get_compat_model_name_map
+  - fastapi._compat.get_definitions
+  - fastapi.openapi.utils.get_fields_from_routes
+  - fastapi.openapi.utils.get_openapi_path
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: get_openapi() first calls get_fields_from_routes() to collect every route's real
+    Pydantic fields, then get_compat_model_name_map() to build a unique name for each distinct model,
+    then get_definitions() to produce the real JSON Schema definitions dict, and finally calls get_openapi_path()
+    once per route to build that route's own OpenAPI operation entry.
