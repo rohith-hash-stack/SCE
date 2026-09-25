@@ -8,21 +8,40 @@
 #
 #   fastapi.applications.FastAPI.setup                                     lines 998-1049
 #
-# Scope note (disclosed per TASK_AUTHORING.md item 6): this is a real,
-# deliberately single-symbol/shallow task - the seed has no further
-# real in-repo continuation (verified, not assumed), so a truly careful
-# annotator has nothing to disagree about here; kappa naturally reads
-# 1.0 for a task this shallow rather than being artificially forced
-# apart.
+# CORRECTION (this header replaces the original version): the run data showed the model
+# correctly naming the inherited add_route() call in its symbols array at higher budgets
+# (a factually correct, thorough answer, matching this task's own expected_solution) and
+# scoring 0.0 for it, since add_route genuinely does not resolve in Prism's own symbol table
+# (Starlette-inherited, not defined anywhere in this repository's own source - confirmed via
+# grep and via a direct symbol_table.get() lookup returning None). Since add_route can never
+# legitimately enter pipeline_symbols, the fix is prompt-only: the prompt now explicitly
+# instructs the model to describe the inherited call in prose but exclude it from the JSON
+# symbols array. pipeline_symbols is unchanged (still correctly [seed] alone).
 task_id: fastapi_t02_018_application_setup_docs_registration
 repo: fastapi
 pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
 seed_symbol: fastapi.applications.FastAPI.setup
 task_type: debug
-prompt: You are investigating how FastAPI wires up its own documentation routes (/openapi.json, /docs,
+prompt: 'You are investigating how FastAPI wires up its own documentation routes (/openapi.json, /docs,
   /redoc) in fastapi/applications.py. Starting from `FastAPI.setup`, identify what it does at the top
-  level - its only real in-repo continuations are calls to an inherited (not FastAPI-defined) add_route
-  method, so this is correctly a single-symbol chain for this task's scope.
+  level - its only real continuations are calls to an inherited (not FastAPI-defined) add_route method.
+
+
+  First give a short (2-4 sentence) explanation of what it does, in prose - you may name the inherited/external
+  call in your explanation. Then, on its own line, emit a fenced JSON code block containing an ordered
+  array of the fully-qualified symbol names in the real causal order - only symbols actually present in
+  the provided context package (this repository''s own indexed source) may appear in that array; a call
+  that resolves to an inherited or third-party symbol outside this repository must be described in your
+  prose explanation only, never added to the JSON array, e.g.:
+
+
+  ```json
+
+  ["fastapi.applications.FastAPI.setup"]
+
+  ```
+
+  '
 annotation_a:
   annotator_id: annotator_a
   pipeline_symbols:
@@ -34,7 +53,8 @@ annotation_a:
   boundary_symbols: []
   expected_solution: setup() conditionally registers the /openapi.json, /docs (Swagger UI), the Swagger
     UI OAuth2 redirect, and /redoc routes, each via self.add_route() - a method FastAPI inherits from
-    Starlette's Router rather than defining itself, so it has no real in-repo definition to chain into.
+    Starlette's Router rather than defining itself, so it is not part of this repository's own indexed
+    source and does not appear in the symbols array, even though it is the real mechanism setup() uses.
     The actual HTML-generation logic (get_swagger_ui_html(), get_redoc_html()) runs inside nested request-handler
     closures defined within setup() itself, not reachable from setup() as a static call target - out of
     scope for this task, disclosed rather than assumed.
@@ -49,7 +69,8 @@ annotation_b:
   boundary_symbols: []
   expected_solution: setup() conditionally registers the /openapi.json, /docs (Swagger UI), the Swagger
     UI OAuth2 redirect, and /redoc routes, each via self.add_route() - a method FastAPI inherits from
-    Starlette's Router rather than defining itself, so it has no real in-repo definition to chain into.
+    Starlette's Router rather than defining itself, so it is not part of this repository's own indexed
+    source and does not appear in the symbols array, even though it is the real mechanism setup() uses.
     The actual HTML-generation logic (get_swagger_ui_html(), get_redoc_html()) runs inside nested request-handler
     closures defined within setup() itself, not reachable from setup() as a static call target - out of
     scope for this task, disclosed rather than assumed.
@@ -64,7 +85,8 @@ adjudicated:
   boundary_symbols: []
   expected_solution: setup() conditionally registers the /openapi.json, /docs (Swagger UI), the Swagger
     UI OAuth2 redirect, and /redoc routes, each via self.add_route() - a method FastAPI inherits from
-    Starlette's Router rather than defining itself, so it has no real in-repo definition to chain into.
+    Starlette's Router rather than defining itself, so it is not part of this repository's own indexed
+    source and does not appear in the symbols array, even though it is the real mechanism setup() uses.
     The actual HTML-generation logic (get_swagger_ui_html(), get_redoc_html()) runs inside nested request-handler
     closures defined within setup() itself, not reachable from setup() as a static call target - out of
     scope for this task, disclosed rather than assumed.
