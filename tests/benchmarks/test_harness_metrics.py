@@ -960,10 +960,10 @@ def test_resolve_unknown_corpus_name_raises():
         resolve("not_a_real_corpus")
 
 
-def test_corpora_loaded_from_pinned_commits_json_covers_all_four_repos():
+def test_corpora_loaded_from_pinned_commits_json_covers_all_five_repos():
     from benchmarks.corpora.resolver import CORPORA
 
-    assert set(CORPORA) == {"django", "gin", "trpc", "express"}
+    assert set(CORPORA) == {"django", "gin", "trpc", "express", "fastapi"}
     for name, spec in CORPORA.items():
         assert spec.name == name
         assert spec.url.startswith("https://github.com/")
@@ -980,6 +980,17 @@ def test_evaluation_task_schema_accepts_express_repo():
         annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
     )
     assert task.repo == "express"
+
+
+def test_evaluation_task_schema_accepts_fastapi_repo():
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+
+    ann = GroundTruthAnnotation(annotator_id="a", pipeline_symbols=["x"], expected_solution="x")
+    task = EvaluationTask(
+        task_id="t1", repo="fastapi", pinned_commit="abc", seed_symbol="a.b", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+    assert task.repo == "fastapi"
 
 
 # --------------------------------------------------------------------- #

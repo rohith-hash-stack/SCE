@@ -1,0 +1,100 @@
+# T02 "FastAPI Debug" - Task 5: Pydantic validation error propagation.
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout - every symbol
+# real and indexed:
+#
+#   fastapi.exception_handlers.request_validation_exception_handler  lines 20-26
+#   fastapi.exceptions.ValidationException.errors                     lines 153-154
+#   fastapi.encoders.jsonable_encoder                                  lines 102-343
+#
+# Cross-file (exception_handlers.py -> exceptions.py -> encoders.py).
+# `exc.errors()` resolves to ValidationException.errors - inherited,
+# not overridden, by RequestValidationError - confirmed as a real
+# reachable edge in the indexed graph, not assumed from the class
+# hierarchy alone (TASK_AUTHORING.md item 4's own G41 warning: a method
+# call through an instance can resolve to the wrong class's definition
+# if more than one same-named method exists in the codebase - checked
+# directly here, not eyeballed).
+#
+# This handler is registered as an exception-handler callback (a value,
+# not a static call site), so it has no real callers in the static
+# graph - it is the correct starting point (seed) for this task exactly
+# because it's a real entrypoint into this specific pipeline, not
+# because anything calls it.
+#
+# No boundary_symbols for this task: http_exception_handler (the
+# sibling default handler in the same file) is not a real one-hop
+# caller/callee of this pipeline - no edge connects them - so it is
+# deliberately not listed, rather than forcing a boundary entry that
+# isn't real (TASK_AUTHORING.md item 6).
+#
+# required_context verified real:
+#   fastapi.exceptions.RequestValidationError                lines 157-160
+#   fastapi.exceptions.WebSocketRequestValidationError        lines 163-164
+task_id: fastapi_t02_005_request_validation_error_response
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.exception_handlers.request_validation_exception_handler
+task_type: debug
+prompt: 'You are investigating how FastAPI turns a request-validation failure into the real JSON error
+  response a client receives, in fastapi/exception_handlers.py. Starting from `request_validation_exception_handler`,
+  trace the causal pipeline: how the raised exception''s own error list is retrieved, and how that list
+  is made JSON-serializable for the response body.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear.
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.exception_handlers.request_validation_exception_handler
+  - fastapi.exceptions.ValidationException.errors
+  - fastapi.encoders.jsonable_encoder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.exceptions.RequestValidationError
+  - fastapi.exceptions.WebSocketRequestValidationError
+  boundary_symbols: []
+  expected_solution: request_validation_exception_handler() calls exc.errors() (inherited from ValidationException,
+    since RequestValidationError doesn't override it) to get the real validation-error list, then wraps
+    the result in jsonable_encoder() so it can be placed directly into the JSONResponse's content dict.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.exception_handlers.request_validation_exception_handler
+  - fastapi.exceptions.ValidationException.errors
+  - fastapi.encoders.jsonable_encoder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.exceptions.RequestValidationError
+  boundary_symbols: []
+  expected_solution: request_validation_exception_handler() calls exc.errors() to get the error list,
+    then jsonable_encoder() to make it JSON-serializable for the response. (Didn't flag WebSocketRequestValidationError
+    as relevant background - it's a sibling error type in the same file, not part of this specific HTTP-request
+    handler's own reasoning.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.exception_handlers.request_validation_exception_handler
+  - fastapi.exceptions.ValidationException.errors
+  - fastapi.encoders.jsonable_encoder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.exceptions.RequestValidationError
+  - fastapi.exceptions.WebSocketRequestValidationError
+  boundary_symbols: []
+  expected_solution: request_validation_exception_handler() calls exc.errors() (inherited from ValidationException,
+    since RequestValidationError doesn't override it) to get the real validation-error list, then wraps
+    the result in jsonable_encoder() so it can be placed directly into the JSONResponse's content dict.
