@@ -1,6 +1,45 @@
 # Two-Pass Phase B Patches — Evaluation Status
 
-**Status: strongly promising, not yet final.**
+**Status: Phase B closed. Cross-corpus generalization now confirmed -
+see the update note immediately below before reading anything else on
+this page as the full picture.**
+
+> **Update (post-FastAPI, Phase B close-out)**: everything below this
+> note describes the Django-only evaluation as it stood before a second
+> corpus was tested - real, accurate as a historical record, but no
+> longer the full picture. Gap 3 and Gap 4 in "Remaining gaps" below
+> (no second corpus tested; formal gate threshold not cleared on either
+> model) are the two items this update closes:
+>
+> - **A second corpus (FastAPI) has since been evaluated** - 25 T02
+>   debug tasks, dual-annotated, 3 rounds of ground-truth debugging, a
+>   seed-42 run plus an independent seeds-101/102 holdout that
+>   reproduced the headline ΔTSR figures within 0-1.4pp. Full account:
+>   `reports/fastapi_seed42_closure_debrief.md`.
+> - **The formal gate threshold has been cleared** - on FastAPI, under
+>   a headroom-aware ΔCPI_answer rule added to `scripts/apply_gate.py`
+>   (commit `e207a8e`) once the flat +15pp absolute bar was found to be
+>   mathematically unreachable against a baseline already at 92-98%
+>   CPI_answer. That rule was cross-checked directly against Django's
+>   own real checkpoints before being trusted as more than a
+>   FastAPI-specific fix: it does not manufacture a PASS anywhere in
+>   Django's results below (both Django models stay EXPAND/STOP,
+>   confirmed unchanged under the new rule too) and does not relax STOP
+>   on DeepSeek's confirmed CPI_answer regression - see
+>   `reports/fastapi_seed42_closure_debrief.md` Section 7 for the full
+>   cross-check and an errata correcting an earlier inaccurate claim
+>   about Django's own gate standing.
+>
+> Django's own result, accurately stated: a real, reproducible
+> *directional* finding (two-pass improves TSR; trades against
+> CPI_answer precision on a smaller model, DeepSeek, without that cost
+> on a larger one, qwen) - never a formal gate PASS on either model,
+> under either gate version. FastAPI's holdout is this evaluation's
+> first and, to date, only formal gate PASS. Two-pass generalizes across
+> a codebase (FastAPI, decorator-driven/dependency-injection) with
+> essentially nothing structurally in common with Django's own MVC/ORM
+> architecture - the cross-repo generalization question this whole
+> evaluation was built to answer.
 
 This tracks the evaluation of the Phase B two-pass patches
 (`feature/two-pass-phase-b-patches`, commits `7512ab0` fix-turn1-resilience
@@ -12,15 +51,20 @@ instead of that answer living only in chat history.
 
 - **All 5 seeds: 42, 43, 44, 45, 46. Complete for both engines, on both
   models below.**
-- **One corpus**: Django.
+- **One corpus**: Django. (Superseded by the update note above - a
+  second corpus, FastAPI, has since been tested; see
+  `reports/fastapi_seed42_closure_debrief.md`.)
 - **Two models now**: `qwen2.5-coder:14b-instruct-q8_0` (below) and
   `deepseek-coder:6.7b-instruct`, both served locally via Ollama - see
   "Second model: DeepSeek-Coder 6.7B" further down.
 - **One evaluation type**: T02 debug tasks only (20 tasks, 3 budgets).
 
 Nothing here has been checked against a second corpus, or a same-family
-smaller model. Any claim of generalization beyond this scope (two models,
-one corpus, one task type) is not supported by this evaluation.
+smaller model, **as of this section's own original writing** - see the
+update note at the top of this document for what has been resolved
+since. Any claim of generalization beyond this scope (two models, one
+corpus, one task type) is not supported by the Django-only evaluation
+below on its own.
 
 ## Artifact status — read this before trusting any two-pass number below
 
@@ -403,25 +447,40 @@ original `repeat_penalty` fix does not reappear anywhere in this run
    (`3e54725`), both independently re-verified.
 2. ~~Seed 46 has never been run for either engine~~ — **fixed**: all 5
    seeds now complete for both engines, on both models.
-3. **Partially closed**: DeepSeek-Coder 6.7B (cross-family) is now tested -
-   see above. Zero corpora other than Django, and zero same-family-smaller
-   models (`qwen2.5-coder:7b`), have been tested.
-4. The formal 15pp gate threshold has not been cleared vs. baseline on
-   either model. Two-pass's edge over single-pass is confirmed-mixed on
-   DeepSeek (TSR up, CPI_answer down, both CIs excluding zero) and still
-   undetermined on qwen (both CIs crossing zero) - two different, both
-   sub-threshold, outcomes, not the same result twice.
+3. ~~Partially closed: DeepSeek-Coder 6.7B (cross-family) is now tested -
+   see above. Zero corpora other than Django... have been tested~~ —
+   **closed for the corpus dimension**: a second corpus (FastAPI) has
+   since been fully evaluated - 25-task dual-annotated suite, seed-42 +
+   holdout, headroom-aware gate PASS on both comparisons. See the update
+   note at the top of this document and
+   `reports/fastapi_seed42_closure_debrief.md` for the complete account.
+   Still open: zero same-family-smaller models (`qwen2.5-coder:7b`) have
+   been tested on Django specifically (FastAPI's own model was
+   `qwen2.5-coder:7b-instruct-q8_0`, so this dimension is now covered on
+   the FastAPI side, just not fed back into a matching Django run).
+4. ~~The formal 15pp gate threshold has not been cleared vs. baseline on
+   either model~~ — **closed for FastAPI, unchanged for Django**: FastAPI
+   clears the formal gate under the headroom-aware ΔCPI_answer rule (see
+   the update note at the top of this document); that rule was verified
+   not to change either Django result below - qwen stays EXPAND vs
+   baseline / STOP vs single-pass, DeepSeek stays EXPAND vs baseline /
+   STOP vs single-pass (confirmed CPI_answer regression), identically
+   under both gate versions. Two-pass's edge over single-pass on Django
+   remains confirmed-mixed on DeepSeek (TSR up, CPI_answer down, both CIs
+   excluding zero) and undetermined on qwen (both CIs crossing zero) -
+   this was never something a rerun on the same corpus/model would move,
+   and it hasn't been asked to.
 5. ~~`fpr_gt` is structurally absent from the single-pass checkpoint
    schema~~ — **corrected, not a real gap**: it's absent from the
    checkpoint file specifically, but present and verified in both models'
    `eval_results_v11.json`. Context noise is compared side by side in both
    results tables above.
 
-Gap 3 needs a second corpus and/or the same-family-smaller model run, cost
-and time permitting. Gap 4 is inherent to this evaluation's current scope,
-not something a rerun alone fixes - more seeds on the same corpus/model was
-never going to move a result that's already stable across seeds on both
-models tested.
+Gap 3's remaining open item (a same-family-smaller Django run) and Gap
+4's Django-specific sub-threshold status are both inherent to Django's
+own evaluation scope, not something a rerun alone fixes - more seeds on
+the same corpus/model was never going to move a result that's already
+stable across seeds on both models tested there.
 
 ## Adoption status
 
@@ -435,3 +494,18 @@ DeepSeek run's confirmed CPI_answer regression against single-pass means
 as a blanket claim across models - it is a real, model-dependent trade-off,
 not a rounding error, and should be described as such rather than smoothed
 over.
+
+**Post-FastAPI update**: the model-dependent CPI_answer trade-off
+documented above is Django/DeepSeek-specific, not universal - FastAPI
+(on `qwen2.5-coder:7b-instruct-q8_0`, a smaller model than Django's own
+qwen-14B run) showed no such regression; ΔCPI_answer was positive and
+CI-confirmed non-zero in every FastAPI comparison run, at both seed-42
+and holdout power. Phase B's own generalization question - does the
+two-pass effect hold on a codebase with a fundamentally different
+architecture from Django's MVC/ORM - is answered: yes, on FastAPI's
+decorator-driven, dependency-injection-heavy structure, with a tight
+holdout reproduction (0-1.4pp delta on every headline TSR figure). See
+`reports/fastapi_seed42_closure_debrief.md` for the full account,
+including the ground-truth debugging arc, the headroom-aware gate
+rationale, and an errata correcting an earlier inaccurate claim about
+Django's own gate standing made in this repository's git history.
