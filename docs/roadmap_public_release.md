@@ -128,31 +128,57 @@ language.
 5. **Gate + manual audit** (Section 2, items 1-5) against this run's
    real results.
 
-## 4. Prerequisite: import-alias tracking, before the TypeScript rollout
+## 4. Prerequisite: import-alias tracking - CLOSED
 
-Phase C Section 8.1 documented a real, disclosed gap: `build_external_
+**Status: closed, on `feature/import-alias-resolution`.** Phase C
+Section 8.1 documented a real, disclosed gap: `build_external_
 candidate_manifest`'s two resolution paths (a `root_imports`-package
-receiver, or a `self`/`this` receiver) both require a real two-segment
+receiver, or a `self`/`this` receiver) both required a real two-segment
 call. A name imported directly - Python's `from X import Y; Y(...)`,
-TypeScript's `import { X } from 'Y'; X(...)` - produces a
-**single-segment** call that matches neither path, by construction.
+TypeScript's `import { X } from 'Y'; X(...)` - produced a
+**single-segment** call that matched neither path, by construction.
 
-This is a **prerequisite for the TypeScript rollout, not a backlog
-item to fold in later**: named imports (`import { z } from 'zod'`) are
-the dominant, idiomatic style in modern TypeScript/JavaScript, more so
-than Python's own `from x import y`. Porting the current receiver-based
-resolver to TypeScript as-is is expected to underperform on exactly the
-calls it most needs to catch - shipping the TypeScript portfolio without
-this fix risks a real, avoidable Tier-2-specific credibility gap on top
-of the tier's own already-known structural-linking-only limitation.
+**How it closed - a reuse, not new parsing**: `prism.graph.
+concrete_builder.ConcreteGraphBuilder` already built a real
+`local_alias -> (source_module.original_symbol)` map
+(`LocalImportMap`) for every file, in every language Prism indexes -
+the same mechanism that already resolves `import X as Y`/`from M
+import A as B` in-repo call sites (Issue #46). It was a local
+variable, built and discarded once Pass 2 finished; the fix persists
+it (`ConcreteGraphBuilder.import_map(path)`) and teaches `build_
+external_candidate_manifest` to consult it for a bare call, and for a
+2-segment call whose receiver is itself an alias (`import X as Y;
+Y.func()` - a second, previously-unnoticed gap found while designing
+this fix). No new Tree-sitter AST walking, and no changes needed in
+`prism.external.index` at all. A second real bug was found and fixed
+in the same change: the on-disk index cache (`.prism/cache/index.db`)
+never persisted this map, so a cache-hit rebuild - the common, fast
+path on a repo already indexed once - silently lost it; fixed by
+re-deriving it from each file's already-unavoidable fresh re-parse on
+a cache hit, mirroring an existing pattern (`_rehydrate_def_nodes`),
+no cache schema bump needed. Full account: `docs/phase_c_architecture_
+spec.md` Section 8.1.
 
-Resolving it requires reading each call site's own file for its real
-import statements and mapping an alias back to its true origin module
-(the `import X as Y` aliasing case, and the "imported from a package's
-own re-export, not its defining submodule" case both apply) - real,
-scoped design and implementation work, not a small patch. This
-prerequisite should land, and be verified against a real repo, before
-Section 3's pilot stage begins on Express.
+**Two caveats this fix does not solve, carried into the TypeScript
+rollout as known, named risks, not surprises to be rediscovered**:
+
+- A 2-segment call through a from-imported *member* (`from zod import
+  z; z.object(...)`) resolves the package precisely but searches for
+  the leaf name (`"object"`) as a bare name within it, not `z`'s own
+  real type - a real, useful answer, but an approximation, not exact
+  resolution.
+- **Scoped npm packages** (`import { initTRPC } from '@trpc/server'`)
+  are not yet handled correctly: the import map's dotted-join
+  convention collapses `'@trpc/server'` to `"@trpc.server"`, and a
+  naive first-segment split would extract `"@trpc"`, not the real
+  package identity `"@trpc/server"`. This must be fixed as part of
+  `TypeScriptSourceLocator`'s own implementation (Section 3, step 2)
+  before tRPC's own pilot stage - not optional, not deferred further,
+  since tRPC's own real imports are exactly this scoped-package shape.
+
+This prerequisite is verified closed against a real repo (Rich,
+`from markdown_it import MarkdownIt`) before Section 3's pilot stage
+begins on Express, per the original plan.
 
 ## 5. Go milestone: explicitly gated, not scheduled
 
@@ -209,7 +235,7 @@ Django re-run through current gate  ---\
 FastAPI already PASS (banked)      ---/
   |
   v
-Import-alias tracking (Section 4, prerequisite)
+Import-alias tracking (Section 4, prerequisite) -- CLOSED, feature/import-alias-resolution
   |
   v
 Express: graph-quality spike -> locator -> 5-8 task pilot -> full 20-25/5-seed run -> gate + audit

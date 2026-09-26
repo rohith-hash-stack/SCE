@@ -14,7 +14,9 @@ context_requested` packer function plus a real, independent
 against httpx, pydantic, starlette, and rich confirming the design
 generalizes beyond the packages it was built against - and, on rich,
 surfacing a real, disclosed scope boundary (Section 8.1) rather than a
-fifth clean pass. Sections 1, 2, 3, and 5 below have been updated to
+fifth clean pass, since closed on `feature/import-alias-resolution`
+(Import-Alias Resolution - see Section 8.1's own "CLOSED" update).
+Sections 1, 2, 3, and 5 below have been updated to
 describe what was actually built, with every real deviation from the
 original draft called out explicitly rather than silently absorbed -
 see each section's own "as built" note. Section 4 (scoring-contract
@@ -827,73 +829,94 @@ against real code, not predicted in advance, and each recorded here so
 a future milestone starts from what's actually known rather than
 re-discovering it.
 
-### 8.1 `from X import Y; Y(...)` is not resolved (found via `tests/test_multi_repo_external_indexing.py`, the multi-repo validation pass)
+### 8.1 `from X import Y; Y(...)` - CLOSED (Import-Alias Resolution, `feature/import-alias-resolution`)
 
-**The boundary**: `build_external_candidate_manifest`'s two resolution
+**Originally**: `build_external_candidate_manifest`'s two resolution
 paths (Section 1's own "two resolution paths, in precision order")
-both require a real **two-segment** call - `receiver.leaf(...)`, where
-`receiver` is either a `root_imports` package name or a `self`/`this`
-token. `prism.parser.lang_config.call_callee_segments` returns a
-**single-segment** list, `["Name"]`, for a call to a name that was
+both required a real **two-segment** call - `receiver.leaf(...)`,
+where `receiver` was either a `root_imports` package name or a
+`self`/`this` token. `prism.parser.lang_config.call_callee_segments`
+returns a **single-segment** list, `["Name"]`, for a call to a name
 imported directly (`from package import Name`) rather than accessed
 through its module (`import package; package.Name`) - and a
-single-segment result matches neither path, by construction
-(`len(segments) != 2: continue` in both branches). The call is silently
-left unresolved: not a crash, not a wrong answer, just absent from the
-external candidate universe.
+single-segment result matched neither path, by construction. Found by
+testing against Rich's own real source: `rich.markdown.Markdown.
+__init__`'s real body calls `MarkdownIt().enable(...)`, imported as
+`from markdown_it import MarkdownIt` - a real, previously undiscovered
+scope boundary, not predicted in advance.
 
-**How this was found**: not predicted - discovered by testing against
-Rich's own real source. `rich.markdown.Markdown.__init__`'s real body
-calls `MarkdownIt().enable("strikethrough").enable("table")`, but
-Rich's own import line reads `from markdown_it import MarkdownIt`, not
-`import markdown_it`. `build_external_candidate_manifest(["markdown.
-Markdown.__init__"], root_imports=["markdown_it"])` returns an empty
-candidate universe - verified directly, not assumed -
-`tests/test_multi_repo_external_indexing.py::
-TestRichMarkdownItImportStyleGap`.
+**The fix - a genuine reuse, not new parsing**: `prism.graph.
+concrete_builder.ConcreteGraphBuilder` already builds a real
+`local_alias -> (source_module.original_symbol)` map for every file,
+in every language Prism indexes (`prism.graph.symbol_table.
+LocalImportMap`, the same mechanism Issue #46 already uses to resolve
+`import X as Y`/`from M import A as B` call sites to real in-repo
+targets - `tests/phase_h/test_engine_extensibility.py`'s own
+`test_import_as_alias_resolves_directly`/`test_from_import_alias_
+resolves_directly`). The import parsing itself is unconditional -
+`from markdown_it import MarkdownIt` produces `aliases["MarkdownIt"]
+== "markdown_it.MarkdownIt"` regardless of whether `markdown_it` is a
+real in-repo module - but `pass2_resolve_calls` built this map as a
+**local variable**, used it for its own two sub-passes, and discarded
+it. No new Tree-sitter AST walking was needed: `ConcreteGraphBuilder.
+_import_maps` now persists what was already computed, and a new
+public `import_map(path)` accessor exposes it to a caller outside the
+two-pass linker.
 
-**Why this matters beyond one library**: `from X import Y` is one of
-the two ordinary ways to import a name in Python (arguably the more
-common one for a small set of frequently-used names - Rich imports
-`MarkdownIt` this way, not as an outlier choice but its own consistent
-house style throughout the file). A design that only reaches `import
-X; X.Y(...)` reaches a real but incomplete slice of real external
-usage - confirmed narrower than assumed once tested against a second,
-independent real library beyond Starlette/FastAPI's own `self.
-add_route(...)`/`orjson.dumps(...)` shapes, both of which happen to be
-two-segment.
+`build_external_candidate_manifest` gained a third resolution path,
+tried first (Section 1's own docstring now documents this as path 1):
+a bare 1-segment call resolves via `import_map.resolve(bare_name)`
+directly; a 2-segment call whose receiver isn't literally in
+`root_imports` also tries `import_map.resolve(receiver)` before
+falling through to the `self`/`this` heuristic - closing a second,
+previously-unnoticed gap found while designing this fix: `import
+markdown_it as md; md.MarkdownIt()` (an aliased *module* import) was
+equally unresolved before, for the same underlying reason. Unlike the
+`self`/`this` path, no `candidates_for_simple_name` guard applies here
+- the import statement is authoritative evidence of where a name came
+from, not a heuristic stand-in for it. `prism.external.index` needed
+**no changes at all** - `extract_external_symbol_all` already does
+everything both new branches need.
 
-**What a fix would require** (not attempted here - a real design
-question for whoever picks this up next, not a small patch): resolving
-a bare single-segment call needs the call's *own file's* import
-statements read and matched - `from markdown_it import MarkdownIt`
-must be recognized and its alias (`MarkdownIt`) mapped back to its real
-origin (`markdown_it`, or more precisely `markdown_it.main` where the
-class is actually defined) before `extract_external_symbol_all` can be
-called at all. This is real, additional work: a from-import can rename
-its target (`from markdown_it import MarkdownIt as MD`), import from a
-package's `__init__.py` re-export rather than the symbol's own defining
-submodule (exactly the `orjson`/`ujson` shape Step 4 already handles
-via `PythonSourceLocator`'s own file search, but for a *known* package
-name - here the package itself isn't known until the import statement
-is parsed), and the same "which of several root_imports packages"
-ambiguity Section 0's leaf-only design already declines to fully solve
-for the `self`/`this` path would recur here too, in a new form (a name
-imported from a package NOT in `root_imports` at all should still
-correctly resolve to nothing, not be guessed against every root
-import).
+**A real second bug found while implementing this, fixed in the same
+change**: `.prism/cache/index.db` (`prism.runtime.index_cache`) never
+persisted `_import_maps` - a cache-hit rebuild (the common, fast path
+on a repo already indexed once) silently returned a builder whose
+`import_map()` was `None` for every file, reproduced directly against
+a real stale cache from the multi-repo validation pass's own earlier
+Rich indexing run. Fixed via `_rehydrate_import_maps`, mirroring
+`_rehydrate_def_nodes`'s own established pattern exactly (re-derive a
+non-serializable-but-cheap artifact from the file's fresh re-parse,
+already unavoidable on every cache hit, rather than trying to
+serialize it) - no cache schema version bump needed, since nothing new
+is read from the cached JSON payload itself.
 
-**Confirmed safe in its current, unresolved state**: this is a
-fail-closed gap, not a fail-open one - `tests/test_multi_repo_external_
-indexing.py::TestRichMarkdownItImportStyleGap::
-test_needs_external_deps_true_with_no_resolvable_candidates_still_
-completes_cleanly` verifies the pipeline still completes normally (the
-seed's own internal node present, Turn 2b never called against an
-empty candidate set, no exception) when every real external call in a
-task happens to be this shape. A task whose only real external
-dependency is a `from X import Y` call degrades to Phase B's own
-pre-Phase-C behavior for that call (scored as before Phase C existed),
-never a crash or a wrong package resolved.
+**Two things this fix deliberately does not solve**, disclosed rather
+than implied away:
+
+- **A 2-segment call through a from-imported *member***
+  (`from zod import z; z.object(...)` -> `import_map.resolve("z") ==
+  "zod.z"`) resolves the package precisely (`"zod"`) but searches for
+  the call's own original leaf (`"object"`) as a bare name within that
+  package - a real, useful answer in practice, but not a resolution of
+  `z`'s own actual type. The same leaf-only philosophy Section 0
+  already applies elsewhere, not a new kind of imprecision.
+- **Scoped npm packages** (`import { initTRPC } from '@trpc/server'`):
+  `LocalImportMap`'s dotted-join convention collapses this to
+  `"@trpc.server.initTRPC"`, and a naive `origin.split(".")[0]` would
+  extract `"@trpc"`, not the real package identity `"@trpc/server"`.
+  Not fixed here (no `TypeScriptSourceLocator` exists yet to test
+  against) - a named, concrete action item for whoever implements that
+  locator (`docs/roadmap_public_release.md` Section 4).
+
+Verified directly: `tests/test_multi_repo_external_indexing.py::
+TestRichMarkdownItBareImportResolution` (formerly `TestRichMarkdownIt
+ImportStyleGap`) now resolves `MarkdownIt` to a real `role="external"`
+node end-to-end, plus a preserved fail-closed test against a genuinely
+unimported package. New synthetic coverage in `tests/test_phase_c_
+pipeline.py::TestImportAliasResolution` (bare call and aliased-module
+cases) and `tests/phase_h/test_engine_extensibility.py` (`import_map`
+persistence, including the cache-hit rehydration bug above).
 
 ### 8.2 Other known boundaries, already recorded elsewhere - consolidated pointers
 

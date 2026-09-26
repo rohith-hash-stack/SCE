@@ -28,9 +28,16 @@ instantiation into its declared dependency, never invented:
     object_stream(...)`, and `Jinja2Templates.__init__`'s own
     `jinja2.FileSystemLoader(...)`/`jinja2.Environment(...)`/
     `jinja2.select_autoescape(...)`.
-  - **rich -> markdown_it**: a real, disclosed *negative* result, not a
-    fourth positive case - see `TestRichMarkdownItImportStyleGap`'s own
-    docstring for why, and what it means for Phase C's current scope.
+  - **rich -> markdown_it**: `Markdown.__init__`'s own `MarkdownIt()` -
+    a *bare*, single-segment call to a directly-imported name (`from
+    markdown_it import MarkdownIt`), originally a disclosed negative
+    result (Phase C Section 8.1 - neither of `build_external_candidate_
+    manifest`'s original two resolution paths matched a bare call at
+    all) and now a real, closed positive case: Import-Alias Resolution
+    (`docs/roadmap_public_release.md` Section 4) resolves it via
+    `ConcreteGraphBuilder.import_map`'s persisted `LocalImportMap` - see
+    `TestRichMarkdownItBareImportResolution`'s own docstring for the
+    real bug this originally was and how it closed.
 
 Every package here is a real, incidental dependency already present (or
 installed) in this environment, not a declared Prism dependency -
@@ -278,30 +285,27 @@ class TestStarletteToAnyioAndJinja2:
 # --------------------------------------------------------------------- #
 # 4. rich -> markdown_it: a real, disclosed negative result
 # --------------------------------------------------------------------- #
-class TestRichMarkdownItImportStyleGap:
-    """Real finding, not a fourth positive case: `rich.markdown.Markdown.
-    __init__`'s real body calls `MarkdownIt().enable(...)` - but rich
-    imports it as `from markdown_it import MarkdownIt`, not
-    `import markdown_it`. `call_callee_segments` on that call therefore
-    returns a single-segment `["MarkdownIt"]`, not a two-segment
-    `["markdown_it", "MarkdownIt"]` - neither of `build_external_
-    candidate_manifest`'s two resolution paths (a `root_imports`-package
-    receiver, or a `self`/`this` receiver) matches a bare, single-
-    segment call at all, by construction (`len(segments) != 2: continue`
-    in both branches).
+class TestRichMarkdownItBareImportResolution:
+    """Closed: was `TestRichMarkdownItImportStyleGap`, a disclosed
+    negative result recorded in Phase C Section 8.1. `rich.markdown.
+    Markdown.__init__`'s real body calls `MarkdownIt().enable(...)` -
+    rich imports it as `from markdown_it import MarkdownIt`, a bare,
+    single-segment call to a directly-imported name.
+    `call_callee_segments` on that call returns `["MarkdownIt"]`, not a
+    two-segment `["markdown_it", "MarkdownIt"]` - neither of `build_
+    external_candidate_manifest`'s original two resolution paths (a
+    `root_imports`-package receiver, or a `self`/`this` receiver)
+    matched a bare call at all, by construction.
 
-    This is a genuine, previously undiscovered scope boundary of Phase
-    C's current leaf-only design, found here by testing against real
-    code (rich consistently uses `from X import Y` throughout its own
-    dependency usage - a real, common, and entirely reasonable Python
-    style this design does not yet reach) - not a bug in the sense of
-    "raises" or "crashes" (it fails closed, exactly as designed), but a
-    real coverage gap worth recording rather than silently working
-    around by cherry-picking a different, resolvable call site instead.
-    Extending resolution to a directly-imported name would mean tracking
-    each file's own `from X import Y` aliases back to their real origin
-    module - real, additional work, not something this validation
-    changes on its own.
+    Import-Alias Resolution (`docs/roadmap_public_release.md` Section
+    4) closes exactly this gap: `ConcreteGraphBuilder.import_map`
+    persists the `LocalImportMap` Pass 2 already builds for every file
+    (previously discarded once indexing finished) and `build_external_
+    candidate_manifest` now consults it for a bare call before giving
+    up - no bespoke new parsing, reusing the same import-resolution
+    machinery that already resolves `import X as Y`/`from M import A as
+    B` call sites to real in-repo targets (Issue #46, `tests/phase_h/
+    test_engine_extensibility.py`).
     """
 
     SEED = "markdown.Markdown.__init__"
@@ -315,24 +319,56 @@ class TestRichMarkdownItImportStyleGap:
     def test_in_tree_indexing_is_real(self, engine):
         _assert_in_tree_indexing_is_real(engine, self.SEED)
 
-    def test_from_import_style_call_is_not_resolved_but_fails_closed(self, engine):
+    def test_bare_from_import_call_resolves_to_the_real_markdown_it_class(self, engine):
         pytest.importorskip("markdown_it")
 
         manifest_text, universe = engine.build_external_candidate_manifest([self.SEED], root_imports=["markdown_it"])
 
-        assert universe == set(), (
-            "Markdown.__init__'s MarkdownIt() call is a bare, single-segment call to a "
-            "from-imported name - not reachable by either of build_external_candidate_manifest's "
-            "two resolution paths. This is the expected, disclosed result, not a bug to silence."
+        assert universe, "MarkdownIt() must resolve now that import-alias resolution is in place"
+        assert any(name.endswith(".MarkdownIt") for name in universe)
+        assert "<external_candidate_index>" in manifest_text
+
+    def test_end_to_end_admits_markdownit_as_external_node_without_body_leakage(self, engine):
+        pytest.importorskip("markdown_it")
+
+        def request_symbols(manifest_text, task_prompt):
+            return [], True
+
+        def request_external_symbols(manifest_text, task_prompt):
+            lines = [ln for ln in manifest_text.split("\n")[1:-1] if ln]
+            return [ln.split("|")[0] for ln in lines]
+
+        pkg, diagnostics = engine.retrieve_two_or_three_pass(
+            self.SEED, RETRIEVAL_BUDGET, request_symbols, request_external_symbols, root_imports=["markdown_it"],
         )
+
+        assert diagnostics["needs_external_deps"] is True
+        assert diagnostics["external_skipped_hallucinated"] == []
+        external_nodes = [n for n in pkg.nodes if n.role == "external"]
+        assert external_nodes
+        assert any(n.symbol_name == "MarkdownIt" for n in external_nodes)
+        for node in external_nodes:
+            assert node.compression == "L2_skeleton"
+            assert node.contract is None
+
+        _internal_budget, external_budget = split_budget_for_external(RETRIEVAL_BUDGET)
+        assert sum(n.cost for n in external_nodes) <= external_budget
+
+    def test_a_genuinely_unimported_package_still_fails_closed(self, engine):
+        """Fail-closed behavior is preserved for a real "nothing to
+        resolve" case - `root_imports` naming a package this file's own
+        import statements never mention at all (not `markdown_it`,
+        which now resolves correctly)."""
+        manifest_text, universe = engine.build_external_candidate_manifest(
+            [self.SEED], root_imports=["this_package_does_not_exist_anywhere_xyz"],
+        )
+        assert universe == set()
         assert manifest_text == "<external_candidate_index>\n</external_candidate_index>"
 
     def test_needs_external_deps_true_with_no_resolvable_candidates_still_completes_cleanly(self, engine):
-        """Even when Turn 1 asks for external deps but Turn 2a resolves
-        nothing at all, the pipeline must still complete cleanly - an
-        empty candidate universe means Turn 2b is never called at all
-        (nothing to select from), and the final package is exactly the
-        internal-only result, never a crash or a stuck state."""
+        """Same control case Phase C always covers - now anchored on a
+        genuinely unresolvable package rather than `markdown_it`, since
+        that no longer resolves to nothing."""
         turn_2b_calls = []
 
         def request_symbols(manifest_text, task_prompt):
@@ -343,7 +379,8 @@ class TestRichMarkdownItImportStyleGap:
             return []
 
         pkg, diagnostics = engine.retrieve_two_or_three_pass(
-            self.SEED, RETRIEVAL_BUDGET, request_symbols, request_external_symbols, root_imports=["markdown_it"],
+            self.SEED, RETRIEVAL_BUDGET, request_symbols, request_external_symbols,
+            root_imports=["this_package_does_not_exist_anywhere_xyz"],
         )
 
         assert turn_2b_calls == [], "Turn 2b must never be called against an empty external candidate universe"

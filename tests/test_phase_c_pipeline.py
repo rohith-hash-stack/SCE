@@ -278,3 +278,100 @@ class TestReceiverBasedResolution:
         response_text = json.dumps({"reasoning": "encode serializes via orjson.dumps", "symbols": ["encode", "dumps"]})
         score = score_debug_causal(response_text, pipeline=[], candidate_symbols=candidate_symbols)
         assert score == 1.0
+
+
+# --------------------------------------------------------------------- #
+# Import-Alias Resolution (`docs/roadmap_public_release.md` Section 4):
+# a bare call to a directly-imported name (`from X import Y; Y(...)`)
+# and a 2-segment call through an aliased *module* import
+# (`import X as Y; Y.thing(...)`) - both against real installed
+# Starlette, mirroring the self/this and receiver-based fixtures above.
+# --------------------------------------------------------------------- #
+@pytest.fixture
+def bare_import_synthetic_engine(tmp_path):
+    """`build_response`'s real body calls `Response(content)` - `Response`
+    is imported directly (`from starlette.responses import Response`),
+    not accessed through `starlette.responses.Response(...)` at all, so
+    `call_callee_segments` gives a bare, single-segment call."""
+    pytest.importorskip("starlette")
+    repo = tmp_path / "webapp"
+    repo.mkdir()
+    (repo / "webapp.py").write_text(
+        "from starlette.responses import Response\n\n"
+        "def build_response(content):\n"
+        "    return Response(content)\n"
+    )
+    return PrismEngine.from_repo(str(repo))
+
+
+@pytest.fixture
+def aliased_module_synthetic_engine(tmp_path):
+    """`build_router`'s real body calls `sr.Router()` - `starlette.
+    routing` is imported as a whole module under a local alias
+    (`import starlette.routing as sr`), so the call's own receiver
+    ("sr") is itself a name only this file's own import statement
+    explains, not the literal `root_imports` package name."""
+    pytest.importorskip("starlette")
+    repo = tmp_path / "routerapp"
+    repo.mkdir()
+    (repo / "routerapp.py").write_text(
+        "import starlette.routing as sr\n\n"
+        "def build_router():\n"
+        "    return sr.Router()\n"
+    )
+    return PrismEngine.from_repo(str(repo))
+
+
+class TestImportAliasResolution:
+    def test_bare_call_to_a_directly_imported_name_resolves(self, bare_import_synthetic_engine):
+        manifest_text, universe = bare_import_synthetic_engine.build_external_candidate_manifest(
+            ["webapp.build_response"], root_imports=["starlette"],
+        )
+        assert universe == {"starlette.responses.Response"}
+        assert "<external_candidate_index>" in manifest_text
+
+    def test_aliased_module_import_receiver_resolves(self, aliased_module_synthetic_engine):
+        manifest_text, universe = aliased_module_synthetic_engine.build_external_candidate_manifest(
+            ["routerapp.build_router"], root_imports=["starlette"],
+        )
+        assert universe == {"starlette.routing.Router"}
+        assert "<external_candidate_index>" in manifest_text
+
+    def test_bare_call_end_to_end_admits_external_node_without_body_leakage(self, bare_import_synthetic_engine):
+        def request_symbols(manifest_text, task_prompt):
+            return [], True
+
+        def request_external_symbols(manifest_text, task_prompt):
+            lines = [ln for ln in manifest_text.split("\n")[1:-1] if ln]
+            return [ln.split("|")[0] for ln in lines]
+
+        pkg, diagnostics = bare_import_synthetic_engine.retrieve_two_or_three_pass(
+            "webapp.build_response", 4000, request_symbols, request_external_symbols, root_imports=["starlette"],
+        )
+        assert diagnostics["needs_external_deps"] is True
+        assert diagnostics["external_skipped_hallucinated"] == []
+        external_nodes = [n for n in pkg.nodes if n.role == "external"]
+        assert len(external_nodes) == 1
+        node = external_nodes[0]
+        assert node.id == "starlette.responses.Response"
+        assert node.compression == "L2_skeleton"
+        assert node.contract is None
+        assert node.body == "class Response:\n    ..."
+
+    def test_aliased_module_import_does_not_regress_the_literal_package_path(self, synthetic_engine):
+        """The existing literal `receiver in root_imports` path (no
+        aliasing involved at all) must still work unchanged - this new
+        machinery is additive, not a replacement."""
+        _manifest_text, universe = synthetic_engine.build_external_candidate_manifest(
+            ["app.Router.dispatch"], root_imports=["starlette"],
+        )
+        assert "starlette.routing.Router.add_route" in universe
+
+    def test_bare_call_to_an_unimported_name_is_not_resolved(self, bare_import_synthetic_engine):
+        """A bare call to a name this file never imported at all (not
+        even from an unrelated package) must fail closed - no import
+        map entry means no resolution, never a guess."""
+        _manifest_text, universe = bare_import_synthetic_engine.build_external_candidate_manifest(
+            ["webapp.build_response"], root_imports=["this_package_does_not_exist_anywhere_xyz"],
+        )
+        assert universe == set()

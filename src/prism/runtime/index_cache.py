@@ -298,6 +298,38 @@ def save_pipeline_to_cache(
         return
 
 
+def _rehydrate_import_maps(builder: ConcreteGraphBuilder, parsed: ParsedFile) -> None:
+    """Repopulates `builder._import_maps[parsed.path]` (`ConcreteGraphBuilder.
+    import_map`, Import-Alias Resolution's own per-file cache - `docs/
+    roadmap_public_release.md` Section 4) on a cache hit.
+
+    Real bug, found and fixed the same way `_rehydrate_def_nodes`'s own
+    docstring already documents `_def_nodes` was found and fixed: `.prism/
+    cache/index.db`'s cached snapshot (`graph_json`/`symbols_json`) has no
+    field for `_import_maps` at all - it was never part of what this
+    module persists, since `LocalImportMap` is itself trivially
+    JSON-serializable but was simply never added here when Import-Alias
+    Resolution landed. A cache-hit rebuild would otherwise silently leave
+    every file's `import_map()` at `None` - not an error, just an
+    unpopulated dict entry - making `prism.engine.PrismEngine.build_
+    external_candidate_manifest`'s import-alias resolution paths quietly
+    stop working on the second and every later `prism index`/`prism
+    query` invocation against an unchanged repo, the exact same "invisible
+    until a fixture repo is indexed twice in one process" failure mode
+    `_rehydrate_def_nodes`'s own docstring names for `_def_nodes`.
+
+    No new cache schema field needed, unlike that fix - `_build_import_map`
+    is a cheap, pure function of `(parsed, module)` alone (no cross-file
+    graph dependency), and `parsed` is already being freshly re-parsed
+    here regardless (tree-sitter `Tree`/`Node` objects can't be cached at
+    all - this module's own docstring), so this is a second, independent
+    re-derivation step from data already in hand, not a new field to read
+    from an old cache entry that never wrote it.
+    """
+    module = builder._module_for_file(parsed)
+    builder._import_maps[parsed.path] = builder._build_import_map(parsed, module)
+
+
 def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symbols: list) -> None:
     """Repopulates `builder._def_nodes` for one freshly-re-parsed file's
     own symbols on a cache hit.
@@ -470,6 +502,7 @@ def load_pipeline_from_cache(
             if parsed is not None:
                 builder._parsed_files[file_path] = parsed
                 _rehydrate_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
+                _rehydrate_import_maps(builder, parsed)
 
         tag_matrix = {k: set(v) for k, v in json.loads(tag_matrix_json).items()}
         return builder, tag_matrix

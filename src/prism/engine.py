@@ -331,16 +331,32 @@ class PrismEngine:
         real static lookup, mirroring `build_candidate_manifest`'s own
         Turn-1 contract.
 
-        Two resolution paths per raw call expression
+        Three resolution paths per raw call expression
         (`prism.parser.lang_config.call_callee_segments`), tried in order
         of precision, leaf-only (Section 0's own Non-goal - no external-
         to-external expansion, no deeper receiver-type inference):
 
-          1. The call's own receiver segment names a `root_imports`
+          1. **Import-alias resolution** (`docs/roadmap_public_release.md`
+             Section 4, the TypeScript-rollout prerequisite): the call's
+             own receiver (a 2-segment call, `md.MarkdownIt(...)`) or the
+             call itself (a bare, 1-segment call, `MarkdownIt(...)`) is a
+             name this file's own `import`/`from ... import` statement
+             bound - resolved via `ConcreteGraphBuilder.import_map`
+             (`prism.graph.symbol_table.LocalImportMap`, already built
+             for every language during ordinary indexing and previously
+             discarded after Pass 2; now persisted for exactly this use).
+             Authoritative, not a heuristic: the import statement itself
+             names where the symbol came from, so no `candidates_for_
+             simple_name` guard is needed or applied here, unlike path 3
+             below.
+          2. The call's own receiver segment names a `root_imports`
              package directly (`orjson.dumps(...)` -> package
              `"orjson"`, symbol `"dumps"`) - the precise case, a real
-             per-package correlation, not a guess.
-          2. The receiver is a `self`/`this` token
+             per-package correlation, not a guess. Tried before path 1's
+             own aliased-receiver variant would even matter, since a
+             literal `root_imports` match needs no alias resolution at
+             all.
+          3. The receiver is a `self`/`this` token
              (`prism.parser.lang_config.SELF_TOKEN_TEXT`) and the leaf
              name has zero real in-repo candidates
              (`GlobalSymbolTable.candidates_for_simple_name` - that
@@ -348,9 +364,11 @@ class PrismEngine:
              ordinary external/builtin reference") - the real `t018`
              case (a Starlette-inherited method Prism's own symbol
              table has no entry for): the bare leaf name is tried
-             against every `root_imports` package.
+             against every `root_imports` package. The one heuristic
+             path here, since `self.foo()` alone gives no evidence of
+             where `foo` came from.
 
-        Both paths use `extract_external_symbol_all`, not
+        All three paths use `extract_external_symbol_all`, not
         `extract_external_symbol` - a bare leaf name genuinely
         ambiguous across more than one real definition (Starlette
         itself ships both a `Router.add_route` and a distinct,
@@ -364,10 +382,19 @@ class PrismEngine:
         A three-or-more-segment receiver chain (`self.router.add_route`)
         is left unresolved rather than guessed at - the same leaf-only
         discipline, not a deeper attribute-chain resolution this method
-        doesn't attempt. Every resolved `ExternalSymbolInfo` is cached on
-        this engine instance (`self._external_symbol_cache`, keyed by
-        qualified name) so Turn 3's own hydration below never re-locates
-        or re-parses a file this step already resolved.
+        doesn't attempt. A 2-segment call whose receiver resolves (via
+        path 1) to an imported *member*, not a bare module
+        (`from zod import z; z.object(...)` -> `import_map.resolve("z")
+        == "zod.z"`), is a real, disclosed approximation: the package
+        (`"zod"`) is precise, but the symbol searched for
+        (`"object"`, the call's own original leaf) is a bare-name search
+        within that package, not a resolution of `z`'s own real type -
+        the same leaf-only philosophy Section 0 already applies
+        elsewhere, not a new kind of imprecision. Every resolved
+        `ExternalSymbolInfo` is cached on this engine instance
+        (`self._external_symbol_cache`, keyed by qualified name) so
+        Turn 3's own hydration below never re-locates or re-parses a
+        file this step already resolved.
         """
         root_imports = list(root_imports or [])
         if not root_imports:
@@ -379,6 +406,15 @@ class PrismEngine:
 
         resolved: dict[str, ExternalSymbolInfo] = {}
         attempted: set[tuple[str, str]] = set()
+
+        def _resolve_against(package_name: str, symbol_name: str) -> None:
+            key = (package_name, symbol_name)
+            if key in attempted:
+                return
+            attempted.add(key)
+            for ext_info in extract_external_symbol_all(package_name, symbol_name):
+                resolved[ext_info.qualified_name] = ext_info
+
         for qname in turn1_symbols:
             info = self._builder.symbol_table.get(qname)
             def_node = self._builder.def_node(qname)
@@ -387,27 +423,49 @@ class PrismEngine:
             parsed = self._builder.parsed_file(info.file)
             if parsed is None:
                 continue
+            import_map = self._builder.import_map(info.file)
             lang = parsed.language_id
             call_type = CALL_NODE_TYPE.get(lang)
             if call_type is None:
                 continue
             for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
                 segments = call_callee_segments(call_node, parsed.source, lang)
-                if not segments or len(segments) != 2:
+                if not segments:
+                    continue
+
+                if len(segments) == 1:
+                    # Path 1, bare call: `MarkdownIt()` after
+                    # `from markdown_it import MarkdownIt`.
+                    bare_name = segments[0]
+                    origin = import_map.resolve(bare_name) if import_map else None
+                    if origin is None:
+                        continue
+                    origin_package = origin.split(".")[0]
+                    if origin_package in root_imports:
+                        # "markdown_it.MarkdownIt" -> search "MarkdownIt";
+                        # "markdown_it.token.Token" -> search "Token" (the
+                        # intermediate submodule segment is dropped -
+                        # matches extract_external_symbol_all's own
+                        # bare-name, cross-file search contract).
+                        _resolve_against(origin_package, origin.rsplit(".", 1)[-1])
+                    continue
+
+                if len(segments) != 2:
                     continue
                 receiver, leaf = segments
                 candidate_packages: list[str] = []
                 if receiver in root_imports:
                     candidate_packages = [receiver]
+                elif import_map and (origin := import_map.resolve(receiver)) and origin.split(".")[0] in root_imports:
+                    # Path 1, aliased-module receiver: `md.MarkdownIt()`
+                    # after `import markdown_it as md`. The package comes
+                    # from the import map; the symbol searched for is the
+                    # call's own original leaf, not derived from `origin`.
+                    candidate_packages = [origin.split(".")[0]]
                 elif receiver in self_tokens and not self._builder.symbol_table.candidates_for_simple_name(leaf):
                     candidate_packages = root_imports
                 for package_name in candidate_packages:
-                    key = (package_name, leaf)
-                    if key in attempted:
-                        continue
-                    attempted.add(key)
-                    for ext_info in extract_external_symbol_all(package_name, leaf):
-                        resolved[ext_info.qualified_name] = ext_info
+                    _resolve_against(package_name, leaf)
 
         self._external_symbol_cache.update(resolved)
         # Real bug, found and fixed while testing the `ujson.dumps`
