@@ -128,7 +128,13 @@ class NodeContract(_Frozen):
 
 class NodeEntry(_Frozen):
     id: str
-    role: Literal["seed", "callee", "caller", "transitive"]
+    #: Phase C (schema_version 3): "external" is a real dependency node
+    #: resolved outside the target repo (`prism.external.index`) - its
+    #: `file`/`line`/`end_line` point at the located stub/source file on
+    #: disk, not a location inside the repo every other role assumes, and
+    #: its `contract` below is always None - no `BehavioralContract` can
+    #: be computed for code this system never AST-indexes as a repo file.
+    role: Literal["seed", "callee", "caller", "transitive", "external"]
     distance: float
     compression: Literal["L0_full", "L1_pruned", "L2_skeleton", "L3_alias"]
     cost: int
@@ -169,7 +175,11 @@ class CausalPath(_Frozen):
 
 
 class ContextPackage(_Frozen):
-    schema_version: int = 2
+    #: Phase C: bumped 2 -> 3 for the `role="external"` NodeEntry member
+    #: above, mirroring Phase F's own unconditional 1 -> 2 bump for
+    #: `causal_path` - the version tracks this module's own current
+    #: capability, not whether a given package actually uses the new one.
+    schema_version: int = 3
     #: Phase F (Blocker B3 / Issue #26): the task_type build_context_package
     #: was called with, if any - None for every pre-Phase-F caller and any
     #: caller without a benchmark-task context (identical default/meaning

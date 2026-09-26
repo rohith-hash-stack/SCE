@@ -223,10 +223,13 @@ def test_causal_path_no_sink_fallback(tmp_path):
 # --------------------------------------------------------------------- #
 def test_causal_path_roundtrip(tmp_path):
     """`parse_context(render(pkg)).causal_path == pkg.causal_path` -
-    schema_version bumped to 2, rendered between `<metadata>` and
-    `<manifest>`, losslessly reconstructed - exactly the same Roundtrip
-    Fidelity property `tests/surface/test_renderer_properties.py`
-    already holds every other envelope block to."""
+    `<causal_path>` itself is a schema_version>=2 addition, rendered
+    between `<metadata>` and `<manifest>`, losslessly reconstructed -
+    exactly the same Roundtrip Fidelity property `tests/surface/
+    test_renderer_properties.py` already holds every other envelope
+    block to. Asserts the current default schema_version (3, since
+    Phase C's `role="external"` bump) round-trips, not a specific
+    literal value causal_path itself doesn't depend on."""
     repo = _linear_chain_repo(tmp_path, "h", 4)
     builder, _ = build_pipeline(str(repo))
     pkg = build_context_package(builder, "chain.h0", str(repo), target_budget=100_000, max_hops=20.0)
@@ -239,7 +242,7 @@ def test_causal_path_roundtrip(tmp_path):
 
     roundtripped = parse_context(xml)
     assert roundtripped.causal_path == pkg.causal_path
-    assert roundtripped.schema_version == 2
+    assert roundtripped.schema_version == 3
 
 
 # --------------------------------------------------------------------- #
