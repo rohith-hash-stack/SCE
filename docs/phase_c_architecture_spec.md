@@ -193,35 +193,66 @@ latency on every cell regardless of relevance.
 
 ## 2. External Dependency Subsystem
 
-### 2.1 Indexing strategy
+### 2.1 Indexing strategy - revised: reuse tree-sitter + `ContractExtractor`, don't reimplement parsing
 
-A new, narrow indexer, built once per external package (not per query),
-cached the same way `ConcreteGraphBuilder`'s own index is
-(`use_cache=True` precedent in `prism.cli.build_pipeline`):
+**Superseded design note**: an earlier draft of this section proposed a
+bespoke, per-language `BaseStubExtractor`/`PythonStubExtractor` pair,
+with the Python implementation walking Python's own stdlib `ast` module
+to strip function bodies. Rejected after checking the real codebase:
+**nothing else in Prism uses stdlib `ast` anywhere** - the entire
+indexing pipeline, Python included, runs on tree-sitter
+(`prism.parser.tree_sitter_loader`), and Prism already has real,
+per-language, already-tested signature/docstring extraction in
+`prism.graph.contracts.ContractExtractor.extract_symbol` (`params`,
+`return_type`, `docstring`, `is_async`, dispatched via
+`parsed.language_id` - already covering Python, JavaScript, TypeScript,
+Go, Java, C#, per `prism.parser.tree_sitter_loader.LanguageID`). A
+bespoke per-language extractor with one hand-rolled implementation
+doesn't actually make TypeScript or Go support cheaper later - each
+would still need a from-scratch parser, exactly like the rejected
+`PythonStubExtractor` did. The revised design gets real cross-language
+reach for near-free by reusing what already exists:
 
-- **Input**: installed packages' `.pyi` stub files (from the package's
-  own bundled stubs, or `typeshed`-style third-party stub packages where
-  the real package ships no stubs of its own - `orjson`/`ujson` both
-  ship `.pyi` stubs; Starlette's own `.py` source is used directly for
-  signature extraction only, never its function bodies, since it's not
-  stub-shipped).
-- **Extracted, per symbol**: fully-qualified name, parameter signature
-  (names, types, defaults), return type annotation, and the symbol's own
-  docstring - nothing else. No function body, no local variable
-  information, no control-flow data.
-- **Explicitly not extracted**: call graphs between external symbols
-  (Non-goal, Section 0), inheritance chains beyond the single class a
-  method is declared on, or anything requiring real bytecode/AST
-  execution-order analysis. A stub file already gives structural
-  signature data without needing any of this - that is precisely why
-  `.pyi` parsing is the right scope boundary, not a corner cut.
-- **Real, existing prior art in this repo**: `prism.slicer.tokenizer`'s
-  own fail-closed-to-heuristic pattern (real BPE counting, falling back
-  to a cheap heuristic only when the real tokenizer can't run) is the
-  template for this indexer's own error handling - a package with no
-  discoverable stubs at all should degrade to "this task's
-  `needs_external_deps` branch finds nothing, falls back silently to the
-  Turn-2 internal-only result," never a hard failure.
+1. **Locate** the external package's real source or stub files on disk -
+   the one genuinely per-ecosystem step (Python: `site-packages`, a
+   `.pyi` stub package, or `typeshed`; TypeScript: `node_modules`'s own
+   `.d.ts` files; Go: a vendor directory or module cache). This is a
+   thin, per-ecosystem adapter (`ExternalSourceLocator`, Section 2.2),
+   not a parser.
+2. **Parse** the located file through Prism's *existing* tree-sitter
+   loader (the same `EXTENSION_LANGUAGE_MAP`/`LanguageID` dispatch every
+   in-repo file already goes through) to get a real `ParsedFile`.
+3. **Extract** signature + docstring via `ContractExtractor`'s *existing*
+   `extract_symbol` (or a thin wrapper around it that only reads the
+   fields Phase C needs and discards the rest) - the body is never
+   rendered because nothing downstream of this step ever asks for it,
+   not because of a special stripping pass.
+
+**Explicitly not extracted** (unchanged from the prior draft): call
+graphs between external symbols (Non-goal, Section 0), inheritance
+chains beyond the single declaring class, or anything requiring real
+bytecode/execution-order analysis - tree-sitter's own parse tree already
+gives structural signature data without needing any of this.
+
+**Real, existing prior art for graceful degradation**:
+`prism.slicer.tokenizer`'s own fail-closed-to-heuristic pattern (real
+BPE counting, falling back to a cheap heuristic only when the real
+tokenizer can't run) is the template for this indexer's own error
+handling - a package whose files can't be located or parsed at all
+should degrade to "this task's `needs_external_deps` branch finds
+nothing, falls back silently to the Turn-2 internal-only result," never
+a hard failure.
+
+**A named, current gap, stated plainly rather than implied away**: Rust
+is not in Prism's language list at all (`LanguageID` above has no Rust
+member) - no tree-sitter grammar loaded, in-repo or otherwise. "Rust
+`pub` crates" is not reachable by this design, or by any stub-extractor
+design, until Rust is added to Prism's core tree-sitter support - a
+separate, materially larger undertaking outside Phase C's own scope.
+Python (`.pyi`/real `.py`), TypeScript (`.d.ts`), and Go (vendored `.go`
+source, following the same "real source, signature-only render" path
+Starlette itself needs) are the three ecosystems this design actually
+reaches, matching Prism's own current language coverage.
 
 ### 2.2 New index type
 
@@ -232,16 +263,25 @@ cached the same way `ConcreteGraphBuilder`'s own index is
 class ExternalSymbolInfo:
     qualified_name: str          # e.g. "orjson.dumps", "starlette.routing.Router.add_route"
     module_origin: str           # e.g. "orjson", "starlette"
-    signature_text: str          # rendered from the stub, real, not fabricated
+    language: str                 # a real prism.parser.tree_sitter_loader.LanguageID value
+    signature_text: str          # rendered from ContractExtractor's own params/return_type, real, not fabricated
     docstring: str | None
     kind: str                    # "function" | "method" | "class"
+
+class ExternalSourceLocator(Protocol):
+    """The one genuinely per-ecosystem piece (Section 2.1, step 1) - a
+    thin adapter, not a parser. One real implementation per ecosystem
+    Prism's tree-sitter loader already supports (Python, TypeScript, Go
+    to start - see the Rust gap noted above)."""
+    def locate(self, package_name: str, package_version: str | None) -> list[Path]: ...
 
 class ExternalSymbolIndex:
     """Deliberately NOT a ConcreteGraphBuilder subclass or a graph at
     all - Non-goal (Section 0) rules out an external call graph, so
     there is no graph to build. A flat, queryable symbol table keyed by
-    qualified name, built once per package via .pyi parsing, with a
-    real one-hop resolution method:
+    qualified name, built once per package via an ExternalSourceLocator
+    + Prism's own tree-sitter loader + ContractExtractor (Section 2.1),
+    with a real one-hop resolution method:
 
         def resolve_direct_callee(self, source_repo_symbol: str, external_ref: str) -> ExternalSymbolInfo | None
 
@@ -321,19 +361,34 @@ the internal side), reserve a fixed fraction of `budget_tokens` for
 external stubs up front:
 
 ```python
-DEFAULT_EXTERNAL_BUDGET_FRACTION = 0.125  # 12.5%, i.e. the midpoint of
-                                            # the requested 10-15% ceiling range
-DEFAULT_EXTERNAL_BUDGET_CAP_TOKENS = None  # optional hard cap, in
-                                            # addition to the fraction,
-                                            # for very large budget_tokens
-                                            # where 12.5% alone would
-                                            # still be a lot of tokens
-                                            # spent on leaf stubs
+DEFAULT_EXTERNAL_BUDGET_FRACTION = 0.125  # 12.5% - resolved (Section 7,
+                                            # item 5), the midpoint of the
+                                            # original 10-15% range
+DEFAULT_EXTERNAL_BUDGET_FLOOR_TOKENS = 256  # resolved - guarantees a
+                                              # minimum viable external
+                                              # allocation even at the
+                                              # tightest established
+                                              # budget (2000): 12.5% of
+                                              # 2000 = 250 < 256, so the
+                                              # floor is the one that
+                                              # actually binds there
+DEFAULT_EXTERNAL_BUDGET_CEILING_TOKENS = 1024  # resolved - caps external
+                                                 # spend at large budgets;
+                                                 # never binds at any of
+                                                 # 2000/4000/8000 (12.5%
+                                                 # of 8000 = 1000 < 1024)
 
-def split_budget_for_external(budget_tokens: int, fraction: float = DEFAULT_EXTERNAL_BUDGET_FRACTION,
-                               cap_tokens: int | None = DEFAULT_EXTERNAL_BUDGET_CAP_TOKENS) -> tuple[int, int]:
-    """(internal_budget, external_budget) - external_budget = min(fraction * budget_tokens, cap_tokens or inf),
-    internal_budget = budget_tokens - external_budget. The existing internal packer
+def split_budget_for_external(
+    budget_tokens: int, fraction: float = DEFAULT_EXTERNAL_BUDGET_FRACTION,
+    floor_tokens: int = DEFAULT_EXTERNAL_BUDGET_FLOOR_TOKENS,
+    ceiling_tokens: int = DEFAULT_EXTERNAL_BUDGET_CEILING_TOKENS,
+) -> tuple[int, int]:
+    """(internal_budget, external_budget) - external_budget =
+    clamp(fraction * budget_tokens, floor_tokens, ceiling_tokens), never
+    exceeding budget_tokens itself (a pathologically small budget_tokens,
+    e.g. under floor_tokens, degrades to external_budget=budget_tokens,
+    internal_budget=0 - correct behavior, not a bug, since there would be
+    nothing else to spend it on either). The existing internal packer
     (pack_symbol_context_requested, unmodified) runs against internal_budget;
     a new, parallel external packer (3.4) runs against external_budget."""
 ```
@@ -547,32 +602,65 @@ verify against real data before trusting a design, never assume:
    in the 25-task suite, or left at its default `False` everywhere else
    pending a real, separate cost/benefit case for each one.
 
-## 7. Open questions requiring a decision before implementation begins
+## 7. Decisions record (resolved) and remaining open items
 
-1. **Stub source for Starlette specifically**: Starlette ships no
-   `.pyi` stubs of its own (confirmed absent when checking `add_route`
-   during Phase B's own investigation) - Section 2.1 proposes parsing
-   its real `.py` source for signatures only, never bodies, but this
-   needs its own real verification pass (can a stub-only AST walk
-   reliably distinguish "signature" from "body" without accidentally
-   executing/serializing real Starlette source into the index) before
-   being trusted as equivalent in rigor to genuine `.pyi` parsing.
-2. **`external_index` lifecycle**: built once per package version and
-   cached where, keyed by what (package name + version, most likely,
-   mirroring `ConcreteGraphBuilder`'s own commit-pinned caching) - not
-   yet specified in this draft.
-3. **Multi-package resolution**: `build_external_candidate_manifest`
-   as drafted takes one `ExternalSymbolIndex`; a seed with real
-   one-hop external references into more than one third-party package
-   (plausible for a larger repo than FastAPI's own security/OpenAPI
-   modules) needs either a composed/union index or a list of indices -
-   not yet decided.
-4. **Section 3.2's exact fraction/cap defaults** (12.5%, no cap) are a
-   first proposal, not empirically tuned - Section 6's own rollout plan
-   should include measuring real external-stub token cost on the 3
-   target tasks before treating these constants as settled, the same
-   caution this evaluation applied to the headroom-aware gate's own
-   constants (Phase B's closure debrief, Section 7: "the specific
-   constants... were sized to this dataset rather than derived
-   beforehand" - a pattern to avoid repeating here without at least one
-   real measurement first).
+Resolved, with real codebase verification behind each - not accepted at
+face value:
+
+1. **Stub extraction mechanism**: resolved as Section 2.1's revised
+   design (reuse tree-sitter + `ContractExtractor`, no stdlib `ast`, no
+   bespoke per-language parser). This also resolves the original
+   question about Starlette specifically - its real `.py` source goes
+   through the exact same tree-sitter parse + `ContractExtractor.
+   extract_symbol` path any other language's real source would, so
+   "can a stub-only walk reliably distinguish signature from body" is
+   answered by "it doesn't need to - `ContractExtractor` already parses
+   real source into structured params/return_type/docstring fields
+   without ever needing the body slice for those fields," not by a new,
+   separate distinguishing pass.
+2. **`external_index` lifecycle / caching**: resolved as an immutable
+   disk cache under `.prism/cache/external_deps/`, keyed by
+   `(package_name, package_version, schema_version)`, mirroring
+   `prism.runtime.contract_cache`'s own established load/save-by-
+   signature pattern. Refinement over the original proposal: the cache
+   key should also fold in a grammar/engine-version component
+   (`prism.traversal._cache_keys.engine_and_grammar_version`, the same
+   value `contract_cache.py` already includes in its own signature) so a
+   tree-sitter grammar upgrade invalidates stale external entries the
+   same way it already invalidates stale in-repo contract entries -
+   not just package version.
+3. **Namespace resolution scope**: resolved - bounded to top-level
+   packages declared in the repository's own root dependency manifest
+   (`pyproject.toml`/`requirements.txt` for Python; the equivalent per
+   ecosystem once TS/Go locators exist). This bounds *which packages*
+   get an `ExternalSymbolIndex` built at all; Section 2.2's one-hop
+   `resolve_direct_callee` still bounds *which specific symbols* enter
+   any one query's candidate universe. The two are complementary, not
+   overlapping controls.
+4. **Multi-package resolution**: still open, deliberately deferred -
+   `build_external_candidate_manifest` as drafted takes one
+   `ExternalSymbolIndex`; a seed with real one-hop external references
+   into more than one third-party package needs either a composed/union
+   index or a list of indices. Not needed for the 3-task Step 1
+   validation (Section 6) - each of `t018`/`t019`/`t020` resolves into
+   exactly one external package - so left open rather than
+   speculatively designed now.
+5. **Section 3.2's budget fraction/floor/ceiling**: refined to 12.5%
+   default, a 256-token floor, and a 1024-token ceiling. Checked against
+   this evaluation's own established 2000/4000/8000 budget grid: the
+   floor only binds at budget=2000 (12.5%=250<256), the ceiling never
+   binds at any of the three. A sensible clamp, but - same caution this
+   evaluation already applied to the headroom-aware gate's own constants
+   (Phase B's closure debrief, Section 7: "the specific constants...
+   were sized to this dataset rather than derived beforehand") - still
+   calibrated to exactly those three numbers, not yet measured against
+   real external-stub token cost. Section 6's rollout plan should
+   measure this on the 3 target tasks before the clamp is treated as
+   settled for any budget outside 2000-8000.
+
+**A named limitation carried forward from Section 2.1, not resolved
+because it cannot be by Phase C's own scope**: Rust is unreachable by
+this design (or any stub-extractor design) until Rust gains a
+tree-sitter grammar in Prism's own core language support - separate,
+larger work, tracked here as a real gap rather than implied away by the
+`ExternalSourceLocator` interface's own apparent genericity.
