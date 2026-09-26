@@ -1,20 +1,27 @@
 # Phase C Architecture Specification: Cross-Boundary External Dependency Retrieval
 
-**Status: Steps 1-4 implemented and tested on `feature/phase-c-external-
-deps` - `prism.external.index` (Step 1), the conditional three-pass
-engine routing and partitioned knapsack sub-budget (Step 2), a real
-end-to-end `t018` simulation against the pinned FastAPI corpus and the
-real installed Starlette package (Step 3), and the extracted
-`pack_external_context_requested` packer function plus a real,
-independent `t019`/`t020`-shaped rollout test against the real
-installed `orjson`/`ujson` packages (Step 4). Sections 1, 2, 3, and 5
-below have been updated to describe what was actually built, with every
-real deviation from the original draft called out explicitly rather
-than silently absorbed - see each section's own "as built" note.
-Section 4 (scoring-contract updates beyond the zero-change path already
-verified in Steps 3-4) and Section 6 (rollout across the rest of the
-25-task suite) remain the original design, not yet implemented beyond
-what Steps 1-4 needed.
+**Status: CLOSED - Steps 1-4 implemented, tested, merged into `develop`
+(`d0f5549`), and independently validated across 4 real, unrelated
+packages beyond the FastAPI/Starlette pair Steps 1-4 themselves used
+(`f2db664`, `tests/test_multi_repo_external_indexing.py`) -
+`prism.external.index` (Step 1), the conditional three-pass engine
+routing and partitioned knapsack sub-budget (Step 2), a real end-to-end
+`t018` simulation against the pinned FastAPI corpus and the real
+installed Starlette package (Step 3), the extracted `pack_external_
+context_requested` packer function plus a real, independent
+`t019`/`t020`-shaped rollout test against the real installed
+`orjson`/`ujson` packages (Step 4), and a multi-repo validation pass
+against httpx, pydantic, starlette, and rich confirming the design
+generalizes beyond the packages it was built against - and, on rich,
+surfacing a real, disclosed scope boundary (Section 8.1) rather than a
+fifth clean pass. Sections 1, 2, 3, and 5 below have been updated to
+describe what was actually built, with every real deviation from the
+original draft called out explicitly rather than silently absorbed -
+see each section's own "as built" note. Section 4 (scoring-contract
+updates beyond the zero-change path already verified in Steps 3-4) and
+Section 6 (rollout across the rest of the 25-task suite) remain the
+original design, not yet implemented beyond what Steps 1-4 needed -
+tracked as future work in Section 8, not silently dropped.
 
 **Three real bugs found and fixed while building this (not while
 drafting it)**, each while genuinely exercising a real package rather
@@ -812,3 +819,116 @@ this design (or any stub-extractor design) until Rust gains a
 tree-sitter grammar in Prism's own core language support - separate,
 larger work, tracked here as a real gap rather than implied away by the
 `ExternalSourceLocator` interface's own apparent genericity.
+
+## 8. Known Scope Boundaries & Future Work
+
+Real, verified boundaries of the current design - each found by testing
+against real code, not predicted in advance, and each recorded here so
+a future milestone starts from what's actually known rather than
+re-discovering it.
+
+### 8.1 `from X import Y; Y(...)` is not resolved (found via `tests/test_multi_repo_external_indexing.py`, the multi-repo validation pass)
+
+**The boundary**: `build_external_candidate_manifest`'s two resolution
+paths (Section 1's own "two resolution paths, in precision order")
+both require a real **two-segment** call - `receiver.leaf(...)`, where
+`receiver` is either a `root_imports` package name or a `self`/`this`
+token. `prism.parser.lang_config.call_callee_segments` returns a
+**single-segment** list, `["Name"]`, for a call to a name that was
+imported directly (`from package import Name`) rather than accessed
+through its module (`import package; package.Name`) - and a
+single-segment result matches neither path, by construction
+(`len(segments) != 2: continue` in both branches). The call is silently
+left unresolved: not a crash, not a wrong answer, just absent from the
+external candidate universe.
+
+**How this was found**: not predicted - discovered by testing against
+Rich's own real source. `rich.markdown.Markdown.__init__`'s real body
+calls `MarkdownIt().enable("strikethrough").enable("table")`, but
+Rich's own import line reads `from markdown_it import MarkdownIt`, not
+`import markdown_it`. `build_external_candidate_manifest(["markdown.
+Markdown.__init__"], root_imports=["markdown_it"])` returns an empty
+candidate universe - verified directly, not assumed -
+`tests/test_multi_repo_external_indexing.py::
+TestRichMarkdownItImportStyleGap`.
+
+**Why this matters beyond one library**: `from X import Y` is one of
+the two ordinary ways to import a name in Python (arguably the more
+common one for a small set of frequently-used names - Rich imports
+`MarkdownIt` this way, not as an outlier choice but its own consistent
+house style throughout the file). A design that only reaches `import
+X; X.Y(...)` reaches a real but incomplete slice of real external
+usage - confirmed narrower than assumed once tested against a second,
+independent real library beyond Starlette/FastAPI's own `self.
+add_route(...)`/`orjson.dumps(...)` shapes, both of which happen to be
+two-segment.
+
+**What a fix would require** (not attempted here - a real design
+question for whoever picks this up next, not a small patch): resolving
+a bare single-segment call needs the call's *own file's* import
+statements read and matched - `from markdown_it import MarkdownIt`
+must be recognized and its alias (`MarkdownIt`) mapped back to its real
+origin (`markdown_it`, or more precisely `markdown_it.main` where the
+class is actually defined) before `extract_external_symbol_all` can be
+called at all. This is real, additional work: a from-import can rename
+its target (`from markdown_it import MarkdownIt as MD`), import from a
+package's `__init__.py` re-export rather than the symbol's own defining
+submodule (exactly the `orjson`/`ujson` shape Step 4 already handles
+via `PythonSourceLocator`'s own file search, but for a *known* package
+name - here the package itself isn't known until the import statement
+is parsed), and the same "which of several root_imports packages"
+ambiguity Section 0's leaf-only design already declines to fully solve
+for the `self`/`this` path would recur here too, in a new form (a name
+imported from a package NOT in `root_imports` at all should still
+correctly resolve to nothing, not be guessed against every root
+import).
+
+**Confirmed safe in its current, unresolved state**: this is a
+fail-closed gap, not a fail-open one - `tests/test_multi_repo_external_
+indexing.py::TestRichMarkdownItImportStyleGap::
+test_needs_external_deps_true_with_no_resolvable_candidates_still_
+completes_cleanly` verifies the pipeline still completes normally (the
+seed's own internal node present, Turn 2b never called against an
+empty candidate set, no exception) when every real external call in a
+task happens to be this shape. A task whose only real external
+dependency is a `from X import Y` call degrades to Phase B's own
+pre-Phase-C behavior for that call (scored as before Phase C existed),
+never a crash or a wrong package resolved.
+
+### 8.2 Other known boundaries, already recorded elsewhere - consolidated pointers
+
+- **Rust is unreachable** by this or any stub-extractor design until
+  Prism's own tree-sitter support gains a Rust grammar (Section 2.1,
+  and the note immediately above this section).
+- **Multi-package resolution per seed** is deliberately deferred
+  (Section 7, item 4) - `build_external_candidate_manifest` handles a
+  seed whose real external calls span more than one `root_imports`
+  package (confirmed fine in practice - the multi-repo validation
+  pass's own Starlette target does exactly this, resolving both `anyio`
+  and `jinja2` boundaries from the same engine instance), but no
+  *single* `build_external_candidate_manifest` call takes more than one
+  package list's worth of namespace-resolution nuance beyond what's
+  already handled - this item was about a still-hypothetical composed-
+  index design that Section 7 correctly judged unnecessary once the
+  real implementation turned out simpler (a flat `dict[str,
+  ExternalSymbolInfo]` cache, not a per-package `ExternalSymbolIndex`
+  object) than the original draft assumed.
+- **The 12.5%/256/1024 budget clamp** (Section 3.2, Section 7 item 5)
+  remains calibrated to the 2000/4000/8000 pilot budget grid, not yet
+  measured against a broader real-world token-cost distribution across
+  many external stubs at once (the multi-repo validation pass's own
+  external costs were all small - single digits to a few dozen tokens
+  per stub - real evidence the clamp has headroom to spare at these
+  budgets, but not a stress test of the ceiling itself).
+- **Class-level stub signatures show no constructor** (observed, not
+  yet filed as a fix): `_render_signature_text`'s `kind == "class"`
+  branch renders a bare `class Name:` with no `__init__` parameters
+  shown (`ContractExtractor.extract_symbol` correctly returns an empty
+  `params` list for a class definition node, which has no `parameters`
+  field to read) - real and honest (never fabricated), but a
+  constructor's own signature (e.g. `httpcore.ConnectionPool`'s real
+  `__init__` parameters) would often be more useful context than the
+  bare class name alone. Not a correctness bug - a quality
+  improvement worth considering for a future milestone: rendering a
+  class stub's real `__init__` signature (when the class defines one)
+  alongside the bare `class Name:` line.
