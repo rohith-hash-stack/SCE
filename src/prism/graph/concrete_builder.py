@@ -31,6 +31,8 @@ from tree_sitter import Node
 
 from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
+    ATTRIBUTE_NODE_TYPE,
+    ATTR_PROPERTY_FIELD,
     CALL_NODE_TYPE,
     CLASS_NODE_TYPES,
     DECORATED_WRAPPER_TYPES,
@@ -450,7 +452,14 @@ class ConcreteGraphBuilder:
             def_nodes.append((n, True, "interface"))
         for n in captures.get("def.function", []):
             def_nodes.append((n, False, None))
-        def_nodes.sort(key=lambda t: t[0].start_byte)
+        # Sorted by the *outer* node's start_byte (not the captured node's
+        # own) so this ordering exactly matches `_rehydrate_def_nodes`'s -
+        # for a property-assigned function/arrow (`outer_definition_node`
+        # unwraps to the enclosing `assignment_expression`), these two can
+        # disagree on a line packed with several same-line definitions
+        # (minified/bundled JS) otherwise, silently mis-pairing captures
+        # to symbols on a cache hit.
+        def_nodes.sort(key=lambda t: outer_definition_node(t[0], lang).start_byte)
         for node, is_class, force_kind in def_nodes:
             self._register_definition(node, is_class, parsed, module, force_kind=force_kind)
         if lang == LanguageID.PYTHON:
@@ -461,7 +470,9 @@ class ConcreteGraphBuilder:
     ) -> None:
         name_node = node.child_by_field_name("name")
         if name_node is None:
-            return
+            name_node = _property_assigned_function_name(node, parsed)
+            if name_node is None:
+                return
         name = node_text(name_node, parsed.source)
         lang = parsed.language_id
         class_types = CLASS_NODE_TYPES[lang]
@@ -496,11 +507,7 @@ class ConcreteGraphBuilder:
             qualified_name = f"{module}.{name}"
             kind = force_kind if force_kind is not None else ("class" if is_class else "function")
 
-        outer = node
-        wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
-        if node.parent is not None and node.parent.type in wrapper_types:
-            outer = node.parent
-
+        outer = outer_definition_node(node, lang)
         line_range = (outer.start_point[0] + 1, outer.end_point[0] + 1)
         enclosing_class_info = self.symbol_table.get(enclosing_class) if enclosing_class is not None else None
         enclosing_class_role = enclosing_class_info.role if enclosing_class_info is not None else None
@@ -2346,6 +2353,82 @@ def _go_type_identifier_text(type_node: Node | None, source: bytes) -> str | Non
     if type_node is None or type_node.type != "type_identifier":
         return None
     return node_text(type_node, source)
+
+
+def outer_definition_node(node: Node, lang: str) -> Node:
+    """The node whose own `start_point`/`end_point` should be used for a
+    captured definition's `line_range` - `node` itself, unless it's
+    wrapped by something whose line ought to be the reported start
+    instead: Python's `@decorator` wrapper (`DECORATED_WRAPPER_TYPES`), or
+    (property-assigned function/arrow definitions) the `assignment_
+    expression` whose `right:` side `node` is, so a definition like
+    `app.handle = function handle(...) {}` reports starting at `app.handle
+    =`, not at the bare `function` keyword.
+
+    Used by both `_register_definition` (the cold-build path) and
+    `prism.runtime.index_cache._rehydrate_def_nodes` (the cache-hit path,
+    which re-runs this same "definitions" query against a fresh parse and
+    has to land on the *identical* line for its start-line join key to
+    find the symbol a cold build already registered) - a real bug, found
+    the same way `_rehydrate_def_nodes`'s own docstring already documents
+    G38/G-cache-1 were found: this fix's own new capture shape initially
+    only updated the cold-build side, leaving the rehydration side
+    computing a *different* line for the exact same symbol (`node`'s own
+    start line, not the assignment's) - invisible until a repo containing
+    property-assigned functions was indexed a second time in one process,
+    at which point every such symbol's `_def_nodes` entry silently failed
+    to repopulate (confirmed directly against django's vendored
+    `select2.full.js`, which uses this exact idiom).
+    """
+    wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
+    parent = node.parent
+    if parent is not None and parent.type in wrapper_types:
+        return parent
+    assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+    if (
+        assign_type is not None
+        and parent is not None
+        and parent.type == assign_type
+        and parent.child_by_field_name("right") == node
+    ):
+        return parent
+    return node
+
+
+def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | None:
+    """The property name a `function_expression`/`arrow_function` with no
+    `name:` field of its own was assigned to (`app.handle = function
+    handle(...) {}` names itself already and never reaches this - it's the
+    anonymous-function-expression and arrow-function cases, e.g. `app.use
+    = function(fn) {}` / `app.route = (path) => {}`, that have no internal
+    name at all and fall back to this).
+
+    `None` unless `node` is exactly the `right:` side of an
+    `assignment_expression` whose `left:` is a plain, dotted property
+    access (`ATTRIBUTE_NODE_TYPE`/`ATTR_PROPERTY_FIELD` - reusing the same
+    per-language tables `flatten_reference_chain` uses, rather than a
+    JS-specific literal, even though only JS/TS/TSX's query set ever
+    captures a node shape this gets called on today). A *computed*
+    property (`app[method] = function(){}`) parses as a different node
+    type for `left:` and is deliberately excluded - see the comment above
+    `_JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION` in `queries.py`.
+    """
+    lang = parsed.language_id
+    assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+    parent = node.parent
+    if assign_type is None or parent is None or parent.type != assign_type:
+        return None
+    # `Node` equality is structural (`==`), not object identity (`is`) -
+    # the tree-sitter Python bindings hand back a fresh wrapper object on
+    # every `child_by_field_name`/`children` access, even for the same
+    # underlying node (confirmed directly), so an `is` comparison here
+    # would silently and always be `False`.
+    if parent.child_by_field_name("right") != node:
+        return None
+    left = parent.child_by_field_name("left")
+    if left is None or left.type != ATTRIBUTE_NODE_TYPE.get(lang):
+        return None
+    return left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
 
 
 def _go_receiver_type(method_node: Node, parsed: ParsedFile) -> str | None:
