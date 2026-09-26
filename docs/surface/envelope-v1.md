@@ -7,10 +7,10 @@ should rely on; `prism.surface.renderer`'s own module docstring is the
 implementation-level detail (exact rendering mechanics, CDATA handling,
 token accounting) behind it.
 
-## Document shape (schema_version 2)
+## Document shape (schema_version 3)
 
 ```xml
-<prism_context generated_at="..." run_id="..." schema_version="2">
+<prism_context generated_at="..." run_id="..." schema_version="3">
   <metadata>
     <engine commit="..." name="..." version="..."/>
     <seed file="..." line="1" symbol="..."/>
@@ -79,22 +79,47 @@ Each `<stage>`:
 | `distance` | `dist_w` from the seed, rounded to 2 decimals (`0.0` for the seed) |
 | `role`     | `entry` (stage 1), `sink`/`return` (the last stage, depending on whether it satisfies the sink definition above), `transform` (everything else) |
 
+## `role="external"` nodes (added in schema_version 3)
+
+Phase C: a `<node role="external" .../>` is a real dependency symbol
+resolved outside the target repo (e.g. a Starlette method a FastAPI
+route calls into) rather than a symbol from the repo Prism indexed -
+`prism.external.index` locates, parses (via Prism's own tree-sitter
+loader), and extracts it exactly as any in-repo symbol's signature and
+docstring are extracted, so it renders through the *same* `<node>`/
+`<signature>`/`<body>` shape every other role already uses. No new
+element and no new attribute name - `role` was already a plain string
+attribute, not a schema_version-2-consumer-validated closed enum, so
+this is additive in exactly the same sense `<causal_path>` was. Two
+fields always take a fixed value for this role: `<contract>` is always
+absent (no `BehavioralContract` exists for code outside the repo), and
+`compression` is always `"L2_skeleton"` (`<body>` is a signature-only
+stub, never a full external source body).
+
 ## `schema_version` and forward compatibility
 
 `schema_version` is a plain integer attribute on the `<prism_context>`
-root, defaulting to `2` (`prism.surface.renderer.RenderOptions.
+root, defaulting to `3` (`prism.surface.renderer.RenderOptions.
 schema_version`); a document that predates `<causal_path>` reads back as
-`schema_version="1"`. The two versions differ by exactly one optional
-element:
+`schema_version="1"`, and one that predates `role="external"` reads back
+as `schema_version="2"`. Each bump differs from the last by exactly one
+additive element or attribute:
 
-- A `schema_version 1` consumer parsing a `schema_version 2` document
-  simply never looks for `<causal_path>` and is otherwise unaffected -
-  every other element, attribute, and ordering rule is unchanged.
+- A `schema_version 1` consumer parsing a `schema_version 2` (or 3)
+  document simply never looks for `<causal_path>` and is otherwise
+  unaffected - every other element, attribute, and ordering rule is
+  unchanged.
 - A `schema_version 2` consumer parsing an older `schema_version 1`
   document (or any document with no `<causal_path>` at all) gets
   `ContextPackage.causal_path is None`, the same value it would get for
   a deliberately causal-path-less blast/overview retrieval - there is no
   separate "version too old" error path.
+- A `schema_version 2` consumer parsing a `schema_version 3` document
+  simply treats `role="external"` as an unrecognized-but-well-formed
+  role string, the same graceful handling any never-updated XML/text
+  consumer already gives an attribute value it doesn't specifically
+  branch on - there is no separate "version too old" error path here
+  either.
 
 Bumping `schema_version` again in the future should follow the same
 shape: one additive, optional element or attribute a consumer that

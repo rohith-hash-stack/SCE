@@ -17,7 +17,7 @@ silently emit invalid XML over it) and every node body goes through
 
 ### Document shape
 
-    <prism_context generated_at="..." run_id="..." schema_version="2">
+    <prism_context generated_at="..." run_id="..." schema_version="3">
       <metadata>
         <engine commit="..." name="..." version="..."/>
         <seed file="..." line="1" symbol="..."/>
@@ -58,6 +58,22 @@ never sees it (parsing an older document never fails
 retroactively) and every schema_version 1 document is still exactly the
 schema_version 2 shape minus this one optional block - forward-
 compatible by construction, not by a special-cased migration.
+
+### schema_version 3: `role="external"` nodes
+
+Phase C: `<node role="external" .../>` is a real dependency symbol
+resolved outside the target repo (`prism.external.index`), not a new
+element - it renders through the exact same `<node>`/`<signature>`/
+`<body>` shape every other role already uses (see Mechanics below;
+`role` is an ordinary sorted attribute, never special-cased by this
+renderer). `<contract>` is always absent for it (`node.contract is
+None` by construction - see `NodeEntry.role`'s own docstring), and its
+`compression` is always `"L2_skeleton"`. A `schema_version="2"`
+consumer that has never seen `role="external"` before still parses the
+document without error (`role` was always a free-form-looking string
+attribute to a schema_version 2 parser, not a closed enum it validates
+against) - the same forward-compatible-by-construction guarantee
+schema_version 2 already gives schema_version 1 consumers above.
 
 ### Mechanics (spec-mandated, not this module's own choice)
 
@@ -131,7 +147,7 @@ class RenderOptions(BaseModel):
     include_run_id: bool = False
     include_bodies: bool = True
     max_body_lines: Optional[int] = None
-    schema_version: int = 2
+    schema_version: int = 3
 
 
 # --------------------------------------------------------------------- #
