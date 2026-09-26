@@ -33,12 +33,38 @@ PYTHON_QUERIES = {
     """,
 }
 
+# `obj.prop = function name() {}` / `obj.prop = function() {}` /
+# `obj.prop = (...) => {}` - CommonJS/pre-ES6 JS's own idiom for exposing a
+# public API off a plain object or a `Constructor.prototype` reference
+# (Express's entire `app.handle`/`app.use`/`proto.route`/... surface is
+# built this way - confirmed directly against express@4.21.0's
+# lib/application.js and lib/router/index.js - none of it is a
+# `function_declaration` or `method_definition`, so without this the whole
+# public API of a repo written in this still-common style is invisible to
+# the symbol table). Only a *dotted* property (`left: (member_expression
+# property: (property_identifier))`) is matched - a *computed* property
+# (`app[method] = function(){}`, e.g. Express's own `methods.forEach`
+# loop) parses as a distinct `subscript_expression` in this grammar, whose
+# property name is a runtime value, not a static identifier, and is a
+# deliberate non-goal here rather than a silent miss. The captured node is
+# the function/arrow node itself (not the whole assignment) so it slots
+# into `_register_definition` as an ordinary function-shaped def node
+# (`concrete_builder.py`'s `_property_assigned_function_name` supplies the
+# name - neither node type has a `name:` field of its own to rely on for
+# the anonymous-function-expression and arrow-function cases).
+_JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION = """
+        (assignment_expression
+            left: (member_expression property: (property_identifier))
+            right: [(function_expression) (arrow_function)] @def.function)
+"""
+
 JAVASCRIPT_QUERIES = {
     "definitions": """
         (class_declaration name: (identifier) @def.name) @def.class
         (function_declaration name: (identifier) @def.name) @def.function
         (method_definition name: (property_identifier) @def.name) @def.function
-    """,
+    """
+    + _JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION,
     "imports": """
         (import_statement) @import.stmt
     """,
@@ -57,7 +83,8 @@ TYPESCRIPT_QUERIES = {
         (interface_declaration name: (type_identifier) @def.name) @def.interface
         (function_declaration name: (identifier) @def.name) @def.function
         (method_definition name: (property_identifier) @def.name) @def.function
-    """,
+    """
+    + _JS_PROPERTY_ASSIGNED_FUNCTION_DEFINITION,
     "imports": JAVASCRIPT_QUERIES["imports"],
     "calls": JAVASCRIPT_QUERIES["calls"],
     "decorators": JAVASCRIPT_QUERIES["decorators"],

@@ -52,9 +52,8 @@ import json
 import sqlite3
 from pathlib import Path
 
-from prism.graph.concrete_builder import ConcreteGraphBuilder
+from prism.graph.concrete_builder import ConcreteGraphBuilder, outer_definition_node
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo, SymbolRole
-from prism.parser.lang_config import DECORATED_WRAPPER_TYPES
 from prism.parser.queries import run_query
 from prism.parser.tree_sitter_loader import ParsedFile, parse_source
 from prism.traversal._cache_keys import engine_and_grammar_version
@@ -356,19 +355,23 @@ def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symb
     for anything that reaches this function.
 
     G38: `SymbolInfo.line_range[0]` is *not* always the captured node's
-    own `start_point` - `ConcreteGraphBuilder._register_definition`
-    (concrete_builder.py:458-463) unwraps to the parent
-    `decorated_definition` node before computing `line_range` for a
-    decorated definition, so a decorated symbol's stored start line is
-    its decorator's line, not its `def`/`class` keyword's line. The
-    `"definitions"` query here captures the bare definition node - the
-    same unwrap has to happen on this side of the join too, or every
-    decorated symbol's start line silently fails to match anything in
-    `by_start_line` and its `_def_nodes` entry is never populated. Only
-    the *lookup key* is unwrapped; the node actually stored is still the
-    plain captured node, exactly matching what a cold build stores
-    (concrete_builder.py:474: `self._def_nodes[qualified_name] = node`,
-    never `outer`).
+    own `start_point` - `ConcreteGraphBuilder._register_definition` calls
+    the shared `outer_definition_node(node, lang)` (also used here) to
+    unwrap to a parent node before computing `line_range`, for two
+    distinct cases: Python's `decorated_definition` wrapper (a decorated
+    symbol's stored start line is its decorator's line, not its `def`/
+    `class` keyword's line), and a property-assigned JS/TS function/arrow
+    (`app.handle = function handle() {}` reports starting at the
+    assignment, not the bare `function` keyword). The same unwrap has to
+    happen on this side of the join too, or every such symbol's start
+    line silently fails to match anything in `by_start_line` and its
+    `_def_nodes` entry is never populated - confirmed both ways directly
+    (a decorated Python symbol originally, then again for property-
+    assigned JS functions against django's vendored `select2.full.js`
+    once that capture shape was added). Only the *lookup key* is
+    unwrapped; the node actually stored is still the plain captured node,
+    exactly matching what a cold build stores
+    (`self._def_nodes[qualified_name] = node`, never `outer`).
 
     G-cache-1: a bare `{start_line: symbol}` dict (the join key this
     docstring describes above) silently drops every symbol past the
@@ -391,7 +394,6 @@ def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symb
     if not symbols:
         return
     lang = parsed.language_id
-    wrapper_types = DECORATED_WRAPPER_TYPES.get(lang, set())
     by_start_line: dict[int, list] = {}
     for s in symbols:
         by_start_line.setdefault(s.line_range[0], []).append(s)
@@ -399,10 +401,7 @@ def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symb
     outer_nodes = []
     for key in ("def.class", "def.interface", "def.function"):
         for node in captures.get(key, []):
-            outer = node
-            if node.parent is not None and node.parent.type in wrapper_types:
-                outer = node.parent
-            outer_nodes.append((node, outer))
+            outer_nodes.append((node, outer_definition_node(node, lang)))
     outer_nodes.sort(key=lambda pair: pair[1].start_byte)
     for node, outer in outer_nodes:
         start_line = outer.start_point[0] + 1
