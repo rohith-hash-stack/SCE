@@ -109,6 +109,79 @@ def test_from_import_alias_resolves_directly(tmp_path):
 
 
 # ============================================================
+# Invariant 1b: ConcreteGraphBuilder.import_map persistence
+# (`docs/roadmap_public_release.md` Section 4 - the Phase C /
+# TypeScript-rollout import-alias-tracking prerequisite)
+# ============================================================
+#
+# `pass2_resolve_calls` already built a real `LocalImportMap` per file
+# to resolve the very alias calls the two tests above characterize -
+# but only as a local variable inside that method, discarded once Pass
+# 2 finished. `prism.engine.PrismEngine.build_external_candidate_
+# manifest` needs to resolve a *bare* or *aliased-module* call to an
+# EXTERNAL (not in-repo) symbol at query time, long after indexing -
+# these tests cover the persistence itself (`ConcreteGraphBuilder.
+# import_map`), independent of any Phase C machinery, since it's a
+# core-graph change other future consumers may also want to build on.
+
+def test_import_map_accessible_after_indexing(tmp_path):
+    """The per-file `LocalImportMap` `pass2_resolve_calls` already
+    builds is retained on the builder instance, not just used and
+    discarded - real regardless of whether the imported name resolves
+    to anything in-repo at all (an external package the repo doesn't
+    define, exactly the shape `from markdown_it import MarkdownIt`
+    has)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text(
+        "from markdown_it import MarkdownIt\n"
+        "import markdown_it as md\n\n\n"
+        "def render():\n"
+        "    return MarkdownIt()\n"
+    )
+    builder, _ = build_pipeline(str(repo))
+
+    import_map = builder.import_map(str(repo / "app.py"))
+    assert import_map is not None
+    assert import_map.resolve("MarkdownIt") == "markdown_it.MarkdownIt"
+    assert import_map.resolve("md") == "markdown_it"
+
+
+def test_import_map_returns_none_for_an_unindexed_path(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("def f():\n    return 1\n")
+    builder, _ = build_pipeline(str(repo))
+
+    assert builder.import_map(str(repo / "does_not_exist.py")) is None
+
+
+def test_import_map_survives_a_cache_hit_rebuild(tmp_path):
+    """Real bug, found and fixed while adding this feature: `.prism/
+    cache/index.db` (`prism.runtime.index_cache`) never persisted
+    `_import_maps` at all - a second `build_pipeline` call against an
+    unchanged repo (a real, common cache-hit path) silently returned a
+    builder whose `import_map()` returned `None` for every file. Fixed
+    via `_rehydrate_import_maps`, mirroring `_rehydrate_def_nodes`'s
+    own established "re-derive from the fresh re-parse, don't try to
+    serialize the tree-sitter-dependent artifact itself" pattern - no
+    cache schema version bump needed, since nothing new is read from
+    the cached JSON payload itself, only computed fresh from data
+    already in hand."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("from markdown_it import MarkdownIt\n\n\ndef render():\n    return MarkdownIt()\n")
+
+    first_builder, _ = build_pipeline(str(repo), use_cache=True)
+    assert first_builder.import_map(str(repo / "app.py")) is not None
+
+    second_builder, _ = build_pipeline(str(repo), use_cache=True)
+    import_map = second_builder.import_map(str(repo / "app.py"))
+    assert import_map is not None, "import_map must survive a cache-hit rebuild, not only a cold build"
+    assert import_map.resolve("MarkdownIt") == "markdown_it.MarkdownIt"
+
+
+# ============================================================
 # Invariant 2: deterministic content-hash AST cache (Issue #45)
 # ============================================================
 

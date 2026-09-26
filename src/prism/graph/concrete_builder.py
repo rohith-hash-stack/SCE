@@ -163,6 +163,20 @@ class ConcreteGraphBuilder:
         self._parsed_files: dict[str, ParsedFile] = {}
         self._def_nodes: dict[str, Node] = {}
         self._methods_by_class: dict[str, list[str]] = {}
+        #: Import-Alias Resolution (Phase C prerequisite, `docs/
+        #: roadmap_public_release.md` Section 4): every file's own
+        #: `LocalImportMap`, computed once in `pass2_resolve_calls`'s own
+        #: sub-pass 2a and previously discarded there (a local variable
+        #: only sub-pass 2b itself could see) - persisted here instead so
+        #: a caller outside this class's own two-pass linker (`prism.
+        #: engine.PrismEngine.build_external_candidate_manifest`) can
+        #: resolve a bare or aliased call's real import origin without
+        #: re-parsing the file. Populated for every file `pass2_resolve_
+        #: calls` successfully processes; absent for a file that failed
+        #: its own Pass 2a error boundary (`import_map()` returns `None`
+        #: for it, same "not present" contract every other per-file
+        #: cache here already has).
+        self._import_maps: dict[str, LocalImportMap] = {}
         self._calls_graph_cache: nx.DiGraph | None = None
         #: Barrel-file / re-export tracking (Issues #6/#7) - see
         #: `prism.graph.symbol_table.ExportRegistry`.
@@ -230,6 +244,9 @@ class ConcreteGraphBuilder:
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
+
+    def import_map(self, path: str) -> LocalImportMap | None:
+        return self._import_maps.get(path)
 
     @property
     def go_call_resolution_ratio(self) -> float:
@@ -660,6 +677,7 @@ class ConcreteGraphBuilder:
                 module = self._module_for_file(parsed)
                 import_map = self._build_import_map(parsed, module)
                 import_maps[path] = import_map
+                self._import_maps[path] = import_map
                 self._register_exports(parsed, module, import_map)
                 self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
                 self._link_go_embeds(classes_by_file.get(path, []), parsed, module)
