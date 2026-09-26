@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from prism.cli import build_pipeline
-from prism.external.index import ExternalSymbolInfo, extract_external_symbol, external_symbol_to_node_entry
+from prism.external.index import ExternalSymbolInfo, extract_external_symbol_all, external_symbol_to_node_entry
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS, _outgoing_call_names, build_candidate_manifest
@@ -348,8 +348,18 @@ class PrismEngine:
              ordinary external/builtin reference") - the real `t018`
              case (a Starlette-inherited method Prism's own symbol
              table has no entry for): the bare leaf name is tried
-             against every `root_imports` package in order, first
-             resolvable match wins.
+             against every `root_imports` package.
+
+        Both paths use `extract_external_symbol_all`, not
+        `extract_external_symbol` - a bare leaf name genuinely
+        ambiguous across more than one real definition (Starlette
+        itself ships both a `Router.add_route` and a distinct,
+        delegating `Starlette.add_route` - `self.add_route(...)` on a
+        `FastAPI` instance could mean either, and this method has no
+        real receiver-type information to disambiguate with) offers
+        *every* real match it finds as its own external candidate
+        line, rather than letting an arbitrary file-locate ordering
+        silently pick one - the actual selection is Turn 2b's own job.
 
         A three-or-more-segment receiver chain (`self.router.add_route`)
         is left unresolved rather than guessed at - the same leaf-only
@@ -396,10 +406,8 @@ class PrismEngine:
                     if key in attempted:
                         continue
                     attempted.add(key)
-                    ext_info = extract_external_symbol(package_name, leaf)
-                    if ext_info is not None:
+                    for ext_info in extract_external_symbol_all(package_name, leaf):
                         resolved[ext_info.qualified_name] = ext_info
-                        break
 
         self._external_symbol_cache.update(resolved)
         lines = [f"{info.qualified_name}|external|{info.kind}|{info.signature_text}" for info in sorted(resolved.values(), key=lambda i: i.qualified_name)]

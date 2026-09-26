@@ -200,42 +200,90 @@ def _render_signature_text(local_qualified_name: str, kind: str, contract: Behav
     return header + ":"
 
 
+def _extract_from_file(file_path: Path, top_level: str, symbol_name: str) -> ExternalSymbolInfo | None:
+    """The shared locate-result -> `ExternalSymbolInfo` step for one
+    already-located file - factored out so `extract_external_symbol`
+    (first match wins) and `extract_external_symbol_all` (every real
+    match, Section 2.1's own bare-name-ambiguity case) share one
+    parse+extract implementation rather than two independently-drifting
+    copies."""
+    parsed = parse_file(str(file_path))
+    if parsed is None:
+        return None
+    match = _find_definition(parsed, symbol_name)
+    if match is None:
+        return None
+    def_node, enclosing_class, local_qualified_name, kind = match
+    contract = ContractExtractor().extract_symbol(def_node, parsed, enclosing_class, local_qualified_name)
+    module_name = _module_name_for_file(top_level, file_path)
+    return ExternalSymbolInfo(
+        qualified_name=f"{module_name}.{local_qualified_name}",
+        module_origin=top_level,
+        language=parsed.language_id,
+        signature_text=_render_signature_text(local_qualified_name, kind, contract),
+        docstring=contract.docstring,
+        kind=kind,
+        file=str(file_path),
+        line=def_node.start_point[0] + 1,
+        end_line=def_node.end_point[0] + 1,
+    )
+
+
 def extract_external_symbol(
     package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None,
 ) -> ExternalSymbolInfo | None:
     """Locate -> parse -> extract (Section 2.1's three steps) for one
-    named external symbol. Returns `None` under any real "can't resolve
-    this" condition - package not installed, file not parseable by any
+    named external symbol - the first real match across `locator`'s own
+    file ordering. Returns `None` under any real "can't resolve this"
+    condition - package not installed, file not parseable by any
     grammar Prism's tree-sitter loader has, symbol name not found in any
     located file - mirroring `prism.slicer.tokenizer`'s own fail-closed
     pattern (Section 2.1): a caller that can't resolve an external
     symbol should silently fall back to its Turn-2 internal-only result,
     never raise.
+
+    A dotted `symbol_name` (`"Router.add_route"`) already disambiguates
+    a bare name that exists in more than one file (Starlette itself
+    ships both `Router.add_route` and a distinct, delegating
+    `Starlette.add_route`) - a *bare* name request that happens to match
+    in more than one file returns only whichever one `locator.locate`
+    happens to order first, which a caller that genuinely needs every
+    real match (Section 1's own Turn 2a, resolving an ambiguous
+    `self.<name>(...)` call with no way to know which class it means)
+    should use `extract_external_symbol_all` for instead.
     """
     locator = locator or PythonSourceLocator()
     top_level = package_name.split(".")[0]
     for file_path in locator.locate(package_name):
-        parsed = parse_file(str(file_path))
-        if parsed is None:
-            continue
-        match = _find_definition(parsed, symbol_name)
-        if match is None:
-            continue
-        def_node, enclosing_class, local_qualified_name, kind = match
-        contract = ContractExtractor().extract_symbol(def_node, parsed, enclosing_class, local_qualified_name)
-        module_name = _module_name_for_file(top_level, file_path)
-        return ExternalSymbolInfo(
-            qualified_name=f"{module_name}.{local_qualified_name}",
-            module_origin=top_level,
-            language=parsed.language_id,
-            signature_text=_render_signature_text(local_qualified_name, kind, contract),
-            docstring=contract.docstring,
-            kind=kind,
-            file=str(file_path),
-            line=def_node.start_point[0] + 1,
-            end_line=def_node.end_point[0] + 1,
-        )
+        info = _extract_from_file(file_path, top_level, symbol_name)
+        if info is not None:
+            return info
     return None
+
+
+def extract_external_symbol_all(
+    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None,
+) -> list[ExternalSymbolInfo]:
+    """Every real match for `symbol_name` across every file `locator`
+    locates for `package_name`, in `locator`'s own file order - unlike
+    `extract_external_symbol`, never stops at the first. Exists for the
+    genuinely ambiguous bare-name case (Section 1's Turn 2a: a
+    `self.<name>(...)` call whose receiver's real type isn't known,
+    so which of several same-named real definitions it means isn't
+    either) - offering every real candidate lets the caller's own Turn
+    2b selection decide, rather than an arbitrary locator-ordering
+    artifact silently deciding for it. Returns `[]` (never raises) under
+    the same fail-closed conditions `extract_external_symbol` returns
+    `None` for.
+    """
+    locator = locator or PythonSourceLocator()
+    top_level = package_name.split(".")[0]
+    results: list[ExternalSymbolInfo] = []
+    for file_path in locator.locate(package_name):
+        info = _extract_from_file(file_path, top_level, symbol_name)
+        if info is not None:
+            results.append(info)
+    return results
 
 
 def external_symbol_to_node_entry(info: ExternalSymbolInfo, distance: float = 1.0) -> NodeEntry:

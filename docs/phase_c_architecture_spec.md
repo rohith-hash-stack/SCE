@@ -1,9 +1,19 @@
 # Phase C Architecture Specification: Cross-Boundary External Dependency Retrieval
 
-**Status: DRAFT - design proposal, not yet implemented. Nothing in this
-document has been built or tested. Written to be reviewed and revised
-before any code changes begin, the same discipline Phase B held itself
-to before authoring ground truth against unverified assumptions.**
+**Status: Steps 1-3 implemented and tested on `feature/phase-c-external-
+deps` (`097ec4b`, `1f7af68`, and the commit syncing this document to
+them) - `prism.external.index` (Step 1), the conditional three-pass
+engine routing and partitioned knapsack sub-budget (Step 2), and a real
+end-to-end `t018` simulation against the pinned FastAPI corpus and the
+real installed Starlette package proving the whole pipeline (Step 3).
+Sections 1, 2, and 5 below have been updated to describe what was
+actually built, with every real deviation from the original draft
+called out explicitly rather than silently absorbed - see each
+section's own "as built" note. Sections 3, 4, and 6 (partitioned
+budgeting's own packer-function split, scoring-contract updates beyond
+the zero-change path already verified in Step 3, and the broader
+rollout plan) remain the original design, not yet implemented beyond
+what Steps 1-3 needed.**
 
 ## 0. Problem statement
 
@@ -67,15 +77,31 @@ responsibility, in both the current and the proposed design.
 
 ### 1.2 New `RequestSymbolsCallback` contract
 
+**As built (`1f7af68`) - revised from a breaking change to a backward-
+compatible one**, per this task's own explicit instruction rather than
+this section's original draft:
+
 ```python
-RequestSymbolsCallback = Callable[[str, str], tuple[list[str], bool]]
-#  (manifest_text, task_prompt) -> (requested_symbols, needs_external_deps)
+RequestSymbolsCallback = Callable[[str, str], list[str] | tuple[list[str], bool]]
+#  (manifest_text, task_prompt) -> requested_symbols                      # legacy
+#                                -> (requested_symbols, needs_external_deps)  # Phase-C-aware
 ```
 
-**This is a breaking signature change** - every real caller must update
-in the same commit that changes the type alias (see Section 5). The
-boolean is a caller-supplied judgment, made by the same Turn-1 LLM call
-that already produces `requested_symbols`: the prompt asks the model to
+`prism.engine._normalize_request_result` unwraps either shape into
+`(requested_symbols, needs_external_deps)`, treating a plain `list[str]`
+as `needs_external_deps=False` - the exact behavior every pre-Phase-C
+callback already had before this flag existed. `retrieve_two_pass`
+itself calls the normalizer too (and simply discards the flag - it
+stays a pure two-pass path by construction; a caller wanting the
+conditional branch calls the new `retrieve_two_or_three_pass` instead).
+**No existing caller needs to change** -
+`tests/test_two_pass_engine.py`'s own deterministic callbacks and
+`benchmarks/run_two_pass_benchmark.py`'s manual Turn-1 call both keep
+returning a plain `list[str]`, unmodified.
+
+The boolean is still a caller-supplied judgment, made by the same
+Turn-1 LLM call that already produces `requested_symbols` (the original
+design's own reasoning is unchanged): the prompt asks the model to
 additionally emit a single boolean flag alongside its causal-pipeline
 request, e.g. extending Turn 1's own response schema from
 `{"requested_symbols": [...]}` to `{"requested_symbols": [...],
@@ -83,6 +109,17 @@ request, e.g. extending Turn 1's own response schema from
 judgment isolated to a structured field the model fills alongside work
 it is already doing, rather than a whole separate LLM call - the
 cheapest possible way to introduce the branch point.
+
+A second, dedicated type was added for Turn 2b, not present in the
+original draft (which had reused `RequestSymbolsCallback` itself for
+it - inconsistent with Section 1.3's own stated `-> external_requested_
+symbols` contract, a plain list, not a tuple; fixed here rather than
+carried forward as written):
+
+```python
+RequestExternalSymbolsCallback = Callable[[str, str], list[str]]
+#  (external_manifest_text, task_prompt) -> external_requested_symbols
+```
 
 ### 1.3 Branching logic
 
@@ -125,56 +162,86 @@ turn failure mode this design exists to avoid.
 
 ### 1.4 New engine methods (`src/prism/engine.py`)
 
-All additions, no signature changes to existing methods other than
-`RequestSymbolsCallback` itself (Section 1.2) and `retrieve_two_pass`'s
-own body (Section 1.5):
+**As built (`1f7af68`) - real signatures, revised from the original
+draft below in three ways**: (1) no `ExternalSymbolIndex` class exists -
+resolution goes straight through Step 1's `prism.external.index.
+extract_external_symbol_all`, cached on the engine instance
+(`self._external_symbol_cache`) rather than a separately-constructed
+index object; (2) `build_external_candidate_manifest` takes
+`(turn1_symbols, root_imports)`, not `(seed_id, external_index)` - this
+task's own explicit, simpler signature, resolving against the repo's
+own raw call expressions (`prism.parser.lang_config.
+call_callee_segments`) rather than a pre-built index's own
+`resolve_direct_callee`; (3) Turn 3's hydration is inlined directly into
+`retrieve_two_or_three_pass` rather than a separate `retrieve_external_
+requested` method - a scope simplification, not a rejection of that
+method existing later if real reuse ever calls for it.
 
 ```python
 def build_external_candidate_manifest(
-    self, seed_id: str, external_index: "ExternalSymbolIndex",
+    self, turn1_symbols: list[str], root_imports: list[str] | None = None,
 ) -> tuple[str, set[str]]:
-    """Turn 2a: every external symbol directly reachable in one hop from
-    seed_id's own real CALLS/INSTANTIATES edges that resolve to a symbol
-    NOT present in this engine's own builder.symbol_table - i.e. exactly
-    the class of edge that currently silently fails to resolve (the same
-    mechanism that made `add_route`, `orjson.dumps` invisible to every
-    prior scoring pass). Leaf-only: no external-to-external expansion.
-    No LLM call - real static lookup against `external_index`, mirroring
-    build_candidate_manifest's own no-LLM contract for Turn 1."""
-
-def retrieve_external_requested(
-    self, seed_id: str, budget_tokens: int,
-    requested_symbols: list[str], external_requested_symbols: list[str],
-    candidate_universe: set[str], external_candidate_universe: set[str],
-    external_index: "ExternalSymbolIndex", task_type: str | None = None,
-) -> tuple[ContextPackage, list[str], list[str]]:
-    """Turn 3: hydrates BOTH the internal and external requests into one
-    ContextPackage. Internal hydration is retrieve_requested's own
-    existing logic, unchanged. External hydration renders each resolved
-    external symbol as a real NodeEntry (role="external", schema_version
-    3+ - see Section 2.3) via a stub-only render path, never a real
-    source body (none exists to render). Returns (pkg, skipped,
-    external_skipped) - skipped/external_skipped kept separate so a
-    caller's own diagnostics can tell which universe a hallucinated name
-    was invented against."""
+    """Turn 2a: every external symbol directly (one-hop) reachable from
+    turn1_symbols' own real outgoing call expressions, resolved against
+    root_imports. Two paths, in precision order: (1) a call receiver
+    naming a root_imports package directly (orjson.dumps(...)) resolves
+    precisely against that package; (2) a self/this-receiver call whose
+    leaf name has zero real in-repo candidates (GlobalSymbolTable.
+    candidates_for_simple_name - the real t018 case) is tried against
+    every root_imports package. Both paths use extract_external_symbol_
+    all, not extract_external_symbol - discovered during Step 3's own
+    t018 integration test: Starlette ships TWO real add_route
+    definitions (Router.add_route and a distinct, delegating Starlette.
+    add_route), and a single-result lookup would let an arbitrary
+    file-locate ordering silently pick one rather than offering both as
+    real candidates for Turn 2b to choose between. No LLM call - real
+    static lookup, mirroring build_candidate_manifest's own no-LLM
+    contract for Turn 1. Resolved ExternalSymbolInfo objects are cached
+    on this engine instance so Turn 3 never re-parses."""
 
 def retrieve_two_or_three_pass(
     self, seed_id: str, budget_tokens: int,
     request_symbols: RequestSymbolsCallback,
-    request_external_symbols: RequestSymbolsCallback,
-    external_index: "ExternalSymbolIndex | None" = None,
-    task_prompt: str = "", task_type: str | None = None, ...,
+    request_external_symbols: RequestExternalSymbolsCallback | None = None,
+    root_imports: list[str] | None = None,
+    task_prompt: str = "", task_type: str | None = None,
+    max_hops: float = CANDIDATE_INDEX_MAX_HOPS,
+    upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
 ) -> tuple[ContextPackage, dict[str, object]]:
-    """Replaces retrieve_two_pass as the first-class entry point (see
-    Section 5 for the migration path - retrieve_two_pass itself is kept,
-    unchanged, for a caller with no external_index, per Section 5's own
-    backward-compatibility note). Runs Turn 1, branches per Section 1.3,
-    runs Turn 2 or Turn 2a/2b/3 accordingly. diagnostics gains
-    needs_external_deps, external_candidate_count,
-    external_requested_count, external_skipped_hallucinated alongside
-    the existing candidate_count/requested_count/skipped_hallucinated -
-    additive keys, not a breaking change to the diagnostics dict shape."""
+    """A new, additive method alongside retrieve_two_pass (kept
+    unchanged - Section 5's own note), not a replacement for it. Runs
+    Turn 1 (shared with retrieve_two_pass), then branches on
+    needs_external_deps. False: identical to retrieve_two_pass (full
+    budget_tokens, zero external overhead - request_external_symbols/
+    build_external_candidate_manifest are never called at all). True:
+    split_budget_for_external reserves the external sub-budget up
+    front; internal Turn 2 (retrieve_requested, unmodified) runs against
+    internal_budget only; Turn 2a resolves external candidates from
+    {seed_id} | requested_symbols; Turn 2b fires only when that
+    candidate set is non-empty; Turn 3 (inlined here, not a separate
+    method) resolves each requested name against the Turn-2a cache,
+    admits it as a role="external" NodeEntry while running cost fits
+    external_budget, and appends admitted nodes onto the internally-
+    packed ContextPackage via model_copy. Raises ValueError if
+    needs_external_deps=True with no request_external_symbols callback
+    supplied. diagnostics gains needs_external_deps,
+    external_candidate_count, external_requested_count,
+    external_skipped_hallucinated alongside the existing candidate_
+    count/requested_count/skipped_hallucinated - additive keys."""
 ```
+
+Verified end-to-end in Step 3 (`tests/test_three_pass_integration.py`)
+against the real, pinned FastAPI corpus and the real installed
+Starlette package: `FastAPI.setup`'s real `self.add_route(...)` call
+sites resolve to both real Starlette definitions, a deterministic Turn
+2b callback selects `Router.add_route`, the resulting `ContextPackage`
+carries both the internal FastAPI seed node and the external Starlette
+stub, the external stub's token cost fits inside its 12.5%-of-budget
+sub-budget, and `score_debug_causal` - via `selected_symbols(pkg)`,
+with **zero changes to its own signature**, confirming Section 4.1's
+"leaner path" claim empirically rather than just arguing it - scores a
+response naming `add_route` as legitimate, while a genuinely invented
+symbol still scores as hallucinated.
 
 ### 1.5 Latency vs. precision (informing the conditional design, not new analysis)
 
@@ -550,12 +617,20 @@ class EvaluationTask(BaseModel):
 
 ## 5. Breaking interfaces - explicit inventory
 
+**As built (`1f7af68`): the one row this table originally called
+unavoidable turned out not to be** - `RequestSymbolsCallback`'s
+signature was widened, not replaced, per this task's own explicit
+backward-compatibility instruction (Section 1.2). No interface below is
+breaking as actually shipped.
+
 | Interface | Change | Breaking? | Migration |
 |---|---|---|---|
-| `prism.engine.RequestSymbolsCallback` | `Callable[[str,str], list[str]]` -> `Callable[[str,str], tuple[list[str], bool]]` | **Yes** | Every real caller must update in the same commit. Only one exists today: `benchmarks/run_two_pass_benchmark.py`'s own Turn-1 LLM-calling closure. |
-| `PrismEngine.retrieve_two_pass` | Unchanged signature/behavior | No | Kept as-is for any caller with no `external_index` (Section 1.4's own note) - a caller that never opts into Phase C sees no change at all. |
+| `prism.engine.RequestSymbolsCallback` | `Callable[[str,str], list[str]]` -> `Callable[[str,str], list[str] \| tuple[list[str], bool]]` | **No** (as built - revised from the original draft's breaking change) | None required. `_normalize_request_result` treats a plain `list[str]` as `needs_external_deps=False` - every existing caller (`tests/test_two_pass_engine.py`, `benchmarks/run_two_pass_benchmark.py`'s own Turn-1 closure) keeps working unmodified. |
+| `prism.engine.RequestExternalSymbolsCallback` | New type alias | No (additive) | New callers only - not present in the original draft, which had reused `RequestSymbolsCallback` itself for Turn 2b (a real inconsistency with Section 1.3's own stated contract, fixed here). |
+| `PrismEngine.retrieve_two_pass` | Unchanged signature/behavior | No | Kept as-is - a caller that never opts into Phase C sees no change at all. |
 | `PrismEngine.retrieve_two_or_three_pass` | New method | No (additive) | New callers only. |
-| `PrismEngine.build_external_candidate_manifest`, `.retrieve_external_requested` | New methods | No (additive) | New callers only. |
+| `PrismEngine.build_external_candidate_manifest` | New method, `(turn1_symbols, root_imports)` (Section 1.4's "as built" note - not `(seed_id, external_index)` as originally drafted) | No (additive) | New callers only. |
+| `prism.external.index.extract_external_symbol_all` | New function | No (additive) | New callers only - added during Step 3 for the genuinely-ambiguous bare-name case (two real Starlette `add_route` definitions); `extract_external_symbol` (single result) is unchanged and still used for the precise package-receiver resolution path. |
 | `retrieve_two_pass`'s own `diagnostics` dict | Gains `needs_external_deps`, `external_*` keys when the new `retrieve_two_or_three_pass` is used | No (additive keys on a new method's own return, not the old method's) | N/A |
 | `NodeEntry.role` (`prism.surface.models`) | `Literal[...]` gains `"external"` member | **Yes, in the type-checking sense** (a `match`/exhaustiveness check over the old 4-member Literal needs a 5th arm) | Grep every `role ==`/`match role` site before merging (one found already: `prism/surface/renderer.py:327`'s `role == "seed"` filter - unaffected since it's an equality check, not an exhaustive match, but every such site needs auditing, not assuming). |
 | `ContextPackage.schema_version` | New value `3` | No (the existing mechanism is designed for exactly this) | `schema_version=1`/`2` consumers unaffected per `renderer.py`'s own documented forward-compatibility guarantee. |
@@ -564,11 +639,15 @@ class EvaluationTask(BaseModel):
 | `EvaluationTask` | New `allows_external_dependencies: bool = False` field | No (defaulted) | None required for existing task YAMLs - pydantic default applies on load. |
 | Checkpoint cell schema (`benchmarks/runner.py`, `run_two_pass_benchmark.py`) | New optional cell fields (`needs_external_deps`, `external_requested_count`, `external_skipped_hallucinated`) | No | `scripts/merge_pilot_checkpoints.py`/`scripts/apply_gate.py` only ever read `task_id`/`engine`/`budget`/`seed`/`tsr`/`cpi_answer` - confirmed by re-reading both scripts - unaffected by additive cell fields. |
 
-**The one unavoidable breaking change is `RequestSymbolsCallback`'s own
-signature.** Everything else in this design is additive by construction,
-specifically because Section 4.1's discovery (reuse `pkg.nodes`/
-`selected_symbols` rather than a parallel parameter) removes what would
-otherwise have been the second-largest breaking change in this spec.
+**As built, every interface in this design is additive - nothing
+breaks.** The original draft treated `RequestSymbolsCallback`'s
+signature as the one unavoidable breaking change; Section 1.2's own
+"as built" note explains why that turned out not to be necessary
+(backward-compatible normalization instead of a hard replacement).
+Section 4.1's discovery (reuse `pkg.nodes`/`selected_symbols` rather
+than a parallel parameter) independently removes what would otherwise
+have been the second-largest breaking change in this spec, and was
+verified empirically in Step 3, not just argued for.
 
 ## 6. Rollout / validation plan
 

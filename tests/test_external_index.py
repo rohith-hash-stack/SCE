@@ -21,6 +21,7 @@ from prism.external.index import (  # noqa: E402
     ExternalSymbolInfo,
     PythonSourceLocator,
     extract_external_symbol,
+    extract_external_symbol_all,
     external_symbol_to_node_entry,
 )
 from prism.surface.models import NodeEntry  # noqa: E402
@@ -132,3 +133,42 @@ def test_extract_external_symbol_returns_none_for_unresolvable_package():
 
 def test_extract_external_symbol_returns_none_for_unresolvable_symbol():
     assert extract_external_symbol("starlette", "this_symbol_does_not_exist_anywhere_xyz") is None
+
+
+# --------------------------------------------------------------------- #
+# extract_external_symbol_all: the genuinely-ambiguous bare-name case
+# (added for Phase C Step 3's t018 integration - Starlette itself ships
+# two real, distinct `add_route` definitions).
+# --------------------------------------------------------------------- #
+def test_extract_external_symbol_all_returns_every_real_add_route_definition():
+    results = extract_external_symbol_all("starlette", "add_route")
+    qualified_names = {r.qualified_name for r in results}
+
+    assert "starlette.routing.Router.add_route" in qualified_names
+    assert "starlette.applications.Starlette.add_route" in qualified_names
+    assert all(isinstance(r, ExternalSymbolInfo) for r in results)
+
+
+def test_extract_external_symbol_all_returns_single_match_for_unambiguous_name():
+    results = extract_external_symbol_all("starlette", "Response")
+    assert len(results) == 1
+    assert results[0].qualified_name == "starlette.responses.Response"
+
+
+def test_extract_external_symbol_all_returns_empty_list_for_unresolvable_symbol():
+    assert extract_external_symbol_all("starlette", "this_symbol_does_not_exist_anywhere_xyz") == []
+
+
+def test_extract_external_symbol_all_returns_empty_list_for_unresolvable_package():
+    assert extract_external_symbol_all("this_package_does_not_exist_anywhere_xyz", "anything") == []
+
+
+def test_extract_external_symbol_still_picks_one_first_match_for_ambiguous_bare_name():
+    """`extract_external_symbol` (single-result) still returns exactly
+    one of the two real `add_route` definitions for the same bare-name
+    query `extract_external_symbol_all` resolves ambiguously - it must
+    be one of the two real candidates, never `None` and never a
+    fabricated result."""
+    info = extract_external_symbol("starlette", "add_route")
+    assert info is not None
+    assert info.qualified_name in {"starlette.routing.Router.add_route", "starlette.applications.Starlette.add_route"}
