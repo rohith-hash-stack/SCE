@@ -89,6 +89,7 @@ import os
 import sys
 import time
 from dataclasses import dataclass, field
+from typing import Literal
 
 import networkx as nx
 
@@ -997,6 +998,17 @@ class SubmodularPackedItem:
     #: "L2_skeleton" (a signature-only stub - see `_signature_stub`) -
     #: matches `prism.surface.build._RESOLUTION_TO_LEVEL`'s own values.
     compression: str = "L0_full"
+    #: Phase C (Section 3.3): "internal" (every existing caller's only
+    #: value - a symbol from `builder.symbol_table`, the repo Prism
+    #: indexed) or "external" (a `prism.external.index.ExternalSymbolInfo`-
+    #: derived item, priced and admitted against its own reserved
+    #: sub-budget - see `split_budget_for_external` - never competing in
+    #: the same knapsack pass an internal item is selected by). A
+    #: dataclass field with a default is additive for every existing
+    #: caller here, confirmed by grep: every current construction site in
+    #: this module already uses keyword arguments for every field it
+    #: sets.
+    origin: Literal["internal", "external"] = "internal"
 
 
 @dataclass
@@ -1007,6 +1019,47 @@ class SubmodularPackResult:
     items: list[SubmodularPackedItem] = field(default_factory=list)
     total_cost: int = 0
     covered_mask: int = 0
+
+
+#: Phase C, Section 3.2 - the fixed fraction of a retrieval's total
+#: `budget_tokens` reserved for external-dependency stubs, resolved (not
+#: the original 10-15% range's midpoint by coincidence: `docs/phase_c_
+#: architecture_spec.md`'s own Section 7 decisions record).
+DEFAULT_EXTERNAL_BUDGET_FRACTION = 0.125
+#: Guarantees a minimum viable external allocation even at the tightest
+#: established pilot budget (2000): `0.125 * 2000 = 250 < 256`, so this
+#: floor is the one that actually binds there.
+DEFAULT_EXTERNAL_BUDGET_FLOOR_TOKENS = 256
+#: Caps external spend at large budgets; never binds at any of the
+#: established pilot budgets (2000/4000/8000 - `0.125 * 8000 = 1000 <
+#: 1024`), only at a budget considerably larger than any pilot has used.
+DEFAULT_EXTERNAL_BUDGET_CEILING_TOKENS = 1024
+
+
+def split_budget_for_external(
+    budget_tokens: int,
+    fraction: float = DEFAULT_EXTERNAL_BUDGET_FRACTION,
+    floor_tokens: int = DEFAULT_EXTERNAL_BUDGET_FLOOR_TOKENS,
+    ceiling_tokens: int = DEFAULT_EXTERNAL_BUDGET_CEILING_TOKENS,
+) -> tuple[int, int]:
+    """`(internal_budget, external_budget)` - `external_budget =
+    clamp(round(fraction * budget_tokens), floor_tokens, ceiling_tokens)`,
+    then re-clamped to never exceed `budget_tokens` itself. Reserved up
+    front, before either packer runs (Section 3.2's own "no pooled
+    knapsack competition" design - a verbose external stub can never
+    outbid or evict an internal node the way a single combined knapsack
+    pass would risk, the mirror image of the existing
+    `_PROTECTED_DOWNGRADE_ROLES` protection on the internal side).
+
+    A pathologically small `budget_tokens` (under `floor_tokens`)
+    degrades to `external_budget=budget_tokens`, `internal_budget=0` -
+    correct behavior, not a bug: there would be nothing else to spend
+    a budget that tight on either.
+    """
+    external_budget = min(max(round(fraction * budget_tokens), floor_tokens), ceiling_tokens)
+    external_budget = min(external_budget, budget_tokens)
+    internal_budget = budget_tokens - external_budget
+    return internal_budget, external_budget
 
 
 #: Rendered-Metadata Metering fix (Fix #2). `_default_costs` previously

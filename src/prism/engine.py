@@ -26,10 +26,12 @@ from dataclasses import dataclass
 from typing import Callable
 
 from prism.cli import build_pipeline
+from prism.external.index import ExternalSymbolInfo, extract_external_symbol, external_symbol_to_node_entry
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS, _outgoing_call_names, build_candidate_manifest
-from prism.packer.submodular_knapsack import DEFAULT_UPSTREAM_MAX_HOPS
+from prism.packer.submodular_knapsack import DEFAULT_UPSTREAM_MAX_HOPS, split_budget_for_external
+from prism.parser.lang_config import CALL_NODE_TYPE, SELF_TOKEN_TEXT, call_callee_segments, iter_scoped_nodes
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.surface.build import build_context_package, build_context_package_requested
 from prism.surface.models import ContextPackage
@@ -55,7 +57,33 @@ PostPackingHook = Callable[[ContextPackage], None]
 #: LLM turn, injected rather than called by `PrismEngine` itself. See
 #: `PrismEngine.retrieve_two_pass`'s own docstring for why the engine
 #: never makes this call directly.
-RequestSymbolsCallback = Callable[[str, str], list[str]]
+#:
+#: Phase C: a callback may now return either the legacy plain
+#: `list[str]` or `(requested_symbols, needs_external_deps)` - see
+#: `_normalize_request_result` below. Every callback written before
+#: Phase C (every one in `tests/test_two_pass_engine.py`,
+#: `benchmarks/run_two_pass_benchmark.py`'s own manual Turn-1 call)
+#: already returns the plain form and needs no change.
+RequestSymbolsCallback = Callable[[str, str], list[str] | tuple[list[str], bool]]
+#: `(external_manifest_text, task_prompt) -> external_requested_symbols`
+#: - Turn 2b's own caller-supplied LLM call, exactly the same injection
+#: boundary `RequestSymbolsCallback` already establishes for Turn 1.
+#: Never invoked when Turn 1 answered `needs_external_deps=False` - see
+#: `PrismEngine.retrieve_two_or_three_pass`'s own docstring.
+RequestExternalSymbolsCallback = Callable[[str, str], list[str]]
+
+
+def _normalize_request_result(result: list[str] | tuple[list[str], bool]) -> tuple[list[str], bool]:
+    """`RequestSymbolsCallback` backward compatibility (Phase C): a
+    legacy callback returning a plain `list[str]` is treated as
+    `needs_external_deps=False` - the exact behavior it already had
+    before this flag existed, so no existing caller (harness or test)
+    needs to change. A Phase-C-aware callback instead returns
+    `(requested_symbols, needs_external_deps)`."""
+    if isinstance(result, tuple):
+        requested_symbols, needs_external_deps = result
+        return list(requested_symbols), bool(needs_external_deps)
+    return list(result), False
 
 
 class PrismEngine:
@@ -77,6 +105,12 @@ class PrismEngine:
         self._contracts = contracts if contracts is not None else {}
         self._pre_traversal_hooks: list[PreTraversalHook] = []
         self._post_packing_hooks: list[PostPackingHook] = []
+        #: Phase C: resolved `ExternalSymbolInfo`s from every
+        #: `build_external_candidate_manifest` call this engine instance
+        #: has made, keyed by qualified name - so `retrieve_two_or_three_
+        #: pass`'s own Turn-3 hydration never re-locates/re-parses a file
+        #: `build_external_candidate_manifest` already resolved.
+        self._external_symbol_cache: dict[str, ExternalSymbolInfo] = {}
 
     @classmethod
     def from_repo(cls, repo_root: str) -> "PrismEngine":
@@ -262,7 +296,12 @@ class PrismEngine:
         manifest_text, candidate_universe = self.build_candidate_manifest(
             seed_id, max_hops=max_hops, upstream_max_hops=upstream_max_hops,
         )
-        requested_symbols = request_symbols(manifest_text, task_prompt)
+        # Phase C: `request_symbols` may now return `(requested_symbols,
+        # needs_external_deps)` - `retrieve_two_pass` itself stays a pure
+        # two-pass path regardless (a caller wanting the conditional
+        # three-pass branch calls `retrieve_two_or_three_pass` instead),
+        # so the flag is normalized away here rather than acted on.
+        requested_symbols, _needs_external_deps = _normalize_request_result(request_symbols(manifest_text, task_prompt))
         pkg, skipped = self.retrieve_requested(
             seed_id, budget_tokens, requested_symbols, candidate_universe, task_type=task_type,
         )
@@ -270,5 +309,239 @@ class PrismEngine:
             "candidate_count": len(candidate_universe),
             "requested_count": len(requested_symbols),
             "skipped_hallucinated": skipped,
+        }
+        return pkg, diagnostics
+
+    # -- Phase C (external-dependency retrieval) -- #
+    #
+    # `docs/phase_c_architecture_spec.md` Sections 1 and 3: the
+    # conditional three-pass branch and its dedicated external-stub
+    # sub-budget, built on Step 1's `prism.external.index` and never
+    # invoked at all unless Turn 1 itself asks for it.
+
+    def build_external_candidate_manifest(
+        self, turn1_symbols: list[str], root_imports: list[str] | None = None,
+    ) -> tuple[str, set[str]]:
+        """Turn 2a: every external symbol directly (one-hop) reachable
+        from `turn1_symbols`'s own real outgoing call expressions,
+        resolved against `root_imports` (Section 2's own Namespace
+        Resolution Scope - bounded to the repo's own top-level imported
+        packages, never an unbounded installed-package search) via
+        `prism.external.index.extract_external_symbol`. No LLM call -
+        real static lookup, mirroring `build_candidate_manifest`'s own
+        Turn-1 contract.
+
+        Two resolution paths per raw call expression
+        (`prism.parser.lang_config.call_callee_segments`), tried in order
+        of precision, leaf-only (Section 0's own Non-goal - no external-
+        to-external expansion, no deeper receiver-type inference):
+
+          1. The call's own receiver segment names a `root_imports`
+             package directly (`orjson.dumps(...)` -> package
+             `"orjson"`, symbol `"dumps"`) - the precise case, a real
+             per-package correlation, not a guess.
+          2. The receiver is a `self`/`this` token
+             (`prism.parser.lang_config.SELF_TOKEN_TEXT`) and the leaf
+             name has zero real in-repo candidates
+             (`GlobalSymbolTable.candidates_for_simple_name` - that
+             table's own docstring already calls this shape "an
+             ordinary external/builtin reference") - the real `t018`
+             case (a Starlette-inherited method Prism's own symbol
+             table has no entry for): the bare leaf name is tried
+             against every `root_imports` package in order, first
+             resolvable match wins.
+
+        A three-or-more-segment receiver chain (`self.router.add_route`)
+        is left unresolved rather than guessed at - the same leaf-only
+        discipline, not a deeper attribute-chain resolution this method
+        doesn't attempt. Every resolved `ExternalSymbolInfo` is cached on
+        this engine instance (`self._external_symbol_cache`, keyed by
+        qualified name) so Turn 3's own hydration below never re-locates
+        or re-parses a file this step already resolved.
+        """
+        root_imports = list(root_imports or [])
+        if not root_imports:
+            return "<external_candidate_index>\n</external_candidate_index>", set()
+
+        self_tokens: set[str] = set()
+        for tokens in SELF_TOKEN_TEXT.values():
+            self_tokens |= tokens
+
+        resolved: dict[str, ExternalSymbolInfo] = {}
+        attempted: set[tuple[str, str]] = set()
+        for qname in turn1_symbols:
+            info = self._builder.symbol_table.get(qname)
+            def_node = self._builder.def_node(qname)
+            if info is None or def_node is None:
+                continue
+            parsed = self._builder.parsed_file(info.file)
+            if parsed is None:
+                continue
+            lang = parsed.language_id
+            call_type = CALL_NODE_TYPE.get(lang)
+            if call_type is None:
+                continue
+            for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
+                segments = call_callee_segments(call_node, parsed.source, lang)
+                if not segments or len(segments) != 2:
+                    continue
+                receiver, leaf = segments
+                candidate_packages: list[str] = []
+                if receiver in root_imports:
+                    candidate_packages = [receiver]
+                elif receiver in self_tokens and not self._builder.symbol_table.candidates_for_simple_name(leaf):
+                    candidate_packages = root_imports
+                for package_name in candidate_packages:
+                    key = (package_name, leaf)
+                    if key in attempted:
+                        continue
+                    attempted.add(key)
+                    ext_info = extract_external_symbol(package_name, leaf)
+                    if ext_info is not None:
+                        resolved[ext_info.qualified_name] = ext_info
+                        break
+
+        self._external_symbol_cache.update(resolved)
+        lines = [f"{info.qualified_name}|external|{info.kind}|{info.signature_text}" for info in sorted(resolved.values(), key=lambda i: i.qualified_name)]
+        manifest_text = "<external_candidate_index>\n" + "\n".join(lines) + ("\n" if lines else "") + "</external_candidate_index>"
+        return manifest_text, set(resolved.keys())
+
+    def retrieve_two_or_three_pass(
+        self,
+        seed_id: str,
+        budget_tokens: int,
+        request_symbols: RequestSymbolsCallback,
+        request_external_symbols: RequestExternalSymbolsCallback | None = None,
+        root_imports: list[str] | None = None,
+        task_prompt: str = "",
+        task_type: str | None = None,
+        max_hops: float = CANDIDATE_INDEX_MAX_HOPS,
+        upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
+    ) -> tuple[ContextPackage, dict[str, object]]:
+        """The conditional three-pass execution path (`docs/phase_c_
+        architecture_spec.md` Section 1). Turn 1 is identical to
+        `retrieve_two_pass`'s own (`build_candidate_manifest` + one call
+        to `request_symbols`), then branches on the `needs_external_deps`
+        half of its answer (`_normalize_request_result` - a legacy
+        `list[str]`-returning callback always takes the `False` branch):
+
+        `needs_external_deps=False`: **zero overhead** - runs exactly the
+        same standard two-pass path `retrieve_two_pass` does (the full
+        `budget_tokens`, no sub-budget split), and `request_external_
+        symbols`/`build_external_candidate_manifest` are never called at
+        all. Every `external_*` diagnostic is reported as its own empty/
+        zero value, matching a caller with no external dependency
+        support (Section 1.3's own "unchanged, for a caller with no
+        external_index" guarantee).
+
+        `needs_external_deps=True`: reserves a dedicated external
+        sub-budget up front (`split_budget_for_external`) so external
+        stubs can never evict or outbid an internal node - the internal
+        Turn 2 hydration (`retrieve_requested`, unmodified) runs against
+        `internal_budget` only. Turn 2a (`build_external_candidate_
+        manifest`, no LLM call) resolves external candidates reachable
+        from the seed plus whatever Turn 1 requested; Turn 2b calls the
+        caller-supplied `request_external_symbols` **only when that
+        candidate set is non-empty** (an empty manifest has nothing to
+        select from - no wasted LLM call). Turn 3 resolves each
+        requested name against `self._external_symbol_cache` (populated
+        by Turn 2a - no second parse), admits it as a real
+        `role="external"` `NodeEntry` while its running cost still fits
+        `external_budget`, and appends every admitted node to the
+        internally-packed `ContextPackage` (`model_copy`, since
+        `ContextPackage` is frozen). A requested name absent from the
+        cache (hallucinated) or that no longer fits the remaining
+        external budget is reported in `external_skipped_hallucinated`,
+        never silently dropped.
+
+        `request_external_symbols` is required whenever Turn 1 itself
+        answers `needs_external_deps=True` - a caller wiring Phase C in
+        at all is expected to always pass it; raises `ValueError`
+        immediately rather than silently treating a missing Turn-2b
+        callback as "no external symbols requested" (a real caller
+        contract violation, not a legitimate degrade path - `root_imports`
+        being empty/`None` is the legitimate "nothing to resolve" case,
+        already handled by `build_external_candidate_manifest` itself).
+
+        Returns `(pkg, diagnostics)` - `diagnostics` carries every key
+        `retrieve_two_pass` already returns, plus `needs_external_deps`,
+        `external_candidate_count`, `external_requested_count`, and
+        `external_skipped_hallucinated`.
+
+        Hook timing note: `register_post_packing_hook` callbacks fire
+        exactly once, inside the internal `retrieve_requested` call above
+        - on the three-pass branch they see the internally-packed
+        `ContextPackage` *before* Turn 3 appends external nodes, not the
+        final combined package this method returns. Widening that
+        contract (a second hook pass over the combined package, or
+        deferring the existing one) is not needed for Step 2's own scope
+        and is left for whichever later step first has a real hook
+        consumer that cares about seeing external nodes.
+        """
+        manifest_text, candidate_universe = self.build_candidate_manifest(
+            seed_id, max_hops=max_hops, upstream_max_hops=upstream_max_hops,
+        )
+        requested_symbols, needs_external_deps = _normalize_request_result(request_symbols(manifest_text, task_prompt))
+
+        if not needs_external_deps:
+            pkg, skipped = self.retrieve_requested(
+                seed_id, budget_tokens, requested_symbols, candidate_universe, task_type=task_type,
+            )
+            diagnostics = {
+                "candidate_count": len(candidate_universe),
+                "requested_count": len(requested_symbols),
+                "skipped_hallucinated": skipped,
+                "needs_external_deps": False,
+                "external_candidate_count": 0,
+                "external_requested_count": 0,
+                "external_skipped_hallucinated": [],
+            }
+            return pkg, diagnostics
+
+        if request_external_symbols is None:
+            raise ValueError(
+                "request_symbols answered needs_external_deps=True but no request_external_symbols "
+                "callback was supplied to retrieve_two_or_three_pass"
+            )
+
+        internal_budget, external_budget = split_budget_for_external(budget_tokens)
+        pkg, skipped = self.retrieve_requested(
+            seed_id, internal_budget, requested_symbols, candidate_universe, task_type=task_type,
+        )
+
+        turn1_symbols = sorted({seed_id, *requested_symbols})
+        external_manifest_text, external_candidate_universe = self.build_external_candidate_manifest(
+            turn1_symbols, root_imports=root_imports,
+        )
+        if external_candidate_universe:
+            external_requested_symbols = list(request_external_symbols(external_manifest_text, task_prompt))
+        else:
+            external_requested_symbols = []
+
+        external_skipped: list[str] = []
+        external_nodes = []
+        running_cost = 0
+        for name in external_requested_symbols:
+            info = self._external_symbol_cache.get(name)
+            if info is None:
+                external_skipped.append(name)
+                continue
+            node = external_symbol_to_node_entry(info)
+            if running_cost + node.cost > external_budget:
+                external_skipped.append(name)
+                continue
+            running_cost += node.cost
+            external_nodes.append(node)
+
+        pkg = pkg.model_copy(update={"nodes": [*pkg.nodes, *external_nodes]})
+
+        diagnostics = {
+            "candidate_count": len(candidate_universe),
+            "requested_count": len(requested_symbols),
+            "skipped_hallucinated": skipped,
+            "needs_external_deps": True,
+            "external_candidate_count": len(external_candidate_universe),
+            "external_requested_count": len(external_requested_symbols),
+            "external_skipped_hallucinated": external_skipped,
         }
         return pkg, diagnostics
