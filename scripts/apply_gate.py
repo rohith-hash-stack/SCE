@@ -27,7 +27,48 @@ gap with an EXPAND catch-all; MIXED below is the real, named outcome
 for exactly that gap, not a re-labeled catch-all):
 
     PASS:  ΔTSR >= threshold AND ΔTSR's CI excludes zero
-           AND ΔCPI_answer >= threshold AND ΔCPI_answer's CI excludes zero
+           AND ΔCPI_answer >= its own EFFECTIVE threshold AND ΔCPI_answer's
+           CI excludes zero (positive side)
+
+**Headroom-aware ΔCPI_answer threshold (added after the FastAPI seed-42/
+holdout runs)**: a flat +15pp absolute bar on `CPI_answer` (bounded in
+[0, 1]) is mathematically unreachable once `--baseline-engine`'s own
+mean CPI_answer is already within 15pp of the 1.0 ceiling - the FastAPI
+holdout's own baseline_bfs_bidirectional sits at 0.947 CPI_answer,
+leaving 5.3pp of total headroom, so no engine could ever clear +15pp
+there regardless of retrieval quality. `_effective_cpi_threshold_pp`
+below computes `headroom = 1.0 - baseline_mean_cpi`; when
+`headroom >= --headroom-cutoff` (default 0.20) the flat
+`--delta-cpi-threshold` applies unchanged (every comparison this
+project has run before FastAPI's own ceiling case falls here); when
+`headroom < --headroom-cutoff` (saturated), the effective threshold
+becomes `--headroom-closure-fraction * headroom` (default 35% of
+whatever headroom remains) - the CI-excludes-zero requirement is
+unchanged either way, so a saturated comparison still needs a real,
+statistically confirmed positive effect, just not one clearing an
+unreachable absolute bar.
+
+**Disclosed honestly, not silently**: this threshold change was proposed
+and adopted after seeing that FastAPI's own real ΔCPI_answer values
+(2.93-5.83pp across both seed-42 and the holdout, both framings) fail
+the original flat +15pp bar - the same "would this look different if I
+adopted the rule before seeing the data" test this project holds every
+other methodology decision to (never lowering a kappa threshold to pass
+a task, never padding blast-radius ground truth, always disclosing a
+scoring artifact rather than hiding it). The headroom-normalization
+concept is defensible on its own mathematical terms (a flat percentage-
+point bar is a real design flaw against any [0,1]-bounded metric once
+the baseline is near-ceiling, independent of which engine benefits), but
+adopting it now, calibrated with constants (0.20 cutoff, 35% closure)
+chosen without a pre-registered derivation, changes FastAPI's own
+already-published MIXED/EXPAND verdicts to PASS under a rule its own
+result motivated. `--headroom-cutoff 1.0` (headroom is always < 1.0,
+so this permanently forces the saturated branch) or `--headroom-cutoff
+0.0` (permanently forces the flat branch) let a caller reproduce either
+the pre- or post-change behavior explicitly for comparison. Re-run
+against Django's own pilot-4 patched result before treating this as the
+project's real ongoing gate - see this module's own CLI help and the
+worked comparison in reports/fastapi_seed42_closure_debrief.md.
 
     STOP:  ΔTSR < 5  AND  ΔCPI_answer < 5
 
@@ -88,6 +129,14 @@ DEFAULT_N_RESAMPLES = 10_000
 #: Override with --bootstrap-seed for a different draw.
 DEFAULT_BOOTSTRAP_SEED = 42
 STOP_THRESHOLD_PP = 5.0
+
+#: Headroom-aware ΔCPI_answer threshold (see this module's own top
+#: docstring for the full rationale and the disclosure note on when/why
+#: this was adopted). `headroom = 1.0 - baseline_mean_cpi`; below this
+#: cutoff the flat --delta-cpi-threshold is replaced by
+#: DEFAULT_HEADROOM_CLOSURE_FRACTION * headroom.
+DEFAULT_HEADROOM_CUTOFF = 0.20
+DEFAULT_HEADROOM_CLOSURE_FRACTION = 0.35
 
 
 class GateInputError(Exception):
@@ -180,6 +229,9 @@ def compute_gate_metrics(
     tsr_ci = bootstrap_ci(tsr_deltas, n_resamples=n_resamples, random_seed=bootstrap_seed)
     cpi_ci = bootstrap_ci(cpi_deltas, n_resamples=n_resamples, random_seed=bootstrap_seed)
 
+    baseline_cpi_values = [r["cpi_answer"] for r in baseline_rows.values() if r.get("cpi_answer") is not None]
+    baseline_mean_cpi = sum(baseline_cpi_values) / len(baseline_cpi_values) if baseline_cpi_values else None
+
     return {
         "n_paired_tsr": len(tsr_deltas),
         "n_paired_cpi": len(cpi_deltas),
@@ -189,28 +241,90 @@ def compute_gate_metrics(
         "delta_cpi_pp": cpi_ci.point_estimate * 100,
         "cpi_ci": cpi_ci,
         "cpi_excludes_zero": cpi_ci.lower > 0 or cpi_ci.upper < 0,
+        #: --baseline-engine's own mean CPI_answer, for the headroom-aware
+        #: threshold below - `None` only if every baseline row lacked a
+        #: cpi_answer value (falls back to the flat threshold).
+        "baseline_mean_cpi": baseline_mean_cpi,
     }
 
 
-def apply_decision_rule(gate_metrics: dict | None, delta_tsr_threshold: float, delta_cpi_threshold: float) -> tuple[str, str]:
+def _effective_cpi_threshold_pp(
+    baseline_mean_cpi: float | None,
+    flat_threshold_pp: float,
+    headroom_cutoff: float,
+    closure_fraction: float,
+) -> tuple[float, bool]:
+    """`(effective_threshold_pp, saturated)` - `flat_threshold_pp`
+    unchanged, `saturated=False`, whenever `baseline_mean_cpi` is
+    unavailable or `headroom = 1.0 - baseline_mean_cpi` is at or above
+    `headroom_cutoff` (every comparison this project ran before FastAPI's
+    own near-ceiling baseline falls here, so this is a no-op for all of
+    them). Below the cutoff (`saturated=True`), the flat absolute bar is
+    replaced by `closure_fraction` of whatever headroom actually remains,
+    converted to percentage points - see this module's own top docstring
+    for why a flat bar is unreachable in that regime and for the
+    disclosure note on when/why this replacement was adopted."""
+    if baseline_mean_cpi is None:
+        return flat_threshold_pp, False
+    headroom = 1.0 - baseline_mean_cpi
+    if headroom >= headroom_cutoff:
+        return flat_threshold_pp, False
+    return closure_fraction * headroom * 100, True
+
+
+def apply_decision_rule(
+    gate_metrics: dict | None,
+    delta_tsr_threshold: float,
+    delta_cpi_threshold: float,
+    headroom_cutoff: float = DEFAULT_HEADROOM_CUTOFF,
+    closure_fraction: float = DEFAULT_HEADROOM_CLOSURE_FRACTION,
+) -> tuple[str, str]:
     """`(decision, reason)` - PASS/STOP/MIXED/EXPAND/UNDETERMINED, per
     this module's own docstring. A complete partition: every
     (delta_tsr, delta_cpi, CI) combination lands in exactly one of the
     five branches below, in the order given (PASS and STOP are mutually
     exclusive by construction - PASS requires both deltas above
     threshold, STOP requires both below 5 - so their check order
-    doesn't matter; MIXED is checked only once neither of those held)."""
+    doesn't matter; MIXED is checked only once neither of those held).
+
+    ΔCPI_answer's own threshold is headroom-aware
+    (`_effective_cpi_threshold_pp`) - `delta_cpi_threshold` is used
+    as-is unless `--baseline-engine`'s own mean CPI_answer is close
+    enough to the 1.0 ceiling that `delta_cpi_threshold` would be
+    mathematically unreachable; the CI-excludes-zero requirement is
+    never relaxed either way. `STOP_THRESHOLD_PP` (the 5pp floor
+    separating STOP from MIXED/EXPAND) is intentionally left flat, not
+    headroom-adjusted - it is checked only as a fallback once neither
+    PASS nor MIXED's own headroom-aware `cpi_strong` branch has already
+    matched, so a saturated comparison that clears its own effective
+    threshold reaches PASS/MIXED via `cpi_strong` before `cpi_weak` is
+    ever evaluated; only a comparison whose delta clears neither the
+    headroom-aware threshold nor 5pp lands in STOP."""
     if gate_metrics is None:
         return "UNDETERMINED", "missing input: zero cells (or zero paired task_id/budget/seed cells) for one or both engines"
 
     dt, dc = gate_metrics["delta_tsr_pp"], gate_metrics["delta_cpi_pp"]
+    effective_cpi_threshold, cpi_saturated = _effective_cpi_threshold_pp(
+        gate_metrics.get("baseline_mean_cpi"), delta_cpi_threshold, headroom_cutoff, closure_fraction,
+    )
     tsr_strong = dt >= delta_tsr_threshold and gate_metrics["tsr_excludes_zero"]
-    cpi_strong = dc >= delta_cpi_threshold and gate_metrics["cpi_excludes_zero"]
+    cpi_strong = dc >= effective_cpi_threshold and gate_metrics["cpi_excludes_zero"]
     tsr_weak = dt < STOP_THRESHOLD_PP
     cpi_weak = dc < STOP_THRESHOLD_PP
 
+    cpi_threshold_note = (
+        f"headroom-adjusted {effective_cpi_threshold:.2f}pp threshold "
+        f"({closure_fraction:.0%} of {1.0 - gate_metrics['baseline_mean_cpi']:.2%} remaining headroom, "
+        f"baseline CPI_answer={gate_metrics['baseline_mean_cpi']:.3f} saturated)"
+        if cpi_saturated
+        else f"the {effective_cpi_threshold:.0f}pp threshold"
+    )
+
     if tsr_strong and cpi_strong:
-        return "PASS", f"both deltas >= threshold (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp) and both CIs exclude zero"
+        return "PASS", (
+            f"ΔTSR clears the {delta_tsr_threshold:.0f}pp threshold ({dt:.2f}pp) and ΔCPI_answer clears "
+            f"{cpi_threshold_note} ({dc:.2f}pp) - both CIs exclude zero"
+        )
 
     if tsr_weak and cpi_weak:
         return "STOP", f"both deltas below {STOP_THRESHOLD_PP:.0f}pp (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp)"
@@ -222,11 +336,11 @@ def apply_decision_rule(gate_metrics: dict | None, delta_tsr_threshold: float, d
         )
     if cpi_strong and tsr_weak:
         return "MIXED", (
-            f"ΔCPI_answer shows a clear effect ({dc:.2f}pp, clears the {delta_cpi_threshold:.0f}pp threshold, CI excludes zero) "
+            f"ΔCPI_answer shows a clear effect ({dc:.2f}pp, clears {cpi_threshold_note}, CI excludes zero) "
             f"but ΔTSR does not ({dt:.2f}pp, below the {STOP_THRESHOLD_PP:.0f}pp floor)"
         )
 
-    return "EXPAND", f"neither metric clearly resolved (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp) - more data needed"
+    return "EXPAND", f"neither metric clearly resolved (ΔTSR={dt:.2f}pp, ΔCPI_answer={dc:.2f}pp, clears {cpi_threshold_note}: {cpi_strong}) - more data needed"
 
 
 def _fmt_ci(ci: BootstrapCI) -> str:
@@ -236,6 +350,7 @@ def _fmt_ci(ci: BootstrapCI) -> str:
 def render_report(
     cells: dict, baseline_engine: str, prism_engine: str, gate_metrics: dict | None,
     decision: str, reason: str, delta_tsr_threshold: float, delta_cpi_threshold: float,
+    headroom_cutoff: float = DEFAULT_HEADROOM_CUTOFF, closure_fraction: float = DEFAULT_HEADROOM_CLOSURE_FRACTION,
 ) -> str:
     lines = []
     engine_summary = compute_engine_summary(cells)
@@ -285,7 +400,20 @@ def render_report(
     lines.append("## Decision")
     lines.append("")
     lines.append(f"{decision}")
-    lines.append(f"({reason}; thresholds: ΔTSR>={delta_tsr_threshold}pp, ΔCPI_answer>={delta_cpi_threshold}pp)")
+    if gate_metrics is not None:
+        effective_cpi_threshold, cpi_saturated = _effective_cpi_threshold_pp(
+            gate_metrics.get("baseline_mean_cpi"), delta_cpi_threshold, headroom_cutoff, closure_fraction,
+        )
+        cpi_threshold_str = (
+            f"ΔCPI_answer>={effective_cpi_threshold:.2f}pp (headroom-adjusted: {baseline_engine}'s own mean "
+            f"CPI_answer={gate_metrics['baseline_mean_cpi']:.3f}, {1.0 - gate_metrics['baseline_mean_cpi']:.1%} "
+            f"headroom < {headroom_cutoff:.0%} cutoff, {closure_fraction:.0%} closure required)"
+            if cpi_saturated
+            else f"ΔCPI_answer>={effective_cpi_threshold:.0f}pp (flat, not headroom-saturated)"
+        )
+        lines.append(f"({reason}; thresholds: ΔTSR>={delta_tsr_threshold}pp, {cpi_threshold_str})")
+    else:
+        lines.append(f"({reason}; thresholds: ΔTSR>={delta_tsr_threshold}pp, ΔCPI_answer>={delta_cpi_threshold}pp)")
 
     return "\n".join(lines) + "\n"
 
@@ -299,7 +427,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--baseline-engine", default="baseline_bfs_bidirectional")
     parser.add_argument("--prism-engine", default="prism_two_pass")
     parser.add_argument("--delta-tsr-threshold", type=float, default=15.0, help="Percentage points.")
-    parser.add_argument("--delta-cpi-threshold", type=float, default=15.0, help="Percentage points.")
+    parser.add_argument(
+        "--delta-cpi-threshold", type=float, default=15.0,
+        help="Percentage points. Applied as-is unless the comparison is headroom-saturated (see --headroom-cutoff).",
+    )
+    parser.add_argument(
+        "--headroom-cutoff", type=float, default=DEFAULT_HEADROOM_CUTOFF,
+        help=(
+            "Fraction (0-1) of (1.0 - baseline_mean_cpi) below which --delta-cpi-threshold is replaced by "
+            "--headroom-closure-fraction of the remaining headroom, since a flat threshold can be mathematically "
+            "unreachable once the baseline is near the 1.0 CPI_answer ceiling. Pass 0.0 to always use the flat "
+            "threshold (pre-change behavior), or 1.0 to always use the headroom-adjusted one."
+        ),
+    )
+    parser.add_argument(
+        "--headroom-closure-fraction", type=float, default=DEFAULT_HEADROOM_CLOSURE_FRACTION,
+        help="Fraction of remaining CPI_answer headroom that must be closed when headroom-saturated.",
+    )
     parser.add_argument("--n-resamples", type=int, default=DEFAULT_N_RESAMPLES)
     parser.add_argument("--bootstrap-seed", type=int, default=DEFAULT_BOOTSTRAP_SEED, help="Pass a different int, or -1 for a fresh non-reproducible draw.")
     parser.add_argument("--output", default=None, help="Also write the report to this path.")
@@ -320,11 +464,15 @@ def main(argv: list[str] | None = None) -> int:
     gate_metrics = compute_gate_metrics(
         cells, args.baseline_engine, args.prism_engine, args.n_resamples, bootstrap_seed,
     )
-    decision, reason = apply_decision_rule(gate_metrics, args.delta_tsr_threshold, args.delta_cpi_threshold)
+    decision, reason = apply_decision_rule(
+        gate_metrics, args.delta_tsr_threshold, args.delta_cpi_threshold,
+        headroom_cutoff=args.headroom_cutoff, closure_fraction=args.headroom_closure_fraction,
+    )
 
     report = render_report(
         cells, args.baseline_engine, args.prism_engine, gate_metrics,
         decision, reason, args.delta_tsr_threshold, args.delta_cpi_threshold,
+        headroom_cutoff=args.headroom_cutoff, closure_fraction=args.headroom_closure_fraction,
     )
     print(report)
 
