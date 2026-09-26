@@ -1,0 +1,103 @@
+# T02 "FastAPI Debug" - Task 4: route registration (cross-file).
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout - every symbol
+# real and indexed:
+#
+#   fastapi.routing.APIRoute.__init__                       lines 430-570
+#   fastapi.dependencies.utils.get_typed_return_annotation  lines 254-262
+#   fastapi.dependencies.utils.get_dependant                lines 265-314
+#   fastapi.dependencies.utils.get_flat_dependant            lines 177-209
+#   fastapi.dependencies.utils.get_body_field                lines 951-1001
+#
+# The genuinely cross-file chain among these 5 tasks: seed lives in
+# fastapi/routing.py, every pipeline stage after it lives in
+# fastapi/dependencies/utils.py. Transitive reachability verified via
+# networkx.has_path for each stage independently (this is NOT the same
+# closure-ambiguity case investigated and rejected earlier in this
+# session - fastapi.routing.app, a nested closure with a real name
+# collision between its HTTP and WebSocket variants; APIRoute.__init__
+# is a real, uniquely-qualified top-level method with no such
+# ambiguity).
+#
+# required_context/boundary_symbols, boundary verified as a real direct
+# one-hop CALLS edge from APIRoute.__init__:
+#   fastapi.utils.create_model_field                        lines 63-106
+#   fastapi.dependencies.models.Dependant                    lines 14-37
+#   fastapi.utils.create_cloned_field                        lines 109-161
+task_id: fastapi_t02_004_route_registration_pipeline
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.routing.APIRoute.__init__
+task_type: debug
+prompt: 'You are investigating what happens when FastAPI registers a route in fastapi/routing.py. Starting
+  from `APIRoute.__init__`, trace the causal pipeline that turns a decorated endpoint function into a
+  fully-configured route: how its response type is introspected, how its full dependency tree is built
+  and flattened, and how its request-body field is constructed.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear.
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.routing.APIRoute.__init__
+  - fastapi.dependencies.utils.get_typed_return_annotation
+  - fastapi.dependencies.utils.get_dependant
+  - fastapi.dependencies.utils.get_flat_dependant
+  - fastapi.dependencies.utils.get_body_field
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  - fastapi.utils.create_model_field
+  boundary_symbols:
+  - fastapi.utils.create_cloned_field
+  expected_solution: APIRoute.__init__ first calls get_typed_return_annotation() to resolve the endpoint's
+    real response type, then get_dependant() to build the endpoint's full Dependant tree (recursing through
+    any Depends()), then get_flat_dependant() to flatten that tree into one combined parameter list, and
+    finally get_body_field() to construct the single ModelField representing the request body, if any.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.routing.APIRoute.__init__
+  - fastapi.dependencies.utils.get_dependant
+  - fastapi.dependencies.utils.get_flat_dependant
+  - fastapi.dependencies.utils.get_body_field
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  boundary_symbols:
+  - fastapi.utils.create_cloned_field
+  expected_solution: APIRoute.__init__ builds the route's dependant tree via get_dependant(), flattens
+    it via get_flat_dependant(), then builds the body field via get_body_field(). (Missed the earlier
+    get_typed_return_annotation() call used for response-model inference, a real, separate stage before
+    dependant construction begins.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.routing.APIRoute.__init__
+  - fastapi.dependencies.utils.get_typed_return_annotation
+  - fastapi.dependencies.utils.get_dependant
+  - fastapi.dependencies.utils.get_flat_dependant
+  - fastapi.dependencies.utils.get_body_field
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  - fastapi.utils.create_model_field
+  boundary_symbols:
+  - fastapi.utils.create_cloned_field
+  expected_solution: APIRoute.__init__ first calls get_typed_return_annotation() to resolve the endpoint's
+    real response type, then get_dependant() to build the endpoint's full Dependant tree (recursing through
+    any Depends()), then get_flat_dependant() to flatten that tree into one combined parameter list, and
+    finally get_body_field() to construct the single ModelField representing the request body, if any.

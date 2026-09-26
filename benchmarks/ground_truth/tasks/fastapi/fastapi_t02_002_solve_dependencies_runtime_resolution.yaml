@@ -1,0 +1,113 @@
+# T02 "FastAPI Debug" - Task 2: per-request dependency resolution.
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout - every symbol
+# real and indexed:
+#
+#   fastapi.dependencies.utils.solve_dependencies          lines 572-695
+#   fastapi.dependencies.utils.request_params_to_args      lines 740-816
+#   fastapi.dependencies.utils.request_body_to_args        lines 905-948
+#   fastapi.dependencies.utils.solve_generator             lines 553-560
+#
+# Transitive reachability verified via networkx.has_path over the
+# allowed-relations subgraph, seed to every stage.
+#
+# Deliberately excluded (TASK_AUTHORING.md item 6, disclosed): the
+# sync-callable dependency branch (`run_in_threadpool`) crosses into
+# starlette.concurrency - out of scope for a task meant to stay inside
+# FastAPI's own repo, so the pipeline stops at solve_generator (the
+# generator-dependency branch), which stays entirely in-repo.
+#
+# Scope note: single-file (dependencies/utils.py), same reasoning as
+# Task 1 - the real sub-dependency recursion and generator-cleanup
+# branch are the point.
+#
+# required_context/boundary_symbols, boundary_symbols verified as real
+# direct one-hop CALLS edges from solve_dependencies:
+#   fastapi.dependencies.utils.SolvedDependency            lines 563-569
+#   fastapi.dependencies.models.Dependant                  lines 14-37
+#   fastapi.dependencies.utils.is_coroutine_callable       lines 530-536
+#   fastapi.dependencies.utils.is_gen_callable             lines 546-550
+task_id: fastapi_t02_002_solve_dependencies_runtime_resolution
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.dependencies.utils.solve_dependencies
+task_type: debug
+prompt: 'You are investigating FastAPI''s per-request dependency resolution in fastapi/dependencies/utils.py.
+  Starting from `solve_dependencies`, trace the causal pipeline that runs once per real HTTP request to
+  turn an already-built Dependant tree into real argument values: how path/query/header/cookie parameters
+  are extracted, how the request body is parsed, and how a generator-based (`yield`) dependency is specially
+  handled for cleanup.
+
+
+  Assume the dependant has at least one generator-based sub-dependency, so the generator-handling stage
+  is part of the traced pipeline rather than skipped.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear.
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.dependencies.utils.solve_dependencies
+  - fastapi.dependencies.utils.request_params_to_args
+  - fastapi.dependencies.utils.request_body_to_args
+  - fastapi.dependencies.utils.solve_generator
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  - fastapi.dependencies.utils.SolvedDependency
+  boundary_symbols:
+  - fastapi.dependencies.utils.is_coroutine_callable
+  - fastapi.dependencies.utils.is_gen_callable
+  expected_solution: solve_dependencies() iterates dependant.dependencies, recursively solving each sub-dependency
+    first, then for a generator-based callable calls solve_generator() (rather than awaiting it directly)
+    so its cleanup runs via the async exit stack. After sub-dependencies are solved, it calls request_params_to_args()
+    for path/query/header/cookie params and request_body_to_args() when the dependant has body params,
+    merging all resolved values.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.dependencies.utils.solve_dependencies
+  - fastapi.dependencies.utils.request_params_to_args
+  - fastapi.dependencies.utils.request_body_to_args
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  - fastapi.dependencies.utils.SolvedDependency
+  boundary_symbols:
+  - fastapi.dependencies.utils.is_coroutine_callable
+  expected_solution: solve_dependencies() resolves each sub-dependency recursively, then calls request_params_to_args()
+    and request_body_to_args() to fill in the remaining values. (Missed that a generator-based dependency
+    is a separately-traceable stage via solve_generator(), reached via the is_gen_callable()/is_async_gen_callable()
+    branch rather than a plain await.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.dependencies.utils.solve_dependencies
+  - fastapi.dependencies.utils.request_params_to_args
+  - fastapi.dependencies.utils.request_body_to_args
+  - fastapi.dependencies.utils.solve_generator
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  - fastapi.dependencies.utils.SolvedDependency
+  boundary_symbols:
+  - fastapi.dependencies.utils.is_coroutine_callable
+  - fastapi.dependencies.utils.is_gen_callable
+  expected_solution: solve_dependencies() iterates dependant.dependencies, recursively solving each sub-dependency
+    first, then for a generator-based callable calls solve_generator() (rather than awaiting it directly)
+    so its cleanup runs via the async exit stack. After sub-dependencies are solved, it calls request_params_to_args()
+    for path/query/header/cookie params and request_body_to_args() when the dependant has body params,
+    merging all resolved values.

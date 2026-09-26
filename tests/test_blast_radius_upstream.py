@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from prism.cli import build_pipeline
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
-from prism.packer.submodular_knapsack import pack_symbol_context
+from prism.packer.candidate_index import build_candidate_manifest
+from prism.packer.submodular_knapsack import UPSTREAM_FRONTIER_CAP, pack_symbol_context
 
 
 def _blast_radius_repo(tmp_path):
@@ -136,3 +137,85 @@ def test_no_upstream_callers_when_seed_is_never_called(tmp_path):
     builder, _ = build_pipeline(str(repo))
     callers = compute_upstream_callers(builder, "tax.calculate_tax")
     assert callers == {}
+
+
+# --------------------------------------------------------------------- #
+# Phase B patch: Turn-1 manifest caller-row contract flags and the
+# UPSTREAM_FRONTIER_CAP admission that bypasses the module-prefix scope
+# filter (pilot-4 finding: `django.urls.base.reverse` had 709 real
+# resolved upstream callers, of which the old module-prefix-only rule
+# admitted exactly 1 into the manifest - see candidate_index.py's own
+# updated docstring).
+# --------------------------------------------------------------------- #
+def test_manifest_caller_row_carries_contract_flags(tmp_path):
+    """`invoice_generator` both binds `calculate_tax`'s return value and
+    supplies a non-trivial argument (the existing `compute_upstream_
+    callers` tests above already establish both booleans for this exact
+    fixture) - the manifest's own `role == "caller"` row must carry both
+    as explicit `binds_return=`/`nontrivial_args=` fields, not just
+    compute them internally for ranking."""
+    repo = _blast_radius_repo(tmp_path)
+    builder, _ = build_pipeline(str(repo))
+
+    manifest_text, _candidate_universe = build_candidate_manifest(builder, "tax.calculate_tax")
+
+    caller_lines = [
+        line for line in manifest_text.splitlines() if line.startswith("invoice.invoice_generator|")
+    ]
+    assert len(caller_lines) == 1, f"expected exactly one manifest row for the upstream caller, got {caller_lines}"
+    line = caller_lines[0]
+    parts = line.split("|")
+    assert parts[1] == "caller"
+    assert "binds_return=true" in parts
+    assert "nontrivial_args=true" in parts
+
+
+def test_manifest_upstream_callers_capped_at_frontier_and_bypass_module_scope(tmp_path):
+    """Five real callers of the seed, each in its own top-level module
+    (none sharing the seed's own `tax` module prefix - the exact
+    cross-package shape the pilot-4 finding diagnosed) and each with a
+    distinct, deliberately ordered contract weight. Only the strongest
+    `UPSTREAM_FRONTIER_CAP` must be admitted into the manifest, and
+    admission must not depend on module-prefix membership at all -
+    every one of these callers would have been dropped by the old
+    module-prefix-only scope rule."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "tax.py").write_text("def calculate_tax(amount):\n    return amount * 0.2\n")
+    # Strongest: binds return + non-trivial arg.
+    (repo / "strongest.py").write_text(
+        "from tax import calculate_tax\n\n\ndef strongest(amount):\n    total = calculate_tax(amount)\n    return total\n"
+    )
+    # Second: binds return, trivial (literal) arg.
+    (repo / "second.py").write_text(
+        "from tax import calculate_tax\n\n\ndef second():\n    total = calculate_tax(100)\n    return total\n"
+    )
+    # Third: discards return, non-trivial arg.
+    (repo / "third.py").write_text(
+        "from tax import calculate_tax\n\n\ndef third(amount):\n    calculate_tax(amount)\n"
+    )
+    # Fourth and fifth: discards return, trivial arg - the two weakest,
+    # tied with each other - must NOT make the cut once the first three
+    # already fill UPSTREAM_FRONTIER_CAP (=3).
+    (repo / "fourth.py").write_text(
+        "from tax import calculate_tax\n\n\ndef fourth():\n    calculate_tax(100)\n"
+    )
+    (repo / "fifth.py").write_text(
+        "from tax import calculate_tax\n\n\ndef fifth():\n    calculate_tax(100)\n"
+    )
+    builder, _ = build_pipeline(str(repo))
+
+    callers = compute_upstream_callers(builder, "tax.calculate_tax")
+    assert len(callers) == 5, f"test fixture assumption: all 5 callers must resolve, got {sorted(callers)}"
+
+    manifest_text, candidate_universe = build_candidate_manifest(builder, "tax.calculate_tax")
+    caller_qnames = {
+        line.split("|")[0] for line in manifest_text.splitlines() if len(line.split("|")) > 1 and line.split("|")[1] == "caller"
+    }
+    assert len(caller_qnames) == UPSTREAM_FRONTIER_CAP, f"expected exactly {UPSTREAM_FRONTIER_CAP} caller rows, got {caller_qnames}"
+
+    ranked_by_weight = sorted(callers.values(), key=lambda c: -c.weight)
+    expected_admitted = {c.symbol for c in ranked_by_weight[:UPSTREAM_FRONTIER_CAP]}
+    expected_excluded = {c.symbol for c in ranked_by_weight[UPSTREAM_FRONTIER_CAP:]}
+    assert caller_qnames == expected_admitted
+    assert not (caller_qnames & expected_excluded), "the weakest callers must not displace a stronger one"

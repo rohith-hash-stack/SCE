@@ -49,7 +49,7 @@ class GroundTruthAnnotation(BaseModel):
 
 class EvaluationTask(BaseModel):
     task_id: str
-    repo: Literal["django", "gin", "trpc", "express"]
+    repo: Literal["django", "gin", "trpc", "express", "fastapi"]
     pinned_commit: str
     seed_symbol: str
     task_type: Literal["chain", "blast", "redundancy", "architecture", "debug"]

@@ -1,0 +1,90 @@
+# T02 "FastAPI Debug" - fastapi_t02_008_add_api_websocket_route
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout (313723494be79d4b24ccaa60e4f6d1f96c150fed) -
+# every symbol below real and indexed, verified directly against prism.cli.
+# build_pipeline's own symbol table; every pipeline_symbols edge verified
+# transitively reachable via networkx.has_path over the TRAVERSABLE_RELATIONS-
+# filtered subgraph (CALLS/INSTANTIATES/EXTENDS/IMPLEMENTS/OVERRIDES/EMBEDS).
+#
+#   fastapi.routing.APIRouter.add_api_websocket_route                      lines 1026-1045
+#   fastapi.routing.APIWebSocketRoute                                      lines (class def, routing.py)
+#
+# CORRECTION (this header replaces the original single-symbol version): the original
+# authoring pass verified reachability to APIWebSocketRoute.__init__ specifically (not
+# reachable) and stopped there without checking reachability to the class itself. Re-checked
+# directly against the real pinned checkout: add_api_websocket_route -> APIWebSocketRoute IS a
+# real, direct INSTANTIATES edge (confirmed via networkx.has_path and by inspecting the raw
+# graph edge attributes: relation='INSTANTIATES'). The full 25-task sweep's own run data
+# confirmed this the hard way: every engine's oracle/two-pass/etc. cell that correctly named
+# APIWebSocketRoute alongside the seed scored 0.0 under the original single-symbol ground
+# truth, despite being factually correct. Broadened here to the real 2-symbol pipeline.
+task_id: fastapi_t02_008_add_api_websocket_route
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.routing.APIRouter.add_api_websocket_route
+task_type: debug
+prompt: 'You are investigating fastapi/routing.py''s WebSocket route registration. Starting from `add_api_websocket_route`,
+  trace the causal pipeline: it merges the router''s own dependencies with any route-specific ones, then
+  constructs the concrete route object - identify that real construction step by the class it instantiates
+  (a verified, direct INSTANTIATES edge in the indexed graph - the route object''s own `__init__` is not
+  further reachable from here, so the pipeline correctly stops at the class itself).
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["fastapi.routing.APIRouter.add_api_websocket_route", "fastapi.routing.APIWebSocketRoute"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.routing.APIRouter.add_api_websocket_route
+  - fastapi.routing.APIWebSocketRoute
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.routing.APIRouter.add_api_route
+  boundary_symbols: []
+  expected_solution: add_api_websocket_route() merges the router's own dependencies with any route-specific
+    ones, then constructs an APIWebSocketRoute - a real, verified, direct INSTANTIATES edge in the indexed
+    graph. The route object's own __init__ is not further reachable from this call site (no edge resolves
+    to it), so the pipeline correctly stops at the class itself rather than continuing into its constructor.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.routing.APIRouter.add_api_websocket_route
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.routing.APIRouter.add_api_route
+  boundary_symbols: []
+  expected_solution: add_api_websocket_route() merges the router's own dependencies with any route-specific
+    ones. (Missed that it also constructs an APIWebSocketRoute - a real, separately-traceable INSTANTIATES
+    edge, not just an unlabeled detail of "constructing the route object".)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.routing.APIRouter.add_api_websocket_route
+  - fastapi.routing.APIWebSocketRoute
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.routing.APIRouter.add_api_route
+  boundary_symbols: []
+  expected_solution: add_api_websocket_route() merges the router's own dependencies with any route-specific
+    ones, then constructs an APIWebSocketRoute - a real, verified, direct INSTANTIATES edge in the indexed
+    graph. The route object's own __init__ is not further reachable from this call site (no edge resolves
+    to it), so the pipeline correctly stops at the class itself rather than continuing into its constructor.

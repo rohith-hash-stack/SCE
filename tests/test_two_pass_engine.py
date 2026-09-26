@@ -94,6 +94,10 @@ class TestCandidateManifest:
             assert not missing, f"{task_id}: pipeline symbols missing from candidate universe: {missing}"
 
     def test_manifest_line_shape(self, engine, django_tasks):
+        """Phase B patch: a `role == "caller"` row carries two additional
+        pipe-delimited contract fields (`binds_return=`/
+        `nontrivial_args=`) beyond the base 5 - every other role stays
+        at exactly 5 fields, unchanged."""
         task = django_tasks["django_t02_009_queryset_filter_clone"]
         manifest_text, candidate_universe = engine.build_candidate_manifest(task.seed_symbol)
         assert manifest_text.startswith("<candidate_index>\n")
@@ -103,10 +107,16 @@ class TestCandidateManifest:
         seen = set()
         for line in lines:
             parts = line.split("|")
-            assert len(parts) == 5, f"expected 5 pipe-delimited fields (qname|role|kind|signature|calls), got {line!r}"
-            qname, role, _kind, _signature, calls_field = parts
-            assert qname in candidate_universe
+            qname, role, _kind, _signature, calls_field = parts[:5]
             assert role in ("seed", "callee", "caller", "transitive")
+            if role == "caller":
+                assert len(parts) == 7, f"expected 7 pipe-delimited fields for a caller row, got {line!r}"
+                binds_return_field, nontrivial_args_field = parts[5], parts[6]
+                assert binds_return_field in ("binds_return=true", "binds_return=false")
+                assert nontrivial_args_field in ("nontrivial_args=true", "nontrivial_args=false")
+            else:
+                assert len(parts) == 5, f"expected 5 pipe-delimited fields (qname|role|kind|signature|calls), got {line!r}"
+            assert qname in candidate_universe
             assert calls_field.startswith("calls=[") and calls_field.endswith("]")
             seen.add(qname)
         assert seen == candidate_universe
@@ -211,3 +221,38 @@ class TestTwoPassEngine:
         assert not requested_and_resolvable, "no real ground-truth pipeline symbol should ever be reported as hallucinated"
         assert diagnostics["candidate_count"] > 0
         assert diagnostics["requested_count"] == len(task.adjudicated.pipeline_symbols)
+
+    def test_retrieve_requested_auto_includes_seed_direct_callees_even_with_empty_request(self, engine, django_tasks):
+        """Pilot-4 autopsy (`django_t02_001_request_middleware_chain`):
+        `check_response` was directly listed in the seed's own
+        `calls=[...]` manifest field - visible, not a manifest gap - yet
+        Turn 1 didn't request it and Turn 2 never hydrated it. The fix:
+        the seed's own direct 1-hop callees are unioned into the
+        hydrated package regardless of what was actually requested,
+        proven here with a deliberately empty request list."""
+        task = django_tasks["django_t02_001_request_middleware_chain"]
+        check_response = "django.core.handlers.base.BaseHandler.check_response"
+        _manifest_text, candidate_universe = engine.build_candidate_manifest(task.seed_symbol)
+        assert check_response in candidate_universe, "test fixture assumption: check_response resolves in the manifest"
+
+        pkg, skipped = engine.retrieve_requested(task.seed_symbol, 4000, [], candidate_universe)
+        selected = {n.id for n in pkg.nodes}
+        assert check_response in selected
+        assert skipped == [], "a direct callee that resolves cleanly is never a hallucination"
+
+    def test_retrieve_two_pass_diagnostics_exclude_auto_included_callees(self, engine, django_tasks):
+        """`requested_count` (and the caller's own `requested_symbols`
+        binding) must still reflect what Turn 1 actually asked for -
+        the direct-callee union happens inside `retrieve_requested`'s
+        own hydration call, never leaking back into the harness's own
+        bookkeeping of what was requested."""
+        task = django_tasks["django_t02_001_request_middleware_chain"]
+        check_response = "django.core.handlers.base.BaseHandler.check_response"
+
+        def empty_request(manifest_text: str, task_prompt: str) -> list[str]:
+            return []
+
+        pkg, diagnostics = engine.retrieve_two_pass(task.seed_symbol, 4000, empty_request, task_prompt=task.prompt)
+        selected = {n.id for n in pkg.nodes}
+        assert check_response in selected, "auto-included despite an empty Turn-1 request"
+        assert diagnostics["requested_count"] == 0

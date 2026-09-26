@@ -1,0 +1,72 @@
+# T02 "FastAPI Debug" - fastapi_t02_010_get_openapi_path_operation_metadata
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout (313723494be79d4b24ccaa60e4f6d1f96c150fed) -
+# every symbol below real and indexed, verified directly against prism.cli.
+# build_pipeline's own symbol table; every pipeline_symbols edge verified
+# transitively reachable via networkx.has_path over the TRAVERSABLE_RELATIONS-
+# filtered subgraph (CALLS/INSTANTIATES/EXTENDS/IMPLEMENTS/OVERRIDES/EMBEDS).
+#
+#   fastapi.openapi.utils.get_openapi_path                                 lines 254-443
+#   fastapi.openapi.utils.get_openapi_operation_metadata                   lines 228-251
+#   fastapi.openapi.utils._get_openapi_operation_parameters                lines 95-167
+#   fastapi.openapi.utils.get_openapi_operation_request_body               lines 170-204
+#   fastapi.openapi.utils.generate_operation_summary                       lines 222-225
+#
+# One real, plausible annotator_b omission (verified: dropping 'fastapi.openapi.utils.generate_operation_summary' still
+# leaves a structurally coherent, just incomplete, pipeline).
+task_id: fastapi_t02_010_get_openapi_path_operation_metadata
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.openapi.utils.get_openapi_path
+task_type: debug
+prompt: You are investigating how FastAPI builds one route's own OpenAPI operation entry in fastapi/openapi/utils.py.
+  Starting from `get_openapi_path`, trace the real causal order it builds an operation's metadata, parameters,
+  and request body in.
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.openapi.utils.get_openapi_path
+  - fastapi.openapi.utils.get_openapi_operation_metadata
+  - fastapi.openapi.utils._get_openapi_operation_parameters
+  - fastapi.openapi.utils.get_openapi_operation_request_body
+  - fastapi.openapi.utils.generate_operation_summary
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: get_openapi_path() first calls get_openapi_operation_metadata() to build the operation's
+    tags/summary/description/operationId block (using generate_operation_summary() for the default summary
+    text when none is set), then _get_openapi_operation_parameters() for the real path/query/header/cookie
+    parameter schemas, then get_openapi_operation_request_body() for the request body schema.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.openapi.utils.get_openapi_path
+  - fastapi.openapi.utils.get_openapi_operation_metadata
+  - fastapi.openapi.utils._get_openapi_operation_parameters
+  - fastapi.openapi.utils.get_openapi_operation_request_body
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: Traced the metadata/parameters/request-body sequence correctly but missed that generate_operation_summary()
+    is a separate, real helper the metadata stage calls, not inlined logic.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.openapi.utils.get_openapi_path
+  - fastapi.openapi.utils.get_openapi_operation_metadata
+  - fastapi.openapi.utils._get_openapi_operation_parameters
+  - fastapi.openapi.utils.get_openapi_operation_request_body
+  - fastapi.openapi.utils.generate_operation_summary
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: get_openapi_path() first calls get_openapi_operation_metadata() to build the operation's
+    tags/summary/description/operationId block (using generate_operation_summary() for the default summary
+    text when none is set), then _get_openapi_operation_parameters() for the real path/query/header/cookie
+    parameter schemas, then get_openapi_operation_request_body() for the request body schema.

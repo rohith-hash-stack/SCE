@@ -28,7 +28,7 @@ from typing import Callable
 from prism.cli import build_pipeline
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
-from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS, build_candidate_manifest
+from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS, _outgoing_call_names, build_candidate_manifest
 from prism.packer.submodular_knapsack import DEFAULT_UPSTREAM_MAX_HOPS
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.surface.build import build_context_package, build_context_package_requested
@@ -184,15 +184,38 @@ class PrismEngine:
         build._PROTECTED_DOWNGRADE_ROLES`), the fix for the real
         `django_t02_009` @ budget=2000 failure mode the spike diagnosed.
         Goes through the same pre/post hooks `retrieve()` does, so a
-        registered hook sees a two-pass query exactly like any other."""
+        registered hook sees a two-pass query exactly like any other.
+
+        Direct-callee auto-inclusion (pilot-4 autopsy: `t02_001`'s
+        `check_response`, `t02_012`'s `set_script_prefix` - both present
+        directly in the seed's own `calls=[...]` line, both visible in
+        the manifest, neither requested by Turn 1): the seed's own
+        direct 1-hop callees (`_outgoing_call_names`, the exact same
+        list the manifest's own seed row already shows) that resolve
+        against `candidate_universe` are unioned into the hydrated
+        request regardless of what Turn 1 asked for - immediate
+        control-flow dependencies of the seed are never a Turn-1
+        selection judgment call the way a 2+-hop transitive symbol
+        legitimately is. `requested_symbols` itself is never mutated
+        (the caller's own list, and `retrieve_two_pass`'s own
+        `requested_count` diagnostic, must still reflect what Turn 1
+        actually requested) - the union is local to this call's own
+        pack.
+        """
         query_ctx = QueryContext(
             seed_id=seed_id, repo_root=self._repo_root, budget_tokens=budget_tokens, task_type=task_type,
         )
         for hook in self._pre_traversal_hooks:
             hook(copy.deepcopy(query_ctx))
 
+        direct_callees = set(_outgoing_call_names(self._builder, seed_id)) & candidate_universe
+        hydration_symbols = list(requested_symbols)
+        seen = set(hydration_symbols)
+        for callee in sorted(direct_callees - seen):
+            hydration_symbols.append(callee)
+
         pkg, skipped = build_context_package_requested(
-            self._builder, seed_id, self._repo_root, budget_tokens, requested_symbols, candidate_universe,
+            self._builder, seed_id, self._repo_root, budget_tokens, hydration_symbols, candidate_universe,
             contracts=self._contracts, task_type=task_type,
         )
 

@@ -1,0 +1,114 @@
+# T02 "FastAPI Debug" - fastapi_t02_018_application_setup_docs_registration
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout (313723494be79d4b24ccaa60e4f6d1f96c150fed) -
+# every symbol below real and indexed, verified directly against prism.cli.
+# build_pipeline's own symbol table; every pipeline_symbols edge verified
+# transitively reachable via networkx.has_path over the TRAVERSABLE_RELATIONS-
+# filtered subgraph (CALLS/INSTANTIATES/EXTENDS/IMPLEMENTS/OVERRIDES/EMBEDS).
+#
+#   fastapi.applications.FastAPI.setup                                     lines 998-1049
+#
+# KNOWN CONSTRUCT-VALIDITY ARTIFACT: "Cross-Boundary Unindexed Callee" (closed out after
+# 3 authoring/rerun rounds - qwen2.5-coder:7b-instruct-q8_0, seed 42, all 4 engines, 36 total
+# LLM calls across rounds 2-3 alone). This task's seed makes its only real continuation
+# (self.add_route()) into a method Starlette defines and FastAPI inherits without overriding -
+# confirmed absent from Prism's own symbol table (`builder.symbol_table.get(...)` returns None;
+# grep confirms no `def add_route` anywhere in this repo). Because it is genuinely unindexed, it
+# can never legitimately enter `pipeline_symbols` (would violate every other task's own
+# real-and-indexed invariant), yet the model's retrieved context necessarily contains the literal
+# source line `self.add_route(...)` inside FastAPI.setup's own body - so a model that correctly,
+# thoroughly reads its own context reliably names it anyway. Two independent fix attempts were
+# tried and both failed to change the outcome:
+#   Round 2 (commit 6886b9f): prompt named "add_route" explicitly as excluded -> 0/12 (WORSE
+#     than round 1's accidental 8/12 - a real negative-constraint-priming regression, confirmed).
+#   Round 3 (commit 6154742): prompt rephrased to state the boundary purely structurally, never
+#     naming "add_route" -> still 0/12. This ruled out priming as the cause for THIS task
+#     specifically: round-3 raw responses (fresh LLM calls, confirmed non-identical text run to
+#     run) still name add_route via reasoning grounded in the real source, not an echoed prompt
+#     token. Contrast with fastapi_t02_019/fastapi_t02_020 (external-library siblings), where the
+#     identical round-3 treatment took them from 2/12 and 5/12 to a clean 12/12 - proving the
+#     round-3 fix pattern works when the excluded symbol is NOT independently visible in the
+#     model's own source context, and that this task's floor is a genuine construct-validity
+#     limit of the exact-match scorer given real source-code exposure, not a fixable prompt defect.
+# Retained in the 25-task suite per an explicit decision to report it both ways: in the full
+# n=75/engine suite (where it contributes a hard TSR=0.0 floor identically across all 4 engines,
+# a comparison-neutral effect since it does not favor or penalize prism_two_pass specifically -
+# every engine, oracle included, scores exactly 0/12) and excluded from the n=72/engine
+# "sanitized" sensitivity suite - see reports/fastapi_seed42_closure_debrief.md for the full
+# dual-reporting comparison and gate results under both framings.
+task_id: fastapi_t02_018_application_setup_docs_registration
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.applications.FastAPI.setup
+task_type: debug
+prompt: 'You are investigating how FastAPI wires up its own documentation routes (/openapi.json, /docs,
+  /redoc) in fastapi/applications.py. Starting from `FastAPI.setup`, identify what it does at the top
+  level: it conditionally registers each documentation route by delegating to a single routing method
+  it inherits from its base class rather than defining itself.
+
+
+  First give a short (2-4 sentence) explanation of what it does, in prose.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in the real causal order. Include in that array only symbols whose full definition lives
+  within this repository''s own source. A call that resolves to a method defined on a base class outside
+  this repository must be described in your prose explanation only - do not add it to the JSON array,
+  e.g.:
+
+
+  ```json
+
+  ["fastapi.applications.FastAPI.setup"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.applications.FastAPI.setup
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: setup() conditionally registers the /openapi.json, /docs (Swagger UI), the Swagger
+    UI OAuth2 redirect, and /redoc routes, each via self.add_route() - a method FastAPI inherits from
+    Starlette's Router rather than defining itself, so it is not part of this repository's own indexed
+    source and does not appear in the symbols array, even though it is the real mechanism setup() uses.
+    The actual HTML-generation logic (get_swagger_ui_html(), get_redoc_html()) runs inside nested request-handler
+    closures defined within setup() itself, not reachable from setup() as a static call target - out of
+    scope for this task, disclosed rather than assumed.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.applications.FastAPI.setup
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: setup() conditionally registers the /openapi.json, /docs (Swagger UI), the Swagger
+    UI OAuth2 redirect, and /redoc routes, each via self.add_route() - a method FastAPI inherits from
+    Starlette's Router rather than defining itself, so it is not part of this repository's own indexed
+    source and does not appear in the symbols array, even though it is the real mechanism setup() uses.
+    The actual HTML-generation logic (get_swagger_ui_html(), get_redoc_html()) runs inside nested request-handler
+    closures defined within setup() itself, not reachable from setup() as a static call target - out of
+    scope for this task, disclosed rather than assumed.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.applications.FastAPI.setup
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: setup() conditionally registers the /openapi.json, /docs (Swagger UI), the Swagger
+    UI OAuth2 redirect, and /redoc routes, each via self.add_route() - a method FastAPI inherits from
+    Starlette's Router rather than defining itself, so it is not part of this repository's own indexed
+    source and does not appear in the symbols array, even though it is the real mechanism setup() uses.
+    The actual HTML-generation logic (get_swagger_ui_html(), get_redoc_html()) runs inside nested request-handler
+    closures defined within setup() itself, not reachable from setup() as a static call target - out of
+    scope for this task, disclosed rather than assumed.

@@ -1,0 +1,94 @@
+# T02 "FastAPI Debug" - Task 3: route parameter parsing/coercion.
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout - every symbol
+# real and indexed:
+#
+#   fastapi.dependencies.utils.request_params_to_args           lines 740-816
+#   fastapi.dependencies.utils._get_multidict_value              lines 716-737
+#   fastapi.dependencies.utils._validate_value_with_model_field  lines 698-713
+#
+# Transitive reachability verified via networkx.has_path. Scoped to the
+# general (not single-embedded-Pydantic-model) branch of
+# request_params_to_args - the prompt states this assumption explicitly
+# so the traced pipeline is unconditionally well-defined.
+#
+# Scope note (disclosed): single-file (dependencies/utils.py) - this is
+# the tightest-scoped of the 5 tasks, deliberately, since "parameter
+# coercion" is itself a narrow, single-function-family mechanic.
+#
+# required_context/boundary_symbols live in fastapi/_compat.py (the
+# Pydantic-version compatibility shim), a real cross-file relationship
+# even though the main pipeline itself doesn't cross files - boundary
+# verified as a real direct one-hop CALLS edge from
+# _validate_value_with_model_field:
+#   fastapi._compat.get_cached_model_fields                lines 662-664
+#   fastapi._compat.get_missing_field_error                lines 517-520
+#   fastapi._compat._regenerate_error_with_loc              lines 534-542
+task_id: fastapi_t02_003_request_params_coercion
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.dependencies.utils.request_params_to_args
+task_type: debug
+prompt: 'You are investigating how FastAPI extracts and validates a single real request parameter (path/query/header/cookie)
+  in fastapi/dependencies/utils.py. Starting from `request_params_to_args`, trace the causal pipeline
+  for the general (not single-embedded-Pydantic-model) case: how the raw value is pulled out of the request''s
+  multidict, and how it is then validated/coerced through the field''s own Pydantic validation.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear.
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.dependencies.utils.request_params_to_args
+  - fastapi.dependencies.utils._get_multidict_value
+  - fastapi.dependencies.utils._validate_value_with_model_field
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi._compat.get_cached_model_fields
+  - fastapi._compat.get_missing_field_error
+  boundary_symbols:
+  - fastapi._compat._regenerate_error_with_loc
+  expected_solution: request_params_to_args() loops over each field, calling _get_multidict_value() to
+    pull the raw value out of the received params (defaulting per-field when absent), then _validate_value_with_model_field()
+    to run it through the field's real Pydantic validation and collect any errors.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.dependencies.utils.request_params_to_args
+  - fastapi.dependencies.utils._validate_value_with_model_field
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi._compat.get_cached_model_fields
+  boundary_symbols:
+  - fastapi._compat._regenerate_error_with_loc
+  expected_solution: request_params_to_args() extracts each field's raw value from the request params
+    and validates it via _validate_value_with_model_field(). (Missed that value extraction is itself a
+    separate, real, named function - _get_multidict_value - not inlined into the main loop.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.dependencies.utils.request_params_to_args
+  - fastapi.dependencies.utils._get_multidict_value
+  - fastapi.dependencies.utils._validate_value_with_model_field
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi._compat.get_cached_model_fields
+  - fastapi._compat.get_missing_field_error
+  boundary_symbols:
+  - fastapi._compat._regenerate_error_with_loc
+  expected_solution: request_params_to_args() loops over each field, calling _get_multidict_value() to
+    pull the raw value out of the received params (defaulting per-field when absent), then _validate_value_with_model_field()
+    to run it through the field's real Pydantic validation and collect any errors.

@@ -42,6 +42,7 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.packer.blast_radius import compute_upstream_callers
 from prism.packer.submodular_knapsack import (
     DEFAULT_UPSTREAM_MAX_HOPS,
+    UPSTREAM_FRONTIER_CAP,
     SeedNotFoundError,
     _classify_role,
     _module_prefix3,
@@ -165,10 +166,30 @@ def build_candidate_manifest(
 ) -> tuple[str, set[str]]:
     """`(manifest_text, candidate_universe)`: one compact
     `qualified_name|role|kind|signature|calls=[...]` line per real
-    (symbol-table-resolved) candidate reachable from `seed_id` within
-    `max_hops` (default `CANDIDATE_INDEX_MAX_HOPS=3.0`) and the upstream
-    blast radius (`compute_upstream_callers`), further reduced by
-    `_combined_hop_scope_filtered`'s scope rule.
+    (symbol-table-resolved) downstream candidate reachable from `seed_id`
+    within `max_hops` (default `CANDIDATE_INDEX_MAX_HOPS=3.0`), plus up
+    to `UPSTREAM_FRONTIER_CAP` upstream callers - a `role == "caller"`
+    line additionally carries two contract-protection flags:
+    `|binds_return=true/false|nontrivial_args=true/false` (`prism.packer.
+    blast_radius.UpstreamCaller.unpacks_return`/`.supplies_nontrivial_args`).
+
+    Upstream admission (pilot-4 finding): `compute_upstream_callers`
+    returns every direct caller, unranked and uncapped - on a hub seed
+    (e.g. `django.urls.base.reverse`, 709 real callers in the pilot-4
+    corpus) `_combined_hop_scope_filtered`'s module-prefix rule alone
+    left exactly 1 of 709 in the manifest, not because the other 708
+    were unimportant but because almost none of them share the seed's
+    own narrow module prefix - the same rule that correctly bounds
+    downstream candidate explosion accidentally hides the cross-package
+    consumers upstream blast-radius protection exists to surface. Here,
+    upstream candidates are instead ranked by `UpstreamCaller.weight`
+    (already boosts a return-unpacking/nontrivial-arg caller) and the
+    top `UPSTREAM_FRONTIER_CAP` are admitted unconditionally - the same
+    cap `submodular_knapsack.select_submodular_context` already uses for
+    its own upstream competitive frontier, reused rather than a second,
+    possibly-drifting constant - independent of module-prefix scope.
+    Downstream candidates keep the original `_combined_hop_scope_
+    filtered` rule unchanged.
 
     Budget-independent by construction, same as `pack_symbol_context`'s
     own `dist_w_map` - what a downstream budget affects is Turn 2's own
@@ -188,12 +209,15 @@ def build_candidate_manifest(
     dist_w_upstream_map = {symbol: caller.dist_w_upstream for symbol, caller in upstream_callers.items()}
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
 
-    candidates = (
-        {seed_id}
-        | {n for n in dist_w_map if dist_w_map[n] <= max_hops}
-        | {n for n in dist_w_upstream_map if dist_w_upstream_map[n] <= upstream_max_hops}
-    )
-    candidates = _combined_hop_scope_filtered(builder, seed_id, candidates, max_hops=int(max_hops))
+    downstream_candidates = {seed_id} | {n for n in dist_w_map if dist_w_map[n] <= max_hops}
+    downstream_candidates = _combined_hop_scope_filtered(builder, seed_id, downstream_candidates, max_hops=int(max_hops))
+
+    ranked_upstream = sorted(upstream_callers.values(), key=lambda c: -c.weight)
+    upstream_candidates = {
+        c.symbol for c in ranked_upstream[:UPSTREAM_FRONTIER_CAP] if dist_w_upstream_map[c.symbol] <= upstream_max_hops
+    }
+
+    candidates = downstream_candidates | upstream_candidates
 
     lines = []
     resolved: set[str] = set()
@@ -211,7 +235,12 @@ def build_candidate_manifest(
         raw_signature = _declaration_line(builder, qname) or ""
         signature = " ".join(raw_signature.split())
         calls = _outgoing_call_names(builder, qname)
-        lines.append(f"{qname}|{role}|{info.kind}|{signature}|calls=[{','.join(calls)}]")
+        line = f"{qname}|{role}|{info.kind}|{signature}|calls=[{','.join(calls)}]"
+        if role == "caller" and qname in upstream_callers:
+            caller = upstream_callers[qname]
+            line += f"|binds_return={'true' if caller.unpacks_return else 'false'}"
+            line += f"|nontrivial_args={'true' if caller.supplies_nontrivial_args else 'false'}"
+        lines.append(line)
         resolved.add(qname)
     manifest = "<candidate_index>\n" + "\n".join(lines) + "\n</candidate_index>"
     return manifest, resolved

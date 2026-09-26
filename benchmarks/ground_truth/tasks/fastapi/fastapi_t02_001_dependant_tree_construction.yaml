@@ -1,0 +1,121 @@
+# T02 "FastAPI Debug" - Task 1: recursive Depends() dependant-tree construction.
+#
+# Grounded in the real pinned FastAPI 0.116.1 checkout (pinned_commit
+# below, matching benchmarks/corpora/pinned_commits.json's own "fastapi"
+# entry) - every symbol here is real and indexed, verified directly
+# against prism.cli.build_pipeline's own symbol table:
+#
+#   fastapi.dependencies.utils.get_dependant              lines 265-314
+#   fastapi.dependencies.utils.get_typed_signature         lines 231-244
+#   fastapi.dependencies.utils.analyze_param               lines 348-511
+#   fastapi.dependencies.utils.get_param_sub_dependant     lines 118-132
+#   fastapi.dependencies.utils.get_sub_dependant           lines 142-171
+#
+# Transitive reachability (CALLS/INSTANTIATES/EXTENDS/IMPLEMENTS/
+# OVERRIDES/EMBEDS edges only, per TASK_AUTHORING.md) verified directly
+# via networkx.has_path from the seed to every pipeline stage - not
+# assumed from reading source. get_sub_dependant recursively re-enters
+# get_dependant (a real self-loop in the allowed-relations subgraph),
+# the actual mechanism behind nested Depends() chains.
+#
+# Scope note (TASK_AUTHORING.md item 6, disclosed honestly): this
+# pipeline is single-file (all of dependencies/utils.py) - the real
+# recursion is the point of this task, not a cross-file boundary.
+#
+# required_context/boundary_symbols also verified real and, for
+# boundary_symbols specifically, real *direct* one-hop CALLS edges from
+# get_dependant (not just transitively reachable):
+#   fastapi.dependencies.models.Dependant                  lines 14-37
+#   fastapi.params.Depends                                 lines 764-774
+#   fastapi.dependencies.utils.add_non_field_param_to_dependency  lines 317-338
+#   fastapi.dependencies.utils.add_param_to_fields         lines 514-527
+task_id: fastapi_t02_001_dependant_tree_construction
+repo: fastapi
+pinned_commit: 313723494be79d4b24ccaa60e4f6d1f96c150fed
+seed_symbol: fastapi.dependencies.utils.get_dependant
+task_type: debug
+prompt: 'You are investigating FastAPI''s dependency-injection machinery in fastapi/dependencies/utils.py.
+  Starting from `get_dependant`, trace the exact causal pipeline that runs when FastAPI builds the dependency
+  tree for a route''s endpoint function: how the function''s signature is introspected, how each parameter
+  is classified, and what happens when a parameter is itself a `Depends()` - including the real recursive
+  re-entry into dependant construction for that sub-dependency.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["fastapi.dependencies.utils.get_dependant", "fastapi.dependencies.utils.get_typed_signature"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - fastapi.dependencies.utils.get_dependant
+  - fastapi.dependencies.utils.get_typed_signature
+  - fastapi.dependencies.utils.analyze_param
+  - fastapi.dependencies.utils.get_param_sub_dependant
+  - fastapi.dependencies.utils.get_sub_dependant
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  - fastapi.params.Depends
+  boundary_symbols:
+  - fastapi.dependencies.utils.add_non_field_param_to_dependency
+  - fastapi.dependencies.utils.add_param_to_fields
+  expected_solution: get_dependant() first calls get_typed_signature() to resolve the endpoint's real
+    type-hinted signature, then for each parameter calls analyze_param() to classify it. When analyze_param()
+    reports the parameter carries a Depends() marker, get_param_sub_dependant() is called, which itself
+    calls get_sub_dependant() - and get_sub_dependant() recursively re-enters get_dependant() to build
+    that sub-dependency's own Dependant tree, the real mechanism behind nested Depends() chains.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - fastapi.dependencies.utils.get_dependant
+  - fastapi.dependencies.utils.get_typed_signature
+  - fastapi.dependencies.utils.analyze_param
+  - fastapi.dependencies.utils.get_sub_dependant
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  - fastapi.params.Depends
+  boundary_symbols:
+  - fastapi.dependencies.utils.add_non_field_param_to_dependency
+  expected_solution: get_dependant() calls get_typed_signature() to get the signature, then analyze_param()
+    per parameter. A Depends()-marked parameter triggers a recursive call back into get_dependant() via
+    get_sub_dependant() to build the sub-dependency's tree. (Missed the real intermediate hop, get_param_sub_dependant,
+    which get_sub_dependant is actually called through, not called from analyze_param directly.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - fastapi.dependencies.utils.get_dependant
+  - fastapi.dependencies.utils.get_typed_signature
+  - fastapi.dependencies.utils.analyze_param
+  - fastapi.dependencies.utils.get_param_sub_dependant
+  - fastapi.dependencies.utils.get_sub_dependant
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - fastapi.dependencies.models.Dependant
+  - fastapi.params.Depends
+  boundary_symbols:
+  - fastapi.dependencies.utils.add_non_field_param_to_dependency
+  - fastapi.dependencies.utils.add_param_to_fields
+  expected_solution: get_dependant() first calls get_typed_signature() to resolve the endpoint's real
+    type-hinted signature, then for each parameter calls analyze_param() to classify it. When analyze_param()
+    reports the parameter carries a Depends() marker, get_param_sub_dependant() is called, which itself
+    calls get_sub_dependant() - and get_sub_dependant() recursively re-enters get_dependant() to build
+    that sub-dependency's own Dependant tree, the real mechanism behind nested Depends() chains.
