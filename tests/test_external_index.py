@@ -172,3 +172,56 @@ def test_extract_external_symbol_still_picks_one_first_match_for_ambiguous_bare_
     info = extract_external_symbol("starlette", "add_route")
     assert info is not None
     assert info.qualified_name in {"starlette.routing.Router.add_route", "starlette.applications.Starlette.add_route"}
+
+
+# --------------------------------------------------------------------- #
+# Phase C Step 4 rollout: the t019/t020-shaped receiver-based path
+# (`orjson.dumps`/`ujson.dumps`) - a real, direct module-level import
+# call (`orjson.dumps(x)`), distinct from t018's self/this-inherited-
+# method shape. Exercises two real bugs found and fixed while adding
+# this coverage:
+#   1. `.pyi` files have no entry in `EXTENSION_LANGUAGE_MAP` (that map
+#      is shared with the main repo scanner - see `_parse_external_file`'s
+#      own docstring), so a package shipping only a `.pyi` (orjson,
+#      a compiled extension with an inline stub) silently failed to
+#      parse at all before this fix.
+#   2. `ujson` ships as a bare compiled extension with its real types in
+#      a *separate* PEP 561 stub-only `ujson-stubs` distribution -
+#      unreachable via `importlib.util.find_spec("ujson")` alone (see
+#      `PythonSourceLocator._locate_stub_only_distribution`'s own
+#      docstring).
+# --------------------------------------------------------------------- #
+def test_orjson_dumps_resolves_from_its_own_inline_pyi_stub():
+    pytest.importorskip("orjson")
+    info = extract_external_symbol("orjson", "dumps")
+
+    assert info is not None
+    assert info.qualified_name == "orjson.dumps"
+    assert info.kind == "function"
+    assert info.language == "python"
+    assert info.file.endswith(".pyi")
+    # Zero body bloat, same standard as every other extracted symbol -
+    # orjson.dumps is a compiled function with no real Python body at
+    # all, so this is vacuously true, but the signature itself must be
+    # the real one, not fabricated.
+    assert "dumps" in info.signature_text
+    assert "bytes" in info.signature_text
+
+
+def test_ujson_dumps_resolves_from_its_separate_stub_only_distribution():
+    pytest.importorskip("ujson")
+    info = extract_external_symbol("ujson", "dumps")
+
+    assert info is not None
+    assert info.qualified_name == "ujson.dumps"
+    assert info.kind == "function"
+    assert "-stubs" in info.file, "ujson's real types live in the separate ujson-stubs distribution, not ujson itself"
+    assert "dumps" in info.signature_text
+
+
+def test_unrelated_package_with_neither_pyi_nor_stub_distribution_still_fails_closed():
+    """Guards the two fixes above against over-reaching: a package name
+    that resolves to no stub-only distribution and no `.pyi` at all
+    (this test suite's own long-standing fail-closed fixture) must still
+    return `None`, not a spurious match."""
+    assert extract_external_symbol("this_package_does_not_exist_anywhere_xyz", "dumps") is None

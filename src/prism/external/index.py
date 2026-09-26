@@ -22,6 +22,7 @@ separate "strip the body" pass to get wrong.
 from __future__ import annotations
 
 import importlib.util
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Protocol
@@ -30,7 +31,7 @@ from tree_sitter import Node
 
 from prism.graph.contracts import BehavioralContract, ContractExtractor
 from prism.parser.lang_config import CLASS_NODE_TYPES, FUNCTION_NODE_TYPES
-from prism.parser.tree_sitter_loader import ParsedFile, node_text, parse_file
+from prism.parser.tree_sitter_loader import ParsedFile, node_text, parse_file, parse_source
 from prism.slicer.tokenizer import count_tokens
 from prism.surface.models import NodeEntry, NodeFeatures, NodeSignature
 
@@ -87,6 +88,10 @@ class PythonSourceLocator:
 
     def locate(self, package_name: str, package_version: str | None = None) -> list[Path]:
         top_level = package_name.split(".")[0]
+        stub_only_files = self._locate_stub_only_distribution(top_level)
+        if stub_only_files:
+            return stub_only_files
+
         try:
             spec = importlib.util.find_spec(top_level)
         except (ImportError, ValueError, ModuleNotFoundError):
@@ -97,13 +102,43 @@ class PythonSourceLocator:
         if not spec.submodule_search_locations:
             # A single-module distribution (`spec.origin` is the module's
             # own file, not a package `__init__.py`) - nothing to search
-            # under, the file itself is the whole surface.
+            # under, the file itself is the whole surface. A compiled
+            # extension module (`.so`/`.pyd`, e.g. `ujson` itself) has no
+            # real Python source at all here - if it ships types, they
+            # live in the stub-only distribution already checked above,
+            # not this file.
             return [origin] if origin.suffix in (".py", ".pyi") else []
         pkg_dir = origin.parent
         stub_files = sorted(p for p in pkg_dir.rglob("*.pyi") if "__pycache__" not in p.parts)
         if stub_files:
             return stub_files
         return sorted(p for p in pkg_dir.rglob("*.py") if "__pycache__" not in p.parts)
+
+    @staticmethod
+    def _locate_stub_only_distribution(top_level: str) -> list[Path]:
+        """Real bug, found and fixed while testing the `ujson.dumps`
+        receiver-based resolution path (Phase C Step 4): `ujson` itself
+        installs as a single compiled extension module (`ujson.*.so`,
+        no real Python source, no bundled `.pyi`) with its real type
+        information shipped *separately*, as a PEP 561 stub-only
+        distribution - a sibling `ujson-stubs` directory. That name is
+        deliberately not a valid Python module (`import ujson-stubs` is
+        a `SyntaxError`), specifically so type checkers locate it by
+        walking each import root for the `<package>-stubs` directory
+        itself, not through `importlib`'s ordinary module-spec
+        resolution - exactly what this method does, checked before
+        `locate`'s own `find_spec`-based lookup (a stub-only
+        distribution is the authoritative source of types for a package
+        that ships none of its own, so it takes priority when both
+        exist). Returns `[]`, never raises, when no such directory is on
+        `sys.path` - the ordinary, far more common case (`orjson`, e.g.,
+        ships its own inline `.pyi` and has no `-stubs` sibling at all).
+        """
+        for root in sys.path:
+            candidate = Path(root) / f"{top_level}-stubs"
+            if candidate.is_dir():
+                return sorted(p for p in candidate.rglob("*.pyi") if "__pycache__" not in p.parts)
+        return []
 
 
 def _iter_definitions(node: Node, lang: str, source: bytes, enclosing_class: str | None = None) -> Iterator[tuple[Node, str | None, str, str]]:
@@ -200,6 +235,42 @@ def _render_signature_text(local_qualified_name: str, kind: str, contract: Behav
     return header + ":"
 
 
+def _parse_external_file(file_path: Path) -> ParsedFile | None:
+    """Parses `file_path` via Prism's own tree-sitter loader - real bug,
+    found and fixed while testing the `orjson.dumps` receiver-based
+    resolution path (Phase C Step 4): `.pyi` stub files use the
+    identical Python grammar `.py` files do (PEP 484 stub syntax, e.g. a
+    body-less `def f(...) -> T: ...`, is valid Python syntax by
+    construction, not a distinct language) - but `prism.parser.
+    tree_sitter_loader.EXTENSION_LANGUAGE_MAP` has no `.pyi` entry, so
+    `parse_file` silently returned `None` for every `.pyi` file, making
+    `PythonSourceLocator`'s own documented ".pyi preferred" behavior
+    completely non-functional for any package (like `orjson`) that ships
+    only a `.pyi` stub with no real `.py` source at all.
+
+    Not fixed by adding `.pyi` to `EXTENSION_LANGUAGE_MAP` itself - that
+    map is shared with `prism.cli`'s own main repo-indexing scanner
+    (`prism.traversal._cache_keys`'s file-discovery walk); adding `.pyi`
+    there would make Prism's real indexing pipeline start picking up
+    stub files inside a *target* repo too, a real, unintended change to
+    what gets indexed, for a fix this module doesn't need to make
+    globally. Instead, the grammar dispatch is forced locally, for this
+    module's own external-file reads only: a `.pyi` path is read as
+    bytes and parsed under the extension `parse_source` would dispatch
+    to Python for. The resulting `ParsedFile.path` carries that
+    substituted extension, harmlessly - neither this module nor
+    `ContractExtractor` ever reads `ParsedFile.path`, only its
+    `.source`/`.language_id`/`.root_node`.
+    """
+    if file_path.suffix == ".pyi":
+        try:
+            source = file_path.read_bytes()
+        except OSError:
+            return None
+        return parse_source(str(file_path.with_suffix(".py")), source)
+    return parse_file(str(file_path))
+
+
 def _extract_from_file(file_path: Path, top_level: str, symbol_name: str) -> ExternalSymbolInfo | None:
     """The shared locate-result -> `ExternalSymbolInfo` step for one
     already-located file - factored out so `extract_external_symbol`
@@ -207,7 +278,7 @@ def _extract_from_file(file_path: Path, top_level: str, symbol_name: str) -> Ext
     match, Section 2.1's own bare-name-ambiguity case) share one
     parse+extract implementation rather than two independently-drifting
     copies."""
-    parsed = parse_file(str(file_path))
+    parsed = _parse_external_file(file_path)
     if parsed is None:
         return None
     match = _find_definition(parsed, symbol_name)

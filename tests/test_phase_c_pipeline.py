@@ -177,3 +177,104 @@ class TestBuildExternalCandidateManifest:
             ["app.Router.dispatch"], root_imports=["this_package_does_not_exist_anywhere_xyz"],
         )
         assert universe == set()
+
+
+# --------------------------------------------------------------------- #
+# Phase C Step 4 rollout: the t019/t020-shaped receiver-based path -
+# `import orjson; orjson.dumps(...)`, a real module-level import call,
+# distinct in shape from the self/this-inherited-method path above
+# (resolution path 1 of build_external_candidate_manifest's two: the
+# call's own receiver names a root_imports package directly, not a
+# self/this token). Proves the receiver-based path resolves, extracts a
+# signature-only stub, and packs within its dedicated sub-budget
+# identically to the self/this path already covered above.
+# --------------------------------------------------------------------- #
+@pytest.fixture
+def orjson_synthetic_engine(tmp_path):
+    """`encode`'s real body calls `orjson.dumps(data)` - `orjson` is
+    imported at module level and called directly (t019/t020's real
+    shape), not through a `self`/`this` receiver at all."""
+    pytest.importorskip("orjson")
+    repo = tmp_path / "jsonapp"
+    repo.mkdir()
+    (repo / "jsonapp.py").write_text(
+        "import orjson\n\n"
+        "def encode(data):\n"
+        "    return orjson.dumps(data)\n"
+    )
+    return PrismEngine.from_repo(str(repo))
+
+
+class TestReceiverBasedResolution:
+    def test_build_external_candidate_manifest_resolves_orjson_dumps(self, orjson_synthetic_engine):
+        manifest_text, universe = orjson_synthetic_engine.build_external_candidate_manifest(
+            ["jsonapp.encode"], root_imports=["orjson"],
+        )
+        assert universe == {"orjson.dumps"}
+        assert "<external_candidate_index>" in manifest_text
+        # The manifest line is a single physical line (Phase C Step 3's
+        # own whitespace-collapse fix for a wrapped stub signature) -
+        # exactly one non-empty line between the wrapper tags.
+        body_lines = [ln for ln in manifest_text.split("\n")[1:-1] if ln]
+        assert len(body_lines) == 1
+        assert body_lines[0].startswith("orjson.dumps|external|function|")
+
+    def test_needs_external_deps_true_admits_orjson_dumps_within_sub_budget(self, orjson_synthetic_engine):
+        def request_symbols(manifest_text, task_prompt):
+            return [], True
+
+        def request_external_symbols(manifest_text, task_prompt):
+            lines = [ln for ln in manifest_text.split("\n")[1:-1] if ln]
+            return [ln.split("|")[0] for ln in lines]
+
+        pkg, diagnostics = orjson_synthetic_engine.retrieve_two_or_three_pass(
+            "jsonapp.encode", 4000, request_symbols, request_external_symbols, root_imports=["orjson"],
+        )
+
+        assert diagnostics["needs_external_deps"] is True
+        assert diagnostics["external_candidate_count"] == 1
+        assert diagnostics["external_requested_count"] == 1
+        assert diagnostics["external_skipped_hallucinated"] == []
+
+        external_nodes = [n for n in pkg.nodes if n.role == "external"]
+        assert len(external_nodes) == 1
+        node = external_nodes[0]
+        assert node.id == "orjson.dumps"
+        assert node.symbol_name == "dumps"
+        assert node.compression == "L2_skeleton"
+        assert node.contract is None
+        # Zero body bloat: orjson.dumps is a compiled function with no
+        # real Python body to leak in the first place - the rendered
+        # body is exactly the signature stub.
+        assert node.body.startswith("def dumps")
+        assert node.body.endswith("...")
+
+        from prism.packer.submodular_knapsack import split_budget_for_external
+
+        _internal_budget, external_budget = split_budget_for_external(4000)
+        assert node.cost <= external_budget
+
+    def test_scorer_recognizes_dumps_as_legitimate_via_selected_symbols(self, orjson_synthetic_engine):
+        """Mirrors the t018 integration test's own scorer check (Step 3)
+        for the receiver-based path: zero changes to score_debug_causal
+        needed for this path either."""
+        import json
+
+        from benchmarks.engines.base import selected_symbols
+        from benchmarks.tsr.scorer_debug import score_debug_causal
+
+        def request_symbols(manifest_text, task_prompt):
+            return [], True
+
+        def request_external_symbols(manifest_text, task_prompt):
+            return ["orjson.dumps"]
+
+        pkg, _diagnostics = orjson_synthetic_engine.retrieve_two_or_three_pass(
+            "jsonapp.encode", 4000, request_symbols, request_external_symbols, root_imports=["orjson"],
+        )
+        candidate_symbols = selected_symbols(pkg)
+        assert "orjson.dumps" in candidate_symbols
+
+        response_text = json.dumps({"reasoning": "encode serializes via orjson.dumps", "symbols": ["encode", "dumps"]})
+        score = score_debug_causal(response_text, pipeline=[], candidate_symbols=candidate_symbols)
+        assert score == 1.0

@@ -30,7 +30,7 @@ from prism.external.index import ExternalSymbolInfo, extract_external_symbol_all
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS, _outgoing_call_names, build_candidate_manifest
-from prism.packer.submodular_knapsack import DEFAULT_UPSTREAM_MAX_HOPS, split_budget_for_external
+from prism.packer.submodular_knapsack import DEFAULT_UPSTREAM_MAX_HOPS, pack_external_context_requested, split_budget_for_external
 from prism.parser.lang_config import CALL_NODE_TYPE, SELF_TOKEN_TEXT, call_callee_segments, iter_scoped_nodes
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.surface.build import build_context_package, build_context_package_requested
@@ -410,7 +410,21 @@ class PrismEngine:
                         resolved[ext_info.qualified_name] = ext_info
 
         self._external_symbol_cache.update(resolved)
-        lines = [f"{info.qualified_name}|external|{info.kind}|{info.signature_text}" for info in sorted(resolved.values(), key=lambda i: i.qualified_name)]
+        # Real bug, found and fixed while testing the `ujson.dumps`
+        # receiver-based path (Phase C Step 4): ujson's own real stub
+        # wraps one parameter's type annotation across multiple physical
+        # lines - `signature_text` preserves that real formatting (it's
+        # also what ends up in the rendered NodeEntry's own body, where
+        # multi-line is fine, even more readable), but embedding it
+        # as-is here would silently break this manifest's own "one
+        # candidate per line" contract - the exact same real failure
+        # mode `prism.packer.candidate_index.build_candidate_manifest`
+        # already found and fixed for the internal manifest's own
+        # wrapped-signature case, via the identical whitespace-collapse.
+        lines = [
+            f"{info.qualified_name}|external|{info.kind}|{' '.join(info.signature_text.split())}"
+            for info in sorted(resolved.values(), key=lambda i: i.qualified_name)
+        ]
         manifest_text = "<external_candidate_index>\n" + "\n".join(lines) + ("\n" if lines else "") + "</external_candidate_index>"
         return manifest_text, set(resolved.keys())
 
@@ -526,21 +540,10 @@ class PrismEngine:
         else:
             external_requested_symbols = []
 
-        external_skipped: list[str] = []
-        external_nodes = []
-        running_cost = 0
-        for name in external_requested_symbols:
-            info = self._external_symbol_cache.get(name)
-            if info is None:
-                external_skipped.append(name)
-                continue
-            node = external_symbol_to_node_entry(info)
-            if running_cost + node.cost > external_budget:
-                external_skipped.append(name)
-                continue
-            running_cost += node.cost
-            external_nodes.append(node)
-
+        items, external_skipped = pack_external_context_requested(
+            self._external_symbol_cache, external_requested_symbols, external_budget,
+        )
+        external_nodes = [external_symbol_to_node_entry(self._external_symbol_cache[item.symbol]) for item in items]
         pkg = pkg.model_copy(update={"nodes": [*pkg.nodes, *external_nodes]})
 
         diagnostics = {

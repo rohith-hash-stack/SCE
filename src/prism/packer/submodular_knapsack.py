@@ -93,6 +93,7 @@ from typing import Literal
 
 import networkx as nx
 
+from prism.external.index import ExternalSymbolInfo
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolRole
@@ -966,6 +967,13 @@ ROLE_SEED = "seed"
 ROLE_CALLEE = "callee"
 ROLE_CALLER = "caller"
 ROLE_TRANSITIVE = "transitive"
+#: Phase C (Section 3.4) - a `SubmodularPackedItem` admitted by
+#: `pack_external_context_requested`, never by the internal
+#: `select_submodular_context`/`_classify_role` path above (an external
+#: symbol has no causal-graph membership to classify in the first
+#: place). Matches `prism.surface.models.NodeEntry.role`'s own
+#: `"external"` member.
+ROLE_EXTERNAL = "external"
 
 
 def _classify_role(
@@ -1060,6 +1068,68 @@ def split_budget_for_external(
     external_budget = min(external_budget, budget_tokens)
     internal_budget = budget_tokens - external_budget
     return internal_budget, external_budget
+
+
+def pack_external_context_requested(
+    external_symbol_cache: dict[str, ExternalSymbolInfo],
+    requested_external_symbols: list[str],
+    external_budget_tokens: int,
+) -> tuple[list[SubmodularPackedItem], list[str]]:
+    """Phase C, Section 3.4 - Turn 3's own external-side admission,
+    factored out of `prism.engine.PrismEngine.retrieve_two_or_three_
+    pass` (Step 4) so that method stays focused on turn orchestration,
+    not budget bookkeeping. Mirrors `pack_symbol_context_requested`'s
+    own "ask, don't re-derive" selection strategy: no knapsack
+    competition among externals either, by design - `split_budget_for_
+    external`'s own up-front reservation is the only competition point,
+    not a second, nested knapsack pass. Greedy, in-request-order
+    admission: iterates `requested_external_symbols` (Turn 2b's own
+    answer) in order, resolves each against `external_symbol_cache`
+    (populated by `PrismEngine.build_external_candidate_manifest`'s own
+    Turn 2a - never re-parsed here), prices it via `count_tokens` on the
+    resolved symbol's own real `signature_text` (the exact same value
+    `prism.external.index.external_symbol_to_node_entry` will price its
+    resulting `NodeEntry.cost` from, so the admission decision here and
+    the rendered node's own cost can never drift apart), and stops
+    admitting once `external_budget_tokens` would be exceeded - an
+    explicit running-cost check this function owns, never delegated to
+    `_enforce_render_budget`'s own post-hoc, whole-package trim (Section
+    3.5's own recommendation A).
+
+    Returns `(items, skipped)` - `skipped` covers both a name absent
+    from `external_symbol_cache` (requested but never a real Turn-2a
+    candidate - hallucinated) and a real, resolvable name that simply
+    didn't fit the remaining sub-budget, mirroring `pack_symbol_context_
+    requested`'s own single `skipped` list shape for the internal side.
+    Each admitted item carries `role=ROLE_EXTERNAL`, `origin="external"`,
+    and `compression="L2_skeleton"` - the fixed values Section 2.3
+    already establishes for every external node, not a per-item choice.
+    """
+    items: list[SubmodularPackedItem] = []
+    skipped: list[str] = []
+    running_cost = 0
+    for name in requested_external_symbols:
+        info = external_symbol_cache.get(name)
+        if info is None:
+            skipped.append(name)
+            continue
+        cost = count_tokens(info.signature_text)
+        if running_cost + cost > external_budget_tokens:
+            skipped.append(name)
+            continue
+        running_cost += cost
+        items.append(
+            SubmodularPackedItem(
+                symbol=info.qualified_name,
+                cost=cost,
+                feature_mask=0,
+                dist_w=1.0,
+                role=ROLE_EXTERNAL,
+                compression="L2_skeleton",
+                origin="external",
+            )
+        )
+    return items, skipped
 
 
 #: Rendered-Metadata Metering fix (Fix #2). `_default_costs` previously

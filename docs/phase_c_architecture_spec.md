@@ -1,19 +1,41 @@
 # Phase C Architecture Specification: Cross-Boundary External Dependency Retrieval
 
-**Status: Steps 1-3 implemented and tested on `feature/phase-c-external-
-deps` (`097ec4b`, `1f7af68`, and the commit syncing this document to
-them) - `prism.external.index` (Step 1), the conditional three-pass
-engine routing and partitioned knapsack sub-budget (Step 2), and a real
+**Status: Steps 1-4 implemented and tested on `feature/phase-c-external-
+deps` - `prism.external.index` (Step 1), the conditional three-pass
+engine routing and partitioned knapsack sub-budget (Step 2), a real
 end-to-end `t018` simulation against the pinned FastAPI corpus and the
-real installed Starlette package proving the whole pipeline (Step 3).
-Sections 1, 2, and 5 below have been updated to describe what was
-actually built, with every real deviation from the original draft
-called out explicitly rather than silently absorbed - see each
-section's own "as built" note. Sections 3, 4, and 6 (partitioned
-budgeting's own packer-function split, scoring-contract updates beyond
-the zero-change path already verified in Step 3, and the broader
-rollout plan) remain the original design, not yet implemented beyond
-what Steps 1-3 needed.**
+real installed Starlette package (Step 3), and the extracted
+`pack_external_context_requested` packer function plus a real,
+independent `t019`/`t020`-shaped rollout test against the real
+installed `orjson`/`ujson` packages (Step 4). Sections 1, 2, 3, and 5
+below have been updated to describe what was actually built, with every
+real deviation from the original draft called out explicitly rather
+than silently absorbed - see each section's own "as built" note.
+Section 4 (scoring-contract updates beyond the zero-change path already
+verified in Steps 3-4) and Section 6 (rollout across the rest of the
+25-task suite) remain the original design, not yet implemented beyond
+what Steps 1-4 needed.
+
+**Three real bugs found and fixed while building this (not while
+drafting it)**, each while genuinely exercising a real package rather
+than a synthetic fixture:
+1. `.pyi` stub files have no entry in `prism.parser.tree_sitter_loader.
+   EXTENSION_LANGUAGE_MAP` (shared with the main repo-indexing scanner,
+   so not fixed there), silently making `PythonSourceLocator`'s own
+   documented ".pyi preferred" behavior non-functional for any
+   `.pyi`-only package (`orjson`) - fixed locally in `prism.external.
+   index._parse_external_file`.
+2. `ujson` ships as a bare compiled extension with its real types in a
+   *separate* PEP 561 stub-only `ujson-stubs` distribution, unreachable
+   via `importlib.util.find_spec` alone - fixed via `PythonSourceLocator.
+   _locate_stub_only_distribution`, a `sys.path` walk for the
+   `<package>-stubs` directory convention type checkers themselves use.
+3. Starlette ships two real `add_route` definitions (`Router.add_route`,
+   and a distinct, delegating `Starlette.add_route`) - a single-result
+   lookup let `PythonSourceLocator`'s file ordering silently pick one;
+   fixed via `extract_external_symbol_all` (Step 3), used by both of
+   `build_external_candidate_manifest`'s resolution paths so every real
+   match is offered as its own candidate.**
 
 ## 0. Problem statement
 
@@ -310,6 +332,26 @@ should degrade to "this task's `needs_external_deps` branch finds
 nothing, falls back silently to the Turn-2 internal-only result," never
 a hard failure.
 
+**As built (Phase C Step 4) - two real `.pyi`-handling gaps found and
+fixed while actually resolving `orjson`/`ujson`, not while drafting
+this section**: (1) `EXTENSION_LANGUAGE_MAP` (`prism.parser.
+tree_sitter_loader`) has no `.pyi` entry at all - a real, load-bearing
+gap this section's own "Python (`.pyi`/real `.py`)" claim above didn't
+actually hold until fixed, since `parse_file` silently returned `None`
+for every `.pyi` file. Fixed locally, in `prism.external.index._parse_
+external_file`, not by adding `.pyi` to the shared map itself - that
+map also drives `prism.cli`'s own main repo-indexing scanner, and
+widening it would make Prism's real indexing pipeline start treating
+`.pyi` files inside a *target* repo as indexable source too, an
+unrelated, unintended change. (2) A compiled-extension package with no
+inline stub of its own (`ujson`) can still have real, installed type
+information - as a *separate* PEP 561 stub-only `<package>-stubs`
+distribution, deliberately not reachable via `importlib.util.find_spec`
+(the `-stubs` suffix isn't a valid Python module name) - so
+`PythonSourceLocator` now also walks `sys.path` for that directory
+convention directly, the same way a real type checker does, before
+falling back to its original `find_spec`-based lookup.
+
 **A named, current gap, stated plainly rather than implied away**: Rust
 is not in Prism's language list at all (`LanguageID` above has no Rust
 member) - no tree-sitter grammar loaded, in-repo or otherwise. "Rust
@@ -486,30 +528,57 @@ about those call sites.
 
 ### 3.4 New external packer function
 
+**As built (Phase C Step 4) - implemented in `src/prism/packer/
+submodular_knapsack.py`, extracted out of `PrismEngine.retrieve_two_or_
+three_pass`'s own inline Turn-3 loop (Step 2's original placement) so
+that method stays focused on turn orchestration, not budget
+bookkeeping.** Real signature, revised from the draft below in two
+ways: (1) no `ExternalSymbolIndex` class exists - takes `external_
+symbol_cache: dict[str, ExternalSymbolInfo]` (`PrismEngine`'s own
+`self._external_symbol_cache`, populated by `build_external_candidate_
+manifest`'s Turn 2a) instead; (2) no separate `external_candidate_
+universe` parameter - `external_symbol_cache`'s own keys already are
+that universe, so a requested name is resolved with one dict lookup,
+not two. Each admitted item carries `role=ROLE_EXTERNAL` (a new
+constant, matching `NodeEntry.role`'s own `"external"` member) and
+`origin="external"`, and prices via `count_tokens` on the resolved
+symbol's own real `signature_text` - the exact value `prism.external.
+index.external_symbol_to_node_entry` will also price the resulting
+`NodeEntry.cost` from, verified directly (`tests/test_external_budget_
+split.py::test_admission_cost_matches_what_external_symbol_to_node_
+entry_would_render`) rather than assumed to never drift.
+
 ```python
 def pack_external_context_requested(
-    external_index: "ExternalSymbolIndex",
+    external_symbol_cache: dict[str, "ExternalSymbolInfo"],
     requested_external_symbols: list[str],
-    external_candidate_universe: set[str],
     external_budget_tokens: int,
 ) -> tuple[list[SubmodularPackedItem], list[str]]:
     """Mirrors pack_symbol_context_requested's own "ask, don't
     re-derive" selection strategy (no knapsack competition among
     externals either, by design - the sub-budget reservation in 3.2 is
-    the only competition point, not a second nested knapsack), but
-    against external_index instead of builder.symbol_table, and capped
-    by external_budget_tokens: iterate requested_external_symbols in
-    order, resolve each against external_candidate_universe, price via
-    a new _default_external_costs (count_tokens on the stub's own
-    signature_text + docstring - no source-file lookup, since none
-    exists), stop admitting once external_budget_tokens is exhausted
-    (an explicit running-cost check this function owns, since
-    _enforce_render_budget's own post-hoc trim, 3.5, is scoped to the
-    combined package and should not be the only thing enforcing the
-    partition). Returns (items, skipped) - skipped covers both
-    unresolved names and anything that didn't fit the sub-budget.
+    the only competition point, not a second nested knapsack): iterate
+    requested_external_symbols in order, resolve each against
+    external_symbol_cache, price via count_tokens on the resolved
+    symbol's own real signature_text, stop admitting once
+    external_budget_tokens would be exceeded (an explicit running-cost
+    check this function owns, since _enforce_render_budget's own
+    post-hoc trim, 3.5, is scoped to the combined package and should
+    not be the only thing enforcing the partition). Returns (items,
+    skipped) - skipped covers both a name absent from external_symbol_
+    cache (never a real Turn-2a candidate) and anything that didn't fit
+    the remaining sub-budget.
     """
 ```
+
+Verified in Step 4's own rollout tests against the receiver-based path
+too (`tests/test_phase_c_pipeline.py`'s `TestReceiverBasedResolution`,
+against the real installed `orjson` package): the same admission
+function, the same sub-budget partition, the same `role="external"`/
+`compression="L2_skeleton"` result, whether the resolved symbol came
+from the `self`/`this` path (`t018`, `Router.add_route`) or the
+direct-package-receiver path (`t019`/`t020`'s own shape,
+`orjson.dumps`).
 
 ### 3.5 `_enforce_render_budget` interaction
 
