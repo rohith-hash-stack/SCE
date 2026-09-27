@@ -156,7 +156,12 @@ def test_ts_qualified_new_expression_resolves(tmp_path):
     )
     builder, _ = build_pipeline(str(repo), use_cache=False)
     targets = {v for _u, v, data in builder.graph.out_edges("caller.use", data=True) if data.get("relation") == "CALLS"}
-    assert "pkg.index.Widget.render" in targets
+    # `pkg/index.ts` is a barrel file - its own module is "pkg", not
+    # "pkg.index" (the fix for the `path_to_module`/index-stripping bug,
+    # `tests/test_export_registry.py`'s own `test_ts_bare_directory_
+    # import_resolves_through_index_barrel`), so `Widget` registers as
+    # "pkg.Widget", not "pkg.index.Widget".
+    assert "pkg.Widget.render" in targets
 
 
 # ============================================================

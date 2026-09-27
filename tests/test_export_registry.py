@@ -249,3 +249,83 @@ def test_ts_barrel_wildcard_reexport_resolves(tmp_path) -> None:
     )
     builder, _tag_matrix = build_pipeline(str(tmp_path))
     assert builder.graph.has_edge("consumer.handle", "widgets.Widget")
+
+
+def test_ts_bare_directory_import_resolves_through_index_barrel(tmp_path) -> None:
+    """The real, confirmed bug this guards: `import { x } from './core'`
+    (a *directory* reference, resolved by every real JS/TS toolchain to
+    `core/index.ts` implicitly - no literal `index` in the specifier at
+    all, unlike `test_ts_barrel_named_reexport_resolves`'s explicit
+    `'./index'` above) previously computed a *different* module string
+    for `core/index.ts`'s own registration (`"core.index"`, since nothing
+    stripped the trailing `index` segment there) than for the importing
+    side (`"core"`, correctly - the specifier never mentions `index` to
+    strip in the first place). The two never matched, so this exact
+    shape - confirmed live against tRPC's own `packages/server/src`,
+    which imports across 15 such `index.ts` barrels - silently resolved
+    to a phantom, unregistered node instead of the real re-exported
+    symbol."""
+    core_dir = tmp_path / "core"
+    core_dir.mkdir()
+    (core_dir / "initTRPC.ts").write_text(
+        "export function initTRPC() {\n"
+        "    return 1;\n"
+        "}\n"
+    )
+    (core_dir / "index.ts").write_text("export { initTRPC } from './initTRPC';\n")
+    (tmp_path / "main.ts").write_text(
+        "import { initTRPC } from './core';\n"
+        "\n"
+        "function useIt() {\n"
+        "    return initTRPC();\n"
+        "}\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(tmp_path))
+    assert builder.graph.has_edge("main.useIt", "core.initTRPC.initTRPC")
+
+
+def test_ts_root_level_index_barrel_resolves(tmp_path) -> None:
+    """The edge case `test_ts_bare_directory_import_resolves_through_
+    index_barrel` doesn't cover: `index.ts` sitting at the *repo root*
+    itself strips to an *empty* module string (the same convention a
+    root-level Python `__init__.py` already gets), which must not
+    corrupt the barrel-fallback's own `from_import.rsplit(".", 1)` split
+    into a bare, unsplittable name."""
+    (tmp_path / "widgets.ts").write_text(
+        "export class Widget {\n"
+        "    render() {\n"
+        "        return 1;\n"
+        "    }\n"
+        "}\n"
+    )
+    (tmp_path / "index.ts").write_text("export { Widget } from './widgets';\n")
+    (tmp_path / "consumer.ts").write_text(
+        "import { Widget } from '.';\n"
+        "\n"
+        "function handle() {\n"
+        "    return new Widget();\n"
+        "}\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(tmp_path))
+    assert builder.graph.has_edge("consumer.handle", "widgets.Widget")
+
+
+def test_ts_direct_file_import_unaffected_by_index_stripping(tmp_path) -> None:
+    """Regression guard: a plain, non-directory relative import (`./utils`
+    resolving directly to `utils.ts`, not a directory's `index.ts`) must
+    keep resolving exactly as it always has - the index-barrel fix must
+    not touch this, more common shape at all."""
+    (tmp_path / "utils.ts").write_text(
+        "export function helper() {\n"
+        "    return 1;\n"
+        "}\n"
+    )
+    (tmp_path / "main.ts").write_text(
+        "import { helper } from './utils';\n"
+        "\n"
+        "function useIt() {\n"
+        "    return helper();\n"
+        "}\n"
+    )
+    builder, _tag_matrix = build_pipeline(str(tmp_path))
+    assert builder.graph.has_edge("main.useIt", "utils.helper")

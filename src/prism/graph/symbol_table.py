@@ -45,16 +45,48 @@ class SymbolRole(str, Enum):
     INTERFACE = "interface"
 
 
+#: JS/TS's own "this file *is* the directory it lives in" convention -
+#: `core/index.ts` is how `import { x } from './core'` (a directory
+#: reference, resolved by the bundler/`tsc` to `core/index.ts`) actually
+#: gets satisfied, the exact analogue of Python's `__init__.py` below.
+#: Gated on extension (not a bare `"index"` name check) so this can never
+#: fire for a language with no such convention - a Python file genuinely
+#: named `index.py` is not special to Python and must not be stripped.
+_JS_INDEX_FILE_EXTENSIONS = (".ts", ".tsx", ".js", ".jsx")
+
+
 def path_to_module(file_path: str, repo_root: str) -> str:
     """Convert a repo-relative or absolute file path into a dotted module name.
 
     ``src/auth/jwt.py`` (relative to `repo_root`) -> ``src.auth.jwt``.
     ``src/auth/__init__.py`` -> ``src.auth``.
+    ``src/core/index.ts`` -> ``src.core``.
+
+    The `index.ts`/`.tsx`/`.js`/`.jsx` case (added alongside the
+    pre-existing `__init__` one) closes a real, confirmed bug: a
+    directory-style import (`import { x } from './core'`, resolved to
+    `core/index.ts` on disk) computes this same module string
+    (`ConcreteGraphBuilder._resolve_js_specifier` never has an `index`
+    segment to strip in the first place, since the import specifier
+    itself never names it) - but before this fix, `core/index.ts`'s own
+    module (used to register whatever it defines or re-exports) was the
+    *different* string `"core.index"`, since nothing here stripped the
+    trailing `index` segment. The two sides never matched, so every
+    barrel-file re-export (`export { x } from './y'` inside an
+    `index.ts`) was invisible to `resolve_export`/`ExportRegistry`
+    (Issues #6/#7's own barrel-file mechanism) despite that mechanism
+    being fully built and working for every case *except* this
+    module-key mismatch - confirmed directly: `main.ts` importing
+    `initTRPC` from `./core` (a real `core/index.ts` re-exporting it from
+    `./initTRPC`) resolved to the non-existent node `"core.initTRPC"`
+    instead of the real `"core.initTRPC.initTRPC"`, before this fix.
     """
     rel = os.path.relpath(file_path, repo_root)
-    rel_no_ext, _ext = os.path.splitext(rel)
+    rel_no_ext, ext = os.path.splitext(rel)
     parts = [p for p in rel_no_ext.split(os.sep) if p not in ("", ".")]
     if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    elif parts and parts[-1] == "index" and ext in _JS_INDEX_FILE_EXTENSIONS:
         parts = parts[:-1]
     return ".".join(parts)
 

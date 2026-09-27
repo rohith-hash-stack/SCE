@@ -1006,6 +1006,22 @@ class ConcreteGraphBuilder:
                     continue
                 imported_name = node_text(name_node, src)
                 local_name = node_text(alias_node, src) if alias_node is not None else imported_name
+                # Deliberately *not* guarded against an empty `module_ref`
+                # (a root-level barrel/index file, now reachable since
+                # `path_to_module` strips `index` there too) the way
+                # Python's own `_handle_python_import_name` guards its
+                # analogous root-`__init__.py` case: `_register_
+                # definition`'s own `qualified_name = f"{module}.{name}"`
+                # is *equally* unguarded, so a root-level symbol's real
+                # registered name already has this same leading dot - the
+                # two sides match either way, and a *re-exported* (not
+                # directly defined) name's leading-dot guess is exactly
+                # what `_resolve_reference_chain`'s barrel-fallback below
+                # needs to `rsplit(".", 1)` into `("", name)` and try
+                # `resolve_export("", name, ...)` - a guard here would
+                # collapse that into a bare, unsplittable name instead
+                # (confirmed directly: broke `test_ts_barrel_named_
+                # reexport_resolves` when tried).
                 import_map.add(local_name, f"{module_ref}.{imported_name}")
             for ns in find_all(stmt, {"namespace_import"}):
                 alias_node = None
@@ -1020,12 +1036,59 @@ class ConcreteGraphBuilder:
                         if cc.type == "identifier":
                             import_map.add(node_text(cc, src), f"{module_ref}.default")
 
+    #: Checked in this order (a same-named `.ts` file always wins over a
+    #: same-named `.js` one, matching `tsc`'s own module resolution -
+    #: real for a mixed-source repo mid-migration from JS to TS, where
+    #: both `foo.js` and `foo.ts` can genuinely coexist on disk).
+    _JS_MODULE_RESOLUTION_EXTENSIONS = (".ts", ".tsx", ".js", ".jsx")
+
     def _resolve_js_specifier(self, specifier: str, file_path: str, current_module: str) -> str:
         if specifier.startswith("."):
             file_dir = os.path.dirname(file_path)
             joined = os.path.normpath(os.path.join(file_dir, specifier))
-            return path_to_module(joined, self.repo_root)
+            return path_to_module(self._resolve_js_module_file(joined), self.repo_root)
         return specifier.replace("/", ".")
+
+    def _resolve_js_module_file(self, joined_no_ext: str) -> str:
+        """`joined_no_ext` is a specifier-derived path with no guaranteed
+        real extension (`import x from './core'` never names one) -
+        resolves it against the real files on disk the same way a real
+        JS/TS toolchain's own module resolution would, so this lands on
+        the *real* file `path_to_module` needs to compute the same
+        module string `_register_exports`/Pass 1 already computed for
+        that file's own registration.
+
+        Two real shapes, tried in order: a direct file (`./utils` ->
+        `utils.ts`), then - only if no direct file exists - a directory's
+        own implicit `index` file (`./core` -> `core/index.ts`, the
+        shape that exposed the `path_to_module` bug this resolves
+        alongside: unresolved here, `path_to_module("core", ...)` would
+        never see an `index` segment to strip in the first place, no
+        matter what that function does).
+
+        An explicit `'./index'` specifier (naming the index file itself,
+        rather than relying on directory-implied resolution) already
+        resolves correctly through the first branch alone (`index` +
+        `.ts` is a direct file) - both spellings of the same real file
+        land on the exact same path here, so `path_to_module` strips
+        `index` identically for either one downstream.
+
+        Falls back to the bare, unresolved path when nothing on disk
+        matches (a broken import, a build-time-only alias `Section 3`'s
+        own `TypeScriptSourceLocator` work will need to handle
+        separately) - exactly today's existing behavior, a synthetic
+        module name no real symbol will ever match, never a crash.
+        """
+        for ext in self._JS_MODULE_RESOLUTION_EXTENSIONS:
+            candidate = joined_no_ext + ext
+            if os.path.isfile(candidate):
+                return candidate
+        if os.path.isdir(joined_no_ext):
+            for ext in self._JS_MODULE_RESOLUTION_EXTENSIONS:
+                candidate = os.path.join(joined_no_ext, "index" + ext)
+                if os.path.isfile(candidate):
+                    return candidate
+        return joined_no_ext
 
     def _parse_go_imports(self, parsed: ParsedFile, import_map: LocalImportMap) -> None:
         src = parsed.source
