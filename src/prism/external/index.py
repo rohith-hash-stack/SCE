@@ -29,7 +29,7 @@ from typing import Iterator, Protocol
 
 from tree_sitter import Node
 
-from prism.graph.contracts import BehavioralContract, ContractExtractor
+from prism.graph.contracts import BehavioralContract, ContractExtractor, Parameter
 from prism.parser.lang_config import CLASS_NODE_TYPES, FUNCTION_NODE_TYPES
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file, parse_source
 from prism.slicer.tokenizer import count_tokens
@@ -228,60 +228,19 @@ def _render_jsdoc_throws_comment(thrown: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-#: Architectural-audit Category 6 (external stub exception rendering):
-#: `contract.thrown_exceptions` was already extracted by `ContractExtractor`
-#: (the same pass every in-repo symbol's contract goes through) but never
-#: reached `_render_signature_text` at all - an agent generating a call
-#: into a stubbed external dependency saw only the type signature, with no
-#: structured signal that the real function can raise. This table is the
-#: "language specifics live in adapters" half of that fix: which comment
-#: *syntax* a thrown-exceptions list renders as, per language - the same
-#: shape `prism.parser.lang_config`'s own per-language dicts already use
-#: (`RAISE_NODE_TYPE`, `AWAIT_NODE_TYPES`, ...), kept local to this module
-#: rather than added there since nothing else in the codebase renders
-#: *output* comment syntax the way concrete_builder.py's shared tables
-#: describe *input* AST node shapes.
-#:
-#: Go has no entry: `contract.thrown_exceptions` is always empty for Go
-#: (`RAISE_NODE_TYPE` itself has no Go entry - it uses multiple return
-#: values with an `error`, not exceptions), so there's never anything to
-#: render there in the first place - an absent key degrades to no
-#: annotation at all, not a missing-language bug.
-_THROWN_EXCEPTIONS_COMMENT_RENDERERS = {
-    LanguageID.PYTHON: _render_python_raises_comment,
-    LanguageID.JAVASCRIPT: _render_jsdoc_throws_comment,
-    LanguageID.TYPESCRIPT: _render_jsdoc_throws_comment,
-    LanguageID.TSX: _render_jsdoc_throws_comment,
-}
+def _render_go_param(p: Parameter) -> str:
+    """`name Type` - Go's own space-separated form, never `name: Type`
+    (that's Python/TS syntax, and `Parameter.render()` produces exactly
+    that - reused as-is for Python/TS below, but wrong for Go). Go also
+    has no default-parameter-value syntax at all, so `p.default` (always
+    `None` in practice - nothing in this codebase's Go extraction ever
+    populates it) is deliberately never consulted here, unlike
+    `Parameter.render()`'s own Python/TS-shaped handling of it."""
+    return f"{p.name} {p.type}" if p.type else p.name
 
 
-def _render_thrown_exceptions_comment(language_id: str, thrown_exceptions: list[str]) -> str:
-    """The annotation block placed immediately above a stub's declaration
-    line, or `""` (no leading/trailing whitespace of its own) when there's
-    nothing to say - `contract.thrown_exceptions` is empty, or this
-    language has no renderer registered above."""
-    if not thrown_exceptions:
-        return ""
-    renderer = _THROWN_EXCEPTIONS_COMMENT_RENDERERS.get(language_id)
-    if renderer is None:
-        return ""
-    return renderer(thrown_exceptions)
-
-
-def _render_signature_text(local_qualified_name: str, kind: str, contract: BehavioralContract, language_id: str) -> str:
-    """The real declaration line, rendered from `ContractExtractor`'s own
-    structured `params`/`return_type`/`is_async` - never the raw source
-    text (which would drag the real body's own indentation/formatting
-    along with it), and never fabricated when a field is absent (a class
-    with no meaningful `__init__` signature to show renders as a bare
-    `class Name:`, not a guessed constructor).
-
-    Prefixed with a language-appropriate thrown-exceptions comment
-    (`_render_thrown_exceptions_comment`) when `contract.thrown_exceptions`
-    is non-empty - `ContractExtractor` already computed this for every
-    in-repo symbol; only the external-stub path was ever discarding it.
-    """
-    simple_name = local_qualified_name.rsplit(".", 1)[-1]
+def _render_python_header(simple_name: str, kind: str, contract: BehavioralContract) -> str:
+    annotation = _render_python_raises_comment(contract.thrown_exceptions) if contract.thrown_exceptions else ""
     if kind == "class":
         header = f"class {simple_name}:"
     else:
@@ -291,8 +250,165 @@ def _render_signature_text(local_qualified_name: str, kind: str, contract: Behav
         if contract.return_type:
             header += f" -> {contract.return_type}"
         header += ":"
-    annotation = _render_thrown_exceptions_comment(language_id, contract.thrown_exceptions)
-    return annotation + header
+    return f"{annotation}{header}"
+
+
+def _render_ts_header(simple_name: str, kind: str, contract: BehavioralContract) -> str:
+    """`declare ...` (an ambient, type-only declaration - real `.d.ts`
+    syntax, terminated by `;`/`}`) rather than a real `function name(...)
+    { ... }` with an executable body: the whole point of a stub is
+    "signature only, no implementation," and `declare` is TypeScript's
+    own idiom for exactly that."""
+    annotation = _render_jsdoc_throws_comment(contract.thrown_exceptions) if contract.thrown_exceptions else ""
+    if kind == "class":
+        header = f"declare class {simple_name} {{}}"
+    else:
+        prefix = "async function" if contract.is_async else "function"
+        params_text = ", ".join(p.render() for p in contract.params)
+        header = f"declare {prefix} {simple_name}({params_text})"
+        if contract.return_type:
+            header += f": {contract.return_type}"
+        header += ";"
+    return f"{annotation}{header}"
+
+
+def _render_go_header(simple_name: str, kind: str, contract: BehavioralContract) -> str:
+    """`contract.thrown_exceptions` is always empty for Go (no `RAISE_
+    NODE_TYPE` entry - Go signals failure via a returned `error` value,
+    not exceptions), so there's no annotation branch to write here at
+    all, unlike the Python/TS renderers above.
+
+    Known, disclosed gap for `kind == "method"`: Go's real syntax needs a
+    receiver clause (`func (c *Context) JSON(...)`), but neither
+    `BehavioralContract` nor this module's own `_iter_definitions` walk
+    captures the receiver's variable name or type anywhere reachable from
+    here - inventing one (a conventional single-letter abbreviation of
+    the enclosing type, the idiomatic Go convention) would be exactly the
+    kind of fabrication this module's own docstring already refuses to
+    do elsewhere ("never fabricated when a field is absent"). Renders as
+    a bare `func Name(...)` instead - a real, valid Go function
+    signature, just missing the receiver context that would mark it as a
+    method on a specific type. Fixing this properly needs receiver
+    extraction threaded through from `ConcreteGraphBuilder`'s own
+    receiver-resolution logic, out of scope here.
+
+    Go structs (`kind == "class"`, `CLASS_NODE_TYPES[GO] = {"type_
+    declaration"}` - the same shared table `concrete_builder.py` uses)
+    render as `type Name struct {}` - Go's real syntax for an empty
+    struct, not a fabricated field list (no field extraction happens for
+    an external Go struct today either).
+    """
+    if kind == "class":
+        return f"type {simple_name} struct {{}}"
+    params_text = ", ".join(_render_go_param(p) for p in contract.params)
+    header = f"func {simple_name}({params_text})"
+    if contract.return_type:
+        header += f" {contract.return_type}"
+    return header
+
+
+def _render_unsupported_language_header(simple_name: str, kind: str, contract: BehavioralContract) -> str:
+    """No real renderer exists for this language (today: Java/C#, neither
+    reachable via any existing `ExternalSourceLocator`) - a bare, keyword-
+    free declaration shape rather than silently defaulting to Python's
+    `def`/`class` syntax (the exact bug this whole refactor fixes for
+    TS/Go; falling back to it here for a *third* unhandled language would
+    just move the same mistake, not close it). Genuinely reachable only
+    once a Java/C# locator is implemented - there is no such locator
+    today, so nothing exercises this path in practice yet.
+    """
+    if kind == "class":
+        return f"{simple_name} {{}}"
+    params_text = ", ".join(p.render() for p in contract.params)
+    header = f"{simple_name}({params_text})"
+    if contract.return_type:
+        header += f": {contract.return_type}"
+    return header
+
+
+#: Architectural-audit Category 6/9 follow-up: the language dispatch this
+#: whole module was missing - `_render_signature_text` used to hardcode
+#: Python's `def`/`async def`/`class` keywords regardless of the actual
+#: source language, so a real TypeScript function rendered as invalid-
+#: syntax `def useAuth(token: string) -> boolean:` (confirmed live during
+#: the architectural audit). Each renderer produces only the declaration
+#: line itself (plus its language-appropriate exception annotation, when
+#: any) - `info.signature_text`'s own contract (`test_external_index.py`'s
+#: `signature_text == "class Response:"`, no placeholder body attached)
+#: - leaving the separate, also per-language question of how to pad that
+#: into a complete stub *body* to `_STUB_BODY_ASSEMBLERS` below, since the
+#: two don't vary together (Python's `...` placeholder is appended after
+#: the header; TypeScript's `declare` form is already complete without
+#: one; Go's needs a matching `{`/`}` pair opened on the header line
+#: itself, and only for a function - a struct's `{}` is already there).
+_SIGNATURE_RENDERERS = {
+    LanguageID.PYTHON: _render_python_header,
+    LanguageID.JAVASCRIPT: _render_ts_header,
+    LanguageID.TYPESCRIPT: _render_ts_header,
+    LanguageID.TSX: _render_ts_header,
+    LanguageID.GO: _render_go_header,
+}
+
+
+def _render_signature_text(local_qualified_name: str, kind: str, contract: BehavioralContract, language_id: str) -> str:
+    """The real declaration line, rendered from `ContractExtractor`'s own
+    structured `params`/`return_type`/`is_async` - never the raw source
+    text, and never fabricated when a field is absent (a class with no
+    meaningful `__init__` signature to show renders as a bare `class
+    Name:`/`declare class Name {}`/`type Name struct {}`, not a guessed
+    constructor). Dispatched per `language_id` via `_SIGNATURE_RENDERERS`,
+    or `_render_unsupported_language_header` for a language with no real
+    renderer yet."""
+    simple_name = local_qualified_name.rsplit(".", 1)[-1]
+    renderer = _SIGNATURE_RENDERERS.get(language_id, _render_unsupported_language_header)
+    return renderer(simple_name, kind, contract)
+
+
+def _assemble_python_stub_body(signature_text: str, kind: str) -> str:
+    return f"{signature_text}\n    ..."
+
+
+def _assemble_ts_stub_body(signature_text: str, kind: str) -> str:
+    # `declare ...` is already a complete, self-terminating statement.
+    return signature_text
+
+
+def _assemble_go_stub_body(signature_text: str, kind: str) -> str:
+    # `type Name struct {}` (kind == "class") is already self-complete;
+    # only a function header needs a matching `{ ... }` body opened here.
+    if kind == "class":
+        return signature_text
+    return f"{signature_text} {{\n\t// ...\n}}"
+
+
+def _assemble_unsupported_language_stub_body(signature_text: str, kind: str) -> str:
+    # No known target syntax to pad with - the bare declaration line is
+    # already the most honest thing we can show.
+    return signature_text
+
+
+#: The per-language counterpart to `_SIGNATURE_RENDERERS`: how to pad a
+#: bare declaration line (`info.signature_text`) into the complete,
+#: syntactically-plausible stub body `NodeEntry.body` shows - kept as a
+#: separate dispatch table because "what a declaration line looks like"
+#: and "what placeholder body syntax follows it" vary independently
+#: across languages (see `_SIGNATURE_RENDERERS`'s own docstring).
+_STUB_BODY_ASSEMBLERS = {
+    LanguageID.PYTHON: _assemble_python_stub_body,
+    LanguageID.JAVASCRIPT: _assemble_ts_stub_body,
+    LanguageID.TYPESCRIPT: _assemble_ts_stub_body,
+    LanguageID.TSX: _assemble_ts_stub_body,
+    LanguageID.GO: _assemble_go_stub_body,
+}
+
+
+def _render_stub_body(signature_text: str, kind: str, language_id: str) -> str:
+    """`NodeEntry.body`'s full text for one external symbol: `signature_
+    text` (the declaration line `_render_signature_text` produced) padded
+    with whatever placeholder body syntax `language_id` needs, via
+    `_STUB_BODY_ASSEMBLERS`."""
+    assembler = _STUB_BODY_ASSEMBLERS.get(language_id, _assemble_unsupported_language_stub_body)
+    return assembler(signature_text, kind)
 
 
 def _parse_external_file(file_path: Path) -> ParsedFile | None:
@@ -419,12 +535,12 @@ def extract_external_symbol_all(
 
 def external_symbol_to_node_entry(info: ExternalSymbolInfo, distance: float = 1.0) -> NodeEntry:
     """`ExternalSymbolInfo` -> a real `role="external"` `NodeEntry`
-    (schema_version 3 - Section 2.3). `body` is the signature line plus a
-    `...` placeholder, the same signature-only render an in-repo
-    `"L2_skeleton"` stub already uses (`_signature_stub` in
-    `submodular_knapsack.py`) - never the located file's real body text,
-    which is never read for anything beyond producing a parse tree.
-    `compression` is always `"L2_skeleton"` and `contract` is always
+    (schema_version 3 - Section 2.3). `body` is `info.signature_text`
+    padded by `_render_stub_body` with whatever placeholder body syntax
+    `info.language` needs (Python's `...`, TypeScript's already-complete
+    `declare` form, Go's matching `{ ... }`) - never the located file's
+    real body text, which is never read for anything beyond producing a
+    parse tree. `compression` is always `"L2_skeleton"` and `contract` is always
     `None` (Section 2.3's own stated metadata boundary - a real, full
     body render is architecturally impossible for a symbol this system
     never AST-indexes as a repo file, not merely undesired here).
@@ -450,5 +566,5 @@ def external_symbol_to_node_entry(info: ExternalSymbolInfo, distance: float = 1.
         signature=NodeSignature(docstring=info.docstring),
         features=_EXTERNAL_FEATURES,
         contract=None,
-        body=f"{info.signature_text}\n    ...",
+        body=_render_stub_body(info.signature_text, info.kind, info.language),
     )
