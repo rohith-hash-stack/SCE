@@ -243,6 +243,18 @@ def _find_definition(parsed: ParsedFile, symbol_name: str) -> tuple[Node, str | 
     return None
 
 
+#: A TypeScript declaration file's own reserved double-extension
+#: convention (`index.d.ts`, `index.d.cts`, `index.d.mts`) - `Path.
+#: with_suffix("")` only ever strips the *outermost* extension, so a
+#: single call leaves a literal `.d` stem behind (`"index.d.ts"` ->
+#: `"index.d"`, not `"index"`) that Python's own single-extension
+#: `.pyi` never had to account for. `_module_name_for_file` below
+#: strips this specific, unambiguous marker a second time - never a
+#: generic "strip any second extension" heuristic, which would
+#: misfire on a real, unrelated `foo.min.ts`-style filename.
+_TS_DECLARATION_FILE_SUFFIXES = (".d.ts", ".d.cts", ".d.mts")
+
+
 def _module_name_for_file(top_level: str, file_path: Path) -> str:
     """`starlette.routing` for `.../dist-packages/starlette/routing.py`,
     `starlette` for that same package's own `__init__.py` - derived from
@@ -250,10 +262,29 @@ def _module_name_for_file(top_level: str, file_path: Path) -> str:
     everything from there), not from a separately-plumbed package root,
     since `ExternalSourceLocator.locate` returns a flat `list[Path]`
     (Section 2.2's own Protocol shape) rather than a `(root, files)` pair.
+
+    `top_level` may itself contain a literal `/` for a scoped npm
+    package (`"@trpc/server"`) - matched as a contiguous run of path
+    *parts* (`("@trpc", "server")`), not a single part, since a scoped
+    package's real directory layout (`node_modules/@trpc/server/...`)
+    never collapses those two segments into one path component the way
+    a naive `top_level in parts` single-part membership check would
+    require. `top_level` is kept as one combined first segment in the
+    returned module string either way (`"@trpc/server.dist.index"`), the
+    same "the real top-level package name, verbatim, as the first
+    segment" contract the plain-Python case already has.
     """
-    parts = file_path.with_suffix("").parts
-    if top_level in parts:
-        rel_parts = parts[parts.index(top_level):]
+    stem_path = file_path.with_suffix("")
+    if any(file_path.name.endswith(suffix) for suffix in _TS_DECLARATION_FILE_SUFFIXES):
+        stem_path = stem_path.with_suffix("")
+    parts = stem_path.parts
+    top_level_parts = tuple(top_level.split("/"))
+    n = len(top_level_parts)
+    match_index = next(
+        (i for i in range(len(parts) - n + 1) if parts[i : i + n] == top_level_parts), None,
+    )
+    if match_index is not None:
+        rel_parts = (top_level, *parts[match_index + n :])
     else:
         rel_parts = (top_level, file_path.stem)
     if rel_parts and rel_parts[-1] == "__init__":
@@ -455,6 +486,18 @@ def _render_stub_body(signature_text: str, kind: str, language_id: str) -> str:
     return assembler(signature_text, kind)
 
 
+#: Real Node/TypeScript source extensions `EXTENSION_LANGUAGE_MAP` has no
+#: entry for - each mapped to an already-supported extension whose
+#: grammar is identical (module format is a bundler/runtime concern, not
+#: a tree-sitter syntax difference). See `_parse_external_file`'s own
+#: docstring for the real packages that surfaced this.
+_EXTERNAL_EXTENSION_OVERRIDES = {
+    ".cts": ".ts",
+    ".mts": ".ts",
+    ".cjs": ".js",
+}
+
+
 def _parse_external_file(file_path: Path) -> ParsedFile | None:
     """Parses `file_path` via Prism's own tree-sitter loader - real bug,
     found and fixed while testing the `orjson.dumps` receiver-based
@@ -481,7 +524,27 @@ def _parse_external_file(file_path: Path) -> ParsedFile | None:
     substituted extension, harmlessly - neither this module nor
     `ContractExtractor` ever reads `ParsedFile.path`, only its
     `.source`/`.language_id`/`.root_node`.
+
+    The same gap, confirmed live against real installed packages while
+    building `TypeScriptSourceLocator`: `EXTENSION_LANGUAGE_MAP` has no
+    `.cts`/`.mts`/`.cjs` entries at all (only `.ts`/`.tsx`/`.js`/`.jsx`/
+    `.mjs`) - real, common real-world extensions for a package.json
+    `"type"`-aware dual ESM/CJS build (`@trpc/server`'s own real `types`
+    field points at `dist/index.d.cts`; `zod`'s own `main` is
+    `./index.cjs`). `.cts`/`.mts` are TypeScript's own explicit-module-
+    format source extensions (the same grammar as `.ts` - module format
+    is a runtime/bundler concern, not a syntax difference tree-sitter
+    cares about); `.cjs` is JavaScript's. `_EXTERNAL_EXTENSION_OVERRIDES`
+    below forces the matching grammar the same local, non-global way
+    `.pyi` already does, for the same reason.
     """
+    override = _EXTERNAL_EXTENSION_OVERRIDES.get(file_path.suffix)
+    if override is not None:
+        try:
+            source = file_path.read_bytes()
+        except OSError:
+            return None
+        return parse_source(str(file_path.with_suffix(override)), source)
     if file_path.suffix == ".pyi":
         try:
             source = file_path.read_bytes()

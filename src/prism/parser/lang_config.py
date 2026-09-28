@@ -110,11 +110,31 @@ CLASS_NODE_TYPES = {
     LanguageID.JAVA: {"class_declaration", "interface_declaration", "record_declaration", "enum_declaration"},
     LanguageID.CSHARP: {"class_declaration", "interface_declaration", "struct_declaration", "record_declaration"},
 }
+#: `function_signature`/`method_signature` (TypeScript/TSX/JavaScript only
+#: - JS has no ambient-declaration syntax, listed anyway for symmetry
+#: since a real `.js` file simply never produces either node type) are
+#: the body-less, ambient-declaration shape a real `.d.ts`/`.d.cts`/
+#: `.d.mts` file's top-level `declare function ...;` and a `declare
+#: class`'s own member signatures parse as - distinct from
+#: `function_declaration`/`method_definition` (which always have a real
+#: body) and from `abstract_method_signature` (a real, non-ambient
+#: class's abstract member, a different node type entirely - not
+#: included here, out of scope for this addition). Confirmed live: an
+#: ordinary executable `.ts`/`.js` function or method, with or without a
+#: body, never produces either signature-only node type - only ambient/
+#: `declare` contexts do - so this is a strictly additive, backward-
+#: compatible change for every existing (non-`.d.ts`) consumer of this
+#: table (`ConcreteGraphBuilder`'s own in-repo indexing included).
+#: Without this, `TypeScriptSourceLocator`'s whole point - resolving a
+#: real npm package's own `.d.ts` file - would land on a file whose
+#: every top-level definition this table's own consumers (`prism.
+#: external.index._iter_definitions` chief among them) silently found
+#: nothing in at all.
 FUNCTION_NODE_TYPES = {
     LanguageID.PYTHON: {"function_definition"},
-    LanguageID.JAVASCRIPT: {"function_declaration", "method_definition"},
-    LanguageID.TYPESCRIPT: {"function_declaration", "method_definition"},
-    LanguageID.TSX: {"function_declaration", "method_definition"},
+    LanguageID.JAVASCRIPT: {"function_declaration", "method_definition", "function_signature", "method_signature"},
+    LanguageID.TYPESCRIPT: {"function_declaration", "method_definition", "function_signature", "method_signature"},
+    LanguageID.TSX: {"function_declaration", "method_definition", "function_signature", "method_signature"},
     LanguageID.GO: {"function_declaration", "method_declaration"},
     LanguageID.JAVA: {"method_declaration", "constructor_declaration"},
     LanguageID.CSHARP: {"method_declaration", "constructor_declaration"},
