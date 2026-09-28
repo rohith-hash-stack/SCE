@@ -1,0 +1,87 @@
+# T02 "Express Pilot" - Task 5: a route Layer's own path-matching and
+# param-decoding.
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.router.layer.match         lines 110-156
+#   lib.router.layer.decode_param  lines 166-181
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to the pipeline stage.
+#
+# Real, disclosed scope note: this is a genuinely short, 2-symbol
+# in-repo pipeline, not an artificially trimmed one - match()'s only
+# other real work is testing `this.regexp` (a `path-to-regexp`-compiled
+# RegExp already built once, in the Layer constructor, from the route
+# pattern) directly via `.exec()`/its own `fast_slash`/`fast_star`
+# fields, which is real object-method use, not a further in-repo
+# CALLS-traversable pipeline stage. Every captured/matched param value
+# is decoded via decode_param() before being stored on `this.params` -
+# the one real, reachable next stage.
+task_id: express_t02_005_layer_path_matching
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.router.layer.match
+task_type: debug
+prompt: 'You are investigating how an Express route Layer decides whether it matches an incoming request
+  path, in lib/router/layer.js. Starting from `match`, trace the exact causal pipeline for a successful
+  match with captured path parameters: what happens to each raw captured value before it is stored on
+  `this.params`.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.router.layer.match", "lib.router.layer.decode_param"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.router.layer.match
+  - lib.router.layer.decode_param
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: match() tests the incoming path against this.regexp (already compiled once, in the
+    Layer constructor). On a real match, it walks the regexp's own captured groups and calls
+    decode_param() on each raw captured string value (URI-decoding it, with a real 400-status error
+    thrown on a malformed percent-encoding) before storing the decoded value into this.params.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.router.layer.match
+  - lib.router.layer.decode_param
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: match() checks the path against the compiled regexp and calls decode_param() on
+    each captured value to URI-decode it before storing it in this.params.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.router.layer.match
+  - lib.router.layer.decode_param
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: match() tests the incoming path against this.regexp (compiled once in the Layer
+    constructor), and on a real match calls decode_param() on each raw captured value - URI-decoding it,
+    with a real 400-status error on malformed percent-encoding - before storing the decoded value into
+    this.params. Both annotators agreed on the real, correct 2-stage pipeline.
