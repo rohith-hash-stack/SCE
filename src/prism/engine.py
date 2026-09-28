@@ -73,7 +73,7 @@ def _locator_for_language(language_id: str, start_dir: str) -> ExternalSourceLoc
     return None
 
 
-def _matching_root_import(origin: str, root_imports: list[str]) -> str | None:
+def _matching_root_import(origin: str, root_imports: list[str]) -> tuple[str, str] | None:
     """Which `root_imports` entry `origin` (a `LocalImportMap`-resolved
     dotted string, e.g. `"@trpc.server.initTRPC"`) actually names - real
     bug, found live while wiring `TypeScriptSourceLocator` in: a naive
@@ -96,6 +96,19 @@ def _matching_root_import(origin: str, root_imports: list[str]) -> str | None:
     like `"orjson"`), which this generalizes without changing at all -
     `package_name.replace("/", ".")` is a no-op for any name with no `/`
     in it to begin with.
+
+    Subpath-export follow-up (`feature/subpath-export-resolution`):
+    returns `(matched_package, remainder)`, not just the matched name -
+    `remainder` is whatever of `origin` sits after the matched entry's
+    own dotted prefix (e.g. `"adapters.express.createExpressMiddleware"`
+    for `origin="@trpc.server.adapters.express.createExpressMiddleware"`
+    matched against `"@trpc/server"`), empty when `origin` names the
+    root package's own top-level export directly. A real `/`-containing
+    npm subpath export (`@trpc/server/adapters/express`) collapses to
+    its own dotted form here exactly like a root package name does -
+    the caller derives the real subpath from `remainder` itself, since
+    the two real call sites need different slices of it (one strips a
+    trailing leaf symbol name first, one doesn't).
     """
     best: str | None = None
     best_dotted_len = -1
@@ -105,7 +118,11 @@ def _matching_root_import(origin: str, root_imports: list[str]) -> str | None:
             if len(dotted) > best_dotted_len:
                 best_dotted_len = len(dotted)
                 best = package_name
-    return best
+    if best is None:
+        return None
+    best_dotted = best.replace("/", ".")
+    remainder = origin[len(best_dotted) + 1 :] if origin != best_dotted else ""
+    return best, remainder
 
 
 @dataclass(frozen=True)
@@ -476,7 +493,7 @@ class PrismEngine:
             self_tokens |= tokens
 
         resolved: dict[str, ExternalSymbolInfo] = {}
-        attempted: set[tuple[str, str, str, str]] = set()
+        attempted: set[tuple[str, str, str, str, str]] = set()
         #: One `ExternalSourceLocator` per `(language_id, start_dir)` pair
         #: actually encountered, reused across every candidate resolved
         #: from that same directory/language within this one call -
@@ -486,8 +503,8 @@ class PrismEngine:
         #: 8) already found worth avoiding.
         locator_cache: dict[tuple[str, str], ExternalSourceLocator | None] = {}
 
-        def _resolve_against(package_name: str, symbol_name: str, lang: str, start_dir: str) -> None:
-            key = (package_name, symbol_name, lang, start_dir)
+        def _resolve_against(package_name: str, symbol_name: str, lang: str, start_dir: str, subpath: str = "") -> None:
+            key = (package_name, symbol_name, lang, start_dir, subpath)
             if key in attempted:
                 return
             attempted.add(key)
@@ -497,7 +514,7 @@ class PrismEngine:
             locator = locator_cache[locator_key]
             if locator is None:
                 return
-            for ext_info in extract_external_symbol_all(package_name, symbol_name, locator=locator):
+            for ext_info in extract_external_symbol_all(package_name, symbol_name, locator=locator, subpath=subpath or None):
                 resolved[ext_info.qualified_name] = ext_info
 
         for qname in turn1_symbols:
@@ -521,41 +538,58 @@ class PrismEngine:
 
                 if len(segments) == 1:
                     # Path 1, bare call: `MarkdownIt()` after
-                    # `from markdown_it import MarkdownIt`.
+                    # `from markdown_it import MarkdownIt`, or
+                    # `createExpressMiddleware()` after `import {
+                    # createExpressMiddleware } from "@trpc/server/
+                    # adapters/express"`.
                     bare_name = segments[0]
                     origin = import_map.resolve(bare_name) if import_map else None
                     if origin is None:
                         continue
-                    matched_package = _matching_root_import(origin, root_imports)
-                    if matched_package is not None:
+                    match = _matching_root_import(origin, root_imports)
+                    if match is not None:
+                        matched_package, remainder = match
                         # "markdown_it.MarkdownIt" -> search "MarkdownIt";
                         # "markdown_it.token.Token" -> search "Token" (the
                         # intermediate submodule segment is dropped -
                         # matches extract_external_symbol_all's own
                         # bare-name, cross-file search contract).
-                        _resolve_against(matched_package, origin.rsplit(".", 1)[-1], lang, start_dir)
+                        leaf = origin.rsplit(".", 1)[-1]
+                        # `remainder` is `<subpath dotted>.<leaf>` when a
+                        # real npm subpath export is involved (e.g.
+                        # "adapters.express.createExpressMiddleware"), or
+                        # just `<leaf>` (no dot) for a plain root export
+                        # ("initTRPC") - strip the trailing leaf segment
+                        # to get the real subpath, "" when there is none.
+                        subpath_dotted = remainder.rsplit(".", 1)[0] if "." in remainder else ""
+                        _resolve_against(matched_package, leaf, lang, start_dir, subpath_dotted.replace(".", "/"))
                     continue
 
                 if len(segments) != 2:
                     continue
                 receiver, leaf = segments
-                candidate_packages: list[str] = []
+                candidate_pairs: list[tuple[str, str]] = []
                 if receiver in root_imports:
-                    candidate_packages = [receiver]
+                    candidate_pairs = [(receiver, "")]
                 elif (
                     import_map
                     and (origin := import_map.resolve(receiver))
-                    and (matched_package := _matching_root_import(origin, root_imports)) is not None
+                    and (match := _matching_root_import(origin, root_imports)) is not None
                 ):
                     # Path 1, aliased-module receiver: `md.MarkdownIt()`
                     # after `import markdown_it as md`. The package comes
                     # from the import map; the symbol searched for is the
                     # call's own original leaf, not derived from `origin`.
-                    candidate_packages = [matched_package]
+                    # Here `origin` names only the module the receiver was
+                    # bound to (no symbol suffix, unlike the bare-call
+                    # case above), so the whole remainder - not a leaf-
+                    # stripped slice of it - is the real subpath.
+                    matched_package, remainder = match
+                    candidate_pairs = [(matched_package, remainder.replace(".", "/"))]
                 elif receiver in self_tokens and not self._builder.symbol_table.candidates_for_simple_name(leaf):
-                    candidate_packages = root_imports
-                for package_name in candidate_packages:
-                    _resolve_against(package_name, leaf, lang, start_dir)
+                    candidate_pairs = [(pkg, "") for pkg in root_imports]
+                for package_name, subpath in candidate_pairs:
+                    _resolve_against(package_name, leaf, lang, start_dir, subpath)
 
         self._external_symbol_cache.update(resolved)
         # Real bug, found and fixed while testing the `ujson.dumps`

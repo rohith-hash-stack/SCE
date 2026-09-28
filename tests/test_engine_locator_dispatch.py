@@ -89,21 +89,43 @@ def test_unsupported_language_returns_none_not_a_guessed_default():
 def test_matching_root_import_handles_a_scoped_package_correctly():
     """The exact regression this session found: a naive `origin.split(
     ".")[0]` on `"@trpc.server.initTRPC"` returns only `"@trpc"`, never
-    matching a real `root_imports` entry of `"@trpc/server"`."""
-    assert _matching_root_import("@trpc.server.initTRPC", ["@trpc/server"]) == "@trpc/server"
+    matching a real `root_imports` entry of `"@trpc/server"`.
+
+    `feature/subpath-export-resolution`: the return shape is now
+    `(matched_package, remainder)`, not a bare string - `remainder` is
+    `"initTRPC"` here (no subpath, just the bare leaf), covered
+    separately below."""
+    assert _matching_root_import("@trpc.server.initTRPC", ["@trpc/server"]) == ("@trpc/server", "initTRPC")
 
 
 def test_matching_root_import_is_unchanged_for_ordinary_unscoped_names():
-    assert _matching_root_import("markdown_it.MarkdownIt", ["markdown_it"]) == "markdown_it"
-    assert _matching_root_import("orjson.dumps", ["orjson"]) == "orjson"
+    assert _matching_root_import("markdown_it.MarkdownIt", ["markdown_it"]) == ("markdown_it", "MarkdownIt")
+    assert _matching_root_import("orjson.dumps", ["orjson"]) == ("orjson", "dumps")
 
 
 def test_matching_root_import_prefers_the_longest_match():
-    assert _matching_root_import("@scope.pkg.sub.Thing", ["@scope/pkg", "@scope/pkg/sub"]) == "@scope/pkg/sub"
+    assert _matching_root_import("@scope.pkg.sub.Thing", ["@scope/pkg", "@scope/pkg/sub"]) == (
+        "@scope/pkg/sub",
+        "Thing",
+    )
 
 
 def test_matching_root_import_returns_none_for_no_match():
     assert _matching_root_import("lodash.debounce", ["express"]) is None
+
+
+def test_matching_root_import_returns_the_full_subpath_remainder():
+    """`feature/subpath-export-resolution`'s own new case: a real npm
+    subpath export (`@trpc/server/adapters/express`) collapses to a
+    dotted origin exactly like a root package does -
+    `ConcreteGraphBuilder._resolve_js_specifier`'s bare-package fallback
+    doesn't distinguish the two. `remainder` here is everything between
+    the matched root and the call's own leaf symbol name
+    (`"adapters.express"` - the caller strips the trailing leaf itself,
+    since the two real call sites need different slices of it)."""
+    assert _matching_root_import(
+        "@trpc.server.adapters.express.createExpressMiddleware", ["@trpc/server"],
+    ) == ("@trpc/server", "adapters.express.createExpressMiddleware")
 
 
 # --------------------------------------------------------------------- #
@@ -163,3 +185,87 @@ def test_ts_and_scoped_candidates_resolve_together_in_one_manifest_call(tmp_path
         ["app.setup", "trpc_app.run"], root_imports=["express", "@trpc/server"],
     )
     assert universe == {"express.index.Router", "@trpc/server.index.initTRPC"}
+
+
+# --------------------------------------------------------------------- #
+# End-to-end: `feature/subpath-export-resolution` - the real
+# `@trpc/server/adapters/express` shape (a bare-name call after a named
+# import from a real npm subpath specifier).
+# --------------------------------------------------------------------- #
+def _write_trpc_adapter_project(root) -> None:
+    node_modules = root / "node_modules"
+    trpc_dir = node_modules / "@trpc" / "server"
+    (trpc_dir / "dist" / "adapters").mkdir(parents=True)
+    (trpc_dir / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "@trpc/server",
+                "main": "./dist/index.js",
+                "exports": {
+                    ".": {"types": "./dist/index.d.ts", "default": "./dist/index.js"},
+                    "./adapters/express": {
+                        "types": "./dist/adapters/express.d.ts",
+                        "default": "./dist/adapters/express.js",
+                    },
+                },
+            }
+        )
+    )
+    (trpc_dir / "dist" / "index.d.ts").write_text("export declare function initTRPC(): void;\n")
+    (trpc_dir / "dist" / "adapters" / "express.d.ts").write_text(
+        "export declare function createExpressMiddleware(opts: { router: unknown }): void;\n"
+    )
+    (root / "bootstrap.ts").write_text(
+        "import { createExpressMiddleware } from '@trpc/server/adapters/express';\n\n"
+        "export function mountRouter(): void {\n    createExpressMiddleware({ router: null });\n}\n"
+    )
+
+
+def test_subpath_export_resolves_to_its_own_declaration_file_not_the_root(tmp_path):
+    """The real regression this branch fixes: before, `createExpressMiddleware`
+    (which lives only in the `./adapters/express` subpath's own file, per
+    real `@trpc/server`'s actual shape) was unreachable - `_matching_root_
+    import` discarded the subpath, and resolution always searched the
+    package's root `exports["."]` file instead, where the symbol simply
+    isn't defined."""
+    _write_trpc_adapter_project(tmp_path)
+    engine = PrismEngine.from_repo(str(tmp_path))
+    manifest_text, universe = engine.build_external_candidate_manifest(
+        ["bootstrap.mountRouter"], root_imports=["@trpc/server"],
+    )
+    assert universe == {"@trpc/server.dist.adapters.express.createExpressMiddleware"}
+    assert "declare function createExpressMiddleware(opts: { router: unknown }): void;" in manifest_text
+
+
+def test_subpath_export_end_to_end_retrieval_admits_the_real_stub(tmp_path):
+    _write_trpc_adapter_project(tmp_path)
+    engine = PrismEngine.from_repo(str(tmp_path))
+
+    pkg, diagnostics = engine.retrieve_two_or_three_pass(
+        "bootstrap.mountRouter",
+        4000,
+        request_symbols=lambda manifest_text, task_prompt: ([], True),
+        request_external_symbols=lambda manifest_text, task_prompt: _accept_every_candidate(manifest_text),
+        root_imports=["@trpc/server"],
+    )
+    assert diagnostics["needs_external_deps"] is True
+    assert diagnostics["external_skipped_hallucinated"] == []
+
+    external_nodes = [n for n in pkg.nodes if n.role == "external"]
+    assert len(external_nodes) == 1
+    assert external_nodes[0].body == "declare function createExpressMiddleware(opts: { router: unknown }): void;"
+
+
+def test_root_export_of_the_same_package_is_unaffected_by_subpath_support(tmp_path):
+    """A plain, non-subpath import of the same package (`initTRPC` from
+    `@trpc/server`'s own root) must still resolve exactly as before -
+    subpath support is strictly additive."""
+    _write_trpc_adapter_project(tmp_path)
+    (tmp_path / "root_usage.ts").write_text(
+        "import { initTRPC } from '@trpc/server';\n\nexport function run() {\n    return initTRPC();\n}\n"
+    )
+    engine = PrismEngine.from_repo(str(tmp_path))
+    _manifest_text, universe = engine.build_external_candidate_manifest(
+        ["root_usage.run"], root_imports=["@trpc/server"],
+    )
+    assert universe == {"@trpc/server.dist.index.initTRPC"}
