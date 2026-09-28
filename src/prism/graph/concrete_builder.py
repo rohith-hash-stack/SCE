@@ -21,10 +21,12 @@ rather than silently pretending to be exact.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import threading
+from dataclasses import dataclass
 
 import networkx as nx
 from tree_sitter import Node
@@ -147,6 +149,32 @@ TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMEN
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class _TsPathAliasConfig:
+    """One parsed `tsconfig.json`/`jsconfig.json`'s `compilerOptions.
+    paths` mapping - Category 8 (architectural audit): `@/*`-style
+    aliased imports previously resolved to a phantom, never-matching
+    module name (the same bare-npm-package fallback a genuine external
+    dependency gets), since `_resolve_js_specifier` never looked at a
+    project's own path-mapping config at all.
+
+    `base_url` is already resolved to a real, absolute directory
+    (`compilerOptions.baseUrl`, default `"."`, joined against the
+    tsconfig's own directory - never the repo root directly, since a
+    monorepo package's `tsconfig.json` sets `baseUrl` relative to
+    *itself*) - every target in `paths` is resolved against this,
+    matching `tsc`'s own rule.
+
+    `paths` keeps each pattern's raw target list (e.g. `{"@/*":
+    ["src/*"]}`) unresolved - substituting `*` and joining against
+    `base_url` happens per matched specifier, not once here, since the
+    matched wildcard text differs per import.
+    """
+
+    base_url: str
+    paths: dict[str, list[str]]
+
+
 class ConcreteGraphBuilder:
     """Builds `G_C` from a set of source files via the two-pass linker."""
 
@@ -243,6 +271,20 @@ class ConcreteGraphBuilder:
         #: all". Same single-threaded/sequential caveat as
         #: `_last_resolution_was_tentative` above.
         self._last_go_embedded_collision: str | None = None
+        #: Category 8 (architectural audit): TS/JS path-alias resolution
+        #: caches - Scope 2's "workspace caching" requirement. Two levels,
+        #: since they memoize two different operations: `_tsconfig_lookup_
+        #: cache` remembers, per starting directory, which `tsconfig.json`/
+        #: `jsconfig.json` file (if any) the upward filesystem walk found -
+        #: every file in that same directory reuses the answer with no
+        #: repeat walk. `_tsconfig_parse_cache` remembers, per resolved
+        #: config file path, the parsed `_TsPathAliasConfig` (or `None` for
+        #: a config with no usable `paths`) - a monorepo where many
+        #: directories all resolve to the same root `tsconfig.json` parses
+        #: and JSON-decodes that one file exactly once, not once per
+        #: importing file.
+        self._tsconfig_lookup_cache: dict[str, str | None] = {}
+        self._tsconfig_parse_cache: dict[str, _TsPathAliasConfig | None] = {}
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
@@ -1047,7 +1089,105 @@ class ConcreteGraphBuilder:
             file_dir = os.path.dirname(file_path)
             joined = os.path.normpath(os.path.join(file_dir, specifier))
             return path_to_module(self._resolve_js_module_file(joined), self.repo_root)
+        alias_module = self._resolve_ts_path_alias(specifier, file_path)
+        if alias_module is not None:
+            return alias_module
         return specifier.replace("/", ".")
+
+    #: Category 8 (architectural audit): the two config filenames a real
+    #: TS/JS toolchain reads path mappings from - `jsconfig.json` is
+    #: `tsconfig.json`'s plain-JS-project equivalent (VS Code's own
+    #: convention, `compilerOptions.paths` included), checked second so a
+    #: project with both (rare, but not invalid) prefers the TS one.
+    _TS_CONFIG_FILENAMES = ("tsconfig.json", "jsconfig.json")
+
+    def _resolve_ts_path_alias(self, specifier: str, file_path: str) -> str | None:
+        """Category 8: `compilerOptions.paths` resolution (`@/*` ->
+        `src/*`, `~/*` -> `./*`, ...) for a non-relative specifier - tried
+        *before* `_resolve_js_specifier`'s bare-npm-package fallback,
+        since a matching alias unambiguously means "this is a local
+        file", never a real installed package (Phase C's external-stub
+        machinery must never be asked to `pip`/`npm`-style "locate" an
+        `@/*` alias as if it were a real dependency).
+
+        Returns `None` - never a guess - when no `tsconfig.json`/
+        `jsconfig.json` covers `file_path`, when the one found declares
+        no usable `paths` at all, or when `specifier` matches none of its
+        patterns; `_resolve_js_specifier` falls through to the ordinary
+        bare-specifier handling in every one of those cases, exactly as
+        it did before this method existed.
+        """
+        config = self._ts_path_alias_config_for_file(file_path)
+        if config is None:
+            return None
+        match = _best_ts_path_alias_match(specifier, config.paths)
+        if match is None:
+            return None
+        pattern, matched_text = match
+        candidates = _ts_path_alias_target_candidates(config.paths[pattern], matched_text, config.base_url)
+        for candidate in candidates:
+            # A `paths` target may already name a real extension of its
+            # own (`"utils": ["src/utils/index.ts"]`, a real, common
+            # tsconfig shape) - checked directly first, since
+            # `_resolve_js_module_file` only ever *appends* an extension
+            # and would otherwise look for the nonexistent
+            # `src/utils/index.ts.ts`.
+            if os.path.isfile(candidate):
+                return path_to_module(candidate, self.repo_root)
+            resolved = self._resolve_js_module_file(candidate)
+            if resolved != candidate:  # a real file was found on disk
+                return path_to_module(resolved, self.repo_root)
+        # The alias pattern matched, but none of its targets exist on
+        # disk (a stale alias, a not-yet-created file) - degrade the same
+        # way an unresolved *relative* import already does (a synthetic
+        # module name no real symbol will ever match) rather than falling
+        # through to the bare-npm-package branch: matching an alias
+        # pattern at all already settled "this was meant to be local".
+        return path_to_module(candidates[0], self.repo_root)
+
+    def _ts_path_alias_config_for_file(self, file_path: str) -> "_TsPathAliasConfig | None":
+        """`file_path`'s nearest `tsconfig.json`/`jsconfig.json`, parsed
+        and cached. Both cache levels are described on `__init__`'s own
+        `_tsconfig_lookup_cache`/`_tsconfig_parse_cache` docstring (Scope
+        2: workspace caching) - this method is their only caller, so a
+        repeat call for any file under the same resolved config directory
+        costs one dict lookup, never a second disk walk or JSON parse."""
+        tsconfig_path = self._find_tsconfig_for_dir(os.path.dirname(file_path))
+        if tsconfig_path is None:
+            return None
+        if tsconfig_path not in self._tsconfig_parse_cache:
+            self._tsconfig_parse_cache[tsconfig_path] = _parse_ts_path_alias_config(tsconfig_path)
+        return self._tsconfig_parse_cache[tsconfig_path]
+
+    def _find_tsconfig_for_dir(self, start_dir: str) -> str | None:
+        """Walks upward from `start_dir` to (and including) `self.
+        repo_root` looking for the nearest `tsconfig.json`/`jsconfig.json`
+        - "nearest wins", the same resolution order a real TS toolchain
+        uses, so a monorepo package's own config correctly shadows one at
+        the repo root for files under that package. Never walks above
+        `repo_root` - Scope 1's "project/workspace root" is this
+        pipeline's whole indexed universe; a config outside it is not
+        this repo's own workspace config.
+        """
+        if start_dir in self._tsconfig_lookup_cache:
+            return self._tsconfig_lookup_cache[start_dir]
+        repo_root = os.path.normpath(self.repo_root)
+        current = os.path.normpath(start_dir)
+        found: str | None = None
+        while True:
+            for filename in self._TS_CONFIG_FILENAMES:
+                candidate = os.path.join(current, filename)
+                if os.path.isfile(candidate):
+                    found = candidate
+                    break
+            if found is not None or current == repo_root:
+                break
+            parent = os.path.dirname(current)
+            if parent == current:  # reached the filesystem root
+                break
+            current = parent
+        self._tsconfig_lookup_cache[start_dir] = found
+        return found
 
     def _resolve_js_module_file(self, joined_no_ext: str) -> str:
         """`joined_no_ext` is a specifier-derived path with no guaranteed
@@ -1074,10 +1214,15 @@ class ConcreteGraphBuilder:
         `index` identically for either one downstream.
 
         Falls back to the bare, unresolved path when nothing on disk
-        matches (a broken import, a build-time-only alias `Section 3`'s
-        own `TypeScriptSourceLocator` work will need to handle
-        separately) - exactly today's existing behavior, a synthetic
-        module name no real symbol will ever match, never a crash.
+        matches (a broken import, or - since Category 8 - a `tsconfig.json`
+        `paths` alias whose target file doesn't actually exist yet) -
+        exactly today's existing behavior, a synthetic module name no real
+        symbol will ever match, never a crash. `_resolve_ts_path_alias`
+        (Category 8) is this method's other caller, alongside `_resolve_
+        js_specifier`'s own relative-import branch - both feed it a
+        resolved, no-extension candidate path and rely on this exact
+        "unchanged means not found" contract to tell a real hit from a
+        miss.
         """
         for ext in self._JS_MODULE_RESOLUTION_EXTENSIONS:
             candidate = joined_no_ext + ext
@@ -2492,6 +2637,154 @@ def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | N
     if left is None or left.type != ATTRIBUTE_NODE_TYPE.get(lang):
         return None
     return left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
+
+
+def _strip_jsonc_comments(text: str) -> str:
+    """A minimal, self-contained comment/trailing-comma stripper for
+    `tsconfig.json`/`jsconfig.json` - both are conventionally JSONC
+    (`//` and `/* */` comments, tolerated trailing commas), which plain
+    `json.loads` rejects outright. No third-party JSONC/JSON5 dependency
+    is added for this one narrow use; a small hand-rolled state machine
+    covers exactly what a real tsconfig ever contains, tracking string
+    state so a `//` or trailing comma *inside* a string literal (an
+    unusual but legal path value) is never mistaken for a comment/comma
+    to strip.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    in_string = False
+    while i < n:
+        ch = text[i]
+        if in_string:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+            i += 1
+            continue
+        if ch == '"':
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            i += 2
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            i += 2
+            while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
+                i += 1
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    stripped = "".join(out)
+    # Trailing commas (a literal `,` immediately before a closing `}`/`]`,
+    # ignoring whitespace/newlines in between) - real JSON forbids this,
+    # JSONC tolerates it and `tsc` itself accepts it in a real tsconfig.
+    return re.sub(r",(\s*[}\]])", r"\1", stripped)
+
+
+def _parse_ts_path_alias_config(tsconfig_path: str) -> "_TsPathAliasConfig | None":
+    """Parses one `tsconfig.json`/`jsconfig.json` file into its
+    `compilerOptions.paths` mapping, or `None` when the file can't be
+    read, isn't valid JSONC, or declares no usable `paths` at all - every
+    one of those degrades to "no alias config for this file", never a
+    crash (Scope 3's "absence of tsconfig.json degrading gracefully"
+    requirement, extended to cover a *present but unusable* one
+    identically).
+
+    `extends` (a tsconfig inheriting another's `compilerOptions`) is a
+    known, disclosed gap - deliberately not resolved here: doing so
+    correctly needs its own base-config lookup (npm-package `extends`
+    targets like `"extends": "@tsconfig/node18/tsconfig.json"` resolve
+    through `node_modules`, not the filesystem walk `_find_tsconfig_for_
+    dir` already does for the project's own configs), a big enough piece
+    of real behavior to be its own follow-up rather than folded silently
+    into this one. A config that only inherits its `paths` from a base
+    config is treated the same as one with no `paths` at all - absent,
+    not guessed.
+    """
+    try:
+        with open(tsconfig_path, encoding="utf-8") as f:
+            raw = f.read()
+    except OSError:
+        return None
+    try:
+        data = json.loads(_strip_jsonc_comments(raw))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    compiler_options = data.get("compilerOptions")
+    if not isinstance(compiler_options, dict):
+        return None
+    raw_paths = compiler_options.get("paths")
+    if not isinstance(raw_paths, dict):
+        return None
+    paths: dict[str, list[str]] = {}
+    for pattern, targets in raw_paths.items():
+        if not isinstance(pattern, str) or not isinstance(targets, list):
+            continue
+        string_targets = [t for t in targets if isinstance(t, str)]
+        if string_targets:
+            paths[pattern] = string_targets
+    if not paths:
+        return None
+    base_url_option = compiler_options.get("baseUrl", ".")
+    if not isinstance(base_url_option, str):
+        base_url_option = "."
+    config_dir = os.path.dirname(tsconfig_path)
+    base_url = os.path.normpath(os.path.join(config_dir, base_url_option))
+    return _TsPathAliasConfig(base_url=base_url, paths=paths)
+
+
+def _best_ts_path_alias_match(specifier: str, paths: dict[str, list[str]]) -> tuple[str, str] | None:
+    """The best-matching `paths` pattern for `specifier`, as `(pattern,
+    matched_wildcard_text)`, or `None` if nothing matches. An exact
+    (no-`*`) pattern always wins outright - `tsc` itself never allows more
+    than one pattern to contain zero wildcards for the same key anyway.
+    Among wildcard patterns, the one with the longest literal prefix wins
+    (`tsc`'s own tie-break: a more specific alias must never lose to a
+    broader one that happens to also match, e.g. `@/components/*` over a
+    catch-all `@/*` for the same specifier).
+    """
+    if specifier in paths:
+        return specifier, ""
+    best: tuple[str, str] | None = None
+    best_prefix_len = -1
+    for pattern in paths:
+        if "*" not in pattern:
+            continue
+        prefix, suffix = pattern.split("*", 1)
+        if not specifier.startswith(prefix) or not specifier.endswith(suffix):
+            continue
+        if len(specifier) < len(prefix) + len(suffix):
+            continue
+        if len(prefix) > best_prefix_len:
+            best_prefix_len = len(prefix)
+            best = (pattern, specifier[len(prefix) : len(specifier) - len(suffix)])
+    return best
+
+
+def _ts_path_alias_target_candidates(targets: list[str], matched_text: str, base_url: str) -> list[str]:
+    """`targets` (e.g. `["src/*", "lib/*"]`) resolved, in order, against
+    `base_url` with `*` substituted by `matched_text` - the caller
+    (`ConcreteGraphBuilder._resolve_ts_path_alias`) tries each candidate
+    against the real filesystem in this same order, matching `tsc`'s own
+    "first target that resolves wins" rule for a multi-target alias.
+    """
+    candidates = []
+    for target in targets:
+        resolved = target.replace("*", matched_text) if "*" in target else target
+        candidates.append(os.path.normpath(os.path.join(base_url, resolved)))
+    return candidates
 
 
 def _go_receiver_type(method_node: Node, parsed: ParsedFile) -> str | None:
