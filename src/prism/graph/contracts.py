@@ -307,7 +307,13 @@ class ContractExtractor:
         return None
 
     def _extract_return_type(self, def_node: Node, parsed: ParsedFile) -> str | None:
-        return_type_node = def_node.child_by_field_name("return_type")
+        # Python/TS/JS all expose their return-type annotation under a
+        # `return_type` field; Go's own grammar calls the same thing
+        # `result` instead (`func Handle(...) error` - no `->`/`:` marker
+        # at all, just a bare trailing type). Trying both, in order,
+        # covers every language `FUNCTION_NODE_TYPES` currently lists
+        # without needing a fourth per-language table for one field name.
+        return_type_node = def_node.child_by_field_name("return_type") or def_node.child_by_field_name("result")
         if return_type_node is not None:
             text = node_text(return_type_node, parsed.source)
             return text.lstrip(":").strip() or None
