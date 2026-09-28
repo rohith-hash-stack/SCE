@@ -108,6 +108,128 @@ def test_scoped_package_path_is_never_split_or_mangled(tmp_path):
     assert files[0].parent == node_modules / "@trpc" / "server"
 
 
+# --------------------------------------------------------------------- #
+# `feature/subpath-export-resolution`: a real npm subpath export
+# (`@trpc/server/adapters/express`) - the fix for the confirmed-live
+# regression where `createExpressMiddleware` was unreachable because
+# resolution only ever consulted the package's root `exports["."]`.
+# --------------------------------------------------------------------- #
+def test_subpath_resolves_via_exports_flat_types_field(tmp_path):
+    """The flatter shape (a direct `types` key, no `import`/`require`
+    nesting) - the same shape `zod`'s own root export already uses
+    elsewhere in this file, generalized to a subpath key."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "zod",
+        {"name": "zod", "exports": {".": {"types": "./lib/index.d.ts"}, "./v4": {"types": "./v4/index.d.ts"}}},
+        {"lib/index.d.ts": "export declare function object(): void;\n", "v4/index.d.ts": "export declare function objectV4(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("zod", subpath="v4")
+    assert files == [node_modules / "zod" / "v4" / "index.d.ts"]
+
+
+def test_subpath_resolves_via_conditional_import_require_exports(tmp_path):
+    """Real `@trpc/server`'s own shape: the subpath's export target is
+    itself nested under `import`/`require`, not a flat `types` key -
+    the exact shape that first exposed the "import declares a `.d.mts`
+    file that doesn't exist on disk, require's own `.d.ts` sibling is
+    never tried" gap this test locks in as fixed (both files present,
+    `import` still tried first per `_types_from_exports_target`'s own
+    documented preference, and it resolves)."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "@trpc/server",
+        {
+            "name": "@trpc/server",
+            "exports": {
+                ".": {"import": {"types": "./dist/index.d.mts"}, "require": {"types": "./dist/index.d.ts"}},
+                "./adapters/express": {
+                    "import": {"types": "./dist/adapters/express.d.mts"},
+                    "require": {"types": "./dist/adapters/express.d.ts"},
+                },
+            },
+        },
+        {
+            "dist/index.d.mts": "export declare function initTRPC(): void;\n",
+            "dist/adapters/express.d.mts": "export declare function createExpressMiddleware(): void;\n",
+            "dist/adapters/express.d.ts": "export declare function createExpressMiddleware(): void;\n",
+        },
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("@trpc/server", subpath="adapters/express")
+    assert files == [node_modules / "@trpc" / "server" / "dist" / "adapters" / "express.d.mts"]
+
+
+def test_subpath_falls_back_to_a_direct_dts_file_on_disk(tmp_path):
+    """No `exports` map entry for the subpath at all - the same "no
+    exports map, just resolve the path" degrade the root chain already
+    applies, generalized to `<subpath>.d.ts`."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "some-pkg",
+        {"name": "some-pkg", "types": "index.d.ts"},
+        {"index.d.ts": "export declare function root(): void;\n", "adapters/express.d.ts": "export declare function mid(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("some-pkg", subpath="adapters/express")
+    assert files == [node_modules / "some-pkg" / "adapters" / "express.d.ts"]
+
+
+def test_subpath_falls_back_to_an_index_dts_directory(tmp_path):
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "some-pkg",
+        {"name": "some-pkg", "types": "index.d.ts"},
+        {"index.d.ts": "export declare function root(): void;\n", "adapters/express/index.d.ts": "export declare function mid(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("some-pkg", subpath="adapters/express")
+    assert files == [node_modules / "some-pkg" / "adapters" / "express" / "index.d.ts"]
+
+
+def test_subpath_miss_falls_through_to_the_root_chain_not_treated_as_missing(tmp_path):
+    """A subpath that resolves to nothing (no `exports` entry, no file
+    on disk) must still fall through to the package's own real root
+    types - a subpath miss is not a reason to abandon the whole lookup,
+    the same way the existing root chain already degrades gracefully
+    from `types`/`typings` to `exports["."]` to `main`-adjacent."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules, "some-pkg", {"name": "some-pkg", "types": "index.d.ts"}, {"index.d.ts": "export declare function root(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("some-pkg", subpath="nonexistent/path")
+    assert files == [node_modules / "some-pkg" / "index.d.ts"]
+
+
+def test_no_subpath_is_unchanged_from_before_this_feature(tmp_path):
+    """Regression guard: `subpath=None` (the default) must resolve
+    exactly like every pre-existing test in this file already proves -
+    this feature is strictly additive."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules, "some-pkg", {"name": "some-pkg", "types": "index.d.ts"}, {"index.d.ts": "export declare function root(): void;\n"},
+    )
+    assert TypeScriptSourceLocator(str(tmp_path)).locate("some-pkg") == [node_modules / "some-pkg" / "index.d.ts"]
+    assert TypeScriptSourceLocator(str(tmp_path)).locate("some-pkg", subpath="") == [node_modules / "some-pkg" / "index.d.ts"]
+
+
+def test_subpath_resolution_applies_through_the_types_sibling_fallback_too(tmp_path):
+    """An untyped package (express-shaped) with a subpath import, falling
+    through to its real `@types/<pkg>` sibling - `subpath` must reach
+    that lookup too, not just the package's own direct resolution."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(node_modules, "some-pkg", {"name": "some-pkg", "main": "index.js"}, {"index.js": "module.exports = {};\n"})
+    _write_package(
+        node_modules,
+        "@types/some-pkg",
+        {"name": "@types/some-pkg", "exports": {"./adapters/express": {"types": "./adapters/express.d.ts"}}},
+        {"index.d.ts": "export declare function root(): void;\n", "adapters/express.d.ts": "export declare function mid(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("some-pkg", subpath="adapters/express")
+    assert files == [node_modules / "@types" / "some-pkg" / "adapters" / "express.d.ts"]
+
+
 def test_exports_conditional_types_resolves_when_no_direct_types_field(tmp_path):
     """A package with *only* a conditional `exports["."].import.types`
     map (no top-level `types` field at all) must still resolve - the
@@ -288,3 +410,134 @@ def test_scoped_package_qualified_name_keeps_the_full_scope_intact(tmp_path):
     info = extract_external_symbol("@scope/pkg", "widget", locator=locator)
     assert info is not None
     assert info.qualified_name == "@scope/pkg.dist.index.widget"
+
+
+# --------------------------------------------------------------------- #
+# `feature/subpath-export-resolution` follow-up: generic Node.js
+# `exports` subpath-pattern (`./*`) matching and the `default`-condition
+# fallback chain, with no package-name special-casing anywhere - proven
+# here against unscoped (`lodash`), deeply-scoped (`@tanstack/react-
+# query`), and pattern-shaped packages a real-world locator must handle
+# identically to `@trpc/server`.
+# --------------------------------------------------------------------- #
+def test_export_pattern_matches_a_single_wildcard_key(tmp_path):
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "lodash-es",
+        {"name": "lodash-es", "exports": {".": {"types": "./index.d.ts"}, "./*": {"types": "./*.d.ts", "default": "./*.js"}}},
+        {"index.d.ts": "export declare function main(): void;\n", "fp.d.ts": "export declare function curry(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("lodash-es", subpath="fp")
+    assert files == [node_modules / "lodash-es" / "fp.d.ts"]
+
+
+def test_export_pattern_on_a_deeply_scoped_package(tmp_path):
+    """The user's own named example: `@tanstack/react-query/devtools`,
+    a scoped package with a multi-segment subpath resolved entirely
+    through the same generic pattern-matching code as any other."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "@tanstack/react-query",
+        {"name": "@tanstack/react-query", "exports": {".": {"types": "./build/index.d.ts"}, "./*": {"types": "./build/*/index.d.ts"}}},
+        {
+            "build/index.d.ts": "export declare function useQuery(): void;\n",
+            "build/devtools/index.d.ts": "export declare function ReactQueryDevtools(): void;\n",
+        },
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("@tanstack/react-query", subpath="devtools")
+    assert files == [node_modules / "@tanstack" / "react-query" / "build" / "devtools" / "index.d.ts"]
+
+
+def test_export_pattern_with_a_literal_suffix_after_the_wildcard(tmp_path):
+    """A pattern key's `*` need not be the last character - Node's real
+    spec allows a literal suffix after it (e.g. `"./features/*.mjs"`),
+    matched and substituted the same way."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "suffixed-pkg",
+        {"name": "suffixed-pkg", "exports": {"./features/*-mod": {"types": "./dist/*-mod.d.ts"}}},
+        {"dist/express-mod.d.ts": "export declare function feature(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("suffixed-pkg", subpath="features/express-mod")
+    assert files == [node_modules / "suffixed-pkg" / "dist" / "express-mod.d.ts"]
+
+
+def test_exact_export_key_wins_over_a_matching_pattern(tmp_path):
+    """A package can declare both a pattern and a real, exact override
+    for one specific subpath under it - the exact key must always win,
+    per real Node.js resolution order (exact lookup before any pattern
+    match is even attempted)."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "mixed-pkg",
+        {
+            "name": "mixed-pkg",
+            "exports": {"./*": {"types": "./dist/*.d.ts"}, "./special": {"types": "./dist/special-override.d.ts"}},
+        },
+        {"dist/special.d.ts": "export declare function generic(): void;\n", "dist/special-override.d.ts": "export declare function overridden(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("mixed-pkg", subpath="special")
+    assert files == [node_modules / "mixed-pkg" / "dist" / "special-override.d.ts"]
+
+
+def test_no_pattern_key_matches_falls_through_to_filesystem_fallback(tmp_path):
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "some-pkg",
+        {"name": "some-pkg", "types": "index.d.ts", "exports": {"./only-this/*": {"types": "./dist/*.d.ts"}}},
+        {"index.d.ts": "export declare function root(): void;\n", "other/index.d.ts": "export declare function other(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("some-pkg", subpath="other")
+    assert files == [node_modules / "some-pkg" / "other" / "index.d.ts"]
+
+
+def test_default_condition_types_resolves_when_import_and_require_have_none(tmp_path):
+    """The condition precedence's own last real step (`default.types`) -
+    a target whose only types-bearing condition is `default`, not
+    `import`/`require` at all."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "default-cond-pkg",
+        {"name": "default-cond-pkg", "exports": {"./widget": {"node": "./node/widget.js", "default": {"types": "./widget.d.ts", "default": "./widget.js"}}}},
+        {"widget.d.ts": "export declare function widget(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("default-cond-pkg", subpath="widget")
+    assert files == [node_modules / "default-cond-pkg" / "widget.d.ts"]
+
+
+def test_bare_default_string_falls_back_to_its_own_adjacent_dts(tmp_path):
+    """No `types` condition anywhere in the target at all - just a bare
+    `default` string naming a JS file. Real TypeScript resolution tries
+    that file's own sibling `.d.ts` next, the same convention the root
+    chain's `main`-adjacent fallback already uses, generalized here to
+    an arbitrary `exports` target."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "js-only-pkg",
+        {"name": "js-only-pkg", "exports": {"./widget": "./dist/widget.js"}},
+        {"dist/widget.js": "module.exports = {};\n", "dist/widget.d.ts": "export declare function widget(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("js-only-pkg", subpath="widget")
+    assert files == [node_modules / "js-only-pkg" / "dist" / "widget.d.ts"]
+
+
+def test_generic_subpath_resolution_on_an_unscoped_package(tmp_path):
+    """The user's own named unscoped example: `lodash/fp` - proves the
+    exact-key path (not just the pattern path) is equally unscoped-
+    package-generic, with zero special-casing."""
+    node_modules = tmp_path / "node_modules"
+    _write_package(
+        node_modules,
+        "lodash",
+        {"name": "lodash", "exports": {".": {"types": "./index.d.ts"}, "./fp": {"types": "./fp.d.ts"}}},
+        {"index.d.ts": "export declare function main(): void;\n", "fp.d.ts": "export declare function curry(): void;\n"},
+    )
+    files = TypeScriptSourceLocator(str(tmp_path)).locate("lodash", subpath="fp")
+    assert files == [node_modules / "lodash" / "fp.d.ts"]

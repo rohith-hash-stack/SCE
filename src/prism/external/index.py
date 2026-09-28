@@ -71,7 +71,7 @@ class ExternalSourceLocator(Protocol):
     this same Protocol, not a design change - see the spec's Rust gap
     note for the one ecosystem this can't reach at all)."""
 
-    def locate(self, package_name: str, package_version: str | None = None) -> list[Path]: ...
+    def locate(self, package_name: str, package_version: str | None = None, subpath: str | None = None) -> list[Path]: ...
 
 
 class PythonSourceLocator:
@@ -86,7 +86,10 @@ class PythonSourceLocator:
     which case it's looking at.
     """
 
-    def locate(self, package_name: str, package_version: str | None = None) -> list[Path]:
+    def locate(self, package_name: str, package_version: str | None = None, subpath: str | None = None) -> list[Path]:
+        # `subpath` (a real npm `exports` subpath, e.g. "adapters/express")
+        # is a TypeScript/JS-ecosystem concept with no Python equivalent -
+        # accepted and ignored, matching `package_version`'s own precedent.
         top_level = package_name.split(".")[0]
         stub_only_files = self._locate_stub_only_distribution(top_level)
         if stub_only_files:
@@ -584,7 +587,7 @@ def _extract_from_file(file_path: Path, top_level: str, symbol_name: str) -> Ext
 
 
 def extract_external_symbol(
-    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None,
+    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None, subpath: str | None = None,
 ) -> ExternalSymbolInfo | None:
     """Locate -> parse -> extract (Section 2.1's three steps) for one
     named external symbol - the first real match across `locator`'s own
@@ -605,10 +608,16 @@ def extract_external_symbol(
     real match (Section 1's own Turn 2a, resolving an ambiguous
     `self.<name>(...)` call with no way to know which class it means)
     should use `extract_external_symbol_all` for instead.
+
+    `subpath` (`feature/subpath-export-resolution`): a real npm `exports`
+    subpath the symbol was imported through (e.g. `"adapters/express"`
+    for `@trpc/server/adapters/express`), passed straight through to
+    `locator.locate` - `None`/`""` for the ordinary root-export case,
+    unchanged from before this parameter existed.
     """
     locator = locator or PythonSourceLocator()
     top_level = package_name.split(".")[0]
-    for file_path in locator.locate(package_name):
+    for file_path in locator.locate(package_name, subpath=subpath):
         info = _extract_from_file(file_path, top_level, symbol_name)
         if info is not None:
             return info
@@ -616,7 +625,7 @@ def extract_external_symbol(
 
 
 def extract_external_symbol_all(
-    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None,
+    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None, subpath: str | None = None,
 ) -> list[ExternalSymbolInfo]:
     """Every real match for `symbol_name` across every file `locator`
     locates for `package_name`, in `locator`'s own file order - unlike
@@ -629,11 +638,15 @@ def extract_external_symbol_all(
     artifact silently deciding for it. Returns `[]` (never raises) under
     the same fail-closed conditions `extract_external_symbol` returns
     `None` for.
+
+    `subpath` (`feature/subpath-export-resolution`): see
+    `extract_external_symbol`'s own docstring - passed straight through
+    to `locator.locate`.
     """
     locator = locator or PythonSourceLocator()
     top_level = package_name.split(".")[0]
     results: list[ExternalSymbolInfo] = []
-    for file_path in locator.locate(package_name):
+    for file_path in locator.locate(package_name, subpath=subpath):
         info = _extract_from_file(file_path, top_level, symbol_name)
         if info is not None:
             results.append(info)
