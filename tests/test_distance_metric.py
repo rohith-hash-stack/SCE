@@ -11,6 +11,7 @@ from prism.slicer.distance import (
     RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT,
     DistanceConfig,
     DistanceEngine,
+    _hub_fanin_penalty,
 )
 
 
@@ -175,3 +176,85 @@ def test_tentative_dynamic_call_is_cheaper_than_tentative_static_call():
     from prism.slicer.distance import RELATION_TENTATIVE_CALL_WEIGHT
 
     assert RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT > RELATION_TENTATIVE_CALL_WEIGHT
+
+
+# --------------------------------------------------------------------- #
+# Category 9 (architectural audit): hub-node fan-in penalty.
+# --------------------------------------------------------------------- #
+def test_hub_fanin_penalty_is_a_noop_below_two_callers():
+    """A node with zero or exactly one caller must price identically to
+    today's unmodified behavior - a single caller is the ordinary,
+    completely common shape (a private helper called from one place),
+    not a hub signal; the penalty only activates from a *second* distinct
+    caller onward."""
+    assert _hub_fanin_penalty(0) == 1.0
+    assert _hub_fanin_penalty(1) == 1.0
+    assert _hub_fanin_penalty(2) > 1.0
+
+
+def test_hub_fanin_penalty_grows_with_in_degree_but_stays_sublinear():
+    p2 = _hub_fanin_penalty(2)
+    p200 = _hub_fanin_penalty(200)
+    assert p2 > 1.0
+    # log1p is sub-linear: a 100x increase in callers must cost far less
+    # than a 100x increase in penalty.
+    assert p200 < p2 * 100
+
+
+def test_shared_utility_bridge_no_longer_reads_as_close_as_a_real_2_hop_path():
+    """The exact failure mode the architectural audit found live: `seed`
+    and `unrelated` share no real relationship, connected only through a
+    busy utility (`hub`, in-degree 2) that also serves a genuinely
+    unrelated second caller. Before this fix, this scored identically to
+    any other 2-undirected-hop node; the fan-in penalty must now push it
+    strictly farther than an equal-hop-count path through a node with no
+    other callers.
+    """
+    bridged = nx.DiGraph()
+    bridged.add_edge("seed", "hub")
+    bridged.add_edge("other_caller", "hub")
+    bridged.add_edge("hub_private_dep", "hub_private_caller")  # unrelated, keeps hub non-trivial
+
+    plain = nx.DiGraph()
+    plain.add_edge("seed", "lone_dep")
+    plain.add_edge("lone_dep", "unrelated")  # same 2-hop shape, but lone_dep has in-degree 1
+
+    engine = DistanceEngine(SemanticMetamodel(), {}, DistanceConfig())
+    bridged_distances = engine.compute_all("seed", bridged)
+    plain_distances = engine.compute_all("seed", plain)
+
+    assert bridged_distances["hub"] > plain_distances["lone_dep"], (
+        f"hub={bridged_distances['hub']}, lone_dep={plain_distances['lone_dep']}"
+    )
+
+
+def test_hub_direct_caller_still_ranks_closer_than_a_path_through_the_hub():
+    """The split `sqrt(penalty(u) * penalty(v))` design must not let a
+    hub's own direct caller read as farther than a node reached by
+    actually traversing through the hub - a genuine 1-hop relationship
+    must still beat a 2-hop one even when the hub is busy."""
+    g = nx.DiGraph()
+    g.add_edge("seed", "hub")
+    g.add_edge("other_caller", "hub")
+    g.add_edge("hub", "beyond_hub")
+
+    engine = DistanceEngine(SemanticMetamodel(), {}, DistanceConfig())
+    distances = engine.compute_all("seed", g)
+
+    assert distances["hub"] < distances["beyond_hub"]
+
+
+def test_hub_fanin_penalty_does_not_touch_the_causal_weights_model():
+    """Category 9's own documented scope decision: `prism.traversal.
+    causal_weights`'s directed, forward-only W(u, v) model cannot exhibit
+    the backward-bridging failure this fixes (walking against edge
+    direction to a hub's other callers is structurally impossible in a
+    forward-only walk), so it must remain completely unmodified by this
+    change - no `_hub_fanin_penalty`/in-degree reference of any kind."""
+    import inspect
+
+    from prism.traversal import causal_weights
+
+    source = inspect.getsource(causal_weights)
+    assert "_hub_fanin_penalty" not in source
+    assert "in_degree" not in source

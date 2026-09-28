@@ -28,6 +28,7 @@ sibling that merely happened to share a tag with the seed.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import networkx as nx
@@ -179,6 +180,54 @@ GAMMA_UNOBSERVED = 0.50
 # never outranks a same-or-fewer-hop exactly-resolved neighbor.
 RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT = 0.65
 
+# Architectural-audit Category 9 (hub-node short-circuiting): `d_hat_{G_C}`
+# is computed over an *undirected* graph, so a high-in-degree utility node
+# (a logger, a base model, a shared `utils` module) sits exactly one hop
+# from every one of its callers - meaning two functions with nothing in
+# common but both happening to call it read as 2 undirected hops apart.
+# Confirmed live during the audit: `checkout.process_checkout ->
+# logger.info <- unrelated_billing.send_invoice`, a synthetic repo where
+# neither function calls or is called by the other, computed
+# `nx.shortest_path_length == 2` purely through the shared `logger.info`
+# bridge (`in_degree(logger.info) == 2` there). This constant is this
+# module's own fix: a pure graph-topology penalty (in/out-degree from
+# `calls_graph`, the same `TRAVERSABLE_RELATIONS`-filtered graph this
+# whole engine already receives as `g_c` - see `ConcreteGraphBuilder.
+# calls_graph`'s own docstring) with zero language awareness, matching
+# the "universal core, language specifics live in adapters" invariant
+# this fix was scoped under.
+#
+# `log1p(max(in_degree - 1, 0))` (not a bare `log1p(in_degree)`) is
+# deliberate: a node's *first* caller is never a "hub" signal at all - the
+# single most common real shape in any codebase is a private helper with
+# exactly one caller, and a bare `log1p(in_degree)` penalizes that
+# completely ordinary case too (confirmed the hard way: `log1p(1) ~= 0.69`
+# is not negligible, and broke `tests/test_audit_batch_a.py::test_high_
+# trust_confirms_boost_distance_discount`'s own exact-value assertion on
+# a synthetic single-caller edge before this `- 1` was added). Subtracting
+# one caller before taking the log means `in_degree` 0 *and* 1 both give
+# exactly `1.0` - no penalty - and the penalty only starts accruing from
+# the *second* distinct caller onward, which is the real "this might be a
+# shared bridge, not a private dependency" signal. Sub-linear growth past
+# that point is still deliberate: a handful of callers (2-5) accrues a
+# modest penalty, while a true hub (dozens-to-hundreds) accrues a real,
+# compounding one.
+#
+# Deliberately *not* applied to `prism.traversal.causal_weights.py`'s
+# separate `W(u, v)` model: that traversal is directed, forward-only from
+# the seed (`continuous_dijkstra.py`'s own docstring: "forward-only
+# reachability from the seed... graph.successors(node)"), so the failure
+# mode this fixes - walking *backward* through a hub's in-edges to reach
+# an unrelated caller - is structurally impossible there by construction;
+# a forward-only walk from the seed can never reach a hub's *other*
+# callers at all, since that requires traversing against edge direction.
+# Adding an in-degree penalty to a model that already can't exhibit this
+# failure would be a no-op at best and an unreviewed behavior change to a
+# separately-tuned, already-shipped scoring model at worst - out of scope
+# for this fix, not an oversight.
+def _hub_fanin_penalty(in_degree: int) -> float:
+    return 1.0 + math.log1p(max(in_degree - 1, 0))
+
 
 @dataclass(frozen=True)
 class DistanceConfig:
@@ -251,9 +300,22 @@ class DistanceEngine:
         adjustments compose (a tentative call could in principle also be
         runtime-confirmed later), each applied independently to
         `structural_weight` before the confidence branch below.
+
+        Category 9's hub-fan-in penalty (`_hub_fanin_penalty`) is applied
+        here too, split as `sqrt(penalty(u) * penalty(v))` per edge rather
+        than the full `penalty(u) * penalty(v)` product - deliberately,
+        so a genuine *direct* 1-hop call into a busy utility (`checkout
+        calls logger.info`, a real and legitimate edge) only absorbs the
+        square root of the penalty, while a path that actually *passes
+        through* the hub (two edges, each touching it) accumulates the
+        square root twice - `sqrt(p) * sqrt(p) == p`, the *full* penalty,
+        exactly once per traversal through the node. This is what
+        specifically suppresses the bridging failure mode (Category 9's
+        own `A -> hub <- B` case) without also pushing a hub's own direct
+        callers artificially far from it.
         """
         undirected = g_c.to_undirected()
-        for _u, _v, data in undirected.edges(data=True):
+        for u, v, data in undirected.edges(data=True):
             structural_weight = RELATION_STRUCTURAL_WEIGHT.get(data.get("relation", "CALLS"), 1.0)
             if data.get("kind") == "TENTATIVE_CALL":
                 structural_weight *= RELATION_TENTATIVE_CALL_WEIGHT
@@ -261,6 +323,8 @@ class DistanceEngine:
                 structural_weight *= RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT
             if data.get("unobserved_in_traces"):
                 structural_weight *= GAMMA_UNOBSERVED
+            hub_penalty = math.sqrt(_hub_fanin_penalty(g_c.in_degree(u)) * _hub_fanin_penalty(g_c.in_degree(v)))
+            structural_weight /= hub_penalty
             base_cost = 1.0 / structural_weight if structural_weight else 1.0
             if data.get("confidence") != "CONFIRMED_RUNTIME":
                 data["weight"] = base_cost
