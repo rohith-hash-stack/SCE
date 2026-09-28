@@ -549,19 +549,46 @@ class PrismEngine:
                     match = _matching_root_import(origin, root_imports)
                     if match is not None:
                         matched_package, remainder = match
-                        # "markdown_it.MarkdownIt" -> search "MarkdownIt";
-                        # "markdown_it.token.Token" -> search "Token" (the
-                        # intermediate submodule segment is dropped -
-                        # matches extract_external_symbol_all's own
-                        # bare-name, cross-file search contract).
-                        leaf = origin.rsplit(".", 1)[-1]
-                        # `remainder` is `<subpath dotted>.<leaf>` when a
-                        # real npm subpath export is involved (e.g.
-                        # "adapters.express.createExpressMiddleware"), or
-                        # just `<leaf>` (no dot) for a plain root export
-                        # ("initTRPC") - strip the trailing leaf segment
-                        # to get the real subpath, "" when there is none.
-                        subpath_dotted = remainder.rsplit(".", 1)[0] if "." in remainder else ""
+                        if not remainder:
+                            # `origin` is the matched package's own bare
+                            # name, with no real symbol/subpath info at
+                            # all - a namespace/default-style binding
+                            # (`var x = require('pkg'); x(...)`, or ES's
+                            # `import * as x from 'y'; x(...)`) used as a
+                            # bare call directly on the required value
+                            # itself, not a member access on it. There is
+                            # no real symbol name to derive from the call
+                            # site here (a local alias like `pathRegexp`
+                            # is not reliably the target's own internal
+                            # name - confirmed live against real
+                            # `path-to-regexp`, whose function is
+                            # declared `pathToRegexp` internally) - the
+                            # shared synthetic "default" leaf both ES's
+                            # default-import handling and CommonJS's own
+                            # `_parse_js_requires` already funnel through
+                            # resolves this via `_find_definition`'s own
+                            # `module.exports = <identifier>` redirect
+                            # (`prism.external.index._commonjs_primary_
+                            # export_name`) instead.
+                            leaf = "default"
+                            subpath_dotted = ""
+                        else:
+                            # "markdown_it.MarkdownIt" -> search
+                            # "MarkdownIt"; "markdown_it.token.Token" ->
+                            # search "Token" (the intermediate submodule
+                            # segment is dropped - matches extract_
+                            # external_symbol_all's own bare-name,
+                            # cross-file search contract).
+                            leaf = origin.rsplit(".", 1)[-1]
+                            # `remainder` is `<subpath dotted>.<leaf>`
+                            # when a real npm subpath export is involved
+                            # (e.g. "adapters.express.
+                            # createExpressMiddleware"), or just `<leaf>`
+                            # (no dot) for a plain root export
+                            # ("initTRPC") - strip the trailing leaf
+                            # segment to get the real subpath, "" when
+                            # there is none.
+                            subpath_dotted = remainder.rsplit(".", 1)[0] if "." in remainder else ""
                         _resolve_against(matched_package, leaf, lang, start_dir, subpath_dotted.replace(".", "/"))
                     continue
 

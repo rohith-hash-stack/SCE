@@ -30,7 +30,7 @@ from typing import Iterator, Protocol
 from tree_sitter import Node
 
 from prism.graph.contracts import BehavioralContract, ContractExtractor, Parameter
-from prism.parser.lang_config import CLASS_NODE_TYPES, FUNCTION_NODE_TYPES
+from prism.parser.lang_config import CLASS_NODE_TYPES, FUNCTION_NODE_TYPES, find_all
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file, parse_source
 from prism.slicer.tokenizer import count_tokens
 from prism.surface.models import NodeEntry, NodeFeatures, NodeSignature
@@ -225,6 +225,56 @@ def _iter_definitions(node: Node, lang: str, source: bytes, enclosing_class: str
             yield from _iter_definitions(child, lang, source, enclosing_class)
 
 
+def _commonjs_primary_export_name(parsed: ParsedFile) -> str | None:
+    """The real name a CommonJS file's own `module.exports = <name>`
+    assignment gives its primary/default export (`feature/commonjs-
+    require-resolution`) - e.g. real `path-to-regexp`'s own exact
+    shape, `module.exports = pathToRegexp;` with `function pathToRegexp
+    (...) {}` declared elsewhere in the same file. This is the same
+    real problem ES's own default-import handling already has (a local
+    alias at the *call site* - `var pathRegexp = require(...)` - is
+    chosen independently of the target's own internal name), so `_find_
+    definition` reuses the identical synthetic `"default"` leaf both
+    conventions already funnel through (`ConcreteGraphBuilder._parse_js_
+    imports`'s `f"{module_ref}.default"` for ES, `_parse_js_requires`'s
+    own identical suffix for CommonJS) - this function is what makes
+    that leaf actually resolve to something real for a CommonJS file,
+    rather than searching for a symbol literally named "default" that
+    essentially never exists.
+
+    Only a plain, direct assignment of an *already-declared* bare
+    identifier counts. Real, disclosed non-goals, not silently guessed
+    at: `module.exports = require('./x')` (a whole-module re-export,
+    no single real definition of its own in *this* file to point to),
+    `module.exports = { ... }` (an object-literal export - no single
+    "the" definition), and `module.exports = function () {}` (a
+    genuinely anonymous export - no name to redirect the leaf-based
+    search to at all, the exact same real gap ES's own anonymous
+    `export default function () {}` already has, left unfixed here as a
+    distinct, separately-scoped problem). Returns `None` - never a
+    guess - when no real `module.exports = <identifier>` assignment
+    exists, or `parsed`'s language isn't JS/TS-family (CommonJS is a
+    JS/TS-ecosystem concept only, unlike this module's own Python/Go
+    paths).
+    """
+    if parsed.language_id not in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+        return None
+    src = parsed.source
+    for assign in find_all(parsed.root_node, {"assignment_expression"}):
+        left = assign.child_by_field_name("left")
+        right = assign.child_by_field_name("right")
+        if left is None or right is None or left.type != "member_expression" or right.type != "identifier":
+            continue
+        obj = left.child_by_field_name("object")
+        prop = left.child_by_field_name("property")
+        if obj is None or prop is None or obj.type != "identifier" or node_text(obj, src) != "module":
+            continue
+        if prop.type != "property_identifier" or node_text(prop, src) != "exports":
+            continue
+        return node_text(right, src)
+    return None
+
+
 def _find_definition(parsed: ParsedFile, symbol_name: str) -> tuple[Node, str | None, str, str] | None:
     """First definition in `parsed` matching `symbol_name` - an exact
     match against the local qualified name (`"Router.add_route"`) when
@@ -235,13 +285,28 @@ def _find_definition(parsed: ParsedFile, symbol_name: str) -> tuple[Node, str | 
     disambiguation) should be requested in dotted form by the caller -
     the same discipline `ExternalSymbolInfo.qualified_name`'s own
     `"starlette.routing.Router.add_route"` example already models.
+
+    `symbol_name == "default"` (ES's and, as of `feature/commonjs-
+    require-resolution`, CommonJS's shared synthetic "the whole
+    module's own primary export" leaf) is redirected, before any
+    matching happens, to whatever real name `_commonjs_primary_export_
+    name` finds - a `module.exports = <identifier>` assignment's own
+    real target - falling back to a literal search for a symbol named
+    `"default"` (matching this function's own prior behavior) when
+    that finds nothing, so an ES file with a real function/class
+    genuinely named `default` is unaffected.
     """
-    dotted = "." in symbol_name
+    effective_name = symbol_name
+    if symbol_name == "default":
+        primary_export = _commonjs_primary_export_name(parsed)
+        if primary_export is not None:
+            effective_name = primary_export
+    dotted = "." in effective_name
     for def_node, enclosing_class, qualified, kind in _iter_definitions(parsed.root_node, parsed.language_id, parsed.source):
         if dotted:
-            if qualified == symbol_name:
+            if qualified == effective_name:
                 return def_node, enclosing_class, qualified, kind
-        elif qualified.rsplit(".", 1)[-1] == symbol_name:
+        elif qualified.rsplit(".", 1)[-1] == effective_name:
             return def_node, enclosing_class, qualified, kind
     return None
 

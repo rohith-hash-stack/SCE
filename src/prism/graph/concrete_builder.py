@@ -879,6 +879,7 @@ class ConcreteGraphBuilder:
             self._parse_python_imports(parsed, module, import_map)
         elif lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
             self._parse_js_imports(parsed, module, import_map)
+            self._parse_js_requires(parsed, module, import_map)
         elif lang == LanguageID.GO:
             self._parse_go_imports(parsed, import_map)
         elif lang == LanguageID.JAVA:
@@ -1136,6 +1137,126 @@ class ConcreteGraphBuilder:
                     for cc in c.children:
                         if cc.type == "identifier":
                             import_map.add(node_text(cc, src), f"{module_ref}.default")
+
+    def _parse_js_requires(self, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
+        """CommonJS `require(...)` extraction (`feature/commonjs-
+        require-resolution`) - funnels straight into the same `import_
+        map` ES `import` statements already use (`_parse_js_imports`
+        above), so downstream call-graph resolution, Phase C candidate-
+        manifest generation, and `TypeScriptSourceLocator` treat a
+        CommonJS binding identically to an ES one, with no special-
+        casing anywhere downstream. A pure, generic tree-sitter
+        `call_expression` walk - no package-name awareness of any kind,
+        confirmed against `lodash`-, `rxjs`-, and Express's own real
+        `require()` call sites alike, not tuned to one repo's shape.
+
+        Five real binding shapes (Node's own `require()` idiom, not an
+        Express-specific list), each mapped onto the exact same
+        `import_map.add(local_name, target)` sink `_parse_js_imports`
+        already uses for the structurally equivalent ES form:
+
+          1. Side-effect only (`require('pkg');`, a bare top-level
+             `expression_statement`) - no local binding is introduced
+             at all (nothing is assigned), so nothing is added.
+          2. Default/namespace (`var x = require('pkg')`) - `x` is
+             bound to the *whole* required value, bound bare
+             (`import_map.add(name, module_ref)`, no synthetic suffix)
+             - the exact same shape ES's own `namespace_import` handling
+             above already uses for `import * as x from 'y'`. Binding
+             it bare, not under a synthetic `.default` leaf, matters for
+             a reason beyond cosmetics: this same `import_map` entry is
+             also what the ordinary in-repo call resolver (Pass 2)
+             consults for a *relative* require used as a 2-segment
+             member-access call (`const utils = require('./utils');
+             utils.helper()`) - a synthetic suffix baked in here would
+             make that resolve to a real-looking but wrong target
+             (`utils.default.helper`, confirmed live, instead of the
+             real `utils.helper`), since Pass 2's own resolution is a
+             plain `f"{resolved}.{member}"` concatenation with no
+             knowledge of any suffix convention. The one real problem a
+             *bare* namespace binding does still have - a later bare
+             call directly on the required value itself (`x(...)`,
+             treating the whole module as callable, not a member access
+             on it) needs the file's own real primary export, and a
+             local alias chosen at the call site is not reliably that
+             export's own real name (confirmed live: real `path-to-
+             regexp` binds under the Express call site's own local
+             alias `pathRegexp`, but the function itself is declared
+             `pathToRegexp` internally) - is fixed at its one real
+             consumer instead (`PrismEngine.build_external_candidate_
+             manifest`'s own bare-call path, `src/prism/engine.py`),
+             not by corrupting this shared binding for every consumer.
+          3. Destructuring (`const { a, b } = require('pkg')`) - each
+             `shorthand_property_identifier_pattern` binds a real named
+             export under its own name, identically to an ES named
+             import.
+          4. Aliased destructuring (`const { a: localA } = require(
+             'pkg')`) - each `pair_pattern`'s own `key`/`value` fields
+             give the real export name and its local alias separately,
+             identically to ES's `import { a as b }`.
+          5. Property access (`const fn = require('pkg').fn`) - the
+             `member_expression`'s own `property` field names the real
+             export directly, identically to a named import - no
+             `.default` indirection needed here, since the real export
+             name is already known from the source text itself.
+
+        Gracefully ignores a dynamic/computed require (`require(
+        someVar)`, `require(fn())`, `require('a' + 'b')`) - the
+        argument must be a real, single, static `string` literal node
+        (never a `template_string`, which is a distinct tree-sitter
+        node type this check already excludes by construction), exactly
+        the same "never guess" discipline `_parse_js_reexports`/
+        `_parse_js_imports` already apply to their own `source` field.
+        """
+        src = parsed.source
+        for call in find_all(parsed.root_node, {"call_expression"}):
+            callee = call.child_by_field_name("function")
+            if callee is None or callee.type != "identifier" or node_text(callee, src) != "require":
+                continue
+            args = call.child_by_field_name("arguments")
+            if args is None:
+                continue
+            arg_nodes = args.named_children
+            if len(arg_nodes) != 1 or arg_nodes[0].type != "string":
+                continue
+            specifier = node_text(arg_nodes[0], src).strip("'\"`")
+            module_ref = self._resolve_js_specifier(specifier, parsed.path, module)
+
+            parent = call.parent
+            if parent is None or parent.type == "expression_statement":
+                continue  # side-effect only - no local binding introduced
+
+            if parent.type == "member_expression" and parent.child_by_field_name("object") == call:
+                # `const fn = require('pkg').fn;` - property access
+                prop_node = parent.child_by_field_name("property")
+                grandparent = parent.parent
+                if prop_node is None or grandparent is None or grandparent.type != "variable_declarator":
+                    continue
+                name_node = grandparent.child_by_field_name("name")
+                if name_node is not None and name_node.type == "identifier":
+                    import_map.add(node_text(name_node, src), f"{module_ref}.{node_text(prop_node, src)}")
+                continue
+
+            if parent.type != "variable_declarator" or parent.child_by_field_name("value") != call:
+                continue  # require() used in a shape this leaf-only walk doesn't model - not guessed
+            name_node = parent.child_by_field_name("name")
+            if name_node is None:
+                continue
+            if name_node.type == "identifier":
+                # `var x = require('pkg');` - default/namespace binding,
+                # bound bare (no synthetic suffix) - see this method's
+                # own docstring for why.
+                import_map.add(node_text(name_node, src), module_ref)
+            elif name_node.type == "object_pattern":
+                for prop in name_node.named_children:
+                    if prop.type == "shorthand_property_identifier_pattern":
+                        local_name = node_text(prop, src)
+                        import_map.add(local_name, f"{module_ref}.{local_name}")
+                    elif prop.type == "pair_pattern":
+                        key_node = prop.child_by_field_name("key")
+                        value_node = prop.child_by_field_name("value")
+                        if key_node is not None and value_node is not None and value_node.type == "identifier":
+                            import_map.add(node_text(value_node, src), f"{module_ref}.{node_text(key_node, src)}")
 
     #: Checked in this order (a same-named `.ts` file always wins over a
     #: same-named `.js` one, matching `tsc`'s own module resolution -

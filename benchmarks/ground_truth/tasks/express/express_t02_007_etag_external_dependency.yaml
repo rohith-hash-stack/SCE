@@ -1,0 +1,127 @@
+# T02 "Express Pilot" - Task 7: the real third-party dependency behind
+# ETag generation (Category 5, closed by `feature/commonjs-require-
+# resolution`).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` (`npm install`, 400 packages) - every symbol
+# verified against the real indexed symbol table and the real
+# `PrismEngine.build_external_candidate_manifest` output, not assumed:
+#
+#   lib.utils.createETagGenerator  lines 270-278 (in-repo seed)
+#   etag.index.etag                 real external stub, resolved live
+#
+# Real source (lib/utils.js:21, 270-278):
+#
+#   var etag = require('etag');
+#   ...
+#   function createETagGenerator (options) {
+#     return function generateETag (body, encoding) {
+#       var buf = !Buffer.isBuffer(body) ? Buffer.from(body, encoding) : body
+#       return etag(buf, options)
+#     }
+#   }
+#
+# This is exactly the real gap Category 5 needed `feature/commonjs-
+# require-resolution` for: `etag` is a *default/namespace* CommonJS
+# require (`var etag = require('etag')`), used as a bare call inside a
+# *nested* returned closure (`generateETag`, itself never separately
+# indexed as its own symbol - the call is structurally part of
+# `createETagGenerator`'s own def_node). Before this fix,
+# `ConcreteGraphBuilder._parse_js_imports` had no `require()` handling
+# at all (confirmed live pre-fix: `import_map.resolve('etag')` returned
+# `None`, `build_external_candidate_manifest` returned an empty
+# manifest). Verified live post-fix:
+#
+#   engine.build_external_candidate_manifest(
+#       ["lib.utils.createETagGenerator"], root_imports=["etag"]
+#   )
+#   -> {"etag.index.etag"}, rendering
+#      "/** @throws {TypeError} */ declare function etag(entity, options);"
+#
+# - both the real signature and a real `@throws` annotation (Category 6)
+# resolved correctly through the same fix, confirming the local
+# require-site alias (`etag`) does not have to match the package's own
+# internal declaration name for this to work (real `etag`'s own source
+# is `module.exports = etag` with `function etag(entity, options) {}`
+# declared separately - here the alias and the real name happen to
+# match, unlike the `path-to-regexp`/`pathToRegexp` case
+# `feature/commonjs-require-resolution`'s own tests exercise
+# specifically for the mismatched case).
+#
+# Real, disclosed scope note: this task's own zero-LLM baseline (see
+# the retrieval report) must go through `PrismEngine.retrieve_two_or_
+# three_pass` with `root_imports=["etag"]`, not plain `retrieve()` -
+# external-dependency resolution is a Turn 2a/2b mechanism, never
+# reached by a single-pass retrieval call, exactly as found and
+# disclosed while investigating Queries 2/3 of the earlier LLM
+# validation spike.
+task_id: express_t02_007_etag_external_dependency
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.utils.createETagGenerator
+task_type: debug
+prompt: 'You are investigating how Express generates ETags, in lib/utils.js. Starting from
+  `createETagGenerator`, identify the real third-party npm package function it actually delegates ETag
+  computation to, and what that function''s own real signature and thrown-exception behavior are.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols
+  actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.utils.createETagGenerator", "etag.index.etag"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.utils.createETagGenerator
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - etag.index.etag
+  boundary_symbols: []
+  expected_solution: createETagGenerator(options) returns a closure (generateETag) that normalizes its
+    input to a Buffer, then delegates the actual ETag computation to the real third-party `etag` npm
+    package's own default-exported function (bound locally as `etag` via `var etag = require('etag')`),
+    called as `etag(buf, options)`. The real etag() function itself can throw a TypeError (per its own
+    real signature/annotation).
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.utils.createETagGenerator
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - etag.index.etag
+  boundary_symbols: []
+  expected_solution: createETagGenerator(options) returns a function that calls the real `etag` package
+    (required via `var etag = require('etag')`) to compute the ETag, passing the normalized body buffer
+    and the original options.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.utils.createETagGenerator
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - etag.index.etag
+  boundary_symbols: []
+  expected_solution: createETagGenerator(options) returns a closure (generateETag) that normalizes its
+    input to a Buffer, then delegates the actual ETag computation to the real third-party `etag` npm
+    package's own default-exported function (bound locally via `var etag = require('etag')`), called as
+    `etag(buf, options)` - a real, previously-unresolvable CommonJS default/namespace require, now closed
+    by feature/commonjs-require-resolution. The real etag() function itself can throw a TypeError. Both
+    annotators independently identified the same real dependency; annotator_a additionally noted the real
+    thrown-exception behavior.
