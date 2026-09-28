@@ -92,12 +92,14 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import networkx as nx
+from tree_sitter import Node
 
 from prism.external.index import ExternalSymbolInfo
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolRole
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
+from prism.parser.tree_sitter_loader import LanguageID, node_text
 from prism.semantics.bitmask import FeatureBit
 from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import count_tokens
@@ -1017,6 +1019,17 @@ class SubmodularPackedItem:
     #: this module already uses keyword arguments for every field it
     #: sets.
     origin: Literal["internal", "external"] = "internal"
+    #: Two-Tier Visibility Pipeline (lexical constant bundling): the
+    #: already-rendered text (`_constant_stub`'s own output, either the
+    #: constant's real full text or its oversized-literal `NAME = {...}
+    #: # N entries` summary) of every in-file module constant this
+    #: symbol references and this fixup chose to bundle alongside it -
+    #: never the constant's *qualified name* (the caller, `prism.surface.
+    #: build`, only needs to append real text to this item's own body,
+    #: not re-resolve/re-render anything a second time). Empty for every
+    #: existing caller/item - additive, same "keyword-argument default"
+    #: contract `origin` above already established.
+    bundled_constants: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -1282,6 +1295,190 @@ def _signature_stub(builder: ConcreteGraphBuilder, qname: str) -> str | None:
     return "\n".join(header_lines) + f"\n{body_indent}..."
 
 
+#: Two-Tier Visibility Pipeline: `_constant_stub`'s own token threshold
+#: above which an oversized Dict/List/Set/Tuple (Python) or Object/Array
+#: (JS/TS) literal gets entry-count-summarized instead of rendered in
+#: full - a token-size threshold, not a line-count one like `_signature_
+#: stub`'s own `_SIGNATURE_STUB_MAX_HEADER_LINES`, since the real risk
+#: (Scope 3: "a massive module-level constant... blowing past tight
+#: token budgets") is about token count, not line count (a 500-entry
+#: dict written on one physical line is exactly as much of a risk as one
+#: spread across 500 lines).
+_CONSTANT_STUB_MAX_TOKENS = 64
+
+#: Real tree-sitter node types for a container literal's own RHS, mapped
+#: to the bracket pair its entry-count summary renders with - Python's
+#: `dictionary`/`set` both use `{}` at the source-syntax level (they're
+#: only distinguished by their own children's shape, irrelevant here
+#: since only the *count* of `named_children` is used, never their
+#: contents).
+_CONTAINER_LITERAL_DELIMITERS = {
+    "dictionary": ("{", "}"),
+    "list": ("[", "]"),
+    "set": ("{", "}"),
+    "tuple": ("(", ")"),
+    "object": ("{", "}"),
+    "array": ("[", "]"),
+}
+
+
+def _oversized_literal_summary(def_node: Node, lang: str, source: bytes) -> str | None:
+    """`NAME = {...}  # N entries` for `def_node`'s own RHS, when that RHS
+    is a real container literal (`_CONTAINER_LITERAL_DELIMITERS`) - never
+    a fabricated entry count (`len(value_node.named_children)` is the
+    literal's own real child count, not an estimate). Returns `None` for
+    anything else (a non-container RHS - a computed expression, a bare
+    scalar, a function call - or a language this doesn't cover), so the
+    caller (`_constant_stub`) falls back to the real, full, unmodified
+    text rather than a guessed or partial rendering.
+    """
+    if lang == LanguageID.PYTHON:
+        if def_node.type != "assignment":
+            return None
+        name_node = def_node.child_by_field_name("left")
+        value_node = def_node.child_by_field_name("right")
+    elif lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+        if def_node.type != "variable_declarator":
+            return None
+        name_node = def_node.child_by_field_name("name")
+        value_node = def_node.child_by_field_name("value")
+    else:
+        return None
+    if name_node is None or value_node is None or name_node.type != "identifier":
+        return None
+    delimiters = _CONTAINER_LITERAL_DELIMITERS.get(value_node.type)
+    if delimiters is None:
+        return None
+    open_delim, close_delim = delimiters
+    entry_count = len(value_node.named_children)
+    name = node_text(name_node, source)
+    noun = "entry" if entry_count == 1 else "entries"
+    return f"{name} = {open_delim}...{close_delim}  # {entry_count} {noun}"
+
+
+def _constant_stub(builder: ConcreteGraphBuilder, qname: str) -> str | None:
+    """A bundled constant's own rendered text: its real full source slice
+    when that's reasonably small, or - only once it exceeds `_CONSTANT_
+    STUB_MAX_TOKENS` *and* its RHS is a real container literal - the
+    entry-count summary `_oversized_literal_summary` produces instead.
+    Unlike `_signature_stub` (a fallback tried only under budget
+    pressure, `None`-able because the caller already has a full-cost
+    value to fall back to), this is the *only* rendering path a bundled
+    constant ever goes through - it still returns `None` under the same
+    "no real source to price" conditions (no symbol-table entry, no
+    parsed file, no cached def node, an empty line range), since there's
+    nothing honest to render in that case either.
+    """
+    info = builder.symbol_table.get(qname)
+    if info is None:
+        return None
+    parsed = builder.parsed_file(info.file)
+    def_node = builder.def_node(qname)
+    if parsed is None or def_node is None:
+        return None
+    source = parsed.source.decode("utf-8", errors="replace")
+    lines = source.splitlines()
+    start, end = info.line_range
+    full_text = "\n".join(lines[max(start - 1, 0):end])
+    if not full_text:
+        return None
+    if count_tokens(full_text) <= _CONSTANT_STUB_MAX_TOKENS:
+        return full_text
+    summary = _oversized_literal_summary(def_node, parsed.language_id, parsed.source)
+    return summary if summary is not None else full_text
+
+
+def _bundle_referenced_constants(
+    builder: ConcreteGraphBuilder,
+    selected: list[str],
+    selected_set: set[str],
+    referenced_constants_by_symbol: dict[str, list[str]] | None,
+    costs: dict[str, int],
+    running_cost: int,
+    effective_budget: float | None,
+) -> tuple[dict[str, list[str]], int]:
+    """Two-Tier Visibility Pipeline (lexical constant bundling): the same
+    post-greedy, skip-and-log shape fix-include-class-when-method-
+    selected already established for class promotion, applied here to
+    each selected symbol's own referenced-constant names instead.
+    Shared by both `pack_symbol_context` (a real budget) and
+    `pack_symbol_context_requested` (`effective_budget=None` - that path
+    admits every requested symbol unconditionally already, by its own
+    documented design, so a bundled constant is never budget-gated
+    there either, only deduplicated) rather than a second, driftable
+    copy of this logic.
+
+    `referenced_constants_by_symbol` (`{qname: [constant simple names]}`,
+    from `BehavioralContract.referenced_constants` - see each caller's
+    own docstring for exactly how it's built) is deliberately its own,
+    separate parameter, never the full `contracts` dict: `pack_symbol_
+    context`'s own real production caller (`prism.surface.build.
+    build_context_package`) never passes `contracts` through to it at
+    all - a real, measured regression (see that call site's "Fix #2,
+    real finding" comment) from `_default_costs`'s *other* `contracts`-
+    gated behavior, `_rendered_metadata_cost`'s per-candidate signature/
+    docstring/tag cost surcharge, leaving the class-promotion/stub
+    fixups too little budget headroom. Gating this fixup on that same
+    `contracts is not None` check would make it silently dead in the one
+    call path that matters most; a narrower, single-purpose map sidesteps
+    that regression entirely rather than reopening it.
+
+    A no-op (returns `({}, running_cost)` unchanged) when `referenced_
+    constants_by_symbol` is `None` or empty.
+
+    Never a `G_C` graph edge or a new knapsack candidate of its own - a
+    bundled constant's rendered text is appended straight onto its
+    *referencing* symbol's own `SubmodularPackedItem.bundled_constants`
+    (the caller reads the returned dict to build that), and its own cost
+    is folded into that same referencing symbol's `costs[qname]` in
+    place, so the package's total reported cost stays accurate.
+
+    Deduplication: a constant already bundled under an earlier symbol in
+    this same pass, or already its own independently-selected item
+    (`selected_set` - it won its own density race, or was itself
+    class-promoted), is never rendered a second time.
+    """
+    bundled_text_by_symbol: dict[str, list[str]] = {}
+    if not referenced_constants_by_symbol:
+        return bundled_text_by_symbol, running_cost
+
+    promoted_constants: set[str] = set()
+    for qname in selected:
+        constant_names = referenced_constants_by_symbol.get(qname)
+        if not constant_names:
+            continue
+        info = builder.symbol_table.get(qname)
+        module = info.module if info is not None else None
+        if module is None:
+            continue
+        bundled_here: list[str] = []
+        for const_name in constant_names:
+            const_qname = f"{module}.{const_name}"
+            if const_qname in promoted_constants or const_qname in selected_set:
+                continue
+            const_text = _constant_stub(builder, const_qname)
+            if const_text is None:
+                continue
+            const_cost = max(count_tokens(const_text), 1)
+            if effective_budget is not None and running_cost + const_cost > effective_budget:
+                print(
+                    f"[knapsack] fix-lexical-constant-bundling: {const_qname!r} "
+                    f"referenced by {qname!r} but the remaining budget "
+                    f"({effective_budget - running_cost}) can't afford its cost "
+                    f"({const_cost}) - skipped",
+                    file=sys.stderr,
+                )
+                continue
+            promoted_constants.add(const_qname)
+            bundled_here.append(const_text)
+            running_cost += const_cost
+            costs[qname] = costs.get(qname, 0) + const_cost
+        if bundled_here:
+            bundled_text_by_symbol[qname] = bundled_here
+
+    return bundled_text_by_symbol, running_cost
+
+
 def pack_symbol_context(
     builder: ConcreteGraphBuilder,
     seed_id: str,
@@ -1291,6 +1488,7 @@ def pack_symbol_context(
     delta_max: int = DEFAULT_DELTA_MAX,
     upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
     contracts: dict[str, BehavioralContract] | None = None,
+    referenced_constants: dict[str, list[str]] | None = None,
 ) -> SubmodularPackResult:
     """The real, wired-together entry point: builds the causal graph
     (`prism.traversal.continuous_dijkstra.build_causal_graph`), the
@@ -1331,11 +1529,29 @@ def pack_symbol_context(
     default) keeps this function's exact pre-existing behavior - see
     `_default_costs`'s own docstring for why that matters for every
     other existing caller/test.
+
+    `referenced_constants` (Two-Tier Visibility Pipeline, optional): a
+    `{qname: [constant simple names]}` map (from `BehavioralContract.
+    referenced_constants`) driving the post-greedy lexical constant
+    bundling fixup below. Deliberately independent of `contracts` -
+    `prism.surface.build.build_context_package`, this function's real
+    production caller, never passes `contracts` through at all (a
+    measured regression from `_rendered_metadata_cost`'s own unrelated
+    cost surcharge - see `_bundle_referenced_constants`'s own docstring),
+    so gating this feature on `contracts` being given would make it
+    silently dead in production. When `None` but `contracts` *is* given,
+    the map is derived from it automatically as a convenience default
+    for a caller that already has both in hand.
     """
     if seed_id not in builder.symbol_table:
         raise SeedNotFoundError(seed_id, suggest_similar_seeds(builder, seed_id))
 
     effective_budget = max(0, target_budget - DEFAULT_PKG_ENVELOPE_TOKENS) if contracts is not None else target_budget
+    effective_referenced_constants = referenced_constants
+    if effective_referenced_constants is None and contracts is not None:
+        effective_referenced_constants = {
+            qname: contract.referenced_constants for qname, contract in contracts.items() if contract.referenced_constants
+        }
 
     with snapshot_file_hash_set(builder.repo_root):
         with _profile_phase("build_causal_graph"):
@@ -1494,6 +1710,14 @@ def pack_symbol_context(
                 file=sys.stderr,
             )
 
+    # Two-Tier Visibility Pipeline (lexical constant bundling): see
+    # `_bundle_referenced_constants`'s own docstring - runs last, once
+    # `selected`/`running_cost` have already settled through both the
+    # class-promotion and stub fixups above.
+    bundled_text_by_symbol, running_cost = _bundle_referenced_constants(
+        builder, selected, selected_set, effective_referenced_constants, costs, running_cost, effective_budget,
+    )
+
     items = [
         SubmodularPackedItem(
             symbol=qname,
@@ -1502,6 +1726,7 @@ def pack_symbol_context(
             dist_w=0.0 if qname == seed_id else dist_w_map.get(qname, dist_w_upstream_map.get(qname, 0.0)),
             role=_classify_role(qname, seed_id, direct_successors, dist_w_map, dist_w_upstream_map),
             compression=stub_compression.get(qname, "L0_full"),
+            bundled_constants=bundled_text_by_symbol.get(qname, []),
         )
         for qname in selected
     ]
@@ -1521,6 +1746,7 @@ def pack_symbol_context_requested(
     seed_id: str,
     requested_symbols: list[str],
     candidate_universe: set[str],
+    contracts: dict[str, BehavioralContract] | None = None,
 ) -> tuple[SubmodularPackResult, list[str]]:
     """Track 2 (Phase B Two-Pass Engine Integration), Turn 2's own
     "selection": no knapsack, no density competition - the seed plus
@@ -1540,6 +1766,14 @@ def pack_symbol_context_requested(
     `_default_costs` real BPE pricing every other pack function here
     uses; the only thing forked is *which* symbols end up in the pack,
     never how any of them are priced or rendered.
+
+    `contracts` (optional, `None` by default - additive for every
+    existing caller/test): when given, `_bundle_referenced_constants`
+    still runs (Two-Tier Visibility Pipeline), but with no budget cap
+    (`effective_budget=None`) - this path already admits every requested
+    symbol unconditionally, by its own documented design above, so a
+    bundled constant is never budget-gated here either, only
+    deduplicated the same way.
     """
     if seed_id not in builder.symbol_table:
         raise SeedNotFoundError(seed_id, suggest_similar_seeds(builder, seed_id))
@@ -1591,6 +1825,15 @@ def pack_symbol_context_requested(
         reordered_selected.append(qname)
     selected = reordered_selected
 
+    referenced_constants = (
+        {qname: contract.referenced_constants for qname, contract in contracts.items() if contract.referenced_constants}
+        if contracts is not None
+        else None
+    )
+    bundled_text_by_symbol, running_cost = _bundle_referenced_constants(
+        builder, selected, selected_set, referenced_constants, costs, running_cost, None,
+    )
+
     items = [
         SubmodularPackedItem(
             symbol=qname,
@@ -1599,6 +1842,7 @@ def pack_symbol_context_requested(
             dist_w=0.0 if qname == seed_id else dist_w_map.get(qname, dist_w_upstream_map.get(qname, 0.0)),
             role=_classify_role(qname, seed_id, direct_successors, dist_w_map, dist_w_upstream_map),
             compression="L0_full",
+            bundled_constants=bundled_text_by_symbol.get(qname, []),
         )
         for qname in selected
     ]
