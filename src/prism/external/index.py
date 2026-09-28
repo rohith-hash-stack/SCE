@@ -141,6 +141,29 @@ class PythonSourceLocator:
         return []
 
 
+def _iter_go_struct_specs(type_declaration: Node) -> Iterator[Node]:
+    """A Go `type_declaration` node has no `name`/`body` field of its own
+    (unlike every other language's `CLASS_NODE_TYPES` entry) - it just
+    wraps one `type_spec` child for a plain `type Foo struct {}`, or
+    several for a grouped `type (\\n Foo struct {}\\n Bar struct {}\\n)`.
+    Yields only the `type_spec` children whose own `type` field is a real
+    `struct_type` - a plain alias (`type UserID int`) or an interface
+    (`type Reader interface {...}`) is neither a struct nor anything this
+    module renders a stub for, matching `prism.parser.queries.GO_QUERIES`'s
+    own `(type_spec name: (type_identifier) @def.name (struct_type))`
+    definitions query, which `ConcreteGraphBuilder`'s pass1 already keys
+    its own Go struct registration off of - this walk is kept in sync
+    with that query's semantics rather than inventing a second, looser
+    definition of "Go struct" for the external-stub path alone.
+    """
+    for child in type_declaration.children:
+        if child.type != "type_spec":
+            continue
+        type_node = child.child_by_field_name("type")
+        if type_node is not None and type_node.type == "struct_type":
+            yield child
+
+
 def _iter_definitions(node: Node, lang: str, source: bytes, enclosing_class: str | None = None) -> Iterator[tuple[Node, str | None, str, str]]:
     """Yields `(def_node, enclosing_class, qualified_name, kind)` for
     every function/class definition reachable from `node` - a single-file
@@ -155,11 +178,32 @@ def _iter_definitions(node: Node, lang: str, source: bytes, enclosing_class: str
     node type, so the walk simply recurses into its children and finds the
     real `function_definition` inside, with its parent still the
     `decorated_definition` `ContractExtractor._is_async` already expects.
+
+    Go's `type_declaration` (`CLASS_NODE_TYPES[GO] = {"type_declaration"}`)
+    gets its own branch, ahead of the general `class_types` case below:
+    unlike every other language's class-shaped node, it carries no `name`
+    field of its own (`_iter_go_struct_specs` walks its real `type_spec`
+    child/children instead) - previously, `child.child_by_field_name(
+    "name")` on the `type_declaration` node itself always returned `None`,
+    so every Go struct - single or grouped - was silently dropped from
+    Phase C's external-stub discovery with no error of any kind.
     """
     class_types = CLASS_NODE_TYPES.get(lang, set())
     func_types = FUNCTION_NODE_TYPES.get(lang, set())
     for child in node.children:
-        if child.type in class_types:
+        if lang == LanguageID.GO and child.type == "type_declaration":
+            for type_spec in _iter_go_struct_specs(child):
+                name_node = type_spec.child_by_field_name("name")
+                if name_node is None:
+                    continue
+                struct_name = node_text(name_node, source)
+                qualified = f"{enclosing_class}.{struct_name}" if enclosing_class else struct_name
+                yield type_spec, enclosing_class, qualified, "class"
+                # Go struct fields carry no function/class definitions of
+                # their own (unlike a Python/JS class body) - no nested
+                # walk needed here, unlike the general `class_types` case
+                # below.
+        elif child.type in class_types:
             name_node = child.child_by_field_name("name")
             class_name = node_text(name_node, source) if name_node is not None else None
             qualified = f"{enclosing_class}.{class_name}" if enclosing_class and class_name else class_name
