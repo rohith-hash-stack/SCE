@@ -31,7 +31,7 @@ from tree_sitter import Node
 
 from prism.graph.contracts import BehavioralContract, ContractExtractor
 from prism.parser.lang_config import CLASS_NODE_TYPES, FUNCTION_NODE_TYPES
-from prism.parser.tree_sitter_loader import ParsedFile, node_text, parse_file, parse_source
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file, parse_source
 from prism.slicer.tokenizer import count_tokens
 from prism.surface.models import NodeEntry, NodeFeatures, NodeSignature
 
@@ -217,22 +217,82 @@ def _module_name_for_file(top_level: str, file_path: Path) -> str:
     return ".".join(rel_parts) if rel_parts else top_level
 
 
-def _render_signature_text(local_qualified_name: str, kind: str, contract: BehavioralContract) -> str:
+def _render_python_raises_comment(thrown: list[str]) -> str:
+    return f"# Raises: {', '.join(thrown)}\n"
+
+
+def _render_jsdoc_throws_comment(thrown: list[str]) -> str:
+    if len(thrown) == 1:
+        return f"/** @throws {{{thrown[0]}}} */\n"
+    lines = ["/**"] + [f" * @throws {{{name}}}" for name in thrown] + [" */"]
+    return "\n".join(lines) + "\n"
+
+
+#: Architectural-audit Category 6 (external stub exception rendering):
+#: `contract.thrown_exceptions` was already extracted by `ContractExtractor`
+#: (the same pass every in-repo symbol's contract goes through) but never
+#: reached `_render_signature_text` at all - an agent generating a call
+#: into a stubbed external dependency saw only the type signature, with no
+#: structured signal that the real function can raise. This table is the
+#: "language specifics live in adapters" half of that fix: which comment
+#: *syntax* a thrown-exceptions list renders as, per language - the same
+#: shape `prism.parser.lang_config`'s own per-language dicts already use
+#: (`RAISE_NODE_TYPE`, `AWAIT_NODE_TYPES`, ...), kept local to this module
+#: rather than added there since nothing else in the codebase renders
+#: *output* comment syntax the way concrete_builder.py's shared tables
+#: describe *input* AST node shapes.
+#:
+#: Go has no entry: `contract.thrown_exceptions` is always empty for Go
+#: (`RAISE_NODE_TYPE` itself has no Go entry - it uses multiple return
+#: values with an `error`, not exceptions), so there's never anything to
+#: render there in the first place - an absent key degrades to no
+#: annotation at all, not a missing-language bug.
+_THROWN_EXCEPTIONS_COMMENT_RENDERERS = {
+    LanguageID.PYTHON: _render_python_raises_comment,
+    LanguageID.JAVASCRIPT: _render_jsdoc_throws_comment,
+    LanguageID.TYPESCRIPT: _render_jsdoc_throws_comment,
+    LanguageID.TSX: _render_jsdoc_throws_comment,
+}
+
+
+def _render_thrown_exceptions_comment(language_id: str, thrown_exceptions: list[str]) -> str:
+    """The annotation block placed immediately above a stub's declaration
+    line, or `""` (no leading/trailing whitespace of its own) when there's
+    nothing to say - `contract.thrown_exceptions` is empty, or this
+    language has no renderer registered above."""
+    if not thrown_exceptions:
+        return ""
+    renderer = _THROWN_EXCEPTIONS_COMMENT_RENDERERS.get(language_id)
+    if renderer is None:
+        return ""
+    return renderer(thrown_exceptions)
+
+
+def _render_signature_text(local_qualified_name: str, kind: str, contract: BehavioralContract, language_id: str) -> str:
     """The real declaration line, rendered from `ContractExtractor`'s own
     structured `params`/`return_type`/`is_async` - never the raw source
     text (which would drag the real body's own indentation/formatting
     along with it), and never fabricated when a field is absent (a class
     with no meaningful `__init__` signature to show renders as a bare
-    `class Name:`, not a guessed constructor)."""
+    `class Name:`, not a guessed constructor).
+
+    Prefixed with a language-appropriate thrown-exceptions comment
+    (`_render_thrown_exceptions_comment`) when `contract.thrown_exceptions`
+    is non-empty - `ContractExtractor` already computed this for every
+    in-repo symbol; only the external-stub path was ever discarding it.
+    """
     simple_name = local_qualified_name.rsplit(".", 1)[-1]
     if kind == "class":
-        return f"class {simple_name}:"
-    prefix = "async def" if contract.is_async else "def"
-    params_text = ", ".join(p.render() for p in contract.params)
-    header = f"{prefix} {simple_name}({params_text})"
-    if contract.return_type:
-        header += f" -> {contract.return_type}"
-    return header + ":"
+        header = f"class {simple_name}:"
+    else:
+        prefix = "async def" if contract.is_async else "def"
+        params_text = ", ".join(p.render() for p in contract.params)
+        header = f"{prefix} {simple_name}({params_text})"
+        if contract.return_type:
+            header += f" -> {contract.return_type}"
+        header += ":"
+    annotation = _render_thrown_exceptions_comment(language_id, contract.thrown_exceptions)
+    return annotation + header
 
 
 def _parse_external_file(file_path: Path) -> ParsedFile | None:
@@ -291,7 +351,7 @@ def _extract_from_file(file_path: Path, top_level: str, symbol_name: str) -> Ext
         qualified_name=f"{module_name}.{local_qualified_name}",
         module_origin=top_level,
         language=parsed.language_id,
-        signature_text=_render_signature_text(local_qualified_name, kind, contract),
+        signature_text=_render_signature_text(local_qualified_name, kind, contract, parsed.language_id),
         docstring=contract.docstring,
         kind=kind,
         file=str(file_path),
