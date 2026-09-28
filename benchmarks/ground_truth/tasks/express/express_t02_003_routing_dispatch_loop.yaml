@@ -1,0 +1,103 @@
+# T02 "Express Pilot" - Task 3: the real router dispatch/matching loop.
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.router.next            lines 177-291
+#   lib.router.getPathname     lines 537-543
+#   lib.router.matchLayer      lines 583-589
+#   lib.router.process_params  lines 338-422
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage.
+#
+# Real, disclosed structural finding: `lib.router.handle` (the router's
+# own public `handle(req, res, callback)` entry point) is *not* itself
+# a rich pipeline seed - its own real out-edges are just `debug`,
+# `getProtohost`, `restore`, `wrap`, `sendOptionsResponse`, and `next`.
+# All of the actual route-matching/dispatch logic (the loop over
+# `this.stack`, `getPathname`, `matchLayer`, `process_params`,
+# `trim_prefix`) lives inside `next` - the router's own internal,
+# closure-scoped dispatch-loop function - not inside `handle` itself.
+# This task seeds directly on `next` for that reason, since it is the
+# real locus of the "routing & layer dispatch" logic, verified by
+# reading the real source (lines 177-291) and cross-checked against the
+# real graph, not assumed.
+task_id: express_t02_003_routing_dispatch_loop
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.router.next
+task_type: debug
+prompt: 'You are investigating Express''s router dispatch loop in lib/router/index.js. Starting from the
+  router''s internal `next` dispatch function, trace the exact causal pipeline it runs through while
+  searching for a matching layer for an incoming request: how the request path is derived, how each
+  stacked layer is tested for a match, and what runs once a matching layer is found.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.router.next", "lib.router.getPathname"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.router.next
+  - lib.router.getPathname
+  - lib.router.matchLayer
+  - lib.router.process_params
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - lib.router.param
+  expected_solution: next() first calls getPathname(req) to derive the request's real path, then loops
+    calling matchLayer(layer, path) against each stacked layer in order until one matches (or the stack
+    is exhausted). Once a real match is found, it calls self.process_params(layer, ...) to run any
+    registered param callbacks (process_params itself calls param()) before either dispatching to the
+    matched route's own handler or continuing the search via trim_prefix for a non-route layer.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.router.next
+  - lib.router.matchLayer
+  - lib.router.process_params
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - lib.router.param
+  expected_solution: next() loops calling matchLayer(layer, path) to find a matching layer, then calls
+    process_params() once one is found. (Missed that the request path itself is derived by a real,
+    separately-reachable call to getPathname(req) before the matching loop even starts, treating `path`
+    as if it were simply given rather than computed.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.router.next
+  - lib.router.getPathname
+  - lib.router.matchLayer
+  - lib.router.process_params
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - lib.router.param
+  expected_solution: next() first calls getPathname(req) to derive the request's real path (a real,
+    separately reachable stage, not an assumed input), then loops calling matchLayer(layer, path) against
+    each stacked layer until one matches, then calls self.process_params(layer, ...) to run registered
+    param callbacks before dispatching. annotator_b's pipeline is real but skipped the initial
+    getPathname() stage.

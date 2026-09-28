@@ -1,0 +1,102 @@
+# T02 "Express Pilot" - Task 1: application bootstrap and default
+# configuration.
+#
+# Grounded in the real pinned Express 4.21.0 checkout (pinned_commit
+# below, matching benchmarks/corpora/pinned_commits.json's own "express"
+# entry) - every symbol here is real and indexed, verified directly
+# against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.application.init                  lines 64-70
+#   lib.application.defaultConfiguration  lines 77-134
+#   lib.application.enable                lines 469-471
+#   lib.application.set                   lines 359-401
+#
+# Transitive reachability (CALLS/INSTANTIATES/EXTENDS/IMPLEMENTS/
+# OVERRIDES/EMBEDS edges only, per TASK_AUTHORING.md) verified directly
+# via networkx.has_path from the seed to every pipeline stage - not
+# assumed from reading source.
+#
+# Real, disclosed exclusion: `app.init()` is called from `lib.express.
+# createApplication` via a dynamically mixed-in property
+# (`mixin(app, proto, false)`, merge-descriptors), which Prism's static
+# call resolution does not follow - `createApplication`'s own out-edges
+# resolve to `<ambiguous:init@...>`, not `lib.application.init`. This
+# task therefore seeds directly on `init` itself rather than on
+# `createApplication`, which is not a real, reachable seed for this
+# pipeline at all.
+task_id: express_t02_001_app_bootstrap_defaults
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.application.init
+task_type: debug
+prompt: 'You are investigating Express''s application bootstrap in lib/application.js. Starting from `init`,
+  trace the exact causal pipeline that runs when a new Express application object is initialized: what
+  default configuration gets applied, and which real config-mutation methods it goes through to do so.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.application.init", "lib.application.defaultConfiguration"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.application.init
+  - lib.application.defaultConfiguration
+  - lib.application.enable
+  - lib.application.set
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: init() calls defaultConfiguration(), which applies Express's real default settings -
+    among them, enabling the 'x-powered-by' boolean flag via enable() (and, conditionally in production,
+    'view cache' too), and setting several named config values via set() (etag, env, query parser,
+    subdomain offset, trust proxy, view, views, jsonp callback name). Both enable() and set() are real,
+    independently-reachable config-mutation methods defaultConfiguration() calls directly.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.application.init
+  - lib.application.defaultConfiguration
+  - lib.application.set
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: init() calls defaultConfiguration(), which sets several default config values via
+    set() (etag, env, query parser, subdomain offset, trust proxy, view, views, jsonp callback name).
+    (Missed that defaultConfiguration() also calls enable() directly for the boolean-flag defaults
+    ('x-powered-by', and conditionally 'view cache'), a separate real config-mutation method from set(),
+    not just a variant of it.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.application.init
+  - lib.application.defaultConfiguration
+  - lib.application.enable
+  - lib.application.set
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: init() calls defaultConfiguration(), which applies Express's real default settings
+    through two distinct, independently-reachable config-mutation methods it calls directly - enable()
+    for boolean flags ('x-powered-by', and conditionally 'view cache' in production) and set() for named
+    values (etag, env, query parser, subdomain offset, trust proxy, view, views, jsonp callback name).
+    annotator_b's pipeline is real but incomplete - it captured set() but missed the separate enable()
+    call.
