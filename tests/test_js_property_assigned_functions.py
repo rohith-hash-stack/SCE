@@ -91,8 +91,18 @@ def test_computed_property_assignment_is_not_registered(tmp_path) -> None:
     assert not any("dynamicName" in n for n in names)
     # The only symbols this file should produce are the ones explicitly
     # covered by the other tests, plus the class/constructor/normal
-    # function below - nothing extra leaked in from the forEach loop.
+    # function below and the file's own three real module-level `var`
+    # declarations (Two-Tier Visibility Pipeline: `_collect_js_module_
+    # constants` now registers these as real `kind="attribute"` symbols,
+    # the same way Python's own module-level assignments already were -
+    # `app`/`exports`/`methods` are genuinely real, referenceable module
+    # bindings, not a leak from the computed-property forEach loop this
+    # test is actually guarding against) - nothing extra leaked in from
+    # that loop.
     assert set(names) == {
+        "property_assigned_functions.app",
+        "property_assigned_functions.exports",
+        "property_assigned_functions.methods",
         "property_assigned_functions.handle",
         "property_assigned_functions.use",
         "property_assigned_functions.route",

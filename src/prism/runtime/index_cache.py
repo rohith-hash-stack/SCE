@@ -54,8 +54,9 @@ from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder, outer_definition_node
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo, SymbolRole
+from prism.parser.lang_config import find_all
 from prism.parser.queries import run_query
-from prism.parser.tree_sitter_loader import ParsedFile, parse_source
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, parse_source
 from prism.traversal._cache_keys import engine_and_grammar_version
 
 try:
@@ -414,6 +415,76 @@ def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symb
         builder._def_nodes[symbol.qualified_name] = node
 
 
+#: Which real AST node type each language's own `kind="attribute"`
+#: registration (`ConcreteGraphBuilder._register_attribute`'s callers)
+#: actually stores - a small, private table matching those real
+#: registration shapes, not `ASSIGNMENT_NODE_TYPE` (whose JS/TS entry is
+#: a plain reassignment expression, the wrong node type for a `const`/
+#: `let`/`var` declaration).
+_ATTRIBUTE_DEF_NODE_TYPES = {
+    LanguageID.PYTHON: {"assignment"},
+    LanguageID.JAVASCRIPT: {"variable_declarator"},
+    LanguageID.TYPESCRIPT: {"variable_declarator"},
+    LanguageID.TSX: {"variable_declarator"},
+}
+
+
+def _rehydrate_attribute_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symbols: list) -> None:
+    """The same real gap `_rehydrate_def_nodes`'s own docstring documents
+    for function/class/method symbols, found again while wiring the
+    Two-Tier Visibility Pipeline's lexical constant bundling: `_register_
+    attribute` (`ConcreteGraphBuilder`) now populates `_def_nodes` for a
+    module/class/instance attribute on a *cold* build, but this cache-hit
+    path re-derives `builder._def_nodes` from scratch and never covered
+    attribute symbols at all - `def_node()` would silently go back to
+    returning `None` for every constant on the second and every later
+    `prism index`/`prism query` invocation against an unchanged repo,
+    invisible to any test that only builds a repo once (the same failure
+    shape this module's docstrings already call out for `_def_nodes`/
+    `_import_maps`).
+
+    Reproducing `_collect_attribute_definitions`'s own module/class-body/
+    self-attribute scoping distinctions here would just be a second,
+    driftable copy of that logic - unnecessary, since (unlike function/
+    class discovery, which needs the real tree-sitter `"definitions"`
+    query to find candidate nodes at all) an attribute's own real node is
+    already fully identified by its cached `SymbolInfo.line_range` alone.
+    A plain, unscoped `find_all(root, node_types)` over the whole file
+    finds every real assignment-shaped node regardless of which scope
+    registered it, and the same "list of same-line candidates, consumed
+    in document order" collision handling `_rehydrate_def_nodes` already
+    uses covers the (vanishingly rare, same accepted tradeoff) case of
+    two unrelated assignments landing on one physical line.
+
+    `node_types` is deliberately its own small, private table here, not
+    `ASSIGNMENT_NODE_TYPE` reused directly: that table's own JS/TS entry
+    (`"assignment_expression"`, a plain `x = 1` *reassignment*) is the
+    wrong node type for `_collect_js_module_constants`'s real
+    registration shape (`variable_declarator`, `const`/`let`/`var`'s own
+    *declaration* node) - confirmed live while building this feature.
+    Python's own entry matches `ASSIGNMENT_NODE_TYPE[PYTHON]` exactly.
+    """
+    attribute_symbols = [s for s in symbols if s.kind == "attribute"]
+    if not attribute_symbols:
+        return
+    node_types = _ATTRIBUTE_DEF_NODE_TYPES.get(parsed.language_id)
+    if not node_types:
+        return
+    by_start_line: dict[int, list] = {}
+    for s in attribute_symbols:
+        by_start_line.setdefault(s.line_range[0], []).append(s)
+    assign_nodes = sorted(find_all(parsed.root_node, node_types), key=lambda n: n.start_byte)
+    for node in assign_nodes:
+        start_line = node.start_point[0] + 1
+        candidates = by_start_line.get(start_line)
+        if not candidates:
+            continue
+        symbol = candidates.pop(0)
+        if not candidates:
+            del by_start_line[start_line]
+        builder._def_nodes[symbol.qualified_name] = node
+
+
 def load_pipeline_from_cache(
     repo_root: str, files: list[str], language_tier: str
 ) -> tuple[ConcreteGraphBuilder, dict[str, set[str]]] | None:
@@ -501,6 +572,7 @@ def load_pipeline_from_cache(
             if parsed is not None:
                 builder._parsed_files[file_path] = parsed
                 _rehydrate_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
+                _rehydrate_attribute_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
                 _rehydrate_import_maps(builder, parsed)
 
         tag_matrix = {k: set(v) for k, v in json.loads(tag_matrix_json).items()}

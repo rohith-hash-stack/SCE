@@ -506,6 +506,8 @@ class ConcreteGraphBuilder:
             self._register_definition(node, is_class, parsed, module, force_kind=force_kind)
         if lang == LanguageID.PYTHON:
             self._collect_attribute_definitions(parsed, module)
+        elif lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+            self._collect_js_module_constants(parsed, module)
 
     def _register_definition(
         self, node: Node, is_class: bool, parsed: ParsedFile, module: str, force_kind: str | None = None
@@ -624,6 +626,51 @@ class ConcreteGraphBuilder:
                 for assign in iter_scoped_nodes(method_node, {assign_type}, lang):
                     self._register_self_attribute(assign, parsed, module, class_qname, self_tokens)
 
+    #: Two-Tier Visibility Pipeline (lexical constant bundling): JS/TS's
+    #: own real module-constant declaration shapes - `const`/`let`/`var`
+    #: (Python's `ASSIGNMENT_NODE_TYPE["assignment"]` only matches a plain
+    #: `x = 1` *reassignment* expression, never a declaration - a
+    #: different grammar node entirely, confirmed directly against a real
+    #: parse).
+    _JS_MODULE_CONST_DECLARATION_TYPES = frozenset({"lexical_declaration", "variable_declaration"})
+
+    def _collect_js_module_constants(self, parsed: ParsedFile, module: str) -> None:
+        """JS/TS's own counterpart to `_collect_attribute_definitions`'s
+        Python-only module-level pass - a real, connected gap found while
+        building the lexical constant bundler: `_collect_attribute_
+        definitions` itself is gated `if lang == LanguageID.PYTHON` at its
+        one call site, so a JS/TS module's own real `const CONFIG =
+        {...};` was never registered as a symbol at all, making `Contract
+        Extractor._js_locally_bound_names`'s own conservative-subset
+        reference-matching work correct but entirely unreachable in
+        practice (nothing to match against).
+
+        Deliberately narrower than the Python pass: module (top-level)
+        scope only - no class-field declarations, no `this.<attr> = ...`
+        instance-attribute collection for JS/TS, both distinct, not-yet-
+        covered concepts genuinely out of scope for "module constant
+        bundling." Only a single, non-destructured `identifier`
+        declarator target is registered (`const a = 1, b = 2;`'s two
+        declarators are each handled independently and registered
+        against the *declarator* node itself, not the whole multi-
+        declarator statement, for a precise, single-constant `line_range`
+        later; `const {a, b} = obj;`'s destructuring pattern is skipped
+        entirely) - the same disclosed gap `_js_locally_bound_names`
+        already has, so the two sides of this feature (registration,
+        reference-matching) agree on what a "real JS module constant" is.
+        """
+        for stmt in parsed.root_node.children:
+            if stmt.type not in self._JS_MODULE_CONST_DECLARATION_TYPES:
+                continue
+            for declarator in stmt.named_children:
+                if declarator.type != "variable_declarator":
+                    continue
+                name_node = declarator.child_by_field_name("name")
+                if name_node is None or name_node.type != "identifier":
+                    continue
+                name = node_text(name_node, parsed.source)
+                self._register_attribute(f"{module}.{name}", declarator, parsed, module, enclosing_class=None)
+
     @staticmethod
     def _direct_assignments(container: Node, assign_type: str) -> list[Node]:
         """Assignment nodes that are direct statements of `container` (each
@@ -680,6 +727,18 @@ class ConcreteGraphBuilder:
             enclosing_class=enclosing_class,
         )
         self.symbol_table.add(symbol)
+        # Two-Tier Visibility Pipeline (lexical constant bundling): unlike
+        # function/class/method registration (`_register_definition`,
+        # which always does this), an attribute's own real assignment
+        # node was never cached here - `builder.def_node(qname)` returned
+        # `None` for every module/class/instance attribute, forcing any
+        # caller that needed its real AST (to inspect a module constant's
+        # RHS shape, say) back to a disk re-read via `file`/`line_range`
+        # alone. `node` here is the real `assign` statement itself (its
+        # own RHS is what `_constant_stub` inspects), the same node shape
+        # `_register_simple_target_attribute`/`_register_self_attribute`
+        # already pass in - populating this costs nothing extra.
+        self._def_nodes[qualified_name] = node
         self.graph.add_node(
             qualified_name,
             kind="attribute",
