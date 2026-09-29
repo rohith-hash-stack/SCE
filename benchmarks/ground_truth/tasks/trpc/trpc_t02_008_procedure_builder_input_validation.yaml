@@ -1,0 +1,93 @@
+# T02 "tRPC Pilot" - Task 8: procedure input validation chaining
+# (`ProcedureBuilder.input()`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   core.internals.procedureBuilder.createBuilder.input lines 226-232
+#   core.internals.getParseFn.getParseFn                lines 5-43
+#   core.internals.procedureBuilder.createNewBuilder      lines 192-205
+#   core.middleware.createInputMiddleware                lines 227-257
+#
+# Real source: `input` is a real object-literal method on the builder
+# object `createBuilder` returns (the exact same fix category as
+# trpc_t02_002/005's own seeds - see docs/architecture_boundaries.md
+# Category 10). Calling `.input(schema)` first resolves the schema's own
+# validator function via getParseFn (detecting whichever validation
+# library shape - Zod/Yup/Superstruct/etc - the schema actually is), then
+# builds the next builder via createNewBuilder, registering a real input-
+# validation middleware for it via createInputMiddleware.
+
+task_id: trpc_t02_008_procedure_builder_input_validation
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.internals.procedureBuilder.createBuilder.input
+task_type: debug
+prompt: 'You are investigating how tRPC validates a procedure''s input schema when `.input(schema)` is
+  called during procedure definition, starting from the `input` method on the builder object `createBuilder`
+  returns, in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+
+  ["core.internals.procedureBuilder.createBuilder.input", "core.internals.getParseFn.getParseFn"]
+
+
+  ```
+
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols: &id002
+  - core.internals.procedureBuilder.createBuilder.input
+  - core.internals.getParseFn.getParseFn
+  - core.middleware.createInputMiddleware
+  - core.internals.procedureBuilder.createNewBuilder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: &id001 []
+  expected_solution: input() first resolves the schema's real validator function via getParseFn, then
+    builds a real input-validation middleware for it via createInputMiddleware, and finally produces the
+    next builder in the chain via createNewBuilder, registering both the new input parser and the new
+    middleware on it.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.internals.procedureBuilder.createBuilder.input
+  - core.internals.getParseFn.getParseFn
+  - core.internals.procedureBuilder.createNewBuilder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: input() resolves the schema's validator via getParseFn, then produces the next builder
+    via createNewBuilder. (Missed createInputMiddleware - a real, separate stage that builds the actual
+    runtime validation middleware from the parser getParseFn returns, called between the two found stages,
+    not merely part of createNewBuilder's own body.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols: *id002
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: input() resolves the validator via getParseFn, builds the real input-validation middleware
+    from it via createInputMiddleware, then produces the next builder via createNewBuilder - all three
+    real, reachable stages. annotator_b found the first and last stages but missed createInputMiddleware
+    in between.

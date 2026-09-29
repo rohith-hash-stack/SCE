@@ -1,0 +1,92 @@
+# T02 "tRPC Pilot" - Task 19: type-safe query procedure finalization
+# (`ProcedureBuilder.query()`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   core.internals.procedureBuilder.createBuilder.query lines 263-268
+#   core.internals.procedureBuilder.createResolver        lines 284-304
+#   core.internals.procedureBuilder.createNewBuilder       lines 192-205
+#   core.internals.procedureBuilder.createProcedureCaller lines 322-407
+#
+# Real source: `query`, a real object-literal method on the builder
+# object `createBuilder` returns (the same fix category as
+# trpc_t02_008/009/010's own seeds), is where a chained procedure
+# definition (`t.procedure.input(x).query(resolver)`) is actually
+# finalized into a real, callable query procedure - marking the
+# definition `query: true` and delegating to createResolver, which
+# itself wraps the resolver in a real middleware (via createNewBuilder)
+# before producing the real, callable procedure via
+# createProcedureCaller.
+
+task_id: trpc_t02_019_procedure_builder_query_resolution
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.internals.procedureBuilder.createBuilder.query
+task_type: debug
+prompt: 'You are investigating how tRPC finalizes a chained procedure definition into a real, callable
+  query procedure when `.query(resolver)` is called, starting from the `query` method on the builder object
+  `createBuilder` returns, in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs
+  through.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+
+  ["core.internals.procedureBuilder.createBuilder.query", "core.internals.procedureBuilder.createResolver"]
+
+
+  ```
+
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols: &id002
+  - core.internals.procedureBuilder.createBuilder.query
+  - core.internals.procedureBuilder.createResolver
+  - core.internals.procedureBuilder.createNewBuilder
+  - core.internals.procedureBuilder.createProcedureCaller
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: &id001 []
+  expected_solution: query() marks the definition query:true and delegates to createResolver, which wraps
+    the real resolver function in a new middleware via createNewBuilder, then produces the real, callable
+    procedure via createProcedureCaller.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.internals.procedureBuilder.createBuilder.query
+  - core.internals.procedureBuilder.createResolver
+  - core.internals.procedureBuilder.createProcedureCaller
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: query() delegates to createResolver, which produces the real, callable procedure
+    via createProcedureCaller. (Missed createNewBuilder - createResolver's own real, intermediate call
+    that wraps the resolver in a new middleware-bearing builder before ever calling createProcedureCaller
+    on its finished definition.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols: *id002
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: createResolver wraps the resolver via createNewBuilder before calling createProcedureCaller
+    on the finished definition - a real, necessary stage between the two annotator_b found.

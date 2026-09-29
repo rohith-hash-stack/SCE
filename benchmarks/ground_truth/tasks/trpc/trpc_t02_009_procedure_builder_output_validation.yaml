@@ -1,0 +1,92 @@
+# T02 "tRPC Pilot" - Task 9: procedure output validation chaining
+# (`ProcedureBuilder.output()`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   core.internals.procedureBuilder.createBuilder.output lines 233-239
+#   core.internals.getParseFn.getParseFn                 lines 5-43
+#   core.middleware.createOutputMiddleware               lines 262-285
+#   core.internals.procedureBuilder.createNewBuilder       lines 192-205
+#
+# Real source: `output`, like `input` (trpc_t02_008), is a real object-
+# literal method on the builder object `createBuilder` returns. It
+# mirrors input()'s own shape exactly but wires an output-validation
+# middleware instead - resolving the output schema's own validator via
+# getParseFn, building a real output-validation middleware for it via
+# createOutputMiddleware, then producing the next builder via
+# createNewBuilder.
+
+task_id: trpc_t02_009_procedure_builder_output_validation
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.internals.procedureBuilder.createBuilder.output
+task_type: debug
+prompt: 'You are investigating how tRPC validates a procedure''s output schema when `.output(schema)`
+  is called during procedure definition, starting from the `output` method on the builder object `createBuilder`
+  returns, in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+
+  ["core.internals.procedureBuilder.createBuilder.output", "core.internals.getParseFn.getParseFn"]
+
+
+  ```
+
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols: &id002
+  - core.internals.procedureBuilder.createBuilder.output
+  - core.internals.getParseFn.getParseFn
+  - core.middleware.createOutputMiddleware
+  - core.internals.procedureBuilder.createNewBuilder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: &id001 []
+  expected_solution: output() first resolves the output schema's real validator function via getParseFn,
+    then builds a real output-validation middleware for it via createOutputMiddleware, and finally produces
+    the next builder in the chain via createNewBuilder.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.internals.procedureBuilder.createBuilder.output
+  - core.middleware.createOutputMiddleware
+  - core.internals.getParseFn.getParseFn
+  - core.internals.procedureBuilder.createNewBuilder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: output() builds an output-validation middleware via createOutputMiddleware (using
+    getParseFn to resolve the schema's validator) then produces the next builder via createNewBuilder.
+    (Same three real stages as the adjudicated answer, but createOutputMiddleware and getParseFn are reversed
+    - the real source resolves the validator first, then passes it into createOutputMiddleware, not the
+    other way around.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols: *id002
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: output() resolves the validator via getParseFn first, then passes it into createOutputMiddleware
+    to build the real middleware, then produces the next builder via createNewBuilder - this exact causal
+    order. annotator_b found all three real stages but reversed the first two.

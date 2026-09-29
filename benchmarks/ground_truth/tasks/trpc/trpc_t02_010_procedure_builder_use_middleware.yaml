@@ -1,0 +1,85 @@
+# T02 "tRPC Pilot" - Task 10: procedure middleware chaining
+# (`ProcedureBuilder.use()`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   core.internals.procedureBuilder.createBuilder.use lines 252-262
+#   core.internals.procedureBuilder.createNewBuilder    lines 192-205
+#
+# Real source: `use`, another real object-literal method on the builder
+# object `createBuilder` returns, is the thinnest of the three chaining
+# methods (trpc_t02_008/009 cover .input()/.output()) - it distinguishes
+# whether it was handed a middleware builder (`.unstable_pipe()`-chained,
+# read via its own `_middlewares` array) or a bare middleware function,
+# then delegates directly to createNewBuilder with the resolved
+# middleware list. A genuinely thin, single-stage-forward pipeline,
+# disclosed as such rather than padded - not every real function has a
+# rich multi-stage chain.
+
+task_id: trpc_t02_010_procedure_builder_use_middleware
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.internals.procedureBuilder.createBuilder.use
+task_type: debug
+prompt: 'You are investigating how tRPC attaches a middleware to a procedure builder when `.use(fn)` is
+  called during procedure definition, starting from the `use` method on the builder object `createBuilder`
+  returns, in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+
+  ["core.internals.procedureBuilder.createBuilder.use", "core.internals.procedureBuilder.createNewBuilder"]
+
+
+  ```
+
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols: &id002
+  - core.internals.procedureBuilder.createBuilder.use
+  - core.internals.procedureBuilder.createNewBuilder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: &id001 []
+  expected_solution: use() distinguishes a middleware-builder argument (read via its own _middlewares
+    array) from a bare middleware function, then delegates directly to createNewBuilder with the resolved
+    middleware list appended to the chain.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.internals.procedureBuilder.createBuilder.use
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: use() just registers the middleware on the builder. (Missed createNewBuilder - the
+    real call that actually produces the next builder in the chain; use() itself does no more than resolve
+    which middleware list to pass into it.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols: *id002
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: use() resolves the real middleware list, then delegates to createNewBuilder to produce
+    the next builder - the one real, necessary stage. annotator_b's pipeline stopped at the seed itself,
+    missing this real, single-hop delegation entirely.

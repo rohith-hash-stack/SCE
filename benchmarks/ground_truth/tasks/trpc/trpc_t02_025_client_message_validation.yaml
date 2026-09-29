@@ -1,0 +1,100 @@
+# T02 "tRPC Pilot" - Task 25: incoming client message validation
+# (`parseTRPCMessage`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   rpc.parseTRPCMessage.parseTRPCMessage             lines 50-84
+#   rpc.parseTRPCMessage.assertIsObject               lines 6-10
+#   rpc.parseTRPCMessage.assertIsRequestId            lines 20-31
+#   rpc.parseTRPCMessage.assertIsJSONRPC2OrUndefined lines 41-47
+#   rpc.parseTRPCMessage.assertIsProcedureType        lines 13-17
+#   rpc.parseTRPCMessage.assertIsString               lines 34-38
+#
+# Real source: before any real query/mutation/subscription dispatch can
+# happen for a raw incoming client message (e.g. over a WebSocket link,
+# adapters/ws.ts's own real use case), parseTRPCMessage validates its
+# real shape through five distinct, same-file assertion functions in
+# this exact real order - each one a genuine, separately-indexed
+# function declaration (an `asserts obj is X` TypeScript type guard,
+# still a real, callable function with a real body, not a bare type
+# annotation), not a single monolithic validation block.
+
+task_id: trpc_t02_025_client_message_validation
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: rpc.parseTRPCMessage.parseTRPCMessage
+task_type: debug
+prompt: 'You are investigating how tRPC validates a raw incoming client message before dispatching it,
+  starting from `parseTRPCMessage` in rpc/parseTRPCMessage.ts. Trace the real causal pipeline of validation
+  checks it runs through, for the case where `method` is not `''subscription.stop''`.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+
+  ["rpc.parseTRPCMessage.parseTRPCMessage", "rpc.parseTRPCMessage.assertIsObject"]
+
+
+  ```
+
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols: &id002
+  - rpc.parseTRPCMessage.parseTRPCMessage
+  - rpc.parseTRPCMessage.assertIsObject
+  - rpc.parseTRPCMessage.assertIsRequestId
+  - rpc.parseTRPCMessage.assertIsJSONRPC2OrUndefined
+  - rpc.parseTRPCMessage.assertIsProcedureType
+  - rpc.parseTRPCMessage.assertIsString
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: &id001 []
+  expected_solution: 'parseTRPCMessage validates the raw message through five distinct real assertion
+    functions in this order: assertIsObject on the whole message, assertIsRequestId on its id, assertIsJSONRPC2OrUndefined
+    on its jsonrpc field, then (for a non-subscription.stop method) assertIsProcedureType on the method,
+    a second assertIsObject on params, and assertIsString on the path.'
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - rpc.parseTRPCMessage.parseTRPCMessage
+  - rpc.parseTRPCMessage.assertIsObject
+  - rpc.parseTRPCMessage.assertIsProcedureType
+  - rpc.parseTRPCMessage.assertIsRequestId
+  - rpc.parseTRPCMessage.assertIsJSONRPC2OrUndefined
+  - rpc.parseTRPCMessage.assertIsString
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: parseTRPCMessage validates the message through the same five real assertion functions,
+    but checks the procedure type immediately after confirming the message is an object. (Real functions,
+    wrong order - assertIsRequestId and assertIsJSONRPC2OrUndefined both run on the top-level message
+    before assertIsProcedureType is ever reached, since that check only applies once execution passes
+    the early subscription.stop branch.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols: *id002
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: parseTRPCMessage checks id and jsonrpc immediately after confirming the message is
+    an object, and only reaches assertIsProcedureType afterward (past the early subscription.stop return).
+    annotator_b named all five real functions but reordered assertIsProcedureType too early.

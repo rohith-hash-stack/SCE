@@ -1,0 +1,101 @@
+# T02 "tRPC Pilot" - Task 23: legacy procedure migration
+# (`migrateProcedure`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   deprecated.interop.migrateProcedure    lines 171-199
+#   core.internals.getParseFn.getParseFnOrPassThrough lines 49-56
+#   core.middleware.createInputMiddleware  lines 227-257
+#   core.internals.procedureBuilder.createBuilder lines 207-282
+#   core.middleware.createOutputMiddleware lines 262-285
+#
+# Real source: migrateProcedure resolves the old procedure's own input/
+# output parsers via getParseFnOrPassThrough (tolerating a legacy
+# procedure with no parser at all, unlike the modern getParseFn -
+# trpc_t02_008/009's own seeds - which requires one), builds a real
+# input-validation middleware for the input parser via
+# createInputMiddleware, constructs a fresh modern builder with both
+# middlewares via createBuilder, and (in the real body, not modeled as
+# its own separate pipeline stage here since it's a second, direct call
+# to the same already-listed createInputMiddleware/createOutputMiddleware
+# functions) wires the output parser's own middleware via
+# createOutputMiddleware.
+
+task_id: trpc_t02_023_deprecated_procedure_migration
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: deprecated.interop.migrateProcedure
+task_type: debug
+prompt: 'You are investigating how tRPC migrates a single legacy (v9-shaped) procedure into the modern
+  procedure-builder shape, starting from `migrateProcedure` in deprecated/interop.ts. Trace the real causal
+  pipeline it runs through.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+
+  ["deprecated.interop.migrateProcedure", "core.internals.getParseFn.getParseFnOrPassThrough"]
+
+
+  ```
+
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols: &id002
+  - deprecated.interop.migrateProcedure
+  - core.internals.getParseFn.getParseFnOrPassThrough
+  - core.middleware.createInputMiddleware
+  - core.middleware.createOutputMiddleware
+  - core.internals.procedureBuilder.createBuilder
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: &id001 []
+  expected_solution: migrateProcedure resolves the legacy procedure's own input and output parsers via
+    getParseFnOrPassThrough, builds a real input-validation middleware for the input parser via createInputMiddleware
+    and an output-validation middleware via createOutputMiddleware, then constructs a fresh modern builder
+    wired with both via createBuilder.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - deprecated.interop.migrateProcedure
+  - core.internals.getParseFn.getParseFnOrPassThrough
+  - core.internals.procedureBuilder.createBuilder
+  - core.middleware.createInputMiddleware
+  - core.middleware.createOutputMiddleware
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: migrateProcedure resolves the legacy parsers via getParseFnOrPassThrough, builds
+    the new builder via createBuilder, wiring it with createInputMiddleware and createOutputMiddleware.
+    (Same four real stages as the adjudicated answer, but createBuilder is called too early - the real
+    source builds both middlewares first and passes them into createBuilder's own initial definition,
+    rather than calling createBuilder before either middleware exists.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols: *id002
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: migrateProcedure builds both middlewares (createInputMiddleware, then createOutputMiddleware)
+    before ever calling createBuilder, since createBuilder's own initial definition includes both already-built
+    middlewares in its middlewares array. annotator_b found all four real stages but called createBuilder
+    before the middlewares it actually depends on.
