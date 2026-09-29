@@ -116,7 +116,7 @@ Also confirmed structurally: `prism_v11` in `runner.py`'s `ENGINE_REGISTRY` wrap
 
 ---
 
-## 5. Step 4/5 — Real two-pass LLM sweep and the pre-registered gate
+## 5. Step 4/5 — Real two-pass LLM sweep, the pre-registered gate, and the 3-engine matrix
 
 ### 5.1 A real blocker found and fixed before any real LLM call could succeed
 
@@ -137,18 +137,43 @@ DeepSeek's endpoint is network-blocked in this environment (`api.deepseek.com:44
 
 Required because `apply_gate.py` needs *paired, real-LLM* TSR on both sides of the comparison — Step 3 was dry-run-only (zero TSR anywhere) and Step 4 only ever scored the two-pass engine. Run for real against the same tasks/budgets/seeds/model. (One earlier attempt at this sweep was lost to a `runner.py` checkpoint-overwrite behavior when `--resume` isn't passed — `save_checkpoint` doesn't merge with what's already on disk, so a second `--budgets` invocation silently replaced the first rather than adding to it. Re-run correctly as a single combined invocation; the lost ~$0.05 is disclosed here rather than absorbed silently.)
 
-### 5.4 Gate verdict: **MIXED**
+### 5.4 A second real methodological bug, found before trusting the gate: mismatched TSR scorers
 
-`scripts/merge_pilot_checkpoints.py` + `scripts/apply_gate.py`, default pre-registered thresholds (ΔTSR ≥ 15pp, ΔCPI_answer ≥ 15pp or headroom-adjusted, both requiring a bootstrap CI excluding zero), `baseline_bfs_bidirectional` vs `prism_two_pass`, n=200 paired cells:
+Before finalizing anything, cross-checking `runner.py`'s own TSR mechanics against `run_two_pass_benchmark.py`'s found a real, uncaught confound: `runner.py`'s `--scorer` defaults to **`strict`** (`score_debug` — exact ordered-list match, `0.0` for any deviation at all), while `run_two_pass_benchmark.py` **hardcodes `score_debug_causal`** (ordered-subsequence containment, partial credit, gated only on genuine hallucination) with no `strict` option at all. The Section 5.3 baseline sweep used `runner.py`'s default (`strict`) — meaning the original ΔTSR computed between `baseline_bfs_bidirectional` and `prism_two_pass` compared two *different scoring functions*, not the same task under two engines.
+
+Fixed without any new spend: both `score_debug` and `score_debug_causal` operate on the exact same saved artifact (`raw_response` text) plus each cell's own already-persisted `selected_symbols` (`score_debug_causal`'s own `candidate_symbols` parameter) — so every already-collected cell was re-scored post-hoc with `score_debug_causal`, matching what `runner.py --scorer causal` would have produced natively. 58/200 baseline cells changed score under re-scoring (mean TSR: 28.5% → **53.0%**).
+
+### 5.5 Gate verdict (corrected, apples-to-apples): **MIXED**
+
+`scripts/merge_pilot_checkpoints.py` + `scripts/apply_gate.py` against the re-scored baseline checkpoint, default pre-registered thresholds (ΔTSR ≥ 15pp, ΔCPI_answer ≥ 15pp or headroom-adjusted, both requiring a bootstrap CI excluding zero), `baseline_bfs_bidirectional` vs `prism_two_pass`, n=200 paired cells, both sides scored by `score_debug_causal`:
 
 | Metric | baseline_bfs_bidirectional | prism_two_pass | Δ | 95% CI | Excludes zero |
 |---|---|---|---|---|---|
-| TSR | 28.5% | 96.0% | **+67.46pp** | [61.08, 73.75] | **yes** |
-| CPI_answer | 97.5% | 96.0% | **−1.54pp** | [−3.58, 0.67] | no |
+| TSR | 53.0% | 96.0% | **+43.00pp** | [36.08, 49.71] | **yes** |
+| CPI_answer | 97.5% | 96.0% | **−1.54pp** | [−3.50, 0.62] | no |
 
-**Decision: MIXED** — "ΔTSR shows a clear effect (67.46pp, clears the 15pp threshold, CI excludes zero) but ΔCPI_answer does not (−1.54pp, below the 5pp floor)."
+**Decision: MIXED** (unchanged from the pre-correction run) — "ΔTSR shows a clear effect (43.00pp, clears the 15pp threshold, CI excludes zero) but ΔCPI_answer does not (−1.54pp, below the 5pp floor)." The gate's *decision* didn't change once the scorer mismatch was fixed, but its *magnitude claim* did — the original +67.46pp figure is retracted as scorer-confounded; +43.00pp is the real, apples-to-apples number.
 
-This is a real, honest, informative result, not a defect in the gate or the run. `baseline_bfs_bidirectional`'s own retrieval-side CPI_answer (its own retrieved set containing the full ground-truth pipeline) is already near-ceiling at 97.5% — consistent with Step 3's own finding that raw recall barely separates the two engines. What the gate's real, paired TSR data now confirms empirically is that **retrieval recall alone does not predict real task success on this suite**: a small model (`gpt-4o-mini`) reading `baseline_bfs_bidirectional`'s noisier, lower-cleanliness context (Step 3: ~41-42%, vs. `prism_v11`'s ~45-47%) fails to correctly articulate the causal pipeline in its final answer 71.5% of the time, even when the right symbols were technically present — while the same model reading `prism_two_pass`'s cleaner, requested-not-dumped context succeeds 96.0% of the time. Cleanliness — flagged as the more honest signal after Step 3 — is the dominant real driver of task success this gate surfaces, not raw recall.
+This is a real, honest, informative result, not a defect in the gate or the run. `baseline_bfs_bidirectional`'s own retrieval-side CPI_answer (its own retrieved set containing the full ground-truth pipeline) is already near-ceiling at 97.5% — consistent with Step 3's own finding that raw recall barely separates the two engines. What the gate's real, paired, apples-to-apples TSR data confirms is that **retrieval recall alone does not predict real task success on this suite**: a small model (`gpt-4o-mini`) reading `baseline_bfs_bidirectional`'s noisier, lower-cleanliness context (Step 3: ~41-42%, vs. `prism_v11`'s ~45-47%) still fails to correctly articulate the causal pipeline (or names a symbol outside its own narrower candidate set, tripping `score_debug_causal`'s hallucination gate) 47.0% of the time, even under partial-credit scoring — while the same model reading `prism_two_pass`'s cleaner, requested-not-dumped context succeeds 96.0% of the time. Cleanliness remains the dominant real driver of task success this gate surfaces, not raw recall — the corrected magnitude is smaller than first reported, but the direction and the mechanism are the same.
+
+### 5.6 PragmaticOracle sweep and the full 3-engine matrix: 20 tasks × 2 budgets × 5 seeds, 200 cells, $0.0619
+
+Run for real (`runner.py`, `--pragmatic-oracle`, `engine_names=[]` via a direct call to `run_evaluation` — the CLI's own `--engines` parsing has no way to express "zero registry engines, Oracle only", since an empty/falsy value always means "all 4"), then re-scored post-hoc with `score_debug_causal` for the same reason as Section 5.4.
+
+| Engine | Mean TSR (causal) | Mean CPI_answer | Cleanliness |
+|---|---|---|---|
+| baseline_bfs_bidirectional | 53.0% | 97.5% | 42.0% |
+| **prism_two_pass** | **96.0%** | 96.0% | 70.6% |
+| PragmaticOracle | 51.7% | 100.0% | 100.0% |
+
+**A second real, surprising finding, root-caused before reporting it**: PragmaticOracle — nominally the "theoretical ceiling" — scores *below* `prism_two_pass` and roughly level with the naive baseline. Splitting its own score by task category shows why:
+
+| PragmaticOracle subset | Mean TSR (causal) |
+|---|---|
+| Internal tasks (n=100) | **93.8%** |
+| Category-5 external-sink tasks (n=100) | **9.7%** |
+
+Root cause, confirmed directly against the raw data: `PragmaticOracle`'s own package construction does not surface `required_context` (external) symbols into its candidate set at all — e.g. for `express_t02_007_etag_external_dependency`, Oracle's own `selected_symbols` is `['lib.utils.createETagGenerator']` only, never `etag.index.etag`. When the model correctly answers with the real external symbol anyway, `score_debug_causal`'s hallucination gate — which only credits a symbol beyond the pipeline if it's a member of the engine's own candidate set — zeroes the entire score, even though the answer is genuinely correct. This is a real, disclosed limitation of `PragmaticOracle`'s current implementation (it evidently predates or was never extended to cover Phase C external-dependency resolution), not a reflection of task difficulty or model capability: on the 10 internal-only tasks, Oracle performs exactly as a ceiling should (93.8%, comparable to `prism_two_pass`'s own 96.0%). **`PragmaticOracle` is not a valid ceiling reference for Category-5 tasks as currently implemented** — this pilot's own external-sink numbers should be read against `prism_two_pass` and the baseline only, not against Oracle.
 
 ---
 
@@ -159,6 +184,7 @@ This is a real, honest, informative result, not a defect in the gate or the run.
 - **CommonJS non-goals** (Section 2): bare re-export (`module.exports = require(...)`), object-literal export (`module.exports = {...}`), anonymous-function export (`module.exports = function(){}`).
 - **`defineGetter`-registered named-function accessors** are not indexed at all (`req.stale`, `req.ip`, `req.ips`); the anonymous-function variant (`req.fresh`) is indexed but carries zero real out-edges. Not fixed in this epic — disclosed via the Express suite's own dropped-subsystem note (Section 3).
 - **Router-level `param()` registration is unreachable under its own qualified name** due to an in-module simple-name collision with a private closure (Section 3) — a real indexer limitation, not fixed here.
+- **`PragmaticOracle`'s own package construction does not surface external (`required_context`) symbols** (Section 5.6) — a real gap in that engine's current implementation, not exercised or fixed by this epic. Confirmed to make Oracle an invalid ceiling reference specifically for Category-5 tasks (9.7% causal TSR vs. 93.8% on internal tasks), while it performs as expected elsewhere.
 
 ---
 
@@ -167,5 +193,5 @@ This is a real, honest, informative result, not a defect in the gate or the run.
 - Full fast suite: 1678 passed, 0 failed, 22 skipped, 1 xfailed, 1 xpassed (consistent across every merge in this epic).
 - 20/20 Express ground-truth tasks load cleanly, agreement gate passes for all (19 auto-accept, 1 genuine adjudication).
 - Zero-LLM dry-run grid: 240 cells (Step 3, comparative) + 60 cells (post-Step-2 sanity, 3-budget) — 0 crashes.
-- Real-LLM cells this closure: 200 (Step 4, two-pass) + 200 (Step 5, baseline) = 400 cells, $0.2343 combined real spend (excluding the disclosed ~$0.05 lost to the checkpoint-overwrite retry).
-- Gate: MIXED, both metrics computed from real, paired, bootstrapped data (n=200, 10,000 resamples, seed=42).
+- Real-LLM cells this closure: 200 (Step 4, two-pass, $0.1261) + 200 (Step 5, baseline, $0.1082) + 200 (Section 5.6, PragmaticOracle, $0.0619) = 600 cells, $0.2962 combined real spend (excluding the disclosed ~$0.05 lost to the earlier checkpoint-overwrite retry). Baseline and Oracle cells were re-scored post-hoc at zero additional cost once the strict-vs-causal scorer mismatch (Section 5.4) was found.
+- Gate: MIXED (both pre- and post-correction), computed from real, paired, bootstrapped data (n=200, 10,000 resamples, seed=42), both engines scored by the same function (`score_debug_causal`) in the final, reported figure.
