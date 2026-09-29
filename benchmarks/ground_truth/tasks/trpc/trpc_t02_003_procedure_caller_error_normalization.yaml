@@ -1,0 +1,103 @@
+# T02 "tRPC Pilot" - Task 3: procedure-caller error normalization.
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   core.internals.procedureBuilder.createProcedureCaller lines 322-407
+#   error.TRPCError.getTRPCErrorFromUnknown                lines 4-24
+#   error.TRPCError.TRPCError                              lines 26-52
+#
+# Real source: createProcedureCaller returns `resolve`, which recursively
+# runs the procedure's middleware chain (`callRecursive`) with the real
+# resolver as the last middleware in the chain. Two real, distinct
+# terminal-error paths exist in the same function: (1) a middleware
+# throwing is caught and normalized via getTRPCErrorFromUnknown(cause)
+# inside callRecursive's own catch block; (2) a falsy/no-result from the
+# whole recursive chain throws a fresh `new TRPCError({ code:
+# 'INTERNAL_SERVER_ERROR', ... })` directly, a real, structurally
+# distinct pipeline stage from path 1's normalization call, not a
+# duplicate of it (getTRPCErrorFromUnknown's own body itself also
+# constructs a TRPCError for the non-TRPCError-instance case, so
+# TRPCError is real, transitively reachable pipeline-relevant context
+# either way).
+#
+# Real, disclosed structural finding (boundary_symbols): `callRecursive`
+# itself, and the `middleware(...)` call it makes at each recursion step,
+# are not part of the pipeline - `callRecursive` is a real, named nested
+# arrow function (never itself a separate top-level symbol - arrow
+# functions are not a `FUNCTION_NODE_TYPES` definition shape at all), and
+# `middleware(...)` is a call through a runtime array element
+# (`_def.middlewares[callOpts.index]`), not a statically resolvable call
+# site - genuinely unresolvable, not a locator gap.
+task_id: trpc_t02_003_procedure_caller_error_normalization
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.internals.procedureBuilder.createProcedureCaller
+task_type: debug
+prompt: 'You are investigating how tRPC normalizes an error thrown while resolving a procedure, starting
+  from `createProcedureCaller` in core/internals/procedureBuilder.ts. Trace the real causal pipeline it
+  runs through to turn an arbitrary thrown value into a real TRPCError.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["core.internals.procedureBuilder.createProcedureCaller", "error.TRPCError.getTRPCErrorFromUnknown"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - core.internals.procedureBuilder.createProcedureCaller
+  - error.TRPCError.getTRPCErrorFromUnknown
+  - error.TRPCError.TRPCError
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: createProcedureCaller's returned resolver catches any error thrown while running the
+    procedure's middleware chain and normalizes it via getTRPCErrorFromUnknown(cause), which itself
+    constructs a real TRPCError when the caught value isn't already one. A second, structurally distinct
+    terminal path constructs a TRPCError directly when the whole middleware chain produces no result at all.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.internals.procedureBuilder.createProcedureCaller
+  - error.TRPCError.TRPCError
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: createProcedureCaller throws a real TRPCError when its middleware chain produces no
+    result. (Found the direct `new TRPCError(...)` construction but missed the getTRPCErrorFromUnknown
+    normalization path in the middleware chain's own catch block - a real, separate error-handling stage
+    that itself also constructs a TRPCError, easy to overlook since it's nested inside a different closure.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - core.internals.procedureBuilder.createProcedureCaller
+  - error.TRPCError.getTRPCErrorFromUnknown
+  - error.TRPCError.TRPCError
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: createProcedureCaller has two real, distinct terminal-error paths - a middleware throw
+    is normalized via getTRPCErrorFromUnknown, and a missing chain result throws a fresh TRPCError directly.
+    Both are real, indexed, transitively-reachable pipeline stages. annotator_b's pipeline found the direct
+    TRPCError construction but missed the getTRPCErrorFromUnknown normalization path nested in the
+    middleware chain's own catch block.

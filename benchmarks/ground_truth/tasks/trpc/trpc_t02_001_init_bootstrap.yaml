@@ -1,0 +1,139 @@
+# T02 "tRPC Pilot" - Task 1: `initTRPC.create()` bootstrap.
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against prism.cli.build_pipeline's own symbol
+# table, and every pipeline stage's real transitive reachability from the
+# seed verified directly via networkx.has_path over
+# builder.calls_graph (TRAVERSABLE_RELATIONS: CALLS/INSTANTIATES/EXTENDS/
+# IMPLEMENTS/OVERRIDES/EMBEDS), never assumed from reading source alone.
+#
+#   core.initTRPC.createTRPCInner                 lines 94-187
+#   transformer.getDataTransformer                lines 71-78
+#   core.internals.procedureBuilder.createBuilder lines 207-282
+#   core.middleware.createMiddlewareFactory       lines 166-199
+#   core.router.createRouterFactory               lines 194-277
+#   core.router.createCallerFactory               lines 299-342
+#
+# Real source: `TRPCBuilder.create()` (the real `initTRPC.create({...})`
+# entry point end users call) delegates to `createTRPCInner<TParams>()`,
+# which returns `initTRPCInner` - the function that actually builds the
+# `{ _config, procedure, middleware, router, mergeRouters,
+# createCallerFactory }` object real tRPC apps destructure. `getData
+# Transformer` runs first (building `config.transformer`, needed before
+# anything else in the returned object is built), then the object's own
+# properties are built in source order: `procedure: createBuilder(...)`,
+# `middleware: createMiddlewareFactory(...)`, `router:
+# createRouterFactory(config)`, `createCallerFactory:
+# createCallerFactory()`. `initTRPCInner` itself is a real function
+# nested inside `createTRPCInner` (a JS/TS named function expression,
+# never itself a separate top-level symbol - `FUNCTION_NODE_TYPES`
+# deliberately excludes `function_expression`), so every one of these
+# real calls, though made from deep inside a nested closure, correctly
+# attributes to `createTRPCInner`'s own candidate manifest - confirmed
+# directly, this is not a guess.
+#
+# Real, disclosed structural finding (boundary_symbols): the returned
+# object also sets `$types: createFlatProxy((key) => {...})` and exposes
+# `mergeRouters` as a bare property reference (never invoked at this
+# call site - `mergeRouters` is assigned, not called, so it produces no
+# real `CALLS` edge here at all, unlike every other property in the same
+# object). `createFlatProxy` (`shared/createProxy/index.ts`) is a real,
+# genuine call this function makes, but it is declared as
+# `export const createFlatProxy = <TFaux>(...) => {...}` - an arrow
+# function assigned to a `const`, a node shape `FUNCTION_NODE_TYPES`
+# does not register as a definition for TypeScript at all (only
+# `function_declaration`/`method_definition`/`function_signature`/
+# `method_signature` are). This is a genuine, disclosed indexing gap
+# (not something this task routes around or pretends isn't real) -
+# `createFlatProxy` cannot appear in `pipeline_symbols` because it is
+# not resolvable in the real symbol table under any qualified name, so
+# it is recorded in `boundary_symbols` instead.
+task_id: trpc_t02_001_init_bootstrap
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.initTRPC.createTRPCInner
+task_type: debug
+prompt: 'You are investigating how tRPC''s `initTRPC.create()` entry point bootstraps a server instance,
+  starting from `createTRPCInner` in core/initTRPC.ts. Trace the real causal pipeline it runs through to
+  build the object a tRPC app actually uses.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["core.initTRPC.createTRPCInner", "transformer.getDataTransformer"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - core.initTRPC.createTRPCInner
+  - transformer.getDataTransformer
+  - core.internals.procedureBuilder.createBuilder
+  - core.middleware.createMiddlewareFactory
+  - core.router.createRouterFactory
+  - core.router.createCallerFactory
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - shared.createProxy.createFlatProxy
+  expected_solution: createTRPCInner returns initTRPCInner, which first resolves the data transformer
+    (getDataTransformer) before building config, then builds the returned object's own properties in
+    source order - procedure (createBuilder), middleware (createMiddlewareFactory), router
+    (createRouterFactory), and createCallerFactory (createCallerFactory). createFlatProxy is a real call
+    this function also makes, but it is an arrow-function-assigned-to-const export, a shape this codebase's
+    indexer does not register as a definition at all - a genuine, disclosed limitation, not something to
+    guess a qualified name for.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.initTRPC.createTRPCInner
+  - core.internals.procedureBuilder.createBuilder
+  - core.middleware.createMiddlewareFactory
+  - core.router.createRouterFactory
+  - core.router.createCallerFactory
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - shared.createProxy.createFlatProxy
+  expected_solution: createTRPCInner builds the object real tRPC apps use, calling createBuilder,
+    createMiddlewareFactory, createRouterFactory, and createCallerFactory in source order to build each of
+    the returned object's own properties. (Missed transformer.getDataTransformer - it runs before the
+    returned object's own properties are built at all, assigning to a local `transformer` variable rather
+    than an object property, and is easy to skip when scanning only the return statement's own property
+    list.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - core.initTRPC.createTRPCInner
+  - transformer.getDataTransformer
+  - core.internals.procedureBuilder.createBuilder
+  - core.middleware.createMiddlewareFactory
+  - core.router.createRouterFactory
+  - core.router.createCallerFactory
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - shared.createProxy.createFlatProxy
+  expected_solution: createTRPCInner returns initTRPCInner, which runs getDataTransformer first (building
+    config.transformer, needed before the returned object exists at all), then builds the returned object's
+    own properties in source order via createBuilder, createMiddlewareFactory, createRouterFactory, and
+    createCallerFactory. annotator_b's pipeline is real but incomplete - it omits getDataTransformer, a real
+    call made before the object literal itself, not one of its properties. createFlatProxy is correctly
+    excluded by both annotators (and here) as a genuine indexing-boundary case - an arrow-function-assigned-
+    to-const export, not a node shape this codebase's Pass 1 registers as a definition.
