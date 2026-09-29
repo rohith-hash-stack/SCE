@@ -1,0 +1,89 @@
+# T02 "tRPC Pilot" - Task 17: shared error-shaping utility
+# (`shared/getErrorShape.getErrorShape`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   shared.getErrorShape.getErrorShape                lines 10-35
+#   http.getHTTPStatusCode.getHTTPStatusCodeFromError lines 60-62
+#   http.getHTTPStatusCode.getStatusCodeFromKey       lines 31-33
+#
+# Real, disclosed structural finding: this is a genuinely *different*,
+# separate real function from trpc_t02_002's own seed - that task's
+# `getErrorShape` is an object-literal method on the router object
+# `createRouterFactory` builds (`core.router.createRouterInner.
+# getErrorShape`); this one is the shared, standalone utility in
+# shared/getErrorShape.ts that both the router's own method and
+# http/resolveHTTPResponse.ts's error paths (trpc_t02_015/016) actually
+# delegate the real shaping work to. Same simple name, two real,
+# distinct, correctly-disambiguated definitions - the same qualified-
+# naming precision this pilot's collision fixes exist to preserve.
+
+task_id: trpc_t02_017_shared_error_shape
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: shared.getErrorShape.getErrorShape
+task_type: debug
+prompt: 'You are investigating the shared utility tRPC uses to shape a TRPCError into its real wire format,
+  starting from `getErrorShape` in shared/getErrorShape.ts (not the router object''s own `getErrorShape`
+  method - this is the separate, shared utility function). Trace the real causal pipeline it runs through
+  to derive the error''s HTTP status.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+
+  ["shared.getErrorShape.getErrorShape", "http.getHTTPStatusCode.getHTTPStatusCodeFromError"]
+
+
+  ```
+
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols: &id002
+  - shared.getErrorShape.getErrorShape
+  - http.getHTTPStatusCode.getHTTPStatusCodeFromError
+  - http.getHTTPStatusCode.getStatusCodeFromKey
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: &id001 []
+  expected_solution: getErrorShape calls getHTTPStatusCodeFromError(error) to derive the shape's data.httpStatus
+    field, which itself delegates to getStatusCodeFromKey(error.code) for the real status-number lookup.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - shared.getErrorShape.getErrorShape
+  - http.getHTTPStatusCode.getHTTPStatusCodeFromError
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: getErrorShape calls getHTTPStatusCodeFromError to get the real HTTP status. (Stopped
+    one stage short - getHTTPStatusCodeFromError's own body is a single-line delegation to getStatusCodeFromKey,
+    a real, separate pipeline stage, not the same function.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols: *id002
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: getErrorShape calls getHTTPStatusCodeFromError, which itself delegates to getStatusCodeFromKey
+    - a real, separate, two-file pipeline stage. annotator_b's pipeline is real but incomplete, stopping
+    at the first hop.

@@ -1,0 +1,89 @@
+# T02 "tRPC Pilot" - Task 18: TRPCError's own cause normalization.
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   error.TRPCError.TRPCError.constructor       lines 32-51
+#   shared.getCauseFromUnknown.getCauseFromUnknown lines 6-31
+#   error.utils.isObject                        lines 4-7
+#
+# Real source: every `new TRPCError({...})` call site across this whole
+# pilot (trpc_t02_003/005/009/011/012/013 among others) runs through this
+# real constructor, which itself normalizes whatever `opts.cause` was
+# passed via getCauseFromUnknown before ever calling `super(message,
+# {cause})` - a genuinely deep, previously-unexercised real stage every
+# other TRPCError-constructing task's own pipeline implicitly passes
+# through but never itself asked about directly. getCauseFromUnknown, for
+# a real plain-object cause, checks isObject(cause) before wrapping it in
+# a synthetic UnknownCauseError.
+
+task_id: trpc_t02_018_trpc_error_cause_normalization
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: error.TRPCError.TRPCError.constructor
+task_type: debug
+prompt: 'You are investigating how TRPCError normalizes whatever `cause` value it was constructed with,
+  starting from the `TRPCError` class''s own constructor in error/TRPCError.ts. Trace the real causal
+  pipeline it runs through for a plain-object cause.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+
+  ["error.TRPCError.TRPCError.constructor", "shared.getCauseFromUnknown.getCauseFromUnknown"]
+
+
+  ```
+
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols: &id002
+  - error.TRPCError.TRPCError.constructor
+  - shared.getCauseFromUnknown.getCauseFromUnknown
+  - error.utils.isObject
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: &id001 []
+  expected_solution: TRPCError's constructor normalizes opts.cause via getCauseFromUnknown before calling
+    super() - for a plain-object cause, getCauseFromUnknown itself checks isObject(cause) before wrapping
+    it in a synthetic error.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - error.TRPCError.TRPCError.constructor
+  - error.utils.isObject
+  - shared.getCauseFromUnknown.getCauseFromUnknown
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: TRPCError's constructor checks isObject on the cause, then normalizes it via getCauseFromUnknown.
+    (Same two real stages as the adjudicated answer, but reversed - the constructor itself only ever calls
+    getCauseFromUnknown directly; isObject is called from inside getCauseFromUnknown's own body, not by
+    the constructor itself.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols: *id002
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: *id001
+  expected_solution: TRPCError's constructor calls getCauseFromUnknown directly, which itself calls isObject
+    internally for the plain-object case - a real, transitively-reachable stage, but only reachable through
+    getCauseFromUnknown, not called directly by the constructor as annotator_b's ordering implies.
