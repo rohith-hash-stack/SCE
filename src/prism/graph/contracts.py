@@ -111,6 +111,19 @@ class BehavioralContract:
     #: concrete function is supplied by the caller) and would otherwise be
     #: invisible beyond its bare type name.
     hof_callbacks: list["HofCallbackContract"] = field(default_factory=list)
+    #: Two-Tier Visibility Pipeline (lexical constant bundling): the
+    #: simple names of this symbol's own module-level `kind="attribute"`
+    #: constants it genuinely reads (`ContractExtractor._referenced_
+    #: module_constants`) - real qualified names are `f"{module}.{name}"`
+    #: for each entry here, never stored pre-joined since `extract_symbol`
+    #: itself has no `module` parameter (only `ContractExtractor.extract_
+    #: all`, which does, calls this). Deliberately never a `G_C` graph
+    #: edge (see `docs/architecture_boundaries.md`'s Category 5 entry) -
+    #: sidecar data for `prism.packer.submodular_knapsack`'s own post-
+    #: greedy bundling fixup to price and attach, the same "real data,
+    #: deliberately outside the traversable graph" shape `READS_STATE`
+    #: itself already uses for instance attributes.
+    referenced_constants: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -128,6 +141,7 @@ class BehavioralContract:
             "visibility": self.visibility,
             "is_deprecated": self.is_deprecated,
             "hof_callbacks": [c.to_dict() for c in self.hof_callbacks],
+            "referenced_constants": self.referenced_constants,
         }
 
     @classmethod
@@ -147,6 +161,7 @@ class BehavioralContract:
             visibility=d.get("visibility", "public"),
             is_deprecated=d.get("is_deprecated", False),
             hof_callbacks=[HofCallbackContract(**c) for c in d.get("hof_callbacks", [])],
+            referenced_constants=list(d.get("referenced_constants", [])),
         )
 
 
@@ -180,7 +195,14 @@ class ContractExtractor:
     """Computes `sigma_contract(u)` for every function/method `G_C` node,
     the behavioral-contract counterpart to `TaggingEngine.tag_graph`."""
 
-    def extract_symbol(self, def_node: Node, parsed: ParsedFile, enclosing_class: str | None, qualified_name: str) -> BehavioralContract:
+    def extract_symbol(
+        self,
+        def_node: Node,
+        parsed: ParsedFile,
+        enclosing_class: str | None,
+        qualified_name: str,
+        module_constant_names: frozenset[str] = frozenset(),
+    ) -> BehavioralContract:
         lang = parsed.language_id
         params = self._extract_params(def_node, parsed)
         return_type = self._extract_return_type(def_node, parsed)
@@ -192,6 +214,7 @@ class ContractExtractor:
         docstring = self._normalize_docstring(def_node, parsed)
         visibility = self._visibility(def_node, parsed, enclosing_class, qualified_name)
         is_deprecated = self._is_deprecated(def_node, parsed, doc_summary)
+        referenced_constants = self._referenced_module_constants(def_node, parsed, module_constant_names)
 
         has_mutation = bool(state_mutations)
         has_global = self._has_global_nonlocal(def_node, lang)
@@ -219,9 +242,24 @@ class ContractExtractor:
             visibility=visibility,
             is_deprecated=is_deprecated,
             hof_callbacks=hof_callbacks,
+            referenced_constants=referenced_constants,
         )
 
     def extract_all(self, builder: ConcreteGraphBuilder) -> dict[str, BehavioralContract]:
+        # Two-Tier Visibility Pipeline: one pass over the whole symbol
+        # table to learn which simple names are real module-level
+        # constants per module (`kind="attribute"`, `enclosing_class is
+        # None` - a class-body or instance attribute is a different,
+        # not-yet-covered case; see `_referenced_module_constants`'s own
+        # docstring) - built once here rather than per-symbol, since
+        # `extract_symbol` itself (also called directly by Phase C's
+        # external-stub path, which has no symbol table at all) can't do
+        # this lookup on its own.
+        constants_by_module: dict[str, set[str]] = {}
+        for symbol in builder.symbol_table:
+            if symbol.kind == "attribute" and symbol.enclosing_class is None:
+                constants_by_module.setdefault(symbol.module, set()).add(symbol.qualified_name.rsplit(".", 1)[-1])
+
         contracts: dict[str, BehavioralContract] = {}
         for symbol in builder.symbol_table:
             if symbol.kind not in ("function", "method"):
@@ -230,7 +268,10 @@ class ContractExtractor:
             parsed = builder.parsed_file(symbol.file)
             if def_node is None or parsed is None:
                 continue
-            contract = self.extract_symbol(def_node, parsed, symbol.enclosing_class, symbol.qualified_name)
+            module_constant_names = frozenset(constants_by_module.get(symbol.module, ()))
+            contract = self.extract_symbol(
+                def_node, parsed, symbol.enclosing_class, symbol.qualified_name, module_constant_names,
+            )
             contracts[symbol.qualified_name] = contract
             if symbol.qualified_name in builder.graph:
                 builder.graph.nodes[symbol.qualified_name]["contract"] = contract
@@ -307,7 +348,13 @@ class ContractExtractor:
         return None
 
     def _extract_return_type(self, def_node: Node, parsed: ParsedFile) -> str | None:
-        return_type_node = def_node.child_by_field_name("return_type")
+        # Python/TS/JS all expose their return-type annotation under a
+        # `return_type` field; Go's own grammar calls the same thing
+        # `result` instead (`func Handle(...) error` - no `->`/`:` marker
+        # at all, just a bare trailing type). Trying both, in order,
+        # covers every language `FUNCTION_NODE_TYPES` currently lists
+        # without needing a fourth per-language table for one field name.
+        return_type_node = def_node.child_by_field_name("return_type") or def_node.child_by_field_name("result")
         if return_type_node is not None:
             text = node_text(return_type_node, parsed.source)
             return text.lstrip(":").strip() or None
@@ -393,6 +440,217 @@ class ContractExtractor:
         if not types:
             return False
         return bool(iter_scoped_nodes(def_node, types, lang))
+
+    # -- lexical constant references (Two-Tier Visibility Pipeline) ----- #
+    def _referenced_module_constants(
+        self, def_node: Node, parsed: ParsedFile, module_constant_names: frozenset[str]
+    ) -> list[str]:
+        """The simple names of `module_constant_names` this symbol's body
+        genuinely *reads* - real module-level constants (`MAX_RETRIES`,
+        `STATUS_CODES`), never a local variable, parameter, or
+        comprehension/`for`/`with`/`except` target that happens to share
+        the same name (Scope requirement: exclude these from matching).
+
+        Two passes, not one: `_locally_bound_names` first collects every
+        name this function's own scope binds *anywhere* within it -
+        Python's real "assigned anywhere in a function is local for the
+        *whole* function" rule, not just "before this line" (a later
+        `identifier` read of a name assigned earlier in the same function
+        is unambiguous only once the whole scope's bindings are known
+        up front) - then a `candidates = module_constant_names -
+        locally_bound` set is checked against every bare `identifier`
+        read in the body. A name declared `global`/`nonlocal` is
+        deliberately excluded from the "locally bound" set - that
+        statement is Python's own explicit "this name means the outer
+        scope, not a new local" declaration, the one case where an
+        assignment inside the function must NOT shadow the module
+        constant of the same name.
+
+        Full support for Python (real binding-target analysis across
+        assignment/for/comprehension/`with`/`except` shapes - see
+        `_python_locally_bound_names`). JavaScript/TypeScript/TSX get a
+        deliberately conservative subset (parameters, `let`/`const`/
+        `var` declarators, `for`/`for-of`/`catch` targets) - real object/
+        array destructuring patterns (`const {a, b} = ...`) are a known,
+        disclosed gap, not silently mismatched: a destructured binding
+        target is simply never added to the locally-bound set, so a
+        module constant that happens to share a destructured parameter's
+        name could, in the rare case that collision occurs, be
+        over-reported as referenced rather than correctly excluded -
+        safer than the reverse (under-reporting a real reference), and
+        far less likely in practice than a plain `for`/`let` shadow.
+        Every other language (Go/Java/C#) returns `[]` - not yet
+        implemented, the same disclosed-gap discipline this module's own
+        docstring already states for those languages elsewhere.
+        """
+        if not module_constant_names:
+            return []
+        lang = parsed.language_id
+        if lang not in (LanguageID.PYTHON, LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+            return []
+        locally_bound = self._locally_bound_names(def_node, parsed)
+        candidates = module_constant_names - locally_bound
+        if not candidates:
+            return []
+        source = parsed.source
+        found: set[str] = set()
+        for ident in iter_scoped_nodes(def_node, {"identifier"}, lang):
+            text = node_text(ident, source)
+            if text not in candidates:
+                continue
+            parent = ident.parent
+            if (
+                parent is not None
+                and parent.type == "keyword_argument"
+                and parent.child_by_field_name("name") == ident
+            ):
+                # `some_func(MAX_RETRIES=10)` - the keyword name on the
+                # *call site's* own left-hand side names a parameter in
+                # some other function's signature, never a read of this
+                # scope's own `MAX_RETRIES` (Python-only node type; JS/TS
+                # object-literal keys already parse as a different node
+                # type, `property_identifier`, not `identifier`, so this
+                # same `iter_scoped_nodes(..., {"identifier"}, ...)` walk
+                # never even reaches one to need an equivalent check).
+                continue
+            found.add(text)
+        return sorted(found)
+
+    def _locally_bound_names(self, def_node: Node, parsed: ParsedFile) -> set[str]:
+        lang = parsed.language_id
+        if lang == LanguageID.PYTHON:
+            return self._python_locally_bound_names(def_node, parsed.source)
+        if lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+            return self._js_locally_bound_names(def_node, parsed.source, lang)
+        return set()
+
+    _PY_UNPACKING_PATTERN_TYPES = frozenset({"pattern_list", "list_pattern", "tuple_pattern"})
+
+    def _python_bound_names_in_target(self, target: Node, source: bytes) -> set[str]:
+        """Names a plain assignment/`for`/comprehension target subtree
+        binds - a bare `identifier`, or nested unpacking
+        (`pattern_list`/`list_pattern`/`tuple_pattern`, arbitrarily
+        nested: `a, (b, c) = ...`). Returns empty for an `attribute`/
+        `subscript` target (`obj.x = ...`/`obj[i] = ...` mutates an
+        existing object in place - it binds no new local name, and in
+        particular never shadows a same-named module constant `obj`
+        itself might be)."""
+        if target.type == "identifier":
+            return {node_text(target, source)}
+        if target.type in self._PY_UNPACKING_PATTERN_TYPES:
+            names: set[str] = set()
+            for child in target.named_children:
+                names |= self._python_bound_names_in_target(child, source)
+            return names
+        return set()
+
+    def _python_locally_bound_names(self, def_node: Node, source: bytes) -> set[str]:
+        bound: set[str] = set()
+
+        params_node = def_node.child_by_field_name("parameters")
+        if params_node is not None:
+            for child in params_node.named_children:
+                if child.type == "identifier":
+                    bound.add(node_text(child, source))
+                elif child.type in ("default_parameter", "typed_parameter", "typed_default_parameter"):
+                    name_node = child.child_by_field_name("name")
+                    if name_node is not None:
+                        bound.add(node_text(name_node, source))
+                elif child.type in ("list_splat_pattern", "dictionary_splat_pattern"):
+                    inner = next((c for c in child.children if c.type == "identifier"), None)
+                    if inner is not None:
+                        bound.add(node_text(inner, source))
+
+        for assign in iter_scoped_nodes(def_node, {"assignment", "augmented_assignment"}, LanguageID.PYTHON):
+            target = assign.child_by_field_name("left")
+            if target is not None:
+                bound |= self._python_bound_names_in_target(target, source)
+
+        for for_stmt in iter_scoped_nodes(def_node, {"for_statement"}, LanguageID.PYTHON):
+            target = for_stmt.child_by_field_name("left")
+            if target is not None:
+                bound |= self._python_bound_names_in_target(target, source)
+
+        # Comprehension/generator `for ... in ...` clauses are a distinct
+        # node type (`for_in_clause`, nested inside the comprehension
+        # expression) from a real `for_statement` above - walked
+        # separately since `iter_scoped_nodes` matches by exact type.
+        for for_in_clause in iter_scoped_nodes(def_node, {"for_in_clause"}, LanguageID.PYTHON):
+            target = for_in_clause.child_by_field_name("left")
+            if target is not None:
+                bound |= self._python_bound_names_in_target(target, source)
+
+        for as_pattern in iter_scoped_nodes(def_node, {"as_pattern"}, LanguageID.PYTHON):
+            alias = as_pattern.child_by_field_name("alias")
+            if alias is None:
+                continue
+            name_node = alias if alias.type == "identifier" else next(
+                (c for c in alias.children if c.type == "identifier"), None,
+            )
+            if name_node is not None:
+                bound.add(node_text(name_node, source))
+
+        global_nonlocal_types = GLOBAL_NONLOCAL_STATEMENT_TYPES.get(LanguageID.PYTHON, set())
+        declared_global_or_nonlocal: set[str] = set()
+        for stmt in iter_scoped_nodes(def_node, global_nonlocal_types, LanguageID.PYTHON):
+            for child in stmt.named_children:
+                if child.type == "identifier":
+                    declared_global_or_nonlocal.add(node_text(child, source))
+
+        return bound - declared_global_or_nonlocal
+
+    def _js_param_bound_names(self, param_like: Node, source: bytes) -> set[str]:
+        """One `formal_parameters` child's own bound name(s) - a bare
+        `identifier` (plain JS), an `assignment_pattern` (JS default,
+        `left` field), a `rest_pattern` (`...rest`), or TS's own
+        `required_parameter`/`optional_parameter` wrapper (unwrapped via
+        its `pattern` field, recursively - the same shapes can nest one
+        level deep there). `object_pattern`/`array_pattern` (real
+        destructuring, TS or plain JS) is the one disclosed gap this
+        class's own docstring already states - returns empty for it
+        rather than guessing at partial unpacking.
+        """
+        if param_like.type == "identifier":
+            return {node_text(param_like, source)}
+        if param_like.type == "assignment_pattern":
+            left = param_like.child_by_field_name("left")
+            return self._js_param_bound_names(left, source) if left is not None else set()
+        if param_like.type == "rest_pattern":
+            inner = next((c for c in param_like.children if c.type == "identifier"), None)
+            return {node_text(inner, source)} if inner is not None else set()
+        if param_like.type in ("required_parameter", "optional_parameter"):
+            pattern = param_like.child_by_field_name("pattern")
+            return self._js_param_bound_names(pattern, source) if pattern is not None else set()
+        return set()
+
+    def _js_locally_bound_names(self, def_node: Node, source: bytes, lang: str) -> set[str]:
+        """The deliberately conservative JS/TS subset this method's own
+        docstring discloses - real destructuring patterns
+        (`object_pattern`/`array_pattern`) are not unpacked here at all,
+        unlike the Python side."""
+        bound: set[str] = set()
+
+        params_node = def_node.child_by_field_name("parameters")
+        if params_node is not None:
+            for child in params_node.named_children:
+                bound |= self._js_param_bound_names(child, source)
+
+        for declarator in iter_scoped_nodes(def_node, {"variable_declarator"}, lang):
+            name_node = declarator.child_by_field_name("name")
+            if name_node is not None and name_node.type == "identifier":
+                bound.add(node_text(name_node, source))
+
+        for for_in_stmt in iter_scoped_nodes(def_node, {"for_in_statement"}, lang):
+            target = for_in_stmt.child_by_field_name("left")
+            if target is not None and target.type == "identifier":
+                bound.add(node_text(target, source))
+
+        for catch_clause in iter_scoped_nodes(def_node, {"catch_clause"}, lang):
+            param = catch_clause.child_by_field_name("parameter")
+            if param is not None and param.type == "identifier":
+                bound.add(node_text(param, source))
+
+        return bound
 
     # -- complexity ------------------------------------------------------ #
     def _cyclomatic_complexity(self, def_node: Node, lang: str) -> int:

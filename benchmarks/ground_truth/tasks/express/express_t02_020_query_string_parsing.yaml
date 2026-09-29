@@ -1,0 +1,126 @@
+# T02 "Express Pilot" - Task 20: `parseurl` (Category 5, the query-
+# parsing middleware factory).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.middleware.query.query   lines 25-45 (in-repo seed)
+#   parseurl.index.parseurl      real external stub, resolved live
+#
+# Real source (lib/middleware/query.js:15-45):
+#
+#   var merge = require('utils-merge')
+#   var parseUrl = require('parseurl');
+#   var qs = require('qs');
+#
+#   module.exports = function query(options) {
+#     var opts = merge({}, options)
+#     var queryparse = qs.parse;
+#     ...
+#     return function query(req, res, next){
+#       if (!req.query) {
+#         var val = parseUrl(req).query;
+#         req.query = queryparse(val, opts);
+#       }
+#       next();
+#     };
+#   };
+#
+# Verified live: `engine.build_external_candidate_manifest(
+# ["lib.middleware.query.query"], root_imports=["parseurl"]) ->
+# {"parseurl.index.parseurl"}`, rendering "declare function
+# parseurl(req);" - a real default/namespace require, called bare
+# inside the returned closure (the same nested-closure shape as Task
+# 7's `etag`/`generateETag`), where the local alias (`parseUrl`) matches
+# the package's own real internal name.
+#
+# Real, disclosed non-resolution (a second, distinct instance of the
+# `qs` object-literal-export gap first found while investigating
+# `lib.utils.parseExtendedQueryString` during this task's own
+# authoring): the returned closure's actual query-string parsing call,
+# `queryparse(val, opts)`, is *two* static hops away from any real
+# import binding - `queryparse` is a local variable reassigned from
+# `qs.parse` inside the *outer* factory function, not a name `import_
+# map` itself ever tracks (which only records names bound directly at
+# a `require()`/`import` site). Even setting that aside, `qs`'s own
+# real `node_modules/qs/lib/index.js` is a bare object-literal export
+# (`module.exports = { parse: require('./parse'), ... }`) whose `parse`
+# property is itself a separate file's own `module.exports` - not a
+# locally-declared named function `prism.external.index`'s definition-
+# finder can locate at all (the same disclosed non-goal already
+# documented for `_commonjs_primary_export_name`: `module.exports =
+# {...}` object-literal exports are out of scope). `qs` is therefore
+# not included in this task's `root_imports` at all - a real, confirmed
+# gap, not a task-authoring oversight.
+task_id: express_t02_020_query_string_parsing
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.middleware.query.query
+task_type: debug
+root_imports:
+- parseurl
+prompt: 'You are investigating Express''s built-in query-string-parsing middleware, starting from the
+  factory function exported by lib/middleware/query.js. Identify the real third-party npm package function
+  it delegates URL parsing to, and that function''s own real signature.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols
+  actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.middleware.query.query", "parseurl.index.parseurl"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.middleware.query.query
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - parseurl.index.parseurl
+  boundary_symbols: []
+  expected_solution: The query middleware factory returns a per-request handler that, on first access to
+    req.query, calls the real third-party `parseurl` npm package's own default-exported function
+    (`parseUrl(req).query`) to extract the raw query string, then parses it (via a real `qs.parse`
+    delegation this task's required_context deliberately excludes - see header comment for why it cannot
+    resolve through the current external-symbol extractor) before caching the result on req.query.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.middleware.query.query
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - parseurl.index.parseurl
+  boundary_symbols: []
+  expected_solution: The query middleware uses the real `parseurl` package to get the URL's query string,
+    then parses it with qs.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.middleware.query.query
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - parseurl.index.parseurl
+  boundary_symbols: []
+  expected_solution: The query middleware factory's returned per-request handler calls the real
+    third-party `parseurl` package's own default export to extract the raw query string from the request,
+    then parses it via a `qs.parse` delegation that is real but not resolvable through the current
+    external-symbol extractor (a confirmed object-literal-export gap, disclosed in the header comment
+    rather than included). Both annotators independently identified the same real `parseurl` dependency;
+    annotator_a additionally explained why the qs delegation is excluded rather than simply omitted.

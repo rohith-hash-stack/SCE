@@ -1,0 +1,103 @@
+# T02 "Express Pilot" - Task 6: `res.json()`'s own real serialize-then-
+# write pipeline.
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.response.json       lines 250-279
+#   lib.response.stringify  lines 1155-1179
+#   lib.response.send       lines 111-236
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage. Real
+# source confirms json() calls stringify(val, replacer, spaces, escape)
+# to serialize the body, then this.send(body) to actually write the
+# response - and send() itself, for a non-string/Buffer chunk, calls
+# back into this.json(chunk) (a real, mutually-referencing pair,
+# matching Express's real documented behavior that res.send() delegates
+# object payloads to res.json()).
+#
+# Real, disclosed exclusion (a second, distinct instance of the same
+# kind of bare-name-collision pitfall found while authoring Tasks 1/2 -
+# TASK_AUTHORING.md's G41): both json() and send() call `this.set(...)`
+# for real (Content-Type/Content-Length/ETag headers) - but
+# `lib.response.set` does not exist as its own indexed symbol. Reading
+# the real source (response.js:776-777) shows why: `res.set = res.header
+# = function header(...) {}` is a *chained* assignment, and Prism's
+# property-assigned-function detector only registers the function under
+# its last-assigned name (`header`), not every name in the chain
+# (`set`). `this.set(...)`'s bare-name call therefore falls through to
+# the only other symbol named `set` anywhere in the project -
+# `lib.application.set`, a real but entirely unrelated function - shown
+# as a real edge in `builder.graph` but not included here, since it is
+# not what actually runs. `lib.response.header` (the real target) is
+# not itself called under the name `set` anywhere Prism's static
+# analysis can see, so it is not included either - a genuine detection
+# gap, disclosed rather than routed around.
+task_id: express_t02_006_response_json_send
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.response.json
+task_type: debug
+prompt: 'You are investigating how Express serializes and writes a JSON response, in lib/response.js.
+  Starting from `json`, trace the exact causal pipeline for `res.json(obj)`: how the body is actually
+  serialized to a string, and what real method finally writes it to the response.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.response.json", "lib.response.stringify"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.response.json
+  - lib.response.stringify
+  - lib.response.send
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: json() calls stringify(val, replacer, spaces, escape) to serialize the body to a
+    real JSON string (with an optional HTML-unsafe-character escape pass), then delegates the actual
+    write to this.send(body) - the real, separately reachable method that performs content-length/etag
+    handling and writes the response.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.response.json
+  - lib.response.stringify
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: json() calls stringify() to serialize the object to a JSON string and returns it.
+    (Missed that json() does not write the response itself - it delegates the actual write to a real,
+    separately reachable call to this.send(body).)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.response.json
+  - lib.response.stringify
+  - lib.response.send
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: json() calls stringify(val, replacer, spaces, escape) to serialize the body, then
+    delegates the actual write to this.send(body) - a real, separately reachable stage, not an implicit
+    detail of json() itself. annotator_b's pipeline stopped one real hop early.

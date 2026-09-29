@@ -29,9 +29,9 @@ from typing import Iterator, Protocol
 
 from tree_sitter import Node
 
-from prism.graph.contracts import BehavioralContract, ContractExtractor
-from prism.parser.lang_config import CLASS_NODE_TYPES, FUNCTION_NODE_TYPES
-from prism.parser.tree_sitter_loader import ParsedFile, node_text, parse_file, parse_source
+from prism.graph.contracts import BehavioralContract, ContractExtractor, Parameter
+from prism.parser.lang_config import CLASS_NODE_TYPES, FUNCTION_NODE_TYPES, find_all
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text, parse_file, parse_source
 from prism.slicer.tokenizer import count_tokens
 from prism.surface.models import NodeEntry, NodeFeatures, NodeSignature
 
@@ -71,7 +71,7 @@ class ExternalSourceLocator(Protocol):
     this same Protocol, not a design change - see the spec's Rust gap
     note for the one ecosystem this can't reach at all)."""
 
-    def locate(self, package_name: str, package_version: str | None = None) -> list[Path]: ...
+    def locate(self, package_name: str, package_version: str | None = None, subpath: str | None = None) -> list[Path]: ...
 
 
 class PythonSourceLocator:
@@ -86,7 +86,10 @@ class PythonSourceLocator:
     which case it's looking at.
     """
 
-    def locate(self, package_name: str, package_version: str | None = None) -> list[Path]:
+    def locate(self, package_name: str, package_version: str | None = None, subpath: str | None = None) -> list[Path]:
+        # `subpath` (a real npm `exports` subpath, e.g. "adapters/express")
+        # is a TypeScript/JS-ecosystem concept with no Python equivalent -
+        # accepted and ignored, matching `package_version`'s own precedent.
         top_level = package_name.split(".")[0]
         stub_only_files = self._locate_stub_only_distribution(top_level)
         if stub_only_files:
@@ -141,6 +144,29 @@ class PythonSourceLocator:
         return []
 
 
+def _iter_go_struct_specs(type_declaration: Node) -> Iterator[Node]:
+    """A Go `type_declaration` node has no `name`/`body` field of its own
+    (unlike every other language's `CLASS_NODE_TYPES` entry) - it just
+    wraps one `type_spec` child for a plain `type Foo struct {}`, or
+    several for a grouped `type (\\n Foo struct {}\\n Bar struct {}\\n)`.
+    Yields only the `type_spec` children whose own `type` field is a real
+    `struct_type` - a plain alias (`type UserID int`) or an interface
+    (`type Reader interface {...}`) is neither a struct nor anything this
+    module renders a stub for, matching `prism.parser.queries.GO_QUERIES`'s
+    own `(type_spec name: (type_identifier) @def.name (struct_type))`
+    definitions query, which `ConcreteGraphBuilder`'s pass1 already keys
+    its own Go struct registration off of - this walk is kept in sync
+    with that query's semantics rather than inventing a second, looser
+    definition of "Go struct" for the external-stub path alone.
+    """
+    for child in type_declaration.children:
+        if child.type != "type_spec":
+            continue
+        type_node = child.child_by_field_name("type")
+        if type_node is not None and type_node.type == "struct_type":
+            yield child
+
+
 def _iter_definitions(node: Node, lang: str, source: bytes, enclosing_class: str | None = None) -> Iterator[tuple[Node, str | None, str, str]]:
     """Yields `(def_node, enclosing_class, qualified_name, kind)` for
     every function/class definition reachable from `node` - a single-file
@@ -155,11 +181,32 @@ def _iter_definitions(node: Node, lang: str, source: bytes, enclosing_class: str
     node type, so the walk simply recurses into its children and finds the
     real `function_definition` inside, with its parent still the
     `decorated_definition` `ContractExtractor._is_async` already expects.
+
+    Go's `type_declaration` (`CLASS_NODE_TYPES[GO] = {"type_declaration"}`)
+    gets its own branch, ahead of the general `class_types` case below:
+    unlike every other language's class-shaped node, it carries no `name`
+    field of its own (`_iter_go_struct_specs` walks its real `type_spec`
+    child/children instead) - previously, `child.child_by_field_name(
+    "name")` on the `type_declaration` node itself always returned `None`,
+    so every Go struct - single or grouped - was silently dropped from
+    Phase C's external-stub discovery with no error of any kind.
     """
     class_types = CLASS_NODE_TYPES.get(lang, set())
     func_types = FUNCTION_NODE_TYPES.get(lang, set())
     for child in node.children:
-        if child.type in class_types:
+        if lang == LanguageID.GO and child.type == "type_declaration":
+            for type_spec in _iter_go_struct_specs(child):
+                name_node = type_spec.child_by_field_name("name")
+                if name_node is None:
+                    continue
+                struct_name = node_text(name_node, source)
+                qualified = f"{enclosing_class}.{struct_name}" if enclosing_class else struct_name
+                yield type_spec, enclosing_class, qualified, "class"
+                # Go struct fields carry no function/class definitions of
+                # their own (unlike a Python/JS class body) - no nested
+                # walk needed here, unlike the general `class_types` case
+                # below.
+        elif child.type in class_types:
             name_node = child.child_by_field_name("name")
             class_name = node_text(name_node, source) if name_node is not None else None
             qualified = f"{enclosing_class}.{class_name}" if enclosing_class and class_name else class_name
@@ -178,6 +225,56 @@ def _iter_definitions(node: Node, lang: str, source: bytes, enclosing_class: str
             yield from _iter_definitions(child, lang, source, enclosing_class)
 
 
+def _commonjs_primary_export_name(parsed: ParsedFile) -> str | None:
+    """The real name a CommonJS file's own `module.exports = <name>`
+    assignment gives its primary/default export (`feature/commonjs-
+    require-resolution`) - e.g. real `path-to-regexp`'s own exact
+    shape, `module.exports = pathToRegexp;` with `function pathToRegexp
+    (...) {}` declared elsewhere in the same file. This is the same
+    real problem ES's own default-import handling already has (a local
+    alias at the *call site* - `var pathRegexp = require(...)` - is
+    chosen independently of the target's own internal name), so `_find_
+    definition` reuses the identical synthetic `"default"` leaf both
+    conventions already funnel through (`ConcreteGraphBuilder._parse_js_
+    imports`'s `f"{module_ref}.default"` for ES, `_parse_js_requires`'s
+    own identical suffix for CommonJS) - this function is what makes
+    that leaf actually resolve to something real for a CommonJS file,
+    rather than searching for a symbol literally named "default" that
+    essentially never exists.
+
+    Only a plain, direct assignment of an *already-declared* bare
+    identifier counts. Real, disclosed non-goals, not silently guessed
+    at: `module.exports = require('./x')` (a whole-module re-export,
+    no single real definition of its own in *this* file to point to),
+    `module.exports = { ... }` (an object-literal export - no single
+    "the" definition), and `module.exports = function () {}` (a
+    genuinely anonymous export - no name to redirect the leaf-based
+    search to at all, the exact same real gap ES's own anonymous
+    `export default function () {}` already has, left unfixed here as a
+    distinct, separately-scoped problem). Returns `None` - never a
+    guess - when no real `module.exports = <identifier>` assignment
+    exists, or `parsed`'s language isn't JS/TS-family (CommonJS is a
+    JS/TS-ecosystem concept only, unlike this module's own Python/Go
+    paths).
+    """
+    if parsed.language_id not in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+        return None
+    src = parsed.source
+    for assign in find_all(parsed.root_node, {"assignment_expression"}):
+        left = assign.child_by_field_name("left")
+        right = assign.child_by_field_name("right")
+        if left is None or right is None or left.type != "member_expression" or right.type != "identifier":
+            continue
+        obj = left.child_by_field_name("object")
+        prop = left.child_by_field_name("property")
+        if obj is None or prop is None or obj.type != "identifier" or node_text(obj, src) != "module":
+            continue
+        if prop.type != "property_identifier" or node_text(prop, src) != "exports":
+            continue
+        return node_text(right, src)
+    return None
+
+
 def _find_definition(parsed: ParsedFile, symbol_name: str) -> tuple[Node, str | None, str, str] | None:
     """First definition in `parsed` matching `symbol_name` - an exact
     match against the local qualified name (`"Router.add_route"`) when
@@ -188,15 +285,42 @@ def _find_definition(parsed: ParsedFile, symbol_name: str) -> tuple[Node, str | 
     disambiguation) should be requested in dotted form by the caller -
     the same discipline `ExternalSymbolInfo.qualified_name`'s own
     `"starlette.routing.Router.add_route"` example already models.
+
+    `symbol_name == "default"` (ES's and, as of `feature/commonjs-
+    require-resolution`, CommonJS's shared synthetic "the whole
+    module's own primary export" leaf) is redirected, before any
+    matching happens, to whatever real name `_commonjs_primary_export_
+    name` finds - a `module.exports = <identifier>` assignment's own
+    real target - falling back to a literal search for a symbol named
+    `"default"` (matching this function's own prior behavior) when
+    that finds nothing, so an ES file with a real function/class
+    genuinely named `default` is unaffected.
     """
-    dotted = "." in symbol_name
+    effective_name = symbol_name
+    if symbol_name == "default":
+        primary_export = _commonjs_primary_export_name(parsed)
+        if primary_export is not None:
+            effective_name = primary_export
+    dotted = "." in effective_name
     for def_node, enclosing_class, qualified, kind in _iter_definitions(parsed.root_node, parsed.language_id, parsed.source):
         if dotted:
-            if qualified == symbol_name:
+            if qualified == effective_name:
                 return def_node, enclosing_class, qualified, kind
-        elif qualified.rsplit(".", 1)[-1] == symbol_name:
+        elif qualified.rsplit(".", 1)[-1] == effective_name:
             return def_node, enclosing_class, qualified, kind
     return None
+
+
+#: A TypeScript declaration file's own reserved double-extension
+#: convention (`index.d.ts`, `index.d.cts`, `index.d.mts`) - `Path.
+#: with_suffix("")` only ever strips the *outermost* extension, so a
+#: single call leaves a literal `.d` stem behind (`"index.d.ts"` ->
+#: `"index.d"`, not `"index"`) that Python's own single-extension
+#: `.pyi` never had to account for. `_module_name_for_file` below
+#: strips this specific, unambiguous marker a second time - never a
+#: generic "strip any second extension" heuristic, which would
+#: misfire on a real, unrelated `foo.min.ts`-style filename.
+_TS_DECLARATION_FILE_SUFFIXES = (".d.ts", ".d.cts", ".d.mts")
 
 
 def _module_name_for_file(top_level: str, file_path: Path) -> str:
@@ -206,10 +330,29 @@ def _module_name_for_file(top_level: str, file_path: Path) -> str:
     everything from there), not from a separately-plumbed package root,
     since `ExternalSourceLocator.locate` returns a flat `list[Path]`
     (Section 2.2's own Protocol shape) rather than a `(root, files)` pair.
+
+    `top_level` may itself contain a literal `/` for a scoped npm
+    package (`"@trpc/server"`) - matched as a contiguous run of path
+    *parts* (`("@trpc", "server")`), not a single part, since a scoped
+    package's real directory layout (`node_modules/@trpc/server/...`)
+    never collapses those two segments into one path component the way
+    a naive `top_level in parts` single-part membership check would
+    require. `top_level` is kept as one combined first segment in the
+    returned module string either way (`"@trpc/server.dist.index"`), the
+    same "the real top-level package name, verbatim, as the first
+    segment" contract the plain-Python case already has.
     """
-    parts = file_path.with_suffix("").parts
-    if top_level in parts:
-        rel_parts = parts[parts.index(top_level):]
+    stem_path = file_path.with_suffix("")
+    if any(file_path.name.endswith(suffix) for suffix in _TS_DECLARATION_FILE_SUFFIXES):
+        stem_path = stem_path.with_suffix("")
+    parts = stem_path.parts
+    top_level_parts = tuple(top_level.split("/"))
+    n = len(top_level_parts)
+    match_index = next(
+        (i for i in range(len(parts) - n + 1) if parts[i : i + n] == top_level_parts), None,
+    )
+    if match_index is not None:
+        rel_parts = (top_level, *parts[match_index + n :])
     else:
         rel_parts = (top_level, file_path.stem)
     if rel_parts and rel_parts[-1] == "__init__":
@@ -217,22 +360,210 @@ def _module_name_for_file(top_level: str, file_path: Path) -> str:
     return ".".join(rel_parts) if rel_parts else top_level
 
 
-def _render_signature_text(local_qualified_name: str, kind: str, contract: BehavioralContract) -> str:
+def _render_python_raises_comment(thrown: list[str]) -> str:
+    return f"# Raises: {', '.join(thrown)}\n"
+
+
+def _render_jsdoc_throws_comment(thrown: list[str]) -> str:
+    if len(thrown) == 1:
+        return f"/** @throws {{{thrown[0]}}} */\n"
+    lines = ["/**"] + [f" * @throws {{{name}}}" for name in thrown] + [" */"]
+    return "\n".join(lines) + "\n"
+
+
+def _render_go_param(p: Parameter) -> str:
+    """`name Type` - Go's own space-separated form, never `name: Type`
+    (that's Python/TS syntax, and `Parameter.render()` produces exactly
+    that - reused as-is for Python/TS below, but wrong for Go). Go also
+    has no default-parameter-value syntax at all, so `p.default` (always
+    `None` in practice - nothing in this codebase's Go extraction ever
+    populates it) is deliberately never consulted here, unlike
+    `Parameter.render()`'s own Python/TS-shaped handling of it."""
+    return f"{p.name} {p.type}" if p.type else p.name
+
+
+def _render_python_header(simple_name: str, kind: str, contract: BehavioralContract) -> str:
+    annotation = _render_python_raises_comment(contract.thrown_exceptions) if contract.thrown_exceptions else ""
+    if kind == "class":
+        header = f"class {simple_name}:"
+    else:
+        prefix = "async def" if contract.is_async else "def"
+        params_text = ", ".join(p.render() for p in contract.params)
+        header = f"{prefix} {simple_name}({params_text})"
+        if contract.return_type:
+            header += f" -> {contract.return_type}"
+        header += ":"
+    return f"{annotation}{header}"
+
+
+def _render_ts_header(simple_name: str, kind: str, contract: BehavioralContract) -> str:
+    """`declare ...` (an ambient, type-only declaration - real `.d.ts`
+    syntax, terminated by `;`/`}`) rather than a real `function name(...)
+    { ... }` with an executable body: the whole point of a stub is
+    "signature only, no implementation," and `declare` is TypeScript's
+    own idiom for exactly that."""
+    annotation = _render_jsdoc_throws_comment(contract.thrown_exceptions) if contract.thrown_exceptions else ""
+    if kind == "class":
+        header = f"declare class {simple_name} {{}}"
+    else:
+        prefix = "async function" if contract.is_async else "function"
+        params_text = ", ".join(p.render() for p in contract.params)
+        header = f"declare {prefix} {simple_name}({params_text})"
+        if contract.return_type:
+            header += f": {contract.return_type}"
+        header += ";"
+    return f"{annotation}{header}"
+
+
+def _render_go_header(simple_name: str, kind: str, contract: BehavioralContract) -> str:
+    """`contract.thrown_exceptions` is always empty for Go (no `RAISE_
+    NODE_TYPE` entry - Go signals failure via a returned `error` value,
+    not exceptions), so there's no annotation branch to write here at
+    all, unlike the Python/TS renderers above.
+
+    Known, disclosed gap for `kind == "method"`: Go's real syntax needs a
+    receiver clause (`func (c *Context) JSON(...)`), but neither
+    `BehavioralContract` nor this module's own `_iter_definitions` walk
+    captures the receiver's variable name or type anywhere reachable from
+    here - inventing one (a conventional single-letter abbreviation of
+    the enclosing type, the idiomatic Go convention) would be exactly the
+    kind of fabrication this module's own docstring already refuses to
+    do elsewhere ("never fabricated when a field is absent"). Renders as
+    a bare `func Name(...)` instead - a real, valid Go function
+    signature, just missing the receiver context that would mark it as a
+    method on a specific type. Fixing this properly needs receiver
+    extraction threaded through from `ConcreteGraphBuilder`'s own
+    receiver-resolution logic, out of scope here.
+
+    Go structs (`kind == "class"`, `CLASS_NODE_TYPES[GO] = {"type_
+    declaration"}` - the same shared table `concrete_builder.py` uses)
+    render as `type Name struct {}` - Go's real syntax for an empty
+    struct, not a fabricated field list (no field extraction happens for
+    an external Go struct today either).
+    """
+    if kind == "class":
+        return f"type {simple_name} struct {{}}"
+    params_text = ", ".join(_render_go_param(p) for p in contract.params)
+    header = f"func {simple_name}({params_text})"
+    if contract.return_type:
+        header += f" {contract.return_type}"
+    return header
+
+
+def _render_unsupported_language_header(simple_name: str, kind: str, contract: BehavioralContract) -> str:
+    """No real renderer exists for this language (today: Java/C#, neither
+    reachable via any existing `ExternalSourceLocator`) - a bare, keyword-
+    free declaration shape rather than silently defaulting to Python's
+    `def`/`class` syntax (the exact bug this whole refactor fixes for
+    TS/Go; falling back to it here for a *third* unhandled language would
+    just move the same mistake, not close it). Genuinely reachable only
+    once a Java/C# locator is implemented - there is no such locator
+    today, so nothing exercises this path in practice yet.
+    """
+    if kind == "class":
+        return f"{simple_name} {{}}"
+    params_text = ", ".join(p.render() for p in contract.params)
+    header = f"{simple_name}({params_text})"
+    if contract.return_type:
+        header += f": {contract.return_type}"
+    return header
+
+
+#: Architectural-audit Category 6/9 follow-up: the language dispatch this
+#: whole module was missing - `_render_signature_text` used to hardcode
+#: Python's `def`/`async def`/`class` keywords regardless of the actual
+#: source language, so a real TypeScript function rendered as invalid-
+#: syntax `def useAuth(token: string) -> boolean:` (confirmed live during
+#: the architectural audit). Each renderer produces only the declaration
+#: line itself (plus its language-appropriate exception annotation, when
+#: any) - `info.signature_text`'s own contract (`test_external_index.py`'s
+#: `signature_text == "class Response:"`, no placeholder body attached)
+#: - leaving the separate, also per-language question of how to pad that
+#: into a complete stub *body* to `_STUB_BODY_ASSEMBLERS` below, since the
+#: two don't vary together (Python's `...` placeholder is appended after
+#: the header; TypeScript's `declare` form is already complete without
+#: one; Go's needs a matching `{`/`}` pair opened on the header line
+#: itself, and only for a function - a struct's `{}` is already there).
+_SIGNATURE_RENDERERS = {
+    LanguageID.PYTHON: _render_python_header,
+    LanguageID.JAVASCRIPT: _render_ts_header,
+    LanguageID.TYPESCRIPT: _render_ts_header,
+    LanguageID.TSX: _render_ts_header,
+    LanguageID.GO: _render_go_header,
+}
+
+
+def _render_signature_text(local_qualified_name: str, kind: str, contract: BehavioralContract, language_id: str) -> str:
     """The real declaration line, rendered from `ContractExtractor`'s own
     structured `params`/`return_type`/`is_async` - never the raw source
-    text (which would drag the real body's own indentation/formatting
-    along with it), and never fabricated when a field is absent (a class
-    with no meaningful `__init__` signature to show renders as a bare
-    `class Name:`, not a guessed constructor)."""
+    text, and never fabricated when a field is absent (a class with no
+    meaningful `__init__` signature to show renders as a bare `class
+    Name:`/`declare class Name {}`/`type Name struct {}`, not a guessed
+    constructor). Dispatched per `language_id` via `_SIGNATURE_RENDERERS`,
+    or `_render_unsupported_language_header` for a language with no real
+    renderer yet."""
     simple_name = local_qualified_name.rsplit(".", 1)[-1]
+    renderer = _SIGNATURE_RENDERERS.get(language_id, _render_unsupported_language_header)
+    return renderer(simple_name, kind, contract)
+
+
+def _assemble_python_stub_body(signature_text: str, kind: str) -> str:
+    return f"{signature_text}\n    ..."
+
+
+def _assemble_ts_stub_body(signature_text: str, kind: str) -> str:
+    # `declare ...` is already a complete, self-terminating statement.
+    return signature_text
+
+
+def _assemble_go_stub_body(signature_text: str, kind: str) -> str:
+    # `type Name struct {}` (kind == "class") is already self-complete;
+    # only a function header needs a matching `{ ... }` body opened here.
     if kind == "class":
-        return f"class {simple_name}:"
-    prefix = "async def" if contract.is_async else "def"
-    params_text = ", ".join(p.render() for p in contract.params)
-    header = f"{prefix} {simple_name}({params_text})"
-    if contract.return_type:
-        header += f" -> {contract.return_type}"
-    return header + ":"
+        return signature_text
+    return f"{signature_text} {{\n\t// ...\n}}"
+
+
+def _assemble_unsupported_language_stub_body(signature_text: str, kind: str) -> str:
+    # No known target syntax to pad with - the bare declaration line is
+    # already the most honest thing we can show.
+    return signature_text
+
+
+#: The per-language counterpart to `_SIGNATURE_RENDERERS`: how to pad a
+#: bare declaration line (`info.signature_text`) into the complete,
+#: syntactically-plausible stub body `NodeEntry.body` shows - kept as a
+#: separate dispatch table because "what a declaration line looks like"
+#: and "what placeholder body syntax follows it" vary independently
+#: across languages (see `_SIGNATURE_RENDERERS`'s own docstring).
+_STUB_BODY_ASSEMBLERS = {
+    LanguageID.PYTHON: _assemble_python_stub_body,
+    LanguageID.JAVASCRIPT: _assemble_ts_stub_body,
+    LanguageID.TYPESCRIPT: _assemble_ts_stub_body,
+    LanguageID.TSX: _assemble_ts_stub_body,
+    LanguageID.GO: _assemble_go_stub_body,
+}
+
+
+def _render_stub_body(signature_text: str, kind: str, language_id: str) -> str:
+    """`NodeEntry.body`'s full text for one external symbol: `signature_
+    text` (the declaration line `_render_signature_text` produced) padded
+    with whatever placeholder body syntax `language_id` needs, via
+    `_STUB_BODY_ASSEMBLERS`."""
+    assembler = _STUB_BODY_ASSEMBLERS.get(language_id, _assemble_unsupported_language_stub_body)
+    return assembler(signature_text, kind)
+
+
+#: Real Node/TypeScript source extensions `EXTENSION_LANGUAGE_MAP` has no
+#: entry for - each mapped to an already-supported extension whose
+#: grammar is identical (module format is a bundler/runtime concern, not
+#: a tree-sitter syntax difference). See `_parse_external_file`'s own
+#: docstring for the real packages that surfaced this.
+_EXTERNAL_EXTENSION_OVERRIDES = {
+    ".cts": ".ts",
+    ".mts": ".ts",
+    ".cjs": ".js",
+}
 
 
 def _parse_external_file(file_path: Path) -> ParsedFile | None:
@@ -261,7 +592,27 @@ def _parse_external_file(file_path: Path) -> ParsedFile | None:
     substituted extension, harmlessly - neither this module nor
     `ContractExtractor` ever reads `ParsedFile.path`, only its
     `.source`/`.language_id`/`.root_node`.
+
+    The same gap, confirmed live against real installed packages while
+    building `TypeScriptSourceLocator`: `EXTENSION_LANGUAGE_MAP` has no
+    `.cts`/`.mts`/`.cjs` entries at all (only `.ts`/`.tsx`/`.js`/`.jsx`/
+    `.mjs`) - real, common real-world extensions for a package.json
+    `"type"`-aware dual ESM/CJS build (`@trpc/server`'s own real `types`
+    field points at `dist/index.d.cts`; `zod`'s own `main` is
+    `./index.cjs`). `.cts`/`.mts` are TypeScript's own explicit-module-
+    format source extensions (the same grammar as `.ts` - module format
+    is a runtime/bundler concern, not a syntax difference tree-sitter
+    cares about); `.cjs` is JavaScript's. `_EXTERNAL_EXTENSION_OVERRIDES`
+    below forces the matching grammar the same local, non-global way
+    `.pyi` already does, for the same reason.
     """
+    override = _EXTERNAL_EXTENSION_OVERRIDES.get(file_path.suffix)
+    if override is not None:
+        try:
+            source = file_path.read_bytes()
+        except OSError:
+            return None
+        return parse_source(str(file_path.with_suffix(override)), source)
     if file_path.suffix == ".pyi":
         try:
             source = file_path.read_bytes()
@@ -291,7 +642,7 @@ def _extract_from_file(file_path: Path, top_level: str, symbol_name: str) -> Ext
         qualified_name=f"{module_name}.{local_qualified_name}",
         module_origin=top_level,
         language=parsed.language_id,
-        signature_text=_render_signature_text(local_qualified_name, kind, contract),
+        signature_text=_render_signature_text(local_qualified_name, kind, contract, parsed.language_id),
         docstring=contract.docstring,
         kind=kind,
         file=str(file_path),
@@ -301,7 +652,7 @@ def _extract_from_file(file_path: Path, top_level: str, symbol_name: str) -> Ext
 
 
 def extract_external_symbol(
-    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None,
+    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None, subpath: str | None = None,
 ) -> ExternalSymbolInfo | None:
     """Locate -> parse -> extract (Section 2.1's three steps) for one
     named external symbol - the first real match across `locator`'s own
@@ -322,10 +673,16 @@ def extract_external_symbol(
     real match (Section 1's own Turn 2a, resolving an ambiguous
     `self.<name>(...)` call with no way to know which class it means)
     should use `extract_external_symbol_all` for instead.
+
+    `subpath` (`feature/subpath-export-resolution`): a real npm `exports`
+    subpath the symbol was imported through (e.g. `"adapters/express"`
+    for `@trpc/server/adapters/express`), passed straight through to
+    `locator.locate` - `None`/`""` for the ordinary root-export case,
+    unchanged from before this parameter existed.
     """
     locator = locator or PythonSourceLocator()
     top_level = package_name.split(".")[0]
-    for file_path in locator.locate(package_name):
+    for file_path in locator.locate(package_name, subpath=subpath):
         info = _extract_from_file(file_path, top_level, symbol_name)
         if info is not None:
             return info
@@ -333,7 +690,7 @@ def extract_external_symbol(
 
 
 def extract_external_symbol_all(
-    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None,
+    package_name: str, symbol_name: str, locator: ExternalSourceLocator | None = None, subpath: str | None = None,
 ) -> list[ExternalSymbolInfo]:
     """Every real match for `symbol_name` across every file `locator`
     locates for `package_name`, in `locator`'s own file order - unlike
@@ -346,11 +703,15 @@ def extract_external_symbol_all(
     artifact silently deciding for it. Returns `[]` (never raises) under
     the same fail-closed conditions `extract_external_symbol` returns
     `None` for.
+
+    `subpath` (`feature/subpath-export-resolution`): see
+    `extract_external_symbol`'s own docstring - passed straight through
+    to `locator.locate`.
     """
     locator = locator or PythonSourceLocator()
     top_level = package_name.split(".")[0]
     results: list[ExternalSymbolInfo] = []
-    for file_path in locator.locate(package_name):
+    for file_path in locator.locate(package_name, subpath=subpath):
         info = _extract_from_file(file_path, top_level, symbol_name)
         if info is not None:
             results.append(info)
@@ -359,12 +720,12 @@ def extract_external_symbol_all(
 
 def external_symbol_to_node_entry(info: ExternalSymbolInfo, distance: float = 1.0) -> NodeEntry:
     """`ExternalSymbolInfo` -> a real `role="external"` `NodeEntry`
-    (schema_version 3 - Section 2.3). `body` is the signature line plus a
-    `...` placeholder, the same signature-only render an in-repo
-    `"L2_skeleton"` stub already uses (`_signature_stub` in
-    `submodular_knapsack.py`) - never the located file's real body text,
-    which is never read for anything beyond producing a parse tree.
-    `compression` is always `"L2_skeleton"` and `contract` is always
+    (schema_version 3 - Section 2.3). `body` is `info.signature_text`
+    padded by `_render_stub_body` with whatever placeholder body syntax
+    `info.language` needs (Python's `...`, TypeScript's already-complete
+    `declare` form, Go's matching `{ ... }`) - never the located file's
+    real body text, which is never read for anything beyond producing a
+    parse tree. `compression` is always `"L2_skeleton"` and `contract` is always
     `None` (Section 2.3's own stated metadata boundary - a real, full
     body render is architecturally impossible for a symbol this system
     never AST-indexes as a repo file, not merely undesired here).
@@ -390,5 +751,5 @@ def external_symbol_to_node_entry(info: ExternalSymbolInfo, distance: float = 1.
         signature=NodeSignature(docstring=info.docstring),
         features=_EXTERNAL_FEATURES,
         contract=None,
-        body=f"{info.signature_text}\n    ...",
+        body=_render_stub_body(info.signature_text, info.kind, info.language),
     )

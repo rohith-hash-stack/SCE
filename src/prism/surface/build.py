@@ -158,6 +158,22 @@ def _node_body(builder: ConcreteGraphBuilder, qname: str) -> str:
     return "\n".join(lines[max(start - 1, 0):end])
 
 
+def _append_bundled_constants(body: str, bundled_constants: list[str]) -> str:
+    """Two-Tier Visibility Pipeline (lexical constant bundling): appends
+    each already-rendered referenced-constant block
+    (`SubmodularPackedItem.bundled_constants` - real text, priced,
+    budget-gated, and deduplicated by `prism.packer.submodular_knapsack.
+    _bundle_referenced_constants`) after `body`, under one clearly-
+    delimited comment header - never silently merged into the
+    function's own rendered text with no marker of what's real function
+    code versus a bundled sidecar constant. A no-op (`body` unchanged)
+    when nothing was bundled - every existing item/caller."""
+    if not bundled_constants:
+        return body
+    block = "\n".join(bundled_constants)
+    return f"{body}\n\n# Referenced module constants:\n{block}"
+
+
 def _derive_contract(node_qname: str, builder: ConcreteGraphBuilder, packed_ids: set[str]) -> NodeContract | None:
     """The call site, if any, from another *packed* node that explains
     `node_qname`'s presence - reusing the exact same provenance detection
@@ -485,7 +501,19 @@ def build_context_package(
     # render_budget` below, which measures the real renderer and only
     # ever trims what doesn't already fit, rather than pre-emptively
     # under-selecting against an estimate.
-    pack_result: SubmodularPackResult = pack_symbol_context(builder, seed_id, target_budget, max_hops=max_hops)
+    #
+    # Two-Tier Visibility Pipeline: `referenced_constants` is passed
+    # separately, deliberately never via `contracts` itself (which stays
+    # unpassed here for exactly the reason above) - a `{qname: [names]}`
+    # map costs nothing like `_rendered_metadata_cost`'s per-candidate
+    # signature/docstring surcharge does, so it carries none of that
+    # regression risk.
+    referenced_constants = {
+        qname: contract.referenced_constants for qname, contract in contracts.items() if contract.referenced_constants
+    }
+    pack_result: SubmodularPackResult = pack_symbol_context(
+        builder, seed_id, target_budget, max_hops=max_hops, referenced_constants=referenced_constants,
+    )
     feature_masks = compute_feature_masks_cached(builder, repo_root)
     # Zero-Debt Hardening Pass, Task 3: compute_topological_distances now
     # defaults its own d_max to 5.0 (was None/unbounded). This call's
@@ -552,7 +580,10 @@ def build_context_package(
                 # recomputed identically here - deterministic given the
                 # same source, so never out of sync with `item.cost`),
                 # not the full body `_node_body` would return.
-                body=_node_body(builder, item.symbol) if item.compression == "L0_full" else (_signature_stub(builder, item.symbol) or ""),
+                body=_append_bundled_constants(
+                    _node_body(builder, item.symbol) if item.compression == "L0_full" else (_signature_stub(builder, item.symbol) or ""),
+                    item.bundled_constants,
+                ),
             )
         )
 
@@ -687,7 +718,9 @@ def build_context_package_requested(
         raise KeyError(seed_id)
     include_causal_path = _causal_path_enabled() and causal_path_applies_to_task_type(task_type)
 
-    pack_result, skipped = pack_symbol_context_requested(builder, seed_id, requested_symbols, candidate_universe)
+    pack_result, skipped = pack_symbol_context_requested(
+        builder, seed_id, requested_symbols, candidate_universe, contracts=contracts,
+    )
     feature_masks = compute_feature_masks_cached(builder, repo_root)
     dist_w_map = compute_topological_distances(builder, seed_id, d_max=DEFAULT_MAX_HOPS)
     reachable_ids = set(dist_w_map) | {seed_id}
@@ -730,7 +763,7 @@ def build_context_package_requested(
                     role=_axis_labels(mask, ROLE_BITS),
                 ),
                 contract=_derive_contract(item.symbol, builder, packed_ids) if item.role != ROLE_SEED else None,
-                body=_node_body(builder, item.symbol),
+                body=_append_bundled_constants(_node_body(builder, item.symbol), item.bundled_constants),
             )
         )
 

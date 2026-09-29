@@ -1,0 +1,133 @@
+# T02 "Express Pilot" - Task 12: cookie signing & management
+# (`res.cookie`).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.response.cookie  lines 862-895 (in-repo seed)
+#   cookie.index.serialize  real external stub, resolved live
+#
+# Real source (lib/response.js:27,31,862-895):
+#
+#   var sign = require('cookie-signature').sign;
+#   ...
+#   var cookie = require('cookie');
+#   ...
+#   res.cookie = function (name, value, options) {
+#     ...
+#     if (signed) {
+#       val = 's:' + sign(val, secret);
+#     }
+#     ...
+#     this.append('Set-Cookie', cookie.serialize(name, String(val), opts));
+#     return this;
+#   };
+#
+# Verified live: `engine.build_external_candidate_manifest(
+# ["lib.response.cookie"], root_imports=["cookie"]) ->
+# {"cookie.index.serialize"}`, rendering
+# "/** @throws {TypeError} */ declare function serialize(name, val, options);"
+# - both the real signature and a real `@throws` annotation (Category 6)
+# resolve correctly. `cookie.serialize(...)` is a real "property access"
+# CommonJS binding (`var cookie = require('cookie')` bare default
+# import, then a 2-segment member call) - the same shape Task 7's own
+# `etag` case already covers via a bare 1-segment call, now confirmed
+# for the 2-segment member-call variant too.
+#
+# Real, disclosed non-resolution (a distinct, new limitation from the
+# `path-to-regexp`/`etag` cases, not previously seen in this pilot):
+# `res.cookie`'s own real signed-cookie path calls the third-party
+# `cookie-signature` package's `sign` function too
+# (`var sign = require('cookie-signature').sign;` - the "property
+# access at the require() call site" binding shape, confirmed correctly
+# captured by `_parse_js_requires` as the graph edge label
+# `cookie-signature.sign`) - but
+# `engine.build_external_candidate_manifest(["lib.response.cookie"],
+# root_imports=["cookie-signature"])` returns an *empty* set. Reading
+# the real installed package (`node_modules/cookie-signature/index.js`)
+# shows why: `exports.sign = function(val, secret){ ... }` assigns an
+# *anonymous* function expression directly to the export property -
+# `prism.external.index`'s definition-finder only recognizes a plain
+# named `function_declaration`/`class`, or a property assignment whose
+# right-hand side is itself a *named* function (as `etag`'s own
+# `module.exports = etag; function etag(...) {}` and `path-to-regexp`'s
+# `module.exports = pathToRegexp; function pathToRegexp(...) {}` both
+# are) - not an anonymous `function(val, secret){}` value. This is a
+# real, confirmed gap in the external-symbol extractor itself, not a
+# task-authoring mistake - `cookie-signature` is therefore *not*
+# included in this task's `root_imports`/`required_context` at all,
+# since a real engine cannot resolve it regardless of retrieval budget.
+task_id: express_t02_012_cookie_signing
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.response.cookie
+task_type: debug
+root_imports:
+- cookie
+prompt: 'You are investigating how Express serializes an outgoing cookie, starting from `res.cookie` in
+  lib/response.js. Identify the real third-party npm package function it delegates the actual
+  name=value;attributes string construction to, and that function''s own real signature and
+  thrown-exception behavior.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols
+  actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.response.cookie", "cookie.index.serialize"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.response.cookie
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - cookie.index.serialize
+  boundary_symbols: []
+  expected_solution: res.cookie(name, value, options) builds up a real cookie value string (optionally
+    signing it first via the third-party cookie-signature package), then delegates the actual
+    name=value;attributes string construction to the real third-party `cookie` npm package's own
+    serialize(name, val, options) function, appending the result as a real Set-Cookie header. The real
+    serialize() function itself can throw a TypeError.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.response.cookie
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - cookie.index.serialize
+  boundary_symbols: []
+  expected_solution: res.cookie() calls the real `cookie` package's serialize() function to build the
+    Set-Cookie header value from the given name, value, and options.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.response.cookie
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - cookie.index.serialize
+  boundary_symbols: []
+  expected_solution: res.cookie(name, value, options) optionally signs the value via the third-party
+    cookie-signature package (a real delegation this task's own required_context deliberately excludes -
+    see header comment for why it cannot resolve through the current external-symbol extractor), then
+    delegates the actual Set-Cookie string construction to the real `cookie` npm package's own
+    serialize(name, val, options) function, which can throw a TypeError. Both annotators independently
+    identified the same real `cookie` delegation; annotator_a additionally noted the real
+    thrown-exception behavior and the signing step.

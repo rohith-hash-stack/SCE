@@ -1,0 +1,112 @@
+# T02 "Express Pilot" - Task 2: middleware mounting (`app.use`) and the
+# lazy router-construction it triggers.
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.application.use          lines 194-249
+#   lib.application.lazyrouter   lines 144-154
+#   lib.application.enabled      lines 438-440
+#   lib.application.set          lines 359-401
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage.
+#
+# Real, disclosed exclusions (both confirmed live against the real
+# graph, not assumed from reading source):
+#
+# - `lazyrouter`'s own real calls `this._router.use(query(this.get(
+#   'query parser fn')))` and `this._router.use(middleware.init(this))`
+#   resolve, on the real graph, to `lib.application.query` (the local
+#   `require('./middleware/query')` binding itself - a one-line variable
+#   declaration, not `lib/middleware/query.js`'s real logic, since
+#   Prism's current CommonJS `require()` handling doesn't follow the
+#   binding into its target module) and to a dangling, unresolved
+#   `lib.application.middleware.init` node (not the real
+#   `lib.middleware.init.init` symbol - a different node entirely,
+#   confirmed via `builder.symbol_table.get` returning `None` for it).
+#   Excluded from the pipeline as low-value/wrong-target stages, not
+#   silently included as if they were the real middleware logic.
+# - `lazyrouter`'s own `this.get('query parser fn')`/`this.get('env')`-
+#   style calls resolve, project-wide, to `lib.response.get` (Response's
+#   header getter) rather than `application.js`'s own `.get` - `app.get`
+#   is defined dynamically inside a `methods.forEach(...)` loop
+#   (real HTTP-verb route registration), invisible to static analysis,
+#   so the only symbol named `get` anywhere in the project wins by
+#   default. A real "wrong resolution" pitfall (TASK_AUTHORING.md's own
+#   G41 case), not included in `pipeline_symbols`.
+task_id: express_t02_002_middleware_mounting
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.application.use
+task_type: debug
+prompt: 'You are investigating how Express mounts middleware in lib/application.js. Starting from `use`,
+  trace the exact causal pipeline that runs when middleware is mounted on an application for the first
+  time: what triggers the application''s internal router to be lazily constructed, and what real
+  configuration lookups happen along the way.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.application.use", "lib.application.lazyrouter"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.application.use
+  - lib.application.lazyrouter
+  - lib.application.enabled
+  - lib.application.set
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: use() calls lazyrouter() to lazily construct the app's internal Router the first
+    time middleware is mounted. lazyrouter() checks this.enabled('case sensitive routing') and
+    this.enabled('strict routing') to decide the new Router's own options - and enabled() itself is not
+    a leaf check, it delegates to set() (returning Boolean(this.set(setting))) to actually read the
+    stored config value.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.application.use
+  - lib.application.lazyrouter
+  - lib.application.enabled
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: use() calls lazyrouter(), which calls enabled() twice to check routing options
+    before constructing the Router. (Treated enabled() as a self-contained boolean check; missed that it
+    internally delegates to set() to read the value, a separate real, reachable config-mutation method.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.application.use
+  - lib.application.lazyrouter
+  - lib.application.enabled
+  - lib.application.set
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: use() calls lazyrouter() to lazily construct the app's internal Router the first
+    time middleware is mounted. lazyrouter() checks this.enabled('case sensitive routing') and
+    this.enabled('strict routing') to decide the new Router's own options, and enabled() itself calls
+    set() directly (return Boolean(this.set(setting))) to read the stored value - a real, separately
+    reachable stage, not merely enabled()'s own internal detail. annotator_b's pipeline is real but
+    stopped one real hop early.

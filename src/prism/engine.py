@@ -22,19 +22,107 @@ hook mechanism belongs here, not grafted onto the benchmark-only class.
 from __future__ import annotations
 
 import copy
+import os
 from dataclasses import dataclass
 from typing import Callable
 
 from prism.cli import build_pipeline
-from prism.external.index import ExternalSymbolInfo, extract_external_symbol_all, external_symbol_to_node_entry
+from prism.external.index import (
+    ExternalSourceLocator,
+    ExternalSymbolInfo,
+    PythonSourceLocator,
+    extract_external_symbol_all,
+    external_symbol_to_node_entry,
+)
+from prism.external.locator_ts import TypeScriptSourceLocator
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS, _outgoing_call_names, build_candidate_manifest
 from prism.packer.submodular_knapsack import DEFAULT_UPSTREAM_MAX_HOPS, pack_external_context_requested, split_budget_for_external
 from prism.parser.lang_config import CALL_NODE_TYPE, SELF_TOKEN_TEXT, call_callee_segments, iter_scoped_nodes
+from prism.parser.tree_sitter_loader import LanguageID
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.surface.build import build_context_package, build_context_package_requested
 from prism.surface.models import ContextPackage
+
+
+def _locator_for_language(language_id: str, start_dir: str) -> ExternalSourceLocator | None:
+    """Turn 2a's own per-file locator dispatch (Phase D follow-up to
+    Category 8's `TypeScriptSourceLocator`): `build_external_candidate_
+    manifest` previously always resolved through the default `Python
+    SourceLocator()` regardless of the call site's real language - silently
+    "correct" only because every caller through this method so far
+    indexed a Python repo; a real TS/JS project's own `node_modules` was
+    never consulted at all.
+
+    Dispatched per the *call site's own file* language, not once for the
+    whole engine instance - a real repo (a monorepo especially) can mix
+    languages, and `TypeScriptSourceLocator`'s own `start_dir` only means
+    anything as that specific file's own directory (its `node_modules`
+    walk-up starts there, per-file, exactly as it's designed to).
+
+    Returns `None` for a language with no real `ExternalSourceLocator`
+    implementation yet (Go, Java, C#) - `_resolve_against`'s caller
+    treats that identically to "resolved to nothing", never a guess at
+    a default locator that would silently search the wrong ecosystem.
+    """
+    if language_id == LanguageID.PYTHON:
+        return PythonSourceLocator()
+    if language_id in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+        return TypeScriptSourceLocator(start_dir)
+    return None
+
+
+def _matching_root_import(origin: str, root_imports: list[str]) -> tuple[str, str] | None:
+    """Which `root_imports` entry `origin` (a `LocalImportMap`-resolved
+    dotted string, e.g. `"@trpc.server.initTRPC"`) actually names - real
+    bug, found live while wiring `TypeScriptSourceLocator` in: a naive
+    `origin.split(".")[0]` (this method's own previous check) silently
+    truncates a *scoped* npm package's identifier at its first `.`,
+    since `ConcreteGraphBuilder._resolve_js_specifier`'s own bare-
+    package fallback already converts `"@trpc/server"` to `"@trpc.
+    server"` (`/` -> `.`) before it ever reaches here - `origin.split(
+    ".")[0]` on `"@trpc.server.initTRPC"` returns only `"@trpc"`, which
+    never matches a real `root_imports` entry of `"@trpc/server"` (the
+    real, `/`-containing package name a caller is expected to supply,
+    matching a real `package.json` dependency key). This compares
+    `origin` against each `root_imports` entry in the *same* dotted form
+    instead, returning the longest matching entry's own real (`/`-
+    containing) name - the same longest-prefix tie-break Category 8's
+    own path-alias matching already uses, for the same reason: a more
+    specific match should never lose to a shorter, coincidentally-also-
+    matching one. `None` when nothing matches, including every existing
+    unscoped case (Python's own `"markdown_it"`, an unscoped npm package
+    like `"orjson"`), which this generalizes without changing at all -
+    `package_name.replace("/", ".")` is a no-op for any name with no `/`
+    in it to begin with.
+
+    Subpath-export follow-up (`feature/subpath-export-resolution`):
+    returns `(matched_package, remainder)`, not just the matched name -
+    `remainder` is whatever of `origin` sits after the matched entry's
+    own dotted prefix (e.g. `"adapters.express.createExpressMiddleware"`
+    for `origin="@trpc.server.adapters.express.createExpressMiddleware"`
+    matched against `"@trpc/server"`), empty when `origin` names the
+    root package's own top-level export directly. A real `/`-containing
+    npm subpath export (`@trpc/server/adapters/express`) collapses to
+    its own dotted form here exactly like a root package name does -
+    the caller derives the real subpath from `remainder` itself, since
+    the two real call sites need different slices of it (one strips a
+    trailing leaf symbol name first, one doesn't).
+    """
+    best: str | None = None
+    best_dotted_len = -1
+    for package_name in root_imports:
+        dotted = package_name.replace("/", ".")
+        if origin == dotted or origin.startswith(dotted + "."):
+            if len(dotted) > best_dotted_len:
+                best_dotted_len = len(dotted)
+                best = package_name
+    if best is None:
+        return None
+    best_dotted = best.replace("/", ".")
+    remainder = origin[len(best_dotted) + 1 :] if origin != best_dotted else ""
+    return best, remainder
 
 
 @dataclass(frozen=True)
@@ -132,6 +220,23 @@ class PrismEngine:
     @property
     def repo_root(self) -> str:
         return self._repo_root
+
+    @property
+    def external_symbol_cache(self) -> dict[str, ExternalSymbolInfo]:
+        """Every `ExternalSymbolInfo` this engine instance has resolved
+        so far via `build_external_candidate_manifest` (Turn 2a), keyed
+        by qualified name - the same cache `retrieve_two_or_three_pass`
+        consults internally for its own Turn 3 hydration. Exposed as a
+        real public property (`feature/two-pass-root-imports-wiring`)
+        so an external caller doing its own manual Turn 2a/2b
+        orchestration outside `retrieve_two_or_three_pass` (`benchmarks.
+        run_two_pass_benchmark`'s own per-cell loop, which needs finer-
+        grained control - real Turn-1 degeneracy handling, per-turn cost
+        tracking - than that single bundled method exposes) can hydrate
+        against it via `prism.packer.submodular_knapsack.pack_external_
+        context_requested` without reaching into a private attribute.
+        """
+        return self._external_symbol_cache
 
     def register_pre_traversal_hook(self, callback: PreTraversalHook) -> None:
         """`callback` runs immediately before `retrieve()` calls into
@@ -405,14 +510,28 @@ class PrismEngine:
             self_tokens |= tokens
 
         resolved: dict[str, ExternalSymbolInfo] = {}
-        attempted: set[tuple[str, str]] = set()
+        attempted: set[tuple[str, str, str, str, str]] = set()
+        #: One `ExternalSourceLocator` per `(language_id, start_dir)` pair
+        #: actually encountered, reused across every candidate resolved
+        #: from that same directory/language within this one call -
+        #: `TypeScriptSourceLocator`'s own `node_modules` walk-up is real
+        #: filesystem I/O, no cheaper to repeat here than `ConcreteGraph
+        #: Builder`'s own analogous `tsconfig.json` lookup cache (Category
+        #: 8) already found worth avoiding.
+        locator_cache: dict[tuple[str, str], ExternalSourceLocator | None] = {}
 
-        def _resolve_against(package_name: str, symbol_name: str) -> None:
-            key = (package_name, symbol_name)
+        def _resolve_against(package_name: str, symbol_name: str, lang: str, start_dir: str, subpath: str = "") -> None:
+            key = (package_name, symbol_name, lang, start_dir, subpath)
             if key in attempted:
                 return
             attempted.add(key)
-            for ext_info in extract_external_symbol_all(package_name, symbol_name):
+            locator_key = (lang, start_dir)
+            if locator_key not in locator_cache:
+                locator_cache[locator_key] = _locator_for_language(lang, start_dir)
+            locator = locator_cache[locator_key]
+            if locator is None:
+                return
+            for ext_info in extract_external_symbol_all(package_name, symbol_name, locator=locator, subpath=subpath or None):
                 resolved[ext_info.qualified_name] = ext_info
 
         for qname in turn1_symbols:
@@ -425,6 +544,7 @@ class PrismEngine:
                 continue
             import_map = self._builder.import_map(info.file)
             lang = parsed.language_id
+            start_dir = os.path.dirname(info.file)
             call_type = CALL_NODE_TYPE.get(lang)
             if call_type is None:
                 continue
@@ -435,37 +555,85 @@ class PrismEngine:
 
                 if len(segments) == 1:
                     # Path 1, bare call: `MarkdownIt()` after
-                    # `from markdown_it import MarkdownIt`.
+                    # `from markdown_it import MarkdownIt`, or
+                    # `createExpressMiddleware()` after `import {
+                    # createExpressMiddleware } from "@trpc/server/
+                    # adapters/express"`.
                     bare_name = segments[0]
                     origin = import_map.resolve(bare_name) if import_map else None
                     if origin is None:
                         continue
-                    origin_package = origin.split(".")[0]
-                    if origin_package in root_imports:
-                        # "markdown_it.MarkdownIt" -> search "MarkdownIt";
-                        # "markdown_it.token.Token" -> search "Token" (the
-                        # intermediate submodule segment is dropped -
-                        # matches extract_external_symbol_all's own
-                        # bare-name, cross-file search contract).
-                        _resolve_against(origin_package, origin.rsplit(".", 1)[-1])
+                    match = _matching_root_import(origin, root_imports)
+                    if match is not None:
+                        matched_package, remainder = match
+                        if not remainder:
+                            # `origin` is the matched package's own bare
+                            # name, with no real symbol/subpath info at
+                            # all - a namespace/default-style binding
+                            # (`var x = require('pkg'); x(...)`, or ES's
+                            # `import * as x from 'y'; x(...)`) used as a
+                            # bare call directly on the required value
+                            # itself, not a member access on it. There is
+                            # no real symbol name to derive from the call
+                            # site here (a local alias like `pathRegexp`
+                            # is not reliably the target's own internal
+                            # name - confirmed live against real
+                            # `path-to-regexp`, whose function is
+                            # declared `pathToRegexp` internally) - the
+                            # shared synthetic "default" leaf both ES's
+                            # default-import handling and CommonJS's own
+                            # `_parse_js_requires` already funnel through
+                            # resolves this via `_find_definition`'s own
+                            # `module.exports = <identifier>` redirect
+                            # (`prism.external.index._commonjs_primary_
+                            # export_name`) instead.
+                            leaf = "default"
+                            subpath_dotted = ""
+                        else:
+                            # "markdown_it.MarkdownIt" -> search
+                            # "MarkdownIt"; "markdown_it.token.Token" ->
+                            # search "Token" (the intermediate submodule
+                            # segment is dropped - matches extract_
+                            # external_symbol_all's own bare-name,
+                            # cross-file search contract).
+                            leaf = origin.rsplit(".", 1)[-1]
+                            # `remainder` is `<subpath dotted>.<leaf>`
+                            # when a real npm subpath export is involved
+                            # (e.g. "adapters.express.
+                            # createExpressMiddleware"), or just `<leaf>`
+                            # (no dot) for a plain root export
+                            # ("initTRPC") - strip the trailing leaf
+                            # segment to get the real subpath, "" when
+                            # there is none.
+                            subpath_dotted = remainder.rsplit(".", 1)[0] if "." in remainder else ""
+                        _resolve_against(matched_package, leaf, lang, start_dir, subpath_dotted.replace(".", "/"))
                     continue
 
                 if len(segments) != 2:
                     continue
                 receiver, leaf = segments
-                candidate_packages: list[str] = []
+                candidate_pairs: list[tuple[str, str]] = []
                 if receiver in root_imports:
-                    candidate_packages = [receiver]
-                elif import_map and (origin := import_map.resolve(receiver)) and origin.split(".")[0] in root_imports:
+                    candidate_pairs = [(receiver, "")]
+                elif (
+                    import_map
+                    and (origin := import_map.resolve(receiver))
+                    and (match := _matching_root_import(origin, root_imports)) is not None
+                ):
                     # Path 1, aliased-module receiver: `md.MarkdownIt()`
                     # after `import markdown_it as md`. The package comes
                     # from the import map; the symbol searched for is the
                     # call's own original leaf, not derived from `origin`.
-                    candidate_packages = [origin.split(".")[0]]
+                    # Here `origin` names only the module the receiver was
+                    # bound to (no symbol suffix, unlike the bare-call
+                    # case above), so the whole remainder - not a leaf-
+                    # stripped slice of it - is the real subpath.
+                    matched_package, remainder = match
+                    candidate_pairs = [(matched_package, remainder.replace(".", "/"))]
                 elif receiver in self_tokens and not self._builder.symbol_table.candidates_for_simple_name(leaf):
-                    candidate_packages = root_imports
-                for package_name in candidate_packages:
-                    _resolve_against(package_name, leaf)
+                    candidate_pairs = [(pkg, "") for pkg in root_imports]
+                for package_name, subpath in candidate_pairs:
+                    _resolve_against(package_name, leaf, lang, start_dir, subpath)
 
         self._external_symbol_cache.update(resolved)
         # Real bug, found and fixed while testing the `ujson.dumps`

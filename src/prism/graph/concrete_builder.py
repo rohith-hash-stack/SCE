@@ -21,10 +21,12 @@ rather than silently pretending to be exact.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import threading
+from dataclasses import dataclass
 
 import networkx as nx
 from tree_sitter import Node
@@ -147,6 +149,32 @@ TRAVERSABLE_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "EXTENDS", "IMPLEMEN
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class _TsPathAliasConfig:
+    """One parsed `tsconfig.json`/`jsconfig.json`'s `compilerOptions.
+    paths` mapping - Category 8 (architectural audit): `@/*`-style
+    aliased imports previously resolved to a phantom, never-matching
+    module name (the same bare-npm-package fallback a genuine external
+    dependency gets), since `_resolve_js_specifier` never looked at a
+    project's own path-mapping config at all.
+
+    `base_url` is already resolved to a real, absolute directory
+    (`compilerOptions.baseUrl`, default `"."`, joined against the
+    tsconfig's own directory - never the repo root directly, since a
+    monorepo package's `tsconfig.json` sets `baseUrl` relative to
+    *itself*) - every target in `paths` is resolved against this,
+    matching `tsc`'s own rule.
+
+    `paths` keeps each pattern's raw target list (e.g. `{"@/*":
+    ["src/*"]}`) unresolved - substituting `*` and joining against
+    `base_url` happens per matched specifier, not once here, since the
+    matched wildcard text differs per import.
+    """
+
+    base_url: str
+    paths: dict[str, list[str]]
+
+
 class ConcreteGraphBuilder:
     """Builds `G_C` from a set of source files via the two-pass linker."""
 
@@ -243,6 +271,20 @@ class ConcreteGraphBuilder:
         #: all". Same single-threaded/sequential caveat as
         #: `_last_resolution_was_tentative` above.
         self._last_go_embedded_collision: str | None = None
+        #: Category 8 (architectural audit): TS/JS path-alias resolution
+        #: caches - Scope 2's "workspace caching" requirement. Two levels,
+        #: since they memoize two different operations: `_tsconfig_lookup_
+        #: cache` remembers, per starting directory, which `tsconfig.json`/
+        #: `jsconfig.json` file (if any) the upward filesystem walk found -
+        #: every file in that same directory reuses the answer with no
+        #: repeat walk. `_tsconfig_parse_cache` remembers, per resolved
+        #: config file path, the parsed `_TsPathAliasConfig` (or `None` for
+        #: a config with no usable `paths`) - a monorepo where many
+        #: directories all resolve to the same root `tsconfig.json` parses
+        #: and JSON-decodes that one file exactly once, not once per
+        #: importing file.
+        self._tsconfig_lookup_cache: dict[str, str | None] = {}
+        self._tsconfig_parse_cache: dict[str, _TsPathAliasConfig | None] = {}
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
@@ -464,6 +506,8 @@ class ConcreteGraphBuilder:
             self._register_definition(node, is_class, parsed, module, force_kind=force_kind)
         if lang == LanguageID.PYTHON:
             self._collect_attribute_definitions(parsed, module)
+        elif lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+            self._collect_js_module_constants(parsed, module)
 
     def _register_definition(
         self, node: Node, is_class: bool, parsed: ParsedFile, module: str, force_kind: str | None = None
@@ -582,6 +626,51 @@ class ConcreteGraphBuilder:
                 for assign in iter_scoped_nodes(method_node, {assign_type}, lang):
                     self._register_self_attribute(assign, parsed, module, class_qname, self_tokens)
 
+    #: Two-Tier Visibility Pipeline (lexical constant bundling): JS/TS's
+    #: own real module-constant declaration shapes - `const`/`let`/`var`
+    #: (Python's `ASSIGNMENT_NODE_TYPE["assignment"]` only matches a plain
+    #: `x = 1` *reassignment* expression, never a declaration - a
+    #: different grammar node entirely, confirmed directly against a real
+    #: parse).
+    _JS_MODULE_CONST_DECLARATION_TYPES = frozenset({"lexical_declaration", "variable_declaration"})
+
+    def _collect_js_module_constants(self, parsed: ParsedFile, module: str) -> None:
+        """JS/TS's own counterpart to `_collect_attribute_definitions`'s
+        Python-only module-level pass - a real, connected gap found while
+        building the lexical constant bundler: `_collect_attribute_
+        definitions` itself is gated `if lang == LanguageID.PYTHON` at its
+        one call site, so a JS/TS module's own real `const CONFIG =
+        {...};` was never registered as a symbol at all, making `Contract
+        Extractor._js_locally_bound_names`'s own conservative-subset
+        reference-matching work correct but entirely unreachable in
+        practice (nothing to match against).
+
+        Deliberately narrower than the Python pass: module (top-level)
+        scope only - no class-field declarations, no `this.<attr> = ...`
+        instance-attribute collection for JS/TS, both distinct, not-yet-
+        covered concepts genuinely out of scope for "module constant
+        bundling." Only a single, non-destructured `identifier`
+        declarator target is registered (`const a = 1, b = 2;`'s two
+        declarators are each handled independently and registered
+        against the *declarator* node itself, not the whole multi-
+        declarator statement, for a precise, single-constant `line_range`
+        later; `const {a, b} = obj;`'s destructuring pattern is skipped
+        entirely) - the same disclosed gap `_js_locally_bound_names`
+        already has, so the two sides of this feature (registration,
+        reference-matching) agree on what a "real JS module constant" is.
+        """
+        for stmt in parsed.root_node.children:
+            if stmt.type not in self._JS_MODULE_CONST_DECLARATION_TYPES:
+                continue
+            for declarator in stmt.named_children:
+                if declarator.type != "variable_declarator":
+                    continue
+                name_node = declarator.child_by_field_name("name")
+                if name_node is None or name_node.type != "identifier":
+                    continue
+                name = node_text(name_node, parsed.source)
+                self._register_attribute(f"{module}.{name}", declarator, parsed, module, enclosing_class=None)
+
     @staticmethod
     def _direct_assignments(container: Node, assign_type: str) -> list[Node]:
         """Assignment nodes that are direct statements of `container` (each
@@ -638,6 +727,18 @@ class ConcreteGraphBuilder:
             enclosing_class=enclosing_class,
         )
         self.symbol_table.add(symbol)
+        # Two-Tier Visibility Pipeline (lexical constant bundling): unlike
+        # function/class/method registration (`_register_definition`,
+        # which always does this), an attribute's own real assignment
+        # node was never cached here - `builder.def_node(qname)` returned
+        # `None` for every module/class/instance attribute, forcing any
+        # caller that needed its real AST (to inspect a module constant's
+        # RHS shape, say) back to a disk re-read via `file`/`line_range`
+        # alone. `node` here is the real `assign` statement itself (its
+        # own RHS is what `_constant_stub` inspects), the same node shape
+        # `_register_simple_target_attribute`/`_register_self_attribute`
+        # already pass in - populating this costs nothing extra.
+        self._def_nodes[qualified_name] = node
         self.graph.add_node(
             qualified_name,
             kind="attribute",
@@ -778,6 +879,7 @@ class ConcreteGraphBuilder:
             self._parse_python_imports(parsed, module, import_map)
         elif lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
             self._parse_js_imports(parsed, module, import_map)
+            self._parse_js_requires(parsed, module, import_map)
         elif lang == LanguageID.GO:
             self._parse_go_imports(parsed, import_map)
         elif lang == LanguageID.JAVA:
@@ -1036,6 +1138,126 @@ class ConcreteGraphBuilder:
                         if cc.type == "identifier":
                             import_map.add(node_text(cc, src), f"{module_ref}.default")
 
+    def _parse_js_requires(self, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> None:
+        """CommonJS `require(...)` extraction (`feature/commonjs-
+        require-resolution`) - funnels straight into the same `import_
+        map` ES `import` statements already use (`_parse_js_imports`
+        above), so downstream call-graph resolution, Phase C candidate-
+        manifest generation, and `TypeScriptSourceLocator` treat a
+        CommonJS binding identically to an ES one, with no special-
+        casing anywhere downstream. A pure, generic tree-sitter
+        `call_expression` walk - no package-name awareness of any kind,
+        confirmed against `lodash`-, `rxjs`-, and Express's own real
+        `require()` call sites alike, not tuned to one repo's shape.
+
+        Five real binding shapes (Node's own `require()` idiom, not an
+        Express-specific list), each mapped onto the exact same
+        `import_map.add(local_name, target)` sink `_parse_js_imports`
+        already uses for the structurally equivalent ES form:
+
+          1. Side-effect only (`require('pkg');`, a bare top-level
+             `expression_statement`) - no local binding is introduced
+             at all (nothing is assigned), so nothing is added.
+          2. Default/namespace (`var x = require('pkg')`) - `x` is
+             bound to the *whole* required value, bound bare
+             (`import_map.add(name, module_ref)`, no synthetic suffix)
+             - the exact same shape ES's own `namespace_import` handling
+             above already uses for `import * as x from 'y'`. Binding
+             it bare, not under a synthetic `.default` leaf, matters for
+             a reason beyond cosmetics: this same `import_map` entry is
+             also what the ordinary in-repo call resolver (Pass 2)
+             consults for a *relative* require used as a 2-segment
+             member-access call (`const utils = require('./utils');
+             utils.helper()`) - a synthetic suffix baked in here would
+             make that resolve to a real-looking but wrong target
+             (`utils.default.helper`, confirmed live, instead of the
+             real `utils.helper`), since Pass 2's own resolution is a
+             plain `f"{resolved}.{member}"` concatenation with no
+             knowledge of any suffix convention. The one real problem a
+             *bare* namespace binding does still have - a later bare
+             call directly on the required value itself (`x(...)`,
+             treating the whole module as callable, not a member access
+             on it) needs the file's own real primary export, and a
+             local alias chosen at the call site is not reliably that
+             export's own real name (confirmed live: real `path-to-
+             regexp` binds under the Express call site's own local
+             alias `pathRegexp`, but the function itself is declared
+             `pathToRegexp` internally) - is fixed at its one real
+             consumer instead (`PrismEngine.build_external_candidate_
+             manifest`'s own bare-call path, `src/prism/engine.py`),
+             not by corrupting this shared binding for every consumer.
+          3. Destructuring (`const { a, b } = require('pkg')`) - each
+             `shorthand_property_identifier_pattern` binds a real named
+             export under its own name, identically to an ES named
+             import.
+          4. Aliased destructuring (`const { a: localA } = require(
+             'pkg')`) - each `pair_pattern`'s own `key`/`value` fields
+             give the real export name and its local alias separately,
+             identically to ES's `import { a as b }`.
+          5. Property access (`const fn = require('pkg').fn`) - the
+             `member_expression`'s own `property` field names the real
+             export directly, identically to a named import - no
+             `.default` indirection needed here, since the real export
+             name is already known from the source text itself.
+
+        Gracefully ignores a dynamic/computed require (`require(
+        someVar)`, `require(fn())`, `require('a' + 'b')`) - the
+        argument must be a real, single, static `string` literal node
+        (never a `template_string`, which is a distinct tree-sitter
+        node type this check already excludes by construction), exactly
+        the same "never guess" discipline `_parse_js_reexports`/
+        `_parse_js_imports` already apply to their own `source` field.
+        """
+        src = parsed.source
+        for call in find_all(parsed.root_node, {"call_expression"}):
+            callee = call.child_by_field_name("function")
+            if callee is None or callee.type != "identifier" or node_text(callee, src) != "require":
+                continue
+            args = call.child_by_field_name("arguments")
+            if args is None:
+                continue
+            arg_nodes = args.named_children
+            if len(arg_nodes) != 1 or arg_nodes[0].type != "string":
+                continue
+            specifier = node_text(arg_nodes[0], src).strip("'\"`")
+            module_ref = self._resolve_js_specifier(specifier, parsed.path, module)
+
+            parent = call.parent
+            if parent is None or parent.type == "expression_statement":
+                continue  # side-effect only - no local binding introduced
+
+            if parent.type == "member_expression" and parent.child_by_field_name("object") == call:
+                # `const fn = require('pkg').fn;` - property access
+                prop_node = parent.child_by_field_name("property")
+                grandparent = parent.parent
+                if prop_node is None or grandparent is None or grandparent.type != "variable_declarator":
+                    continue
+                name_node = grandparent.child_by_field_name("name")
+                if name_node is not None and name_node.type == "identifier":
+                    import_map.add(node_text(name_node, src), f"{module_ref}.{node_text(prop_node, src)}")
+                continue
+
+            if parent.type != "variable_declarator" or parent.child_by_field_name("value") != call:
+                continue  # require() used in a shape this leaf-only walk doesn't model - not guessed
+            name_node = parent.child_by_field_name("name")
+            if name_node is None:
+                continue
+            if name_node.type == "identifier":
+                # `var x = require('pkg');` - default/namespace binding,
+                # bound bare (no synthetic suffix) - see this method's
+                # own docstring for why.
+                import_map.add(node_text(name_node, src), module_ref)
+            elif name_node.type == "object_pattern":
+                for prop in name_node.named_children:
+                    if prop.type == "shorthand_property_identifier_pattern":
+                        local_name = node_text(prop, src)
+                        import_map.add(local_name, f"{module_ref}.{local_name}")
+                    elif prop.type == "pair_pattern":
+                        key_node = prop.child_by_field_name("key")
+                        value_node = prop.child_by_field_name("value")
+                        if key_node is not None and value_node is not None and value_node.type == "identifier":
+                            import_map.add(node_text(value_node, src), f"{module_ref}.{node_text(key_node, src)}")
+
     #: Checked in this order (a same-named `.ts` file always wins over a
     #: same-named `.js` one, matching `tsc`'s own module resolution -
     #: real for a mixed-source repo mid-migration from JS to TS, where
@@ -1047,7 +1269,105 @@ class ConcreteGraphBuilder:
             file_dir = os.path.dirname(file_path)
             joined = os.path.normpath(os.path.join(file_dir, specifier))
             return path_to_module(self._resolve_js_module_file(joined), self.repo_root)
+        alias_module = self._resolve_ts_path_alias(specifier, file_path)
+        if alias_module is not None:
+            return alias_module
         return specifier.replace("/", ".")
+
+    #: Category 8 (architectural audit): the two config filenames a real
+    #: TS/JS toolchain reads path mappings from - `jsconfig.json` is
+    #: `tsconfig.json`'s plain-JS-project equivalent (VS Code's own
+    #: convention, `compilerOptions.paths` included), checked second so a
+    #: project with both (rare, but not invalid) prefers the TS one.
+    _TS_CONFIG_FILENAMES = ("tsconfig.json", "jsconfig.json")
+
+    def _resolve_ts_path_alias(self, specifier: str, file_path: str) -> str | None:
+        """Category 8: `compilerOptions.paths` resolution (`@/*` ->
+        `src/*`, `~/*` -> `./*`, ...) for a non-relative specifier - tried
+        *before* `_resolve_js_specifier`'s bare-npm-package fallback,
+        since a matching alias unambiguously means "this is a local
+        file", never a real installed package (Phase C's external-stub
+        machinery must never be asked to `pip`/`npm`-style "locate" an
+        `@/*` alias as if it were a real dependency).
+
+        Returns `None` - never a guess - when no `tsconfig.json`/
+        `jsconfig.json` covers `file_path`, when the one found declares
+        no usable `paths` at all, or when `specifier` matches none of its
+        patterns; `_resolve_js_specifier` falls through to the ordinary
+        bare-specifier handling in every one of those cases, exactly as
+        it did before this method existed.
+        """
+        config = self._ts_path_alias_config_for_file(file_path)
+        if config is None:
+            return None
+        match = _best_ts_path_alias_match(specifier, config.paths)
+        if match is None:
+            return None
+        pattern, matched_text = match
+        candidates = _ts_path_alias_target_candidates(config.paths[pattern], matched_text, config.base_url)
+        for candidate in candidates:
+            # A `paths` target may already name a real extension of its
+            # own (`"utils": ["src/utils/index.ts"]`, a real, common
+            # tsconfig shape) - checked directly first, since
+            # `_resolve_js_module_file` only ever *appends* an extension
+            # and would otherwise look for the nonexistent
+            # `src/utils/index.ts.ts`.
+            if os.path.isfile(candidate):
+                return path_to_module(candidate, self.repo_root)
+            resolved = self._resolve_js_module_file(candidate)
+            if resolved != candidate:  # a real file was found on disk
+                return path_to_module(resolved, self.repo_root)
+        # The alias pattern matched, but none of its targets exist on
+        # disk (a stale alias, a not-yet-created file) - degrade the same
+        # way an unresolved *relative* import already does (a synthetic
+        # module name no real symbol will ever match) rather than falling
+        # through to the bare-npm-package branch: matching an alias
+        # pattern at all already settled "this was meant to be local".
+        return path_to_module(candidates[0], self.repo_root)
+
+    def _ts_path_alias_config_for_file(self, file_path: str) -> "_TsPathAliasConfig | None":
+        """`file_path`'s nearest `tsconfig.json`/`jsconfig.json`, parsed
+        and cached. Both cache levels are described on `__init__`'s own
+        `_tsconfig_lookup_cache`/`_tsconfig_parse_cache` docstring (Scope
+        2: workspace caching) - this method is their only caller, so a
+        repeat call for any file under the same resolved config directory
+        costs one dict lookup, never a second disk walk or JSON parse."""
+        tsconfig_path = self._find_tsconfig_for_dir(os.path.dirname(file_path))
+        if tsconfig_path is None:
+            return None
+        if tsconfig_path not in self._tsconfig_parse_cache:
+            self._tsconfig_parse_cache[tsconfig_path] = _parse_ts_path_alias_config(tsconfig_path)
+        return self._tsconfig_parse_cache[tsconfig_path]
+
+    def _find_tsconfig_for_dir(self, start_dir: str) -> str | None:
+        """Walks upward from `start_dir` to (and including) `self.
+        repo_root` looking for the nearest `tsconfig.json`/`jsconfig.json`
+        - "nearest wins", the same resolution order a real TS toolchain
+        uses, so a monorepo package's own config correctly shadows one at
+        the repo root for files under that package. Never walks above
+        `repo_root` - Scope 1's "project/workspace root" is this
+        pipeline's whole indexed universe; a config outside it is not
+        this repo's own workspace config.
+        """
+        if start_dir in self._tsconfig_lookup_cache:
+            return self._tsconfig_lookup_cache[start_dir]
+        repo_root = os.path.normpath(self.repo_root)
+        current = os.path.normpath(start_dir)
+        found: str | None = None
+        while True:
+            for filename in self._TS_CONFIG_FILENAMES:
+                candidate = os.path.join(current, filename)
+                if os.path.isfile(candidate):
+                    found = candidate
+                    break
+            if found is not None or current == repo_root:
+                break
+            parent = os.path.dirname(current)
+            if parent == current:  # reached the filesystem root
+                break
+            current = parent
+        self._tsconfig_lookup_cache[start_dir] = found
+        return found
 
     def _resolve_js_module_file(self, joined_no_ext: str) -> str:
         """`joined_no_ext` is a specifier-derived path with no guaranteed
@@ -1074,10 +1394,15 @@ class ConcreteGraphBuilder:
         `index` identically for either one downstream.
 
         Falls back to the bare, unresolved path when nothing on disk
-        matches (a broken import, a build-time-only alias `Section 3`'s
-        own `TypeScriptSourceLocator` work will need to handle
-        separately) - exactly today's existing behavior, a synthetic
-        module name no real symbol will ever match, never a crash.
+        matches (a broken import, or - since Category 8 - a `tsconfig.json`
+        `paths` alias whose target file doesn't actually exist yet) -
+        exactly today's existing behavior, a synthetic module name no real
+        symbol will ever match, never a crash. `_resolve_ts_path_alias`
+        (Category 8) is this method's other caller, alongside `_resolve_
+        js_specifier`'s own relative-import branch - both feed it a
+        resolved, no-extension candidate path and rely on this exact
+        "unchanged means not found" contract to tell a real hit from a
+        miss.
         """
         for ext in self._JS_MODULE_RESOLUTION_EXTENSIONS:
             candidate = joined_no_ext + ext
@@ -2492,6 +2817,154 @@ def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | N
     if left is None or left.type != ATTRIBUTE_NODE_TYPE.get(lang):
         return None
     return left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
+
+
+def _strip_jsonc_comments(text: str) -> str:
+    """A minimal, self-contained comment/trailing-comma stripper for
+    `tsconfig.json`/`jsconfig.json` - both are conventionally JSONC
+    (`//` and `/* */` comments, tolerated trailing commas), which plain
+    `json.loads` rejects outright. No third-party JSONC/JSON5 dependency
+    is added for this one narrow use; a small hand-rolled state machine
+    covers exactly what a real tsconfig ever contains, tracking string
+    state so a `//` or trailing comma *inside* a string literal (an
+    unusual but legal path value) is never mistaken for a comment/comma
+    to strip.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    in_string = False
+    while i < n:
+        ch = text[i]
+        if in_string:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+            i += 1
+            continue
+        if ch == '"':
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            i += 2
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            i += 2
+            while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
+                i += 1
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    stripped = "".join(out)
+    # Trailing commas (a literal `,` immediately before a closing `}`/`]`,
+    # ignoring whitespace/newlines in between) - real JSON forbids this,
+    # JSONC tolerates it and `tsc` itself accepts it in a real tsconfig.
+    return re.sub(r",(\s*[}\]])", r"\1", stripped)
+
+
+def _parse_ts_path_alias_config(tsconfig_path: str) -> "_TsPathAliasConfig | None":
+    """Parses one `tsconfig.json`/`jsconfig.json` file into its
+    `compilerOptions.paths` mapping, or `None` when the file can't be
+    read, isn't valid JSONC, or declares no usable `paths` at all - every
+    one of those degrades to "no alias config for this file", never a
+    crash (Scope 3's "absence of tsconfig.json degrading gracefully"
+    requirement, extended to cover a *present but unusable* one
+    identically).
+
+    `extends` (a tsconfig inheriting another's `compilerOptions`) is a
+    known, disclosed gap - deliberately not resolved here: doing so
+    correctly needs its own base-config lookup (npm-package `extends`
+    targets like `"extends": "@tsconfig/node18/tsconfig.json"` resolve
+    through `node_modules`, not the filesystem walk `_find_tsconfig_for_
+    dir` already does for the project's own configs), a big enough piece
+    of real behavior to be its own follow-up rather than folded silently
+    into this one. A config that only inherits its `paths` from a base
+    config is treated the same as one with no `paths` at all - absent,
+    not guessed.
+    """
+    try:
+        with open(tsconfig_path, encoding="utf-8") as f:
+            raw = f.read()
+    except OSError:
+        return None
+    try:
+        data = json.loads(_strip_jsonc_comments(raw))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    compiler_options = data.get("compilerOptions")
+    if not isinstance(compiler_options, dict):
+        return None
+    raw_paths = compiler_options.get("paths")
+    if not isinstance(raw_paths, dict):
+        return None
+    paths: dict[str, list[str]] = {}
+    for pattern, targets in raw_paths.items():
+        if not isinstance(pattern, str) or not isinstance(targets, list):
+            continue
+        string_targets = [t for t in targets if isinstance(t, str)]
+        if string_targets:
+            paths[pattern] = string_targets
+    if not paths:
+        return None
+    base_url_option = compiler_options.get("baseUrl", ".")
+    if not isinstance(base_url_option, str):
+        base_url_option = "."
+    config_dir = os.path.dirname(tsconfig_path)
+    base_url = os.path.normpath(os.path.join(config_dir, base_url_option))
+    return _TsPathAliasConfig(base_url=base_url, paths=paths)
+
+
+def _best_ts_path_alias_match(specifier: str, paths: dict[str, list[str]]) -> tuple[str, str] | None:
+    """The best-matching `paths` pattern for `specifier`, as `(pattern,
+    matched_wildcard_text)`, or `None` if nothing matches. An exact
+    (no-`*`) pattern always wins outright - `tsc` itself never allows more
+    than one pattern to contain zero wildcards for the same key anyway.
+    Among wildcard patterns, the one with the longest literal prefix wins
+    (`tsc`'s own tie-break: a more specific alias must never lose to a
+    broader one that happens to also match, e.g. `@/components/*` over a
+    catch-all `@/*` for the same specifier).
+    """
+    if specifier in paths:
+        return specifier, ""
+    best: tuple[str, str] | None = None
+    best_prefix_len = -1
+    for pattern in paths:
+        if "*" not in pattern:
+            continue
+        prefix, suffix = pattern.split("*", 1)
+        if not specifier.startswith(prefix) or not specifier.endswith(suffix):
+            continue
+        if len(specifier) < len(prefix) + len(suffix):
+            continue
+        if len(prefix) > best_prefix_len:
+            best_prefix_len = len(prefix)
+            best = (pattern, specifier[len(prefix) : len(specifier) - len(suffix)])
+    return best
+
+
+def _ts_path_alias_target_candidates(targets: list[str], matched_text: str, base_url: str) -> list[str]:
+    """`targets` (e.g. `["src/*", "lib/*"]`) resolved, in order, against
+    `base_url` with `*` substituted by `matched_text` - the caller
+    (`ConcreteGraphBuilder._resolve_ts_path_alias`) tries each candidate
+    against the real filesystem in this same order, matching `tsc`'s own
+    "first target that resolves wins" rule for a multi-target alias.
+    """
+    candidates = []
+    for target in targets:
+        resolved = target.replace("*", matched_text) if "*" in target else target
+        candidates.append(os.path.normpath(os.path.join(base_url, resolved)))
+    return candidates
 
 
 def _go_receiver_type(method_node: Node, parsed: ParsedFile) -> str | None:

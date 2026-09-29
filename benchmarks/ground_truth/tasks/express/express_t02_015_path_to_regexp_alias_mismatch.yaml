@@ -1,0 +1,111 @@
+# T02 "Express Pilot" - Task 15: `path-to-regexp` (Category 5, the
+# flagship local-alias-mismatch case `feature/commonjs-require-
+# resolution` was built specifically to handle).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.router.layer.Layer  lines 33-49 (in-repo seed)
+#   path-to-regexp.index.pathToRegexp  real external stub, resolved live
+#
+# Real source (lib/router/layer.js:16,33-49):
+#
+#   var pathRegexp = require('path-to-regexp');
+#   ...
+#   function Layer(path, options, fn) {
+#     ...
+#     this.regexp = pathRegexp(path, this.keys = [], opts);
+#     ...
+#   }
+#
+# This is exactly the real, motivating case for the alias-redirect
+# mechanism in `prism.external.index._commonjs_primary_export_name`:
+# the local require-site alias is `pathRegexp`, but the real installed
+# `path-to-regexp` package declares its own default-exported function
+# as `pathToRegexp` internally (`node_modules/path-to-regexp/index.js`:
+# `module.exports = pathToRegexp; function pathToRegexp(path, keys,
+# options) {...}`) - a real, confirmed case where the local alias does
+# *not* match the target's own real internal name. Verified live:
+#
+#   engine.build_external_candidate_manifest(
+#       ["lib.router.layer.Layer"], root_imports=["path-to-regexp"]
+#   )
+#   -> {"path-to-regexp.index.pathToRegexp"}
+#
+# Before `feature/commonjs-require-resolution`, this call site was
+# entirely unresolvable (a bare default/namespace require used as a
+# bare 1-segment call has no real symbol name derivable from the call
+# site's own local alias - the whole reason the `_commonjs_primary_
+# export_name` redirect exists).
+task_id: express_t02_015_path_to_regexp_alias_mismatch
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.router.layer.Layer
+task_type: debug
+root_imports:
+- path-to-regexp
+prompt: 'You are investigating how Express compiles a route path into a matchable regular expression,
+  starting from the `Layer` constructor in lib/router/layer.js. Identify the real third-party npm package
+  function it delegates path-to-regexp compilation to, and that function''s own real signature - note that
+  the local variable name used to call it may not match the function''s own real internal name.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols
+  actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.router.layer.Layer", "path-to-regexp.index.pathToRegexp"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.router.layer.Layer
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - path-to-regexp.index.pathToRegexp
+  boundary_symbols: []
+  expected_solution: The Layer constructor compiles the given route path into a regular expression by
+    calling the real third-party `path-to-regexp` npm package's own default-exported function, bound
+    locally via `var pathRegexp = require('path-to-regexp')` and called as `pathRegexp(path, this.keys =
+    [], opts)`. The real function is internally declared `pathToRegexp`, not `pathRegexp` - the local call
+    site's own alias does not match the package's own real internal name.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.router.layer.Layer
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - path-to-regexp.index.pathToRegexp
+  boundary_symbols: []
+  expected_solution: The Layer constructor calls the real `path-to-regexp` package (locally called
+    `pathRegexp`) to compile the route path into a regexp and capture its named params into `this.keys`.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.router.layer.Layer
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - path-to-regexp.index.pathToRegexp
+  boundary_symbols: []
+  expected_solution: The Layer constructor delegates route-path compilation to the real third-party
+    `path-to-regexp` npm package's own default-exported function, called via the local alias `pathRegexp`
+    (bound by `var pathRegexp = require('path-to-regexp')`) - but the function's own real internal name is
+    `pathToRegexp`, a confirmed local-alias mismatch. Both annotators independently identified the same real
+    dependency; annotator_a additionally noted the real name mismatch explicitly.

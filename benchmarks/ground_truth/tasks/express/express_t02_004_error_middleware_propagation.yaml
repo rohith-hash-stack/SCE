@@ -1,0 +1,96 @@
+# T02 "Express Pilot" - Task 4: 4-arity error-middleware propagation
+# through a Route's own dispatch loop.
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.router.route.dispatch      lines 101-154
+#   lib.router.route.next          lines 121-153 (a closure defined and called inside dispatch itself)
+#   lib.router.layer.handle_error  lines 62-75
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage. Real
+# source (lines 144-150) confirms the exact arity-driven branch this
+# task targets: `next`'s own internal dispatch conditional -
+# `layer.handle_error(err, req, res, next)` when an error is pending,
+# `layer.handle_request(req, res, next)` otherwise - the real mechanism
+# behind Express's documented 4-arity `(err, req, res, next)` error-
+# middleware signature.
+#
+# Real, disclosed scope note: this pipeline is single-file (all of
+# lib/router/route.js) - `layer.handle_error`'s own further real
+# out-edges are only the caller-supplied error-handling middleware
+# function itself (an unresolvable call-site placeholder, not a real
+# in-repo symbol) and `next` (self-recursive) - there is no deeper real
+# in-repo pipeline stage beyond it to include.
+task_id: express_t02_004_error_middleware_propagation
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.router.route.dispatch
+task_type: debug
+prompt: 'You are investigating how a matched Express Route propagates an error through its own middleware
+  stack, in lib/router/route.js. Starting from `dispatch`, trace the exact causal pipeline that runs when
+  one of the route''s own handlers calls `next(err)` with a real error: which internal function actually
+  decides whether to invoke a layer''s 4-arity error handler versus its ordinary request handler, and
+  what real symbol that decision calls into.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.router.route.dispatch", "lib.router.route.next"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.router.route.dispatch
+  - lib.router.route.next
+  - lib.router.layer.handle_error
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: dispatch() calls its own internal next() closure to advance through the route's
+    stack. On each real error-bearing call to next(err), that same next() checks whether err is truthy -
+    if so it calls layer.handle_error(err, req, res, next), the real 4-arity error-middleware invocation;
+    otherwise it calls layer.handle_request(req, res, next) for the ordinary, non-error path.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.router.route.dispatch
+  - lib.router.layer.handle_error
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: dispatch() directly invokes handle_error() on the layer when an error occurs.
+    (Missed the real intermediate hop - dispatch() itself never calls handle_error directly; its own
+    internal next() closure does, after dispatch()'s initial call to next() to start the loop.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.router.route.dispatch
+  - lib.router.route.next
+  - lib.router.layer.handle_error
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: dispatch() calls its own internal next() closure to advance through the route's
+    stack; that next() is the real function that checks whether a pending error is truthy and, if so,
+    calls layer.handle_error(err, req, res, next) - the real 4-arity error-middleware invocation -
+    otherwise calling layer.handle_request(req, res, next). annotator_b's pipeline is real but collapses
+    a genuine intermediate hop (next) into dispatch() itself.

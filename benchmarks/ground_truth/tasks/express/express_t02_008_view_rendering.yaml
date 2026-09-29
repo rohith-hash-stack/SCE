@@ -1,0 +1,110 @@
+# T02 "Express Pilot" - Task 8: view resolution & rendering.
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.application.render      lines 548-610
+#   lib.application.tryRender   lines 655-661 (private helper)
+#   lib.view.render             lines 133-136 (View.prototype.render)
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage.
+#
+# Real source: app.render(name, options, callback) merges app.locals
+# and the caller's own options into renderOptions, then (on a cache
+# miss) looks up a View constructor and instantiates one, and finally
+# calls the private helper tryRender(view, renderOptions, done), which
+# itself calls view.render(options, callback) inside a try/catch.
+#
+# Real, disclosed structural finding: `lib.view.View` (the real View
+# constructor, lib/view.js:52-91, whose own body is a rich, internally-
+# reachable pipeline - View -> lookup -> resolve, all verified real and
+# connected) is genuinely NOT reachable from this seed. Reading the
+# real source shows why: `app.render` does not call `new View(...)`
+# against a statically-known import - it does `var View = this.get(
+# 'view'); view = new View(name, {...})`, a *locally rebound* name
+# whose value comes from a dynamic app-settings lookup, not from any
+# import/require Prism's static resolver can follow. The instantiation
+# is real (and runs every time a view isn't cached) but the edge simply
+# isn't there in `builder.graph` - the same class of gap `feature/
+# commonjs-require-resolution`'s docstring calls out for a local
+# require-site alias, generalized here to a *settings-based* rebinding
+# instead of an import-based one. Recorded as `boundary_symbols` rather
+# than silently omitted.
+task_id: express_t02_008_view_rendering
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.application.render
+task_type: debug
+prompt: 'You are investigating how Express renders a view, starting from the application''s own `render`
+  method in lib/application.js. Trace the real causal pipeline from `app.render(name, options, callback)`
+  through to the point where the actual view engine is invoked.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.application.render", "lib.application.tryRender"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.application.render
+  - lib.application.tryRender
+  - lib.view.render
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - lib.view.View
+  expected_solution: app.render(name, options, callback) merges app.locals and the caller's own options
+    into a single renderOptions object, resolves (or lazily instantiates) a View for the given name, and
+    then calls the private helper tryRender(view, renderOptions, done), which calls view.render(options,
+    callback) inside a try/catch so a thrown error is routed to the callback instead of propagating. The
+    real View instantiation itself (a locally-rebound `View = this.get('view')`, not a statically-known
+    import) is not reachable in the static call graph, so its own separately-verified internal pipeline
+    (View -> lookup -> resolve) is excluded here and recorded as a boundary symbol.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.application.render
+  - lib.view.render
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - lib.view.View
+  expected_solution: app.render() builds up the render options, then delegates to the view's own
+    render(options, callback) method to actually invoke the view engine. (Missed the private tryRender
+    helper as a real, separately reachable intermediate stage - assumed app.render called view.render()
+    directly.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.application.render
+  - lib.application.tryRender
+  - lib.view.render
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - lib.view.View
+  expected_solution: app.render(name, options, callback) merges app.locals and the caller's own options
+    into renderOptions, resolves/instantiates the View, and calls the private helper tryRender(view,
+    renderOptions, done) - a real, separately reachable intermediate stage, not a direct call - which
+    itself calls view.render(options, callback) inside a try/catch. annotator_b's pipeline is real but
+    skipped the intermediate tryRender stage. Both annotators correctly excluded View's own instantiation,
+    which is real but not statically reachable from this seed (see header comment).
