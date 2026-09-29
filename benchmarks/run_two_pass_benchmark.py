@@ -447,6 +447,28 @@ class TwoPassCellResult:
     external_skipped_hallucinated: list[str] = dataclasses.field(default_factory=list)
 
 
+def _ollama_sampler_kwargs(client: OpenAICompatibleClient, repeat_penalty: float, num_predict: int) -> dict:
+    """`{"extra_body": {"options": {...}}}` when `client` is actually
+    pointed at a local Ollama-style endpoint, else `{}` - found live
+    while preparing this script's first real run against OpenAI's own
+    API (forced by this environment's network policy blocking DeepSeek's
+    endpoint outright): `options.repeat_penalty`/`options.num_predict`
+    are Ollama-native sampler knobs (`DEFAULT_TURN1_REPEAT_PENALTY`'s own
+    docstring: tuned against `qwen2.5-coder:14b-instruct-q8_0`, a local
+    Ollama model), previously sent unconditionally as `extra_body`
+    regardless of which real provider `client.base_url` pointed at.
+    DeepSeek's own endpoint apparently tolerates the unrecognized field
+    silently (every prior real run here targeted DeepSeek or Ollama, so
+    this never surfaced) - OpenAI's real endpoint does not: `Unrecognized
+    request argument supplied: options` (HTTP 400), calls that turn0.
+    Detected via the same `"localhost"/"127.0.0.1" in base_url` convention
+    `OpenAICompatibleClient.__init__` itself already uses to decide
+    whether an empty API key is acceptable - not a new heuristic."""
+    if "localhost" in client.base_url or "127.0.0.1" in client.base_url:
+        return {"extra_body": {"options": {"repeat_penalty": repeat_penalty, "num_predict": num_predict}}}
+    return {}
+
+
 def _turn1_user_prompt(manifest_text: str, task_prompt: str) -> str:
     return (
         f"{manifest_text}\n\nTask:\n{task_prompt}\n\n"
@@ -585,7 +607,7 @@ def run_two_pass_cell(
     turn1_user = _turn1_user_prompt(manifest_text, task.prompt)
     turn1_call = client.complete(
         model, TURN1_SYSTEM_PROMPT, turn1_user, seed=seed, task_id=task.task_id, engine="prism_two_pass_turn1",
-        extra_body={"options": {"repeat_penalty": turn1_repeat_penalty, "num_predict": turn1_num_predict}},
+        **_ollama_sampler_kwargs(client, turn1_repeat_penalty, turn1_num_predict),
     )
     requested_symbols, parsed_ok = _parse_requested_symbols(turn1_call.content, candidate_universe)
     # Layer 1 (gateway text-shape check) + Layer 2a (runner cap
