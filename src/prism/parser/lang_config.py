@@ -139,6 +139,44 @@ FUNCTION_NODE_TYPES = {
     LanguageID.JAVA: {"method_declaration", "constructor_declaration"},
     LanguageID.CSHARP: {"method_declaration", "constructor_declaration"},
 }
+#: Object-*literal* expression node types - JS/TS/TSX only (a real class
+#: body is a distinct `class_body` node, never this). Used by
+#: `ConcreteGraphBuilder._register_definition`'s ancestor walk to detect
+#: the tRPC `router.ts`-shaped pattern: a factory function returning
+#: `{ method() {...}, ... }` - a `method_definition` here is a real,
+#: separate definition (unlike a plain `{a: 1, b: 2}` data literal, which
+#: never contains one), but it is scoped to whichever function actually
+#: owns/returns this object, not to the bare enclosing module - a
+#: distinction a class's own `class_body` never needs to make. Empty for
+#: every non-JS/TS language, so this can never affect Python/Go/Java/C#.
+OBJECT_LITERAL_NODE_TYPES = {
+    LanguageID.PYTHON: set(),
+    LanguageID.JAVASCRIPT: {"object"},
+    LanguageID.TYPESCRIPT: {"object"},
+    LanguageID.TSX: {"object"},
+    LanguageID.GO: set(),
+    LanguageID.JAVA: set(),
+    LanguageID.CSHARP: set(),
+}
+#: Function-*expression* shapes that can plausibly own/return an object
+#: literal but are never themselves a `FUNCTION_NODE_TYPES` "definition"
+#: node (a `function_expression`/`arrow_function` used as a value, not a
+#: statement - `express`'s own `proto.param = function param(...) {...}`
+#: pattern is the property-assignment analogue this table doesn't cover,
+#: already handled separately). Paired with `OBJECT_LITERAL_NODE_TYPES`
+#: below in the same ancestor walk - a name is read from the node itself
+#: when it has one (`function createRouterInner() {...}`), falling back
+#: to the enclosing `variable_declarator`'s own name for an anonymous
+#: arrow/function expression (`const makeRouter = () => {...}`).
+ENCLOSING_FUNCTION_EXPRESSION_TYPES = {
+    LanguageID.PYTHON: set(),
+    LanguageID.JAVASCRIPT: {"function_declaration", "function_expression", "arrow_function", "generator_function"},
+    LanguageID.TYPESCRIPT: {"function_declaration", "function_expression", "arrow_function", "generator_function"},
+    LanguageID.TSX: {"function_declaration", "function_expression", "arrow_function", "generator_function"},
+    LanguageID.GO: set(),
+    LanguageID.JAVA: set(),
+    LanguageID.CSHARP: set(),
+}
 DECORATED_WRAPPER_TYPES = {
     LanguageID.PYTHON: {"decorated_definition"},
     LanguageID.JAVASCRIPT: set(),

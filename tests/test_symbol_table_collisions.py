@@ -20,6 +20,7 @@ shape exactly.
 from __future__ import annotations
 
 from prism.cli import build_pipeline
+from prism.engine import PrismEngine
 
 
 def _build(tmp_path, filename: str, source: str):
@@ -173,3 +174,133 @@ def test_candidates_for_simple_name_includes_every_real_collision_sibling(tmp_pa
     candidates = builder.symbol_table.candidates_for_simple_name("param")
     qualified_names = {c.qualified_name for c in candidates}
     assert qualified_names == {"router.param", "router.param#2"}
+
+
+# --------------------------------------------------------------------- #
+# Object-literal methods owned by an enclosing function (tRPC's own
+# `core/router.ts`: `createRouterFactory` returns `createRouterInner`,
+# which returns `{ createCaller(ctx) {...}, getErrorShape(opts) {...} }`)
+# must scope to that owning function, not collide with the flat module
+# namespace the way `_register_definition`'s class-only ancestor walk
+# used to leave them in - a real, live recall gap found running Phase 3's
+# own zero-LLM-cost graph-quality spike against the real, pinned tRPC
+# corpus (`createCallerFactory`/`getHTTPStatusCodeFromError`, both real
+# calls made from inside these two methods, never appeared in either
+# method's own candidate manifest before this fix, since the methods
+# themselves were mis-scoped to the bare module rather than to the
+# function that actually owns/returns the object they live on).
+# --------------------------------------------------------------------- #
+_TRPC_ROUTER_FACTORY_SOURCE = (
+    "function createRouterFactory(config) {\n"
+    "  return function createRouterInner(procedures) {\n"
+    "    function realCallee() {\n"
+    "      return 1;\n"
+    "    }\n"
+    "    const router = {\n"
+    "      createCaller(ctx) {\n"
+    "        return realCallee(ctx);\n"
+    "      },\n"
+    "      getErrorShape(opts) {\n"
+    "        return unrelatedHelper(opts);\n"
+    "      },\n"
+    "    };\n"
+    "    return router;\n"
+    "  };\n"
+    "}\n"
+    "\n"
+    "function unrelatedHelper(opts) {\n"
+    "  return opts;\n"
+    "}\n"
+)
+
+
+def test_object_literal_method_owned_by_enclosing_function_gets_scoped_name(tmp_path):
+    builder = _build(tmp_path, "router.js", _TRPC_ROUTER_FACTORY_SOURCE)
+
+    create_caller = builder.symbol_table.get("router.createRouterInner.createCaller")
+    assert create_caller is not None
+    assert create_caller.kind == "method"
+    assert create_caller.enclosing_class == "router.createRouterInner"
+    assert create_caller.line_range == (7, 9)
+
+    get_error_shape = builder.symbol_table.get("router.createRouterInner.getErrorShape")
+    assert get_error_shape is not None
+    assert get_error_shape.enclosing_class == "router.createRouterInner"
+
+    # The flat, unscoped names must never exist - that's the exact bug
+    # (a real top-level `createCaller`/`getErrorShape` would collide with
+    # these; here there happens to be no real collision, but the wrong
+    # scope alone was already the problem: real calls made from inside
+    # these methods never reached their own candidate manifest, since
+    # `iter_scoped_nodes` correctly treats a registered `method_
+    # definition` as its own separate scope boundary - correct only once
+    # the method itself is registered under its real, owning scope).
+    assert "router.createCaller" not in builder.symbol_table
+    assert "router.getErrorShape" not in builder.symbol_table
+
+    # A plain top-level function with no object-literal ancestor at all
+    # is completely unaffected.
+    assert builder.symbol_table.get("router.realCallee") is not None
+    assert builder.symbol_table.get("router.unrelatedHelper") is not None
+
+
+def test_object_literal_method_scoped_symbol_is_independently_seedable(tmp_path):
+    """The whole point of the fix: `createCaller`'s own real call
+    (`realCallee`) must appear in *its own* candidate manifest once it is
+    used as a seed - not silently dropped the way it was before this fix
+    scoped the method under its real owning function."""
+    builder = _build(tmp_path, "router.js", _TRPC_ROUTER_FACTORY_SOURCE)
+    engine = PrismEngine(builder, str(tmp_path / "repo"))
+    manifest_text, candidate_universe = engine.build_candidate_manifest(
+        "router.createRouterInner.createCaller"
+    )
+    assert "router.realCallee" in candidate_universe
+    assert "calls=[router.realCallee]" in manifest_text
+
+
+def test_object_literal_owned_by_anonymous_function_falls_back_safely(tmp_path):
+    """An IIFE (`(function () { return {...}; })()`) has no derivable
+    name at all - neither its own `name:` field nor an enclosing
+    `variable_declarator` (its immediate parent is the IIFE's own call
+    expression, not an assignment). The fix must never crash chasing a
+    name that doesn't exist; it falls back to this table's pre-existing
+    flat registration instead of fabricating one."""
+    source = (
+        "const router = (function () {\n"
+        "  return {\n"
+        "    handle(req) {\n"
+        "      return process(req);\n"
+        "    },\n"
+        "  };\n"
+        "})();\n"
+        "\n"
+        "function process(req) {\n"
+        "  return req;\n"
+        "}\n"
+    )
+    builder = _build(tmp_path, "router.js", source)
+    handle = builder.symbol_table.get("router.handle")
+    assert handle is not None
+    assert handle.enclosing_class is None
+
+
+def test_plain_top_level_object_literal_is_completely_unaffected(tmp_path):
+    """A genuinely top-level object literal (`const api = { foo() {...},
+    bar() {...} }`, no enclosing function at all between it and the
+    module) never enters the object-literal-scoping path in the first
+    place - zero behavior change for this, the overwhelmingly common,
+    pre-existing case."""
+    source = (
+        "const api = {\n"
+        "  foo() {\n"
+        "    return 1;\n"
+        "  },\n"
+        "  bar() {\n"
+        "    return api.foo();\n"
+        "  },\n"
+        "};\n"
+    )
+    builder = _build(tmp_path, "router.js", source)
+    assert builder.symbol_table.get("router.foo") is not None
+    assert builder.symbol_table.get("router.bar") is not None
+    assert builder.symbol_table.get("router.foo").enclosing_class is None
