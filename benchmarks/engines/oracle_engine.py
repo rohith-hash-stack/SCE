@@ -41,6 +41,8 @@ from pathlib import Path
 import yaml
 
 from prism.cli import build_pipeline
+from prism.engine import PrismEngine
+from prism.external.index import ExternalSymbolInfo, external_symbol_to_node_entry
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.contracts import BehavioralContract
 from prism.language_tiers import precision_tier_for
@@ -232,6 +234,15 @@ class PragmaticOracle(AbstractRetrievalEngine):
         self._contracts: dict[str, BehavioralContract] = {}
         self._feature_masks: dict[str, int] | None = None
         self._cache_digest: str | None = None
+        #: Category-5 fix (`epic/engine-hardening-and-consolidation`):
+        #: `{qualified_name: ExternalSymbolInfo}` for every real external
+        #: (Phase C, `required_context`) symbol this task's own seed +
+        #: pipeline reaches - resolved once here in `index()` (this
+        #: engine's own real, single per-task indexing step, reused
+        #: across every budget of the task exactly like `_distance_cache`
+        #: below), never per-`retrieve()` call. Empty for a task with no
+        #: `root_imports` - the common case is entirely unaffected.
+        self._external_symbols: dict[str, ExternalSymbolInfo] = {}
 
     def index(self, repo_path: str) -> None:
         # Reuses PrismEngineCache's own shared, disk-persisted
@@ -255,6 +266,30 @@ class PragmaticOracle(AbstractRetrievalEngine):
             self._feature_masks = compute_feature_masks(self._builder)
             PrismEngineCache._process_graph_cache[self._cache_digest] = (self._builder, self._contracts, self._feature_masks)
         self._repo_root = repo_path
+
+        # Category-5 fix: before this, `retrieve()`'s own candidate loop
+        # looked every qualified name up via `builder.symbol_table.get`
+        # only - correct for an in-repo `pipeline_symbols`/`boundary_
+        # symbols` entry, but a real external `required_context` symbol
+        # (e.g. `etag.index.etag`) is never in that table at all (it's
+        # resolved via Phase C's own locator machinery, a completely
+        # separate mechanism `PragmaticOracle` never touched). The loop
+        # silently `continue`d past it - not a crash, just a candidate
+        # quietly dropped - so a model's genuinely correct external
+        # answer then failed `score_debug_causal`'s own hallucination
+        # gate (the symbol was never a member of Oracle's own candidate
+        # set), confirmed live: Oracle scored 9.7% causal TSR on
+        # Category-5 Express tasks vs. 93.8% on internal ones (`reports/
+        # express_pilot_audit_gap_closure.md` Section 5.6). Resolved
+        # here, once per task, via the exact same real mechanism
+        # `run_two_pass_benchmark.py`'s own Turn 2a already uses -
+        # `PrismEngine.build_external_candidate_manifest` wrapping this
+        # engine's own already-indexed builder (no re-indexing cost).
+        if self._task.root_imports:
+            engine = PrismEngine(self._builder, repo_path, self._contracts)
+            turn1_symbols = sorted({self._task.seed_symbol, *self._task.adjudicated.pipeline_symbols})
+            engine.build_external_candidate_manifest(turn1_symbols, root_imports=self._task.root_imports)
+            self._external_symbols = dict(engine.external_symbol_cache)
 
     def retrieve(self, seed_symbol: str, budget_tokens: int, task_type: str | None = None) -> ContextPackage:
         if self._builder is None or self._repo_root is None or self._feature_masks is None:
@@ -290,7 +325,15 @@ class PragmaticOracle(AbstractRetrievalEngine):
         for qname in candidates:
             info = builder.symbol_table.get(qname)
             if info is None:
-                continue  # a real symbol that isn't in *this* indexed repo build - skip, never fabricate a node for it
+                ext_info = self._external_symbols.get(qname)
+                if ext_info is None:
+                    continue  # neither an in-repo symbol nor a resolved external one - skip, never fabricate a node for it
+                cost = count_tokens(ext_info.signature_text)
+                if qname != seed_symbol and total_cost + cost > budget_tokens:
+                    continue  # over budget from here - drop, but keep checking (a cheaper later candidate may still fit)
+                total_cost += cost
+                nodes.append(external_symbol_to_node_entry(ext_info, distance=distances.get(qname, 1.0)))
+                continue
             cost = count_tokens(_node_body(builder, qname))
             if qname != seed_symbol and total_cost + cost > budget_tokens:
                 continue  # over budget from here - drop, but keep checking (a cheaper later candidate may still fit)
