@@ -33,7 +33,7 @@ change that.
 | Repo | Language | Role | Corpus status |
 |---|---|---|---|
 | **FastAPI** | Python (Tier 1) | Primary anchor - already has a formal PASS (headroom-aware gate, 900-cell aggregate + holdout replication, `reports/fastapi_seed42_closure_debrief.md`) and the validated Phase C external-dependency fix (`t018`/`t019`/`t020`). | Pinned (`0.116.1`), 25 ground-truth tasks already authored. |
-| **Django** | Python (Tier 1) | Second architectural profile within the same Tier-1 language (OOP inheritance vs. FastAPI's decorator-driven DI) - re-run through the *current* headroom-aware gate rather than treated as spent; its own Phase B result predates that gate. | Pinned (`4.2.30`), 24 ground-truth tasks already authored. |
+| **Django** | Python (Tier 1) | Second architectural profile within the same Tier-1 language (OOP inheritance vs. FastAPI's decorator-driven DI). **Re-run through the current gate: CLOSED** - `reports/fastapi_seed42_closure_debrief.md` Section 7 re-ran `scripts/apply_gate.py` against Django's own real, raw merged checkpoints (1800 cells qwen, 1200 cells DeepSeek), confirmed to use the fully current gate (both the MIXED-outcome and headroom-aware thresholds are ancestors of that commit, and `apply_gate.py` has had zero commits since). Verdict: EXPAND vs. baseline, STOP vs. `prism_v11`, both models - a real, reproducible directional finding, never a formal PASS; also corrects an earlier, inaccurate "gate PASS" claim about Django from commit `0eb5b11`. Nothing further scheduled for Django in this portfolio. | Pinned (`4.2.30`), 24 ground-truth tasks already authored. |
 | **Express** | TypeScript/JS (Tier 2) | First TypeScript-ecosystem target - single-package, mature, authored in plain JavaScript with a separately-versioned `@types/express` DefinitelyTyped package. Deliberately the *simpler* half of the TS story - proves the mechanism before tRPC's monorepo complexity. | Pinned (`4.21.0`), **zero ground-truth tasks authored yet**. |
 | **tRPC** | TypeScript (Tier 2) | Second, harder TypeScript-ecosystem target - real TypeScript, heavy generics, bundled `.d.ts`, but a monorepo (`packages/*`) - real npm-workspace-hoisting friction Express doesn't have (Section 4). Sequenced *after* Express, not in parallel. | Pinned (`v10.45.4`), **zero ground-truth tasks authored yet**. |
 
@@ -230,9 +230,9 @@ down before anyone is tempted to benchmark Go against a lower one.
 Phase C (done, d7a8d2f)
   |
   v
-Django re-run through current gate  ---\
-                                         >-- Python portfolio confirmed
-FastAPI already PASS (banked)      ---/
+Django re-run through current gate (done, 80fa284 - see Section 1) ---\
+                                                                       >-- Python portfolio confirmed
+FastAPI already PASS (banked)                                    ---/
   |
   v
 Import-alias tracking (Section 4, prerequisite) -- CLOSED, feature/import-alias-resolution

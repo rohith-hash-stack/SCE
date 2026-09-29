@@ -499,6 +499,90 @@ def test_pragmatic_oracle_drops_phantom_symbols_not_in_indexed_graph(tmp_path):
     )
 
 
+def test_pragmatic_oracle_admits_a_real_external_required_context_symbol(tmp_path):
+    """`epic/engine-hardening-and-consolidation` fix: before this,
+    `PragmaticOracle`'s candidate loop only ever checked `builder.
+    symbol_table.get(qname)` - correct for an in-repo `pipeline_symbols`/
+    `boundary_symbols` entry, but a real external `required_context`
+    symbol (Phase C's own resolution mechanism, a separate lookup this
+    engine never touched at all) always returned `None` there and was
+    silently dropped, identically to a genuine phantom (`test_pragmatic_
+    oracle_drops_phantom_symbols_not_in_indexed_graph` above) - even
+    though it's a real, resolvable symbol. Confirmed live on the Express
+    pilot: 9.7% causal TSR on Category-5 tasks vs. 93.8% on internal
+    ones (`reports/express_pilot_audit_gap_closure.md` Section 5.6),
+    since a model's genuinely correct external answer then failed
+    `score_debug_causal`'s own hallucination gate (the symbol was never
+    a member of Oracle's own candidate set to begin with).
+
+    Reuses `test_phase_c_pipeline.py`'s own `orjson_synthetic_engine`
+    fixture shape (`import orjson; orjson.dumps(data)`, t019/t020's real
+    shape) rather than inventing a new one - the exact same real,
+    installed package this repo's own Phase C tests already resolve
+    against, not a hand-rolled stub."""
+    pytest.importorskip("orjson")
+    from benchmarks.engines.oracle_engine import PragmaticOracle
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+
+    repo = tmp_path / "jsonapp"
+    repo.mkdir()
+    (repo / "jsonapp.py").write_text("import orjson\n\ndef encode(data):\n    return orjson.dumps(data)\n")
+
+    ann = GroundTruthAnnotation(
+        annotator_id="a",
+        pipeline_symbols=["jsonapp.encode"],
+        required_context={"orjson.dumps"},
+        boundary_symbols=set(),
+        expected_solution="x",
+    )
+    task = EvaluationTask(
+        task_id="t1", repo="django", pinned_commit="x", seed_symbol="jsonapp.encode", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+        root_imports=["orjson"],
+    )
+    engine = PragmaticOracle(task)
+    engine.index(str(repo))
+
+    pkg = engine.retrieve("jsonapp.encode", 4000)
+    assert selected_symbols(pkg) == {"jsonapp.encode", "orjson.dumps"}
+    external_node = next(n for n in pkg.nodes if n.id == "orjson.dumps")
+    assert external_node.role == "external"
+    assert external_node.cost > 0
+
+    # A tight budget still truncates the external node exactly like an
+    # in-repo one - it isn't given a free pass around the budget loop.
+    tight_pkg = engine.retrieve("jsonapp.encode", 1)
+    assert selected_symbols(tight_pkg) == {"jsonapp.encode"}
+
+
+def test_pragmatic_oracle_without_root_imports_is_unaffected_by_the_fix(tmp_path):
+    """A task with no `root_imports` (the common, non-Category-5 case)
+    must behave identically to before this fix - `_external_symbols`
+    stays empty, `index()` never constructs a `PrismEngine` at all, and
+    a genuine phantom symbol is still silently dropped exactly as
+    `test_pragmatic_oracle_drops_phantom_symbols_not_in_indexed_graph`
+    already established."""
+    from benchmarks.engines.oracle_engine import PragmaticOracle
+    from benchmarks.ground_truth.schema import EvaluationTask, GroundTruthAnnotation
+
+    repo = _bfs_repo(tmp_path)
+    ann = GroundTruthAnnotation(
+        annotator_id="a", pipeline_symbols=["svc.calculate_tax"], required_context={"svc.invoice_generator"},
+        boundary_symbols=set(), expected_solution="x",
+    )
+    task = EvaluationTask(
+        task_id="t1", repo="django", pinned_commit="x", seed_symbol="svc.calculate_tax", task_type="debug", prompt="p",
+        annotation_a=ann, annotation_b=ann, adjudicated=ann, cohen_kappa=1.0,
+    )
+    assert task.root_imports == []
+    engine = PragmaticOracle(task)
+    engine.index(str(repo))
+    assert engine._external_symbols == {}
+
+    pkg = engine.retrieve("svc.calculate_tax", 4000)
+    assert selected_symbols(pkg) == {"svc.calculate_tax", "svc.invoice_generator"}
+
+
 def test_pragmatic_oracle_shares_prism_engine_cache_feature_masks(tmp_path):
     """PragmaticOracle reuses PrismEngineCache's own shared cache for
     (builder, contracts, feature_masks) - indexing both against the same

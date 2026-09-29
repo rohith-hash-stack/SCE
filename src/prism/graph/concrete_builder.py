@@ -566,10 +566,18 @@ class ConcreteGraphBuilder:
             enclosing_class=enclosing_class,
             role=role,
         )
-        self.symbol_table.add(symbol)
-        self._def_nodes[qualified_name] = node
+        # `key` is `qualified_name` unchanged unless `add()` just detected
+        # a genuine in-module collision (Option C, `reports/symbol_table_
+        # collision_spike.md`) - e.g. `lib.router.param`, a real top-level
+        # registration function, vs. an unrelated closure also named
+        # `param` nested inside a different function in the same module -
+        # in which case this (later-processed) definition gets a real,
+        # separately-addressable `#N`-suffixed key instead of silently
+        # overwriting the primary's own `_def_nodes`/graph-node entry.
+        key = self.symbol_table.add(symbol)
+        self._def_nodes[key] = node
         self.graph.add_node(
-            qualified_name,
+            key,
             kind=kind,
             file=parsed.path,
             line_range=line_range,
@@ -579,7 +587,7 @@ class ConcreteGraphBuilder:
             role=role,
         )
         if enclosing_class is not None and kind == "method":
-            self._methods_by_class.setdefault(enclosing_class, []).append(qualified_name)
+            self._methods_by_class.setdefault(enclosing_class, []).append(key)
 
     # -- Attribute definitions (module/class/instance-level assignments) - #
     def _collect_attribute_definitions(self, parsed: ParsedFile, module: str) -> None:
