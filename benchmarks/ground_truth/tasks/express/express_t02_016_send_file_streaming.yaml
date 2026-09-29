@@ -1,0 +1,102 @@
+# T02 "Express Pilot" - Task 16: `send` (Category 5, file-streaming
+# external sink).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.response.sendFile  lines 419-458 (in-repo seed)
+#   send.index.send        real external stub, resolved live
+#
+# Real source (lib/response.js:32,419-458):
+#
+#   var send = require('send');
+#   ...
+#   res.sendFile = function sendFile(path, options, callback) {
+#     ...
+#     var pathname = encodeURI(path);
+#     var file = send(req, pathname, opts);
+#     sendfile(res, file, opts, function (err) { ... });
+#   };
+#
+# Verified live: `engine.build_external_candidate_manifest(
+# ["lib.response.sendFile"], root_imports=["send"]) ->
+# {"send.index.send"}`, rendering
+# "declare function send(req, path, options);" - a real
+# default/namespace require (`send`), called bare as `send(req,
+# pathname, opts)`, where the local alias happens to match the
+# package's own real internal name (`node_modules/send/index.js`:
+# `module.exports = send; function send(req, file, opts) {...}`).
+#
+# Deliberately shares its seed with `express_t02_011_file_transmission
+# .yaml` (the same call site's real in-repo reachability, covered there
+# without `root_imports`) - this task isolates the Category-5 signal
+# from the same real code region rather than conflating the two.
+task_id: express_t02_016_send_file_streaming
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.response.sendFile
+task_type: debug
+root_imports:
+- send
+prompt: 'You are investigating how Express actually streams a file to the client, starting from
+  `res.sendFile` in lib/response.js. Identify the real third-party npm package function it delegates file
+  streaming to, and that function''s own real signature.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols
+  actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.response.sendFile", "send.index.send"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.response.sendFile
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - send.index.send
+  boundary_symbols: []
+  expected_solution: res.sendFile(path, options, callback) encodes the given path and delegates the
+    actual file-streaming work to the real third-party `send` npm package's own default-exported function,
+    called as `send(req, pathname, opts)` to create a real file stream, which is then piped to the response
+    by a private helper.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.response.sendFile
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - send.index.send
+  boundary_symbols: []
+  expected_solution: res.sendFile() calls the real `send` package to create a file stream for the given
+    path.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.response.sendFile
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - send.index.send
+  boundary_symbols: []
+  expected_solution: res.sendFile(path, options, callback) delegates the actual file-streaming work to the
+    real third-party `send` npm package's own default-exported function, called as `send(req, pathname,
+    opts)`. Both annotators independently identified the same real dependency; annotator_a additionally
+    noted the encoding step and the private streaming helper it feeds into.

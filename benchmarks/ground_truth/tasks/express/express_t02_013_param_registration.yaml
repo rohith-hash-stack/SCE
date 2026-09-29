@@ -1,0 +1,120 @@
+# T02 "Express Pilot" - Task 13: param callback registration
+# (`app.param`).
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.application.param       lines 328-342
+#   lib.application.lazyrouter  lines 144-162
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage.
+#
+# Real source: app.param(name, fn) first calls this.lazyrouter() to
+# ensure the app's own internal router exists (creating it on first
+# use), then - for the array-of-names overload - recurses back into
+# this.param(name[i], fn) for each name, and otherwise delegates the
+# actual registration to this._router.param(name, fn).
+#
+# Real, disclosed structural finding (a new variant of G41 - not a
+# receiver-type mismatch this time, but a genuine *same-file,
+# same-simple-name* collision inside lib/router/index.js itself):
+# `this._router.param(name, fn)`'s real target is the exported
+# `proto.param = function param(name, fn) {...}` at router/index.js:97
+# - the actual public router-level param registration API, whose own
+# body loops over previously-registered param functions
+# (`params[i](name, fn)`, a dynamic array-element call, itself not
+# statically resolvable). But `builder.symbol_table.get(
+# "lib.router.param")` does **not** point there - it points instead to
+# an entirely different, *locally-scoped* `function param(err) {...}`
+# at router/index.js:359-396, a private per-request dispatch closure
+# nested inside `proto.process_params` (already the seed of
+# `express_t02_003_routing_dispatch_loop.yaml`'s own pipeline). Both
+# functions share the bare simple name `param` in the same module, and
+# Prism's indexer keeps only one qualified name per (module, simple
+# name) pair - the later-declared, private one wins here. This means
+# the *real* `this._router.param(name, fn)` call site, though a real
+# and reachable graph edge, resolves to a completely unrelated function
+# with the same name, not the actual router-level registration API -
+# exactly the class of pitfall `TASK_AUTHORING.md`'s G41 warns about
+# ("a same-named symbol is reachable" is not the same as "the real call
+# site actually resolves there"), just triggered by an in-module name
+# collision rather than a receiver-type mismatch. It is excluded from
+# this task's pipeline for that reason, leaving a genuinely thin (but
+# real) two-stage chain - the real router-level param registration
+# logic itself is simply not indexable under its own real name given
+# this collision, a genuine limitation disclosed rather than routed
+# around.
+task_id: express_t02_013_param_registration
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.application.param
+task_type: debug
+prompt: 'You are investigating how Express registers a param callback, starting from `app.param` in
+  lib/application.js. Trace the real causal pipeline it runs through before delegating to the app''s
+  internal router.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.application.param", "lib.application.lazyrouter"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.application.param
+  - lib.application.lazyrouter
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: app.param(name, fn) first calls this.lazyrouter() to ensure the app's own internal
+    router exists before anything else happens, then (for a single name) delegates the actual registration
+    to this._router.param(name, fn) - or, for an array of names, recurses back into this.param() once per
+    name instead. The real router-level registration function itself is not reliably indexable under its
+    own name in this codebase (see header comment for the real in-module name collision that causes this),
+    so it is not included as a separate pipeline stage.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.application.param
+  - lib.application.lazyrouter
+  - lib.router.param
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: app.param() calls lazyrouter() to ensure the router exists, then calls
+    router.param() to actually register the callback. (Included lib.router.param without checking whether
+    that qualified name's real indexed definition is actually the function `this._router.param(...)`
+    resolves to at this call site - it is not; see header comment.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.application.param
+  - lib.application.lazyrouter
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: app.param(name, fn) calls this.lazyrouter() to ensure the internal router exists,
+    then delegates to this._router.param(name, fn) (for a single name) or recurses per-name (for an
+    array). lib.router.param is deliberately excluded - a real, confirmed in-module simple-name collision
+    in router/index.js means that qualified name's actual indexed definition is an unrelated private
+    dispatch closure inside process_params, not the real router-level param() registration function this
+    call site invokes (see header comment). annotator_b's pipeline included lib.router.param without
+    checking this, exactly the G41 pitfall this pilot has repeatedly found.

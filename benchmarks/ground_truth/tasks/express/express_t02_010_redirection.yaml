@@ -1,0 +1,111 @@
+# T02 "Express Pilot" - Task 10: redirection (`res.redirect` ->
+# `res.location`).
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.response.redirect  lines 946-990
+#   lib.response.location  lines 914-926
+#   lib.response.get       lines 811-813
+#   lib.response.format    lines 684-709
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage.
+#
+# Real source: res.redirect(url) first resolves the real target address
+# via `this.location(address).get('Location')` - i.e. it delegates the
+# actual Location-header construction to res.location(), then reads the
+# header straight back off itself via res.get() - and then calls
+# this.format({...}) to build a text/html fallback body appropriate to
+# what the client accepts, before finally writing the response. This is
+# a genuine, disclosed example of `TASK_AUTHORING.md`'s guidance that
+# pipeline order reflects real execution order at the seed's own call
+# site, not a call-chain requirement between neighbors: `location()` and
+# `get()` both happen (in that order) before `format()` is ever called,
+# even though `get()` is technically invoked as a continuation of
+# `location()`'s own return value rather than a separate statement.
+#
+# Real, disclosed exclusion (the third confirmed instance of the same
+# bare-name-collision pitfall found while authoring Tasks 1/2/6/9 -
+# TASK_AUTHORING.md's G41): both redirect() and location() call
+# `this.set(...)` for real (setting the Content-Length and Location
+# headers respectively) - but `lib.response.set` does not exist as its
+# own indexed symbol, for the same reason as Tasks 6/9 (a chained
+# `res.set = res.header = function header(...) {}` assignment). The
+# bare `this.set(...)` calls resolve in `builder.graph` to
+# `lib.application.set`, a real but entirely unrelated function - not
+# included here.
+task_id: express_t02_010_redirection
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.response.redirect
+task_type: debug
+prompt: 'You are investigating Express''s redirect handling, starting from `res.redirect` in
+  lib/response.js. Trace the real causal pipeline it runs through to determine the target Location header
+  and build the fallback response body.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.response.redirect", "lib.response.location"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.response.redirect
+  - lib.response.location
+  - lib.response.get
+  - lib.response.format
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: res.redirect(url) delegates the real Location-header computation to
+    this.location(address), then immediately reads that header straight back via this.get('Location') to
+    get the fully-resolved address string, and then calls this.format({...}) to build a text/plain or
+    text/html fallback body according to what the client accepts (falling back to an empty body for any
+    other type). It then sets the status code and Content-Length and writes the response.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.response.redirect
+  - lib.response.location
+  - lib.response.format
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: res.redirect() calls res.location() to set the Location header, then calls
+    res.format() to build the response body based on what the client accepts. (Missed that redirect()
+    reads the resolved address back via a real, separately reachable this.get('Location') call rather than
+    reusing its own local `address` variable directly.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.response.redirect
+  - lib.response.location
+  - lib.response.get
+  - lib.response.format
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: res.redirect(url) delegates Location-header computation to this.location(address),
+    reads it straight back via this.get('Location') - a real, separately reachable stage annotator_b
+    missed, assuming the local `address` variable was reused directly instead - and then calls
+    this.format({...}) to build the fallback body before writing the response. Both annotators correctly
+    identified location() and format(); annotator_a additionally traced the intermediate get() call.
