@@ -1,0 +1,116 @@
+# T02 "Express Pilot" - Task 18: `type-is` (Category 5, a second
+# real default/namespace-require alias-mismatch case, distinct in shape
+# from Task 15's `path-to-regexp`).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.request.is                     lines 278-291 (in-repo seed)
+#   type-is.index.typeofrequest        real external stub, resolved live
+#
+# Real source (lib/request.js:19,278-291):
+#
+#   var typeis = require('type-is');
+#   ...
+#   req.is = function is(types) {
+#     var arr = types;
+#     ...
+#     return typeis(this, arr);
+#   };
+#
+# Real installed `node_modules/type-is/index.js`:
+#
+#   module.exports = typeofrequest
+#   module.exports.is = typeis
+#   ...
+#   function typeofrequest (req, types_) { ... }
+#
+# A distinct variant of the alias-mismatch pattern from Task 15's
+# `path-to-regexp`/`pathToRegexp`: here the local binding `typeis` is
+# not merely a *stylistic* rename of the real function's own name - it
+# is bound to the package's real *default* export (`typeofrequest`),
+# and only *coincidentally* happens to share a name with a completely
+# different named property the same package separately exposes
+# (`module.exports.is = typeis`, a real, distinct internal function).
+# Verified live:
+#
+#   engine.build_external_candidate_manifest(
+#       ["lib.request.is"], root_imports=["type-is"]
+#   )
+#   -> {"type-is.index.typeofrequest"}
+#
+# - correctly resolving to the real default export actually invoked at
+# this call site (`typeis(this, arr)`, a bare namespace call), not to
+# the same-named `.is` property the package also happens to expose.
+task_id: express_t02_018_type_is_alias_mismatch
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.request.is
+task_type: debug
+root_imports:
+- type-is
+prompt: 'You are investigating how Express checks an incoming request''s Content-Type, starting from
+  `req.is` in lib/request.js. Identify the real third-party npm package function it actually delegates to,
+  and that function''s own real signature - note that the package also separately exposes a same-named
+  property that is *not* what this call site actually invokes.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols
+  actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.request.is", "type-is.index.typeofrequest"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.request.is
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - type-is.index.typeofrequest
+  boundary_symbols: []
+  expected_solution: req.is(types) delegates the actual content-type matching to the real third-party
+    `type-is` npm package, bound locally as `typeis` via `var typeis = require('type-is')` and called bare
+    as `typeis(this, arr)` - invoking the package's real *default* export, internally named
+    `typeofrequest`, not the same-named `.is` property the package also separately exposes
+    (`module.exports.is = typeis`, a distinct real function this call site does not invoke).
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.request.is
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - type-is.index.typeofrequest
+  boundary_symbols: []
+  expected_solution: req.is() calls the real `type-is` package (locally called `typeis`) to check the
+    request's content type against the given types.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.request.is
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - type-is.index.typeofrequest
+  boundary_symbols: []
+  expected_solution: req.is(types) delegates content-type matching to the real third-party `type-is`
+    package's own default export (internally named `typeofrequest`), called bare via the local alias
+    `typeis`. Both annotators independently identified the same real dependency; annotator_a additionally
+    disambiguated it from the package's own separate, same-named `.is` property, which this call site does
+    not invoke.

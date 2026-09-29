@@ -1,0 +1,102 @@
+# T02 "Express Pilot" - Task 11: file transmission (`res.download` ->
+# `res.sendFile`).
+#
+# Grounded in the real pinned Express 4.21.0 checkout - every symbol
+# verified against prism.cli.build_pipeline's own symbol table:
+#
+#   lib.response.download  lines 550-599
+#   lib.response.sendFile  lines 419-458
+#   lib.response.sendfile  lines 1053-1090 (private helper, note the
+#                           lowercase name - a distinct symbol from the
+#                           public, capitalized `sendFile`)
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage.
+#
+# Real source: res.download(path, filename, options, callback) is a
+# thin real wrapper - it normalizes its own overloaded arguments, sets
+# a real Content-Disposition header value, resolves the full path, and
+# then simply calls `this.sendFile(fullPath, opts, done)`. sendFile()
+# itself does its own real argument/type validation, then creates a
+# file stream via the real third-party `send` npm package
+# (`file = send(req, pathname, opts)`) and hands it to the private
+# lowercase `sendfile(res, file, opts, callback)` helper, which pipes
+# the stream to the response and handles the real error cases
+# (EISDIR, aborted connections, write errors).
+#
+# This task is deliberately kept internal-only (no `root_imports`) -
+# the real external delegation to the `send` npm package from this
+# exact seed is covered separately, and independently verified, by
+# `express_t02_016_send_file_streaming.yaml` (Category 5). Keeping them
+# separate lets the benchmark grid measure in-repo reachability and
+# external-symbol resolution from the *same* real call site without
+# conflating the two signals in one task.
+task_id: express_t02_011_file_transmission
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.response.download
+task_type: debug
+prompt: 'You are investigating how Express transmits a file to the client, starting from `res.download` in
+  lib/response.js. Trace the real causal pipeline through to the point where the file is actually streamed.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["lib.response.download", "lib.response.sendFile"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.response.download
+  - lib.response.sendFile
+  - lib.response.sendfile
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: res.download(path, filename, options, callback) normalizes its own overloaded
+    arguments, sets a real Content-Disposition header, resolves the full path, and delegates entirely to
+    this.sendFile(fullPath, opts, done). sendFile() validates its own arguments, creates a file stream, and
+    hands it to the private lowercase sendfile() helper, which actually pipes the stream to the response
+    and handles error cases.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.response.download
+  - lib.response.sendFile
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: res.download() sets the Content-Disposition header and delegates to res.sendFile() to
+    actually send the file. (Missed that sendFile() itself delegates the real streaming/piping logic to a
+    separate, private lowercase `sendfile` helper function rather than doing it inline.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.response.download
+  - lib.response.sendFile
+  - lib.response.sendfile
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: res.download() normalizes arguments, sets Content-Disposition, and delegates to
+    this.sendFile(). sendFile() validates arguments, creates the file stream, and hands off to the private
+    lowercase sendfile() helper - a real, separately reachable stage annotator_b missed - which does the
+    actual piping and error handling. Both annotators correctly identified the download -> sendFile
+    delegation.

@@ -1,0 +1,149 @@
+# T02 "Express Pilot" - Task 9: content negotiation (`res.format`).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.response.format   lines 684-709
+#   lib.request.accepts   lines 132-135
+#   lib.response.vary     lines 1001-1015
+#
+# Transitive reachability verified via networkx.has_path over
+# builder.calls_graph from the seed to every pipeline stage.
+#
+# Real source: res.format(obj) collects obj's own keys (minus
+# 'default'), asks req.accepts(keys) which of them the client actually
+# accepts, calls this.vary("Accept") unconditionally (a real caching
+# concern, independent of whether a match was found), and then either
+# invokes the matched handler, obj.default, or (Category 5 finding)
+# calls the real third-party `http-errors` package's own default-
+# exported function to build a 406 error.
+#
+# A task with *two* real, independently-resolving external root
+# imports at once (`accepts` and `http-errors`) - a first for this
+# pilot suite (every earlier Category-5 task, including Task 7, only
+# ever needed one). `res.format()` itself directly calls the real
+# `http-errors` package (`var createError = require('http-errors'); ...
+# createError(406, {...})` - here the local alias happens to match the
+# package's own real internal name, unlike the `path-to-regexp`/
+# `pathToRegexp` case) - a genuine one-hop delegation from the seed
+# itself. `req.accepts()`'s own real accept-header logic is a *second*,
+# one-hop-deeper delegation to the `accepts` npm package (`var accepts =
+# require('accepts'); ... accepts(this).types.apply(...)`, a
+# default/namespace require used as a bare call, resolving to the real
+# `Accepts` constructor) - reachable from `res.format()` only once
+# `lib.request.accepts` (a real pipeline stage in its own right, per
+# this task's own `pipeline_symbols`) is *also* in Turn 2a's own
+# `turn1_symbols` set. Verified live, matching exactly what a real Turn
+# 1 pass that correctly identifies the full causal pipeline hands to
+# Turn 2a:
+#
+#   engine.build_external_candidate_manifest(
+#       ["lib.response.format", "lib.request.accepts"],
+#       root_imports=["accepts", "http-errors"],
+#   )
+#   -> {"accepts.index.Accepts", "http-errors.index.createError"}
+#
+# Real, disclosed scope note: from the bare seed *alone*
+# (`["lib.response.format"]`, without `lib.request.accepts`), only
+# `http-errors.index.createError` resolves - confirmed live, the same
+# call returns a single-entry set. This means `run_two_pass_benchmark`'s
+# own `--dry-run` zero-LLM baseline (which currently seeds Turn 2a's
+# `turn1_symbols` from the bare seed alone, never the full ground-truth
+# pipeline) will only ever surface `http-errors` for this task, not
+# `accepts` - a real, disclosed baseline-harness limitation distinct
+# from an engine bug, exercised only once a real Turn 1 pass (LLM-
+# driven or otherwise) actually requests `lib.request.accepts` too.
+#
+# Real, disclosed exclusion (a recurring instance of the same bare-
+# name-collision pitfall found while authoring Tasks 1/2/6 -
+# TASK_AUTHORING.md's G41): res.format() calls `this.set('Content-Type',
+# ...)` for real, but `lib.response.set` does not exist as its own
+# indexed symbol (response.js:776-777's `res.set = res.header = function
+# header(...) {}` chained assignment only registers the function under
+# its last-assigned name). The bare `this.set(...)` call therefore
+# resolves in `builder.graph` to `lib.application.set`, a real but
+# entirely unrelated function - not included here, since it is not what
+# actually runs.
+task_id: express_t02_009_content_negotiation
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.response.format
+task_type: debug
+root_imports:
+- accepts
+- http-errors
+prompt: 'You are investigating Express''s content-negotiation logic, starting from `res.format` in
+  lib/response.js. Trace the real causal pipeline it runs through to decide which of the caller''s handlers
+  to invoke, including which real third-party npm packages it actually delegates to for accept-header
+  parsing and error construction.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved - only symbols actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.response.format", "lib.request.accepts"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.response.format
+  - lib.request.accepts
+  - lib.response.vary
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - accepts.index.Accepts
+  - http-errors.index.createError
+  boundary_symbols: []
+  expected_solution: res.format(obj) collects obj's own real keys (excluding 'default'), calls
+    req.accepts(keys) - which itself delegates to the real `accepts` npm package's own Accepts constructor
+    - to find which key the client actually accepts, unconditionally calls this.vary("Accept") to mark the
+    response as varying on that header, and then either invokes the matched handler, obj.default, or (no
+    match and no default) builds a 406 error via the real `http-errors` package's own default-exported
+    function.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.response.format
+  - lib.request.accepts
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - accepts.index.Accepts
+  boundary_symbols: []
+  expected_solution: res.format() calls req.accepts() (which uses the real `accepts` package) to determine
+    which content type to serve, then invokes the matching handler from the passed-in object. (Missed the
+    real, unconditional this.vary("Accept") call, and missed that the no-match path calls the real
+    `http-errors` package to build a 406 response rather than just silently failing.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.response.format
+  - lib.request.accepts
+  - lib.response.vary
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - accepts.index.Accepts
+  - http-errors.index.createError
+  boundary_symbols: []
+  expected_solution: res.format(obj) collects obj's own real keys (excluding 'default'), calls
+    req.accepts(keys) - delegating to the real `accepts` npm package - to find which key the client
+    actually accepts, unconditionally calls this.vary("Accept") (a real, separately reachable stage
+    annotator_b missed), and then either invokes the matched handler, obj.default, or builds a 406 error
+    via the real `http-errors` package. Both annotators independently identified the `accepts` delegation;
+    annotator_a additionally traced the vary() call and the http-errors fallback path.

@@ -42,10 +42,30 @@ def _express_engine() -> PrismEngine:
 # --------------------------------------------------------------------- #
 # Schema: `root_imports` is additive and defaults to empty.
 # --------------------------------------------------------------------- #
+#: Every Express task that legitimately declares a real, verified
+#: Category-5 external dependency (`feature/express-task-expansion`
+#: grew this from Task 7 alone to ten) - kept as an explicit allowlist
+#: rather than inferring it from the loaded tasks themselves, so this
+#: test still catches a plain internal task accidentally picking up a
+#: stray `root_imports` entry during authoring.
+_CATEGORY_5_EXPRESS_TASK_IDS = frozenset({
+    "express_t02_007_etag_external_dependency",
+    "express_t02_009_content_negotiation",
+    "express_t02_012_cookie_signing",
+    "express_t02_014_top_level_dispatch",
+    "express_t02_015_path_to_regexp_alias_mismatch",
+    "express_t02_016_send_file_streaming",
+    "express_t02_017_content_disposition",
+    "express_t02_018_type_is_alias_mismatch",
+    "express_t02_019_range_parser",
+    "express_t02_020_query_string_parsing",
+})
+
+
 def test_every_non_category_5_express_task_has_empty_root_imports():
     result = load_tasks_from_dir(EXPRESS_TASKS_DIR)
     for task in result.accepted:
-        if task.task_id != "express_t02_007_etag_external_dependency":
+        if task.task_id not in _CATEGORY_5_EXPRESS_TASK_IDS:
             assert task.root_imports == [], task.task_id
 
 

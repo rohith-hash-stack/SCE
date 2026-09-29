@@ -1,0 +1,106 @@
+# T02 "Express Pilot" - Task 17: `content-disposition` (Category 5,
+# download-header external sink).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.response.download  lines 550-599 (in-repo seed)
+#   content-disposition.index.contentDisposition  real external stub,
+#     resolved live
+#
+# Real source (lib/response.js:16,550-599):
+#
+#   var contentDisposition = require('content-disposition');
+#   ...
+#   res.download = function download (path, filename, options, callback) {
+#     ...
+#     var headers = {
+#       'Content-Disposition': contentDisposition(name || path)
+#     };
+#     ...
+#   };
+#
+# Verified live: `engine.build_external_candidate_manifest(
+# ["lib.response.download"], root_imports=["content-disposition"]) ->
+# {"content-disposition.index.contentDisposition"}`, rendering
+# "declare function contentDisposition(filename, options);" - a real
+# default/namespace require, called bare as `contentDisposition(name ||
+# path)`, where the local alias (a camelCased rename of the package's
+# own hyphenated name) matches the package's own real internal name
+# (`node_modules/content-disposition/index.js`: `module.exports =
+# contentDisposition; function contentDisposition(filename, opts)
+# {...}`).
+#
+# Deliberately shares its seed with `express_t02_011_file_transmission
+# .yaml` - see that task's header comment for why the in-repo and
+# external signals from this same call site are kept in separate
+# tasks.
+task_id: express_t02_017_content_disposition
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.response.download
+task_type: debug
+root_imports:
+- content-disposition
+prompt: 'You are investigating how Express builds the Content-Disposition header for a file download,
+  starting from `res.download` in lib/response.js. Identify the real third-party npm package function it
+  delegates that header value''s construction to, and that function''s own real signature.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols
+  actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.response.download", "content-disposition.index.contentDisposition"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.response.download
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - content-disposition.index.contentDisposition
+  boundary_symbols: []
+  expected_solution: res.download(path, filename, options, callback) delegates the construction of the
+    Content-Disposition header value to the real third-party `content-disposition` npm package's own
+    default-exported function, called as `contentDisposition(name || path)`, before merging it with any
+    user-provided headers and forwarding to sendFile().
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.response.download
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - content-disposition.index.contentDisposition
+  boundary_symbols: []
+  expected_solution: res.download() calls the real `content-disposition` package to build the header value
+    for the given filename.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.response.download
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - content-disposition.index.contentDisposition
+  boundary_symbols: []
+  expected_solution: res.download(path, filename, options, callback) delegates Content-Disposition header
+    construction to the real third-party `content-disposition` npm package's own default-exported function,
+    called as `contentDisposition(name || path)`. Both annotators independently identified the same real
+    dependency; annotator_a additionally traced what happens with the result afterward.

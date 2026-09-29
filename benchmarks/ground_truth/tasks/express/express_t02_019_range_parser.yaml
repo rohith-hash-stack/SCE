@@ -1,0 +1,116 @@
+# T02 "Express Pilot" - Task 19: `range-parser` (Category 5, HTTP Range
+# request parsing) - also the fourth confirmed instance of the G41
+# bare-name-collision pitfall in this pilot (Tasks 6/9/10 already found
+# three others).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.request.range                  lines 212-216 (in-repo seed)
+#   range-parser.index.rangeParser     real external stub, resolved live
+#
+# Real source (lib/request.js:22,212-216):
+#
+#   var parseRange = require('range-parser');
+#   ...
+#   req.range = function range(size, options) {
+#     var range = this.get('Range');
+#     if (!range) return;
+#     return parseRange(size, range, options);
+#   };
+#
+# Verified live: `engine.build_external_candidate_manifest(
+# ["lib.request.range"], root_imports=["range-parser"]) ->
+# {"range-parser.index.rangeParser"}`, rendering
+# "/** @throws {TypeError} */ declare function rangeParser(size, str,
+# options);" - a third distinct real local-alias mismatch (`parseRange`
+# locally, `rangeParser` internally - `node_modules/range-parser/
+# index.js`: `module.exports = rangeParser; function rangeParser(size,
+# str, options) {...}`), plus a real `@throws` annotation (Category 6).
+#
+# Real, disclosed G41 finding (a fourth confirmed instance, after Tasks
+# 6/9/10's `res.set`/`lib.application.set` collisions - this one is on
+# the *request* side): `req.range`'s own real first line,
+# `this.get('Range')`, should call `req.get` - but, exactly like
+# `res.set`/`res.header` in response.js, `req.get = req.header =
+# function header(name){...}` at request.js is a *chained* assignment,
+# so Prism's property-assigned-function detector only registers the
+# function under its last-assigned name (`header`); `lib.request.get`
+# does not exist as its own indexed symbol at all. The bare
+# `this.get('Range')` call therefore resolves in `builder.graph` to
+# `lib.response.get`, a real but entirely unrelated function on a
+# *different* prototype object - not included in this task's pipeline,
+# since it is not what actually runs.
+task_id: express_t02_019_range_parser
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.request.range
+task_type: debug
+root_imports:
+- range-parser
+prompt: 'You are investigating how Express parses an incoming Range header, starting from `req.range` in
+  lib/request.js. Identify the real third-party npm package function it delegates the actual range-parsing
+  logic to, and that function''s own real signature and thrown-exception behavior.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols
+  actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.request.range", "range-parser.index.rangeParser"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.request.range
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - range-parser.index.rangeParser
+  boundary_symbols: []
+  expected_solution: req.range(size, options) reads the request's own Range header, and if present,
+    delegates the actual parsing to the real third-party `range-parser` npm package's own default-exported
+    function - bound locally as `parseRange`, but internally declared `rangeParser` (a real local-alias
+    mismatch, the same class of pattern as path-to-regexp). The real rangeParser() function itself can
+    throw a TypeError.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.request.range
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - range-parser.index.rangeParser
+  boundary_symbols: []
+  expected_solution: req.range() reads the Range header via req.get('Range') and passes it to the real
+    `range-parser` package (locally called `parseRange`) to actually parse it.
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.request.range
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - range-parser.index.rangeParser
+  boundary_symbols: []
+  expected_solution: req.range(size, options) reads the request's Range header (via a bare `this.get(
+    'Range')` call that, due to a real in-repo chained-assignment gap, is not resolvable to req's own
+    get()/header() - see header comment - and is therefore excluded rather than misattributed to
+    res.get()), then delegates the actual parsing to the real third-party `range-parser` package's own
+    default export, internally named `rangeParser` despite the local alias `parseRange`. Both annotators
+    independently identified the same real dependency and its mismatched alias; annotator_a additionally
+    noted the real thrown-exception behavior.

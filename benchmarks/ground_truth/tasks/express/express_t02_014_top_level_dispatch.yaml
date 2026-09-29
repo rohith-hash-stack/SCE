@@ -1,0 +1,125 @@
+# T02 "Express Pilot" - Task 14: the top-level request-handling entry
+# point (`app.handle`).
+#
+# Grounded in the real pinned Express 4.21.0 checkout, with real
+# installed `node_modules` - every symbol verified against the real
+# indexed symbol table and the real `PrismEngine.build_external_
+# candidate_manifest` output, not assumed:
+#
+#   lib.application.handle  lines 165-182 (in-repo seed)
+#   finalhandler.index.finalhandler  real external stub, resolved live
+#
+# Real source (lib/application.js:16,165-182):
+#
+#   var finalhandler = require('finalhandler');
+#   ...
+#   app.handle = function handle(req, res, callback) {
+#     var router = this._router;
+#     var done = callback || finalhandler(req, res, {
+#       env: this.get('env'),
+#       onerror: logerror.bind(this)
+#     });
+#     if (!router) {
+#       debug('no routes defined on app');
+#       done();
+#       return;
+#     }
+#     router.handle(req, res, done);
+#   };
+#
+# Verified live: `engine.build_external_candidate_manifest(
+# ["lib.application.handle"], root_imports=["finalhandler"]) ->
+# {"finalhandler.index.finalhandler"}`, rendering
+# "declare function finalhandler(req, res, options);" - a real
+# default/namespace require used as a bare call, exactly the same shape
+# as Task 7's `etag` and Task 14's own sibling tasks.
+#
+# Real, disclosed structural finding: `router.handle(req, res, done)` -
+# the real, final step of every request that reaches an app with routes
+# defined - is **not** reachable from this seed in the static call
+# graph, even though `lib.router.handle` is itself a real, indexed
+# symbol (already the subject of `express_t02_003_routing_dispatch_
+# loop.yaml`'s own header-comment finding about its own thin edge set).
+# Reading the source shows why: `router` here is `this._router`, a
+# dynamic instance property assigned elsewhere (`app.lazyrouter()`), not
+# a statically-known import or local variable Prism's call resolver can
+# type - the same class of gap already found for `new View(...)` in
+# `express_t02_008_view_rendering.yaml` (`var View = this.get('view')`),
+# now confirmed for a *third* distinct dynamically-rebound receiver in
+# this same codebase. Recorded as `boundary_symbols` rather than
+# silently omitted.
+task_id: express_t02_014_top_level_dispatch
+repo: express
+pinned_commit: 7e562c6d8daddff4604f8efaaf9db2cf98c6dcff
+seed_symbol: lib.application.handle
+task_type: debug
+root_imports:
+- finalhandler
+prompt: 'You are investigating Express''s top-level request-handling entry point, `app.handle` in
+  lib/application.js. Identify what it does when no explicit callback is given, including the real
+  third-party npm package it delegates default error handling to.
+
+
+  First give a short (2-4 sentence) explanation.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names involved - only symbols actually present in the provided context package may appear, e.g.:
+
+
+  ```json
+
+  ["lib.application.handle", "finalhandler.index.finalhandler"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - lib.application.handle
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - finalhandler.index.finalhandler
+  boundary_symbols:
+  - lib.router.handle
+  expected_solution: app.handle(req, res, callback) builds a default "done" handler when no callback is
+    given, by delegating to the real third-party `finalhandler` npm package (passing the app's own `env`
+    setting and a bound error logger) - and, if the app has an internal router, hands off to
+    router.handle(req, res, done) to actually dispatch the request. The router.handle() delegation itself
+    is real but not statically reachable here, since `this._router` is a dynamically-assigned instance
+    property, not a resolvable import.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - lib.application.handle
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - finalhandler.index.finalhandler
+  boundary_symbols: []
+  expected_solution: app.handle() uses the real `finalhandler` package to build a default response handler
+    when none is provided, then dispatches to the router. (Did not check whether the router.handle()
+    delegation is actually reachable in the static graph - it is not, since `this._router` is a dynamic
+    property.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - lib.application.handle
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context:
+  - finalhandler.index.finalhandler
+  boundary_symbols:
+  - lib.router.handle
+  expected_solution: app.handle(req, res, callback) delegates default error handling to the real
+    third-party `finalhandler` package when no callback is given, then (if a router exists) hands off to
+    router.handle(req, res, done). The router.handle() step is real but genuinely unreachable in the static
+    call graph (`this._router` is a dynamically-assigned instance property, not a statically-known import -
+    the same class of gap already found for View() in Task 8), so it is recorded as a boundary symbol
+    rather than a pipeline stage. annotator_b identified the same real finalhandler delegation but did not
+    check reachability for the router.handle() step.
