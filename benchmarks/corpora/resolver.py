@@ -34,12 +34,26 @@ class CorpusSpec:
     name: str
     url: str
     pinned_commit: str
+    #: A monorepo's own real indexing root, relative to the cloned repo's
+    #: top-level directory (e.g. tRPC's `"packages/server/src"` -
+    #: `docs/architecture_boundaries.md` Category 10's own real-world
+    #: motivation: `PrismEngine.from_repo`/`build_pipeline` given the
+    #: bare monorepo root would index every workspace package at once,
+    #: producing qualified names prefixed by each package's own full
+    #: relative path (`packages.server.src.core.router....` instead of
+    #: the real, ground-truth-authored `core.router....`) - the wrong
+    #: indexing root for a corpus whose ground truth was authored
+    #: against one specific package. `None` (the default) is a complete
+    #: no-op - a single-package repo (Django/Express/FastAPI/Gin) is
+    #: indexed at its own real clone root exactly as before this field
+    #: existed.
+    subdir: str | None = None
 
 
 def _load_corpora(path: Path = PINNED_COMMITS_PATH) -> dict[str, CorpusSpec]:
     data = json.loads(path.read_text())
     return {
-        name: CorpusSpec(name=name, url=entry["url"], pinned_commit=entry["pinned_commit"])
+        name: CorpusSpec(name=name, url=entry["url"], pinned_commit=entry["pinned_commit"], subdir=entry.get("subdir"))
         for name, entry in data.items()
     }
 
@@ -137,8 +151,24 @@ def resolve_corpus(spec: CorpusSpec, cache_dir: Path = DEFAULT_CACHE_DIR, force:
 
 def resolve(name: str, cache_dir: Path = DEFAULT_CACHE_DIR, force: bool = False) -> Path:
     """`resolve_corpus` keyed by one of `CORPORA`'s own registered
-    names ("django", "gin", "trpc", "express")."""
+    names ("django", "gin", "trpc", "express"), joined with the spec's
+    own `subdir` when it has one (a monorepo indexed at one real
+    package's own root, never the bare clone root - see `CorpusSpec.
+    subdir`'s own docstring). Raises `CorpusResolutionError` - never
+    silently falls back to the bare clone root - if a declared `subdir`
+    doesn't actually exist in the real checkout, since every ground-truth
+    task authored against it would otherwise index against the wrong
+    root without any visible failure at all.
+    """
     spec = CORPORA.get(name)
     if spec is None:
         raise CorpusResolutionError(f"unknown corpus {name!r} - registered corpora: {sorted(CORPORA)}")
-    return resolve_corpus(spec, cache_dir=cache_dir, force=force)
+    dest = resolve_corpus(spec, cache_dir=cache_dir, force=force)
+    if spec.subdir is None:
+        return dest
+    subdir_path = dest / spec.subdir
+    if not subdir_path.is_dir():
+        raise CorpusResolutionError(
+            f"{name}: declared subdir {spec.subdir!r} does not exist in the real checkout at {dest}"
+        )
+    return subdir_path
