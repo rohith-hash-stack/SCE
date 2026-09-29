@@ -22,6 +22,8 @@ fact then answer correctly.
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from benchmarks.corpora.resolver import resolve
@@ -29,6 +31,7 @@ from benchmarks.engines.base import selected_symbols
 from benchmarks.run_two_pass_benchmark import (
     _check_turn1_degeneration,
     _has_repetition_loop,
+    _ollama_sampler_kwargs,
     _parse_requested_symbols,
     _turn1_user_prompt,
 )
@@ -275,3 +278,37 @@ class TestDryRunWiring:
         assert result.turn1_response == ""
         assert result.candidate_count == 14
         assert result.requested_count == 0
+
+
+class TestOllamaSamplerKwargs:
+    """Found live while preparing this session's first real run against
+    OpenAI's own API (DeepSeek's endpoint is network-blocked in this
+    environment): `run_two_pass_cell` used to send Ollama-native
+    `options.repeat_penalty`/`options.num_predict` as `extra_body` on
+    *every* Turn 1 call regardless of which provider `client.base_url`
+    actually pointed at - DeepSeek silently tolerated the unrecognized
+    field, OpenAI's real endpoint returned a hard HTTP 400
+    ("Unrecognized request argument supplied: options"). Fixed by
+    gating it on the same `"localhost"/"127.0.0.1" in base_url` check
+    `OpenAICompatibleClient.__init__` already uses for its own API-key
+    placeholder logic."""
+
+    def test_empty_for_a_real_hosted_endpoint(self):
+        client = SimpleNamespace(base_url="https://api.openai.com/v1")
+        assert _ollama_sampler_kwargs(client, 1.15, 2048) == {}
+
+    def test_empty_for_deepseeks_own_endpoint(self):
+        client = SimpleNamespace(base_url="https://api.deepseek.com/v1")
+        assert _ollama_sampler_kwargs(client, 1.15, 2048) == {}
+
+    def test_populated_for_a_localhost_ollama_endpoint(self):
+        client = SimpleNamespace(base_url="http://localhost:11434/v1")
+        assert _ollama_sampler_kwargs(client, 1.15, 2048) == {
+            "extra_body": {"options": {"repeat_penalty": 1.15, "num_predict": 2048}}
+        }
+
+    def test_populated_for_a_127_0_0_1_ollama_endpoint(self):
+        client = SimpleNamespace(base_url="http://127.0.0.1:11434/v1")
+        assert _ollama_sampler_kwargs(client, 1.3, 4096) == {
+            "extra_body": {"options": {"repeat_penalty": 1.3, "num_predict": 4096}}
+        }
