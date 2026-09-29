@@ -221,6 +221,23 @@ class PrismEngine:
     def repo_root(self) -> str:
         return self._repo_root
 
+    @property
+    def external_symbol_cache(self) -> dict[str, ExternalSymbolInfo]:
+        """Every `ExternalSymbolInfo` this engine instance has resolved
+        so far via `build_external_candidate_manifest` (Turn 2a), keyed
+        by qualified name - the same cache `retrieve_two_or_three_pass`
+        consults internally for its own Turn 3 hydration. Exposed as a
+        real public property (`feature/two-pass-root-imports-wiring`)
+        so an external caller doing its own manual Turn 2a/2b
+        orchestration outside `retrieve_two_or_three_pass` (`benchmarks.
+        run_two_pass_benchmark`'s own per-cell loop, which needs finer-
+        grained control - real Turn-1 degeneracy handling, per-turn cost
+        tracking - than that single bundled method exposes) can hydrate
+        against it via `prism.packer.submodular_knapsack.pack_external_
+        context_requested` without reaching into a private attribute.
+        """
+        return self._external_symbol_cache
+
     def register_pre_traversal_hook(self, callback: PreTraversalHook) -> None:
         """`callback` runs immediately before `retrieve()` calls into
         `build_context_package`, once per `retrieve()` call, in
