@@ -34,14 +34,31 @@ change that.
 |---|---|---|---|
 | **FastAPI** | Python (Tier 1) | Primary anchor - already has a formal PASS (headroom-aware gate, 900-cell aggregate + holdout replication, `reports/fastapi_seed42_closure_debrief.md`) and the validated Phase C external-dependency fix (`t018`/`t019`/`t020`). | Pinned (`0.116.1`), 25 ground-truth tasks already authored. |
 | **Django** | Python (Tier 1) | Second architectural profile within the same Tier-1 language (OOP inheritance vs. FastAPI's decorator-driven DI). **Re-run through the current gate: CLOSED** - `reports/fastapi_seed42_closure_debrief.md` Section 7 re-ran `scripts/apply_gate.py` against Django's own real, raw merged checkpoints (1800 cells qwen, 1200 cells DeepSeek), confirmed to use the fully current gate (both the MIXED-outcome and headroom-aware thresholds are ancestors of that commit, and `apply_gate.py` has had zero commits since). Verdict: EXPAND vs. baseline, STOP vs. `prism_v11`, both models - a real, reproducible directional finding, never a formal PASS; also corrects an earlier, inaccurate "gate PASS" claim about Django from commit `0eb5b11`. Nothing further scheduled for Django in this portfolio. | Pinned (`4.2.30`), 24 ground-truth tasks already authored. |
-| **Express** | TypeScript/JS (Tier 2) | First TypeScript-ecosystem target - single-package, mature, authored in plain JavaScript with a separately-versioned `@types/express` DefinitelyTyped package. Deliberately the *simpler* half of the TS story - proves the mechanism before tRPC's monorepo complexity. | Pinned (`4.21.0`), **zero ground-truth tasks authored yet**. |
-| **tRPC** | TypeScript (Tier 2) | Second, harder TypeScript-ecosystem target - real TypeScript, heavy generics, bundled `.d.ts`, but a monorepo (`packages/*`) - real npm-workspace-hoisting friction Express doesn't have (Section 4). Sequenced *after* Express, not in parallel. | Pinned (`v10.45.4`), **zero ground-truth tasks authored yet**. |
+| **Express** | TypeScript/JS (Tier 2) | First TypeScript-ecosystem target - single-package, mature, authored in plain JavaScript with a separately-versioned `@types/express` DefinitelyTyped package. Deliberately the *simpler* half of the TS story - proved the mechanism before tRPC's monorepo complexity. **CLOSED** - `reports/express_pilot_audit_gap_closure.md`: 20 ground-truth tasks, 200 real cells (2 budgets x 5 seeds), `gpt-4o-mini` run in-tree (DeepSeek's own endpoint network-blocked in this environment). Gate verdict **MIXED** vs. baseline (ΔTSR +43.00pp, CI [36.08, 49.71], excludes zero; ΔCPI_answer -1.54pp, CI [-3.50, 0.62], does not exclude zero). All 5 roadmap Exit Criteria (Section 2) checked, including the latency/turn-count SLA (Section 2 item 5, two-pass p50 2.940s vs. single-pass p50 1.327s, ~2.2x). | Pinned (`4.21.0`), 20 ground-truth tasks authored. |
+| **tRPC** | TypeScript (Tier 2) | Second, harder TypeScript-ecosystem target - real TypeScript, heavy generics, bundled `.d.ts`, but a monorepo (`packages/*`) - real npm-workspace-hoisting friction Express doesn't have (Section 4). Sequenced *after* Express, not in parallel. **CLOSED** - `reports/trpc_benchmark_debrief.md`: 25 ground-truth tasks (scoped to `packages/server/src` per Category 10, Section 4), 375 real cells (1 budget x 5 seeds x 3 engines), `gpt-4o-mini` run in-tree, same DeepSeek substitution as Express. Gate verdict **MIXED** vs. baseline (ΔTSR +33.87pp, CI [25.20, 42.67], excludes zero; ΔCPI_answer -4.07pp, CI [-6.13, -2.33], a confirmed real regression against baseline's already-perfect 1.000 CPI_answer). Cleanliness (1 - FPR against ground truth): `prism_two_pass` 76.7% vs. baseline's 36.2%. | Pinned (`v10.45.4`), 25 ground-truth tasks authored. |
 
 All four repos are already pinned in `benchmarks/corpora/
 pinned_commits.json` - zero new corpus-acquisition risk. Ground-truth
-task authoring for Express and tRPC is real, uncosted work (see
-Section 3's pilot stage) - `benchmarks/ground_truth/tasks/` currently
-holds only `django/` and `fastapi/`.
+tasks are now authored for all four repos -
+`benchmarks/ground_truth/tasks/` holds `django/`, `fastapi/`,
+`express/`, and `trpc/`.
+
+**Cross-corpus cleanliness takeaway**: the same mechanism reproduces in
+every corpus tested, independent of language or framework paradigm.
+Baseline BFS retrieval saturates CPI_answer near or at its ceiling
+(94.7-100% across FastAPI/Express/tRPC) by casting a wide, undirected
+net - the correct answer is essentially always *present* somewhere in
+context - but that net is only 36-42% relevant to any given task's own
+real ground truth, and the model fails to reliably find the right
+symbols in the right causal order inside that noise (TSR collapses to
+53-58%). `prism_two_pass`'s own curated, Turn-1-manifest-selected
+context roughly doubles that signal-to-noise ratio (Express 70.6%,
+tRPC 76.7%) - not incremental recall - and that curation gain alone is
+what drives the +33.87pp to +43.00pp TSR lift seen consistently across
+every corpus in this portfolio, at the cost of a small, real (tRPC,
+CI-confirmed) or inconclusive (Express) ΔCPI_answer regression from a
+tighter budget occasionally excluding a symbol the noisier wide net
+would have accidentally caught.
 
 **Why not a 3rd language for the public story right now**: Java and C#
 (Tier 2, per `src/prism/language_tiers.py` - real constructor-based
