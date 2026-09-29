@@ -61,6 +61,8 @@ import time
 from pathlib import Path
 
 from prism.engine import PrismEngine
+from prism.external.index import external_symbol_to_node_entry
+from prism.packer.submodular_knapsack import pack_external_context_requested, split_budget_for_external
 from prism.surface.renderer import RenderOptions, render
 
 from benchmarks.corpora.resolver import CORPORA, CorpusResolutionError, resolve
@@ -313,6 +315,82 @@ TURN1_SYSTEM_PROMPT = (
     "the index - never invent one."
 )
 
+#: Turn 2b (`feature/two-pass-root-imports-wiring`, Category 5): the
+#: external-dependency counterpart of `TURN1_SYSTEM_PROMPT`, for a task
+#: that declares `root_imports`. Deliberately a separate prompt/call,
+#: not folded into Turn 1 - the external candidate index only exists
+#: once Turn 2a (`PrismEngine.build_external_candidate_manifest`) has
+#: run against Turn 1's own already-resolved requested symbols, exactly
+#: mirroring `PrismEngine.retrieve_two_or_three_pass`'s own real turn
+#: ordering (Turn 1 -> Turn 2 internal hydration -> Turn 2a -> Turn 2b
+#: -> Turn 3), just orchestrated manually here instead of through that
+#: one bundled method (see `run_two_pass_cell`'s own docstring for why).
+TURN2B_SYSTEM_PROMPT = (
+    "You are a senior software engineer investigating a codebase. You will be given a compact "
+    "<external_candidate_index> - every real external (third-party dependency) symbol directly "
+    "reachable from the code you have already selected, one per line as "
+    "qualified_name|external|kind|signature - followed by the same real task as before. Decide which "
+    "of these real external symbols are actually needed to trace or explain the causal pipeline. Only "
+    "name symbols that appear in the index - never invent one."
+)
+
+
+def _turn2b_user_prompt(external_manifest_text: str, task_prompt: str) -> str:
+    return (
+        f"{external_manifest_text}\n\nTask:\n{task_prompt}\n\n"
+        'Respond with a JSON object: {"thought_process": "1-2 sentences on why", '
+        '"requested_symbols": ["qualified.name", ...]} - using each symbol\'s own full qualified_name '
+        "exactly as given in the index. Respond with this JSON object and nothing else."
+    )
+
+
+def _external_manifest_for_task(
+    engine: PrismEngine, task: EvaluationTask, turn1_requested_symbols: list[str],
+) -> tuple[str, set[str]]:
+    """Turn 2a for one two-pass cell - `turn1_symbols = sorted({seed_id,
+    *requested_symbols})` mirrors `PrismEngine.retrieve_two_or_three_
+    pass`'s own exact convention (the seed itself, plus whatever Turn 1
+    actually requested, is what Turn 2a scans for real external call
+    sites)."""
+    turn1_symbols = sorted({task.seed_symbol, *turn1_requested_symbols})
+    return engine.build_external_candidate_manifest(turn1_symbols, root_imports=task.root_imports)
+
+
+def _request_all_external_candidates(external_manifest_text: str) -> list[str]:
+    """The `--dry-run` path's own deterministic, zero-LLM Turn 2b stand-
+    in: request every real candidate Turn 2a found. Deliberately *not*
+    Turn 1's own dry-run convention (an empty request, relying on
+    `retrieve_requested`'s automatic direct-callee union) - there is no
+    equivalent "automatic direct external callee inclusion" for a
+    Turn-2a-resolved external symbol (admission always requires an
+    explicit Turn 2b request), so an empty request here would leave
+    `--dry-run` structurally unable to ever exercise Category 5's own
+    resolution path at all - defeating this flag's whole "checks the
+    wiring for real, for free" purpose (`run_two_pass_benchmark`'s own
+    module docstring)."""
+    names = []
+    for line in external_manifest_text.splitlines():
+        if line.startswith("<") or not line.strip():
+            continue
+        names.append(line.split("|", 1)[0])
+    return names
+
+
+def _hydrate_external(engine: PrismEngine, pkg, external_requested_symbols: list[str], external_budget: int):
+    """Turn 3 - admits `external_requested_symbols` against `engine.
+    external_symbol_cache` (populated by the Turn 2a call that already
+    ran against this same engine instance) within `external_budget`,
+    appending the admitted nodes to `pkg`. The exact same real admission
+    function `PrismEngine.retrieve_two_or_three_pass` itself calls
+    internally, factored out here so both the dry-run and real branches
+    of `run_two_pass_cell` share one hydration path rather than two
+    independently-drifting copies."""
+    items, skipped = pack_external_context_requested(
+        engine.external_symbol_cache, external_requested_symbols, external_budget,
+    )
+    external_nodes = [external_symbol_to_node_entry(engine.external_symbol_cache[item.symbol]) for item in items]
+    return pkg.model_copy(update={"nodes": [*pkg.nodes, *external_nodes]}), skipped
+
 
 class TwoPassBenchmarkError(Exception):
     """A user-facing failure (bad repo, no matching debug tasks, a
@@ -358,6 +436,15 @@ class TwoPassCellResult:
     model: str = ""
     turn1_response: str = ""
     turn2_response: str = ""
+    #: Category 5 (`feature/two-pass-root-imports-wiring`) - all zero/
+    #: empty for any task with no `root_imports` declared, so an
+    #: internal-only task's own checkpoint row is unchanged in shape
+    #: from before this field existed (a plain dict-unpack reconstructs
+    #: an old checkpoint entry fine, since these are pure additions with
+    #: defaults).
+    external_candidate_count: int = 0
+    external_requested_count: int = 0
+    external_skipped_hallucinated: list[str] = dataclasses.field(default_factory=list)
 
 
 def _turn1_user_prompt(manifest_text: str, task_prompt: str) -> str:
@@ -448,11 +535,40 @@ def run_two_pass_cell(
     rather than relying solely on the OpenAI-compat `max_tokens`
     translation, costs nothing on an endpoint that honors both and can
     only help on one that doesn't reliably honor the translated form.
+
+    Category 5 (`feature/two-pass-root-imports-wiring`): a task that
+    declares `root_imports` gets Turn 2a (`build_external_candidate_
+    manifest`)/Turn 2b (an LLM request, mirroring Turn 1's own shape)/
+    Turn 3 (`pack_external_context_requested`) woven in after the
+    existing internal Turn 1/Turn 2 - the same real turn sequence
+    `PrismEngine.retrieve_two_or_three_pass` itself uses. **Not** a call
+    to that method directly: this function already reimplements Turn
+    1/Turn 2 manually (real per-turn cost tracking, the degeneracy
+    salvage/cap-breach handling above) rather than delegating to
+    `retrieve_two_pass`, since that single bundled call exposes none of
+    those hooks - the external turns are added at the same level of
+    manual control, not by discarding everything already built here to
+    call a higher-level method instead. A task with empty `root_imports`
+    (every non-Category-5 task) skips this entirely - `internal_budget`
+    equals `budget` exactly as before this feature existed.
     """
     manifest_text, candidate_universe = engine.build_candidate_manifest(task.seed_symbol)
+    internal_budget, external_budget = (
+        split_budget_for_external(budget) if task.root_imports else (budget, 0)
+    )
 
     if client is None:
-        pkg, skipped = engine.retrieve_requested(task.seed_symbol, budget, [], candidate_universe, task_type=task.task_type)
+        pkg, skipped = engine.retrieve_requested(task.seed_symbol, internal_budget, [], candidate_universe, task_type=task.task_type)
+        external_candidate_count = 0
+        external_requested_count = 0
+        external_skipped: list[str] = []
+        if task.root_imports:
+            _ext_manifest, external_candidates = _external_manifest_for_task(engine, task, [])
+            external_candidate_count = len(external_candidates)
+            if external_candidates:
+                requested_external = _request_all_external_candidates(_ext_manifest)
+                pkg, external_skipped = _hydrate_external(engine, pkg, requested_external, external_budget)
+                external_requested_count = len(requested_external)
         candidates = selected_symbols(pkg)
         return TwoPassCellResult(
             task_id=task.task_id, budget=budget, seed=seed, tsr=None,
@@ -461,6 +577,9 @@ def run_two_pass_cell(
             fpr_gt=fpr(candidates, _ground_truth_universe(task)),
             candidate_count=len(candidate_universe), requested_count=0, skipped_hallucinated=skipped,
             turn1_parsed_ok=True,
+            external_candidate_count=external_candidate_count,
+            external_requested_count=external_requested_count,
+            external_skipped_hallucinated=external_skipped,
         )
 
     turn1_user = _turn1_user_prompt(manifest_text, task.prompt)
@@ -478,8 +597,34 @@ def run_two_pass_cell(
     )
 
     pkg, skipped = engine.retrieve_requested(
-        task.seed_symbol, budget, requested_symbols, candidate_universe, task_type=task.task_type,
+        task.seed_symbol, internal_budget, requested_symbols, candidate_universe, task_type=task.task_type,
     )
+
+    external_candidate_count = 0
+    external_requested_count = 0
+    external_skipped = []
+    turn2b_completion_tokens = 0
+    turn2b_prompt_tokens = 0
+    turn2b_cost = 0.0
+    if task.root_imports:
+        ext_manifest, external_candidates = _external_manifest_for_task(engine, task, requested_symbols)
+        external_candidate_count = len(external_candidates)
+        if external_candidates:
+            # Mirrors `retrieve_two_or_three_pass`'s own "Turn 2b only
+            # when the candidate set is non-empty" rule - no wasted LLM
+            # call when Turn 2a found nothing real to choose from.
+            turn2b_user = _turn2b_user_prompt(ext_manifest, task.prompt)
+            turn2b_call = client.complete(
+                model, TURN2B_SYSTEM_PROMPT, turn2b_user, seed=seed, task_id=task.task_id,
+                engine="prism_two_pass_turn2b",
+            )
+            requested_external, _turn2b_parsed_ok = _parse_requested_symbols(turn2b_call.content, external_candidates)
+            pkg, external_skipped = _hydrate_external(engine, pkg, requested_external, external_budget)
+            external_requested_count = len(requested_external)
+            turn2b_completion_tokens = turn2b_call.completion_tokens
+            turn2b_prompt_tokens = turn2b_call.prompt_tokens
+            turn2b_cost = turn2b_call.cost_usd or 0.0
+
     candidates = selected_symbols(pkg)
 
     rendered_xml = render(pkg, RenderOptions(include_timestamp=False, include_run_id=False))
@@ -503,11 +648,14 @@ def run_two_pass_cell(
         fpr_gt=fpr(candidates, _ground_truth_universe(task)),
         candidate_count=len(candidate_universe), requested_count=len(requested_symbols), skipped_hallucinated=skipped,
         turn1_parsed_ok=parsed_ok, turn1_degenerate=turn1_degenerate,
-        turn1_prompt_tokens=turn1_call.prompt_tokens, turn2_prompt_tokens=turn2_call.prompt_tokens,
-        completion_tokens=turn1_call.completion_tokens + turn2_call.completion_tokens,
-        cost_usd=(turn1_call.cost_usd or 0.0) + (turn2_call.cost_usd or 0.0),
+        turn1_prompt_tokens=turn1_call.prompt_tokens, turn2_prompt_tokens=turn2_call.prompt_tokens + turn2b_prompt_tokens,
+        completion_tokens=turn1_call.completion_tokens + turn2_call.completion_tokens + turn2b_completion_tokens,
+        cost_usd=(turn1_call.cost_usd or 0.0) + (turn2_call.cost_usd or 0.0) + turn2b_cost,
         model=turn2_call.model,
         turn1_response=turn1_call.content, turn2_response=turn2_call.content,
+        external_candidate_count=external_candidate_count,
+        external_requested_count=external_requested_count,
+        external_skipped_hallucinated=external_skipped,
     )
 
 

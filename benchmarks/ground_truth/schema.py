@@ -58,6 +58,18 @@ class EvaluationTask(BaseModel):
     annotation_b: GroundTruthAnnotation
     adjudicated: GroundTruthAnnotation
     cohen_kappa: float
+    #: Phase D (`feature/two-pass-root-imports-wiring`): the real
+    #: top-level npm/pip package names `PrismEngine.build_external_
+    #: candidate_manifest`'s own `root_imports` parameter needs to
+    #: resolve this task's external dependency/dependencies (Category
+    #: 5) - e.g. `["etag"]` for a task whose ground truth includes a
+    #: real external symbol like `etag.index.etag`. Empty (the default)
+    #: for every task with no external-dependency component at all -
+    #: `benchmarks.run_two_pass_benchmark`'s own per-cell loop gates its
+    #: entire Turn 2a/2b branch on this being non-empty, so an ordinary
+    #: internal-only task's behavior is completely unchanged by this
+    #: field's mere existence.
+    root_imports: list[str] = Field(default_factory=list)
 
 
 #: `compute_inter_annotator_agreement`'s own enforcement thresholds - see
