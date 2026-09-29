@@ -1,14 +1,19 @@
 # Roadmap: Public Release Benchmark Portfolio
 
-**Status: committed plan, not yet executed.** This document records the
-target portfolio, exit criteria, and sequencing agreed after Phase C's
-closure (`d7a8d2f`) and the multi-repo external-indexing validation
-pass (`f2db664`) - written to be checked against as work proceeds, the
-same discipline every other milestone in this project has held itself
-to (Phase B's own closure debrief, the Phase C architecture spec).
-Nothing in Sections 2-4 below has been executed yet; Section 1's
-portfolio choice and Section 5's Go gate are the product of real,
-already-measured data cited inline, not projection.
+**Status: Express and tRPC evaluation sweeps executed and complete;
+FastAPI and Django were already closed when this document was written.**
+This document records the target portfolio, exit criteria, and
+sequencing agreed after Phase C's closure (`d7a8d2f`) and the multi-repo
+external-indexing validation pass (`f2db664`) - written to be checked
+against as work proceeds, the same discipline every other milestone in
+this project has held itself to (Phase B's own closure debrief, the
+Phase C architecture spec). Section 3's evaluation pipeline has now run
+end-to-end for all four repos (Section 1's own table); Section 4's
+import-alias prerequisite is closed. One item remains genuinely open:
+Section 2's own mandatory manual construct-validity audit of every
+FAIL/MIXED cell has not yet been performed for tRPC's MIXED result
+(see `reports/trpc_benchmark_debrief.md` Section 5) - not silently
+marked done here.
 
 ## 0. Why this exists
 
@@ -255,13 +260,19 @@ FastAPI already PASS (banked)                                    ---/
 Import-alias tracking (Section 4, prerequisite) -- CLOSED, feature/import-alias-resolution
   |
   v
-Express: graph-quality spike -> locator -> 5-8 task pilot -> full 20-25/5-seed run -> gate + audit
+Express: graph-quality spike -> locator -> 20-task suite -> 200-cell run -> gate + audit
+         DONE - MIXED (dTSR +43.00pp, dCPI_answer -1.54pp), all 5 exit criteria
+         checked, see reports/express_pilot_audit_gap_closure.md
   |
   v
-tRPC:    graph-quality spike -> locator -> 5-8 task pilot -> full 20-25/5-seed run -> gate + audit
+tRPC:    graph-quality spike -> locator -> 25-task suite -> 375-cell run -> gate + audit
+         Gate DONE - MIXED (dTSR +33.87pp, dCPI_answer -4.07pp), see
+         reports/trpc_benchmark_debrief.md; manual audit of MIXED cells
+         (exit criterion 4) NOT yet performed - real, open next step
   |
   v
-Python + TypeScript portfolio complete -> public release readiness review
+Python + TypeScript portfolio: gates complete on all four repos ->
+tRPC's own manual audit, then public release readiness review
 
 (separately, unscheduled, gated on its own bar:)
 Go receiver-call resolution on gin-gonic/gin: 49.75% -> re-measure past 80%
