@@ -118,22 +118,157 @@ class GlobalSymbolTable:
         # function/method symbols are indexed here: a class or a bare
         # attribute is never itself the target of an ambiguous *call*.
         self._simple_name_index: dict[str, list[str]] = {}
+        #: Option C (`reports/symbol_table_collision_spike.md`): `{base_
+        #: qualified_name: [base_qualified_name, suffixed_key, ...]}` -
+        #: populated only when `add()` actually detects a genuine
+        #: same-qualified-name collision (two real, different definitions
+        #: - never a harmless re-registration of the same one, e.g. a
+        #: cache-hit rehydration replaying an already-suffixed key
+        #: unchanged). Empty for the overwhelming majority of real repos,
+        #: which never collide at all. Queried via `collisions_for`.
+        self.collisions: dict[str, list[str]] = {}
 
-    def add(self, symbol: SymbolInfo) -> None:
-        self._symbols[symbol.qualified_name] = symbol
-        simple_name = symbol.qualified_name.rsplit(".", 1)[-1]
-        self._module_index.setdefault(symbol.module, {})[simple_name] = symbol.qualified_name
-        # Also index by the class-qualified name (Class.method) so `self.method()`
-        # resolution can look up `EnclosingClass.method` without the module prefix.
-        if symbol.enclosing_class is not None:
-            class_simple = symbol.enclosing_class.rsplit(".", 1)[-1]
-            local_name = f"{class_simple}.{simple_name}"
-            self._module_index.setdefault(symbol.module, {})[local_name] = symbol.qualified_name
+    def add(self, symbol: SymbolInfo) -> str:
+        """Registers `symbol`, returning the real key it was stored
+        under - identical to `symbol.qualified_name` unless a genuine
+        collision was detected, in which case a deterministic `#N`
+        suffix is appended and *that* key is returned. A caller that
+        also maintains its own qualified-name-keyed structure alongside
+        this table (`ConcreteGraphBuilder._def_nodes`) must use this
+        return value, not `symbol.qualified_name` directly, to stay
+        consistent with which real definition this table actually
+        stored under which key.
+
+        Collision detection (Option C, `reports/symbol_table_collision_
+        spike.md`): two `add()` calls for the same `qualified_name` are
+        the *same* real definition - a harmless re-registration, not a
+        collision - iff they agree on both `file` and `line_range` (the
+        two fields that together uniquely identify a real, physical
+        definition site). This is exactly what happens on a cache-hit
+        rehydration (`prism.runtime.index_cache`): the cached data
+        already has any real collision's own suffix baked into its own
+        serialized `qualified_name` string, so replaying it here never
+        re-triggers this branch - every rehydrated entry's key is
+        already unique by construction. A *genuine* collision (two
+        really different definitions - e.g. a module's own real,
+        top-level `param` function and an unrelated closure named
+        `param` nested inside a different function, `docs/architecture_
+        boundaries.md`-adjacent territory this table's own ancestor-walk
+        limitation in `ConcreteGraphBuilder._register_definition`
+        produces) keeps the *first*-registered definition under the
+        clean, unsuffixed name - `get(qualified_name)`'s own contract is
+        therefore "the primary/first real declaration for this name",
+        never an arbitrary last-write-wins pick - and assigns every
+        subsequent different one the next free `f"{qualified_name}#{n}"`
+        (n starting at 2 - the base key is implicitly "#1"), recording
+        the full real set in `self.collisions` for explicit querying
+        rather than leaving it undiscoverable.
+        """
+        base_key = symbol.qualified_name
+        existing = self._symbols.get(base_key)
+        simple_name = base_key.rsplit(".", 1)[-1]
+
+        if existing is None or (existing.file, existing.line_range) == (symbol.file, symbol.line_range):
+            # First registration, or a harmless re-registration of the
+            # exact same physical definition (a cache-hit rehydration
+            # replaying an already-unique serialized key). Plain
+            # overwrite - a real, pre-existing, unrelated ambiguity this
+            # fix isn't scoped to touch: two genuinely different
+            # qualified names sharing a bare simple name in one module
+            # already resolved "whichever was registered last" before
+            # this change and still does.
+            key = base_key
+            self._symbols[key] = symbol
+            self._module_index.setdefault(symbol.module, {})[simple_name] = key
+            # Also index by the class-qualified name (Class.method) so `self.method()`
+            # resolution can look up `EnclosingClass.method` without the module prefix.
+            if symbol.enclosing_class is not None:
+                class_simple = symbol.enclosing_class.rsplit(".", 1)[-1]
+                local_name = f"{class_simple}.{simple_name}"
+                self._module_index.setdefault(symbol.module, {})[local_name] = key
+            if symbol.kind in ("function", "method"):
+                self._simple_name_index.setdefault(simple_name, []).append(key)
+            return key
+
+        # Genuine collision: two real, different definitions share
+        # `base_key`. Normally `existing` keeps the canonical,
+        # unsuffixed slot (the "first real declaration wins" rule) and
+        # `symbol` is assigned the next free `#N` suffix - UNLESS
+        # `existing` is a bare interface/stub declaration (the
+        # `typing.overload` convention: one or more signature-only
+        # stubs, each with an `...`/`pass` body, immediately followed by
+        # the real, fully-bodied implementation) and `symbol` is a real
+        # implementation, in which case `symbol` *promotes* into the
+        # canonical slot instead and `existing` is demoted to the `#N`
+        # sibling. Without this, first-wins would make an `@overload`
+        # stub - never itself callable - the permanent `get()` answer
+        # for names like `Jinja2Templates.__init__`, regressing this
+        # table's prior (accidental, but correct for this specific,
+        # extremely common pattern) last-write-wins behavior. Two stubs
+        # colliding with each other (`symbol` also `INTERFACE`) still
+        # resolve via plain first-wins, exactly like any other
+        # collision - only a *real* implementation ever promotes, and a
+        # stub arriving after a real implementation never bumps it.
+        promote = existing.role is SymbolRole.INTERFACE and symbol.role is not SymbolRole.INTERFACE
+
+        n = 2
+        while f"{base_key}#{n}" in self._symbols:
+            n += 1
+        sibling_key = f"{base_key}#{n}"
+        self.collisions.setdefault(base_key, [base_key]).append(sibling_key)
+
+        # A suffixed/demoted registration never touches `_module_index` -
+        # Rule D's bare-name lookup must keep resolving to the primary
+        # declaration's own key exactly like `get()` does. In the
+        # `promote` case that key is still `base_key` (only *which*
+        # object lives there changes), so `_module_index` - already
+        # pointing at `base_key` from the stub's own original
+        # registration - needs no update there either.
+        if promote:
+            self._symbols[sibling_key] = existing
+            existing.qualified_name = sibling_key
+            self._symbols[base_key] = symbol
+            if existing.kind in ("function", "method"):
+                self._simple_name_index.setdefault(simple_name, []).append(sibling_key)
+            return base_key
+
+        # The stored object's own `qualified_name` must reflect the real
+        # key it was registered under - otherwise two colliding siblings
+        # report the identical `qualified_name` (the shared `base_key`)
+        # despite living under different table keys, and every consumer
+        # that reads a `SymbolInfo` back out (Polysemy Disambiguation's
+        # `candidates_for_simple_name` included) can't tell them apart.
+        symbol.qualified_name = sibling_key
+        self._symbols[sibling_key] = symbol
         if symbol.kind in ("function", "method"):
-            self._simple_name_index.setdefault(simple_name, []).append(symbol.qualified_name)
+            # Every real candidate for this bare simple name - base key
+            # *and* any `#N` collision siblings - so `candidates_for_
+            # simple_name` (Polysemy Disambiguation) can see and score
+            # between them exactly as it already does for same-named
+            # functions in different modules, now extended to same-named
+            # functions colliding in the *same* module too.
+            self._simple_name_index.setdefault(simple_name, []).append(sibling_key)
+        return sibling_key
 
     def get(self, qualified_name: str) -> SymbolInfo | None:
         return self._symbols.get(qualified_name)
+
+    def collisions_for(self, qualified_name: str) -> list[SymbolInfo]:
+        """Every real `SymbolInfo` registered under `qualified_name`'s
+        own real collision group - `[get(qualified_name)]` (a single-
+        element list) for the overwhelming majority of names, which
+        never collide with anything; the real, explicit full set
+        (primary declaration first, then each `#N` sibling in
+        registration order) for one that does. Never raises, never
+        returns an empty list for a name that's genuinely in this table
+        - only `[]` for a name that was never registered at all, the
+        same "no fabricated answer" contract `get()` itself already
+        has."""
+        keys = self.collisions.get(qualified_name)
+        if keys is None:
+            symbol = self._symbols.get(qualified_name)
+            return [symbol] if symbol is not None else []
+        return [self._symbols[k] for k in keys if k in self._symbols]
 
     def __contains__(self, qualified_name: str) -> bool:
         return qualified_name in self._symbols
