@@ -141,3 +141,65 @@ model that prices a `READS_STATE` hop cheaply enough to avoid the
 degree-explosion failure mode above, validated against the same real
 corpora (FastAPI, Django) Category 9's own before/after evaluation used.
 Out of scope for v1.
+
+---
+
+## Category 10: Monorepo-Internal Cross-Package Resolution
+
+**Limitation.** `TypeScriptSourceLocator` (`src/prism/external/
+locator_ts.py`, Category 8's own external-dependency resolver) resolves
+a package's typed entry point strictly from its `package.json`'s
+declared build output (`types`/`typings`, `exports["."]`'s own `types`
+condition, or a `main`-adjacent `.d.ts`) - the correct, and only
+correct, contract for a genuinely *external* npm dependency, whose
+published tarball already contains real, pre-built `dist/` output.
+Inside a real pnpm/yarn/npm-workspace monorepo, a *sibling* package
+(`@trpc/client` importing `@trpc/server`, confirmed live against the
+real, pinned tRPC v10.45.4 corpus) resolves through `node_modules` to a
+real workspace symlink pointing at that sibling's own package directory
+(`packages/client/node_modules/@trpc/server -> ../../../server`) - but
+that directory's `package.json` still declares `"types": "dist/
+index.d.ts"` / `"main": "dist/index.js"`, and `dist/` is never built in
+a source checkout with no compile step run (confirmed: no `dist/`
+directory exists in the pinned commit at all). `TypeScriptSourceLocator`
+correctly finds the symlink, correctly reads the real `package.json`,
+and correctly returns `[]` - there is no fabricated fallback to the
+sibling's own `src/index.ts`, since nothing in Category 8's contract
+says a locator should ever read a package's *unbuilt* source instead of
+its own declared, built entry point. A genuine third-party dependency in
+the same monorepo (`@tanstack/react-query`, a real, separately-published
+package with its own real built output already in pnpm's content-
+addressable store) resolves correctly through this exact same code path
+- confirmed live in the same validation pass - so this is not a general
+monorepo/pnpm incompatibility, only the same-repo-sibling case
+specifically.
+
+**Why this is architectural, not an oversight.** Recognizing "this
+`node_modules` entry is actually a workspace symlink back into my own
+repo, so read its `src/` instead of its declared build output" is a
+fundamentally different resolution question than anything Category 8's
+`ExternalSourceLocator` protocol was designed to answer - it requires
+detecting a symlink (or an equivalent workspace-manifest cross-
+reference) *before* falling into the ordinary `package.json`-driven
+chain, then re-entering indexing on that sibling package's own `src/`
+tree via the ordinary in-repo path (`ConcreteGraphBuilder`, not
+`extract_external_symbol`) rather than the external-stub rendering path
+`external_symbol_to_node_entry` produces - a same-repo sibling's real
+source should arguably never be rendered as an `L2_skeleton` external
+stub at all, since (unlike a genuine third party) its real body is
+right there on disk. Building this properly means a third resolution
+tier alongside "resolve in this repo" and "resolve as an external
+stub," not a parameterization of either existing one.
+
+**What would have to change to lift this.** A workspace-awareness layer
+that (a) detects a `node_modules/<pkg>` entry that is a symlink pointing
+back inside the same repository root (not just an ordinary installed
+copy), (b) resolves the sibling package as a second in-repo indexing
+root rather than an external stub, and (c) defines how cross-package
+in-repo symbols compose with the existing single-repo `GlobalSymbolTable`
+(a second, separate table per workspace package, or one table spanning
+the whole workspace - a real design decision, not a given). Out of scope
+for the tRPC pilot: ground-truth tasks are scoped to `packages/server`
+(itself a zero-runtime-dependency package with no cross-package imports
+of its own), sidestepping this gap entirely rather than authoring tasks
+against a known-unresolvable retrieval path.

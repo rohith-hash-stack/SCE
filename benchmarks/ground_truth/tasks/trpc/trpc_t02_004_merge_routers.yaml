@@ -1,0 +1,90 @@
+# T02 "tRPC Pilot" - Task 4: `mergeRouters` combining multiple routers.
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   core.internals.mergeRouters.mergeRouters               lines 37-90
+#   core.internals.mergeWithoutOverrides.mergeWithoutOverrides lines 4-19
+#   core.router.createRouterFactory                        lines 194-277
+#
+# Real source: mergeRouters(...) first merges every input router's own
+# `procedures` record via mergeWithoutOverrides({}, ...), then (after
+# separately reducing an error formatter and a transformer across the
+# input routers, neither of which is itself a further real pipeline call)
+# builds the actual merged router via createRouterFactory({...})(record)
+# - the same router-construction entry point trpc_t02_001/trpc_t02_006
+# also exercise, confirming this real subsystem is reachable from more
+# than one real, independent call site in the codebase.
+task_id: trpc_t02_004_merge_routers
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.internals.mergeRouters.mergeRouters
+task_type: debug
+prompt: 'You are investigating how tRPC combines multiple routers into one via `mergeRouters`, starting from
+  `mergeRouters` in core/internals/mergeRouters.ts. Trace the real causal pipeline it runs through to
+  produce the merged router.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["core.internals.mergeRouters.mergeRouters", "core.internals.mergeWithoutOverrides.mergeWithoutOverrides"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - core.internals.mergeRouters.mergeRouters
+  - core.internals.mergeWithoutOverrides.mergeWithoutOverrides
+  - core.router.createRouterFactory
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: mergeRouters first merges every input router's own procedures record via
+    mergeWithoutOverrides({}, ...routerList.map(r => r._def.record)), then builds the real merged router by
+    calling createRouterFactory with the reduced config, invoked immediately with the merged record.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.internals.mergeRouters.mergeRouters
+  - core.router.createRouterFactory
+  - core.internals.mergeWithoutOverrides.mergeWithoutOverrides
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: mergeRouters builds the merged router via createRouterFactory, using
+    mergeWithoutOverrides to combine the input routers' own procedure records. (Same real two-stage
+    pipeline as the adjudicated answer, but in the wrong causal order - mergeWithoutOverrides runs first in
+    the real source, building the record createRouterFactory is then called with, not the other way
+    around.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - core.internals.mergeRouters.mergeRouters
+  - core.internals.mergeWithoutOverrides.mergeWithoutOverrides
+  - core.router.createRouterFactory
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: mergeRouters calls mergeWithoutOverrides first to combine the input routers' own
+    procedure records, then passes the merged record into createRouterFactory to build the real merged
+    router - both real, reachable, and necessary pipeline stages, in this real causal order. annotator_b
+    found both real stages but reported them in the reversed order, not matching the real source's own
+    execution sequence.

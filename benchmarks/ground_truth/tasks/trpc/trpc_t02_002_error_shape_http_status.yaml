@@ -1,0 +1,99 @@
+# T02 "tRPC Pilot" - Task 2: router-level error shaping
+# (`Router.getErrorShape`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   core.router.createRouterInner.getErrorShape       lines 254-272
+#   http.getHTTPStatusCode.getHTTPStatusCodeFromError lines 60-62
+#   http.getHTTPStatusCode.getStatusCodeFromKey       lines 31-33
+#
+# Real, disclosed structural finding (the exact motivating case for
+# `docs/architecture_boundaries.md` Category 10's own fix, epic/engine-
+# hardening-and-consolidation): `getErrorShape` is a real object-literal
+# method (`createRouterFactory` -> `createRouterInner` -> `return {
+# ..., getErrorShape(opts) {...} }`), not a class method or a top-level
+# function. Before this session's own object-literal-method-scoping fix,
+# `_register_definition`'s ancestor walk only recognized an enclosing
+# *class* as a real scope boundary - `getErrorShape` would have
+# registered as a bare, flat `core.router.getErrorShape` with no real
+# standalone identity, and its own real call into `getHTTPStatusCode
+# FromError` would never have appeared in its own candidate manifest at
+# all (that call site was verified missing from the pre-fix manifest
+# directly, live against this exact repo, before authoring this task).
+# The fix scopes it correctly to `core.router.createRouterInner.
+# getErrorShape` - its real owning function - restoring full recall.
+# This task exists specifically to validate that fix against a real,
+# independently-authored ground-truth pipeline, not just the spike's own
+# ad hoc check.
+task_id: trpc_t02_002_error_shape_http_status
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.router.createRouterInner.getErrorShape
+task_type: debug
+prompt: 'You are investigating how tRPC''s router shapes an error into its wire response, starting from
+  `getErrorShape` on the router object built by `createRouterFactory` in core/router.ts. Trace the real
+  causal pipeline it runs through to derive the HTTP status code for that error.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["core.router.createRouterInner.getErrorShape", "http.getHTTPStatusCode.getHTTPStatusCodeFromError"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - core.router.createRouterInner.getErrorShape
+  - http.getHTTPStatusCode.getHTTPStatusCodeFromError
+  - http.getHTTPStatusCode.getStatusCodeFromKey
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: getErrorShape calls getHTTPStatusCodeFromError(opts.error) to compute the shape's
+    data.stack/data.code/httpStatus fields; getHTTPStatusCodeFromError itself delegates the actual HTTP
+    status lookup to getStatusCodeFromKey(error.code), which maps the tRPC error code to a real HTTP status
+    number via a static JSONRPC2_TO_HTTP_CODE table.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.router.createRouterInner.getErrorShape
+  - http.getHTTPStatusCode.getHTTPStatusCodeFromError
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: getErrorShape calls getHTTPStatusCodeFromError to get the real HTTP status code for
+    the response shape's data.httpStatus field. (Stopped one stage short - getHTTPStatusCodeFromError's own
+    body is a single-line delegation to getStatusCodeFromKey, easy to treat as "the same function" rather
+    than a distinct, separately indexed pipeline stage.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - core.router.createRouterInner.getErrorShape
+  - http.getHTTPStatusCode.getHTTPStatusCodeFromError
+  - http.getHTTPStatusCode.getStatusCodeFromKey
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: getErrorShape calls getHTTPStatusCodeFromError(opts.error), which itself delegates to
+    getStatusCodeFromKey(error.code) - a real, separate, two-file pipeline stage, not the same function.
+    annotator_b's pipeline is real but incomplete, stopping at the first hop rather than following the real
+    delegation one stage further.

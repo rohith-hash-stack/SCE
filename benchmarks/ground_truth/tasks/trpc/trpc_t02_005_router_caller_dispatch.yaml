@@ -1,0 +1,122 @@
+# T02 "tRPC Pilot" - Task 5: server-side router caller dispatch
+# (`router.createCaller(ctx)`).
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph.
+#
+#   core.router.createRouterInner.createCaller lines 251-253
+#   core.router.createCallerFactory             lines 299-342
+#   core.router.callProcedure                   lines 282-297
+#   error.TRPCError.TRPCError                   lines 26-52
+#
+# Real source: `createCaller`, a real object-literal method on the
+# router object `createRouterFactory` builds (the exact same fix
+# category as trpc_t02_002's own seed - see docs/architecture_
+# boundaries.md Category 10), delegates to
+# `createCallerFactory<TConfig>()(router as any)(ctx)`. createCallerFactory
+# itself returns two further, real, nested (never separately top-level-
+# registered) function expressions - `createCallerInner`, then an
+# inner, differently-scoped `createCaller` closure - whose own body
+# calls `callProcedure(...)` for the real interop-mode dispatch path.
+# `callProcedure` constructs a `new TRPCError(...)` when the requested
+# procedure type doesn't match what was actually registered. This whole
+# chain - three real function-expression hops deep, none of them a
+# separately registered symbol - correctly attributes every one of these
+# calls to `createCallerFactory`'s own candidate manifest, confirmed
+# directly against this real repo (not assumed from reading source
+# alone).
+#
+# Real, disclosed structural findings (boundary_symbols / prompt
+# fidelity):
+#   - `createRecursiveProxy` (shared/createProxy/index.ts) is a real call
+#     this pipeline makes (`createCaller`'s own proxy wrapper), but - like
+#     trpc_t02_001's `createFlatProxy` - it is an arrow-function-assigned-
+#     to-const export, a shape this codebase's Pass 1 does not register as
+#     a definition. Recorded in boundary_symbols, not silently dropped.
+#   - `procedureTypes.includes(...)` (a real call in the same function)
+#     is a builtin `Array.prototype.includes` invocation on a plain array
+#     named `procedureTypes` - not a real repo symbol at all. It appears
+#     as a dead candidate line in the raw Turn-1 manifest (resolving to no
+#     real node, exactly like `router.ts`'s own `reservedWords.includes`
+#     case documented in the collision-fix commit), and is neither a
+#     pipeline stage nor a boundary symbol - it is not excluded from
+#     anything because it was never a real candidate to begin with.
+task_id: trpc_t02_005_router_caller_dispatch
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.router.createRouterInner.createCaller
+task_type: debug
+prompt: 'You are investigating how tRPC dispatches a server-side call made through `router.createCaller(ctx)`,
+  starting from `createCaller` on the router object built by `createRouterFactory` in core/router.ts. Trace
+  the real causal pipeline it runs through, including how a mismatched procedure type is turned into a real
+  error.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["core.router.createRouterInner.createCaller", "core.router.createCallerFactory"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - core.router.createRouterInner.createCaller
+  - core.router.createCallerFactory
+  - core.router.callProcedure
+  - error.TRPCError.TRPCError
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - shared.createProxy.createRecursiveProxy
+  expected_solution: createCaller delegates to createCallerFactory()(router)(ctx), whose own returned
+    closure calls callProcedure for the interop-mode dispatch path; callProcedure constructs a real
+    TRPCError when the requested procedure type doesn't match what was actually registered.
+    createRecursiveProxy is a real call in the same chain but is an arrow-function-assigned-to-const export,
+    a shape this codebase's indexer does not register as a definition.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.router.createRouterInner.createCaller
+  - core.router.createCallerFactory
+  - core.router.callProcedure
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - shared.createProxy.createRecursiveProxy
+  expected_solution: createCaller delegates through createCallerFactory to callProcedure, which actually
+    dispatches the call. (Missed that callProcedure itself constructs a real TRPCError on a procedure-type
+    mismatch - a real, separate terminal pipeline stage, not merely part of callProcedure's own single,
+    undifferentiated body.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - core.router.createRouterInner.createCaller
+  - core.router.createCallerFactory
+  - core.router.callProcedure
+  - error.TRPCError.TRPCError
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols:
+  - shared.createProxy.createRecursiveProxy
+  expected_solution: createCaller delegates through createCallerFactory's own nested closures to
+    callProcedure, which constructs a real TRPCError when the requested procedure type doesn't match what
+    was registered - a real, separate, reachable terminal stage. annotator_b's pipeline is real but stops
+    one stage short, not following callProcedure's own error-construction path through to TRPCError.

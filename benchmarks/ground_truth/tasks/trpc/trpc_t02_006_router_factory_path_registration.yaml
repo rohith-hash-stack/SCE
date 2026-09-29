@@ -1,0 +1,111 @@
+# T02 "tRPC Pilot" - Task 6: router-factory procedure-path registration.
+#
+# Grounded in the real pinned tRPC v10.45.4 checkout (packages/server/src)
+# - every symbol verified against the real indexed symbol table, every
+# pipeline stage's transitive reachability verified via networkx.has_path
+# over builder.calls_graph. This is the exact seed used for Phase 3's own
+# zero-LLM-cost graph-quality spike (see docs/architecture_boundaries.md
+# Category 10's own header) - authored as a real ground-truth task, not
+# just an ad hoc spike check, once the object-literal-method-scoping fix
+# made this seed's own manifest fully clean.
+#
+#   core.router.createRouterFactory  lines 194-277
+#   core.internals.omitPrototype.omitPrototype lines 5-9
+#   core.router.recursiveGetPaths    lines 213-228
+#
+# Real source: createRouterFactory returns createRouterInner, which
+# first builds `routerProcedures` via omitPrototype({}) (a real,
+# indexed, cross-file call - `internals/omitPrototype.ts`), then defines
+# and immediately calls `recursiveGetPaths(procedures)` - a real,
+# same-file, self-recursive function that walks the procedure tree
+# (recursing into itself for a nested sub-router, calling `isRouter` at
+# each step to decide whether to recurse further). `recursiveGetPaths`
+# and `isRouter` are excluded from this task's own pipeline (kept to
+# createRouterFactory's own two direct real stages, matching how
+# trpc_t02_004/001 each stop at a natural real boundary rather than
+# chasing every transitively reachable symbol into one maximal chain) -
+# recursiveGetPaths's own further real self-recursion is a distinct,
+# separate causal question this task does not ask about.
+#
+# Real, disclosed structural finding: `createRouterInner` also calls
+# `reservedWords.includes(v)` - a bare `Array.prototype.includes` call
+# on a plain module-level array literal (`const reservedWords = [...]`
+# at router.ts:171), not a call into any real class/namespace method.
+# This resolves in the raw Turn-1 candidate manifest as a dead candidate
+# line naming a nonexistent symbol (`core.router.reservedWords.
+# includes`) - confirmed directly: that string is not in the real symbol
+# table at all. This is real manifest noise (a receiver-based call
+# resolution heuristic mistaking a builtin array method for a namespaced
+# call), not a missed pipeline stage or an indexing gap needing its own
+# boundary_symbols entry, since it never names a real definition to begin
+# with.
+task_id: trpc_t02_006_router_factory_path_registration
+repo: trpc
+pinned_commit: 2ec29bfa2e3a170901be5201962f30e9faf73f96
+seed_symbol: core.router.createRouterFactory
+task_type: debug
+prompt: 'You are investigating how tRPC''s router factory registers a router''s own procedure paths,
+  starting from `createRouterFactory` in core/router.ts. Trace the real causal pipeline it runs through
+  before the router object itself is built.
+
+
+  First give a short (2-4 sentence) explanation of the pipeline.
+
+
+  Then, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified
+  symbol names in that causal order - only symbols actually present in the provided context package may
+  appear, e.g.:
+
+
+  ```json
+
+  ["core.router.createRouterFactory", "core.internals.omitPrototype.omitPrototype"]
+
+  ```
+
+  '
+annotation_a:
+  annotator_id: annotator_a
+  pipeline_symbols:
+  - core.router.createRouterFactory
+  - core.internals.omitPrototype.omitPrototype
+  - core.router.recursiveGetPaths
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: createRouterFactory's returned createRouterInner first builds an empty procedures
+    record via omitPrototype({}), then calls recursiveGetPaths(procedures) to walk the input procedure tree
+    and populate that record with every real procedure's own dotted path.
+annotation_b:
+  annotator_id: annotator_b
+  pipeline_symbols:
+  - core.router.createRouterFactory
+  - core.router.recursiveGetPaths
+  - core.internals.omitPrototype.omitPrototype
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: createRouterFactory calls recursiveGetPaths to walk the procedure tree and
+    omitPrototype to build a clean record for it. (Same two real stages as the adjudicated answer, but in
+    the wrong causal order - omitPrototype runs first in the real source, building the empty record
+    recursiveGetPaths is then called to populate.)
+adjudicated:
+  annotator_id: adjudicator
+  pipeline_symbols:
+  - core.router.createRouterFactory
+  - core.internals.omitPrototype.omitPrototype
+  - core.router.recursiveGetPaths
+  critical_callers: []
+  orthogonal_neighbors: []
+  reference_symbols: []
+  required_context: []
+  boundary_symbols: []
+  expected_solution: createRouterFactory's returned createRouterInner calls omitPrototype({}) first to
+    build an empty, clean procedures record, then calls recursiveGetPaths(procedures) to walk the real
+    procedure tree and populate it - both real, reachable, and necessary, in this real causal order.
+    annotator_b found both real stages but reported them in the reversed order, not matching the real
+    source's own execution sequence.
