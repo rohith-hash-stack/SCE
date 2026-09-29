@@ -38,6 +38,8 @@ from prism.parser.lang_config import (
     CALL_NODE_TYPE,
     CLASS_NODE_TYPES,
     DECORATED_WRAPPER_TYPES,
+    ENCLOSING_FUNCTION_EXPRESSION_TYPES,
+    OBJECT_LITERAL_NODE_TYPES,
     RETURN_STATEMENT_NODE_TYPE,
     SELF_TOKEN_TEXT,
     call_callee_segments,
@@ -535,12 +537,35 @@ class ConcreteGraphBuilder:
             if receiver_type is not None:
                 enclosing_class = f"{module}.{receiver_type}"
         else:
+            object_literal_types = OBJECT_LITERAL_NODE_TYPES.get(lang, set())
+            enclosing_function_types = ENCLOSING_FUNCTION_EXPRESSION_TYPES.get(lang, set())
             cursor = node.parent
+            passed_object_literal = False
             while cursor is not None:
                 if cursor.type in class_types:
                     cls_name_node = cursor.child_by_field_name("name")
                     if cls_name_node is not None:
                         enclosing_class = f"{module}.{node_text(cls_name_node, parsed.source)}"
+                    break
+                if cursor.type in object_literal_types:
+                    passed_object_literal = True
+                elif passed_object_literal and cursor.type in enclosing_function_types:
+                    # tRPC `router.ts` shape: a factory function returning
+                    # `{ method() {...}, ... }` - `method`'s real scope is
+                    # this function, not the bare enclosing module (which
+                    # would otherwise give it the exact same qualified-
+                    # name shape a genuine top-level export gets, despite
+                    # being a per-invocation object property with no real
+                    # standalone identity - `reports/symbol_table_
+                    # collision_spike.md`-adjacent territory, just for
+                    # object-literal methods instead of plain nested
+                    # functions). Never climbs past this nearest owning
+                    # function even when its own name can't be determined
+                    # (an anonymous callback/IIFE) - falls back to the
+                    # pre-existing flat registration instead of guessing.
+                    outer_name = _enclosing_function_own_name(cursor, parsed)
+                    if outer_name is not None:
+                        enclosing_class = f"{module}.{outer_name}"
                     break
                 cursor = cursor.parent
 
@@ -2825,6 +2850,30 @@ def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | N
     if left is None or left.type != ATTRIBUTE_NODE_TYPE.get(lang):
         return None
     return left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
+
+
+def _enclosing_function_own_name(func_node: Node, parsed: ParsedFile) -> str | None:
+    """The name of a function that owns/returns an object literal a
+    `method_definition` was found inside (`ENCLOSING_FUNCTION_EXPRESSION_
+    TYPES`'s own tRPC `router.ts` use case in `_register_definition`) -
+    the function's own `name:` field when it has one (`function
+    createRouterInner() {...}`), else the name of the variable it's
+    directly assigned to for an anonymous arrow/function expression
+    (`const makeRouter = () => {...}`). `None` for a fully anonymous
+    expression with neither (an inline callback argument, an IIFE) -
+    deliberately not chased any further up the chain; fabricating an
+    unstable positional name would be worse than the caller's own
+    pre-existing fallback (flat, unscoped registration).
+    """
+    name_node = func_node.child_by_field_name("name")
+    if name_node is not None:
+        return node_text(name_node, parsed.source)
+    parent = func_node.parent
+    if parent is not None and parent.type == "variable_declarator":
+        var_name_node = parent.child_by_field_name("name")
+        if var_name_node is not None:
+            return node_text(var_name_node, parsed.source)
+    return None
 
 
 def _strip_jsonc_comments(text: str) -> str:
