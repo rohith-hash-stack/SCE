@@ -273,6 +273,7 @@ class OpenAICompatibleClient:
         task_id: str | None = None,
         engine: str | None = None,
         extra_body: dict | None = None,
+        response_format: dict | None = {"type": "json_object"},  # noqa: B006 - never mutated
     ) -> CallResult:
         """One chat-completions call, retrying on HTTP 429
         (`openai.RateLimitError`) per `RATE_LIMIT_BACKOFF_SECONDS`
@@ -292,7 +293,9 @@ class OpenAICompatibleClient:
         literal string `None`) for a caller - `run_tsr_prompt`'s own
         `FakeClient`-based tests included - that doesn't pass them.
 
-        Always sends `response_format={"type": "json_object"}`: a
+        Sends `response_format={"type": "json_object"}` unless the caller
+        passes `response_format=None` (plain-text protocols such as the
+        Agentless baseline): a
         standard OpenAI-compatible chat-completions parameter, accepted
         by both DeepSeek's endpoint and Ollama's OpenAI-compatible one
         (confirmed for Ollama; DeepSeek's own docs are unreachable from
@@ -322,7 +325,7 @@ class OpenAICompatibleClient:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    response_format={"type": "json_object"},
+                    **({"response_format": response_format} if response_format is not None else {}),
                     stop=list(STOP_SEQUENCES),
                     **({"seed": seed} if seed is not None else {}),
                     **({"extra_body": extra_body} if extra_body is not None else {}),
