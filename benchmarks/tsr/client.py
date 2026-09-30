@@ -402,7 +402,16 @@ class OpenAICompatibleClient:
             cost_usd=cost,
             latency_seconds=round(latency, 4),
             seed=seed,
+            system_fingerprint=_str_or_none(getattr(response, "system_fingerprint", None)),
+            response_model=_str_or_none(getattr(response, "model", None)),
         )
+
+
+def _str_or_none(value: object) -> str | None:
+    """A response attribute only if it's a real string - a test double
+    (a `MagicMock` response, say) yields a non-JSON-serializable mock
+    for any attribute it wasn't explicitly given."""
+    return value if isinstance(value, str) else None
 
 
 def _known_model_pricing_override(model: str) -> tuple[float | None, float | None]:
