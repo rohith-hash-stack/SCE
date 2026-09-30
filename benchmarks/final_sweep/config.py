@@ -13,7 +13,7 @@ from typing import Literal
 #: Bumped whenever a change here or in `arms.py`/`context_ops.py` could
 #: change what a cell measures - logged per cell, so rows produced by
 #: different harness revisions are never silently pooled.
-HARNESS_VERSION = "final-sweep-8arms/1.0"
+HARNESS_VERSION = "final-sweep-8arms/1.1"
 
 #: Pinned snapshot, never the floating `gpt-4o-mini` alias.
 DEFAULT_MODEL = "gpt-4o-mini-2024-07-18"
@@ -21,8 +21,10 @@ DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_API_KEY_ENV = "OPENAI_API_KEY"
 
 #: Non-zero on purpose: at 0.0 repeated seeds collapse to near-identical
-#: samples and the seed axis stops estimating variance.
-DEFAULT_TEMPERATURE = 0.2
+#: samples and the seed axis stops estimating variance. The tRPC pilot ran
+#: at 0.2 and only 0-3/25 tasks per arm changed outcome across seeds, so
+#: the full sweep uses 0.4.
+DEFAULT_TEMPERATURE = 0.4
 
 #: Retrieval budget every arm packs against.
 DEFAULT_BUDGET = 8000

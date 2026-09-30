@@ -217,7 +217,7 @@ def test_end_to_end_sweep_all_arms(tmp_path, corpus):
         assert validate_record(row) == [], (row["engine_id"], validate_record(row))
         assert row["status"] == "ok", row["error"]
         assert row["system_fingerprint"] == "fp_test"
-        assert row["temperature"] == pytest.approx(0.2)
+        assert row["temperature"] == pytest.approx(0.4)
     by_arm = {r["engine_id"]: r for r in rows if r["seed"] == 42}
     # The scripted model answers perfectly from any context holding the pipeline.
     assert by_arm["pragmatic_oracle"]["tsr"] == 1 and by_arm["pragmatic_oracle"]["cleanliness"] == 1.0
@@ -228,7 +228,7 @@ def test_end_to_end_sweep_all_arms(tmp_path, corpus):
     assert by_arm["prism_plus_distractors"]["n_llm_calls"] == 1
     assert by_arm["prism_plus_distractors"]["requested_symbols"] == by_arm["prism_full"]["requested_symbols"]
     # Every call used the protocol temperature.
-    assert {c["temperature"] for c in client.calls} == {C.DEFAULT_TEMPERATURE} == {0.2}
+    assert {c["temperature"] for c in client.calls} == {C.DEFAULT_TEMPERATURE} == {0.4}
     # Manifest hashes are seed-independent.
     assert {r["manifest_hash"] for r in rows if r["engine_id"] == "prism_full"} == {by_arm["prism_full"]["manifest_hash"]}
     assert (tmp_path / "cells.parquet").exists()

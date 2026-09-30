@@ -10,7 +10,7 @@ context, and which PRISM components contribute.
 | Parameter | Value | Where |
 |---|---|---|
 | Model | `gpt-4o-mini-2024-07-18` (pinned snapshot; served model logged per call) | `config.DEFAULT_MODEL` |
-| Temperature | 0.2 (non-zero so seeds estimate sampling variance) | `config.DEFAULT_TEMPERATURE` |
+| Temperature | 0.4 for the full sweep (the tRPC pilot ran at 0.2 and showed too little seed variance) | `config.DEFAULT_TEMPERATURE` |
 | Seeds | 10 per (task, arm): 42..51 | `config.DEFAULT_SEEDS` |
 | Retrieval budget | 8,000 tokens | `config.DEFAULT_BUDGET` |
 | Hard context ceiling | 8,800 tokens of rendered context (every drop logged) | `config.DEFAULT_TOKEN_CEILING` |
