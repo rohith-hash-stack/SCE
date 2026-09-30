@@ -56,7 +56,7 @@ AxisPolicy = Literal["all", "none", "no_substance"]
 @dataclass(frozen=True)
 class ArmSpec:
     engine_id: str
-    kind: Literal["bfs", "oracle", "two_pass"]
+    kind: Literal["bfs", "oracle", "two_pass", "pagerank"]
     #: oracle arms only: include the deterministic AST scaffold.
     scaffolded: bool = False
     #: two-pass arms only.
@@ -107,6 +107,19 @@ ARMS: dict[str, ArmSpec] = {
 
 ARM_ORDER: tuple[str, ...] = tuple(ARMS)
 
+#: Arms outside the frozen 8-arm protocol: resolvable by name via
+#: `--arms`, never included in `--arms all` or in `ARM_ORDER`.
+EXPERIMENTAL_ARMS: dict[str, ArmSpec] = {
+    spec.engine_id: spec
+    for spec in (
+        ArmSpec(
+            "baseline_pagerank_repomap", "pagerank",
+            description="Aider-style repo map: PageRank over the AST symbol graph, personalized toward "
+            "identifiers named in the task prompt; top signatures packed to a 4,000-token budget.",
+        ),
+    )
+}
+
 _DOSE_ARM_RE = re.compile(r"^prism_plus_distractors_k(\d+)$")
 
 
@@ -115,6 +128,8 @@ def resolve_arm(engine_id: str) -> ArmSpec:
     built on the fly - so a dose-response sweep adds arms by name alone."""
     if engine_id in ARMS:
         return ARMS[engine_id]
+    if engine_id in EXPERIMENTAL_ARMS:
+        return EXPERIMENTAL_ARMS[engine_id]
     match = _DOSE_ARM_RE.match(engine_id)
     if match:
         k = int(match.group(1))

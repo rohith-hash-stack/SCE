@@ -363,3 +363,37 @@ def test_cluster_analysis_pools_tasks_and_detects_a_clear_effect():
     (c,) = [c for c in result["contrasts"] if c["b"] == "ablation_lexical_anchors"]
     assert c["delta_tsr"] == 1.0 and c["excludes_zero"]
     assert result["arms"]["prism_full"]["per_repo_tsr"] == {"django": 1.0, "trpc": 1.0}
+
+
+# --------------------------------------------------------------------- #
+# Experimental arm: PageRank repo map (Aider-style)
+# --------------------------------------------------------------------- #
+
+def test_pagerank_arm_is_experimental_not_part_of_the_protocol():
+    spec = C.resolve_arm("baseline_pagerank_repomap")
+    assert spec.kind == "pagerank"
+    assert "baseline_pagerank_repomap" not in C.ARM_ORDER and len(C.ARM_ORDER) == 8
+
+
+def test_repo_map_personalizes_toward_query_hits_and_respects_budget(corpus):
+    from benchmarks.baselines.pagerank_repomap import build_repo_map, build_symbol_graph
+
+    g = build_symbol_graph(corpus.builder)
+    plain = build_repo_map(corpus.builder, set(), budget_tokens=10_000, graph=g)
+    hit = build_repo_map(corpus.builder, {"compute_total"}, budget_tokens=10_000, graph=g)
+    assert not plain.personalized and hit.personalized
+    assert hit.query_hits == {"src.services.pricing.compute_total"}
+    assert hit.entries[0].symbol == "src.services.pricing.compute_total"
+    small = build_repo_map(corpus.builder, set(), budget_tokens=40, graph=g)
+    assert small.tokens <= 40 and len(small.entries) < len(plain.entries)
+
+
+def test_pagerank_arm_end_to_end_stays_within_its_rendered_budget(tmp_path, corpus):
+    from benchmarks.final_sweep.arms import REPOMAP_BUDGET_TOKENS
+
+    rows = run_sweep("django", ["baseline_pagerank_repomap"], (1,), tmp_path, SweepConfig(budget=8000, token_ceiling=8800),
+                     workers=1, client=FakeClient(), corpus=corpus, tasks=[_task()])
+    (row,) = rows
+    assert validate_record(row) == [] and row["status"] == "ok"
+    assert row["context_tokens"] <= REPOMAP_BUDGET_TOKENS and row["n_llm_calls"] == 1
+    assert row["n_ceiling_dropped"] == 0

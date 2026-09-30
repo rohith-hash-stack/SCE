@@ -31,6 +31,13 @@ import urllib.request
 # --------------------------------------------------------------------- #
 REPO = "fastapi"  # fastapi | trpc | express | django
 SEEDS = "1,2,3,4,5"  # batch 1; batch 2 = "6,7,8,9,10"
+ARMS = "all"  # "all" = the 8 protocol arms; or comma-separated engine ids
+TASKS = ""  # "" = every task; or space-separated task ids (e.g. a smoke subset)
+# PageRank repo-map smoke test (5 FastAPI tasks, seed 1) - uncomment:
+# REPO, SEEDS, ARMS = "fastapi", "1", "baseline_pagerank_repomap"
+# TASKS = ("fastapi_t02_001_dependant_tree_construction fastapi_t02_002_solve_dependencies_runtime_resolution "
+#          "fastapi_t02_003_request_params_coercion fastapi_t02_004_route_registration_pipeline "
+#          "fastapi_t02_005_request_validation_error_response")
 
 MODEL = "qwen2.5-coder:7b-instruct-q8_0"
 TEMPERATURE = 0.4
@@ -43,6 +50,10 @@ OLLAMA_VERSION = "0.34.0"  # same pin as kaggle/pilot_4_cell.py; "" = latest
 BRANCH = "claude/prism-final-empirical-8arms-kp3tpt"
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 OUT_ROOT = "reports/final_sweep/slm_qwen7b"  # kept apart from the gpt-4o-mini cells in reports/final_sweep/full/
+if ARMS != "all" or TASKS:
+    # Non-protocol runs (smoke tests, experimental arms) never write into the
+    # sweep's own cell files.
+    OUT_ROOT = "reports/final_sweep/smoke_qwen7b"
 SCE_DIR = "/kaggle/working/SCE"
 EXPECTED_TASKS = {"fastapi": 25, "trpc": 25, "express": 20, "django": 20}
 
@@ -208,7 +219,8 @@ def push(label):
 
 cmd = [
     sys.executable, "-m", "benchmarks.final_sweep.runner",
-    "--repo", REPO, "--seeds", SEEDS, "--model", MODEL, "--temperature", str(TEMPERATURE),
+    "--repo", REPO, "--seeds", SEEDS, "--arms", ARMS, *(["--tasks", *TASKS.split()] if TASKS else []),
+    "--model", MODEL, "--temperature", str(TEMPERATURE),
     "--base-url", ",".join(f"http://127.0.0.1:{p}/v1" for p in ports),
     "--num-ctx", str(NUM_CTX), "--workers", str(PARALLEL_PER_GPU * len(ports)),
     "--out", OUT_DIR,

@@ -48,7 +48,7 @@ from prism.packer.submodular_knapsack import split_budget_for_external
 from benchmarks.corpora.resolver import resolve
 from benchmarks.engines.base import selected_symbols
 from benchmarks.final_sweep import config as C
-from benchmarks.final_sweep.arms import BuiltContext, CorpusState, build_bfs, build_oracle, distractor_nodes
+from benchmarks.final_sweep.arms import BuiltContext, CorpusState, build_bfs, build_oracle, build_pagerank, distractor_nodes
 from benchmarks.final_sweep.context_ops import (
     annotate_manifest_axes,
     enforce_token_ceiling,
@@ -463,6 +463,9 @@ def _run_cell_inner(corpus, client, spec, task, seed, cfg, turn1_cache, record: 
     if spec.kind == "bfs":
         built = build_bfs(corpus, task, cfg.budget)
         record.anchor_symbol, record.anchor_matches_task_seed = task.seed_symbol, True
+    elif spec.kind == "pagerank":
+        built = build_pagerank(corpus, task)
+        record.anchor_symbol = task.seed_symbol
     elif spec.kind == "oracle":
         built = build_oracle(corpus, task, cfg.budget, spec.scaffolded, spec.engine_id)
         record.anchor_symbol, record.anchor_matches_task_seed = task.seed_symbol, True
@@ -475,6 +478,10 @@ def _run_cell_inner(corpus, client, spec, task, seed, cfg, turn1_cache, record: 
     rendered = render_context(pkg)
     packed = selected_symbols(pkg)
 
+    if spec.kind == "pagerank":
+        # A repo map has no anchor; record whether the task seed survived
+        # into the final (post-ceiling) context.
+        record.anchor_matches_task_seed = task.seed_symbol in packed
     record.distractors = distractors
     record.distractors_in_context = len(set(distractors) & packed)
     record.selected_symbols = sorted(packed)

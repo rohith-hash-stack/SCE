@@ -83,6 +83,8 @@ class CorpusState:
         self.scaffold_index = ScaffoldIndex(self.builder, self.feature_masks)
         self._distances: dict[str, dict[str, float]] = {}
         self._static: dict[str, TaskStatic] = {}
+        #: `baseline_pagerank_repomap`'s symbol graph, built on first use.
+        self._repomap_graph = None
 
     def distances(self, seed: str) -> dict[str, float]:
         with self.lock:
@@ -239,6 +241,70 @@ def build_oracle(corpus: CorpusState, task: EvaluationTask, budget: int, scaffol
     packed = {n.id for n in nodes}
     dropped = [q for q in wanted if q not in packed]
     return BuiltContext(pkg=pkg, n_budget_dropped=len(dropped), budget_dropped=dropped, designed_partial=designed_partial)
+
+
+#: Aider-style repo maps are small by design; this arm packs to its own
+#: budget, independent of the sweep's `--budget` (8,000 for other arms).
+REPOMAP_BUDGET_TOKENS = 4000
+
+
+def build_pagerank(corpus: CorpusState, task: EvaluationTask) -> BuiltContext:
+    """`baseline_pagerank_repomap`: signature stubs of the top-PageRank
+    symbols (`benchmarks.baselines.pagerank_repomap`), rendered as
+    `L2_skeleton` nodes with no 4-axis features (a repo map has none),
+    ordered by rank. `n_budget_dropped` counts query-hit symbols the
+    budget kept out - the only "wanted" set a query-driven map has."""
+    from benchmarks.baselines.pagerank_repomap import build_repo_map, build_symbol_graph
+    from benchmarks.final_sweep.context_ops import lexical_tokens
+
+    from prism.surface.models import NodeFeatures, NodeSignature
+
+    from benchmarks.final_sweep.context_ops import enforce_token_ceiling, render_context
+
+    def map_node(qname: str, stub: str, rank: int):
+        # A repo map shows the signature line only: no docstring, no
+        # parameter table, no 4-axis features.
+        node = node_for_symbol(
+            corpus.builder, corpus.repo_path, corpus.contracts, {}, qname, "transitive", float(rank),
+            body=stub, compression="L2_skeleton",
+        )
+        if node is None:
+            return None
+        return node.model_copy(update={
+            "signature": NodeSignature(),
+            "features": NodeFeatures(substance="NONE", form="NONE", output="NONE", role="NONE"),
+        })
+
+    with corpus.lock:
+        graph = corpus._repomap_graph
+        if graph is None:
+            graph = build_symbol_graph(corpus.builder)
+            corpus._repomap_graph = graph
+        empty = corpus.envelope("baseline_pagerank_repomap", task.seed_symbol, REPOMAP_BUDGET_TOKENS, [], considered=0)
+        base_tokens = count_tokens(render_context(empty))
+
+        def rendered_cost(qname: str, stub: str) -> int:
+            node = map_node(qname, stub, 0)
+            if node is None:
+                return 10**9
+            one = empty.model_copy(update={"nodes": [node]})
+            return count_tokens(render_context(one)) - base_tokens
+
+        repo_map = build_repo_map(
+            corpus.builder, set(lexical_tokens(task.prompt)), REPOMAP_BUDGET_TOKENS - base_tokens, graph,
+            cost_fn=rendered_cost,
+        )
+        nodes = [n for e in repo_map.entries if (n := map_node(e.symbol, e.signature, e.rank)) is not None]
+        pkg = corpus.envelope("baseline_pagerank_repomap", task.seed_symbol, REPOMAP_BUDGET_TOKENS, nodes,
+                              considered=repo_map.graph_nodes)
+        # Per-node pricing ignores the edges block; trim exactly to the
+        # rendered budget (lowest-ranked entries go first).
+        pkg, _trimmed, _before, _after = enforce_token_ceiling(pkg, REPOMAP_BUDGET_TOKENS)
+        nodes = list(pkg.nodes)
+    packed = {n.id for n in nodes}
+    dropped = sorted(repo_map.query_hits - packed)
+    return BuiltContext(pkg=pkg, n_budget_dropped=len(dropped), budget_dropped=dropped,
+                        designed_partial=packed)
 
 
 def distractor_nodes(corpus: CorpusState, names: list[str]) -> list[NodeEntry]:
