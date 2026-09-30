@@ -35,6 +35,18 @@ def load_root(root: Path) -> list[dict]:
     return rows
 
 
+def external_task_ids() -> set[str]:
+    """Task ids whose ground truth declares `root_imports` - the Express
+    tasks whose required context is an external-package symbol."""
+    from benchmarks.ground_truth.loader import load_tasks_from_dir
+    from benchmarks.runner import DEFAULT_TASKS_DIR_TEMPLATE
+
+    ids = set()
+    for repo in C.FINAL_SWEEP_REPOS:
+        ids |= {t.task_id for t in load_tasks_from_dir(Path(DEFAULT_TASKS_DIR_TEMPLATE.format(repo=repo))).accepted if t.root_imports}
+    return ids
+
+
 def _task_means(rows: list[dict], field: str) -> dict[tuple[str, str], dict[str, float]]:
     """`{(repo, task): {arm: mean of field over seeds}}`."""
     acc: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
@@ -148,8 +160,17 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m benchmarks.final_sweep.analysis")
     p.add_argument("root", help="Directory holding <repo>/cells.jsonl for one model")
     p.add_argument("--out", default=None, help="Also write the markdown here (and .json alongside)")
+    p.add_argument("--seeds", default=None, help="Comma-separated seeds to keep (e.g. one batch)")
+    p.add_argument("--exclude-external", action="store_true",
+                   help="Drop tasks that declare root_imports (external-package tasks)")
     args = p.parse_args(argv)
     rows = load_root(Path(args.root))
+    if args.seeds:
+        keep = {int(x) for x in args.seeds.split(",")}
+        rows = [r for r in rows if r["seed"] in keep]
+    if args.exclude_external:
+        external = external_task_ids()
+        rows = [r for r in rows if r["task_id"] not in external]
     if not rows:
         print(f"no scored cells under {args.root}", file=sys.stderr)
         return 1
