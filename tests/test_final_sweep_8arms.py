@@ -251,3 +251,17 @@ def test_errors_are_recorded_and_resume_retries_only_them(tmp_path, corpus):
     run_sweep("django", arms, (42,), tmp_path, cfg, workers=1, client=retry, corpus=corpus, tasks=[_task()])
     assert {c["engine"].split("/")[0] for c in retry.calls} == {"prism_full"}
     assert {r["status"] for r in load_records(tmp_path / "cells.jsonl").values()} == {"ok"}
+
+
+def test_token_rate_limiter_blocks_until_the_window_frees(monkeypatch):
+    from benchmarks.final_sweep import runner
+
+    clock = [0.0]
+    monkeypatch.setattr(runner.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(runner.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    limiter = runner.TokenRateLimiter(1000)
+    limiter.acquire(600)
+    limiter.acquire(400)
+    assert clock[0] == 0.0
+    limiter.acquire(100)  # window full - must wait for the first event to age out
+    assert clock[0] >= 60.0

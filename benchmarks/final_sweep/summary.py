@@ -171,7 +171,7 @@ def summarize(rows: list[dict]) -> dict:
             "full_sweep_projection": projection,
         },
         "errors": [
-            {"task_id": r["task_id"], "engine_id": r["engine_id"], "seed": r["seed"], "error": (r["error"] or "").splitlines()[0]}
+            {"task_id": r["task_id"], "engine_id": r["engine_id"], "seed": r["seed"], "error": (r["error"] or "").splitlines()[0][:160]}
             for r in rows if r["status"] == "error"
         ][:50],
     }

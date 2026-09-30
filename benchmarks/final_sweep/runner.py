@@ -103,6 +103,10 @@ class SweepConfig:
     api_key_env: str = C.DEFAULT_API_KEY_ENV
     dry_run: bool = False
     max_cost_usd: float | None = None
+    #: Client-side tokens-per-minute budget shared by all workers. Keep it
+    #: under the account's TPM limit (gpt-4o-mini tier: 200K) - the pilot
+    #: at 8 unthrottled workers lost 8% of cells to 429s.
+    tpm_limit: int | None = 150_000
 
 
 # --------------------------------------------------------------------- #
@@ -518,13 +522,58 @@ def write_parquet(records: list[dict], path: Path) -> bool:
     return True
 
 
+class TokenRateLimiter:
+    """Sliding 60-second window over *estimated* request tokens (prompt
+    tokens counted locally + completion allowance), shared by every
+    worker thread. `acquire` blocks until the request fits."""
+
+    COMPLETION_ALLOWANCE = 400
+
+    def __init__(self, tokens_per_minute: int) -> None:
+        self.tpm = tokens_per_minute
+        self._events: list[tuple[float, int]] = []
+        self._lock = threading.Lock()
+
+    def acquire(self, tokens: int) -> None:
+        tokens = min(tokens, self.tpm)
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                self._events = [(t, n) for t, n in self._events if now - t < 60.0]
+                used = sum(n for _, n in self._events)
+                if used + tokens <= self.tpm:
+                    self._events.append((now, tokens))
+                    return
+                wait = 60.0 - (now - self._events[0][0]) + 0.05
+            time.sleep(max(wait, 0.05))
+
+
+class ThrottledClient:
+    """Wraps a client's `complete()` with a `TokenRateLimiter`; everything
+    else passes through."""
+
+    def __init__(self, inner, limiter: TokenRateLimiter) -> None:
+        self._inner = inner
+        self._limiter = limiter
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def complete(self, model=None, system="", user="", *args, **kwargs):
+        from prism.slicer.tokenizer import count_tokens
+
+        self._limiter.acquire(count_tokens(system) + count_tokens(user) + TokenRateLimiter.COMPLETION_ALLOWANCE)
+        return self._inner.complete(model, system, user, *args, **kwargs)
+
+
 def build_client(cfg: SweepConfig) -> OpenAICompatibleClient | None:
     if cfg.dry_run:
         return None
     key = os.environ.get(cfg.api_key_env, "")
     if not key:
         raise SystemExit(f"error: ${cfg.api_key_env} is not set (use --api-key-env to name the variable holding the key)")
-    return OpenAICompatibleClient(api_key=key, base_url=cfg.base_url)
+    client = OpenAICompatibleClient(api_key=key, base_url=cfg.base_url)
+    return ThrottledClient(client, TokenRateLimiter(cfg.tpm_limit)) if cfg.tpm_limit else client
 
 
 def run_sweep(
@@ -642,6 +691,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--base-url", default=C.DEFAULT_BASE_URL)
     p.add_argument("--api-key-env", default=C.DEFAULT_API_KEY_ENV)
     p.add_argument("--max-cost-usd", type=float, default=None)
+    p.add_argument("--tpm-limit", type=int, default=150_000,
+                   help="Client-side tokens/minute budget across all workers (0 disables).")
     return p
 
 
@@ -659,7 +710,7 @@ def main(argv: list[str] | None = None) -> int:
         cfg = SweepConfig(
             model=args.model, temperature=args.temperature, budget=args.budget, token_ceiling=args.token_ceiling,
             max_tokens=args.max_tokens, base_url=args.base_url, api_key_env=args.api_key_env,
-            dry_run=args.dry_run, max_cost_usd=args.max_cost_usd,
+            dry_run=args.dry_run, max_cost_usd=args.max_cost_usd, tpm_limit=args.tpm_limit or None,
         )
         run_sweep(args.repo, arms, seeds, out_dir, cfg, task_ids=args.tasks, workers=args.workers, resume=not args.fresh)
     rows = list(load_records(out_dir / "cells.jsonl").values())
