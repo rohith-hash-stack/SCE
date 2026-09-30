@@ -140,3 +140,33 @@ python -m benchmarks.final_sweep.runner --out reports/final_sweep/pilot_trpc --s
 Runs are resumable by default: cells with an `ok` record are skipped, and
 `error` cells are retried. Pass `--fresh` to start over. For the full
 sweep, use `kaggle/final_sweep_8arms_cell.py`.
+
+## Local SLM runs (Ollama on Kaggle)
+
+The runner works against any OpenAI-compatible endpoint. `--base-url`
+defaults to `$OPENAI_BASE_URL` (then `$LLM_BASE_URL`), and `--model`
+defaults to `$LLM_MODEL`. For a local endpoint (localhost or 127.0.0.1):
+
+- **API key:** no real key is needed; a dummy value is used when
+  `$OPENAI_API_KEY` is unset.
+- **Context window:** every call sends `options.num_ctx` (`--num-ctx`,
+  default 24,576). Ollama's default window silently truncates longer
+  prompts. Calls whose prompt reached the window are counted in
+  `n_calls_at_ctx_limit`.
+- **Turn-1 sampling:** Turn-1 calls also get `repeat_penalty=1.15`, the
+  Qwen setting from `run_two_pass_benchmark`.
+- **Cost and throttling:** cost is recorded as $0, and the tokens-per-minute
+  throttle is off.
+- **Several servers:** comma-separate endpoints to round-robin calls, for
+  example one Ollama server per GPU.
+
+A results directory holds exactly one model: the runner refuses to resume
+into a directory that contains another model's cells. Qwen results go to
+`reports/final_sweep/slm_qwen7b/<repo>/`; the gpt-4o-mini results stay in
+`reports/final_sweep/full/`.
+
+Seeds are split into two batches of five, and each batch resumes on top of
+the other. Cells are keyed by `(repo, task_id, engine_id, seed, budget)`,
+so running `--seeds 6,7,8,9,10` into a directory that already holds seeds
+1-5 appends only the new cells. Re-running a batch is a no-op. Kaggle
+driver: `scripts/kaggle_slm_sweep.py`.

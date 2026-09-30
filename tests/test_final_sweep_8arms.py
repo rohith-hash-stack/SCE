@@ -70,7 +70,8 @@ class FakeClient:
 
     def complete(self, model=None, system="", user="", temperature=0.0, max_tokens=None, seed=None,
                  task_id=None, engine=None, extra_body=None):
-        self.calls.append({"engine": engine, "seed": seed, "temperature": temperature, "system": system, "user": user})
+        self.calls.append({"engine": engine, "seed": seed, "temperature": temperature, "system": system, "user": user,
+                           "extra_body": extra_body})
         if self.fail_engine and engine.startswith(self.fail_engine + "/"):
             raise LLMCallError("scripted failure")
         if engine.endswith("/turn1"):
@@ -265,3 +266,82 @@ def test_token_rate_limiter_blocks_until_the_window_frees(monkeypatch):
     assert clock[0] == 0.0
     limiter.acquire(100)  # window full - must wait for the first event to age out
     assert clock[0] >= 60.0
+
+
+# --------------------------------------------------------------------- #
+# Local SLM (Ollama) support and 2-batch seed partitioning
+# --------------------------------------------------------------------- #
+
+OLLAMA = "http://localhost:11434/v1"
+QWEN = "qwen2.5-coder:7b-instruct-q8_0"
+
+
+def test_sampler_options_only_go_to_local_endpoints():
+    from benchmarks.final_sweep.runner import sampler_kwargs
+
+    remote = SweepConfig()
+    assert sampler_kwargs(remote, "turn1") == {} and not remote.local
+    local = SweepConfig(base_url=f"{OLLAMA},http://localhost:11435/v1", model=QWEN, num_ctx=16384)
+    assert local.local and local.base_urls == [OLLAMA, "http://localhost:11435/v1"]
+    assert sampler_kwargs(local, "answer") == {"extra_body": {"options": {"num_ctx": 16384}}}
+    turn1 = sampler_kwargs(local, "turn1")["extra_body"]["options"]
+    assert turn1["num_ctx"] == 16384 and turn1["repeat_penalty"] == 1.15 and turn1["num_predict"] == local.max_tokens
+
+
+def test_cli_defaults_follow_openai_base_url_and_llm_model(monkeypatch):
+    from benchmarks.final_sweep.runner import build_arg_parser
+
+    monkeypatch.setenv("OPENAI_BASE_URL", OLLAMA)
+    monkeypatch.setenv("LLM_MODEL", QWEN)
+    args = build_arg_parser().parse_args(["--out", "x", "--seeds", "1,2,3,4,5"])
+    assert (args.base_url, args.model, args.seeds) == (OLLAMA, QWEN, "1,2,3,4,5")
+
+
+def test_local_client_needs_no_real_key_and_round_robins(monkeypatch):
+    from benchmarks.final_sweep.runner import RoundRobinClient, build_client
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    client = build_client(SweepConfig(base_url=f"{OLLAMA},http://localhost:11435/v1", model=QWEN, tpm_limit=None))
+    assert isinstance(client, RoundRobinClient)
+    assert [c.base_url for c in client._clients] == [OLLAMA, "http://localhost:11435/v1"]
+
+
+def test_batch_two_appends_new_seeds_without_rerunning_batch_one(tmp_path, corpus):
+    cfg = SweepConfig(budget=4000, token_ceiling=4400, model=QWEN, base_url=OLLAMA)
+    arms = list(C.ARM_ORDER)
+    batch1 = FakeClient()
+    run_sweep("django", arms, (1, 2), tmp_path, cfg, workers=2, client=batch1, corpus=corpus, tasks=[_task()])
+    before = {k: r["finished_at"] + r["context_hash"] for k, r in load_records(tmp_path / "cells.jsonl").items()}
+    assert len(before) == 16
+
+    batch2 = FakeClient()
+    rows = run_sweep("django", arms, (3, 4), tmp_path, cfg, workers=2, client=batch2, corpus=corpus, tasks=[_task()])
+    assert {c["seed"] for c in batch2.calls} == {3, 4}  # batch 1 cells were not re-run
+    after = load_records(tmp_path / "cells.jsonl")
+    assert len(rows) == len(after) == 32
+    assert {k: after[k]["finished_at"] + after[k]["context_hash"] for k in before} == before
+    lines = (tmp_path / "cells.jsonl").read_text().splitlines()
+    assert len(lines) == 32  # appended, one line per cell, nothing duplicated
+    # Local endpoint: unmetered, and every call carried the Ollama options.
+    assert all(r["cost_usd"] == 0.0 for r in rows)
+    assert all(c["extra_body"]["options"]["num_ctx"] == cfg.num_ctx for c in batch2.calls)
+    # Re-running batch 2 is a no-op.
+    again = FakeClient()
+    run_sweep("django", arms, (3, 4), tmp_path, cfg, workers=2, client=again, corpus=corpus, tasks=[_task()])
+    assert again.calls == []
+
+
+def test_resume_refuses_to_mix_models(tmp_path, corpus):
+    run_sweep("django", ["pragmatic_oracle"], (1,), tmp_path, SweepConfig(budget=4000, token_ceiling=4400),
+              workers=1, client=FakeClient(), corpus=corpus, tasks=[_task()])
+    with pytest.raises(SystemExit, match="separate --out"):
+        run_sweep("django", ["pragmatic_oracle"], (2,), tmp_path,
+                  SweepConfig(budget=4000, token_ceiling=4400, model=QWEN, base_url=OLLAMA),
+                  workers=1, client=FakeClient(), corpus=corpus, tasks=[_task()])
+
+
+def test_load_records_skips_a_truncated_trailing_line(tmp_path):
+    good = {"repo": "r", "task_id": "t", "engine_id": "e", "seed": 1, "budget": 8000, "status": "ok"}
+    path = tmp_path / "cells.jsonl"
+    path.write_text(json.dumps(good) + "\n" + json.dumps(good)[:25])
+    assert list(load_records(path).values()) == [good]
