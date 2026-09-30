@@ -181,7 +181,28 @@ def tasks_at(commit, repo):
 
 
 HISTORICAL = [
-    # label, repo, task-commit, single-pass checkpoint spec, two-pass checkpoint spec
+    # label, repo, task-commit, single-pass checkpoint spec, two-pass checkpoint spec.
+    # Every Qwen-7B run outside the final sweep (found by scanning all
+    # remote branches; there are none for tRPC or Express), then the
+    # Django 14B/DeepSeek pilots the draft manuscript also cites.
+    ("Django qwen-7B smoke", "django", "origin/smoke-qwen7b-progress",
+     "origin/smoke-qwen7b-progress:reports/pilot-qwen7b/checkpoint_single_pass.json",
+     "origin/smoke-qwen7b-progress:reports/pilot-qwen7b/checkpoint_two_pass.json"),
+    ("Django qwen-7B pilot (seeds 43-46)", "django", "origin/pilot-qwen7b-progress",
+     "origin/pilot-qwen7b-progress:reports/pilot-qwen7b/checkpoint_single_pass.json",
+     "origin/pilot-qwen7b-progress:reports/pilot-qwen7b/checkpoint_two_pass.json"),
+    ("Django qwen-7B holdout (seeds 101-102)", "django", "origin/pilot-qwen7b-holdout",
+     "origin/pilot-qwen7b-holdout:reports/pilot-qwen7b-holdout/checkpoint_single_pass.json",
+     "origin/pilot-qwen7b-holdout:reports/pilot-qwen7b-holdout/checkpoint_two_pass.json"),
+    ("FastAPI qwen-7B smoke", "fastapi", "origin/smoke-fastapi-qwen7b-progress",
+     "origin/smoke-fastapi-qwen7b-progress:reports/pilot-fastapi-qwen7b/checkpoint_single_pass.json",
+     "origin/smoke-fastapi-qwen7b-progress:reports/pilot-fastapi-qwen7b/checkpoint_two_pass.json"),
+    ("FastAPI qwen-7B rerun v2", "fastapi", "origin/pilot-fastapi-qwen7b-full-v2-progress",
+     "origin/pilot-fastapi-qwen7b-full-v2-progress:reports/pilot-fastapi-qwen7b-full-v2/checkpoint_single_pass.json",
+     "origin/pilot-fastapi-qwen7b-full-v2-progress:reports/pilot-fastapi-qwen7b-full-v2/checkpoint_two_pass.json"),
+    ("FastAPI qwen-7B rerun v3", "fastapi", "origin/pilot-fastapi-qwen7b-full-v3-progress",
+     "origin/pilot-fastapi-qwen7b-full-v3-progress:reports/pilot-fastapi-qwen7b-full-v3/checkpoint_single_pass.json",
+     "origin/pilot-fastapi-qwen7b-full-v3-progress:reports/pilot-fastapi-qwen7b-full-v3/checkpoint_two_pass.json"),
     ("FastAPI qwen-7B full (seed 42)", "fastapi", "9d4333f",
      "36e52b5:reports/pilot-fastapi-qwen7b-full/checkpoint_single_pass.json",
      "899a2ae:reports/pilot-fastapi-qwen7b-full/checkpoint_two_pass.json"),

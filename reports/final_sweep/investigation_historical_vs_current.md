@@ -32,7 +32,12 @@ out, pulled, or modified.
 | Express pilot closure | `a05189f`/`a2b955a`, `reports/express_pilot_audit_gap_closure.md` | gpt-4o-mini, T=0.0 | 2000, 4000 | 5 seeds | **No** (debrief only) |
 | FastAPI qwen-7B full | `9d4333f`, `reports/pilot-fastapi-qwen7b-full/` (branch history) | qwen2.5-coder:7b-instruct-q8_0, T=0.0 | 2000/4000/8000 | 42 | Yes |
 | FastAPI qwen-7B holdout | `0588972` on `origin/pilot-fastapi-qwen7b-holdout-progress` | qwen2.5-coder:7b-instruct-q8_0, T=0.0 | 2000/4000/8000 | 101-103 | Yes |
-| Django qwen-7B / DeepSeek pilots | `765ee1f`, `0ee0c2e`, `3e54725` | qwen-7B / deepseek | 2000/4000/8000 | 42-46, 101-102 | Yes (not compared: Django had no earlier gpt run and Qwen Django shows no regression) |
+| Django qwen-7B pilot / holdout / smoke | `origin/pilot-qwen7b-progress` (`765ee1f`), `origin/pilot-qwen7b-holdout` (`0ee0c2e`), `origin/smoke-qwen7b-progress` | qwen2.5-coder:7b-instruct-q8_0, T=0.0 | 2000/4000/8000 | 43-46, 101-102 | Yes. Re-scored in `auditor_revision_plan.md` §2.4 |
+| FastAPI qwen-7B reruns v2 / v3 / smoke | `origin/pilot-fastapi-qwen7b-full-v2-progress`, `-full-v3-progress`, `origin/smoke-fastapi-qwen7b-progress` | qwen2.5-coder:7b-instruct-q8_0, T=0.0 | 2000/4000/8000 | 42 | Yes. Re-scored in `auditor_revision_plan.md` §2.4 |
+| Django deepseek / qwen-14B pilots | `origin/pilot-deepseek-progress`, `origin/pilot-4-patched-progress` | deepseek-coder:6.7b / qwen2.5-coder:14b | 2000/4000/8000 | 42-46 | Yes |
+
+All 55 remote branches were fetched and scanned. Qwen-7B runs outside the
+final sweep exist only for Django and FastAPI.
 
 T=0.0 comes from `benchmarks/tsr/client.py`: `DEFAULT_TEMPERATURE = 0.0`.
 The historical harnesses never overrode it.

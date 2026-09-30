@@ -178,6 +178,17 @@ internal-only Express tasks, PRISM shows no advantage.
 
 ### 2.4 Historical runs re-scored from their own cells
 
+Scope: every remote branch was fetched and scanned for checkpoints. Qwen
+2.5-Coder 7B was run outside the final sweep **only on Django and FastAPI**
+(8 runs, all listed below). No branch holds Qwen-7B (or any other
+local-model) runs for tRPC or Express. Those corpora were only run with
+gpt-4o-mini before the sweep.
+
+**Every Qwen-7B historical run scored its single-pass arms with the strict
+exact-match scorer and PRISM with partial credit.** The reported PRISM − BFS
+gains (+0.35 to +0.60) shrink to +0.01 to +0.20 under uniform binary TSR.
+None of the uniform-binary CIs excludes zero.
+
 Single-pass cells were re-scored with `score_debug_causal(raw_response,
 pipeline, selected_symbols)`; two-pass binary is `tsr == 1.0`. Pipelines
 come from the task files at each run's own commit.
@@ -187,7 +198,13 @@ were stored causal-scored, re-scoring reproduces the stored means exactly.
 
 | historical run | single-pass scorer as run | Δ as reported (PRISM − BFS, mixed where noted) | Δ uniform partial | **Δ uniform binary** (95% cluster CI) |
 |---|---|---|---|---|
-| FastAPI qwen-7B full (seed 42) | strict exact-match | +0.371 (mixed scorers) | −0.020 | **+0.013 [−0.093, +0.133]** |
+| Django qwen-7B smoke (`origin/smoke-qwen7b-progress`) | strict exact-match | +0.573 (mixed scorers) | +0.082 | **+0.100 [−0.083, +0.283]** |
+| Django qwen-7B pilot, seeds 43-46 (`origin/pilot-qwen7b-progress`) | strict exact-match | +0.548 (mixed scorers) | +0.068 | **+0.090 [−0.087, +0.273]** |
+| Django qwen-7B holdout, seeds 101-102 (`origin/pilot-qwen7b-holdout`) | no baseline arm in this run (single-pass arm was `prism_v11` only) | – | – | – |
+| FastAPI qwen-7B smoke (`origin/smoke-fastapi-qwen7b-progress`, 5 tasks) | strict exact-match | +0.603 (mixed scorers) | +0.020 | **+0.200 [−0.267, +0.600]** |
+| FastAPI qwen-7B full, seed 42 (`origin/pilot-fastapi-qwen7b-full-progress`) | strict exact-match | +0.371 (mixed scorers) | −0.020 | **+0.013 [−0.093, +0.133]** |
+| FastAPI qwen-7B rerun v2 (`origin/pilot-fastapi-qwen7b-full-v2-progress`) | strict exact-match | +0.398 (mixed scorers) | +0.060 | **+0.093 [−0.027, +0.227]** |
+| FastAPI qwen-7B rerun v3 (`origin/pilot-fastapi-qwen7b-full-v3-progress`) | strict exact-match | +0.345 (mixed scorers) | +0.006 | **+0.040 [−0.053, +0.147]** |
 | FastAPI qwen-7B holdout (seeds 101-103); draft cites +34.47 pp | strict exact-match | +0.345 (mixed scorers) | +0.001 | **+0.027 [−0.076, +0.124]** |
 | Django qwen-14B pilot-4-patched; draft cites +7.67 pp | causal | +0.077 (uniform) | +0.077 | **+0.133 [+0.033, +0.267]** |
 | Django deepseek-6.7B; draft cites +7.86 pp | causal | +0.079 (uniform) | +0.079 | **+0.030 [−0.183, +0.243]** |
