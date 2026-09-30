@@ -1,0 +1,129 @@
+{
+  "harness_version": "final-sweep-8arms/1.1",
+  "repo": "django",
+  "arms": [
+    "baseline_bfs_bidirectional",
+    "pragmatic_oracle",
+    "scaffolded_oracle",
+    "prism_full",
+    "ablation_lexical_anchors",
+    "ablation_signature_only",
+    "ablation_no_purity",
+    "prism_plus_distractors"
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "tasks": [
+    "django_t02_001_request_middleware_chain",
+    "django_t02_002_queryset_delete_cascade_pipeline",
+    "django_t02_003_form_clean_validation",
+    "django_t02_004_url_resolve_traversal",
+    "django_t02_005_model_save_signals",
+    "django_t02_006_auth_get_user_resolution",
+    "django_t02_007_locmem_cache_get_eviction",
+    "django_t02_008_db_session_load_decode",
+    "django_t02_009_queryset_filter_clone",
+    "django_t02_010_i18n_catalog_translation",
+    "django_t02_011_permissions_backend_check",
+    "django_t02_012_wsgi_entrypoint_dispatch",
+    "django_t02_013_common_middleware_slash_redirect",
+    "django_t02_014_send_mail_pipeline",
+    "django_t02_015_admin_each_context",
+    "django_t02_016_db_cursor_connection",
+    "django_t02_017_redirect_url_safety_check",
+    "django_t02_018_response_init_headers_cookies",
+    "django_t02_019_request_get_host_validation",
+    "django_t02_020_storage_generate_filename"
+  ],
+  "model": "qwen2.5-coder:7b-instruct-q8_0",
+  "temperature": 0.4,
+  "budget": 8000,
+  "token_ceiling": 8800,
+  "max_tokens": 2048,
+  "base_url": "http://127.0.0.1:11434/v1,http://127.0.0.1:11435/v1",
+  "api_key_env": "OPENAI_API_KEY",
+  "dry_run": false,
+  "max_cost_usd": null,
+  "tpm_limit": null,
+  "num_ctx": 24576,
+  "turn1_repeat_penalty": 1.15,
+  "arm_specs": {
+    "baseline_bfs_bidirectional": {
+      "engine_id": "baseline_bfs_bidirectional",
+      "kind": "bfs",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Unpruned bidirectional AST call-graph BFS, greedy-filled to budget (floor)."
+    },
+    "pragmatic_oracle": {
+      "engine_id": "pragmatic_oracle",
+      "kind": "oracle",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Exactly the adjudicated pipeline_symbols - the strict minimal ground truth."
+    },
+    "scaffolded_oracle": {
+      "engine_id": "scaffolded_oracle",
+      "kind": "oracle",
+      "scaffolded": true,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "pipeline_symbols + annotated required_context + deterministic AST scaffold (referenced type declarations, validators, factory/builder initializers)."
+    },
+    "prism_full": {
+      "engine_id": "prism_full",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Two-pass: taxonomy anchor (task seed), 4-axis annotated manifest, k-hop expansion."
+    },
+    "ablation_lexical_anchors": {
+      "engine_id": "ablation_lexical_anchors",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "lexical",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Two-pass with the anchor picked by BM25 over the task prompt; 4-axis metadata kept."
+    },
+    "ablation_signature_only": {
+      "engine_id": "ablation_signature_only",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "none",
+      "distractor_k": 0,
+      "description": "Two-pass with taxonomy anchor; manifest and context carry raw signatures, no 4-axis annotations."
+    },
+    "ablation_no_purity": {
+      "engine_id": "ablation_no_purity",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "no_substance",
+      "distractor_k": 0,
+      "description": "prism_full with the purity/side-effect axis (Substance) suppressed everywhere."
+    },
+    "prism_plus_distractors": {
+      "engine_id": "prism_plus_distractors",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 8,
+      "description": "prism_full's context plus 8 fixed, unrelated repository functions."
+    }
+  }
+}
