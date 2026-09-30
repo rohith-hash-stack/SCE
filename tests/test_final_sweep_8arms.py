@@ -345,3 +345,21 @@ def test_load_records_skips_a_truncated_trailing_line(tmp_path):
     path = tmp_path / "cells.jsonl"
     path.write_text(json.dumps(good) + "\n" + json.dumps(good)[:25])
     assert list(load_records(path).values()) == [good]
+
+
+def test_cluster_analysis_pools_tasks_and_detects_a_clear_effect():
+    from benchmarks.final_sweep.analysis import analyze
+
+    rows = []
+    for repo in ("trpc", "django"):
+        for t in range(6):
+            for seed in (1, 2, 3):
+                for arm, tsr in (("prism_full", 1), ("ablation_lexical_anchors", 0)):
+                    rows.append({"repo": repo, "task_id": f"{repo}_{t}", "engine_id": arm, "seed": seed, "tsr": tsr,
+                                 "cleanliness": 0.8, "sufficiency_ratio": 0.5, "context_tokens": 3000,
+                                 "model_requested": "m"})
+    result = analyze(rows)
+    assert result["n_tasks"] == 12
+    (c,) = [c for c in result["contrasts"] if c["b"] == "ablation_lexical_anchors"]
+    assert c["delta_tsr"] == 1.0 and c["excludes_zero"]
+    assert result["arms"]["prism_full"]["per_repo_tsr"] == {"django": 1.0, "trpc": 1.0}
