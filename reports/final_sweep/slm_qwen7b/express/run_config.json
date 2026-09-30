@@ -1,0 +1,129 @@
+{
+  "harness_version": "final-sweep-8arms/1.1",
+  "repo": "express",
+  "arms": [
+    "baseline_bfs_bidirectional",
+    "pragmatic_oracle",
+    "scaffolded_oracle",
+    "prism_full",
+    "ablation_lexical_anchors",
+    "ablation_signature_only",
+    "ablation_no_purity",
+    "prism_plus_distractors"
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "tasks": [
+    "express_t02_001_app_bootstrap_defaults",
+    "express_t02_002_middleware_mounting",
+    "express_t02_003_routing_dispatch_loop",
+    "express_t02_004_error_middleware_propagation",
+    "express_t02_005_layer_path_matching",
+    "express_t02_006_response_json_send",
+    "express_t02_007_etag_external_dependency",
+    "express_t02_008_view_rendering",
+    "express_t02_009_content_negotiation",
+    "express_t02_010_redirection",
+    "express_t02_011_file_transmission",
+    "express_t02_012_cookie_signing",
+    "express_t02_013_param_registration",
+    "express_t02_014_top_level_dispatch",
+    "express_t02_015_path_to_regexp_alias_mismatch",
+    "express_t02_016_send_file_streaming",
+    "express_t02_017_content_disposition",
+    "express_t02_018_type_is_alias_mismatch",
+    "express_t02_019_range_parser",
+    "express_t02_020_query_string_parsing"
+  ],
+  "model": "qwen2.5-coder:7b-instruct-q8_0",
+  "temperature": 0.4,
+  "budget": 8000,
+  "token_ceiling": 8800,
+  "max_tokens": 2048,
+  "base_url": "http://127.0.0.1:11434/v1,http://127.0.0.1:11435/v1",
+  "api_key_env": "OPENAI_API_KEY",
+  "dry_run": false,
+  "max_cost_usd": null,
+  "tpm_limit": null,
+  "num_ctx": 24576,
+  "turn1_repeat_penalty": 1.15,
+  "arm_specs": {
+    "baseline_bfs_bidirectional": {
+      "engine_id": "baseline_bfs_bidirectional",
+      "kind": "bfs",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Unpruned bidirectional AST call-graph BFS, greedy-filled to budget (floor)."
+    },
+    "pragmatic_oracle": {
+      "engine_id": "pragmatic_oracle",
+      "kind": "oracle",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Exactly the adjudicated pipeline_symbols - the strict minimal ground truth."
+    },
+    "scaffolded_oracle": {
+      "engine_id": "scaffolded_oracle",
+      "kind": "oracle",
+      "scaffolded": true,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "pipeline_symbols + annotated required_context + deterministic AST scaffold (referenced type declarations, validators, factory/builder initializers)."
+    },
+    "prism_full": {
+      "engine_id": "prism_full",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Two-pass: taxonomy anchor (task seed), 4-axis annotated manifest, k-hop expansion."
+    },
+    "ablation_lexical_anchors": {
+      "engine_id": "ablation_lexical_anchors",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "lexical",
+      "axes": "all",
+      "distractor_k": 0,
+      "description": "Two-pass with the anchor picked by BM25 over the task prompt; 4-axis metadata kept."
+    },
+    "ablation_signature_only": {
+      "engine_id": "ablation_signature_only",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "none",
+      "distractor_k": 0,
+      "description": "Two-pass with taxonomy anchor; manifest and context carry raw signatures, no 4-axis annotations."
+    },
+    "ablation_no_purity": {
+      "engine_id": "ablation_no_purity",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "no_substance",
+      "distractor_k": 0,
+      "description": "prism_full with the purity/side-effect axis (Substance) suppressed everywhere."
+    },
+    "prism_plus_distractors": {
+      "engine_id": "prism_plus_distractors",
+      "kind": "two_pass",
+      "scaffolded": false,
+      "anchor": "taxonomy",
+      "axes": "all",
+      "distractor_k": 8,
+      "description": "prism_full's context plus 8 fixed, unrelated repository functions."
+    }
+  }
+}
