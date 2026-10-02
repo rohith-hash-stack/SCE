@@ -1,0 +1,943 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "syn_t1_conceptual",
+  "items": [
+   {
+    "source_id": "fastapi/dependencies/utils.py:265-314",
+    "content": "# fastapi/dependencies/utils.py:265-314  (fastapi.dependencies.utils.get_dependant)\ndef get_dependant(\n    *,\n    path: str,\n    call: Callable[..., Any],\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n    use_cache: bool = True,\n) -> Dependant:\n    path_param_names = get_path_param_names(path)\n    endpoint_signature = get_typed_signature(call)\n    signature_params = endpoint_signature.parameters\n    dependant = Dependant(\n        call=call,\n        name=name,\n        path=path,\n        security_scopes=security_scopes,\n        use_cache=use_cache,\n    )\n    for param_name, param in signature_params.items():\n        is_path_param = param_name in path_param_names\n        param_details = analyze_param(\n            param_name=param_name,\n            annotation=param.annotation,\n            value=param.default,\n            is_path_param=is_path_param,\n        )\n        if param_details.depends is not None:\n            sub_dependant = get_param_sub_dependant(\n                param_name=param_name,\n                depends=param_details.depends,\n                path=path,\n                security_scopes=security_scopes,\n            )\n            dependant.dependencies.append(sub_dependant)\n            continue\n        if add_non_field_param_to_dependency(\n            param_name=param_name,\n            type_annotation=param_details.type_annotation,\n            dependant=dependant,\n        ):\n            assert param_details.field is None, (\n                f\"Cannot specify multiple FastAPI annotations for {param_name!r}\"\n            )\n            continue\n        assert param_details.field is not None\n        if isinstance(param_details.field.field_info, params.Body):\n            dependant.body_params.append(param_details.field)\n        else:\n            add_param_to_fields(field=param_details.field, dependant=dependant)\n    return dependant",
+    "token_count": 386,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_dependant"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 21,
+     "rerank_score": 0.13011810183525085,
+     "bm25_rank": 11,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 386
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial011_an.py:1-4",
+    "content": "# docs_src/dependencies/tutorial011_an.py:1-4  (docs_src.dependencies.tutorial011_an)\nfrom fastapi import Depends, FastAPI\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 48,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": -0.7616554498672485,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial008_an.py:1-2",
+    "content": "# docs_src/dependencies/tutorial008_an.py:1-2  (docs_src.dependencies.tutorial008_an)\nfrom fastapi import Depends\nfrom typing_extensions import Annotated",
+    "token_count": 39,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": -0.8052623271942139,
+     "bm25_rank": null,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 39
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial008_an_py39.py:1-3",
+    "content": "# docs_src/dependencies/tutorial008_an_py39.py:1-3  (docs_src.dependencies.tutorial008_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import Depends",
+    "token_count": 44,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 7,
+     "rerank_score": -1.1126970052719116,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 44
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial001_02_an_py39.py:1-5",
+    "content": "# docs_src/dependencies/tutorial001_02_an_py39.py:1-5  (docs_src.dependencies.tutorial001_02_an_py39)\nfrom typing import Annotated, Union\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()",
+    "token_count": 61,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 24,
+     "rerank_score": -1.4823276996612549,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 61
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial001_an_py39.py:1-5",
+    "content": "# docs_src/dependencies/tutorial001_an_py39.py:1-5  (docs_src.dependencies.tutorial001_an_py39)\nfrom typing import Annotated, Union\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()",
+    "token_count": 55,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 26,
+     "rerank_score": -1.4823276996612549,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial001_02_an_py310.py:1-5",
+    "content": "# docs_src/dependencies/tutorial001_02_an_py310.py:1-5  (docs_src.dependencies.tutorial001_02_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()",
+    "token_count": 61,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 14,
+     "rerank_score": -1.6641442775726318,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 61
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial001_an_py310.py:1-5",
+    "content": "# docs_src/dependencies/tutorial001_an_py310.py:1-5  (docs_src.dependencies.tutorial001_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()",
+    "token_count": 55,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 16,
+     "rerank_score": -1.6641442775726318,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial011_an_py39.py:1-5",
+    "content": "# docs_src/dependencies/tutorial011_an_py39.py:1-5  (docs_src.dependencies.tutorial011_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()",
+    "token_count": 53,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -1.6641442775726318,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 53
+    }
+   },
+   {
+    "source_id": "fastapi/routing.py:1-77",
+    "content": "# fastapi/routing.py:1-77  (fastapi.routing)\nimport asyncio\nimport dataclasses\nimport email.message\nimport inspect\nimport json\nfrom contextlib import AsyncExitStack, asynccontextmanager\nfrom enum import Enum, IntEnum\nfrom typing import (\n    Any,\n    AsyncIterator,\n    Callable,\n    Collection,\n    Coroutine,\n    Dict,\n    List,\n    Mapping,\n    Optional,\n    Sequence,\n    Set,\n    Tuple,\n    Type,\n    Union,\n)\n\nfrom fastapi import params\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    _model_dump,\n    _normalize_errors,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import Default, DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _should_embed_body_fields,\n    get_body_field,\n    get_dependant,\n    get_flat_dependant,\n    get_parameterless_sub_dependant,\n    get_typed_return_annotation,\n    solve_dependencies,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.exceptions import (\n    FastAPIError,\n    RequestValidationError,\n    ResponseValidationError,\n    WebSocketRequestValidationError,\n)\nfrom fastapi.types import DecoratedCallable, IncEx\nfrom fastapi.utils import (\n    create_cloned_field,\n    create_model_field,\n    generate_unique_id,\n    get_value_or_default,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette import routing\nfrom starlette.concurrency import run_in_threadpool\nfrom starlette.exceptions import HTTPException\nfrom starlette.requests import Request\nfrom starlette.responses import JSONResponse, Response\nfrom starlette.routing import (\n    BaseRoute,\n    Match,\n    compile_path,\n    get_name,\n    request_response,\n    websocket_session,\n)\nfrom starlette.routing import Mount as Mount  # noqa\nfrom starlette.types import AppType, ASGIApp, Lifespan, Scope\nfrom starlette.websockets import WebSocket\nfrom typing_extensions import Annotated, Doc, deprecated",
+    "token_count": 428,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": -1.6796765327453613,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 428
+    }
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:355-429#part1of2",
+    "content": "# fastapi/dependencies/utils.py:355-429#part1of2  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    field_info = None\n    depends = None\n    type_annotation: Any = Any\n    use_annotation: Any = Any\n    if annotation is not inspect.Signature.empty:\n        use_annotation = annotation\n        type_annotation = annotation\n    # Extract Annotated info\n    if get_origin(use_annotation) is Annotated:\n        annotated_args = get_args(annotation)\n        type_annotation = annotated_args[0]\n        fastapi_annotations = [\n            arg\n            for arg in annotated_args[1:]\n            if isinstance(arg, (FieldInfo, params.Depends))\n        ]\n        fastapi_specific_annotations = [\n            arg\n            for arg in fastapi_annotations\n            if isinstance(arg, (params.Param, params.Body, params.Depends))\n        ]\n        if fastapi_specific_annotations:\n            fastapi_annotation: Union[FieldInfo, params.Depends, None] = (\n                fastapi_specific_annotations[-1]\n            )\n        else:\n            fastapi_annotation = None\n        # Set default for Annotated FieldInfo\n        if isinstance(fastapi_annotation, FieldInfo):\n            # Copy `field_info` because we mutate `field_info.default` below.\n            field_info = copy_field_info(\n                field_info=fastapi_annotation, annotation=use_annotation\n            )\n            assert (\n                field_info.default is Undefined or field_info.default is RequiredParam\n            ), (\n                f\"`{field_info.__class__.__name__}` default value cannot be set in\"\n                f\" `Annotated` for {param_name!r}. Set the default value with `=` instead.\"\n            )\n            if value is not inspect.Signature.empty:\n                assert not is_path_param, \"Path parameters cannot have default values\"\n                field_info.default = value\n            else:\n                field_info.default = RequiredParam\n        # Get Annotated Depends\n        elif isinstance(fastapi_annotation, params.Depends):\n            depends = fastapi_annotation\n    # Get Depends from default value\n    if isinstance(value, params.Depends):\n        assert depends is None, (\n            \"Cannot specify `Depends` in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        assert field_info is None, (\n            \"Cannot specify a FastAPI annotation in `Annotated` and `Depends` as a\"\n            f\" default value together for {param_name!r}\"\n        )\n        depends = value\n    # Get FieldInfo from default value\n    elif isinstance(value, FieldInfo):\n        assert field_info is None, (\n            \"Cannot specify FastAPI annotations in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        field_info = value\n        if PYDANTIC_V2:\n            field_info.annotation = type_annotation\n\n    # Get Depends from type annotation\n    if depends is not None and depends.dependency is None:\n        # Copy `depends` before mutating it\n        depends = copy(depends)\n        depends.dependency = type_annotation\n\n    # Handle non-param type annotations like Request",
+    "token_count": 691,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.analyze_param"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 29,
+     "rerank_score": -2.0514097213745117,
+     "bm25_rank": 15,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 691
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial001_02_an.py:1-6",
+    "content": "# docs_src/dependencies/tutorial001_02_an.py:1-6  (docs_src.dependencies.tutorial001_02_an)\nfrom typing import Union\n\nfrom fastapi import Depends, FastAPI\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 59,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 9,
+     "rerank_score": -2.068127155303955,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 59
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial001_an.py:1-6",
+    "content": "# docs_src/dependencies/tutorial001_an.py:1-6  (docs_src.dependencies.tutorial001_an)\nfrom typing import Union\n\nfrom fastapi import Depends, FastAPI\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 53,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": -2.068127155303955,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 53
+    }
+   },
+   {
+    "source_id": "docs_src/dependencies/tutorial012_an.py:1-2",
+    "content": "# docs_src/dependencies/tutorial012_an.py:1-2  (docs_src.dependencies.tutorial012_an)\nfrom fastapi import Depends, FastAPI, Header, HTTPException\nfrom typing_extensions import Annotated",
+    "token_count": 47,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 50,
+     "rerank_score": -2.3111348152160645,
+     "bm25_rank": null,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 47
+    }
+   },
+   {
+    "source_id": "tests/test_generic_parameterless_depends.py:1-11",
+    "content": "# tests/test_generic_parameterless_depends.py:1-11  (tests.test_generic_parameterless_depends)\nfrom typing import TypeVar\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.testclient import TestClient\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\nT = TypeVar(\"T\")\n\nDep = Annotated[T, Depends()]",
+    "token_count": 75,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 23,
+     "rerank_score": -2.497062921524048,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 75
+    }
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:254-262",
+    "content": "# fastapi/dependencies/utils.py:254-262  (fastapi.dependencies.utils.get_typed_return_annotation)\ndef get_typed_return_annotation(call: Callable[..., Any]) -> Any:\n    signature = inspect.signature(call)\n    annotation = signature.return_annotation\n\n    if annotation is inspect.Signature.empty:\n        return None\n\n    globalns = getattr(call, \"__globals__\", {})\n    return get_typed_annotation(annotation, globalns)",
+    "token_count": 92,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_typed_return_annotation"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 4,
+     "rerank_score": -2.538045883178711,
+     "bm25_rank": 2,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 92
+    }
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:247-251",
+    "content": "# fastapi/dependencies/utils.py:247-251  (fastapi.dependencies.utils.get_typed_annotation)\ndef get_typed_annotation(annotation: Any, globalns: Dict[str, Any]) -> Any:\n    if isinstance(annotation, str):\n        annotation = ForwardRef(annotation)\n        annotation = evaluate_forwardref(annotation, globalns, globalns)\n    return annotation",
+    "token_count": 77,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_typed_annotation"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 1,
+     "rerank_score": -2.8851523399353027,
+     "bm25_rank": 1,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 77
+    }
+   },
+   {
+    "source_id": "docs_src/path_params_numeric_validations/tutorial002_an_py39.py:1-5",
+    "content": "# docs_src/path_params_numeric_validations/tutorial002_an_py39.py:1-5  (docs_src.path_params_numeric_validations.tutorial002_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()",
+    "token_count": 60,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 36,
+     "rerank_score": -3.4062509536743164,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 60
+    }
+   },
+   {
+    "source_id": "docs_src/path_params_numeric_validations/tutorial003_an_py39.py:1-5",
+    "content": "# docs_src/path_params_numeric_validations/tutorial003_an_py39.py:1-5  (docs_src.path_params_numeric_validations.tutorial003_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()",
+    "token_count": 60,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -3.4062509536743164,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 60
+    }
+   },
+   {
+    "source_id": "docs_src/path_params_numeric_validations/tutorial004_an_py39.py:1-5",
+    "content": "# docs_src/path_params_numeric_validations/tutorial004_an_py39.py:1-5  (docs_src.path_params_numeric_validations.tutorial004_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()",
+    "token_count": 60,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 40,
+     "rerank_score": -3.4062509536743164,
+     "bm25_rank": null,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 60
+    }
+   },
+   {
+    "source_id": "docs_src/path_params_numeric_validations/tutorial005_an_py39.py:1-5",
+    "content": "# docs_src/path_params_numeric_validations/tutorial005_an_py39.py:1-5  (docs_src.path_params_numeric_validations.tutorial005_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()",
+    "token_count": 60,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -3.4062509536743164,
+     "bm25_rank": null,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 60
+    }
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:343-345",
+    "content": "# fastapi/dependencies/utils.py:343-345  (fastapi.dependencies.utils.ParamDetails)\n@dataclass\nclass ParamDetails:\n    type_annotation: Any\n    depends: Optional[params.Depends]\n    field: Optional[ModelField]",
+    "token_count": 55,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.ParamDetails"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 8,
+     "rerank_score": -3.7073397636413574,
+     "bm25_rank": 4,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    }
+   },
+   {
+    "source_id": "docs_src/path_params_numeric_validations/tutorial002_an.py:1-4",
+    "content": "# docs_src/path_params_numeric_validations/tutorial002_an.py:1-4  (docs_src.path_params_numeric_validations.tutorial002_an)\nfrom fastapi import FastAPI, Path\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 55,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -3.8215694427490234,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    }
+   },
+   {
+    "source_id": "docs_src/path_params_numeric_validations/tutorial003_an.py:1-4",
+    "content": "# docs_src/path_params_numeric_validations/tutorial003_an.py:1-4  (docs_src.path_params_numeric_validations.tutorial003_an)\nfrom fastapi import FastAPI, Path\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 55,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 30,
+     "rerank_score": -3.8215694427490234,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    }
+   },
+   {
+    "source_id": "docs_src/path_params_numeric_validations/tutorial004_an.py:1-4",
+    "content": "# docs_src/path_params_numeric_validations/tutorial004_an.py:1-4  (docs_src.path_params_numeric_validations.tutorial004_an)\nfrom fastapi import FastAPI, Path\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 55,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 32,
+     "rerank_score": -3.8215694427490234,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    }
+   },
+   {
+    "source_id": "docs_src/path_params_numeric_validations/tutorial005_an.py:1-4",
+    "content": "# docs_src/path_params_numeric_validations/tutorial005_an.py:1-4  (docs_src.path_params_numeric_validations.tutorial005_an)\nfrom fastapi import FastAPI, Path\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 55,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 34,
+     "rerank_score": -3.8215694427490234,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 55
+    }
+   },
+   {
+    "source_id": "docs_src/body_multiple_params/tutorial001_an_py310.py:1-6",
+    "content": "# docs_src/body_multiple_params/tutorial001_an_py310.py:1-6  (docs_src.body_multiple_params.tutorial001_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\nfrom pydantic import BaseModel\n\napp = FastAPI()",
+    "token_count": 65,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 44,
+     "rerank_score": -4.050595283508301,
+     "bm25_rank": null,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 65
+    }
+   },
+   {
+    "source_id": "docs_src/python_types/tutorial013_py39.py:1-1",
+    "content": "# docs_src/python_types/tutorial013_py39.py:1-1  (docs_src.python_types.tutorial013_py39)\nfrom typing import Annotated",
+    "token_count": 37,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 3,
+     "rerank_score": -4.094762325286865,
+     "bm25_rank": null,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 37
+    }
+   },
+   {
+    "source_id": "tests/test_multipart_installation.py:1-8",
+    "content": "# tests/test_multipart_installation.py:1-8  (tests.test_multipart_installation)\nimport warnings\n\nimport pytest\nfrom fastapi import FastAPI, File, Form, UploadFile\nfrom fastapi.dependencies.utils import (\n    multipart_incorrect_install_error,\n    multipart_not_installed_error,\n)",
+    "token_count": 62,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 39,
+     "rerank_score": -4.162479877471924,
+     "bm25_rank": 20,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 62
+    }
+   },
+   {
+    "source_id": "docs_src/header_params/tutorial001_an.py:1-6",
+    "content": "# docs_src/header_params/tutorial001_an.py:1-6  (docs_src.header_params.tutorial001_an)\nfrom typing import Union\n\nfrom fastapi import FastAPI, Header\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 54,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 46,
+     "rerank_score": -4.237732887268066,
+     "bm25_rank": null,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 54
+    }
+   },
+   {
+    "source_id": "docs_src/header_params/tutorial002_an.py:1-6",
+    "content": "# docs_src/header_params/tutorial002_an.py:1-6  (docs_src.header_params.tutorial002_an)\nfrom typing import Union\n\nfrom fastapi import FastAPI, Header\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 54,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -4.237732887268066,
+     "bm25_rank": null,
+     "dense_rank": 25,
+     "oversized_chunk": false,
+     "engine_token_count": 54
+    }
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:231-244",
+    "content": "# fastapi/dependencies/utils.py:231-244  (fastapi.dependencies.utils.get_typed_signature)\ndef get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:\n    signature = inspect.signature(call)\n    globalns = getattr(call, \"__globals__\", {})\n    typed_params = [\n        inspect.Parameter(\n            name=param.name,\n            kind=param.kind,\n            default=param.default,\n            annotation=get_typed_annotation(param.annotation, globalns),\n        )\n        for param in signature.parameters.values()\n    ]\n    typed_signature = inspect.Signature(typed_params)\n    return typed_signature",
+    "token_count": 127,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_typed_signature"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 6,
+     "rerank_score": -4.526540279388428,
+     "bm25_rank": 3,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 127
+    }
+   },
+   {
+    "source_id": "tests/test_compat.py:1-18",
+    "content": "# tests/test_compat.py:1-18  (tests.test_compat)\nfrom typing import Any, Dict, List, Union\n\nfrom fastapi import FastAPI, UploadFile\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    get_cached_model_fields,\n    get_model_fields,\n    is_bytes_sequence_annotation,\n    is_scalar_field,\n    is_uploadfile_sequence_annotation,\n)\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseConfig, BaseModel, ConfigDict\nfrom pydantic.fields import FieldInfo\n\nfrom .utils import needs_pydanticv1, needs_pydanticv2",
+    "token_count": 135,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 33,
+     "rerank_score": -4.758778095245361,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 135
+    }
+   },
+   {
+    "source_id": "fastapi/_compat.py:551-560",
+    "content": "# fastapi/_compat.py:551-560  (fastapi._compat.field_annotation_is_sequence)\ndef field_annotation_is_sequence(annotation: Union[Type[Any], None]) -> bool:\n    origin = get_origin(annotation)\n    if origin is Union or origin is UnionType:\n        for arg in get_args(annotation):\n            if field_annotation_is_sequence(arg):\n                return True\n        return False\n    return _annotation_is_sequence(annotation) or _annotation_is_sequence(\n        get_origin(annotation)\n    )",
+    "token_count": 105,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi._compat.field_annotation_is_sequence"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 37,
+     "rerank_score": -4.8961920738220215,
+     "bm25_rank": 19,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 105
+    }
+   },
+   {
+    "source_id": "docs_src/python_types/tutorial013.py:1-1",
+    "content": "# docs_src/python_types/tutorial013.py:1-1  (docs_src.python_types.tutorial013)\nfrom typing_extensions import Annotated",
+    "token_count": 32,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 2,
+     "rerank_score": -5.681080341339111,
+     "bm25_rank": null,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 32
+    }
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:317-338",
+    "content": "# fastapi/dependencies/utils.py:317-338  (fastapi.dependencies.utils.add_non_field_param_to_dependency)\ndef add_non_field_param_to_dependency(\n    *, param_name: str, type_annotation: Any, dependant: Dependant\n) -> Optional[bool]:\n    if lenient_issubclass(type_annotation, Request):\n        dependant.request_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, WebSocket):\n        dependant.websocket_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, HTTPConnection):\n        dependant.http_connection_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, Response):\n        dependant.response_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, StarletteBackgroundTasks):\n        dependant.background_tasks_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, SecurityScopes):\n        dependant.security_scopes_param_name = param_name\n        return True\n    return None",
+    "token_count": 235,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.add_non_field_param_to_dependency"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 22,
+     "rerank_score": -5.79000186920166,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 235
+    }
+   },
+   {
+    "source_id": "fastapi/_compat.py:632-644",
+    "content": "# fastapi/_compat.py:632-644  (fastapi._compat.is_bytes_sequence_annotation)\ndef is_bytes_sequence_annotation(annotation: Any) -> bool:\n    origin = get_origin(annotation)\n    if origin is Union or origin is UnionType:\n        at_least_one = False\n        for arg in get_args(annotation):\n            if is_bytes_sequence_annotation(arg):\n                at_least_one = True\n                continue\n        return at_least_one\n    return field_annotation_is_sequence(annotation) and all(\n        is_bytes_or_nonable_bytes_annotation(sub_annotation)\n        for sub_annotation in get_args(annotation)\n    )",
+    "token_count": 127,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi._compat.is_bytes_sequence_annotation"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 41,
+     "rerank_score": -5.990349769592285,
+     "bm25_rank": 21,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 127
+    }
+   },
+   {
+    "source_id": "tests/test_tutorial/test_dependencies/test_tutorial008b.py:1-6",
+    "content": "# tests/test_tutorial/test_dependencies/test_tutorial008b.py:1-6  (tests.test_tutorial.test_dependencies.test_tutorial008b)\nimport importlib\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_py39",
+    "token_count": 59,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -6.335599899291992,
+     "bm25_rank": 24,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 59
+    }
+   },
+   {
+    "source_id": "fastapi/_compat.py:575-585",
+    "content": "# fastapi/_compat.py:575-585  (fastapi._compat.field_annotation_is_complex)\ndef field_annotation_is_complex(annotation: Union[Type[Any], None]) -> bool:\n    origin = get_origin(annotation)\n    if origin is Union or origin is UnionType:\n        return any(field_annotation_is_complex(arg) for arg in get_args(annotation))\n\n    return (\n        _annotation_is_complex(annotation)\n        or _annotation_is_complex(origin)\n        or hasattr(origin, \"__pydantic_core_schema__\")\n        or hasattr(origin, \"__get_pydantic_core_schema__\")\n    )",
+    "token_count": 123,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi._compat.field_annotation_is_complex"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 49,
+     "rerank_score": -6.555907249450684,
+     "bm25_rank": 25,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 123
+    }
+   },
+   {
+    "source_id": "fastapi/_compat.py:567-572",
+    "content": "# fastapi/_compat.py:567-572  (fastapi._compat._annotation_is_complex)\ndef _annotation_is_complex(annotation: Union[Type[Any], None]) -> bool:\n    return (\n        lenient_issubclass(annotation, (BaseModel, Mapping, UploadFile))\n        or _annotation_is_sequence(annotation)\n        or is_dataclass(annotation)\n    )",
+    "token_count": 80,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi._compat._annotation_is_complex"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 45,
+     "rerank_score": -6.97822380065918,
+     "bm25_rank": 23,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 80
+    }
+   },
+   {
+    "source_id": "fastapi/_compat.py:647-659",
+    "content": "# fastapi/_compat.py:647-659  (fastapi._compat.is_uploadfile_sequence_annotation)\ndef is_uploadfile_sequence_annotation(annotation: Any) -> bool:\n    origin = get_origin(annotation)\n    if origin is Union or origin is UnionType:\n        at_least_one = False\n        for arg in get_args(annotation):\n            if is_uploadfile_sequence_annotation(arg):\n                at_least_one = True\n                continue\n        return at_least_one\n    return field_annotation_is_sequence(annotation) and all(\n        is_uploadfile_or_nonable_uploadfile_annotation(sub_annotation)\n        for sub_annotation in get_args(annotation)\n    )",
+    "token_count": 132,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi._compat.is_uploadfile_sequence_annotation"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 43,
+     "rerank_score": -6.986689567565918,
+     "bm25_rank": 22,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 132
+    }
+   },
+   {
+    "source_id": "tests/test_response_model_as_return_annotation.py:192-197",
+    "content": "# tests/test_response_model_as_return_annotation.py:192-197  (tests.test_response_model_as_return_annotation.response_model_list_of_model_no_annotation)\n@app.get(\"/response_model_list_of_model-no_annotation\", response_model=List[User])\ndef response_model_list_of_model_no_annotation():\n    return [\n        DBUser(name=\"John\", surname=\"Doe\", password_hash=\"secret\"),\n        DBUser(name=\"Jane\", surname=\"Does\", password_hash=\"secret2\"),\n    ]",
+    "token_count": 100,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_response_model_as_return_annotation.response_model_list_of_model_no_annotation"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 17,
+     "rerank_score": -7.960664749145508,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 100
+    }
+   },
+   {
+    "source_id": "tests/test_response_model_as_return_annotation.py:200-205",
+    "content": "# tests/test_response_model_as_return_annotation.py:200-205  (tests.test_response_model_as_return_annotation.no_response_model_annotation_list_of_model)\n@app.get(\"/no_response_model-annotation_list_of_model\")\ndef no_response_model_annotation_list_of_model() -> List[User]:\n    return [\n        DBUser(name=\"John\", surname=\"Doe\", password_hash=\"secret\"),\n        DBUser(name=\"Jane\", surname=\"Does\", password_hash=\"secret2\"),\n    ]",
+    "token_count": 99,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_response_model_as_return_annotation.no_response_model_annotation_list_of_model"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 13,
+     "rerank_score": -8.000085830688477,
+     "bm25_rank": 7,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 99
+    }
+   },
+   {
+    "source_id": "tests/test_response_model_as_return_annotation.py:208-213",
+    "content": "# tests/test_response_model_as_return_annotation.py:208-213  (tests.test_response_model_as_return_annotation.no_response_model_annotation_forward_ref_list_of_model)\n@app.get(\"/no_response_model-annotation_forward_ref_list_of_model\")\ndef no_response_model_annotation_forward_ref_list_of_model() -> \"List[User]\":\n    return [\n        DBUser(name=\"John\", surname=\"Doe\", password_hash=\"secret\"),\n        DBUser(name=\"Jane\", surname=\"Does\", password_hash=\"secret2\"),\n    ]",
+    "token_count": 107,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_response_model_as_return_annotation.no_response_model_annotation_forward_ref_list_of_model"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 19,
+     "rerank_score": -8.087154388427734,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 107
+    }
+   },
+   {
+    "source_id": "tests/test_response_model_as_return_annotation.py:437-443",
+    "content": "# tests/test_response_model_as_return_annotation.py:437-443  (tests.test_response_model_as_return_annotation.test_response_model_list_of_model_no_annotation)\ndef test_response_model_list_of_model_no_annotation():\n    response = client.get(\"/response_model_list_of_model-no_annotation\")\n    assert response.status_code == 200, response.text\n    assert response.json() == [\n        {\"name\": \"John\", \"surname\": \"Doe\"},\n        {\"name\": \"Jane\", \"surname\": \"Does\"},\n    ]",
+    "token_count": 109,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_response_model_as_return_annotation.test_response_model_list_of_model_no_annotation"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 10,
+     "rerank_score": -8.901347160339355,
+     "bm25_rank": 5,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    }
+   },
+   {
+    "source_id": "tests/test_response_model_as_return_annotation.py:446-452",
+    "content": "# tests/test_response_model_as_return_annotation.py:446-452  (tests.test_response_model_as_return_annotation.test_no_response_model_annotation_list_of_model)\ndef test_no_response_model_annotation_list_of_model():\n    response = client.get(\"/no_response_model-annotation_list_of_model\")\n    assert response.status_code == 200, response.text\n    assert response.json() == [\n        {\"name\": \"John\", \"surname\": \"Doe\"},\n        {\"name\": \"Jane\", \"surname\": \"Does\"},\n    ]",
+    "token_count": 110,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_response_model_as_return_annotation.test_no_response_model_annotation_list_of_model"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 12,
+     "rerank_score": -9.178668022155762,
+     "bm25_rank": 6,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 110
+    }
+   },
+   {
+    "source_id": "tests/test_response_model_as_return_annotation.py:455-461",
+    "content": "# tests/test_response_model_as_return_annotation.py:455-461  (tests.test_response_model_as_return_annotation.test_no_response_model_annotation_forward_ref_list_of_model)\ndef test_no_response_model_annotation_forward_ref_list_of_model():\n    response = client.get(\"/no_response_model-annotation_forward_ref_list_of_model\")\n    assert response.status_code == 200, response.text\n    assert response.json() == [\n        {\"name\": \"John\", \"surname\": \"Doe\"},\n        {\"name\": \"Jane\", \"surname\": \"Does\"},\n    ]",
+    "token_count": 116,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_response_model_as_return_annotation.test_no_response_model_annotation_forward_ref_list_of_model"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 15,
+     "rerank_score": -9.242921829223633,
+     "bm25_rank": 8,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 116
+    }
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:174-174",
+    "content": "# fastapi/dependencies/utils.py:174-174  (fastapi.dependencies.utils)\nCacheKey = Tuple[Optional[Callable[..., Any]], Tuple[str, ...]]",
+    "token_count": 38,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 27,
+     "rerank_score": -10.186431884765625,
+     "bm25_rank": 14,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 38
+    }
+   },
+   {
+    "source_id": "docs_src/response_model/tutorial002.py:16-16",
+    "content": "# docs_src/response_model/tutorial002.py:16-16  (docs_src.response_model.tutorial002)\n# Don't do this in production!",
+    "token_count": 36,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 31,
+     "rerank_score": -10.196853637695312,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 36
+    }
+   },
+   {
+    "source_id": "docs_src/response_model/tutorial002_py310.py:14-14",
+    "content": "# docs_src/response_model/tutorial002_py310.py:14-14  (docs_src.response_model.tutorial002_py310)\n# Don't do this in production!",
+    "token_count": 44,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 35,
+     "rerank_score": -10.196853637695312,
+     "bm25_rank": 18,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 44
+    }
+   }
+  ],
+  "total_tokens": 5025,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "Python files only in M1 (TypeScript chunking arrives with the multi-corpus pipeline)",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "What does `fastapi.dependencies.utils.get_typed_annotation` do?",
+   "task_type": "T1_conceptual",
+   "n_chunks_indexed": 5398,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     18.594334
+    ],
+    "L_embed_query": [
+     94.194175
+    ],
+    "L_dense": [
+     16.005692
+    ],
+    "L_rrf": [
+     0.149913
+    ],
+    "L_rerank": [
+     18011.896747
+    ],
+    "L_retrieve": [
+     18161.646893
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 5025,
+   "prompt_tokens": 5134,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 5147,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/dependencies/utils.py:265-314  (fastapi.dependencies.utils.get_dependant)\ndef get_dependant(\n    *,\n    path: str,\n    call: Callable[..., Any],\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n    use_cache: bool = True,\n) -> Dependant:\n    path_param_names = get_path_param_names(path)\n    endpoint_signature = get_typed_signature(call)\n    signature_params = endpoint_signature.parameters\n    dependant = Dependant(\n        call=call,\n        name=name,\n        path=path,\n        security_scopes=security_scopes,\n        use_cache=use_cache,\n    )\n    for param_name, param in signature_params.items():\n        is_path_param = param_name in path_param_names\n        param_details = analyze_param(\n            param_name=param_name,\n            annotation=param.annotation,\n            value=param.default,\n            is_path_param=is_path_param,\n        )\n        if param_details.depends is not None:\n            sub_dependant = get_param_sub_dependant(\n                param_name=param_name,\n                depends=param_details.depends,\n                path=path,\n                security_scopes=security_scopes,\n            )\n            dependant.dependencies.append(sub_dependant)\n            continue\n        if add_non_field_param_to_dependency(\n            param_name=param_name,\n            type_annotation=param_details.type_annotation,\n            dependant=dependant,\n        ):\n            assert param_details.field is None, (\n                f\"Cannot specify multiple FastAPI annotations for {param_name!r}\"\n            )\n            continue\n        assert param_details.field is not None\n        if isinstance(param_details.field.field_info, params.Body):\n            dependant.body_params.append(param_details.field)\n        else:\n            add_param_to_fields(field=param_details.field, dependant=dependant)\n    return dependant\n\n# docs_src/dependencies/tutorial011_an.py:1-4  (docs_src.dependencies.tutorial011_an)\nfrom fastapi import Depends, FastAPI\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# docs_src/dependencies/tutorial008_an.py:1-2  (docs_src.dependencies.tutorial008_an)\nfrom fastapi import Depends\nfrom typing_extensions import Annotated\n\n# docs_src/dependencies/tutorial008_an_py39.py:1-3  (docs_src.dependencies.tutorial008_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import Depends\n\n# docs_src/dependencies/tutorial001_02_an_py39.py:1-5  (docs_src.dependencies.tutorial001_02_an_py39)\nfrom typing import Annotated, Union\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()\n\n# docs_src/dependencies/tutorial001_an_py39.py:1-5  (docs_src.dependencies.tutorial001_an_py39)\nfrom typing import Annotated, Union\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()\n\n# docs_src/dependencies/tutorial001_02_an_py310.py:1-5  (docs_src.dependencies.tutorial001_02_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()\n\n# docs_src/dependencies/tutorial001_an_py310.py:1-5  (docs_src.dependencies.tutorial001_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()\n\n# docs_src/dependencies/tutorial011_an_py39.py:1-5  (docs_src.dependencies.tutorial011_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\n\napp = FastAPI()\n\n# fastapi/routing.py:1-77  (fastapi.routing)\nimport asyncio\nimport dataclasses\nimport email.message\nimport inspect\nimport json\nfrom contextlib import AsyncExitStack, asynccontextmanager\nfrom enum import Enum, IntEnum\nfrom typing import (\n    Any,\n    AsyncIterator,\n    Callable,\n    Collection,\n    Coroutine,\n    Dict,\n    List,\n    Mapping,\n    Optional,\n    Sequence,\n    Set,\n    Tuple,\n    Type,\n    Union,\n)\n\nfrom fastapi import params\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    _model_dump,\n    _normalize_errors,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import Default, DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _should_embed_body_fields,\n    get_body_field,\n    get_dependant,\n    get_flat_dependant,\n    get_parameterless_sub_dependant,\n    get_typed_return_annotation,\n    solve_dependencies,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.exceptions import (\n    FastAPIError,\n    RequestValidationError,\n    ResponseValidationError,\n    WebSocketRequestValidationError,\n)\nfrom fastapi.types import DecoratedCallable, IncEx\nfrom fastapi.utils import (\n    create_cloned_field,\n    create_model_field,\n    generate_unique_id,\n    get_value_or_default,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette import routing\nfrom starlette.concurrency import run_in_threadpool\nfrom starlette.exceptions import HTTPException\nfrom starlette.requests import Request\nfrom starlette.responses import JSONResponse, Response\nfrom starlette.routing import (\n    BaseRoute,\n    Match,\n    compile_path,\n    get_name,\n    request_response,\n    websocket_session,\n)\nfrom starlette.routing import Mount as Mount  # noqa\nfrom starlette.types import AppType, ASGIApp, Lifespan, Scope\nfrom starlette.websockets import WebSocket\nfrom typing_extensions import Annotated, Doc, deprecated\n\n# fastapi/dependencies/utils.py:355-429#part1of2  (fastapi.dependencies.utils.analyze_param)\ndef analyze_param(\n    *,\n    param_name: str,\n    annotation: Any,\n    value: Any,\n    is_path_param: bool,\n) -> ParamDetails:\n    field_info = None\n    depends = None\n    type_annotation: Any = Any\n    use_annotation: Any = Any\n    if annotation is not inspect.Signature.empty:\n        use_annotation = annotation\n        type_annotation = annotation\n    # Extract Annotated info\n    if get_origin(use_annotation) is Annotated:\n        annotated_args = get_args(annotation)\n        type_annotation = annotated_args[0]\n        fastapi_annotations = [\n            arg\n            for arg in annotated_args[1:]\n            if isinstance(arg, (FieldInfo, params.Depends))\n        ]\n        fastapi_specific_annotations = [\n            arg\n            for arg in fastapi_annotations\n            if isinstance(arg, (params.Param, params.Body, params.Depends))\n        ]\n        if fastapi_specific_annotations:\n            fastapi_annotation: Union[FieldInfo, params.Depends, None] = (\n                fastapi_specific_annotations[-1]\n            )\n        else:\n            fastapi_annotation = None\n        # Set default for Annotated FieldInfo\n        if isinstance(fastapi_annotation, FieldInfo):\n            # Copy `field_info` because we mutate `field_info.default` below.\n            field_info = copy_field_info(\n                field_info=fastapi_annotation, annotation=use_annotation\n            )\n            assert (\n                field_info.default is Undefined or field_info.default is RequiredParam\n            ), (\n                f\"`{field_info.__class__.__name__}` default value cannot be set in\"\n                f\" `Annotated` for {param_name!r}. Set the default value with `=` instead.\"\n            )\n            if value is not inspect.Signature.empty:\n                assert not is_path_param, \"Path parameters cannot have default values\"\n                field_info.default = value\n            else:\n                field_info.default = RequiredParam\n        # Get Annotated Depends\n        elif isinstance(fastapi_annotation, params.Depends):\n            depends = fastapi_annotation\n    # Get Depends from default value\n    if isinstance(value, params.Depends):\n        assert depends is None, (\n            \"Cannot specify `Depends` in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        assert field_info is None, (\n            \"Cannot specify a FastAPI annotation in `Annotated` and `Depends` as a\"\n            f\" default value together for {param_name!r}\"\n        )\n        depends = value\n    # Get FieldInfo from default value\n    elif isinstance(value, FieldInfo):\n        assert field_info is None, (\n            \"Cannot specify FastAPI annotations in `Annotated` and default value\"\n            f\" together for {param_name!r}\"\n        )\n        field_info = value\n        if PYDANTIC_V2:\n            field_info.annotation = type_annotation\n\n    # Get Depends from type annotation\n    if depends is not None and depends.dependency is None:\n        # Copy `depends` before mutating it\n        depends = copy(depends)\n        depends.dependency = type_annotation\n\n    # Handle non-param type annotations like Request\n\n# docs_src/dependencies/tutorial001_02_an.py:1-6  (docs_src.dependencies.tutorial001_02_an)\nfrom typing import Union\n\nfrom fastapi import Depends, FastAPI\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# docs_src/dependencies/tutorial001_an.py:1-6  (docs_src.dependencies.tutorial001_an)\nfrom typing import Union\n\nfrom fastapi import Depends, FastAPI\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# docs_src/dependencies/tutorial012_an.py:1-2  (docs_src.dependencies.tutorial012_an)\nfrom fastapi import Depends, FastAPI, Header, HTTPException\nfrom typing_extensions import Annotated\n\n# tests/test_generic_parameterless_depends.py:1-11  (tests.test_generic_parameterless_depends)\nfrom typing import TypeVar\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.testclient import TestClient\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\nT = TypeVar(\"T\")\n\nDep = Annotated[T, Depends()]\n\n# fastapi/dependencies/utils.py:254-262  (fastapi.dependencies.utils.get_typed_return_annotation)\ndef get_typed_return_annotation(call: Callable[..., Any]) -> Any:\n    signature = inspect.signature(call)\n    annotation = signature.return_annotation\n\n    if annotation is inspect.Signature.empty:\n        return None\n\n    globalns = getattr(call, \"__globals__\", {})\n    return get_typed_annotation(annotation, globalns)\n\n# fastapi/dependencies/utils.py:247-251  (fastapi.dependencies.utils.get_typed_annotation)\ndef get_typed_annotation(annotation: Any, globalns: Dict[str, Any]) -> Any:\n    if isinstance(annotation, str):\n        annotation = ForwardRef(annotation)\n        annotation = evaluate_forwardref(annotation, globalns, globalns)\n    return annotation\n\n# docs_src/path_params_numeric_validations/tutorial002_an_py39.py:1-5  (docs_src.path_params_numeric_validations.tutorial002_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()\n\n# docs_src/path_params_numeric_validations/tutorial003_an_py39.py:1-5  (docs_src.path_params_numeric_validations.tutorial003_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()\n\n# docs_src/path_params_numeric_validations/tutorial004_an_py39.py:1-5  (docs_src.path_params_numeric_validations.tutorial004_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()\n\n# docs_src/path_params_numeric_validations/tutorial005_an_py39.py:1-5  (docs_src.path_params_numeric_validations.tutorial005_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()\n\n# fastapi/dependencies/utils.py:343-345  (fastapi.dependencies.utils.ParamDetails)\n@dataclass\nclass ParamDetails:\n    type_annotation: Any\n    depends: Optional[params.Depends]\n    field: Optional[ModelField]\n\n# docs_src/path_params_numeric_validations/tutorial002_an.py:1-4  (docs_src.path_params_numeric_validations.tutorial002_an)\nfrom fastapi import FastAPI, Path\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# docs_src/path_params_numeric_validations/tutorial003_an.py:1-4  (docs_src.path_params_numeric_validations.tutorial003_an)\nfrom fastapi import FastAPI, Path\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# docs_src/path_params_numeric_validations/tutorial004_an.py:1-4  (docs_src.path_params_numeric_validations.tutorial004_an)\nfrom fastapi import FastAPI, Path\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# docs_src/path_params_numeric_validations/tutorial005_an.py:1-4  (docs_src.path_params_numeric_validations.tutorial005_an)\nfrom fastapi import FastAPI, Path\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# docs_src/body_multiple_params/tutorial001_an_py310.py:1-6  (docs_src.body_multiple_params.tutorial001_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import FastAPI, Path\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\n# docs_src/python_types/tutorial013_py39.py:1-1  (docs_src.python_types.tutorial013_py39)\nfrom typing import Annotated\n\n# tests/test_multipart_installation.py:1-8  (tests.test_multipart_installation)\nimport warnings\n\nimport pytest\nfrom fastapi import FastAPI, File, Form, UploadFile\nfrom fastapi.dependencies.utils import (\n    multipart_incorrect_install_error,\n    multipart_not_installed_error,\n)\n\n# docs_src/header_params/tutorial001_an.py:1-6  (docs_src.header_params.tutorial001_an)\nfrom typing import Union\n\nfrom fastapi import FastAPI, Header\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# docs_src/header_params/tutorial002_an.py:1-6  (docs_src.header_params.tutorial002_an)\nfrom typing import Union\n\nfrom fastapi import FastAPI, Header\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# fastapi/dependencies/utils.py:231-244  (fastapi.dependencies.utils.get_typed_signature)\ndef get_typed_signature(call: Callable[..., Any]) -> inspect.Signature:\n    signature = inspect.signature(call)\n    globalns = getattr(call, \"__globals__\", {})\n    typed_params = [\n        inspect.Parameter(\n            name=param.name,\n            kind=param.kind,\n            default=param.default,\n            annotation=get_typed_annotation(param.annotation, globalns),\n        )\n        for param in signature.parameters.values()\n    ]\n    typed_signature = inspect.Signature(typed_params)\n    return typed_signature\n\n# tests/test_compat.py:1-18  (tests.test_compat)\nfrom typing import Any, Dict, List, Union\n\nfrom fastapi import FastAPI, UploadFile\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    get_cached_model_fields,\n    get_model_fields,\n    is_bytes_sequence_annotation,\n    is_scalar_field,\n    is_uploadfile_sequence_annotation,\n)\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseConfig, BaseModel, ConfigDict\nfrom pydantic.fields import FieldInfo\n\nfrom .utils import needs_pydanticv1, needs_pydanticv2\n\n# fastapi/_compat.py:551-560  (fastapi._compat.field_annotation_is_sequence)\ndef field_annotation_is_sequence(annotation: Union[Type[Any], None]) -> bool:\n    origin = get_origin(annotation)\n    if origin is Union or origin is UnionType:\n        for arg in get_args(annotation):\n            if field_annotation_is_sequence(arg):\n                return True\n        return False\n    return _annotation_is_sequence(annotation) or _annotation_is_sequence(\n        get_origin(annotation)\n    )\n\n# docs_src/python_types/tutorial013.py:1-1  (docs_src.python_types.tutorial013)\nfrom typing_extensions import Annotated\n\n# fastapi/dependencies/utils.py:317-338  (fastapi.dependencies.utils.add_non_field_param_to_dependency)\ndef add_non_field_param_to_dependency(\n    *, param_name: str, type_annotation: Any, dependant: Dependant\n) -> Optional[bool]:\n    if lenient_issubclass(type_annotation, Request):\n        dependant.request_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, WebSocket):\n        dependant.websocket_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, HTTPConnection):\n        dependant.http_connection_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, Response):\n        dependant.response_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, StarletteBackgroundTasks):\n        dependant.background_tasks_param_name = param_name\n        return True\n    elif lenient_issubclass(type_annotation, SecurityScopes):\n        dependant.security_scopes_param_name = param_name\n        return True\n    return None\n\n# fastapi/_compat.py:632-644  (fastapi._compat.is_bytes_sequence_annotation)\ndef is_bytes_sequence_annotation(annotation: Any) -> bool:\n    origin = get_origin(annotation)\n    if origin is Union or origin is UnionType:\n        at_least_one = False\n        for arg in get_args(annotation):\n            if is_bytes_sequence_annotation(arg):\n                at_least_one = True\n                continue\n        return at_least_one\n    return field_annotation_is_sequence(annotation) and all(\n        is_bytes_or_nonable_bytes_annotation(sub_annotation)\n        for sub_annotation in get_args(annotation)\n    )\n\n# tests/test_tutorial/test_dependencies/test_tutorial008b.py:1-6  (tests.test_tutorial.test_dependencies.test_tutorial008b)\nimport importlib\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_py39\n\n# fastapi/_compat.py:575-585  (fastapi._compat.field_annotation_is_complex)\ndef field_annotation_is_complex(annotation: Union[Type[Any], None]) -> bool:\n    origin = get_origin(annotation)\n    if origin is Union or origin is UnionType:\n        return any(field_annotation_is_complex(arg) for arg in get_args(annotation))\n\n    return (\n        _annotation_is_complex(annotation)\n        or _annotation_is_complex(origin)\n        or hasattr(origin, \"__pydantic_core_schema__\")\n        or hasattr(origin, \"__get_pydantic_core_schema__\")\n    )\n\n# fastapi/_compat.py:567-572  (fastapi._compat._annotation_is_complex)\ndef _annotation_is_complex(annotation: Union[Type[Any], None]) -> bool:\n    return (\n        lenient_issubclass(annotation, (BaseModel, Mapping, UploadFile))\n        or _annotation_is_sequence(annotation)\n        or is_dataclass(annotation)\n    )\n\n# fastapi/_compat.py:647-659  (fastapi._compat.is_uploadfile_sequence_annotation)\ndef is_uploadfile_sequence_annotation(annotation: Any) -> bool:\n    origin = get_origin(annotation)\n    if origin is Union or origin is UnionType:\n        at_least_one = False\n        for arg in get_args(annotation):\n            if is_uploadfile_sequence_annotation(arg):\n                at_least_one = True\n                continue\n        return at_least_one\n    return field_annotation_is_sequence(annotation) and all(\n        is_uploadfile_or_nonable_uploadfile_annotation(sub_annotation)\n        for sub_annotation in get_args(annotation)\n    )\n\n# tests/test_response_model_as_return_annotation.py:192-197  (tests.test_response_model_as_return_annotation.response_model_list_of_model_no_annotation)\n@app.get(\"/response_model_list_of_model-no_annotation\", response_model=List[User])\ndef response_model_list_of_model_no_annotation():\n    return [\n        DBUser(name=\"John\", surname=\"Doe\", password_hash=\"secret\"),\n        DBUser(name=\"Jane\", surname=\"Does\", password_hash=\"secret2\"),\n    ]\n\n# tests/test_response_model_as_return_annotation.py:200-205  (tests.test_response_model_as_return_annotation.no_response_model_annotation_list_of_model)\n@app.get(\"/no_response_model-annotation_list_of_model\")\ndef no_response_model_annotation_list_of_model() -> List[User]:\n    return [\n        DBUser(name=\"John\", surname=\"Doe\", password_hash=\"secret\"),\n        DBUser(name=\"Jane\", surname=\"Does\", password_hash=\"secret2\"),\n    ]\n\n# tests/test_response_model_as_return_annotation.py:208-213  (tests.test_response_model_as_return_annotation.no_response_model_annotation_forward_ref_list_of_model)\n@app.get(\"/no_response_model-annotation_forward_ref_list_of_model\")\ndef no_response_model_annotation_forward_ref_list_of_model() -> \"List[User]\":\n    return [\n        DBUser(name=\"John\", surname=\"Doe\", password_hash=\"secret\"),\n        DBUser(name=\"Jane\", surname=\"Does\", password_hash=\"secret2\"),\n    ]\n\n# tests/test_response_model_as_return_annotation.py:437-443  (tests.test_response_model_as_return_annotation.test_response_model_list_of_model_no_annotation)\ndef test_response_model_list_of_model_no_annotation():\n    response = client.get(\"/response_model_list_of_model-no_annotation\")\n    assert response.status_code == 200, response.text\n    assert response.json() == [\n        {\"name\": \"John\", \"surname\": \"Doe\"},\n        {\"name\": \"Jane\", \"surname\": \"Does\"},\n    ]\n\n# tests/test_response_model_as_return_annotation.py:446-452  (tests.test_response_model_as_return_annotation.test_no_response_model_annotation_list_of_model)\ndef test_no_response_model_annotation_list_of_model():\n    response = client.get(\"/no_response_model-annotation_list_of_model\")\n    assert response.status_code == 200, response.text\n    assert response.json() == [\n        {\"name\": \"John\", \"surname\": \"Doe\"},\n        {\"name\": \"Jane\", \"surname\": \"Does\"},\n    ]\n\n# tests/test_response_model_as_return_annotation.py:455-461  (tests.test_response_model_as_return_annotation.test_no_response_model_annotation_forward_ref_list_of_model)\ndef test_no_response_model_annotation_forward_ref_list_of_model():\n    response = client.get(\"/no_response_model-annotation_forward_ref_list_of_model\")\n    assert response.status_code == 200, response.text\n    assert response.json() == [\n        {\"name\": \"John\", \"surname\": \"Doe\"},\n        {\"name\": \"Jane\", \"surname\": \"Does\"},\n    ]\n\n# fastapi/dependencies/utils.py:174-174  (fastapi.dependencies.utils)\nCacheKey = Tuple[Optional[Callable[..., Any]], Tuple[str, ...]]\n\n# docs_src/response_model/tutorial002.py:16-16  (docs_src.response_model.tutorial002)\n# Don't do this in production!\n\n# docs_src/response_model/tutorial002_py310.py:14-14  (docs_src.response_model.tutorial002_py310)\n# Don't do this in production!\n\n## Task\n\nWhat does `fastapi.dependencies.utils.get_typed_annotation` do?\n\n## Response format\n\nAnswer in a few sentences of prose."
+}
