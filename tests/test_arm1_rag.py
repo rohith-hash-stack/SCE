@@ -107,3 +107,32 @@ def test_onnx_cross_encoder_export_and_inference(tmp_path):
     assert ce.score("query w3", ragged).shape == (5,)
     ce2 = OnnxCrossEncoder(model_id=str(model_dir), cache_dir=tmp_path / "cache")   # reuses the export
     assert np.allclose(ce2.score("query w1 w2", docs), s, atol=1e-5)
+
+
+def test_missing_reranker_fails_once_at_index_time(monkeypatch):
+    """Kaggle d087d1b: a missing onnxruntime failed every Arm 1 cell one by
+    one at retrieval. It must fail once, in index(), with a clear message."""
+    import harness.arms.arm1_rag as A
+
+    class Boom:
+        def __init__(self, *a, **k):
+            raise ModuleNotFoundError("No module named 'onnxruntime'")
+
+    monkeypatch.setattr(A, "OnnxCrossEncoder", Boom)
+    embedded = []
+
+    class TrackingEmbedder(HashEmbedder):
+        def encode(self, texts):
+            embedded.append(len(texts))
+            return super().encode(texts)
+
+    arm = A.Arm1RAG(tokenizer=Words(), embedder=TrackingEmbedder(), reranker=None, cache_embeddings=False)
+    with pytest.raises(RuntimeError, match=r"arm1: reranker unavailable: ModuleNotFoundError: No module named 'onnxruntime'"):
+        arm.index(FIXTURE, {"repo_id": "fixture"})
+    assert embedded == []                                     # failed before the expensive corpus embedding
+    assert "L_rerank_load" in arm.index_latency
+
+
+def test_reranker_load_time_counts_in_l_index():
+    arm, _ = _arm()
+    assert {"L_index", "L_rerank_load", "L_chunk", "L_embed_corpus"} <= set(arm.index_latency)

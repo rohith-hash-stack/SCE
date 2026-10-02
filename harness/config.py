@@ -17,7 +17,11 @@ HARNESS_VERSION = "eight-arm-slm/m1"
 # --------------------------------------------------------------------------
 # Model and sampling
 # --------------------------------------------------------------------------
-MODEL_NAME = "qwen2.5-coder:14b-instruct-q4_K_M"
+#: q8_0, not the originally specified q4_K_M (owner decision after the
+#: d087d1b Kaggle run): q8_0 is what that run actually served, it fits on
+#: Kaggle's 2 x T4 (about 10.9 GB peak per GPU observed, split across both
+#: GPUs), and it is cached on Kaggle. Every arm uses this one model.
+MODEL_NAME = "qwen2.5-coder:14b-instruct-q8_0"
 #: Hugging Face id of the tokenizer that matches MODEL_NAME (Qwen2.5 family).
 TOKENIZER_HF_ID = "Qwen/Qwen2.5-Coder-14B-Instruct"
 #: Optional local override: a directory holding the tokenizer files, or a
@@ -33,12 +37,16 @@ REQUEST_TIMEOUT_S = 600
 # --------------------------------------------------------------------------
 # Token envelope (fixed by the server's 16,384-token context window)
 # --------------------------------------------------------------------------
-CONTEXT_WINDOW = 16_384
+#: 18,432, not 16,384: the generation cap went from 2,500 to 4,096 tokens
+#: (degenerate repetition loops hit the old cap). The window grew instead
+#: of the retrieval budget shrinking, so every arm keeps its 13,000 tokens.
+#: The harness requests this window explicitly (Ollama native API num_ctx).
+CONTEXT_WINDOW = 18_432
 SYSTEM_PROMPT_TOKENS = 500
 TASK_PROMPT_TOKENS = 300
 RETRIEVAL_BUDGET = 13_000
-GENERATION_RESERVE = 2_500
-SAFETY_MARGIN = 84
+GENERATION_RESERVE = 4_096
+SAFETY_MARGIN = 536
 assert (
     SYSTEM_PROMPT_TOKENS + TASK_PROMPT_TOKENS + RETRIEVAL_BUDGET + GENERATION_RESERVE + SAFETY_MARGIN
     == CONTEXT_WINDOW

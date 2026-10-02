@@ -80,8 +80,35 @@ def summary_table(results, corpus_of: dict[str, str] | None = None, n_reps: int 
         effs.append(retrieval_efficiency(row.mean_tsr, a0v, orv) if (a0v == a0v and orv == orv) else float("nan"))
     df["retrieval_lift"] = lifts
     df["retrieval_efficiency"] = effs
+    df["retrieval_lift_any_gold"], df["retrieval_lift_note"] = _t2_secondary_lift(df)
     assert_reporting_rules(df)
     return df
+
+
+T2_LIFT_NOTE = (
+    "N/A: Arm 0's strict T2 tsr is 0 (every gold symbol must be named, and Arm 0 has no context), so "
+    "Retrieval Lift has a zero denominator. See retrieval_lift_any_gold, computed on answer_names_any_gold. "
+    "Caution: in every real T2 task the seed symbol is gold and is named in the prompt, so answer_names_any_gold "
+    "is easily 1.0 for every arm and this secondary lift is often 0."
+)
+
+
+def _t2_secondary_lift(df: pd.DataFrame) -> tuple[list[float], list[str]]:
+    """T2 only: lift computed on answer_names_any_gold, plus a note on rows
+    whose primary (strict) lift is N/A."""
+    lifts, notes = [], []
+    col = "mean_answer_names_any_gold"
+    for _, row in df.iterrows():
+        if row.task_type != "T2_localization" or col not in df.columns:
+            lifts.append(float("nan"))
+            notes.append("")
+            continue
+        same = df[(df.task_type == row.task_type) & (df.corpus == row.corpus) & (df.arm == "arm0")][col]
+        a0 = float(same.iloc[0]) if len(same) else float("nan")
+        lifts.append(retrieval_lift(float(row[col]), a0) if a0 == a0 else float("nan"))
+        primary = row.retrieval_lift
+        notes.append(T2_LIFT_NOTE if (primary != primary) else "")
+    return lifts, notes
 
 
 def assert_reporting_rules(df: pd.DataFrame) -> None:

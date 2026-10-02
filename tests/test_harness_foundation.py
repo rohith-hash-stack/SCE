@@ -18,7 +18,8 @@ from pydantic import ValidationError
 
 
 def test_config_envelope_and_arms():
-    assert C.RETRIEVAL_BUDGET == 13_000 and C.CONTEXT_WINDOW == 16_384
+    assert C.RETRIEVAL_BUDGET == 13_000 and C.CONTEXT_WINDOW == 18_432 and C.GENERATION_RESERVE == 4_096
+    assert C.MODEL_NAME == "qwen2.5-coder:14b-instruct-q8_0"
     assert sum([C.SYSTEM_PROMPT_TOKENS, C.TASK_PROMPT_TOKENS, C.RETRIEVAL_BUDGET,
                 C.GENERATION_RESERVE, C.SAFETY_MARGIN]) == C.CONTEXT_WINDOW
     assert C.TEMPERATURE == 0.4 and C.SEEDS == [42, 43, 44]

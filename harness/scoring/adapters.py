@@ -114,6 +114,30 @@ def extract_answer(text: str, task_type: str) -> tuple[str, list[str], Extractio
     return text, extract_identifiers(text), "plain_text", bool(text.strip())
 
 
+_QUOTED_DOTTED = re.compile(r'"([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+)"')
+
+
+def repetition_count(text: str) -> int:
+    """Symbol mentions minus distinct symbols. Counted over the JSON
+    `symbols` list when the answer parses; otherwise over every quoted
+    dotted name in the raw text, which still sees the partial `symbols`
+    array of an answer cut off by the generation cap. 0 for prose."""
+    text = text or ""
+    for _lang, body in _FENCE.findall(text) + [("", text)]:
+        start, end = body.find("{"), body.rfind("}")
+        if start < 0 or end <= start:
+            continue
+        try:
+            obj = json.loads(body[start:end + 1])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("symbols"), list):
+            syms = [s.strip() for s in obj["symbols"] if isinstance(s, str) and s.strip()]
+            return len(syms) - len(set(syms))
+    quoted = _QUOTED_DOTTED.findall(text)
+    return len(quoted) - len(set(quoted))
+
+
 def _answer(arm: str, task, completion: dict, method_override: ExtractionMethod | None = None) -> NormalizedAnswer:
     answer_text, symbols, method, ok = extract_answer(completion.get("text", ""), task.task_type)
     if method_override and ok:
@@ -123,6 +147,8 @@ def _answer(arm: str, task, completion: dict, method_override: ExtractionMethod 
         answer_symbols=symbols, extraction_method=method, extraction_success=ok,
         generation_tokens=int(completion.get("generation_tokens", 0)),
         latency_seconds=float(completion.get("latency_seconds", 0.0)),
+        finish_reason=str(completion.get("finish_reason") or ""),
+        repetition_count=repetition_count(completion.get("text", "")),
     )
 
 

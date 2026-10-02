@@ -33,7 +33,8 @@ EFFICIENCY = ["budget_tokens", "total_tokens", "budget_utilization",
               "latency_l_generate_p50", "latency_l_generate_p95", "latency_l_e2e_p50", "latency_l_e2e_p95",
               "l_retrieve_ms", "l_generate_ms", "l_e2e_ms"]
 DIAGNOSTICS = ["extraction_success", "over_budget", "turn_count", "digest_safety_loss", "tool_fpr",
-               "verification_lift", "recovery_rate", "total_tool_output_tokens", "hallucination_breakdown_json"]
+               "verification_lift", "recovery_rate", "total_tool_output_tokens", "hallucination_breakdown_json",
+               "finish_reason", "generation_capped", "repetition_count"]
 COLUMNS = ID_COLUMNS + UNIVERSAL + TYPE_SPECIFIC + EFFICIENCY + DIAGNOSTICS
 
 #: Column-name fragments that would indicate a composite / cross-type score.

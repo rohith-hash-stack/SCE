@@ -54,3 +54,40 @@ def test_nan_when_no_candidates_and_cache_hits(tmp_path):
     assert {"render", "Widget.render", "lib.mod.Widget.render"} <= cache
     assert H.resolve_identifier("Widget.render", str(tmp_path), cache)
     assert not H.resolve_identifier("Widget.paint", str(tmp_path), cache)
+
+
+def _fastapi_like(tmp_path):
+    (tmp_path / "fastapi" / "dependencies").mkdir(parents=True)
+    (tmp_path / "fastapi" / "dependencies" / "utils.py").write_text(
+        "async def solve_dependencies(request):\n    values = {}\n    errors = []\n    return values, errors\n")
+    (tmp_path / "fastapi" / "exception_handlers.py").write_text(
+        "async def request_validation_exception_handler(request, exc):\n    return exc.errors()\n")
+    cache = H.build_symbol_cache(["fastapi.dependencies.utils.solve_dependencies",
+                                  "fastapi.exception_handlers.request_validation_exception_handler"])
+    return tmp_path, cache
+
+
+def test_invented_dotted_names_are_hallucinations_even_if_last_word_exists(tmp_path):
+    """Regression (Kaggle d087d1b): these resolved through their last
+    component ("values", "errors"), which ripgrep finds as plain words."""
+    root, cache = _fastapi_like(tmp_path)
+    assert H.resolve_identifier("values", str(root), cache)            # the plain words do exist
+    assert H.resolve_identifier("errors", str(root), cache)
+    for invented in ("fastapi.dependencies.utils.solve_dependencies.values",
+                     "fastapi.exception_handlers.exc.errors"):
+        assert not H.resolve_identifier(invented, str(root), cache), invented
+    task = _task(root, gold=("fastapi.dependencies.utils.solve_dependencies",))
+    rate, bd = H.hallucination_rate(
+        ["fastapi.dependencies.utils.solve_dependencies", "fastapi.dependencies.utils.solve_dependencies.values",
+         "fastapi.exception_handlers.exc.errors", "utils.solve_dependencies"], task, symbol_cache=cache)
+    assert rate == 2 / 4
+    assert bd["module_import"] == ["fastapi.dependencies.utils.solve_dependencies.values",
+                                   "fastapi.exception_handlers.exc.errors"]
+
+
+def test_real_dotted_suffixes_still_resolve(tmp_path):
+    root, cache = _fastapi_like(tmp_path)
+    for real in ("fastapi.dependencies.utils.solve_dependencies", "utils.solve_dependencies",
+                 "exception_handlers.request_validation_exception_handler"):
+        assert H.resolve_identifier(real, str(root), cache), real
+    assert not H.resolve_identifier("utils.solve_dependencies", str(root), None)   # no cache: not resolvable

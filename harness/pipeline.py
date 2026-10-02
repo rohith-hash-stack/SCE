@@ -23,6 +23,31 @@ from harness.scoring.latency import latency_profile, timed
 from harness.scoring.scorer import ScoreResult, score
 
 
+#: a server prompt count below this fraction of the harness's own count is
+#: treated as server-side truncation
+SERVER_SHORTFALL_RATIO = 0.95
+
+
+def class_ancestors(builder) -> dict[str, frozenset[str]]:
+    """class FQN -> every ancestor class FQN (transitive), from the code
+    graph's EXTENDS edges (subclass -> base)."""
+    parents: dict[str, set[str]] = {}
+    for u, v, data in builder.graph.edges(data=True):
+        if data.get("relation") == "EXTENDS":
+            parents.setdefault(u, set()).add(v)
+    out: dict[str, frozenset[str]] = {}
+    for cls in parents:
+        seen: set[str] = set()
+        stack = list(parents[cls])
+        while stack:
+            p = stack.pop()
+            if p not in seen:
+                seen.add(p)
+                stack.extend(parents.get(p, ()))
+        out[cls] = frozenset(seen)
+    return out
+
+
 @dataclass
 class CellOutput:
     arm: str
@@ -53,12 +78,16 @@ def gpu_watchdog(limit_mb: int = C.GPU_MEMORY_ABORT_MB) -> int | None:
 
 class Pipeline:
     def __init__(self, arms: dict, llm, tokenizer, out_dir: str | Path | None = None,
-                 symbol_cache: frozenset[str] | None = None) -> None:
+                 symbol_cache: frozenset[str] | None = None, ancestors: dict | None = None) -> None:
         self.arms = arms
         self.llm = llm
         self.tok = tokenizer
         self.out_dir = Path(out_dir) if out_dir else None
         self.symbol_cache = symbol_cache
+        #: class FQN -> ancestor FQNs, for the T2 inherited-gold diagnostic
+        self.ancestors = ancestors
+        #: the stage the current cell is in, read by callers when a cell fails
+        self.step = "idle"
 
     def _seed_dict(self, arm_id: str, task, seed: int | None) -> dict:
         d = {**task.seed_dict(), "llm_seed": seed}
@@ -79,15 +108,25 @@ class Pipeline:
         arm = self.arms[arm_id]
         lat: dict[str, list[float]] = {}
         with timed(lat, "L_e2e"):
+            self.step = "retrieve"
             with timed(lat, "L_retrieve"):
                 raw_ctx = arm.retrieve(task.query, self._seed_dict(arm_id, task, seed))
+            self.step = "budget"
             ctx = finalize_context(raw_ctx, self.tok)
+            self.step = "prompt"
             prompt = arm.build_prompt(ctx, self.tok)
             prompt_tokens = self.tok.count(SYSTEM_PROMPT) + self.tok.count(prompt)
             ctx.build_meta["prompt_tokens"] = prompt_tokens
             ctx.build_meta["prompt_over_window"] = prompt_tokens + C.GENERATION_RESERVE > C.CONTEXT_WINDOW
+            self.step = "generate"
             with timed(lat, "L_generate"):
                 comp = self.llm(SYSTEM_PROMPT, prompt, max_tokens=C.GENERATION_RESERVE, seed=seed, purpose="answer")
+        # The server counts the chat template too, so it should report at least
+        # what we sent. Clearly fewer means the server cut the prompt (its
+        # window was smaller than ours): flagged, never silently scored.
+        ctx.build_meta["server_prompt_tokens"] = comp.prompt_tokens
+        ctx.build_meta["server_prompt_shortfall"] = bool(
+            comp.prompt_tokens and comp.prompt_tokens < SERVER_SHORTFALL_RATIO * prompt_tokens)
         for k, v in (raw_ctx.build_meta.get("latency_ms") or {}).items():
             if k not in lat:
                 lat[k] = list(v)
@@ -97,6 +136,10 @@ class Pipeline:
                               "finish_reason": comp.finish_reason, "model": comp.model}}
         self._write("bundles", arm_id, task.task_id, seed, {"bundle": raw["bundle"], "prompt": prompt})
         self._write("completions", arm_id, task.task_id, seed, raw["completion"])
+        self.step = "adapt"
         ctx2, ans = adapt(arm_id, raw, task)
-        result = score(task, ctx2, ans, symbol_cache=self.symbol_cache, latency_profile=latency_profile(lat), seed=seed)
+        self.step = "score"
+        result = score(task, ctx2, ans, symbol_cache=self.symbol_cache, latency_profile=latency_profile(lat), seed=seed,
+                       ancestors=self.ancestors)
+        self.step = "done"
         return CellOutput(arm_id, task.task_id, seed, ctx2, ans, result, prompt_tokens)

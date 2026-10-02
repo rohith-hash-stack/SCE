@@ -97,6 +97,12 @@ class NormalizedAnswer:
     extraction_success: bool
     generation_tokens: int
     latency_seconds: float
+    #: the server's finish reason ("stop", or "length" when the generation
+    #: cap was hit); "" when unknown
+    finish_reason: str = ""
+    #: symbol mentions in the answer minus distinct symbols: how many times
+    #: the model repeated a symbol it had already named (repetition loops)
+    repetition_count: int = 0
 
     def __post_init__(self) -> None:
         if self.extraction_method not in EXTRACTION_METHODS:

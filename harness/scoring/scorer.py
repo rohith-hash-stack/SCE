@@ -111,6 +111,12 @@ class ScoreResult:
     verification_lift: Optional[float] = None
     recovery_rate: Optional[float] = None
     total_tool_output_tokens: Optional[int] = None
+    #: server finish reason ("stop" / "length"); "" when unknown
+    finish_reason: str = ""
+    #: True when the answer hit the generation cap (finish_reason "length")
+    generation_capped: bool = False
+    #: symbol mentions minus distinct symbols in the answer (repetition loops)
+    repetition_count: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -205,7 +211,33 @@ def _score_t1(task, ans, ctx, judge: Judge | None) -> tuple[float, dict]:
     return min(faith, relev), {"faithfulness": faith, "answer_relevancy": relev, "judge_status": "ok"}
 
 
-def _score_t2(task, ans, ctx) -> tuple[float, dict]:
+#: class FQN -> every ancestor class FQN (transitive), from the code graph
+Ancestry = dict[str, frozenset[str]]
+
+
+def names_symbol_inherited(gold: str, answer_symbols: list[str], ancestors: Ancestry) -> bool:
+    """`gold` named strictly, or as the same member on a subclass of the
+    gold's class: gold `exceptions.ValidationException.errors` is matched by
+    `RequestValidationError.errors` when RequestValidationError extends
+    ValidationException. Diagnostic only; strict matching stays primary."""
+    if names_symbol(gold, answer_symbols):
+        return True
+    if "." not in gold:
+        return False
+    gold_cls, member = gold.rsplit(".", 1)
+    for s in answer_symbols:
+        if "." not in s:
+            continue
+        s_cls, s_member = s.rsplit(".", 1)
+        if s_member != member:
+            continue
+        for cls, anc in ancestors.items():
+            if (cls == s_cls or cls.endswith("." + s_cls)) and gold_cls in anc:
+                return True
+    return False
+
+
+def _score_t2(task, ans, ctx, ancestors: Ancestry | None = None) -> tuple[float, dict]:
     """Primary: did the answer name the gold? Same rule for every arm.
 
     "all" (default) needs every gold symbol named; "any" needs one. In every
@@ -215,16 +247,21 @@ def _score_t2(task, ans, ctx) -> tuple[float, dict]:
     """
     gold = list(task.ground_truth.pipeline_symbols)
     if not gold:
-        return NAN, {"acc_at_5_retrieval": NAN, "answer_names_gold": NAN,
-                     "answer_names_any_gold": NAN, "answer_gold_recall": NAN}
+        return NAN, {"acc_at_5_retrieval": NAN, "answer_names_gold": NAN, "answer_names_any_gold": NAN,
+                     "answer_names_inherited_gold": NAN, "answer_gold_recall": NAN}
     recall = answer_recall(gold, ans.answer_symbols)
     names_all = 1.0 if recall == 1.0 else 0.0
     names_any = 1.0 if recall > 0.0 else 0.0
     covered = gold_covered_in_top(ctx.items, set(gold), 5)
     acc5 = 1.0 if set(gold) <= covered else 0.0
+    # every gold named, accepting a subclass's inherited member (NaN when no
+    # class hierarchy was supplied)
+    inherited = (1.0 if all(names_symbol_inherited(g, ans.answer_symbols, ancestors) for g in gold) else 0.0) \
+        if ancestors is not None else NAN
     tsr = names_any if C.T2_ANSWER_RULE == "any" else names_all
     return tsr, {"acc_at_5_retrieval": acc5, "answer_names_gold": names_all,
-                 "answer_names_any_gold": names_any, "answer_gold_recall": recall}
+                 "answer_names_any_gold": names_any, "answer_names_inherited_gold": inherited,
+                 "answer_gold_recall": recall}
 
 
 def _score_t3_stub(task, ans, ctx) -> tuple[float, dict]:
@@ -248,7 +285,7 @@ def _score_t5(task, ans, ctx) -> tuple[float, dict]:
 # --------------------------------------------------------------------------
 def score(task, ctx: DeliveredContext, ans: NormalizedAnswer, *, judge: Judge | None = None,
           symbol_cache: frozenset[str] | None = None, latency_profile: dict | None = None,
-          seed: int | None = None) -> ScoreResult:
+          seed: int | None = None, ancestors: Ancestry | None = None) -> ScoreResult:
     """Single scoring function for every arm. Dispatches by task type."""
     if ctx.task_id != task.task_id or ans.task_id != task.task_id or ans.arm != ctx.arm:
         raise ValueError(f"mismatched cell: task={task.task_id} ctx={ctx.arm}/{ctx.task_id} ans={ans.arm}/{ans.task_id}")
@@ -283,7 +320,7 @@ def score(task, ctx: DeliveredContext, ans: NormalizedAnswer, *, judge: Judge | 
     if tt == "T1_conceptual":
         tsr, specific = _score_t1(task, ans, ctx, judge)
     elif tt == "T2_localization":
-        tsr, specific = _score_t2(task, ans, ctx)
+        tsr, specific = _score_t2(task, ans, ctx, ancestors)
     elif tt == "T3_codegen":
         tsr, specific = _score_t3_stub(task, ans, ctx)
     elif tt == "T4_edit":
@@ -312,6 +349,9 @@ def score(task, ctx: DeliveredContext, ans: NormalizedAnswer, *, judge: Judge | 
         if ctx.budget_tokens else bool(ctx.total_tokens > 0),
         seed=seed,
         total_tool_output_tokens=meta.get("total_tool_output_tokens"),
+        finish_reason=ans.finish_reason,
+        generation_capped=ans.finish_reason == "length",
+        repetition_count=ans.repetition_count,
     )
     _validate(result)
     return result

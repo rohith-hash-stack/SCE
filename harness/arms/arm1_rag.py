@@ -189,6 +189,14 @@ class Arm1RAG(RetrievalArm):
         self.repo_root = repo_path
         self.repo_id = config.get("repo_id", os.path.basename(repo_path.rstrip("/")))
         with timed(self.index_latency, "L_index"):
+            # The cross-encoder loads here, first (cheap, before the corpus
+            # is embedded): a missing dependency fails once, at index time,
+            # with one clear message, not once per retrieval.
+            with timed(self.index_latency, "L_rerank_load"):
+                try:
+                    _ = self.reranker
+                except Exception as exc:  # noqa: BLE001 - re-raised with context
+                    raise RuntimeError(f"arm1: reranker unavailable: {type(exc).__name__}: {exc}") from exc
             with timed(self.index_latency, "L_chunk"):
                 splitter = PythonSplitter(self.tok, C.RAG_MAX_CHUNK_TOKENS)
                 files = config.get("files") or iter_python_files(repo_path)
@@ -199,7 +207,10 @@ class Arm1RAG(RetrievalArm):
                 self.bm25 = BM25Okapi([lexical_tokens(f"{c.qualified_name} {c.content}") for c in self.chunks],
                                       k1=C.RAG_BM25_K1, b=C.RAG_BM25_B)
             with timed(self.index_latency, "L_embed_corpus"):
-                self.vectors = self._embed_corpus()
+                try:
+                    self.vectors = self._embed_corpus()
+                except Exception as exc:  # noqa: BLE001 - re-raised with context
+                    raise RuntimeError(f"arm1: embedder unavailable: {type(exc).__name__}: {exc}") from exc
 
     def _embed_corpus(self) -> np.ndarray:
         texts = [c.content for c in self.chunks]

@@ -8,6 +8,7 @@ Keys per entry:
 - `type`: the task type ("T1".."T5") or arm family ("arm4", "prism") the
   metric applies to. Absent = universal (every arm, every task type).
 - `where`: "row" (one value per cell, in the ScoreResult / output row),
+  "diagnostic" (per cell, reported but never bootstrapped),
   "task_specific" (inside ScoreResult.task_specific), "aggregate"
   (computed over cells: latency percentiles) or "report" (reporting layer
   only, from per-arm means).
@@ -43,6 +44,8 @@ METRICS: dict[str, dict] = {
     "acc_at_5_retrieval":     {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "answer_names_gold":      {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "answer_names_any_gold":  {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
+    #: every gold named, accepting a subclass's inherited member (diagnostic)
+    "answer_names_inherited_gold": {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "answer_gold_recall":     {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "pass_at_1":              {"type": "T3", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "codebleu":               {"type": "T3", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
@@ -64,9 +67,14 @@ METRICS: dict[str, dict] = {
     "verification_lift":      {"type": "prism", "higher_is_better": True, "where": "row"},
     "recovery_rate":          {"type": "prism", "range": [0, 1], "higher_is_better": True, "where": "row"},
     "total_tool_output_tokens": {"type": "arm4", "range": [0, None], "where": "row"},
+    # Per-cell generation diagnostics (not bootstrapped)
+    "generation_capped":      {"range": [0, 1], "higher_is_better": False, "where": "diagnostic"},
+    "repetition_count":       {"range": [0, None], "higher_is_better": False, "where": "diagnostic"},
     # Reporting-only
     "retrieval_lift":         {"higher_is_better": True, "where": "report"},
     "retrieval_efficiency":   {"higher_is_better": True, "where": "report"},
+    #: T2 only: lift on answer_names_any_gold, for when strict Arm 0 T2 tsr is 0
+    "retrieval_lift_any_gold": {"higher_is_better": True, "where": "report"},
 }
 
 TASK_TYPE_CODES = {"T1_conceptual": "T1", "T2_localization": "T2", "T3_codegen": "T3",

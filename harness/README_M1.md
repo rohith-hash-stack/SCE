@@ -11,7 +11,7 @@ in M2 and Arm 4 in M3; for now they are declared stubs that raise
 
 ```
 harness/
-  config.py            every constant: model, 13,000/16,384 budgets, seeds 42-44, T=0.4, fidelity grades
+  config.py            every constant: model, 13,000/18,432 budgets, seeds 42-44, T=0.4, fidelity grades
   tokenizer.py         HF Qwen2.5 tokenizer (Hub id, local dir or GGUF), llama-server /tokenize,
                        Ollama prompt counter, verify_tokenizer_parity()
   llm.py               OpenAI-compatible chat client (Ollama /v1 or llama-server); same call for every arm
@@ -52,19 +52,35 @@ python -m harness.smoke_test_cpu            # exits non-zero on FAIL or BLOCKED
 weights unreachable). It is not a pass. `--allow-blocked` changes only the
 exit code.
 
-## Run the Kaggle notebook
+## Model and token envelope (decided after the d087d1b Kaggle run)
 
-Upload `kaggle/m1_smoke.ipynb` with Accelerator **GPU T4** and Internet **ON**.
-Optionally add a `GITHUB_TOKEN` secret with push access, which pushes results to
-`reports/harness_m1/kaggle_smoke/` on this branch. Then Run All.
+- **Model: `qwen2.5-coder:14b-instruct-q8_0`**, not the originally specified
+  q4_K_M. q8_0 is what that run actually served, it fits on Kaggle's 2 × T4
+  (about 10.9 GB peak per GPU observed, split across both GPUs), and it is
+  cached on Kaggle.
+- **Generation cap: 4,096 tokens** (was 2,500). Two cells hit the old cap in
+  repetition loops.
+- **Context window: 18,432 tokens.** It grew instead of the retrieval budget
+  shrinking, so every arm keeps its 13,000 retrieval tokens. The envelope is
+  system 500 + task 300 + retrieval 13,000 + generation 4,096 + margin 536.
+- **The window is requested on every call.** With `--ollama-url`,
+  `harness.kaggle_m1` calls Ollama's native `/api/chat` with
+  `num_ctx = 18,432` and `num_predict = 4,096`. Ollama's OpenAI-compatible
+  `/v1` endpoint ignores per-request options, so the window would otherwise
+  depend on how the server was started.
+- **Truncation guard:** if the server counts clearly fewer prompt tokens than
+  the harness sent (below 95%), the cell is flagged
+  `server_prompt_shortfall` and fails the gate rather than being scored.
 
-The notebook:
-- clones the branch and installs the harness;
-- starts Ollama on GPU 0 with `qwen2.5-coder:14b-instruct-q4_K_M`, a 16,384
-  context, flash attention and a q8_0 KV cache;
-- runs `harness.smoke_test_cpu` (the real jina embedder and the bge ONNX
-  reranker, on CPU);
-- runs `harness.kaggle_m1`.
+## Run on Kaggle
+
+The Kaggle script maintained outside the repository (pilot-4 pattern, 2 × T4)
+is what runs M1. It installs onnxruntime/onnx/onnxscript, runs
+`python -m harness.smoke_test_cpu --json /kaggle/working/m1_smoke/smoke_cpu.json`,
+then `python -m harness.kaggle_m1 --out /kaggle/working/m1_smoke --model ...
+--llm-url ... --ollama-url ...`, and pushes the results to
+`reports/harness_m1/kaggle_smoke/`. `kaggle/m1_smoke.ipynb` predates that
+script (single GPU, q4_K_M) and is superseded by it.
 
 `harness.kaggle_m1` runs:
 - **tokenizer parity**: the HF tokenizer against the serving model's own
@@ -73,7 +89,24 @@ The notebook:
 - **Gate A**: 5 synthetic tasks (T1–T5) × Arms 0/1/5/Oracle, run once;
 - **Gate B**: 5 FastAPI T2 tasks × the same arms.
 
-Expected output: one PASS/FAIL line per (gate, arm, task_type), 24 rows. It
+Before Gate A it sends a warm-up request and then takes the first GPU reading,
+so the model is resident when memory is measured. It takes another reading
+before each gate and a final one before exit. Each arm indexes on its own: an
+arm that fails to index is recorded once in `index_failures`, its cells fail
+with that cause, and the other arms still run. Arm 1 loads its reranker
+first in `index()`, so a missing package fails there in seconds.
+
+Every FAIL row carries a `failure` record:
+`{type, message, traceback_tail (last 5 lines), step, cmd}`.
+`step` is one of index, retrieve, budget, prompt, generate, adapt, score,
+validate. `gate_report.json` also holds:
+- the PASS/FAIL table (`table`) and `totals`;
+- `exit_code`;
+- the GPU readings (`gpu_mb_after_warmup`, `gpu_mb_per_gate`, `gpu_mb_final`);
+- `index_failures`;
+- `fatal`, if the run itself crashed (exit code 2).
+
+Expected output: one PASS/FAIL line per (gate, arm, task_type), 24 table cells over 40 rows. It
 also prints the within-type bootstrap check and the tokenizer parity status,
 and writes these files to `/kaggle/working/m1_smoke/`:
 - `gate_report.json`
@@ -123,14 +156,42 @@ secondary, binarised view.
 | Type | `tsr` | Type-specific metrics |
 |---|---|---|
 | T1 | judge-scored: min(faithfulness, answer relevancy). NaN without a judge; the judge must not be a Qwen model. | `faithfulness`, `answer_relevancy` |
-| T2 | **answer-based**, same rule for every arm: 1 if the answer names all gold symbols (`config.T2_ANSWER_RULE = "all"`; `"any"` is available), else 0. Arm 0's T2 rate is the parametric floor. | `acc_at_5_retrieval` (all gold in the top-5 items; retrieval diagnostic, not part of success), `answer_names_gold`, `answer_names_any_gold`, `answer_gold_recall` |
+| T2 | **answer-based**, same rule for every arm: 1 if the answer names all gold symbols (`config.T2_ANSWER_RULE = "all"`; `"any"` is available), else 0. Arm 0's T2 rate is the parametric floor. | `acc_at_5_retrieval` (all gold in the top-5 items; retrieval diagnostic, not part of success), `answer_names_gold`, `answer_names_any_gold`, `answer_names_inherited_gold` (every gold named, also accepting a subclass's inherited member: `RequestValidationError.errors` for gold `ValidationException.errors`), `answer_gold_recall` |
 | T3, T4 | stub (NaN) until a sandboxed test runner exists | `stub: true` |
 | T5 | **primary**: fractional recall of the gold affected set named in the answer (8 of 10 gives 0.8) | `recall_at_5` (gold affected in the top-5 delivered items; retrieval diagnostic, not part of success), `false_negative_rate` = 1 − tsr |
 
 **Hallucination**: answer identifiers of at least 4 characters that are not
-in G*_universe and do not resolve in the repository. Resolution tries the
-symbol cache, then a file path, then ripgrep. The candidates are
+in G*_universe and do not resolve in the repository. The candidates are
 G*_universe for every arm; the arm's own retrieved set is never used.
+Resolution:
+- a file path resolves if the file exists;
+- a dotted name resolves only if it, or its own dotted suffix, is a known
+  symbol in the symbol table. `utils.get_dependant` resolves;
+  `solve_dependencies.values` and `exc.errors` do not, even though the
+  words "values" and "errors" occur in the code;
+- a plain name resolves through the symbol table, then ripgrep.
+
+External-library names, such as starlette's, are not in the repository's
+symbol table, so they count as unresolved unless they are in G*_universe.
+
+**Generation diagnostics** (per cell, never bootstrapped):
+- `finish_reason`: the server's value; "length" means the 4,096-token cap was
+  hit;
+- `generation_capped`: true when `finish_reason` is "length";
+- `repetition_count`: symbol mentions minus distinct symbols. It is counted
+  on the JSON `symbols` list, or on the quoted dotted names of an answer cut
+  off mid-list. A 219-repeat loop of `APIRoute.__init__` is what this catches.
+
+Sampling is identical across arms, so repetition is model behavior and is
+not penalised.
+
+**Retrieval Lift on T2**: Arm 0's strict T2 `tsr` is 0 (it has no context
+and must name every gold symbol), so the primary `retrieval_lift` is N/A
+(NaN). The summary table explains this in `retrieval_lift_note` and adds
+`retrieval_lift_any_gold`, which is computed on `answer_names_any_gold`.
+Read it with caution: in every real T2 task the seed symbol is gold and is
+named in the prompt, so any-gold is 1.0 for every arm in all 15 real-task
+cells of the d087d1b run, and this secondary lift is likely 0.
 
 **Bootstrap**: repositories are fixed and tasks are resampled within each
 repository; seeds are averaged per task.

@@ -65,3 +65,44 @@ class ChatLLM:
         )
         self.log.append(comp.to_dict())
         return comp
+
+
+class OllamaChatLLM:
+    """Ollama's native /api/chat. Unlike Ollama's OpenAI-compatible /v1
+    endpoint (which ignores per-request options), this sets the context
+    window (`num_ctx`), the generation cap (`num_predict`), temperature and
+    seed on every request, so the window does not depend on how the server
+    was started."""
+
+    def __init__(self, base_url: str = "http://127.0.0.1:11434", model: str | None = None,
+                 temperature: float = C.TEMPERATURE, timeout: float = C.REQUEST_TIMEOUT_S,
+                 num_ctx: int = C.CONTEXT_WINDOW) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.model = model or C.MODEL_NAME
+        self.temperature = temperature
+        self.timeout = timeout
+        self.num_ctx = num_ctx
+        self.log: list[dict] = []
+
+    def __call__(self, system: str, user: str, max_tokens: int = C.GENERATION_RESERVE,
+                 seed: int | None = None, purpose: str = "answer") -> Completion:
+        options = {"num_ctx": self.num_ctx, "num_predict": max_tokens, "temperature": self.temperature}
+        if seed is not None:
+            options["seed"] = seed
+        payload = {"model": self.model, "stream": False, "options": options,
+                   "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        req = urllib.request.Request(f"{self.base_url}/api/chat", data=json.dumps(payload).encode(),
+                                     headers={"Content-Type": "application/json"})
+        t0 = time.perf_counter()
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            out = json.loads(resp.read().decode("utf-8"))
+        dt = time.perf_counter() - t0
+        # Ollama's done_reason is "stop" or "length" (cap hit), as OpenAI's finish_reason
+        comp = Completion(
+            text=(out.get("message") or {}).get("content") or "",
+            prompt_tokens=int(out.get("prompt_eval_count", 0)), completion_tokens=int(out.get("eval_count", 0)),
+            latency_seconds=dt, model=out.get("model", self.model), finish_reason=out.get("done_reason") or "",
+            purpose=purpose,
+        )
+        self.log.append(comp.to_dict())
+        return comp

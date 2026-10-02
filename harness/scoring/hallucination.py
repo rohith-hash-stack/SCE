@@ -9,13 +9,17 @@ comparable across engines.
 
 An identifier the answer names is NOT hallucinated if it is in G*_universe
 or resolves in the repository:
-  1. symbol cache: a set of known names (fully-qualified names and their
-     dotted suffixes). M1 fills it from the PRISM symbol table; M2 adds
-     Pyright's workspace/symbol results.
-  2. file path: `repo_root / ident` exists.
-  3. ripgrep: `rg --word-regexp --fixed-strings -l` finds it (timeout 5 s).
-     A dotted name is searched by its last component, since fully-qualified
-     names rarely appear verbatim in source.
+  1. file path (contains "/"): `repo_root / ident` exists.
+  2. dotted name (contains "."): it must be in the symbol cache, i.e. equal
+     a known fully-qualified name or one of its dotted suffixes
+     (`utils.get_dependant` hits; `solve_dependencies.values` does not).
+     Its last component alone never resolves it: an invented
+     `pkg.mod.func.values` must not pass because the word "values" occurs
+     somewhere. Without a symbol cache a dotted name outside G*_universe is
+     unresolved; the pipeline always supplies one (the PRISM symbol table;
+     M2 adds Pyright's workspace/symbol results).
+  3. plain name (no dot): the symbol cache, else ripgrep
+     (`rg --word-regexp --fixed-strings -l`, timeout 5 s).
 Identifiers shorter than 4 characters are excluded (x, i, id, ...).
 """
 from __future__ import annotations
@@ -108,10 +112,13 @@ def resolve_identifier(ident: str, repo_root: str, symbol_cache: frozenset[str] 
     root = Path(repo_root)
     if "/" in ident:
         return (root / ident).exists()
+    if "." in ident:
+        # a dotted name resolves fully or by its own dotted suffix (the
+        # cache holds every suffix), never by its last component alone
+        return False
     if not root.is_dir():
         return False
-    word = ident.rsplit(".", 1)[-1] if "." in ident else ident
-    return _rg_finds(word, str(root))
+    return _rg_finds(ident, str(root))
 
 
 def universe_candidates(task) -> set[str]:
