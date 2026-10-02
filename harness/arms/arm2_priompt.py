@@ -1,0 +1,21 @@
+"""Cursor-style Priompt packing (arm2). STUB: the implementation arrives in M2. The arm and
+its fidelity grade are declared now so the dispatch surface is complete;
+every entry point raises NotImplementedError until M2."""
+from __future__ import annotations
+
+from harness.arms.base import RetrievalArm
+
+_MSG = "arm2 (Cursor-style Priompt packing) is implemented in M2"
+
+
+class Arm2Priompt(RetrievalArm):
+    arm_id = "arm2"
+
+    def index(self, repo_path: str, config: dict) -> None:
+        raise NotImplementedError(_MSG)
+
+    def retrieve(self, query: str, seed: dict):
+        raise NotImplementedError(_MSG)
+
+    def build_prompt(self, ctx, tokenizer) -> str:
+        raise NotImplementedError(_MSG)
