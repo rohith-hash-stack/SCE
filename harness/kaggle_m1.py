@@ -45,6 +45,8 @@ def _scripted_llm():
 
 
 def _fake_encoders():
+    import zlib
+
     import numpy as np
 
     from harness.arms.arm1_rag import lexical_tokens
@@ -56,7 +58,7 @@ def _fake_encoders():
             out = np.zeros((len(texts), 64), dtype=np.float32)
             for i, t in enumerate(texts):
                 for w in lexical_tokens(t):
-                    out[i, hash(w) % 64] += 1
+                    out[i, zlib.crc32(w.encode()) % 64] += 1
             return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-9)
 
     class OverlapReranker:

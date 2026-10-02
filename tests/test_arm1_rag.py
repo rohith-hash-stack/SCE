@@ -1,5 +1,7 @@
 """Arm 1 pipeline with deterministic stand-ins for the two neural models
 (the real jina/bge weights load on Kaggle; see smoke_test_cpu)."""
+import zlib
+
 import numpy as np
 import pytest
 
@@ -20,7 +22,7 @@ class HashEmbedder:
         out = np.zeros((len(texts), 64), dtype=np.float32)
         for i, t in enumerate(texts):
             for w in lexical_tokens(t):
-                out[i, hash(w) % 64] += 1
+                out[i, zlib.crc32(w.encode()) % 64] += 1
         return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-9)
 
 

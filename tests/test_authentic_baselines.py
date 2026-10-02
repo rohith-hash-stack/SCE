@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import zlib
+
 import numpy as np
 import pytest
 
@@ -27,15 +29,17 @@ def builder():
 
 
 class HashEncoder:
-    """Deterministic bag-of-identifiers encoder - stands in for a real model."""
+    """Deterministic bag-of-identifiers encoder - stands in for a real model.
+    CRC32 (not `hash()`, which is randomized per process) into 4,096 buckets,
+    so collisions don't decide the ranking."""
 
     name = "test-hash-encoder"
 
     def encode(self, texts):
-        out = np.zeros((len(texts), 64), dtype=np.float32)
+        out = np.zeros((len(texts), 4096), dtype=np.float32)
         for i, t in enumerate(texts):
             for w in t.replace(".", " ").replace("(", " ").split():
-                out[i, hash(w.lower()) % 64] += 1.0
+                out[i, zlib.crc32(w.lower().encode()) % 4096] += 1.0
         out /= np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-9)
         return out
 
