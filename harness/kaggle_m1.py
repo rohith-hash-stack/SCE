@@ -202,20 +202,6 @@ def _run(args, out_dir: Path, report: dict) -> int:
     print(f"[m1] tokenizer parity: {report['tokenizer_parity'].get('status')} "
           f"max_div={report['tokenizer_parity'].get('max_divergence')}", flush=True)
 
-    # ---- warm-up, then the first GPU reading (the model is resident now) ----
-    if not args.dry_run:
-        try:
-            w = llm("You are a test.", "Reply with OK.", max_tokens=8, seed=args.seed, purpose="warmup")
-            report["warmup"] = {"ok": True, "latency_seconds": round(w.latency_seconds, 1), "text": w.text[:40]}
-        except Exception as exc:  # noqa: BLE001
-            report["warmup"] = {"ok": False, **failure_record(exc, "warmup", "llm(warmup)")}
-        report["gpu_mb_after_warmup"] = _gpu_reading()
-        print(f"[m1] warm-up {report['warmup'].get('ok')}; GPU after warm-up: {report['gpu_mb_after_warmup']}", flush=True)
-        if report["gpu_mb_after_warmup"].get("over_limit"):
-            report["aborted"] = "GPU watchdog: memory over limit after warm-up"
-            print(f"[m1] {report['aborted']}", flush=True)
-            return 1
-
     # ---- index (CPU), each arm on its own: one arm's failure is that arm's ----
     index_failures: dict[str, dict] = {}
     index_ms: dict[tuple[str, str], float] = {}
@@ -249,6 +235,21 @@ def _run(args, out_dir: Path, report: dict) -> int:
     ancestors = class_ancestors(builder) if builder is not None else None
     pipe = Pipeline({a: arms[a] for a in arm_order if arms.get(a)}, llm, tok, out_dir=out_dir,
                     symbol_cache=symbol_cache, ancestors=ancestors)
+    # ---- warm-up right before the gates (after the minutes of CPU indexing, so an
+    # idle-unload during indexing cannot matter), then the first GPU reading ----
+    if not args.dry_run:
+        try:
+            w = llm("You are a test.", "Reply with OK.", max_tokens=8, seed=args.seed, purpose="warmup")
+            report["warmup"] = {"ok": True, "latency_seconds": round(w.latency_seconds, 1), "text": w.text[:40]}
+        except Exception as exc:  # noqa: BLE001
+            report["warmup"] = {"ok": False, **failure_record(exc, "warmup", "llm(warmup)")}
+        report["gpu_mb_after_warmup"] = _gpu_reading()
+        print(f"[m1] warm-up {report['warmup'].get('ok')}; GPU after warm-up: {report['gpu_mb_after_warmup']}", flush=True)
+        if report["gpu_mb_after_warmup"].get("over_limit"):
+            report["aborted"] = "GPU watchdog: memory over limit after warm-up"
+            print(f"[m1] {report['aborted']}", flush=True)
+            return 1
+
     gates = {"A_type_coverage": synthetic_tasks(root), "B_real_fastapi_T2": load_tasks("fastapi", repo_root=root,
                                                                                          limit=args.real_tasks)}
     results = []

@@ -89,8 +89,8 @@ script (single GPU, q4_K_M) and is superseded by it.
 - **Gate A**: 5 synthetic tasks (T1–T5) × Arms 0/1/5/Oracle, run once;
 - **Gate B**: 5 FastAPI T2 tasks × the same arms.
 
-Before Gate A it sends a warm-up request and then takes the first GPU reading,
-so the model is resident when memory is measured. It takes another reading
+After indexing, right before Gate A, it sends a warm-up request and then takes
+the first GPU reading, so the model is resident when memory is measured. It takes another reading
 before each gate and a final one before exit. Each arm indexes on its own: an
 arm that fails to index is recorded once in `index_failures`, its cells fail
 with that cause, and the other arms still run. Arm 1 loads its reranker
