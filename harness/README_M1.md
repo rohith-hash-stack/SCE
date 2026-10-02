@@ -123,9 +123,9 @@ secondary, binarised view.
 | Type | `tsr` | Type-specific metrics |
 |---|---|---|
 | T1 | judge-scored: min(faithfulness, answer relevancy). NaN without a judge; the judge must not be a Qwen model. | `faithfulness`, `answer_relevancy` |
-| T2 | 1 if Acc@5 (all gold in the top-5 items) **and** the answer names all gold, else 0 | `acc_at_5`, `answer_names_gold`, `answer_gold_recall` |
+| T2 | **answer-based**, same rule for every arm: 1 if the answer names all gold symbols (`config.T2_ANSWER_RULE = "all"`; `"any"` is available), else 0. Arm 0's T2 rate is the parametric floor. | `acc_at_5_retrieval` (all gold in the top-5 items; retrieval diagnostic, not part of success), `answer_names_gold`, `answer_names_any_gold`, `answer_gold_recall` |
 | T3, T4 | stub (NaN) until a sandboxed test runner exists | `stub: true` |
-| T5 | **fractional** recall of the gold affected set named in the answer (8 of 10 gives 0.8) | `recall_at_5` (gold covered by the top-5 items), `false_negative_rate` = 1 − tsr |
+| T5 | **primary**: fractional recall of the gold affected set named in the answer (8 of 10 gives 0.8) | `recall_at_5` (gold affected in the top-5 delivered items; retrieval diagnostic, not part of success), `false_negative_rate` = 1 − tsr |
 
 **Hallucination**: answer identifiers of at least 4 characters that are not
 in G*_universe and do not resolve in the repository. Resolution tries the
@@ -147,14 +147,17 @@ plus per-arm sub-components.
 1. **`tsr` field added to `ScoreResult`** (and registered). The spec's
    ScoreResult held only the binary `task_success`, which leaves nowhere to
    put T5's fractional recall, the primary T5 metric.
-2. **T5 `recall_at_5`** is read as retrieval recall of the gold affected set
-   within the top-5 delivered items. The fractional *answer* recall is `tsr`.
-   The spec's "recall@5 on gold_affected" was ambiguous between the two.
-3. **T2 `tsr` requires Acc@5, as specified.** As a consequence, Arm 0 (no
-   items) can never succeed on T2, so its T2 `tsr` is 0 by construction and
-   Retrieval Lift against it is NaN (division by 0). `answer_names_gold` and
-   `answer_gold_recall` are reported alongside, so an answer-only view
-   exists. **This needs an owner decision before M4.**
+2. **T5 (official interpretation, confirmed by the owner):** `tsr`, the
+   fractional recall of the gold affected set in the answer, is the primary
+   metric. `recall_at_5` (gold affected in the top-5 delivered items) is a
+   retrieval diagnostic, not part of success.
+3. **T2 success is answer-based (owner decision after M1 review).** Acc@5
+   moved out of `tsr` into the diagnostic `acc_at_5_retrieval`, so Arm 0 can
+   score on T2 and Retrieval Lift is defined. The success rule needs ALL
+   gold symbols named (`T2_ANSWER_RULE = "all"`), not any one: in all 90
+   real T2 tasks the seed symbol is gold and is named in the prompt, so
+   "any" is met by echoing the question. "any" is reported as
+   `answer_names_any_gold`, and one config line switches the rule.
 4. **Arm 0's prompt** is the query plus the same response contract every arm
    gets. Answers must be extracted identically for every arm.
 5. **Extra files**: `tasks/loaders.py` and `tasks/synthetic.py` (task

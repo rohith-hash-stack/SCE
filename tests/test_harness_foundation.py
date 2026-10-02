@@ -187,7 +187,7 @@ def test_registry_is_complete_and_checks_ranges():
         "uniform_cpi", "cleanliness", "context_precision", "context_recall", "mrr_at_5", "mrr_at_10",
         "ndcg_at_5", "ndcg_at_10", "map", "p_at_5", "r_at_5", "f1_at_5", "relevant_token_density",
         "task_success", "hallucination_rate", "budget_utilization", "faithfulness", "answer_relevancy",
-        "acc_at_5", "pass_at_1", "codebleu", "patch_exact_match", "regression_rate", "recall_at_5",
+        "acc_at_5_retrieval", "pass_at_1", "codebleu", "patch_exact_match", "regression_rate", "recall_at_5",
         "false_negative_rate", "latency_l_index", "latency_l_retrieve_p50", "latency_l_retrieve_p95",
         "latency_l_generate_p50", "latency_l_generate_p95", "latency_l_e2e_p50", "latency_l_e2e_p95",
         "digest_safety_loss", "tool_fpr", "verification_lift", "recovery_rate", "total_tool_output_tokens",

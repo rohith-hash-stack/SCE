@@ -153,6 +153,11 @@ AGENT_TOOL_TIMEOUT_S = 10
 # Scoring and statistics
 # --------------------------------------------------------------------------
 TASK_SUCCESS_THRESHOLD = 0.5
+#: T2 success is answer-based for every arm. "all": the answer names every
+#: gold symbol. "any": it names at least one. In all 90 real T2 tasks the
+#: seed symbol is gold and is named in the prompt, so "any" is satisfied by
+#: echoing the question; "all" is the default for that reason.
+T2_ANSWER_RULE = "all"
 RANK_CUTOFFS = (5, 10)
 HALLUCINATION_MIN_IDENT_LEN = 4
 RIPGREP_TIMEOUT_S = 5

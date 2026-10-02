@@ -38,8 +38,11 @@ METRICS: dict[str, dict] = {
     # Type-specific
     "faithfulness":           {"type": "T1", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "answer_relevancy":       {"type": "T1", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
-    "acc_at_5":               {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
+    #: retrieval diagnostic: every gold symbol in the top-5 delivered items
+    #: (not part of task_success)
+    "acc_at_5_retrieval":     {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "answer_names_gold":      {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
+    "answer_names_any_gold":  {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "answer_gold_recall":     {"type": "T2", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "pass_at_1":              {"type": "T3", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "codebleu":               {"type": "T3", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},

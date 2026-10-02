@@ -16,7 +16,7 @@ def test_lift_and_efficiency():
 
 
 def _s(arm, tid, tsr, tt="T5_blast_radius", repo="django"):
-    spec = {"recall_at_5": tsr, "false_negative_rate": 1 - tsr} if tt == "T5_blast_radius" else {"acc_at_5": tsr}
+    spec = {"recall_at_5": tsr, "false_negative_rate": 1 - tsr} if tt == "T5_blast_radius" else {"acc_at_5_retrieval": tsr}
     base = dict(arm=arm, task_id=tid, task_type=tt, repo_id=repo, seed=42, tsr=tsr, task_success=tsr >= 0.5,
                 task_specific=spec)
     for m in ("uniform_cpi", "cleanliness", "context_precision", "context_recall", "mrr_at_5", "mrr_at_10",

@@ -27,13 +27,13 @@ def test_round_trip_preserves_nulls_and_nan(tmp_path):
     df = to_frame(_results(tmp_path))
     assert list(df.columns) == COLUMNS
     t5 = df[(df.arm == "arm1") & (df.task_type == "T5_blast_radius")].iloc[0]
-    assert not pd.isna(t5.recall_at_5) and pd.isna(t5.acc_at_5) and pd.isna(t5.pass_at_1)   # N/A types are null, not 0
+    assert not pd.isna(t5.recall_at_5) and pd.isna(t5.acc_at_5_retrieval) and pd.isna(t5.pass_at_1)   # N/A types are null, not 0
     back = read_parquet(write_parquet(df, tmp_path / "cells.parquet"))
     assert len(back) == len(df) and list(back.columns) == COLUMNS
     a0 = back[(back.arm == "arm0") & (back.task_type == "T2_localization")].iloc[0]
     assert math.isnan(a0.cleanliness)                        # arm0 NaN survives, not 1.0
     b5 = back[(back.arm == "arm1") & (back.task_type == "T5_blast_radius")].iloc[0]
-    assert pd.isna(b5.acc_at_5) and pd.isna(b5.pass_at_1) and not pd.isna(b5.recall_at_5)
+    assert pd.isna(b5.acc_at_5_retrieval) and pd.isna(b5.pass_at_1) and not pd.isna(b5.recall_at_5)
     assert back.l_generate_ms.notna().all()
 
 

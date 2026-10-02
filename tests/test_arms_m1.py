@@ -100,7 +100,7 @@ def test_oracle_delivers_universe_pipeline_first(fastapi_prism):
     assert all(i.kind == "oracle_truth" for i in ctx.items)
     assert ctx.delivered_symbols | set(ctx.build_meta["unresolved_universe"]) == task.ground_truth.universe_symbols()
     res = score(task, ctx, NormalizedAnswer("oracle", task.task_id, "", "", [], "plain_text", False, 0, 0.0))
-    assert res.cleanliness == 1.0 and res.task_specific["acc_at_5"] == 1.0          # ceiling by construction
+    assert res.cleanliness == 1.0 and res.task_specific["acc_at_5_retrieval"] == 1.0          # ceiling by construction
 
 
 # ---- Arm 2/3/4 stubs ----

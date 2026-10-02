@@ -25,10 +25,16 @@ is a dotted suffix of g at a component boundary (`get_dependant`,
 
 `tsr` is the continuous per-type success score; `task_success = tsr >= 0.5`
 is a secondary, binarised view of it (False when tsr is NaN).
-- T2: 1.0 if Acc@5 (every gold symbol covered by the top-5 items) AND the
-  answer names every gold symbol, else 0.0.
-- T5: FRACTIONAL answer recall, |gold named in answer| / |gold|. 8 of 10
-  affected symbols named gives 0.8. false_negative_rate = 1 - tsr.
+- T2: ANSWER-based: 1.0 if the answer names the gold (config.T2_ANSWER_RULE:
+  "all" gold symbols by default, or "any" one), else 0.0. The same rule runs
+  for every arm, Arm 0 included, so Arm 0's T2 rate is the parametric floor.
+  Retrieval quality is NOT part of it: `acc_at_5_retrieval` (every gold
+  symbol in the top-5 delivered items) is a diagnostic column.
+- T5: PRIMARY metric = `tsr` = FRACTIONAL recall of the gold affected set in
+  the model's answer, |gold named in answer| / |gold| (8 of 10 named gives
+  0.8). `recall_at_5` (gold affected present in the top-5 delivered items)
+  is a RETRIEVAL diagnostic, not part of task_success.
+  false_negative_rate = 1 - tsr.
 - T1: judge-scored (faithfulness, answer relevancy); NaN without a judge.
 - T3/T4: stubs (NaN) until a sandboxed test runner exists.
 """
@@ -52,9 +58,19 @@ NAN = float("nan")
 class ScoreResult:
     """One scored cell.
 
-    `tsr` is the primary per-type score: for T5 it is FRACTIONAL recall of
-    the gold affected set. `task_success = tsr >= 0.5` is SECONDARY: a
-    binarised convenience view, reported alongside, never instead.
+    `tsr` is the primary per-type score. `task_success = tsr >= 0.5` is
+    SECONDARY: a binarised convenience view, reported alongside, never instead.
+
+    T5 (official interpretation): the PRIMARY metric is `tsr`, the
+    FRACTIONAL recall of the gold affected set in the model's answer.
+    `task_specific["recall_at_5"]` (gold affected present in the top-5
+    delivered items) is a RETRIEVAL diagnostic and is not part of
+    `task_success`.
+
+    T2: `tsr` is answer-based (did the answer name the gold), identical for
+    every arm. `task_specific["acc_at_5_retrieval"]` (all gold in the top-5
+    delivered items) is a RETRIEVAL diagnostic and is not part of
+    `task_success`.
     """
     arm: str
     task_id: str
@@ -190,13 +206,25 @@ def _score_t1(task, ans, ctx, judge: Judge | None) -> tuple[float, dict]:
 
 
 def _score_t2(task, ans, ctx) -> tuple[float, dict]:
+    """Primary: did the answer name the gold? Same rule for every arm.
+
+    "all" (default) needs every gold symbol named; "any" needs one. In every
+    real T2 task the seed symbol is gold AND named in the prompt, so "any"
+    is met by echoing the question; it is reported as a diagnostic only.
+    Retrieval (all gold in the top-5 delivered items) is a diagnostic too.
+    """
     gold = list(task.ground_truth.pipeline_symbols)
-    covered = gold_covered_in_top(ctx.items, set(gold), 5)
-    acc5 = 1.0 if gold and set(gold) <= covered else 0.0
+    if not gold:
+        return NAN, {"acc_at_5_retrieval": NAN, "answer_names_gold": NAN,
+                     "answer_names_any_gold": NAN, "answer_gold_recall": NAN}
     recall = answer_recall(gold, ans.answer_symbols)
     names_all = 1.0 if recall == 1.0 else 0.0
-    tsr = 1.0 if (acc5 == 1.0 and names_all == 1.0) else 0.0
-    return tsr, {"acc_at_5": acc5, "answer_names_gold": names_all, "answer_gold_recall": recall}
+    names_any = 1.0 if recall > 0.0 else 0.0
+    covered = gold_covered_in_top(ctx.items, set(gold), 5)
+    acc5 = 1.0 if set(gold) <= covered else 0.0
+    tsr = names_any if C.T2_ANSWER_RULE == "any" else names_all
+    return tsr, {"acc_at_5_retrieval": acc5, "answer_names_gold": names_all,
+                 "answer_names_any_gold": names_any, "answer_gold_recall": recall}
 
 
 def _score_t3_stub(task, ans, ctx) -> tuple[float, dict]:
