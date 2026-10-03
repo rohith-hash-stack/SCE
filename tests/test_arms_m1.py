@@ -104,7 +104,8 @@ def test_oracle_delivers_universe_pipeline_first(fastapi_prism):
 
 
 # ---- Arm 2/3/4 stubs ----
-@pytest.mark.parametrize("arm_id,ms,grade", [("arm2", "M2", "MEDIUM"), ("arm3", "M2", "MEDIUM"), ("arm4", "M3", "MEDIUM_HIGH")])
+# Arm 2 is implemented in M2 (tests/test_arm2_priompt.py); Arms 3 and 4 are still stubs
+@pytest.mark.parametrize("arm_id,ms,grade", [("arm3", "M2", "MEDIUM"), ("arm4", "M3", "MEDIUM_HIGH")])
 def test_stubs_declare_fidelity_and_raise(arm_id, ms, grade):
     from harness.arms import build_arm
     arm = build_arm(arm_id)

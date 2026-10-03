@@ -183,8 +183,15 @@ def adapt_arm1_rag(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]
     return ctx, _answer("arm1", task, raw["completion"])
 
 
-def adapt_arm2_priompt(raw: dict, task):
-    raise NotImplementedError("Arm 2 (Priompt) adapter arrives in M2")
+def adapt_arm2_priompt(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
+    """Components above the Priompt cutoff: full chunks (`code_chunk`) and
+    stubs that replaced their bodies (`signature_stub`). Chunks below every
+    cutoff were never delivered and are not here."""
+    ctx = _context(raw, "arm2", task, {"code_chunk", "signature_stub"})
+    for key in ("cutoff", "n_full", "n_stub", "n_dropped"):
+        if key not in ctx.build_meta:
+            raise ValueError(f"arm2 bundle missing build_meta[{key!r}]")
+    return ctx, _answer("arm2", task, raw["completion"])
 
 
 def adapt_arm3_lsp(raw: dict, task):

@@ -251,8 +251,10 @@ def _run(args, out_dir: Path, report: dict) -> int:
     _index("oracle", lambda: build_arm("oracle", tokenizer=tok, builder=builder), {})
     emb, rr = _fake_encoders() if args.fake_encoders else (None, None)
     _index("arm1", lambda: build_arm("arm1", tokenizer=tok, embedder=emb, reranker=rr), {"repo_id": "fastapi"})
+    if "arm2" in C.ACTIVE_ARMS:
+        _index("arm2", lambda: build_arm("arm2", tokenizer=tok), {})
     report["index_failures"] = index_failures
-    arm_order = ["arm0", "arm1", "arm5", "oracle"]
+    arm_order = [a for a in C.ACTIVE_ARMS if a in arms]
 
     builder = builder or (arms["oracle"].builder if arms.get("oracle") else None)
     symbol_cache = build_symbol_cache(builder.symbol_table._symbols) if builder is not None else None

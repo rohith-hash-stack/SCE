@@ -16,6 +16,8 @@ Checks
                             call; the cold first call is reported too.
  3. arm1_dense_encoder      jina-embeddings-v2-base-code loads on CPU and
                             embeds.
+ 3b. arm2_packing          Arm 2 packs 5 real FastAPI T2 tasks within 13,000
+                            tokens; every full chunk and stub compiles.
  4. arm5_trimming           a PRISM output over 13,000 harness tokens is
                             trimmed from the lowest rank to <= 13,000.
  5. tokenizer_parity        HF tokenizer vs a (mocked) llama-server
@@ -113,6 +115,33 @@ def check_arm1_dense_encoder(tok):
     v = emb.encode(["def f(x): return x + 1", "class A: pass"])
     ok = v.shape[0] == 2 and abs(float((v[0] ** 2).sum()) - 1.0) < 1e-3
     return ok, f"embedding dim {v.shape[1]}, L2-normalised"
+
+
+def check_arm2_packing(tok):
+    """Arm 2 packs each of 5 real FastAPI T2 tasks within 13,000 harness
+    tokens, and every delivered full chunk and signature stub compiles."""
+    from harness.arms.arm2_priompt import Arm2Priompt
+    from harness.scoring.fairness import verify_ranking
+    from harness.tasks.loaders import load_tasks
+    root = _fastapi_root()
+    arm = Arm2Priompt(tokenizer=tok)
+    arm.index(root, {})
+    worst, n_items, errors, n_full, n_stub = 0, 0, 0, 0, 0
+    for task in load_tasks("fastapi", repo_root=root, limit=5):
+        ctx = arm.retrieve(task.query, task.seed_dict())
+        verify_ranking(ctx.items)
+        worst = max(worst, ctx.total_tokens)
+        n_full += ctx.build_meta["n_full"]
+        n_stub += ctx.build_meta["n_stub"]
+        for it in ctx.items:
+            n_items += 1
+            try:
+                compile(it.content.split("\n", 1)[1], it.source_id, "exec", dont_inherit=True)
+            except SyntaxError:
+                errors += 1
+    ok = worst <= C.RETRIEVAL_BUDGET and errors == 0 and n_items > 0
+    return ok, (f"5 tasks: max packed {worst} tokens (budget {C.RETRIEVAL_BUDGET}); {n_items} items "
+                f"({n_full} full, {n_stub} stubs), {errors} compile errors")
 
 
 def check_arm5_trimming(tok):
@@ -295,6 +324,7 @@ CHECKS = [
     ("arm1_chunk_reassembly", check_arm1_chunk_reassembly),
     ("arm1_onnx_reranker", check_arm1_onnx_reranker),
     ("arm1_dense_encoder", check_arm1_dense_encoder),
+    ("arm2_packing", check_arm2_packing),
     ("arm5_trimming", check_arm5_trimming),
     ("tokenizer_parity", check_tokenizer_parity),
     ("scorer_dispatch", check_scorer_dispatch),

@@ -90,9 +90,9 @@ FIDELITY = {
     "arm5": FidelityGrade.HIGH,
     "oracle": FidelityGrade.CEILING,
 }
-#: Arms implemented in this milestone. The others raise NotImplementedError.
-ACTIVE_ARMS = ["arm0", "arm1", "arm5", "oracle"]
-STUB_MILESTONE = {"arm2": "M2", "arm3": "M2", "arm4": "M3"}
+#: Arms implemented so far (M1: 0, 1, 5, oracle; M2: 2). The others raise NotImplementedError.
+ACTIVE_ARMS = ["arm0", "arm1", "arm2", "arm5", "oracle"]
+STUB_MILESTONE = {"arm3": "M2", "arm4": "M3"}
 #: Arms 2 and 3 are Python-only (Python tree-sitter splitter; Pyright).
 PYTHON_ONLY_ARMS = {"arm2", "arm3"}
 
@@ -144,11 +144,24 @@ ARM1_EXCLUDE_DIRS: list[str] = []
 
 
 # --------------------------------------------------------------------------
-# Arm 2 — Priompt (M2; constants fixed now so the spec lives in one place)
+# Arm 2 — Priompt (M2)
 # --------------------------------------------------------------------------
 PRIOMPT_SEED_PRIORITY = 1000
 PRIOMPT_CHUNK_BASE_PRIORITY = 500
 PRIOMPT_CHUNK_RANK_STEP = 10
+#: BM25 chunks retrieved; 500 - 10*rank stays positive up to rank 50.
+PRIOMPT_RETRIEVE_K = 50
+#: A stub outranks its own body by this much, so Priompt's <first> falls
+#: back from body to stub as the cutoff rises (inferred; see arm2_priompt).
+#: 500 = the width of the retrieved band: a chunk's signature is worth as much
+#: as a body 50 ranks higher.
+PRIOMPT_STUB_PRIORITY_BONUS = 500
+#: Seed-file chunks: 1000 minus their distance (in chunks) from the seed
+#: symbol's chunk, floored here so the whole seed file stays above every
+#: retrieved chunk (<= 490). A flat 1000 makes the seed file all-or-nothing
+#: (inferred, per Priompt's own guidance on long files: priority falls with
+#: distance from the point of interest).
+PRIOMPT_SEED_PRIORITY_FLOOR = 501
 
 
 # --------------------------------------------------------------------------
