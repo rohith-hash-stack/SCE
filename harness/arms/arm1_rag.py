@@ -62,6 +62,33 @@ def rrf(rankings: list[list[int]], k: int = C.RAG_RRF_K) -> list[tuple[int, floa
     return sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
 
 
+def available_cpus() -> int:
+    """CPUs this process may actually use. `os.cpu_count()` reports the
+    host's CPUs inside a container, which oversubscribes ONNX Runtime's
+    thread pool. Uses the CPU affinity set, capped by a cgroup CPU quota
+    when one is set (v2 `cpu.max`, or v1 `cpu.cfs_quota_us`)."""
+    try:
+        n = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        n = os.cpu_count() or 1
+    quota = None
+    try:
+        q, period = open("/sys/fs/cgroup/cpu.max").read().split()[:2]
+        if q != "max":
+            quota = float(q) / float(period)
+    except (OSError, ValueError):
+        try:
+            q_us = int(open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read())
+            period_us = int(open("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read())
+            if q_us > 0 and period_us > 0:
+                quota = q_us / period_us
+        except (OSError, ValueError):
+            pass
+    if quota:
+        n = min(n, max(int(quota), 1))
+    return max(n, 1)
+
+
 class JinaCodeEmbedder:
     """jina-embeddings-v2-base-code on CPU."""
 
@@ -96,7 +123,8 @@ class OnnxCrossEncoder:
             self._materialize(model_id, export_dir)
         self.tok = AutoTokenizer.from_pretrained(str(export_dir))
         opts = ort.SessionOptions()
-        opts.intra_op_num_threads = max(os.cpu_count() or 1, 1)
+        self.threads = available_cpus()
+        opts.intra_op_num_threads = self.threads
         self.session = ort.InferenceSession(str(onnx_path), opts, providers=["CPUExecutionProvider"])
         self._inputs = {i.name for i in self.session.get_inputs()}
         self.provenance = (export_dir / "SOURCE").read_text().strip() if (export_dir / "SOURCE").exists() else "unknown"

@@ -104,7 +104,28 @@ validate. `gate_report.json` also holds:
 - `exit_code`;
 - the GPU readings (`gpu_mb_after_warmup`, `gpu_mb_per_gate`, `gpu_mb_final`);
 - `index_failures`;
+- `wall_seconds` (the whole harness run);
 - `fatal`, if the run itself crashed (exit code 2).
+
+`summary.parquet` holds one row per (arm, task_type, corpus): means with CIs,
+`retrieval_lift` (N/A on strict T2), `retrieval_lift_any_gold` and
+`retrieval_lift_note`.
+
+**Reranker threads:** ONNX Runtime uses the CPUs this process may actually use,
+i.e. the affinity set capped by any cgroup CPU quota, not `os.cpu_count()`
+(which inside a container reports the host). The smoke test gates a warm
+(second) 50-pair call at 3 s and reports the cold first call and the thread
+count beside it.
+
+**Arm 1 T2 diagnostic** (one-off, off by default; enable with
+`HARNESS_ARM1_T2_DIAGNOSTIC=1`): writes `arm1_t2_diagnostic.json` with the
+gold and Arm 1's top-5 chunks per T2 task, plus a verdict that separates a
+symbol-mapping bug from a retrieval failure. The same analysis runs
+offline on pushed bundles:
+`python -m harness.scoring.arm1_t2_diagnostic --bundles <dir>`. On the
+1fd53af bundles the verdict is a retrieval failure: every delivered gold
+definition is in `symbols` (3 of 3), and the top 5 mention 1 of the 20 gold
+names.
 
 Expected output: one PASS/FAIL line per (gate, arm, task_type), 24 table cells over 40 rows. It
 also prints the within-type bootstrap check and the tokenizer parity status,
@@ -165,14 +186,28 @@ in G*_universe and do not resolve in the repository. The candidates are
 G*_universe for every arm; the arm's own retrieved set is never used.
 Resolution:
 - a file path resolves if the file exists;
-- a dotted name resolves only if it, or its own dotted suffix, is a known
-  symbol in the symbol table. `utils.get_dependant` resolves;
-  `solve_dependencies.values` and `exc.errors` do not, even though the
-  words "values" and "errors" occur in the code;
+- a dotted name resolves when any of these holds:
+  - it, or its own dotted suffix, is a known symbol: `utils.get_dependant`;
+  - its longest module prefix is a repository module that binds the last
+    name at top level, by import, re-export, def, class or assignment
+    (including inside top-level if/try blocks). So
+    `fastapi.dependencies.utils.get_path_param_names` resolves (imported
+    from `fastapi.utils`), and `fastapi.responses.JSONResponse` resolves
+    (re-exported from starlette);
+  - it is `Class.member` and the member is defined on an ancestor class:
+    `RequestValidationError.errors` resolves via `ValidationException.errors`.
+- otherwise the dotted name is a hallucination. Its last word alone never
+  rescues it: `solve_dependencies.values` (a function's local) and
+  `exception_handlers.exc.errors` stay hallucinations;
 - a plain name resolves through the symbol table, then ripgrep.
 
-External-library names, such as starlette's, are not in the repository's
-symbol table, so they count as unresolved unless they are in G*_universe.
+On the d087d1b/1fd53af data, the Oracle's rate fell from 0.571 to 0 (t02_001)
+and from 0.333 to 0 (t02_005) under these rules; no cell's rate rose.
+
+External-library names that the repository does not bind, such as
+`typing.get_type_hints` or `pydantic.fields.ModelField...`, cannot be
+checked from the repository and count as unresolved unless they are in
+G*_universe.
 
 **Generation diagnostics** (per cell, never bootstrapped):
 - `finish_reason`: the server's value; "length" means the 4,096-token cap was

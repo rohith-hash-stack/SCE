@@ -135,6 +135,7 @@ def main(argv=None) -> int:
                     "fake_encoders": args.fake_encoders, "context_window": C.CONTEXT_WINDOW,
                     "generation_cap": C.GENERATION_RESERVE, "rows": []}
     exit_code = 2   # overwritten below; 2 = the run itself crashed
+    t_start = time.perf_counter()
     try:
         exit_code = _run(args, out_dir, report)
     except Exception as exc:  # noqa: BLE001 - recorded, then reported via exit code 2
@@ -146,6 +147,7 @@ def main(argv=None) -> int:
         if not args.dry_run:
             report["gpu_mb_final"] = _gpu_reading()
         report["exit_code"] = exit_code
+        report["wall_seconds"] = round(time.perf_counter() - t_start, 1)
         (out_dir / "gate_report.json").write_text(json.dumps(report, indent=1, default=str))
     return exit_code
 
@@ -178,6 +180,7 @@ def _run(args, out_dir: Path, report: dict) -> int:
     from harness.llm import ChatLLM, OllamaChatLLM
     from harness.pipeline import Pipeline, class_ancestors
     from harness.reporting.output_schema import attach_latency_aggregates, to_frame, write_parquet
+    from harness.reporting.summary import summary_table
     from harness.scoring.bootstrap import bootstrap_ci
     from harness.scoring.hallucination import build_symbol_cache
     from harness.tasks.loaders import load_tasks
@@ -253,6 +256,7 @@ def _run(args, out_dir: Path, report: dict) -> int:
     gates = {"A_type_coverage": synthetic_tasks(root), "B_real_fastapi_T2": load_tasks("fastapi", repo_root=root,
                                                                                          limit=args.real_tasks)}
     results = []
+    arm1_diag: list[dict] = []
     for gate, tasks in gates.items():
         if not args.dry_run:
             reading = _gpu_reading()
@@ -272,6 +276,9 @@ def _run(args, out_dir: Path, report: dict) -> int:
                 else:
                     try:
                         out = pipe.run_cell(arm_id, task, seed=args.seed)
+                        if C.ARM1_T2_DIAGNOSTIC and arm_id == "arm1" and task.task_type == "T2_localization":
+                            from harness.scoring.arm1_t2_diagnostic import record as diag_record
+                            arm1_diag.append(diag_record(task, out.ctx.to_dict()["items"]))
                         problems = _validity(out, task)
                         results.append(out.result)
                         r = out.result
@@ -310,6 +317,20 @@ def _run(args, out_dir: Path, report: dict) -> int:
     if results:
         df = attach_latency_aggregates(to_frame(results), index_ms)
         write_parquet(df, out_dir / "cells.parquet")
+        # one row per (arm, task_type, corpus): means with CIs, retrieval
+        # lift (N/A on strict T2), lift on any-gold, and the note
+        summary = summary_table(results, n_reps=args.bootstrap_reps)
+        summary.to_parquet(out_dir / "summary.parquet", index=False)
+        report["summary_rows"] = len(summary)
+        for _, s in summary[summary.task_type == "T2_localization"].iterrows():
+            print(f"[m1] T2 {s.arm:7s} mean_tsr={s.mean_tsr:.2f} lift={s.retrieval_lift:.3g} "
+                  f"lift_any_gold={s.retrieval_lift_any_gold:.3g}", flush=True)
+    if arm1_diag:
+        from harness.scoring.arm1_t2_diagnostic import verdict
+        (out_dir / "arm1_t2_diagnostic.json").write_text(
+            json.dumps({"records": arm1_diag, "verdict": verdict(arm1_diag)}, indent=1))
+        report["arm1_t2_diagnostic"] = verdict(arm1_diag)
+        print(f"[m1] arm1 T2 diagnostic: {report['arm1_t2_diagnostic']}", flush=True)
 
     # ---- PASS/FAIL table per (gate, arm, task_type), also into the report ----
     print("\n" + "=" * 64)

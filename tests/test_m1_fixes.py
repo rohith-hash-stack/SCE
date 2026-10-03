@@ -6,6 +6,7 @@ import json
 import math
 import threading
 
+import pandas as pd
 import pytest
 
 from harness import config as C
@@ -150,3 +151,36 @@ def test_ollama_native_client_sets_window_and_cap():
     assert body["options"] == {"num_ctx": C.CONTEXT_WINDOW, "num_predict": C.GENERATION_RESERVE,
                                "temperature": C.TEMPERATURE, "seed": 42}
     assert (c.text, c.prompt_tokens, c.completion_tokens, c.finish_reason) == ("OK", 42, 7, "length")
+
+
+# ---- Arm 1 T2 diagnostic ----
+def test_arm1_t2_diagnostic_separates_mapping_bug_from_retrieval_failure(tmp_path):
+    from harness.scoring.arm1_t2_diagnostic import record, verdict
+    task = _task(tmp_path, gold=["pkg.mod.target", "pkg.mod.other"])
+    defined_but_unmapped = [{"source_id": "pkg/mod.py:1-2", "rank": 1, "symbols": [],          # the bug case
+                             "content": "def target():\n    return other()"}]
+    r = record(task, defined_but_unmapped)
+    assert r["top5"] == {"mentioned": 2, "defined": 1, "in_symbols": 0}
+    assert verdict([r]).startswith("MAPPING BUG")
+    unrelated = [{"source_id": "docs/x.py:1-1", "rank": 1, "symbols": [], "content": "from pkg import thing"}]
+    assert verdict([record(task, unrelated)]).startswith("RETRIEVAL FAILURE")
+    assert set(r["retrieved_top5"][0]) == {"chunk_source_id", "chunk_symbols", "chunk_text"}
+
+
+def test_kaggle_runner_writes_summary_wall_time_and_diagnostic(tmp_path, monkeypatch):
+    import os
+    if not os.path.isdir("/home/user/SCE/.benchmarks/corpora/fastapi"):
+        pytest.skip("FastAPI checkout missing")
+    from harness import kaggle_m1
+    monkeypatch.setattr(C, "ARM1_T2_DIAGNOSTIC", True)
+    code = kaggle_m1.main(["--dry-run", "--fake-encoders", "--real-tasks", "2", "--bootstrap-reps", "50",
+                           "--out", str(tmp_path)])
+    report = json.loads((tmp_path / "gate_report.json").read_text())
+    assert code == 0 and report["exit_code"] == 0 and report["wall_seconds"] > 0
+    summary = pd.read_parquet(tmp_path / "summary.parquet")
+    t2 = summary[summary.task_type == "T2_localization"]
+    assert {"retrieval_lift", "retrieval_lift_any_gold", "retrieval_lift_note"} <= set(summary.columns)
+    assert set(t2.arm) == {"arm0", "arm1", "arm5", "oracle"}
+    diag = json.loads((tmp_path / "arm1_t2_diagnostic.json").read_text())
+    assert len(diag["records"]) == 3 and diag["verdict"]          # synthetic T2 + 2 real T2 tasks
+    assert report["arm1_t2_diagnostic"] == diag["verdict"]

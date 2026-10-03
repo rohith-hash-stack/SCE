@@ -98,6 +98,7 @@ def test_onnx_cross_encoder_export_and_inference(tmp_path):
     _tiny_cross_encoder(str(model_dir))
     ce = OnnxCrossEncoder(model_id=str(model_dir), cache_dir=tmp_path / "cache")
     assert "torch.onnx.export" in ce.provenance                    # no repo ONNX offline -> exported
+    assert ce.threads >= 1
     docs = [" ".join(f"w{(i * 7 + j) % 50}" for j in range(40)) for i in range(50)]
     t0 = time.perf_counter()
     s = ce.score("query w1 w2", docs)
@@ -136,3 +137,25 @@ def test_missing_reranker_fails_once_at_index_time(monkeypatch):
 def test_reranker_load_time_counts_in_l_index():
     arm, _ = _arm()
     assert {"L_index", "L_rerank_load", "L_chunk", "L_embed_corpus"} <= set(arm.index_latency)
+
+
+def test_available_cpus_uses_affinity_and_cgroup_quota(monkeypatch):
+    """Kaggle 1fd53af: the reranker took 22.6 s for 50 pairs; ONNX Runtime
+    was sized by os.cpu_count(), the host's count inside a container."""
+    import io
+    import os
+
+    import harness.arms.arm1_rag as A
+    monkeypatch.setattr(os, "cpu_count", lambda: 96)
+    monkeypatch.setattr(os, "sched_getaffinity", lambda pid: set(range(8)), raising=False)
+
+    def fake_open(path, *a, **k):
+        if path == "/sys/fs/cgroup/cpu.max":
+            return io.StringIO("400000 100000\n")      # quota: 4 CPUs
+        raise OSError(path)
+    monkeypatch.setattr(A, "open", fake_open, raising=False)
+    assert A.available_cpus() == 4                     # min(affinity 8, quota 4), never 96
+
+    monkeypatch.setattr(A, "open", lambda path, *a, **k: io.StringIO("max 100000\n") if path.endswith("cpu.max")
+                        else (_ for _ in ()).throw(OSError(path)), raising=False)
+    assert A.available_cpus() == 8                     # no quota: the affinity set

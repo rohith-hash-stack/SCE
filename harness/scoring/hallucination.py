@@ -10,20 +10,33 @@ comparable across engines.
 An identifier the answer names is NOT hallucinated if it is in G*_universe
 or resolves in the repository:
   1. file path (contains "/"): `repo_root / ident` exists.
-  2. dotted name (contains "."): it must be in the symbol cache, i.e. equal
-     a known fully-qualified name or one of its dotted suffixes
-     (`utils.get_dependant` hits; `solve_dependencies.values` does not).
-     Its last component alone never resolves it: an invented
-     `pkg.mod.func.values` must not pass because the word "values" occurs
-     somewhere. Without a symbol cache a dotted name outside G*_universe is
-     unresolved; the pipeline always supplies one (the PRISM symbol table;
-     M2 adds Pyright's workspace/symbol results).
+  2. dotted name (contains "."), in order:
+     a. symbol cache: it equals a known fully-qualified name or one of its
+        dotted suffixes (`utils.get_dependant` hits);
+     b. module binding: its longest prefix that is a repository module binds
+        the last name at module level, by import / re-export
+        (`from fastapi.utils import get_path_param_names` makes
+        `fastapi.dependencies.utils.get_path_param_names` real;
+        `from starlette.responses import JSONResponse as JSONResponse`
+        makes `fastapi.responses.JSONResponse` real) or by a top-level
+        def / class / assignment, including inside top-level if/try blocks
+        (an AST index per module, cached);
+     c. inheritance: `Class.member` where `member` is defined on an
+        ancestor of `Class` (class hierarchy from the code graph):
+        `RequestValidationError.errors` via `ValidationException.errors`.
+     Otherwise it is unresolved. Its last component alone never resolves
+     it: `solve_dependencies.values` (a local of a function) and
+     `exception_handlers.exc.errors` stay hallucinations although "values"
+     and "errors" occur in the code. The pipeline always supplies a symbol
+     cache (the PRISM symbol table; M2 adds Pyright's workspace/symbol
+     results) and the class hierarchy.
   3. plain name (no dot): the symbol cache, else ripgrep
      (`rg --word-regexp --fixed-strings -l`, timeout 5 s).
 Identifiers shorter than 4 characters are excluded (x, i, id, ...).
 """
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 from functools import lru_cache
@@ -106,16 +119,90 @@ def _rg_finds(word: str, repo_root: str) -> bool:
     return proc.returncode == 0 and bool(proc.stdout.strip())
 
 
-def resolve_identifier(ident: str, repo_root: str, symbol_cache: frozenset[str] | None = None) -> bool:
+def _module_file(repo_root: str, parts: list[str]) -> Path | None:
+    base = Path(repo_root).joinpath(*parts)
+    for cand in (base.with_suffix(".py"), base / "__init__.py"):
+        if cand.is_file():
+            return cand
+    return None
+
+
+def _bound_names(body: list) -> set[str]:
+    """Names a module binds at top level: imports (`as` names included),
+    defs, classes, assignment targets; recursing into top-level if / try /
+    with blocks, never into function or class bodies."""
+    out: set[str] = set()
+    for node in body:
+        if isinstance(node, ast.Import):
+            out.update((a.asname or a.name.split(".")[0]) for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            out.update((a.asname or a.name) for a in node.names if a.name != "*")
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out.add(node.name)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for t in targets:
+                out.update(n.id for n in ast.walk(t) if isinstance(n, ast.Name))
+        elif isinstance(node, ast.If):
+            out |= _bound_names(node.body) | _bound_names(node.orelse)
+        elif isinstance(node, ast.Try):
+            out |= _bound_names(node.body) | _bound_names(node.orelse) | _bound_names(node.finalbody)
+            for h in node.handlers:
+                out |= _bound_names(h.body)
+        elif isinstance(node, ast.With):
+            out |= _bound_names(node.body)
+    return out
+
+
+@lru_cache(maxsize=4096)
+def module_bindings(repo_root: str, module: str) -> frozenset[str] | None:
+    """Top-level names bound by repository module `module`, or None when
+    no such module file exists (or it does not parse)."""
+    path = _module_file(repo_root, module.split("."))
+    if path is None:
+        return None
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError:
+        return None
+    return frozenset(_bound_names(tree.body))
+
+
+def _resolves_by_module_binding(ident: str, repo_root: str) -> bool:
+    parts = ident.split(".")
+    for k in range(len(parts) - 1, 0, -1):
+        bound = module_bindings(repo_root, ".".join(parts[:k]))
+        if bound is None:
+            continue
+        # the longest module prefix decides: exactly one name may follow it
+        return len(parts) - k == 1 and parts[-1] in bound
+    return False
+
+
+def _resolves_by_inheritance(ident: str, symbol_cache: frozenset[str] | None, ancestors: dict | None) -> bool:
+    if not symbol_cache or not ancestors:
+        return False
+    cls_part, member = ident.rsplit(".", 1)
+    for cls, anc in ancestors.items():
+        if cls == cls_part or cls.endswith("." + cls_part):
+            if any(f"{a}.{member}" in symbol_cache for a in anc):
+                return True
+    return False
+
+
+def resolve_identifier(ident: str, repo_root: str, symbol_cache: frozenset[str] | None = None,
+                       ancestors: dict | None = None) -> bool:
     if symbol_cache and ident in symbol_cache:
         return True
     root = Path(repo_root)
     if "/" in ident:
         return (root / ident).exists()
     if "." in ident:
-        # a dotted name resolves fully or by its own dotted suffix (the
-        # cache holds every suffix), never by its last component alone
-        return False
+        # never by the last component alone: by full / dotted-suffix symbol
+        # (above), module binding, or inheritance
+        if root.is_dir() and _resolves_by_module_binding(ident, str(root)):
+            return True
+        return _resolves_by_inheritance(ident, symbol_cache, ancestors)
     if not root.is_dir():
         return False
     return _rg_finds(ident, str(root))
@@ -126,8 +213,8 @@ def universe_candidates(task) -> set[str]:
     return task.ground_truth.universe_symbols()
 
 
-def hallucination_rate(answer_symbols: list[str], task, ctx=None,
-                       symbol_cache: frozenset[str] | None = None) -> tuple[float, dict[str, list[str]]]:
+def hallucination_rate(answer_symbols: list[str], task, ctx=None, symbol_cache: frozenset[str] | None = None,
+                       ancestors: dict | None = None) -> tuple[float, dict[str, list[str]]]:
     """(rate, breakdown). rate = unresolved / candidates, NaN when the answer
     names no identifier of >= 4 characters. `ctx` is accepted for interface
     symmetry and deliberately unused (see module docstring)."""
@@ -142,7 +229,7 @@ def hallucination_rate(answer_symbols: list[str], task, ctx=None,
     universe_cache = build_symbol_cache(universe)
     unresolved = [
         c for c in candidates
-        if c not in universe_cache and not resolve_identifier(c, task.repo_root, symbol_cache)
+        if c not in universe_cache and not resolve_identifier(c, task.repo_root, symbol_cache, ancestors)
     ]
     for c in unresolved:
         breakdown[categorize(c)].append(c)

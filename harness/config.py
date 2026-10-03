@@ -178,6 +178,11 @@ ALPHA = 0.05
 # Noise robustness (infrastructure only; execution deferred)
 # --------------------------------------------------------------------------
 NOISE_SWEEP_ENABLED = False
+
+#: One-off M1 diagnostic (harness/scoring/arm1_t2_diagnostic.py): dump Arm
+#: 1's top-5 chunks per T2 task to arm1_t2_diagnostic.json. Off by default;
+#: not for regular runs.
+ARM1_T2_DIAGNOSTIC = os.environ.get("HARNESS_ARM1_T2_DIAGNOSTIC", "0") == "1"
 NOISE_LEVELS = [0.0, 0.10, 0.25, 0.50]
 NOISE_TYPES = ["adjacent", "same_domain", "random"]
 

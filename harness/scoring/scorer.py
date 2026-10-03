@@ -313,7 +313,7 @@ def score(task, ctx: DeliveredContext, ans: NormalizedAnswer, *, judge: Judge | 
 
     rel_tokens = sum(it.token_count for it in ctx.items if set(it.symbols) & universe)
     rel_density = NAN if ctx.total_tokens == 0 else rel_tokens / ctx.total_tokens
-    halluc, halluc_bd = hallucination_rate(ans.answer_symbols, task, ctx, symbol_cache)
+    halluc, halluc_bd = hallucination_rate(ans.answer_symbols, task, ctx, symbol_cache, ancestors)
 
     # ---- type-specific ----
     tt = task.task_type
