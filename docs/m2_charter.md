@@ -7,8 +7,9 @@ M2 replaces the M1 stubs for Arm 2 (Cursor-style, Priompt packing) and Arm 3
 (Copilot-style, Pyright LSP) with real implementations. Both run through the
 same `RetrievalArm` interface, `finalize_context` budget enforcement,
 adapters, unified `score()`, bootstrap and reporting that M1 built and
-validated; nothing in that shared path changes. Both arms are Python-only, so
-they run on FastAPI and Django and the results table discloses the asymmetry.
+validated; nothing in that shared path changes. Both arms are Python-only:
+in the full benchmark they run on FastAPI and Django (the results table
+discloses the asymmetry), but M2 itself is gated on FastAPI only.
 
 ## Arm 2: Cursor-style (Priompt packing). Fidelity MEDIUM
 
@@ -31,8 +32,15 @@ they run on FastAPI and Django and the results table discloses the asymmetry.
   the HF tokenizer is the counter.
 - **Latency sub-components:** `L_ast_parse`, `L_priority_sort`,
   `L_binary_search_tokenize`.
+- **Retrieval (decision 1): BM25 over the AST chunks.**
+  Retrieval uses BM25 over the AST chunks for speed and determinism. The
+  Cursor-style contribution under test is the Priompt packing algorithm —
+  priority ordering, binary-search cutoff, and `<first>` fallback — not the
+  retriever. Using BM25 keeps the packing as the isolated variable and
+  avoids a second embedder on CPU.
 - **Declared simplification:** Cursor's codebase retrieval is not public, so
-  the ranking that feeds `500 − 10·rank` is inferred (decision 1 below).
+  the BM25 ranking that feeds `500 − 10·rank` is a stand-in, declared in
+  `build_meta`.
 
 ## Arm 3: Copilot-style (Pyright LSP). Fidelity MEDIUM
 
@@ -70,15 +78,30 @@ expected and legitimate.
 ## New dependency and the Kaggle script
 
 Arm 3 needs `pyright-langserver`, installed with `npm install -g pyright`.
-It also needs FastAPI and Django installed editable (`pip install -e`)
-before Pyright launches, so imports resolve.
+It also needs the FastAPI checkout installed editable (`pip install -e`)
+before Pyright launches, so imports resolve. M2 is FastAPI-only (decision 2).
 
 The Kaggle script will therefore need two additions in M2: a Node/npm check
-plus `npm install -g pyright`, and the per-corpus `pip install -e`.
+plus `npm install -g pyright`, and `pip install -e` of the FastAPI checkout.
 **The script is not modified now.**
 
-The dev container already has Node 22 and `pyright-langserver`, so Arm 3 can
-be tested here against the real server, not only a fake.
+## Index scope (decision 3)
+
+Arms 2 and 3 index the same FastAPI checkout as Arms 0, 1, 5 and the
+Oracle. No directory filtering. Arm 1's docs_src finding (6.4% library
+chunks; top-5 mentions 1/20 gold symbols) is a result that only exists
+because no arm filters. Applying a filter to some arms and not others
+would invalidate the cross-arm comparison.
+
+## Testing strategy
+
+Arm 3 can be developed and tested against the real pyright-langserver in
+this container, not only against a fake. This shortens the M2 iteration
+cycle: handshake order, quiescence probe, and two-hop retrieval can all be
+validated locally before any Kaggle run. (The dev container has Node 22 and
+`pyright-langserver`.) The fake LSP server is still used for the framing
+and error-path unit tests, where the real server can't be made to misbehave
+on demand.
 
 ## Acceptance criteria (mirroring M1)
 
@@ -108,21 +131,23 @@ be tested here against the real server, not only a fake.
 4. **Documentation:** `harness/README_M2.md`, with fidelity disclosures and
    every simplification declared in each arm's `build_meta`.
 
-## Decisions needed before implementation
+## Decisions (made by the owner)
 
-1. **Arm 2's ranking source.** Which retriever orders the chunks that get
-   `500 − 10·rank`?
-   - Option A (recommended): BM25 over the same AST chunks, a lexical,
-     editor-style signal that is distinct from Arm 1.
-   - Option B: Arm 1's fused BM25 and dense ranking without the reranker.
-2. **Corpora for the M2 gate:** FastAPI only, as in M1, or also the 4 Django
-   T5 tasks, so T5 is exercised on real tasks by every Python arm.
-3. **The `ARM1_EXCLUDE_DIRS` finding** stays an Arm 1 lever, off by default.
-   Arms 2 and 3 index the whole checkout, like every other arm.
+1. **Arm 2's ranking source: BM25** over the AST chunks (see the Arm 2
+   section).
+2. **Corpora for the M2 gate: FastAPI only.** No Django tasks in M2 (see
+   "Out of scope for M2").
+3. **Index scope: the whole checkout for Arms 2 and 3,** as for every other
+   arm (see "Index scope").
 
 ## Out of scope for M2
 
 - Arm 4 (the agent loop) and TypeScript chunking for Express and tRPC: M3.
+- Django's T5 tasks. Adding a second corpus concurrently with two new arms
+  mixes two independent variables. If the M2 gate fails, we cannot
+  distinguish Arm 2/3 defects from Django indexing defects. Django's T5
+  tasks move to their own milestone after M2 closes and the arms are
+  validated on FastAPI.
 - The noise sweep (gated off) and the T1 judge, T3/T4 test runner, and
   hypothesis sign-off: M4.
 - Fix D: no streaming early-stop. Revisit only if repetition loops become
