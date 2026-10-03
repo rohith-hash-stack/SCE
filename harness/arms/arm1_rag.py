@@ -228,6 +228,12 @@ class Arm1RAG(RetrievalArm):
             with timed(self.index_latency, "L_chunk"):
                 splitter = PythonSplitter(self.tok, C.RAG_MAX_CHUNK_TOKENS)
                 files = config.get("files") or iter_python_files(repo_path)
+                # M4 ablation lever; empty by default, so nothing is excluded
+                exclude = set(config.get("exclude_dirs", C.ARM1_EXCLUDE_DIRS))
+                if exclude:
+                    files = [f for f in files
+                             if os.path.relpath(f, repo_path).replace(os.sep, "/").split("/", 1)[0] not in exclude]
+                self.excluded_dirs = sorted(exclude)
                 self.chunks: list[Chunk] = [c for f in files for c in splitter.split_file(f, repo_path)]
             if not self.chunks:
                 raise RuntimeError(f"arm1: no Python chunks under {repo_path}")
@@ -299,6 +305,7 @@ class Arm1RAG(RetrievalArm):
             "n_chunks_indexed": len(self.chunks), "n_fused_candidates": len(fused),
             "skipped_for_budget": skipped, "over_budget": False, "turn_count": 1,
             "embedder": self.embedder.name, "reranker": self.reranker.name,
+            "excluded_dirs": list(getattr(self, "excluded_dirs", [])),
             "ranking_method": "cross_encoder", "latency_ms": lat,
         }
         return DeliveredContext("arm1", seed["task_id"], items, total, self.budget, meta)

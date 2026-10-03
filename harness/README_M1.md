@@ -238,6 +238,33 @@ repository; seeds are averaged per task.
 sample kept separately. Layers are L_index, L_retrieve, L_generate and L_e2e,
 plus per-arm sub-components.
 
+## M1 finding: docs_src/tests pollution in Arm 1
+
+A documented result, not a fix. From the Kaggle run at 44e7c83 (results
+commit 1fd53af), Arm 1 on the 5 real FastAPI T2 tasks:
+
+- **57 of 93 delivered chunks came from `docs_src` or `tests`.** Only 36
+  came from the `fastapi/` library itself.
+- **The top 5 chunks mention only 1 of the 20 gold symbols** across the 5
+  tasks, and define none of them. Arm 1's T2 `tsr` was 0 on all 5.
+- **On t02_001, ranks 1–3 are `docs_src/dependencies/tutorial*.py:1-3`.**
+  These are 1–3-line tutorial import snippets that the cross-encoder
+  scores highest.
+- **The cause is the corpus.** The pinned FastAPI checkout has 681
+  `docs_src` and 382 `tests` Python files against 44 library files. Of
+  Arm 1's 5,398 index chunks, only 346 (6.4%) are library code; 2,401 are
+  `docs_src` and 2,461 are `tests`.
+- **It is not a symbol-mapping bug.** Every delivered chunk that defines a
+  gold symbol carries it in `symbols` (3 of 3). This was checked by
+  `harness/scoring/arm1_t2_diagnostic.py` on the pushed bundles.
+
+Every arm indexes the same whole checkout, so this is how plain RAG behaves
+on this repository. `config.ARM1_EXCLUDE_DIRS` (for example
+`["docs_src", "tests"]`) leaves those top-level directories out of Arm 1's
+index. It exists as an **M4 ablation lever and is off by default (empty)**:
+with it empty, Arm 1 indexes exactly the same 5,398 chunks as before. M4
+will ablation-test both settings.
+
 ## Deviations from the M1 specification (and why)
 
 1. **`tsr` field added to `ScoreResult`** (and registered). The spec's

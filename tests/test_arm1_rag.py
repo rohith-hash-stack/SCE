@@ -159,3 +159,27 @@ def test_available_cpus_uses_affinity_and_cgroup_quota(monkeypatch):
     monkeypatch.setattr(A, "open", lambda path, *a, **k: io.StringIO("max 100000\n") if path.endswith("cpu.max")
                         else (_ for _ in ()).throw(OSError(path)), raising=False)
     assert A.available_cpus() == 8                     # no quota: the affinity set
+
+
+def test_exclude_dirs_lever_is_off_by_default(tmp_path):
+    """ARM1_EXCLUDE_DIRS (M4 ablation lever) defaults to empty: the index is
+    the whole checkout, identical to not having the lever. When set, the
+    listed top-level directories are left out."""
+    from harness import config as C
+    for d, body in (("lib", "def core_fn():\n    return 1\n"), ("docs_src", "def tutorial_fn():\n    return 2\n"),
+                    ("tests", "def test_fn():\n    return 3\n")):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "m.py").write_text(body)
+    assert C.ARM1_EXCLUDE_DIRS == []
+
+    def indexed(config):
+        arm = Arm1RAG(tokenizer=Words(), embedder=HashEmbedder(), reranker=OverlapReranker(), cache_embeddings=False)
+        arm.index(str(tmp_path), config)
+        return sorted(c.qualified_name for c in arm.chunks), arm
+
+    default, arm = indexed({"repo_id": "x"})
+    assert default == ["docs_src.m.tutorial_fn", "lib.m.core_fn", "tests.m.test_fn"] and arm.excluded_dirs == []
+    ctx = arm.retrieve("core_fn", {"task_id": "t", "task_type": "T2_localization"})
+    assert ctx.build_meta["excluded_dirs"] == []
+    ablated, arm2 = indexed({"repo_id": "x", "exclude_dirs": ["docs_src", "tests"]})
+    assert ablated == ["lib.m.core_fn"] and arm2.excluded_dirs == ["docs_src", "tests"]

@@ -135,6 +135,12 @@ RAG_RERANK_BATCH = 16
 RAG_RERANK_SMOKE_SECONDS = 3.0
 #: Where the exported ONNX reranker and cached chunk embeddings live.
 RAG_CACHE_DIR = Path(os.environ.get("HARNESS_CACHE_DIR", str(REPO_ROOT / ".benchmarks/cache/harness")))
+#: M4 ablation lever, OFF in M1: top-level directories (relative to the
+#: corpus root, e.g. ["docs_src", "tests"]) that Arm 1 leaves out of its
+#: index. Empty = index the whole checkout, as every arm does. See README
+#: "M1 finding: docs_src/tests pollution in Arm 1". Do not enable outside
+#: the M4 ablation.
+ARM1_EXCLUDE_DIRS: list[str] = []
 
 
 # --------------------------------------------------------------------------
