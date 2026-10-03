@@ -107,9 +107,18 @@ validate. `gate_report.json` also holds:
 - `wall_seconds` (the whole harness run);
 - `fatal`, if the run itself crashed (exit code 2).
 
-`summary.parquet` holds one row per (arm, task_type, corpus): means with CIs,
-`retrieval_lift` (N/A on strict T2), `retrieval_lift_any_gold` and
-`retrieval_lift_note`.
+`summary.parquet` holds one row per (gate, arm, task_type, corpus): means with
+CIs, `retrieval_lift` (N/A on strict T2), `retrieval_lift_any_gold` and
+`retrieval_lift_note`. It is partitioned by gate because Gate A's synthetic
+tasks carry the corpus tag "fastapi". Pooled by corpus alone, the synthetic
+T2 task was averaged into the 5 real tasks (the 344565a summary showed Arm 0
+at 0.167 instead of 0, with a defined lift). `cells.parquet` was never
+affected.
+
+**Known gap at M1 close:** the failure-record format above (`traceback_tail`,
+`step`, `cmd`) has not been exercised on Kaggle: no Kaggle row has failed
+since it was added (runs 1fd53af and 344565a: 40/40 PASS). It is covered by
+local tests and local dry runs only.
 
 **Reranker threads:** ONNX Runtime uses the CPUs this process may actually use,
 i.e. the affinity set capped by any cgroup CPU quota, not `os.cpu_count()`

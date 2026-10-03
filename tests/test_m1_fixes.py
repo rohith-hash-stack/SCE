@@ -184,3 +184,41 @@ def test_kaggle_runner_writes_summary_wall_time_and_diagnostic(tmp_path, monkeyp
     diag = json.loads((tmp_path / "arm1_t2_diagnostic.json").read_text())
     assert len(diag["records"]) == 3 and diag["verdict"]          # synthetic T2 + 2 real T2 tasks
     assert report["arm1_t2_diagnostic"] == diag["verdict"]
+
+
+# ---- summary partitioned by gate (synthetic Gate A never pools with real Gate B) ----
+def test_gate_summary_keeps_synthetic_and_real_t2_apart(tmp_path):
+    from harness.kaggle_m1 import gate_summary
+    from harness.reporting.summary import T2_LIFT_NOTE
+    results, gates = [], []
+
+    def cell(arm, task, named):
+        ctx = DeliveredContext(arm, task.task_id, [], 0, 0 if arm == "arm0" else 13_000, {})
+        return score(task, ctx, _ans(task, named, arm=arm))
+
+    # Gate A: one synthetic, single-gold T2 task (corpus tag "fastapi"); Arm 0 names it
+    syn = _task(tmp_path, gold=["fastapi.mod.target"], tid="syn_t2_localization")
+    for arm in ("arm0", "arm5", "oracle"):
+        results.append(cell(arm, syn, ["fastapi.mod.target"]))
+        gates.append("A_type_coverage")
+    # Gate B: real multi-gold T2 tasks; Arm 0 names only the seed (any-gold 1, strict 0)
+    for i in range(3):
+        real = _task(tmp_path, gold=["fastapi.mod.seed", f"fastapi.mod.stage{i}"], tid=f"fastapi_t02_00{i}")
+        results.append(cell("arm0", real, ["fastapi.mod.seed"]))
+        results.append(cell("arm5", real, ["fastapi.mod.seed"] + ([f"fastapi.mod.stage{i}"] if i else [])))
+        results.append(cell("oracle", real, ["fastapi.mod.seed", f"fastapi.mod.stage{i}"]))
+        gates += ["B_real_fastapi_T2"] * 3
+
+    s = gate_summary(results, gates, n_reps=100)
+    assert list(s.columns[:4]) == ["gate", "arm", "task_type", "corpus"]
+    assert set(s.corpus) == {"fastapi"}                                   # same corpus tag ...
+    assert set(s.gate) == {"A_type_coverage", "B_real_fastapi_T2"}        # ... separate groups
+    a = s[s.gate == "A_type_coverage"].set_index("arm")
+    b = s[s.gate == "B_real_fastapi_T2"].set_index("arm")
+    assert (a.n_tasks == 1).all() and (b.n_tasks == 3).all()              # never 4 = 1 synthetic + 3 real
+    assert b.loc["arm0", "mean_tsr"] == 0.0                               # not pooled with the synthetic 1.0
+    assert math.isnan(b.loc["arm5", "retrieval_lift"]) and b.loc["arm5", "retrieval_lift_note"] == T2_LIFT_NOTE
+    assert (b.retrieval_lift_any_gold == 0.0).all()                       # any-gold is 1.0 for every arm
+    assert a.loc["arm0", "mean_tsr"] == 1.0
+    with pytest.raises(ValueError):
+        gate_summary(results, gates[:-1])

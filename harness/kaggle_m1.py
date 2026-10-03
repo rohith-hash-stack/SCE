@@ -152,6 +152,28 @@ def main(argv=None) -> int:
     return exit_code
 
 
+def gate_summary(results: list, gates: list[str], n_reps: int = C.BOOTSTRAP_REPS):
+    """`summary_table` per gate, stacked, with a leading `gate` column.
+
+    Groups are (gate, arm, task_type, corpus), never (arm, task_type, corpus)
+    alone: Gate A's synthetic tasks carry the corpus tag of the repository
+    they are grounded in ("fastapi"), so pooling by corpus would mix one
+    synthetic task into the real Gate B means (and into their lifts, which
+    are computed against the same gate's Arm 0 and Oracle)."""
+    import pandas as pd
+
+    from harness.reporting.summary import summary_table
+    if len(results) != len(gates):
+        raise ValueError("one gate per result")
+    frames = []
+    for gate in dict.fromkeys(gates):
+        part = summary_table([r for r, g in zip(results, gates) if g == gate], n_reps=n_reps)
+        if not part.empty:
+            part.insert(0, "gate", gate)
+            frames.append(part)
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
 def failure_record(exc: BaseException | None, step: str, cmd: str, message: str | None = None,
                    type_: str | None = None) -> dict:
     """A failed cell (or run): {type, message, traceback_tail (last 5
@@ -180,7 +202,6 @@ def _run(args, out_dir: Path, report: dict) -> int:
     from harness.llm import ChatLLM, OllamaChatLLM
     from harness.pipeline import Pipeline, class_ancestors
     from harness.reporting.output_schema import attach_latency_aggregates, to_frame, write_parquet
-    from harness.reporting.summary import summary_table
     from harness.scoring.bootstrap import bootstrap_ci
     from harness.scoring.hallucination import build_symbol_cache
     from harness.tasks.loaders import load_tasks
@@ -256,6 +277,7 @@ def _run(args, out_dir: Path, report: dict) -> int:
     gates = {"A_type_coverage": synthetic_tasks(root), "B_real_fastapi_T2": load_tasks("fastapi", repo_root=root,
                                                                                          limit=args.real_tasks)}
     results = []
+    result_gates: list[str] = []   # the gate of each entry in `results`
     arm1_diag: list[dict] = []
     for gate, tasks in gates.items():
         if not args.dry_run:
@@ -281,6 +303,7 @@ def _run(args, out_dir: Path, report: dict) -> int:
                             arm1_diag.append(diag_record(task, out.ctx.to_dict()["items"]))
                         problems = _validity(out, task)
                         results.append(out.result)
+                        result_gates.append(gate)
                         r = out.result
                         row.update(status="PASS" if not problems else "FAIL", problems=problems,
                                    tsr=r.tsr, extraction_success=out.ans.extraction_success,
@@ -317,14 +340,14 @@ def _run(args, out_dir: Path, report: dict) -> int:
     if results:
         df = attach_latency_aggregates(to_frame(results), index_ms)
         write_parquet(df, out_dir / "cells.parquet")
-        # one row per (arm, task_type, corpus): means with CIs, retrieval
-        # lift (N/A on strict T2), lift on any-gold, and the note
-        summary = summary_table(results, n_reps=args.bootstrap_reps)
+        # one row per (gate, arm, task_type, corpus): means with CIs,
+        # retrieval lift (N/A on strict T2), lift on any-gold, and the note
+        summary = gate_summary(results, result_gates, n_reps=args.bootstrap_reps)
         summary.to_parquet(out_dir / "summary.parquet", index=False)
         report["summary_rows"] = len(summary)
         for _, s in summary[summary.task_type == "T2_localization"].iterrows():
-            print(f"[m1] T2 {s.arm:7s} mean_tsr={s.mean_tsr:.2f} lift={s.retrieval_lift:.3g} "
-                  f"lift_any_gold={s.retrieval_lift_any_gold:.3g}", flush=True)
+            print(f"[m1] T2 {s.gate:18s} {s.arm:7s} n={s.n_tasks} mean_tsr={s.mean_tsr:.2f} "
+                  f"lift={s.retrieval_lift:.3g} lift_any_gold={s.retrieval_lift_any_gold:.3g}", flush=True)
     if arm1_diag:
         from harness.scoring.arm1_t2_diagnostic import verdict
         (out_dir / "arm1_t2_diagnostic.json").write_text(
