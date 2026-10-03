@@ -180,7 +180,7 @@ def test_kaggle_runner_writes_summary_wall_time_and_diagnostic(tmp_path, monkeyp
     summary = pd.read_parquet(tmp_path / "summary.parquet")
     t2 = summary[summary.task_type == "T2_localization"]
     assert {"retrieval_lift", "retrieval_lift_any_gold", "retrieval_lift_note"} <= set(summary.columns)
-    assert set(t2.arm) == {"arm0", "arm1", "arm5", "oracle"}
+    assert set(t2.arm) == set(C.ACTIVE_ARMS)                    # every implemented arm (M2: + arm2)
     diag = json.loads((tmp_path / "arm1_t2_diagnostic.json").read_text())
     assert len(diag["records"]) == 3 and diag["verdict"]          # synthetic T2 + 2 real T2 tasks
     assert report["arm1_t2_diagnostic"] == diag["verdict"]
