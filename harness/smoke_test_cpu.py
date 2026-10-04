@@ -18,6 +18,10 @@ Checks
                             embeds.
  3b. arm2_packing          Arm 2 packs 5 real FastAPI T2 tasks within 13,000
                             tokens; every full chunk and stub compiles.
+ 3c. arm3_lsp_ready         Arm 3: pyright-langserver on FastAPI is ready
+                            within 120 s and its >= 5 workspace/symbol probes
+                            return >= 1 symbol; one real task retrieves within
+                            budget. BLOCKED when pyright-langserver is absent.
  4. arm5_trimming           a PRISM output over 13,000 harness tokens is
                             trimmed from the lowest rank to <= 13,000.
  5. tokenizer_parity        HF tokenizer vs a (mocked) llama-server
@@ -50,7 +54,7 @@ import traceback
 from harness import config as C
 
 FASTAPI_FILE = "fastapi/dependencies/utils.py"
-NETWORK_HINTS = ("ConnectError", "ConnectionError", "LocalEntryNotFoundError", "OSError", "HTTPError",
+NETWORK_HINTS = ("pyright-langserver not found", "ConnectError", "ConnectionError", "LocalEntryNotFoundError", "OSError", "HTTPError",
                  "huggingface", "Max retries", "proxy", "403", "offline", "resolve", "Repository Not Found",
                  "We couldn't connect")
 
@@ -142,6 +146,32 @@ def check_arm2_packing(tok):
     ok = worst <= C.RETRIEVAL_BUDGET and errors == 0 and n_items > 0
     return ok, (f"5 tasks: max packed {worst} tokens (budget {C.RETRIEVAL_BUDGET}); {n_items} items "
                 f"({n_full} full, {n_stub} stubs), {errors} compile errors")
+
+
+def check_arm3_lsp_ready(tok):
+    """Arm 3 reaches readiness on FastAPI within ARM3_READY_TIMEOUT_S, at
+    least 5 probes return at least 1 symbol in total, and one real T2 task
+    retrieves hover/outline items within budget. The editable-install check
+    follows ARM3_REQUIRE_EDITABLE_INSTALL (on unless the environment opts out)."""
+    from harness.arms.arm3_lsp import Arm3PyrightLSP
+    from harness.scoring.fairness import verify_ranking
+    from harness.tasks.loaders import load_tasks
+    root = _fastapi_root()
+    arm = Arm3PyrightLSP(tokenizer=tok)
+    try:
+        arm.index(root, {})
+        ready = arm.ready
+        assert ready is not None
+        task = load_tasks("fastapi", repo_root=root, limit=1)[0]
+        ctx = arm.retrieve(task.query, task.seed_dict())
+        verify_ranking(ctx.items)
+    finally:
+        arm.close()
+    ok = (ready.seconds < C.ARM3_READY_TIMEOUT_S and len(ready.probes) >= 5 and ready.total_probe_results >= 1
+          and 0 < ctx.total_tokens <= C.RETRIEVAL_BUDGET)
+    return ok, (f"ready in {ready.seconds:.1f}s ({ready.source_files} files, {ready.rounds} probe rounds); probes "
+                f"{ready.probes}; {task.task_id}: {len(ctx.items)} items, {ctx.total_tokens} tokens; editable-install "
+                f"check {'on' if arm.require_editable else 'off'}")
 
 
 def check_arm5_trimming(tok):
@@ -325,6 +355,7 @@ CHECKS = [
     ("arm1_onnx_reranker", check_arm1_onnx_reranker),
     ("arm1_dense_encoder", check_arm1_dense_encoder),
     ("arm2_packing", check_arm2_packing),
+    ("arm3_lsp_ready", check_arm3_lsp_ready),
     ("arm5_trimming", check_arm5_trimming),
     ("tokenizer_parity", check_tokenizer_parity),
     ("scorer_dispatch", check_scorer_dispatch),

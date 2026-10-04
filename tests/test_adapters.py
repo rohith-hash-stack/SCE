@@ -46,7 +46,7 @@ def _raw(arm, task, items, budget=13_000, meta=None):
 def test_seven_adapters_registered_and_stubs_point_to_milestones():
     assert set(ADAPTERS) == {"arm0", "arm1", "arm2", "arm3", "arm4", "arm5", "oracle"}
     t = _task()
-    for arm, ms in (("arm3", "M2"), ("arm4", "M3")):          # arm2: real since M2
+    for arm, ms in (("arm4", "M3"),):                          # arm2, arm3: real since M2
         with pytest.raises(NotImplementedError, match=ms):
             adapt(arm, {}, t)
 

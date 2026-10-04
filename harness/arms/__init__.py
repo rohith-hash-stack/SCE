@@ -1,5 +1,5 @@
-"""Arm registry. `build_arm(arm_id, **kw)` constructs any arm; Arms 2/3/4 are
-M2/M3 stubs whose methods raise NotImplementedError."""
+"""Arm registry. `build_arm(arm_id, **kw)` constructs any arm; Arm 4 is an
+M3 stub whose methods raise NotImplementedError."""
 from __future__ import annotations
 
 from harness.arms.arm0_parametric import Arm0Parametric

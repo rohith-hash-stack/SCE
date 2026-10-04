@@ -194,8 +194,16 @@ def adapt_arm2_priompt(raw: dict, task) -> tuple[DeliveredContext, NormalizedAns
     return ctx, _answer("arm2", task, raw["completion"])
 
 
-def adapt_arm3_lsp(raw: dict, task):
-    raise NotImplementedError("Arm 3 (Pyright LSP) adapter arrives in M2")
+def adapt_arm3_lsp(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
+    """Hovers (`lsp_hover`) and file outlines (`lsp_symbol`) from at most
+    two LSP hops around the seed symbol; nothing else is ever delivered."""
+    ctx = _context(raw, "arm3", task, {"lsp_hover", "lsp_symbol"})
+    for key in ("hop1_definitions", "hop2_files", "ready"):
+        if key not in ctx.build_meta:
+            raise ValueError(f"arm3 bundle missing build_meta[{key!r}]")
+    if any(int(it.provenance.get("hop", 0)) > 2 for it in ctx.items):
+        raise ValueError("arm3 delivered an item from beyond hop 2")
+    return ctx, _answer("arm3", task, raw["completion"])
 
 
 def adapt_arm4_agent(raw: dict, task):

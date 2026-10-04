@@ -26,7 +26,7 @@ def test_config_envelope_and_arms():
     assert C.NOISE_SWEEP_ENABLED is False
     assert set(C.FIDELITY) == set(C.ARM_IDS)
     assert C.FIDELITY["arm1"] is C.FidelityGrade.HIGH and C.FIDELITY["arm4"] is C.FidelityGrade.MEDIUM_HIGH
-    assert set(C.ACTIVE_ARMS) == {"arm0", "arm1", "arm2", "arm5", "oracle"}
+    assert set(C.ACTIVE_ARMS) == {"arm0", "arm1", "arm2", "arm3", "arm5", "oracle"}
 
 
 # ---- Step 2: arms/base.py ----

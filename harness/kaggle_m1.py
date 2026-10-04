@@ -253,6 +253,8 @@ def _run(args, out_dir: Path, report: dict) -> int:
     _index("arm1", lambda: build_arm("arm1", tokenizer=tok, embedder=emb, reranker=rr), {"repo_id": "fastapi"})
     if "arm2" in C.ACTIVE_ARMS:
         _index("arm2", lambda: build_arm("arm2", tokenizer=tok), {})
+    if "arm3" in C.ACTIVE_ARMS:   # needs pyright-langserver and the editable install (charter)
+        _index("arm3", lambda: build_arm("arm3", tokenizer=tok), {})
     report["index_failures"] = index_failures
     arm_order = [a for a in C.ACTIVE_ARMS if a in arms]
 

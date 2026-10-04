@@ -1,8 +1,8 @@
 """Every constant the harness uses. Nothing else in `harness/` hard-codes a
 threshold, a budget, a path or a model name; it reads it from here.
 
-M1 scope: Arms 0, 1, 5 and the Oracle are real; Arms 2, 3, 4 are declared
-(with their fidelity grades) but stubbed until M2/M3.
+Arms 0, 1, 5 and the Oracle are real since M1, Arms 2 and 3 since M2; Arm 4
+is declared (with its fidelity grade) but stubbed until M3.
 """
 from __future__ import annotations
 
@@ -90,9 +90,9 @@ FIDELITY = {
     "arm5": FidelityGrade.HIGH,
     "oracle": FidelityGrade.CEILING,
 }
-#: Arms implemented so far (M1: 0, 1, 5, oracle; M2: 2). The others raise NotImplementedError.
-ACTIVE_ARMS = ["arm0", "arm1", "arm2", "arm5", "oracle"]
-STUB_MILESTONE = {"arm3": "M2", "arm4": "M3"}
+#: Arms implemented so far (M1: 0, 1, 5, oracle; M2: 2, 3). The others raise NotImplementedError.
+ACTIVE_ARMS = ["arm0", "arm1", "arm2", "arm3", "arm5", "oracle"]
+STUB_MILESTONE = {"arm4": "M3"}
 #: Arms 2 and 3 are Python-only (Python tree-sitter splitter; Pyright).
 PYTHON_ONLY_ARMS = {"arm2", "arm3"}
 
@@ -162,6 +162,20 @@ PRIOMPT_STUB_PRIORITY_BONUS = 500
 #: (inferred, per Priompt's own guidance on long files: priority falls with
 #: distance from the point of interest).
 PRIOMPT_SEED_PRIORITY_FLOOR = 501
+
+
+# --------------------------------------------------------------------------
+# Arm 3 — Pyright LSP (M2)
+# --------------------------------------------------------------------------
+#: Readiness (handshake to stable workspace/symbol probes) must finish within this.
+ARM3_READY_TIMEOUT_S = 120.0
+#: Distinct referenced names in the seed symbol's body whose definition is
+#: requested (hop 1); bounds the LSP round trips per task.
+ARM3_MAX_DEFINITIONS = 40
+#: Charter step 1: the repository must be pip-installed editable (its
+#: top-level module imports from the checkout) before Pyright launches.
+#: Local development without the install sets HARNESS_ARM3_REQUIRE_EDITABLE=0.
+ARM3_REQUIRE_EDITABLE_INSTALL = os.environ.get("HARNESS_ARM3_REQUIRE_EDITABLE", "1") == "1"
 
 
 # --------------------------------------------------------------------------

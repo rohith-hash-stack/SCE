@@ -169,10 +169,15 @@ def test_arm1_t2_diagnostic_separates_mapping_bug_from_retrieval_failure(tmp_pat
 
 def test_kaggle_runner_writes_summary_wall_time_and_diagnostic(tmp_path, monkeypatch):
     import os
+    import shutil
     if not os.path.isdir("/home/user/SCE/.benchmarks/corpora/fastapi"):
         pytest.skip("FastAPI checkout missing")
+    if shutil.which("pyright-langserver") is None:
+        pytest.skip("pyright-langserver missing (Arm 3)")
     from harness import kaggle_m1
     monkeypatch.setattr(C, "ARM1_T2_DIAGNOSTIC", True)
+    # FastAPI is not pip-installed here; Pyright resolves it from the workspace root
+    monkeypatch.setattr(C, "ARM3_REQUIRE_EDITABLE_INSTALL", False)
     code = kaggle_m1.main(["--dry-run", "--fake-encoders", "--real-tasks", "2", "--bootstrap-reps", "50",
                            "--out", str(tmp_path)])
     report = json.loads((tmp_path / "gate_report.json").read_text())
@@ -180,7 +185,7 @@ def test_kaggle_runner_writes_summary_wall_time_and_diagnostic(tmp_path, monkeyp
     summary = pd.read_parquet(tmp_path / "summary.parquet")
     t2 = summary[summary.task_type == "T2_localization"]
     assert {"retrieval_lift", "retrieval_lift_any_gold", "retrieval_lift_note"} <= set(summary.columns)
-    assert set(t2.arm) == set(C.ACTIVE_ARMS)                    # every implemented arm (M2: + arm2)
+    assert set(t2.arm) == set(C.ACTIVE_ARMS)                    # every implemented arm (M2: + arm2, arm3)
     diag = json.loads((tmp_path / "arm1_t2_diagnostic.json").read_text())
     assert len(diag["records"]) == 3 and diag["verdict"]          # synthetic T2 + 2 real T2 tasks
     assert report["arm1_t2_diagnostic"] == diag["verdict"]
