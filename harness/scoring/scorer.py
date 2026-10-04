@@ -117,6 +117,10 @@ class ScoreResult:
     generation_capped: bool = False
     #: symbol mentions minus distinct symbols in the answer (repetition loops)
     repetition_count: int = 0
+    #: accounting only (see the registry): unique delivered symbols resolved
+    #: (body / stub / hover / oracle) vs. named only (outline / definition)
+    delivered_symbols_resolved: int = 0
+    delivered_symbols_named_only: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -352,6 +356,8 @@ def score(task, ctx: DeliveredContext, ans: NormalizedAnswer, *, judge: Judge | 
         finish_reason=ans.finish_reason,
         generation_capped=ans.finish_reason == "length",
         repetition_count=ans.repetition_count,
+        delivered_symbols_resolved=len(ctx.delivered_symbols_resolved),
+        delivered_symbols_named_only=len(ctx.delivered_symbols_named_only),
     )
     _validate(result)
     return result

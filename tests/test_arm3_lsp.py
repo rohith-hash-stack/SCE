@@ -230,14 +230,16 @@ def test_adapter_accepts_lsp_items_and_rejects_others():
     from types import SimpleNamespace
     task = SimpleNamespace(task_id="t1", task_type="T2_localization")
     meta = {"hop1_definitions": 1, "hop2_files": 1, "ready": {}}
-    ok = [DeliveredItem("f.py:1", "h", 1, 1, "lsp_hover", ["m.f"], {"hop": 1}),
-          DeliveredItem("g.py#outline", "o", 1, 2, "lsp_symbol", ["m.g"], {"hop": 2})]
+    ok = [DeliveredItem("f.py:1", "h", 1, 1, "lsp_hover", ["m.f"], {"hop": 1, "lsp_method": "textDocument/hover"}),
+          DeliveredItem("g.py#outline", "o", 1, 2, "lsp_symbol", ["m.g"],
+                        {"hop": 2, "lsp_method": "textDocument/documentSymbol"})]
     ctx, ans = adapt("arm3", _raw(ok, meta), task)
     assert ans.answer_symbols == ["a.b"] and len(ctx.items) == 2
     with pytest.raises(ValueError, match="kinds"):
         adapt("arm3", _raw([DeliveredItem("x", "c", 1, 1, "code_chunk", [])], meta), task)
     with pytest.raises(ValueError, match="hop 2"):
-        adapt("arm3", _raw([DeliveredItem("x", "c", 1, 1, "lsp_hover", [], {"hop": 3})], meta), task)
+        adapt("arm3", _raw([DeliveredItem("x", "c", 1, 1, "lsp_hover", [], {"hop": 3, "lsp_method": "textDocument/hover"})],
+                           meta), task)
     with pytest.raises(ValueError, match="ready"):
         adapt("arm3", _raw(ok, {"hop1_definitions": 1, "hop2_files": 1}), task)
 
@@ -275,6 +277,7 @@ def test_real_two_hop_retrieval(fastapi_arm):
     assert 0 < ctx.total_tokens <= C.RETRIEVAL_BUDGET
     assert {it.kind for it in ctx.items} <= {"lsp_hover", "lsp_symbol"}
     assert {int(it.provenance["hop"]) for it in ctx.items} <= {1, 2}
+    assert {it.provenance["lsp_method"] for it in ctx.items} == {"textDocument/hover", "textDocument/documentSymbol"}
     seed_uri = pc.path_to_uri(os.path.join(FASTAPI, "fastapi/dependencies/utils.py"))
     # hop 1: the seed hover first, naming the seed; then the seed outline
     assert ctx.items[0].kind == "lsp_hover" and ctx.items[0].symbols == [SEED["seed_symbol"]]

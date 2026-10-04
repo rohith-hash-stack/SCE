@@ -333,11 +333,12 @@ class Arm3PyrightLSP(RetrievalArm):
             text = self._hover(seed_path, pos["line"], pos["character"], lat)
             fq, _ = self.fqn_at(seed_path, pos["line"], lat)
             if text:
-                cands.append(self._cand(f"{rel}:{pos['line'] + 1}", fq, text, "lsp_hover", [fq], 1, "seed"))
+                cands.append(self._cand(f"{rel}:{pos['line'] + 1}", fq, text, "lsp_hover", [fq], 1, "seed",
+                                        "textDocument/hover"))
         body, fqns = self._outline_item(seed_path, lat, members=True)
         if body:
             cands.append(self._cand(f"{rel}#outline", self._module_of(seed_path) + " outline", body, "lsp_symbol",
-                                    fqns, 1, "seed_outline"))
+                                    fqns, 1, "seed_outline", "textDocument/documentSymbol"))
         # definitions at the references in the seed symbol's body
         try:
             tree = ast.parse("\n".join(self._lines(seed_path)))
@@ -384,7 +385,7 @@ class Arm3PyrightLSP(RetrievalArm):
             if body:
                 cands.append(self._cand(f"{os.path.relpath(path, self.repo_root)}#outline",
                                         self._module_of(path) + " outline", body, "lsp_symbol", fqns, 2,
-                                        "hop2_outline"))
+                                        "hop2_outline", "textDocument/documentSymbol"))
 
     def _def_hover(self, loc: dict, cands: list[dict], lat: dict, hop: int, origin: str) -> None:
         path, line, char = loc["path"], loc["line"], loc["character"]
@@ -392,12 +393,15 @@ class Arm3PyrightLSP(RetrievalArm):
         fq, _ = self.fqn_at(path, line, lat)
         if text:
             cands.append(self._cand(f"{os.path.relpath(path, self.repo_root)}:{line + 1}", fq, text, "lsp_hover",
-                                    [fq], hop, origin))
+                                    [fq], hop, origin, "textDocument/hover"))
 
     @staticmethod
-    def _cand(source_id: str, label: str, body: str, kind: str, symbols: list[str], hop: int, origin: str) -> dict:
+    def _cand(source_id: str, label: str, body: str, kind: str, symbols: list[str], hop: int, origin: str,
+              lsp_method: str) -> dict:
+        """`lsp_method`: the LSP request whose result is the item's content
+        (a definition target's item is the hover at that target)."""
         return {"source_id": source_id, "content": f"{item_header(source_id, label)}\n{body}", "kind": kind,
-                "symbols": symbols, "hop": hop, "origin": origin}
+                "symbols": symbols, "hop": hop, "origin": origin, "lsp_method": lsp_method}
 
     def _pack(self, cands: list[dict]) -> list[DeliveredItem]:
         """Greedy in rank order: each candidate that still fits the budget is
@@ -410,7 +414,7 @@ class Arm3PyrightLSP(RetrievalArm):
                 continue
             used += n
             items.append(DeliveredItem(c["source_id"], c["content"], n, len(items) + 1, c["kind"], c["symbols"],
-                                       {"hop": c["hop"], "origin": c["origin"]}))
+                                       {"hop": c["hop"], "origin": c["origin"], "lsp_method": c["lsp_method"]}))
         return items
 
     def build_prompt(self, ctx: DeliveredContext, tokenizer=None) -> str:

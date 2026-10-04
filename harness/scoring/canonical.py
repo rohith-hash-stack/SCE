@@ -12,6 +12,9 @@ Rules:
    Cross-engine metrics read only these.
 3. Arm-specific diagnostics go in `provenance` / `build_meta`, never in new
    top-level fields.
+4. Every item carries `symbol_provenance`: how the symbols it names reached
+   the model (set by each arm's adapter). Accounting only: no primary
+   metric reads it.
 """
 from __future__ import annotations
 
@@ -27,6 +30,16 @@ ItemKind = Literal[
 ]
 ExtractionMethod = Literal["answer_tool", "code_block", "plain_text", "prism_final"]
 ITEM_KINDS = frozenset(get_args(ItemKind))
+#: How an item's symbols reached the model: with their code or a resolved
+#: description ("body", "signature_stub", "hover", "oracle"), by name and
+#: location only ("documentSymbol", "definition"), or as an agent's tool
+#: output ("tool_result"). "" = not yet set (the adapter sets it).
+SymbolProvenance = Literal["hover", "definition", "documentSymbol", "signature_stub", "body", "tool_result", "oracle"]
+SYMBOL_PROVENANCES = frozenset(get_args(SymbolProvenance))
+#: delivered_symbols_resolved counts symbols with one of these ...
+RESOLVED_PROVENANCES = frozenset({"hover", "body", "signature_stub", "oracle"})
+#: ... delivered_symbols_named_only those delivered only with one of these.
+NAMED_ONLY_PROVENANCES = frozenset({"documentSymbol", "definition"})
 EXTRACTION_METHODS = frozenset(get_args(ExtractionMethod))
 
 
@@ -39,10 +52,13 @@ class DeliveredItem:
     kind: ItemKind
     symbols: list[str]          # FQNs referenced (used for CPI)
     provenance: dict = field(default_factory=dict)
+    symbol_provenance: str = ""  # a SymbolProvenance; "" until the adapter sets it
 
     def __post_init__(self) -> None:
         if self.kind not in ITEM_KINDS:
             raise ValueError(f"unknown item kind {self.kind!r}")
+        if self.symbol_provenance and self.symbol_provenance not in SYMBOL_PROVENANCES:
+            raise ValueError(f"unknown symbol_provenance {self.symbol_provenance!r}")
         if self.token_count < 0:
             raise ValueError("token_count must be >= 0")
 
@@ -62,6 +78,24 @@ class DeliveredContext:
         for item in self.items:
             out.update(item.symbols)
         return out
+
+    def symbols_by_provenance(self, provenances: frozenset[str]) -> set[str]:
+        out: set[str] = set()
+        for item in self.items:
+            if item.symbol_provenance in provenances:
+                out.update(item.symbols)
+        return out
+
+    @property
+    def delivered_symbols_resolved(self) -> set[str]:
+        """Symbols delivered with their code or a resolved description."""
+        return self.symbols_by_provenance(RESOLVED_PROVENANCES)
+
+    @property
+    def delivered_symbols_named_only(self) -> set[str]:
+        """Symbols delivered only by name and location (an outline entry, a
+        definition location): never also resolved by another item."""
+        return self.symbols_by_provenance(NAMED_ONLY_PROVENANCES) - self.delivered_symbols_resolved
 
     def ranked_items(self) -> list[DeliveredItem]:
         return sorted(self.items, key=lambda it: it.rank)

@@ -149,7 +149,11 @@ def test_retrieve_never_exceeds_budget_and_adapts(budget):
     from harness.tasks.synthetic import synthetic_tasks
     task = synthetic_tasks(FIXTURE)[1].model_copy(update={"task_id": "t"})
     c2, ans = adapt("arm2", raw, task)
-    assert c2.items == ctx.items and ans.extraction_success
+    from dataclasses import replace
+    # the adapter only adds symbol_provenance (accounting); the delivered items are otherwise unchanged
+    assert [replace(i, symbol_provenance="") for i in c2.items] == ctx.items and ans.extraction_success
+    assert [i.symbol_provenance for i in c2.items] == [
+        "body" if i.kind == "code_chunk" else "signature_stub" for i in ctx.items]
 
 
 def test_adapter_rejects_bundle_without_priompt_meta():

@@ -34,7 +34,8 @@ EFFICIENCY = ["budget_tokens", "total_tokens", "budget_utilization",
               "l_retrieve_ms", "l_generate_ms", "l_e2e_ms"]
 DIAGNOSTICS = ["extraction_success", "over_budget", "turn_count", "digest_safety_loss", "tool_fpr",
                "verification_lift", "recovery_rate", "total_tool_output_tokens", "hallucination_breakdown_json",
-               "finish_reason", "generation_capped", "repetition_count"]
+               "finish_reason", "generation_capped", "repetition_count",
+               "delivered_symbols_resolved", "delivered_symbols_named_only"]
 COLUMNS = ID_COLUMNS + UNIVERSAL + TYPE_SPECIFIC + EFFICIENCY + DIAGNOSTICS
 
 #: Column-name fragments that would indicate a composite / cross-type score.

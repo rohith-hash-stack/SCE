@@ -36,6 +36,13 @@ METRICS: dict[str, dict] = {
     "tsr":                    {"range": [0, 1], "higher_is_better": True, "where": "row"},
     "hallucination_rate":     {"range": [0, 1], "higher_is_better": False, "where": "row"},
     "budget_utilization":     {"range": [0, None], "higher_is_better": False, "where": "row"},
+    #: Symbol accounting (counts, per cell; no direction, and read by no
+    #: primary metric). Resolved: unique symbols delivered with symbol_provenance
+    #: hover / body / signature_stub / oracle. Named-only: unique symbols
+    #: delivered only as documentSymbol / definition (name and location), never
+    #: also resolved. Makes Arm 3's outline symbols comparable across arms.
+    "delivered_symbols_resolved":   {"range": [0, None], "where": "row"},
+    "delivered_symbols_named_only": {"range": [0, None], "where": "row"},
     # Type-specific
     "faithfulness":           {"type": "T1", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},
     "answer_relevancy":       {"type": "T1", "range": [0, 1], "higher_is_better": True, "where": "task_specific"},

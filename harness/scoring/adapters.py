@@ -169,6 +169,40 @@ def _context(raw: dict, arm: str, task, allowed_kinds: set[str]) -> DeliveredCon
 
 
 # --------------------------------------------------------------------------
+# symbol provenance (accounting only; set here, by each arm's adapter)
+# --------------------------------------------------------------------------
+#: item kind -> symbol_provenance, for the arms whose kind decides it
+KIND_PROVENANCE = {"code_chunk": "body", "signature_stub": "signature_stub", "oracle_truth": "oracle",
+                   "tool_result_grep": "tool_result", "tool_result_read": "tool_result",
+                   "tool_result_digest": "tool_result"}
+#: Arm 3: the LSP method that produced the item (provenance["lsp_method"])
+LSP_METHOD_PROVENANCE = {"textDocument/hover": "hover", "textDocument/definition": "definition",
+                         "textDocument/documentSymbol": "documentSymbol"}
+
+
+def _with_symbol_provenance(ctx: DeliveredContext, of: Callable[[DeliveredItem], str]) -> DeliveredContext:
+    items = []
+    for it in ctx.items:
+        value = of(it)
+        if it.symbol_provenance and it.symbol_provenance != value:
+            raise ValueError(f"{ctx.arm}/{it.source_id}: symbol_provenance {it.symbol_provenance!r}, "
+                             f"expected {value!r}")
+        items.append(replace(it, symbol_provenance=value))
+    return replace(ctx, items=items)
+
+
+def _by_kind(it: DeliveredItem) -> str:
+    return KIND_PROVENANCE[str(it.kind)]
+
+
+def _by_lsp_method(it: DeliveredItem) -> str:
+    method = it.provenance.get("lsp_method")
+    if method not in LSP_METHOD_PROVENANCE:
+        raise ValueError(f"arm3/{it.source_id}: unknown lsp_method {method!r}")
+    return LSP_METHOD_PROVENANCE[method]
+
+
+# --------------------------------------------------------------------------
 # the seven adapters
 # --------------------------------------------------------------------------
 def adapt_arm0(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
@@ -179,7 +213,7 @@ def adapt_arm0(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
 
 
 def adapt_arm1_rag(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
-    ctx = _context(raw, "arm1", task, {"code_chunk"})
+    ctx = _with_symbol_provenance(_context(raw, "arm1", task, {"code_chunk"}), _by_kind)     # "body"
     return ctx, _answer("arm1", task, raw["completion"])
 
 
@@ -187,7 +221,7 @@ def adapt_arm2_priompt(raw: dict, task) -> tuple[DeliveredContext, NormalizedAns
     """Components above the Priompt cutoff: full chunks (`code_chunk`) and
     stubs that replaced their bodies (`signature_stub`). Chunks below every
     cutoff were never delivered and are not here."""
-    ctx = _context(raw, "arm2", task, {"code_chunk", "signature_stub"})
+    ctx = _with_symbol_provenance(_context(raw, "arm2", task, {"code_chunk", "signature_stub"}), _by_kind)
     for key in ("cutoff", "n_full", "n_stub", "n_dropped"):
         if key not in ctx.build_meta:
             raise ValueError(f"arm2 bundle missing build_meta[{key!r}]")
@@ -197,7 +231,7 @@ def adapt_arm2_priompt(raw: dict, task) -> tuple[DeliveredContext, NormalizedAns
 def adapt_arm3_lsp(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
     """Hovers (`lsp_hover`) and file outlines (`lsp_symbol`) from at most
     two LSP hops around the seed symbol; nothing else is ever delivered."""
-    ctx = _context(raw, "arm3", task, {"lsp_hover", "lsp_symbol"})
+    ctx = _with_symbol_provenance(_context(raw, "arm3", task, {"lsp_hover", "lsp_symbol"}), _by_lsp_method)
     for key in ("hop1_definitions", "hop2_files", "ready"):
         if key not in ctx.build_meta:
             raise ValueError(f"arm3 bundle missing build_meta[{key!r}]")
@@ -207,11 +241,12 @@ def adapt_arm3_lsp(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]
 
 
 def adapt_arm4_agent(raw: dict, task):
+    # M3: tool_result_* items get symbol_provenance "tool_result" (KIND_PROVENANCE)
     raise NotImplementedError("Arm 4 (agent loop) adapter arrives in M3")
 
 
 def adapt_arm5_prism(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
-    ctx = _context(raw, "arm5", task, {"code_chunk", "signature_stub"})
+    ctx = _with_symbol_provenance(_context(raw, "arm5", task, {"code_chunk", "signature_stub"}), _by_kind)
     for key in ("turn_count", "turn2b_triggered"):
         if key not in ctx.build_meta:
             raise ValueError(f"arm5 bundle missing build_meta[{key!r}]")
@@ -219,7 +254,7 @@ def adapt_arm5_prism(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswe
 
 
 def adapt_oracle(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
-    ctx = _context(raw, "oracle", task, {"oracle_truth"})
+    ctx = _with_symbol_provenance(_context(raw, "oracle", task, {"oracle_truth"}), _by_kind)   # "oracle"
     return ctx, _answer("oracle", task, raw["completion"])
 
 

@@ -151,7 +151,11 @@ on the 5 FastAPI T2 tasks with the Qwen tokenizer.
    - then repeat the five probes until two consecutive rounds return
      identical counts.
 
-   The 120 s limit and the all-zero abort are kept. On FastAPI: ready in
+   The 120 s limit and the all-zero abort are kept. Pyright >= 1.1.400 does
+   not emit serverStatus quiescent=true; the arm falls back to waiting for
+   the 'Found N source files' log line, then requires two consecutive probe
+   rounds to agree before retrieval starts. The 120 s timeout and
+   abort-on-empty-probes guards are preserved. On FastAPI: ready in
    6–7 s, 1,129 files, 2 probe rounds, probe counts
    `{fastapi: 9, __init__: 108, ...}`.
 2. **Editable install.** Charter step 1 is enforced as a check, not
@@ -163,12 +167,39 @@ on the 5 FastAPI T2 tasks with the Qwen tokenizer.
    FastAPI is deliberately not installed (pdm-backend would write
    `.pdm-build` into the corpus checkout), opts out with
    `HARNESS_ARM3_REQUIRE_EDITABLE=0`. Pyright still resolves `fastapi.*`
-   from the workspace root there.
+   from the workspace root there. Approved as checked-not-performed: the harness never
+   modifies the environment as a side effect of indexing; the install is
+   the Kaggle script's job, and `HARNESS_ARM3_REQUIRE_EDITABLE=0` is the
+   local escape hatch only.
 3. **Outline items name every listed symbol.** This is what the outline
    delivers to the model, but it means `delivered_symbols` (CPI,
    cleanliness, retrieval diagnostics) counts 18 to 153 outline names per
    task. On the 5 FastAPI T2 tasks every gold symbol is among the delivered
    symbols, but only 18 of 20 are named by a hover.
+
+   **Accounting fix (approved).** Every delivered item now carries
+   `symbol_provenance`, set by its arm's adapter:
+
+   | Arm | `symbol_provenance` |
+   |---|---|
+   | Arm 1 | `body` |
+   | Arm 2 | `body` (full chunk) or `signature_stub` |
+   | Arm 3 | the LSP method whose result is the item: `hover` or `documentSymbol` (`definition` is reserved; every definition target is delivered as the hover at that target) |
+   | Arm 4 (M3) | `tool_result` |
+   | Arm 5 | `body` or `signature_stub` |
+   | Oracle | `oracle` |
+
+   Two per-cell metrics, in the registry, the Parquet schema and the
+   summary table (mean and CI), sit beside CPI:
+   - `delivered_symbols_resolved`: unique symbols delivered with provenance
+     `hover`, `body`, `signature_stub` or `oracle`;
+   - `delivered_symbols_named_only`: unique symbols delivered only with
+     `documentSymbol` or `definition`, never also resolved by another
+     item.
+
+   CPI, cleanliness, `uniform_cpi` and every other primary metric are
+   unchanged and do not read the field. Arm 3's mechanism is unchanged; it
+   only records `lsp_method` in each item's provenance.
 
 ### Arm 3 verification (local)
 
