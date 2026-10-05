@@ -165,6 +165,20 @@ PRIOMPT_SEED_PRIORITY_FLOOR = 501
 
 
 # --------------------------------------------------------------------------
+# Arm 5 — PRISM manifest ablation (scaffold; OFF)
+# --------------------------------------------------------------------------
+#: When True, the harness filters PRISM's Turn-1 candidate manifest before
+#: the Turn-1 call: downstream symbols farther than
+#: PRISM_MANIFEST_STRICT_MAX_HOPS from the seed (PRISM's own weighted
+#: distance, the one its manifest's max_hops=3.0 bound uses) are dropped;
+#: the seed and PRISM's upstream callers are kept. Applied in the harness
+#: wrapper, not in PRISM. No gold-based exception: arms never see gold.
+#: M3 ablation lever; do not enable outside it.
+PRISM_MANIFEST_STRICT: bool = False
+PRISM_MANIFEST_STRICT_MAX_HOPS = 2.0
+
+
+# --------------------------------------------------------------------------
 # Arm 3 — Pyright LSP (M2)
 # --------------------------------------------------------------------------
 #: Readiness (handshake to stable workspace/symbol probes) must finish within this.

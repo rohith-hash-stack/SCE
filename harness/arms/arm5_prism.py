@@ -36,6 +36,26 @@ from harness.scoring.latency import timed
 TURN1_MAX_TOKENS = 1024
 
 
+def strict_manifest(manifest: str, universe: set[str], seed: str, distances: dict[str, float],
+                    max_hops: float) -> tuple[str, set[str]]:
+    """PRISM's Turn-1 manifest without the downstream symbols farther than
+    `max_hops` from `seed` (`distances`: PRISM's downstream distance map).
+    The seed is always kept; a symbol absent from `distances` is one of
+    PRISM's upstream callers (already bounded by PRISM) and is kept too.
+    Manifest lines are `qualified_name|role|...`; the wrapper lines stay."""
+    keep = {s for s in universe if s == seed or s not in distances or distances[s] <= max_hops}
+    lines = manifest.split("\n")
+    body = [ln for ln in lines[1:-1] if ln.split("|", 1)[0] in keep]
+    return "\n".join([lines[0], *body, lines[-1]]), keep
+
+
+def _downstream_distances(engine, seed: str) -> dict[str, float]:
+    """PRISM's own weighted downstream distances, to the manifest's own horizon."""
+    from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS
+    from prism.traversal.continuous_dijkstra import compute_topological_distances
+    return compute_topological_distances(engine.builder, seed, d_max=CANDIDATE_INDEX_MAX_HOPS)
+
+
 class Arm5Prism(RetrievalArm):
     arm_id = "arm5"
 
@@ -91,7 +111,8 @@ class Arm5Prism(RetrievalArm):
         anchor = seed.get("seed_symbol")
         root_imports = list(seed.get("root_imports") or [])
         meta = {**self.fidelity_meta(), "query": query, "task_type": seed.get("task_type"), "anchor": anchor,
-                "turn2b_triggered": False, "turn_count": 1, "over_budget": False, "ranking_method": "prism_order"}
+                "turn2b_triggered": False, "turn_count": 1, "over_budget": False, "ranking_method": "prism_order",
+                "prism_manifest_strict": C.PRISM_MANIFEST_STRICT}
         if not anchor:
             meta.update({"no_seed": True, "latency_ms": lat})
             return DeliveredContext("arm5", seed["task_id"], [], 0, self.budget, meta)
@@ -102,6 +123,11 @@ class Arm5Prism(RetrievalArm):
         with timed(lat, "L_retrieve"):
             with timed(lat, "L_turn1_manifest"):
                 manifest, universe = self.engine.build_candidate_manifest(anchor)
+                unfiltered = len(universe)
+                if C.PRISM_MANIFEST_STRICT:     # M3 ablation scaffold, off by default
+                    manifest, universe = strict_manifest(manifest, universe, anchor,
+                                                         _downstream_distances(self.engine, anchor),
+                                                         C.PRISM_MANIFEST_STRICT_MAX_HOPS)
             t1 = self.llm(TURN1_SYSTEM_PROMPT, _turn1_user_prompt(manifest, query), max_tokens=TURN1_MAX_TOKENS,
                           seed=llm_seed, purpose="turn1")
             requested, parsed_ok = _parse_requested_symbols(t1.text, universe)
@@ -130,7 +156,8 @@ class Arm5Prism(RetrievalArm):
 
         meta.update({
             "turn_count": len(turns) + 1,   # retrieval turns + the answer turn
-            "manifest_candidates": len(universe), "requested_symbols": list(requested),
+            "manifest_candidates": len(universe), "manifest_candidates_unfiltered": unfiltered,
+            "prism_manifest_strict": C.PRISM_MANIFEST_STRICT, "requested_symbols": list(requested),
             "turn1_parsed_ok": parsed_ok, "turn1_degenerate": degenerate,
             "external_requested": ext_requested, "skipped_hallucinated": list(skipped),
             "retrieval_turns": turns, "latency_ms": lat,
