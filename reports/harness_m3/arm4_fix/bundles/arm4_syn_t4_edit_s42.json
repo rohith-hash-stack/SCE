@@ -1,0 +1,235 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "syn_t4_edit",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"glob\": \"*.py\", \"pattern\": \"def f\\\\(\"})\ntests/test_duplicate_models_openapi.py:22:def f():",
+    "token_count": 36,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [
+     "tests.test_duplicate_models_openapi.f"
+    ],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def f\\(",
+      "glob": "*.py"
+     },
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (glob {\"pattern\": \"**/f.py\"})\nno files",
+    "token_count": 18,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "glob",
+     "args": {
+      "pattern": "**/f.py"
+     },
+     "engine_token_count": 18
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 25, \"path\": \"tests/test_duplicate_models_openapi.py\", \"start_line\": 22})\n22: def f():\n23:     return {\"c\": {}, \"d\": {\"a\": {}}}\n24: \n25: \n[lines 22-25 of 80]",
+    "token_count": 81,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "tests.test_duplicate_models_openapi.f"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "tests/test_duplicate_models_openapi.py",
+      "start_line": 22,
+      "end_line": 25
+     },
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 135,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "Change f to return 2:\n\ndef f(): return 1",
+   "task_type": "T4_edit",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def f\\\\(\", \"glob\": \"*.py\"}}</tools>\n<tools>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/f.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def f\\(",
+        "glob": "*.py"
+       }
+      },
+      {
+       "name": "glob",
+       "arguments": {
+        "pattern": "**/f.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def f\\(",
+        "glob": "*.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "glob",
+       "args": {
+        "pattern": "**/f.py"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 51,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"tests/test_duplicate_models_openapi.py\", \"start_line\": 22, \"end_line\": 25}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "tests/test_duplicate_models_openapi.py",
+        "start_line": 22,
+        "end_line": 25
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "tests/test_duplicate_models_openapi.py",
+        "start_line": 22,
+        "end_line": 25
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 42,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```python\\ndef f(): return 2\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```python\ndef f(): return 2\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 31,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     3917.794661,
+     2741.380493,
+     2087.275524
+    ],
+    "L_tool_exec": [
+     16.849978,
+     9.943935,
+     0.262977
+    ],
+    "L_retrieve": [
+     8792.754298
+    ]
+   },
+   "agent_prompt_tokens": 808,
+   "agent_answer": {
+    "text": "```python\ndef f(): return 2\n```",
+    "generation_tokens": 31,
+    "latency_seconds": 2.087161406000064,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 841,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 135,
+   "prompt_tokens": 808,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 841,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

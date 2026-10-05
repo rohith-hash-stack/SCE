@@ -1,0 +1,665 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "fastapi_t02_002_solve_dependencies_runtime_resolution",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"def solve_dependencies\"})\n572:async def solve_dependencies(:",
+    "token_count": 35,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def solve_dependencies",
+      "path": "fastapi/dependencies/utils.py"
+     },
+     "engine_token_count": 35
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 580, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 560})\n560:     return await stack.enter_async_context(cm)\n561: \n562: \n563: @dataclass\n564: class SolvedDependency:\n565:     values: Dict[str, Any]\n566:     errors: List[Any]\n567:     background_tasks: Optional[StarletteBackgroundTasks]\n568:     response: Response\n569:     dependency_cache: Dict[Tuple[Callable[..., Any], Tuple[str]], Any]\n570: \n571: \n572: async def solve_dependencies(\n573:     *,\n574:     request: Union[Request, WebSocket],\n575:     dependant: Dependant,\n576:     body: Optional[Union[Dict[str, Any], FormData]] = None,\n577:     background_tasks: Optional[StarletteBackgroundTasks] = None,\n578:     response: Optional[Response] = None,\n579:     dependency_overrides_provider: Optional[Any] = None,\n580:     dependency_cache: Optional[Dict[Tuple[Callable[..., Any], Tuple[str]], Any]] = None,\n[lines 560-580 of 1002]",
+    "token_count": 305,
+    "rank": 2,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.dependencies.utils.solve_generator",
+     "fastapi.dependencies.utils.SolvedDependency",
+     "fastapi.dependencies.utils.solve_dependencies"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/dependencies/utils.py",
+      "start_line": 560,
+      "end_line": 580
+     },
+     "engine_token_count": 305
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"await solve_dependencies\"})\n615:        solved_result = await solve_dependencies(:",
+    "token_count": 39,
+    "rank": 3,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "await solve_dependencies",
+      "path": "fastapi/dependencies/utils.py"
+     },
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.2",
+    "content": "# r3.2  (grep {\"path\": \"fastapi/routing.py\", \"pattern\": \"await solve_dependencies\"})\n292:                solved_result = await solve_dependencies(:\n372:            solved_result = await solve_dependencies(:",
+    "token_count": 51,
+    "rank": 4,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r3.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "await solve_dependencies",
+      "path": "fastapi/routing.py"
+     },
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r4.1",
+    "content": "# r4.1  (read {\"end_line\": 380, \"path\": \"fastapi/routing.py\", \"start_line\": 280})\n280:                 )\n281:                 raise validation_error from e\n282:             except HTTPException:\n283:                 # If a middleware raises an HTTPException, it should be raised again\n284:                 raise\n285:             except Exception as e:\n286:                 http_error = HTTPException(\n287:                     status_code=400, detail=\"There was an error parsing the body\"\n288:                 )\n289:                 raise http_error from e\n290:             errors: List[Any] = []\n291:             async with AsyncExitStack() as async_exit_stack:\n292:                 solved_result = await solve_dependencies(\n293:                     request=request,\n294:                     dependant=dependant,\n295:                     body=body,\n296:                     dependency_overrides_provider=dependency_overrides_provider,\n297:                     async_exit_stack=async_exit_stack,\n298:                     embed_body_fields=embed_body_fields,\n299:                 )\n300:                 errors = solved_result.errors\n301:                 if not errors:\n302:                     raw_response = await run_endpoint_function(\n303:                         dependant=dependant,\n304:                         values=solved_result.values,\n305:                         is_coroutine=is_coroutine,\n306:                     )\n307:                     if isinstance(raw_response, Response):\n308:                         if raw_response.background is None:\n309:                             raw_response.background = solved_result.background_tasks\n310:                         response = raw_response\n311:                     else:\n312:                         response_args: Dict[str, Any] = {\n313:                             \"background\": solved_result.background_tasks\n314:                         }\n315:                         # If status_code was set, use it, otherwise use the default from the\n316:                         # response class, in the case of redirect it's 307\n317:                         current_status_code = (\n318:                             status_code\n319:                             if status_code\n320:                             else solved_result.response.status_code\n321:                         )\n322:                         if current_status_code is not None:\n323:                             response_args[\"status_code\"] = current_status_code\n324:                         if solved_result.response.status_code:\n325:                             response_args[\"status_code\"] = (\n326:                                 solved_result.response.status_code\n327:                             )\n328:                         content = await serialize_response(\n329:                             field=response_field,\n330:                             response_content=raw_response,\n331:                             include=response_model_include,\n332:                             exclude=response_model_exclude,\n333:                             by_alias=response_model_by_alias,\n334:                             exclude_unset=response_model_exclude_unset,\n335:                             exclude_defaults=response_model_exclude_defaults,\n336:                             exclude_none=response_model_exclude_none,\n337:                             is_coroutine=is_coroutine,\n338:                         )\n339:                         response = actual_response_class(content, **response_args)\n340:                         if not is_body_allowed_for_status_code(response.status_code):\n341:                             response.body = b\"\"\n342:                         response.headers.raw.extend(solved_result.response.headers.raw)\n343:             if errors:\n344:                 validation_error = RequestValidationError(\n345:                     _normalize_errors(errors), body=body\n346:                 )\n347:                 raise validation_error\n348:         if response is None:\n349:             raise FastAPIError(\n350:                 \"No response object was returned. There's a high chance that the \"\n351:                 \"application code is raising an exception and a dependency with yield \"\n352:                 \"has a block with a bare except, or a block with except Exception, \"\n353:                 \"and is not raising the exception again. Read more about it in the \"\n354:                 \"docs: https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#dependencies-with-yield-and-except\"\n355:             )\n356:         return response\n357: \n358:     return app\n359: \n360: \n361: def get_websocket_app(\n362:     dependant: Dependant,\n363:     dependency_overrides_provider: Optional[Any] = None,\n364:     embed_body_fields: bool = False,\n365: ) -> Callable[[WebSocket], Coroutine[Any, Any, Any]]:\n366:     async def app(websocket: WebSocket) -> None:\n367:         async with AsyncExitStack() as async_exit_stack:\n368:             # TODO: remove this scope later, after a few releases\n369:             # This scope fastapi_astack is no longer used by FastAPI, kept for\n370:             # compatibility, just in case\n371:             websocket.scope[\"fastapi_astack\"] = async_exit_stack\n372:             solved_result = await solve_dependencies(\n373:                 request=websocket,\n374:                 dependant=dependant,\n375:                 dependency_overrides_provider=dependency_overrides_provider,\n376:                 async_exit_stack=async_exit_stack,\n377:                 embed_body_fields=embed_body_fields,\n378:             )\n379:             if solved_result.errors:\n380:                 raise WebSocketRequestValidationError(\n[lines 280-380 of 4441]",
+    "token_count": 1266,
+    "rank": 5,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.routing.get_request_handler",
+     "fastapi.routing.get_request_handler.app",
+     "fastapi.routing.get_websocket_app",
+     "fastapi.routing.get_websocket_app.app"
+    ],
+    "provenance": {
+     "msg_id": "r4.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/routing.py",
+      "start_line": 280,
+      "end_line": 380
+     },
+     "engine_token_count": 1266
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r5.1",
+    "content": "# r5.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"async def solve_dependencies\"})\n572:async def solve_dependencies(:",
+    "token_count": 36,
+    "rank": 6,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r5.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "async def solve_dependencies",
+      "path": "fastapi/dependencies/utils.py"
+     },
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r6.1",
+    "content": "# r6.1  (read {\"end_line\": 600, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 560})\n560:     return await stack.enter_async_context(cm)\n561: \n562: \n563: @dataclass\n564: class SolvedDependency:\n565:     values: Dict[str, Any]\n566:     errors: List[Any]\n567:     background_tasks: Optional[StarletteBackgroundTasks]\n568:     response: Response\n569:     dependency_cache: Dict[Tuple[Callable[..., Any], Tuple[str]], Any]\n570: \n571: \n572: async def solve_dependencies(\n573:     *,\n574:     request: Union[Request, WebSocket],\n575:     dependant: Dependant,\n576:     body: Optional[Union[Dict[str, Any], FormData]] = None,\n577:     background_tasks: Optional[StarletteBackgroundTasks] = None,\n578:     response: Optional[Response] = None,\n579:     dependency_overrides_provider: Optional[Any] = None,\n580:     dependency_cache: Optional[Dict[Tuple[Callable[..., Any], Tuple[str]], Any]] = None,\n581:     async_exit_stack: AsyncExitStack,\n582:     embed_body_fields: bool,\n583: ) -> SolvedDependency:\n584:     values: Dict[str, Any] = {}\n585:     errors: List[Any] = []\n586:     if response is None:\n587:         response = Response()\n588:         del response.headers[\"content-length\"]\n589:         response.status_code = None  # type: ignore\n590:     dependency_cache = dependency_cache or {}\n591:     sub_dependant: Dependant\n592:     for sub_dependant in dependant.dependencies:\n593:         sub_dependant.call = cast(Callable[..., Any], sub_dependant.call)\n594:         sub_dependant.cache_key = cast(\n595:             Tuple[Callable[..., Any], Tuple[str]], sub_dependant.cache_key\n596:         )\n597:         call = sub_dependant.call\n598:         use_sub_dependant = sub_dependant\n599:         if (\n600:             dependency_overrides_provider\n[lines 560-600 of 1002]",
+    "token_count": 553,
+    "rank": 7,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.dependencies.utils.solve_generator",
+     "fastapi.dependencies.utils.SolvedDependency",
+     "fastapi.dependencies.utils.solve_dependencies"
+    ],
+    "provenance": {
+     "msg_id": "r6.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/dependencies/utils.py",
+      "start_line": 560,
+      "end_line": 600
+     },
+     "engine_token_count": 553
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r7.1",
+    "content": "# r7.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"sub_dependant.call\"})\n593:        sub_dependant.call = cast(Callable[..., Any], sub_dependant.call):\n597:        call = sub_dependant.call:\n603:            original_call = sub_dependant.call:",
+    "token_count": 74,
+    "rank": 8,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r7.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "sub_dependant.call",
+      "path": "fastapi/dependencies/utils.py"
+     },
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r8.1",
+    "content": "# r8.1  (read {\"end_line\": 620, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 590})\n590:     dependency_cache = dependency_cache or {}\n591:     sub_dependant: Dependant\n592:     for sub_dependant in dependant.dependencies:\n593:         sub_dependant.call = cast(Callable[..., Any], sub_dependant.call)\n594:         sub_dependant.cache_key = cast(\n595:             Tuple[Callable[..., Any], Tuple[str]], sub_dependant.cache_key\n596:         )\n597:         call = sub_dependant.call\n598:         use_sub_dependant = sub_dependant\n599:         if (\n600:             dependency_overrides_provider\n601:             and dependency_overrides_provider.dependency_overrides\n602:         ):\n603:             original_call = sub_dependant.call\n604:             call = getattr(\n605:                 dependency_overrides_provider, \"dependency_overrides\", {}\n606:             ).get(original_call, original_call)\n607:             use_path: str = sub_dependant.path  # type: ignore\n608:             use_sub_dependant = get_dependant(\n609:                 path=use_path,\n610:                 call=call,\n611:                 name=sub_dependant.name,\n612:                 security_scopes=sub_dependant.security_scopes,\n613:             )\n614: \n615:         solved_result = await solve_dependencies(\n616:             request=request,\n617:             dependant=use_sub_dependant,\n618:             body=body,\n619:             background_tasks=background_tasks,\n620:             response=response,\n[lines 590-620 of 1002]",
+    "token_count": 418,
+    "rank": 9,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.dependencies.utils.solve_dependencies"
+    ],
+    "provenance": {
+     "msg_id": "r8.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/dependencies/utils.py",
+      "start_line": 590,
+      "end_line": 620
+     },
+     "engine_token_count": 418
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r9.1",
+    "content": "# r9.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"yield\"})\nno matches",
+    "token_count": 27,
+    "rank": 10,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r9.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "yield",
+      "path": "fastapi/dependencies/utils.py"
+     },
+     "engine_token_count": 27
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r10.1",
+    "content": "# r10.1  (grep {\"glob\": \"**/*.py\", \"path\": \".\", \"pattern\": \"yield\"})\nscripts/translate.py:110:    yield from first_parent.glob(\"*.md\")\nscripts/translate.py:112:        yield from dir_path.rglob(\"*.md\")\nscripts/translate.py:119:        yield path\nscripts/docs.py:73:            yield lang_path.name\nfastapi/datastructures.py:143:        yield cls.validate\nfastapi/concurrency.py:27:        yield await run_in_threadpool(cm.__enter__)\nfastapi/routing.py:137:                    yield None  # old ASGI compatibility\nfastapi/routing.py:139:                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}\nfastapi/routing.py:351:                \"application code is raising an exception and a dependency with yield \"\nfastapi/routing.py:354:                \"docs: https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#dependencies-with-yield-and-except\"\nfastapi/openapi/models.py:27:            yield cls.validate\ndocs_src/dependencies/tutorial008c.py:12:        yield \"Rick\"\ndocs_src/dependencies/tutorial008d_an_py39.py:14:        yield \"Rick\"\ndocs_src/dependencies/tutorial008_an_py39.py:9:        yield dep_a\ndocs_src/dependencies/tutorial008_an_py39.py:17:        yield dep_b\ndocs_src/dependencies/tutorial008_an_py39.py:25:        yield dep_c\ndocs_src/dependencies/tutorial008.py:7:        yield dep_a\ndocs_src/dependencies/tutorial008.py:15:        yield dep_b\ndocs_src/dependencies/tutorial008.py:23:        yield dep_c\ndocs_src/dependencies/tutorial008b_an.py:19:        yield \"Rick\"\ndocs_src/dependencies/tutorial008c_an_py39.py:14:        yield \"Rick\"\ndocs_src/dependencies/tutorial009.py:7:        yield dep_a\ndocs_src/dependencies/tutorial009.py:15:        yield dep_b\ndocs_src/dependencies/tutorial009.py:23:        yield dep_c\ndocs_src/dependencies/tutorial008c_an.py:13:        yield \"Rick\"\ndocs_src/dependencies/tutorial008b.py:18:        yield \"Rick\"\ntests/test_tutorial/test_sql_databases/test_tutorial002.py:47:        yield c\ntests/test_tutorial/test_sql_databases/test_tutorial001.py:47:        yield c\ntests/test_tutorial/test_events/test_tutorial002.py:10:    yield app\ntests/test_tutorial/test_events/test_tutorial001.py:10:    yield app\n[55 more matching lines not shown]",
+    "token_count": 644,
+    "rank": 11,
+    "kind": "tool_result_grep",
+    "symbols": [
+     "scripts.translate.iter_paths_to_translate",
+     "scripts.docs.complete_existing_lang",
+     "fastapi.datastructures.UploadFile.__get_validators__",
+     "fastapi.concurrency.contextmanager_in_threadpool",
+     "fastapi.routing._merge_lifespan_context.merged_lifespan",
+     "fastapi.routing.get_request_handler.app",
+     "docs_src.dependencies.tutorial008c.get_username",
+     "docs_src.dependencies.tutorial008d_an_py39.get_username",
+     "docs_src.dependencies.tutorial008_an_py39.dependency_a",
+     "docs_src.dependencies.tutorial008_an_py39.dependency_b",
+     "docs_src.dependencies.tutorial008_an_py39.dependency_c",
+     "docs_src.dependencies.tutorial008.dependency_a",
+     "docs_src.dependencies.tutorial008.dependency_b",
+     "docs_src.dependencies.tutorial008.dependency_c",
+     "docs_src.dependencies.tutorial008b_an.get_username",
+     "docs_src.dependencies.tutorial008c_an_py39.get_username",
+     "docs_src.dependencies.tutorial009.dependency_a",
+     "docs_src.dependencies.tutorial009.dependency_b",
+     "docs_src.dependencies.tutorial009.dependency_c",
+     "docs_src.dependencies.tutorial008c_an.get_username",
+     "docs_src.dependencies.tutorial008b.get_username",
+     "tests.test_tutorial.test_sql_databases.test_tutorial002.get_client",
+     "tests.test_tutorial.test_sql_databases.test_tutorial001.get_client",
+     "tests.test_tutorial.test_events.test_tutorial002.get_app",
+     "tests.test_tutorial.test_events.test_tutorial001.get_app"
+    ],
+    "provenance": {
+     "msg_id": "r10.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "yield",
+      "path": ".",
+      "glob": "**/*.py"
+     },
+     "engine_token_count": 644
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 3448,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating FastAPI's per-request dependency resolution in fastapi/dependencies/utils.py. Starting from `solve_dependencies`, trace the causal pipeline that runs once per real HTTP request to turn an already-built Dependant tree into real argument values: how path/query/header/cookie parameters are extracted, how the request body is parsed, and how a generator-based (`yield`) dependency is specially handled for cleanup.\n\nAssume the dependant has at least one generator-based sub-dependency, so the generator-handling stage is part of the traced pipeline rather than skipped.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear.\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 11,
+   "tool_calls": 11,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 1,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": true,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To understand FastAPI's per-request dependency resolution, we need to trace the pipeline starting from `solve_dependencies`. This function processes a Dependant tree, extracting path/query/header/cookie parameters, parsing the request body, and handling generator-based dependencies for cleanup.\n\nLet's begin by finding the `solve_dependencies` function and tracing its execution flow.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def solve_dependencies\", \"path\": \"fastapi/dependencies/utils.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def solve_dependencies",
+        "path": "fastapi/dependencies/utils.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def solve_dependencies",
+        "path": "fastapi/dependencies/utils.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 102,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "Great, we found the `solve_dependencies` function. Now, let's read the surrounding lines to understand its initial steps and dependencies.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 560, \"end_line\": 580}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 560,
+        "end_line": 580
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 560,
+        "end_line": 580
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 70,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "The `solve_dependencies` function is responsible for resolving dependencies for a given request. It takes several parameters, including the request, the dependant tree, and optional background tasks, response, and dependency overrides. The function processes the dependant tree to extract path/query/header/cookie parameters, parse the request body, and handle generator-based dependencies for cleanup.\n\nNext, let's trace the execution flow by finding where `solve_dependencies` is called and understanding its dependencies.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"await solve_dependencies\", \"path\": \"fastapi/dependencies/utils.py\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"await solve_dependencies\", \"path\": \"fastapi/routing.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "await solve_dependencies",
+        "path": "fastapi/dependencies/utils.py"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "await solve_dependencies",
+        "path": "fastapi/routing.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "await solve_dependencies",
+        "path": "fastapi/dependencies/utils.py"
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "await solve_dependencies",
+        "path": "fastapi/routing.py"
+       },
+       "msg_id": "r3.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 158,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "raw_text": "The `solve_dependencies` function is called within the `solve_dependencies` function itself and in the `routing.py` file. This indicates that the function is recursive and handles nested dependencies.\n\nNow, let's read the relevant lines in `routing.py` to understand how `solve_dependencies` is used in the routing process.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/routing.py\", \"start_line\": 280, \"end_line\": 380}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/routing.py",
+        "start_line": 280,
+        "end_line": 380
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/routing.py",
+        "start_line": 280,
+        "end_line": 380
+       },
+       "msg_id": "r4.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 106,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 5,
+     "raw_text": "In the `routing.py` file, `solve_dependencies` is called to resolve dependencies for both HTTP and WebSocket requests. The function processes the dependant tree, extracting path/query/header/cookie parameters, parsing the request body, and handling generator-based dependencies for cleanup.\n\nThe `solve_dependencies` function is called with the following parameters:\n- `request`: The incoming request object.\n- `dependant`: The dependant tree to be resolved.\n- `body`: The parsed request body.\n- `dependency_overrides_provider`: The dependency overrides provider.\n- `async_exit_stack`: The asynchronous exit stack for managing cleanup.\n- `embed_body_fields`: A flag indicating whether to embed body fields.\n\nAfter resolving the dependencies, the function checks for errors. If there are no errors, it proceeds to run the endpoint function and serialize the response. If there are errors, it raises a `RequestValidationError`.\n\nNow, let's trace the execution flow of `solve_dependencies` to understand how it processes the dependant tree.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"async def solve_dependencies\", \"path\": \"fastapi/dependencies/utils.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "async def solve_dependencies",
+        "path": "fastapi/dependencies/utils.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "async def solve_dependencies",
+        "path": "fastapi/dependencies/utils.py"
+       },
+       "msg_id": "r5.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 237,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 6,
+     "raw_text": "Great, we found the `solve_dependencies` function again. Let's read the surrounding lines to understand its execution flow.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 560, \"end_line\": 600}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 560,
+        "end_line": 600
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 560,
+        "end_line": 600
+       },
+       "msg_id": "r6.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 67,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 7,
+     "raw_text": "The `solve_dependencies` function processes the dependant tree by iterating over its dependencies. For each sub-dependency, it checks if there are any dependency overrides and then calls the sub-dependency's `call` function to resolve its value.\n\nThe function then adds the resolved value to the `values` dictionary and checks for any errors. If there are errors, it adds them to the `errors` list.\n\nAfter processing all dependencies, the function returns a `SolvedDependency` object containing the resolved values, errors, background tasks, response, and dependency cache.\n\nNow, let's trace the execution flow of the sub-dependency resolution process.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"sub_dependant.call\", \"path\": \"fastapi/dependencies/utils.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "sub_dependant.call",
+        "path": "fastapi/dependencies/utils.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "sub_dependant.call",
+        "path": "fastapi/dependencies/utils.py"
+       },
+       "msg_id": "r7.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 164,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 8,
+     "raw_text": "Great, we found the `sub_dependant.call` pattern in the `solve_dependencies` function. Let's read the surrounding lines to understand how sub-dependencies are resolved.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 590, \"end_line\": 620}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 590,
+        "end_line": 620
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/dependencies/utils.py",
+        "start_line": 590,
+        "end_line": 620
+       },
+       "msg_id": "r8.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 78,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 9,
+     "raw_text": "The `solve_dependencies` function resolves sub-dependencies by iterating over the `dependant.dependencies` list. For each sub-dependency, it checks if there are any dependency overrides and then calls the sub-dependency's `call` function to resolve its value.\n\nThe function then adds the resolved value to the `values` dictionary and checks for any errors. If there are errors, it adds them to the `errors` list.\n\nAfter processing all dependencies, the function returns a `SolvedDependency` object containing the resolved values, errors, background tasks, response, and dependency cache.\n\nNow, let's trace the execution flow of the generator-based dependency handling process.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"yield\", \"path\": \"fastapi/dependencies/utils.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "yield",
+        "path": "fastapi/dependencies/utils.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "yield",
+        "path": "fastapi/dependencies/utils.py"
+       },
+       "msg_id": "r9.1",
+       "is_error": false,
+       "outcome": "grep_empty"
+      }
+     ],
+     "completion_tokens": 165,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 10,
+     "raw_text": "It seems that there are no matches for the `yield` keyword in the `fastapi/dependencies/utils.py` file. This suggests that the generator-based dependency handling process may be implemented in a different file or module.\n\nLet's search for the `yield` keyword in the entire FastAPI repository to find where it is used in the context of dependencies.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"yield\", \"path\": \".\", \"glob\": \"**/*.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "yield",
+        "path": ".",
+        "glob": "**/*.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "yield",
+        "path": ".",
+        "glob": "**/*.py"
+       },
+       "msg_id": "r10.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 103,
+     "finish_reason": "stop",
+     "is_error": false
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     7161.148835,
+     4460.418668,
+     10409.911268,
+     6911.855843,
+     17145.634647,
+     4431.819867,
+     11714.741324,
+     5243.199944,
+     11634.283843,
+     6857.857034
+    ],
+    "L_tool_exec": [
+     3.725541,
+     0.369057,
+     3.405876,
+     2.757491,
+     1.075157,
+     3.306487,
+     0.412196,
+     3.923236,
+     0.337945,
+     3.234232,
+     20.698031
+    ],
+    "L_retrieve": [
+     86252.968658
+    ]
+   },
+   "agent_prompt_tokens": 4863,
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 3448,
+   "prompt_tokens": 3754,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3767,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# r1.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"def solve_dependencies\"})\n572:async def solve_dependencies(:\n\n# r2.1  (read {\"end_line\": 580, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 560})\n560:     return await stack.enter_async_context(cm)\n561: \n562: \n563: @dataclass\n564: class SolvedDependency:\n565:     values: Dict[str, Any]\n566:     errors: List[Any]\n567:     background_tasks: Optional[StarletteBackgroundTasks]\n568:     response: Response\n569:     dependency_cache: Dict[Tuple[Callable[..., Any], Tuple[str]], Any]\n570: \n571: \n572: async def solve_dependencies(\n573:     *,\n574:     request: Union[Request, WebSocket],\n575:     dependant: Dependant,\n576:     body: Optional[Union[Dict[str, Any], FormData]] = None,\n577:     background_tasks: Optional[StarletteBackgroundTasks] = None,\n578:     response: Optional[Response] = None,\n579:     dependency_overrides_provider: Optional[Any] = None,\n580:     dependency_cache: Optional[Dict[Tuple[Callable[..., Any], Tuple[str]], Any]] = None,\n[lines 560-580 of 1002]\n\n# r3.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"await solve_dependencies\"})\n615:        solved_result = await solve_dependencies(:\n\n# r3.2  (grep {\"path\": \"fastapi/routing.py\", \"pattern\": \"await solve_dependencies\"})\n292:                solved_result = await solve_dependencies(:\n372:            solved_result = await solve_dependencies(:\n\n# r4.1  (read {\"end_line\": 380, \"path\": \"fastapi/routing.py\", \"start_line\": 280})\n280:                 )\n281:                 raise validation_error from e\n282:             except HTTPException:\n283:                 # If a middleware raises an HTTPException, it should be raised again\n284:                 raise\n285:             except Exception as e:\n286:                 http_error = HTTPException(\n287:                     status_code=400, detail=\"There was an error parsing the body\"\n288:                 )\n289:                 raise http_error from e\n290:             errors: List[Any] = []\n291:             async with AsyncExitStack() as async_exit_stack:\n292:                 solved_result = await solve_dependencies(\n293:                     request=request,\n294:                     dependant=dependant,\n295:                     body=body,\n296:                     dependency_overrides_provider=dependency_overrides_provider,\n297:                     async_exit_stack=async_exit_stack,\n298:                     embed_body_fields=embed_body_fields,\n299:                 )\n300:                 errors = solved_result.errors\n301:                 if not errors:\n302:                     raw_response = await run_endpoint_function(\n303:                         dependant=dependant,\n304:                         values=solved_result.values,\n305:                         is_coroutine=is_coroutine,\n306:                     )\n307:                     if isinstance(raw_response, Response):\n308:                         if raw_response.background is None:\n309:                             raw_response.background = solved_result.background_tasks\n310:                         response = raw_response\n311:                     else:\n312:                         response_args: Dict[str, Any] = {\n313:                             \"background\": solved_result.background_tasks\n314:                         }\n315:                         # If status_code was set, use it, otherwise use the default from the\n316:                         # response class, in the case of redirect it's 307\n317:                         current_status_code = (\n318:                             status_code\n319:                             if status_code\n320:                             else solved_result.response.status_code\n321:                         )\n322:                         if current_status_code is not None:\n323:                             response_args[\"status_code\"] = current_status_code\n324:                         if solved_result.response.status_code:\n325:                             response_args[\"status_code\"] = (\n326:                                 solved_result.response.status_code\n327:                             )\n328:                         content = await serialize_response(\n329:                             field=response_field,\n330:                             response_content=raw_response,\n331:                             include=response_model_include,\n332:                             exclude=response_model_exclude,\n333:                             by_alias=response_model_by_alias,\n334:                             exclude_unset=response_model_exclude_unset,\n335:                             exclude_defaults=response_model_exclude_defaults,\n336:                             exclude_none=response_model_exclude_none,\n337:                             is_coroutine=is_coroutine,\n338:                         )\n339:                         response = actual_response_class(content, **response_args)\n340:                         if not is_body_allowed_for_status_code(response.status_code):\n341:                             response.body = b\"\"\n342:                         response.headers.raw.extend(solved_result.response.headers.raw)\n343:             if errors:\n344:                 validation_error = RequestValidationError(\n345:                     _normalize_errors(errors), body=body\n346:                 )\n347:                 raise validation_error\n348:         if response is None:\n349:             raise FastAPIError(\n350:                 \"No response object was returned. There's a high chance that the \"\n351:                 \"application code is raising an exception and a dependency with yield \"\n352:                 \"has a block with a bare except, or a block with except Exception, \"\n353:                 \"and is not raising the exception again. Read more about it in the \"\n354:                 \"docs: https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#dependencies-with-yield-and-except\"\n355:             )\n356:         return response\n357: \n358:     return app\n359: \n360: \n361: def get_websocket_app(\n362:     dependant: Dependant,\n363:     dependency_overrides_provider: Optional[Any] = None,\n364:     embed_body_fields: bool = False,\n365: ) -> Callable[[WebSocket], Coroutine[Any, Any, Any]]:\n366:     async def app(websocket: WebSocket) -> None:\n367:         async with AsyncExitStack() as async_exit_stack:\n368:             # TODO: remove this scope later, after a few releases\n369:             # This scope fastapi_astack is no longer used by FastAPI, kept for\n370:             # compatibility, just in case\n371:             websocket.scope[\"fastapi_astack\"] = async_exit_stack\n372:             solved_result = await solve_dependencies(\n373:                 request=websocket,\n374:                 dependant=dependant,\n375:                 dependency_overrides_provider=dependency_overrides_provider,\n376:                 async_exit_stack=async_exit_stack,\n377:                 embed_body_fields=embed_body_fields,\n378:             )\n379:             if solved_result.errors:\n380:                 raise WebSocketRequestValidationError(\n[lines 280-380 of 4441]\n\n# r5.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"async def solve_dependencies\"})\n572:async def solve_dependencies(:\n\n# r6.1  (read {\"end_line\": 600, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 560})\n560:     return await stack.enter_async_context(cm)\n561: \n562: \n563: @dataclass\n564: class SolvedDependency:\n565:     values: Dict[str, Any]\n566:     errors: List[Any]\n567:     background_tasks: Optional[StarletteBackgroundTasks]\n568:     response: Response\n569:     dependency_cache: Dict[Tuple[Callable[..., Any], Tuple[str]], Any]\n570: \n571: \n572: async def solve_dependencies(\n573:     *,\n574:     request: Union[Request, WebSocket],\n575:     dependant: Dependant,\n576:     body: Optional[Union[Dict[str, Any], FormData]] = None,\n577:     background_tasks: Optional[StarletteBackgroundTasks] = None,\n578:     response: Optional[Response] = None,\n579:     dependency_overrides_provider: Optional[Any] = None,\n580:     dependency_cache: Optional[Dict[Tuple[Callable[..., Any], Tuple[str]], Any]] = None,\n581:     async_exit_stack: AsyncExitStack,\n582:     embed_body_fields: bool,\n583: ) -> SolvedDependency:\n584:     values: Dict[str, Any] = {}\n585:     errors: List[Any] = []\n586:     if response is None:\n587:         response = Response()\n588:         del response.headers[\"content-length\"]\n589:         response.status_code = None  # type: ignore\n590:     dependency_cache = dependency_cache or {}\n591:     sub_dependant: Dependant\n592:     for sub_dependant in dependant.dependencies:\n593:         sub_dependant.call = cast(Callable[..., Any], sub_dependant.call)\n594:         sub_dependant.cache_key = cast(\n595:             Tuple[Callable[..., Any], Tuple[str]], sub_dependant.cache_key\n596:         )\n597:         call = sub_dependant.call\n598:         use_sub_dependant = sub_dependant\n599:         if (\n600:             dependency_overrides_provider\n[lines 560-600 of 1002]\n\n# r7.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"sub_dependant.call\"})\n593:        sub_dependant.call = cast(Callable[..., Any], sub_dependant.call):\n597:        call = sub_dependant.call:\n603:            original_call = sub_dependant.call:\n\n# r8.1  (read {\"end_line\": 620, \"path\": \"fastapi/dependencies/utils.py\", \"start_line\": 590})\n590:     dependency_cache = dependency_cache or {}\n591:     sub_dependant: Dependant\n592:     for sub_dependant in dependant.dependencies:\n593:         sub_dependant.call = cast(Callable[..., Any], sub_dependant.call)\n594:         sub_dependant.cache_key = cast(\n595:             Tuple[Callable[..., Any], Tuple[str]], sub_dependant.cache_key\n596:         )\n597:         call = sub_dependant.call\n598:         use_sub_dependant = sub_dependant\n599:         if (\n600:             dependency_overrides_provider\n601:             and dependency_overrides_provider.dependency_overrides\n602:         ):\n603:             original_call = sub_dependant.call\n604:             call = getattr(\n605:                 dependency_overrides_provider, \"dependency_overrides\", {}\n606:             ).get(original_call, original_call)\n607:             use_path: str = sub_dependant.path  # type: ignore\n608:             use_sub_dependant = get_dependant(\n609:                 path=use_path,\n610:                 call=call,\n611:                 name=sub_dependant.name,\n612:                 security_scopes=sub_dependant.security_scopes,\n613:             )\n614: \n615:         solved_result = await solve_dependencies(\n616:             request=request,\n617:             dependant=use_sub_dependant,\n618:             body=body,\n619:             background_tasks=background_tasks,\n620:             response=response,\n[lines 590-620 of 1002]\n\n# r9.1  (grep {\"path\": \"fastapi/dependencies/utils.py\", \"pattern\": \"yield\"})\nno matches\n\n# r10.1  (grep {\"glob\": \"**/*.py\", \"path\": \".\", \"pattern\": \"yield\"})\nscripts/translate.py:110:    yield from first_parent.glob(\"*.md\")\nscripts/translate.py:112:        yield from dir_path.rglob(\"*.md\")\nscripts/translate.py:119:        yield path\nscripts/docs.py:73:            yield lang_path.name\nfastapi/datastructures.py:143:        yield cls.validate\nfastapi/concurrency.py:27:        yield await run_in_threadpool(cm.__enter__)\nfastapi/routing.py:137:                    yield None  # old ASGI compatibility\nfastapi/routing.py:139:                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}\nfastapi/routing.py:351:                \"application code is raising an exception and a dependency with yield \"\nfastapi/routing.py:354:                \"docs: https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#dependencies-with-yield-and-except\"\nfastapi/openapi/models.py:27:            yield cls.validate\ndocs_src/dependencies/tutorial008c.py:12:        yield \"Rick\"\ndocs_src/dependencies/tutorial008d_an_py39.py:14:        yield \"Rick\"\ndocs_src/dependencies/tutorial008_an_py39.py:9:        yield dep_a\ndocs_src/dependencies/tutorial008_an_py39.py:17:        yield dep_b\ndocs_src/dependencies/tutorial008_an_py39.py:25:        yield dep_c\ndocs_src/dependencies/tutorial008.py:7:        yield dep_a\ndocs_src/dependencies/tutorial008.py:15:        yield dep_b\ndocs_src/dependencies/tutorial008.py:23:        yield dep_c\ndocs_src/dependencies/tutorial008b_an.py:19:        yield \"Rick\"\ndocs_src/dependencies/tutorial008c_an_py39.py:14:        yield \"Rick\"\ndocs_src/dependencies/tutorial009.py:7:        yield dep_a\ndocs_src/dependencies/tutorial009.py:15:        yield dep_b\ndocs_src/dependencies/tutorial009.py:23:        yield dep_c\ndocs_src/dependencies/tutorial008c_an.py:13:        yield \"Rick\"\ndocs_src/dependencies/tutorial008b.py:18:        yield \"Rick\"\ntests/test_tutorial/test_sql_databases/test_tutorial002.py:47:        yield c\ntests/test_tutorial/test_sql_databases/test_tutorial001.py:47:        yield c\ntests/test_tutorial/test_events/test_tutorial002.py:10:    yield app\ntests/test_tutorial/test_events/test_tutorial001.py:10:    yield app\n[55 more matching lines not shown]\n\n## Task\n\nYou are investigating FastAPI's per-request dependency resolution in fastapi/dependencies/utils.py. Starting from `solve_dependencies`, trace the causal pipeline that runs once per real HTTP request to turn an already-built Dependant tree into real argument values: how path/query/header/cookie parameters are extracted, how the request body is parsed, and how a generator-based (`yield`) dependency is specially handled for cleanup.\n\nAssume the dependant has at least one generator-based sub-dependency, so the generator-handling stage is part of the traced pipeline rather than skipped.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}
