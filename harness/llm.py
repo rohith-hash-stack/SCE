@@ -41,9 +41,15 @@ class ChatLLM:
 
     def __call__(self, system: str, user: str, max_tokens: int = C.GENERATION_RESERVE,
                  seed: int | None = None, purpose: str = "answer") -> Completion:
+        return self.chat([{"role": "system", "content": system}, {"role": "user", "content": user}],
+                         max_tokens=max_tokens, seed=seed, purpose=purpose)
+
+    def chat(self, messages: list[dict], max_tokens: int = C.GENERATION_RESERVE,
+             seed: int | None = None, purpose: str = "answer") -> Completion:
+        """Any message list (multi-turn, e.g. Arm 4's agent loop)."""
         payload = {
             "model": self.model, "temperature": self.temperature, "max_tokens": max_tokens,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "messages": list(messages),
             # Ollama reads num_ctx from `options`; llama-server ignores it
             # (its window is fixed by -c).
             "options": {"num_ctx": self.num_ctx},
@@ -86,11 +92,16 @@ class OllamaChatLLM:
 
     def __call__(self, system: str, user: str, max_tokens: int = C.GENERATION_RESERVE,
                  seed: int | None = None, purpose: str = "answer") -> Completion:
+        return self.chat([{"role": "system", "content": system}, {"role": "user", "content": user}],
+                         max_tokens=max_tokens, seed=seed, purpose=purpose)
+
+    def chat(self, messages: list[dict], max_tokens: int = C.GENERATION_RESERVE,
+             seed: int | None = None, purpose: str = "answer") -> Completion:
+        """Any message list (multi-turn, e.g. Arm 4's agent loop)."""
         options = {"num_ctx": self.num_ctx, "num_predict": max_tokens, "temperature": self.temperature}
         if seed is not None:
             options["seed"] = seed
-        payload = {"model": self.model, "stream": False, "options": options,
-                   "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        payload = {"model": self.model, "stream": False, "options": options, "messages": list(messages)}
         req = urllib.request.Request(f"{self.base_url}/api/chat", data=json.dumps(payload).encode(),
                                      headers={"Content-Type": "application/json"})
         t0 = time.perf_counter()

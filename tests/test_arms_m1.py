@@ -103,13 +103,10 @@ def test_oracle_delivers_universe_pipeline_first(fastapi_prism):
     assert res.cleanliness == 1.0 and res.task_specific["acc_at_5_retrieval"] == 1.0          # ceiling by construction
 
 
-# ---- Arm 2/3/4 stubs ----
-# Arms 2 and 3 are implemented in M2 (tests/test_arm2_priompt.py, tests/test_arm3_lsp.py); Arm 4 is still a stub
-@pytest.mark.parametrize("arm_id,ms,grade", [("arm4", "M3", "MEDIUM_HIGH")])
-def test_stubs_declare_fidelity_and_raise(arm_id, ms, grade):
-    from harness.arms import build_arm
-    arm = build_arm(arm_id)
-    assert arm.fidelity.value == grade
-    for call in (lambda: arm.index("/r", {}), lambda: arm.retrieve("q", {}), lambda: arm.build_prompt(None, None)):
-        with pytest.raises(NotImplementedError, match=ms):
-            call()
+# ---- no stubs remain: Arms 2, 3 (M2) and 4 (M3) are implemented ----
+# (tests/test_arm2_priompt.py, tests/test_arm3_lsp.py, tests/test_arm4_agent.py)
+def test_every_arm_is_implemented_with_its_declared_fidelity():
+    from harness import config as C
+    from harness.arms import ARM_CLASSES
+    assert C.STUB_MILESTONE == {} and set(C.ACTIVE_ARMS) == set(C.ARM_IDS) == set(ARM_CLASSES)
+    assert ARM_CLASSES["arm4"](tokenizer=Words()).fidelity.value == "MEDIUM_HIGH"

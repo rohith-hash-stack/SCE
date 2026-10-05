@@ -17,6 +17,7 @@ from pathlib import Path
 
 from harness import config as C
 from harness.arms.base import SYSTEM_PROMPT
+from harness.llm import Completion
 from harness.scoring.adapters import adapt, finalize_context
 from harness.scoring.canonical import DeliveredContext, NormalizedAnswer
 from harness.scoring.latency import latency_profile, timed
@@ -114,13 +115,27 @@ class Pipeline:
             self.step = "budget"
             ctx = finalize_context(raw_ctx, self.tok)
             self.step = "prompt"
-            prompt = arm.build_prompt(ctx, self.tok)
-            prompt_tokens = self.tok.count(SYSTEM_PROMPT) + self.tok.count(prompt)
+            own = ctx.build_meta.get("agent_answer") if getattr(arm, "self_answering", False) else None
+            if own is not None:
+                # Arm 4 answered through its own answer tool: no separate answer
+                # call. Its last turn's prompt is what the model answered from.
+                prompt = ""
+                prompt_tokens = int(ctx.build_meta.get("agent_prompt_tokens", 0))
+            else:
+                prompt = arm.build_prompt(ctx, self.tok)
+                prompt_tokens = self.tok.count(SYSTEM_PROMPT) + self.tok.count(prompt)
             ctx.build_meta["prompt_tokens"] = prompt_tokens
             ctx.build_meta["prompt_over_window"] = prompt_tokens + C.GENERATION_RESERVE > C.CONTEXT_WINDOW
             self.step = "generate"
             with timed(lat, "L_generate"):
-                comp = self.llm(SYSTEM_PROMPT, prompt, max_tokens=C.GENERATION_RESERVE, seed=seed, purpose="answer")
+                if own is not None:
+                    comp = Completion(own["text"], int(own.get("prompt_tokens_server") or 0),
+                                      int(own.get("generation_tokens") or 0), float(own.get("latency_seconds") or 0.0),
+                                      model=own.get("model", ""), finish_reason=own.get("finish_reason", ""),
+                                      purpose="answer_tool")
+                else:
+                    comp = self.llm(SYSTEM_PROMPT, prompt, max_tokens=C.GENERATION_RESERVE, seed=seed,
+                                    purpose="answer")
         # The server counts the chat template too, so it should report at least
         # what we sent. Clearly fewer means the server cut the prompt (its
         # window was smaller than ours): flagged, never silently scored.

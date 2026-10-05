@@ -22,6 +22,9 @@ Checks
                             within 120 s and its >= 5 workspace/symbol probes
                             return >= 1 symbol; one real task retrieves within
                             budget. BLOCKED when pyright-langserver is absent.
+ 3d. arm4_agent_tools      Arm 4's tools on the real FastAPI checkout with a scripted
+                            agent (grep -> read + glob -> answer): ripgrep present,
+                            caps hold, results map to FQNs, the answer is taken.
  4. arm5_trimming           a PRISM output over 13,000 harness tokens is
                             trimmed from the lowest rank to <= 13,000.
  5. tokenizer_parity        HF tokenizer vs a (mocked) llama-server
@@ -172,6 +175,49 @@ def check_arm3_lsp_ready(tok):
     return ok, (f"ready in {ready.seconds:.1f}s ({ready.source_files} files, {ready.rounds} probe rounds); probes "
                 f"{ready.probes}; {task.task_id}: {len(ctx.items)} items, {ctx.total_tokens} tokens; editable-install "
                 f"check {'on' if arm.require_editable else 'off'}")
+
+
+def check_arm4_agent_tools(tok):
+    """Arm 4 on a real FastAPI T2 task with a scripted agent: grep, then a
+    read and a glob in one turn, then answer. Checks ripgrep is present, the
+    30-line grep cap, the read cap, FQN mapping and the self-answer path."""
+    import json as _json
+
+    from harness.arms.arm4_agent import Arm4AgentLoop
+    from harness.llm import Completion
+    from harness.scoring.fairness import verify_ranking
+    from harness.tasks.loaders import load_tasks
+
+    def tools(*calls):
+        return "".join(f"<tools>{_json.dumps({'name': n, 'arguments': a})}</tools>" for n, a in calls)
+
+    class Agent:
+        def __init__(self):
+            self.turns = [tools(("grep", {"pattern": "def ", "glob": "*.py"})),
+                          tools(("read", {"path": "fastapi/dependencies/utils.py", "start_line": 260, "end_line": 600}),
+                                ("glob", {"pattern": "fastapi/**/*.py"})),
+                          tools(("answer", {"response": '```json\n{"reasoning": "s", "symbols": '
+                                            '["fastapi.dependencies.utils.get_dependant"]}\n```'}))]
+
+        def chat(self, messages, max_tokens=0, seed=None, purpose=""):
+            return Completion(self.turns.pop(0), 0, 9, 0.0, purpose=purpose)
+
+    root = _fastapi_root()
+    arm = Arm4AgentLoop(llm=Agent(), tokenizer=tok)
+    arm.index(root, {})
+    task = load_tasks("fastapi", repo_root=root, limit=1)[0]
+    ctx = arm.retrieve(task.query, task.seed_dict())
+    verify_ranking(ctx.items)
+    meta = ctx.build_meta
+    grep = next(it for it in ctx.items if it.kind == "tool_result_grep" and it.provenance["tool"] == "grep")
+    read = next(it for it in ctx.items if it.kind == "tool_result_read")
+    shown = [ln for ln in grep.content.split("\n")[1:] if not ln.startswith("[")]
+    ok = (len(shown) == C.AGENT_GREP_MAX_LINES and "fastapi.dependencies.utils.get_dependant" in read.symbols
+          and read.content.count("\n") <= C.AGENT_READ_MAX_LINES + 2 and not meta["forced_answer"]
+          and meta["tool_calls"] == 3 and ctx.total_tokens <= C.RETRIEVAL_BUDGET)
+    return ok, (f"{meta['turn_count']} turns, {meta['tool_calls']} tool calls, {len(ctx.items)} items "
+                f"({ctx.total_tokens} tokens); grep shows {len(shown)} lines; read maps to {len(read.symbols)} "
+                f"definitions; answered via tool: {not meta['forced_answer']}")
 
 
 def check_arm5_trimming(tok):
@@ -356,6 +402,7 @@ CHECKS = [
     ("arm1_dense_encoder", check_arm1_dense_encoder),
     ("arm2_packing", check_arm2_packing),
     ("arm3_lsp_ready", check_arm3_lsp_ready),
+    ("arm4_agent_tools", check_arm4_agent_tools),
     ("arm5_trimming", check_arm5_trimming),
     ("tokenizer_parity", check_tokenizer_parity),
     ("scorer_dispatch", check_scorer_dispatch),

@@ -43,12 +43,8 @@ def _raw(arm, task, items, budget=13_000, meta=None):
     return {"bundle": ctx.to_dict(), "completion": {"text": '{"symbols": ["x.y"]}', "generation_tokens": 4, "latency_seconds": 1.0}}
 
 
-def test_seven_adapters_registered_and_stubs_point_to_milestones():
-    assert set(ADAPTERS) == {"arm0", "arm1", "arm2", "arm3", "arm4", "arm5", "oracle"}
-    t = _task()
-    for arm, ms in (("arm4", "M3"),):                          # arm2, arm3: real since M2
-        with pytest.raises(NotImplementedError, match=ms):
-            adapt(arm, {}, t)
+def test_seven_adapters_registered():
+    assert set(ADAPTERS) == {"arm0", "arm1", "arm2", "arm3", "arm4", "arm5", "oracle"}  # no stubs since M3
 
 
 def test_active_adapters_produce_valid_pairs_and_enforce_kinds():

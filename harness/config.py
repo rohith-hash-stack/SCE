@@ -1,8 +1,8 @@
 """Every constant the harness uses. Nothing else in `harness/` hard-codes a
 threshold, a budget, a path or a model name; it reads it from here.
 
-Arms 0, 1, 5 and the Oracle are real since M1, Arms 2 and 3 since M2; Arm 4
-is declared (with its fidelity grade) but stubbed until M3.
+Arms 0, 1, 5 and the Oracle are real since M1, Arms 2 and 3 since M2, Arm 4
+since M3.
 """
 from __future__ import annotations
 
@@ -90,9 +90,9 @@ FIDELITY = {
     "arm5": FidelityGrade.HIGH,
     "oracle": FidelityGrade.CEILING,
 }
-#: Arms implemented so far (M1: 0, 1, 5, oracle; M2: 2, 3). The others raise NotImplementedError.
-ACTIVE_ARMS = ["arm0", "arm1", "arm2", "arm3", "arm5", "oracle"]
-STUB_MILESTONE = {"arm4": "M3"}
+#: Arms implemented (M1: 0, 1, 5, oracle; M2: 2, 3; M3: 4).
+ACTIVE_ARMS = ["arm0", "arm1", "arm2", "arm3", "arm4", "arm5", "oracle"]
+STUB_MILESTONE: dict[str, str] = {}
 #: Run-time subset of the implemented arms, e.g. HARNESS_ACTIVE_ARMS=arm0,arm5,oracle
 #: for a single-arm baseline. Unknown or not-yet-implemented arms are rejected.
 _ACTIVE_ARMS_OVERRIDE = os.environ.get("HARNESS_ACTIVE_ARMS")

@@ -24,12 +24,12 @@ def _active_arms(env_value):
 
 
 def test_active_arms_default_and_override():
-    assert _active_arms(None).stdout.strip() == "arm0,arm1,arm2,arm3,arm5,oracle"
+    assert _active_arms(None).stdout.strip() == "arm0,arm1,arm2,arm3,arm4,arm5,oracle"
     assert _active_arms("arm0, arm5 ,oracle").stdout.strip() == "arm0,arm5,oracle"
 
 
-@pytest.mark.parametrize("bad", ["arm4", "arm0,armX", ","])
-def test_active_arms_rejects_stub_unknown_or_empty(bad):
+@pytest.mark.parametrize("bad", ["arm9", "arm0,armX", ","])
+def test_active_arms_rejects_unknown_or_empty(bad):
     out = _active_arms(bad)
     assert out.returncode != 0 and "HARNESS_ACTIVE_ARMS" in out.stderr
 

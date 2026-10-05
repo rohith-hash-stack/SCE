@@ -240,9 +240,20 @@ def adapt_arm3_lsp(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]
     return ctx, _answer("arm3", task, raw["completion"])
 
 
-def adapt_arm4_agent(raw: dict, task):
-    # M3: tool_result_* items get symbol_provenance "tool_result" (KIND_PROVENANCE)
-    raise NotImplementedError("Arm 4 (agent loop) adapter arrives in M3")
+def adapt_arm4_agent(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
+    """Tool results the agent's prompt held at its final call: reads,
+    greps/globs and digests (`tool_result`). The answer came from its answer
+    tool (`answer_tool`), or, when it never called it, from the uniform
+    answer prompt (forced_answer: ordinary extraction)."""
+    kinds = {"tool_result_grep", "tool_result_read", "tool_result_digest"}
+    ctx = _with_symbol_provenance(_context(raw, "arm4", task, kinds), _by_kind)
+    for key in ("turn_count", "tool_calls", "forced_answer", "trajectory"):
+        if key not in ctx.build_meta:
+            raise ValueError(f"arm4 bundle missing build_meta[{key!r}]")
+    if ctx.build_meta["turn_count"] > C.AGENT_MAX_TURNS + 1:
+        raise ValueError("arm4 exceeded the turn cap")
+    method = None if ctx.build_meta["forced_answer"] else "answer_tool"
+    return ctx, _answer("arm4", task, raw["completion"], method_override=method)
 
 
 def adapt_arm5_prism(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:

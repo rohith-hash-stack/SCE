@@ -37,6 +37,15 @@ def _scripted_llm():
     def llm(system, user, max_tokens=0, seed=None, purpose="answer"):
         if purpose in ("turn1", "turn2b"):
             return Completion(json.dumps({"requested_symbols": []}), 0, 5, 0.0, model="scripted", purpose=purpose)
+        if purpose == "agent_turn":     # Arm 4: grep once, then answer
+            if "<tool_results>" not in user:
+                call = {"name": "grep", "arguments": {"pattern": "def get_typed_annotation", "glob": "*.py"}}
+            else:
+                resp = ("```python\ndef f(): return 1\n```" if "fenced ```python" in user else
+                        "It evaluates `fastapi.dependencies.utils.get_typed_annotation`." if "few sentences of prose" in user
+                        else '```json\n{"reasoning": "s", "symbols": ["fastapi.dependencies.utils.get_typed_annotation"]}\n```')
+                call = {"name": "answer", "arguments": {"response": resp}}
+            return Completion(f"<tools>{json.dumps(call)}</tools>", 0, 9, 0.0, model="scripted", purpose=purpose)
         if "fenced ```python" in user:
             return Completion("```python\ndef f(): return 1\n```", 0, 9, 0.0, model="scripted", purpose=purpose)
         if "few sentences of prose" in user:
@@ -256,6 +265,8 @@ def _run(args, out_dir: Path, report: dict) -> int:
         _index("arm2", lambda: build_arm("arm2", tokenizer=tok), {})
     if "arm3" in C.ACTIVE_ARMS:   # needs pyright-langserver and the editable install (charter)
         _index("arm3", lambda: build_arm("arm3", tokenizer=tok), {})
+    if "arm4" in C.ACTIVE_ARMS:   # needs ripgrep
+        _index("arm4", lambda: build_arm("arm4", llm=llm, tokenizer=tok), {})
     report["index_failures"] = index_failures
     arm_order = [a for a in C.ACTIVE_ARMS if a in arms]
 
