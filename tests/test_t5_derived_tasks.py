@@ -136,3 +136,57 @@ def test_derived_gold_names_are_plain_identifiers(corpus):
     for f in _derived(corpus):
         gold = yaml.safe_load(f.read_text())["adjudicated"]["critical_callers"]
         assert all(ident.match(g) for g in gold), [g for g in gold if not ident.match(g)]
+
+
+# ------------------------------------------------- Pyright cross-check, cap
+def test_cross_check_excludes_a_task_when_prism_and_pyright_differ_by_one_symbol():
+    prism = {("pkg/a.py", 10), ("pkg/b.py", 20), ("pkg/c.py", 30)}
+    same = D.cross_check(prism, {"seed_found": True, "identities": set(prism)})
+    assert same["agree"] and same["only_prism"] == [] and same["only_pyright"] == []
+    one_more = D.cross_check(prism, {"seed_found": True, "identities": prism | {("pkg/d.py", 5)}})
+    assert not one_more["agree"] and one_more["only_pyright"] == [["pkg/d.py", 5]] and one_more["only_prism"] == []
+    one_less = D.cross_check(prism, {"seed_found": True, "identities": prism - {("pkg/c.py", 30)}})
+    assert not one_less["agree"] and one_less["only_prism"] == [["pkg/c.py", 30]]
+    unlocated = D.cross_check(prism, {"seed_found": False, "identities": set()})
+    assert not unlocated["agree"] and unlocated["pyright_seed_found"] is False
+
+
+def test_definition_identity_skips_decorators(tmp_path):
+    f = tmp_path / "m.py"
+    f.write_text("import functools\n\n\n@functools.lru_cache\ndef f():\n    return 1\n\n\nclass C:\n"
+                 "    @property\n    def p(self):\n        return f()\n")
+    assert D.definition_identity(str(tmp_path), str(f), "m.f", 4) == ("m.py", 5)          # range starts at @
+    assert D.definition_identity(str(tmp_path), str(f), "m.C.p#2", 10) == ("m.py", 11)
+
+
+@pytest.mark.parametrize("corpus", CORPORA)
+def test_derived_gold_sets_respect_the_cap(corpus):
+    for f in _derived(corpus):
+        gold = yaml.safe_load(f.read_text())["adjudicated"]["critical_callers"]
+        assert D.MIN_CALLERS <= len(gold) <= D.MAX_GOLD, (f.name, len(gold))
+
+
+@pytest.mark.parametrize("corpus", ["fastapi", "django"])
+def test_python_gold_is_cross_verified_with_pyright(corpus):
+    for f in _derived(corpus):
+        assert "# Cross-verified: Pyright textDocument/references" in f.read_text(), f.name
+
+
+# ----------------------------------------------------------- bias control
+def test_t5_bias_control_compares_arm3_with_the_other_retrieval_arms():
+    import pandas as pd
+
+    from harness.reporting.t5_bias_control import bias_control
+    rows = []
+    for task in ("trpc_t5_001", "express_t5_001"):
+        for arm, cpi in (("arm0", 0.0), ("arm1", 0.2), ("arm2", 0.2), ("arm3", 0.8), ("arm4", 0.2), ("arm5", 0.2),
+                         ("oracle", 1.0)):
+            rows.append({"task_id": task, "repo_id": task.split("_")[0], "task_type": "T5_blast_radius",
+                         "arm": arm, "uniform_cpi": cpi})
+    rows.append({"task_id": "fastapi_t5_001", "repo_id": "fastapi", "task_type": "T5_blast_radius",
+                 "arm": "arm3", "uniform_cpi": 0.0})                     # Python: not part of the control
+    res = bias_control(pd.DataFrame(rows))
+    assert res["n_tasks"] == 2 and res["by_arm"]["arm3"]["mean_overlap"] == pytest.approx(0.8)
+    assert res["comparison_arms_mean_overlap"] == pytest.approx(0.2)
+    assert res["arm3_ratio"] == pytest.approx(4.0)
+    assert set(res["by_corpus"]) == {"express", "trpc"}

@@ -34,7 +34,17 @@ Gold names drop PRISM's `#N` collision suffix (`fastapi.routing.app#2` is a
 second nested `app`; no answer can name the suffix), merging such entries.
 
 Seeds with fewer than `MIN_CALLERS` production callers are skipped: there is
-no blast radius to measure. T2 task files are never modified.
+no blast radius to measure. Tasks whose gold set exceeds `MAX_GOLD` (30) are
+excluded, not truncated: above it the task measures enumeration rather than
+retrieval.
+
+`--verify-with-pyright` (Python only): PRISM is Arm 5, so a gold set taken
+from PRISM's graph alone is tautological for it. With the flag, the same
+transitive walk is repeated through Pyright's `textDocument/references`, and
+a task is kept only if both tools find exactly the same production callers.
+Callers are compared as definition identities (file, line of the `def`),
+because PRISM flattens nested functions (`fastapi.routing.app`) where
+Pyright nests them. Gold names stay PRISM's, the convention of the T2 gold. T2 task files are never modified.
 """
 from __future__ import annotations
 
@@ -48,6 +58,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIN_CALLERS = 2
+#: Gold sets larger than this are excluded (not truncated): above it the task
+#: measures enumeration rather than retrieval.
+MAX_GOLD = 30
 PY_CORPORA = {"fastapi", "django"}
 NON_PRODUCTION = re.compile(
     r"(^|/)(tests?|__tests__|testing|docs_src|docs?|examples?|benchmarks?|scripts)(/|$)"
@@ -128,8 +141,130 @@ def python_run(root: str, seeds: list[str]) -> dict[str, dict]:
     def callers_of(sym: str) -> set[tuple[str, str]]:
         return {(p, rel_of(p)) for p in preds.get(sym, ())}
 
-    return {seed: {"seed_found": seed in builder.graph, "callers": closure(callers_of, seed), "module_level": 0}
-            for seed in seeds}
+    def identity(sym: str) -> tuple[str, int] | None:
+        s = builder.symbol_table.get(sym)
+        return definition_identity(root, s.file, sym, s.line_range[0]) if s is not None else None
+
+    out = {}
+    for seed in seeds:
+        callers = closure(callers_of, seed)
+        out[seed] = {"seed_found": seed in builder.graph, "callers": callers, "module_level": 0,
+                     "seed_identity": identity(seed), "identities": {c: identity(c) for c in callers}}
+    return out
+
+
+def definition_identity(root: str, path: str, name: str, start_line: int) -> tuple[str, int]:
+    """(path relative to `root`, 1-based line of the `def`/`class` keyword):
+    a name-independent identity for a definition. PRISM's line range starts
+    at the first decorator, Pyright's selectionRange at the name, so both
+    are moved to the line that defines the name."""
+    leaf = re.escape(_COLLISION_SUFFIX.sub("", name).rsplit(".", 1)[-1])
+    pat = re.compile(rf"^\s*(async\s+def|def|class)\s+{leaf}\b")
+    lines = Path(path).read_text(encoding="utf-8", errors="replace").split("\n")
+    for i in range(max(start_line - 1, 0), min(start_line + 200, len(lines))):
+        if pat.match(lines[i]):
+            return os.path.relpath(path, root), i + 1
+    return os.path.relpath(path, root), start_line
+
+
+# ----------------------------------------------------- Python cross-check
+#: LSP SymbolKinds that can be a caller: class, method, constructor, function
+_CALLER_KINDS = {5, 6, 9, 12}
+
+
+def pyright_run(root: str, corpus: str, seeds: list[str]) -> dict[str, dict]:
+    """The same transitive production-caller walk as `python_run`, through
+    Pyright instead of PRISM: `textDocument/references` on a definition's
+    name, kept when the reference is a call target (`f(...)`, `a.f(...)`,
+    located with Python's ast), credited to the innermost enclosing
+    function, method or class in Pyright's outline, then followed from that
+    definition's own name. Results are definition identities
+    (`definition_identity`), so the two tools' naming does not matter."""
+    import ast
+
+    from harness.arms.arm3_lsp import Arm3PyrightLSP, utf16_col
+    from harness.pyright_client import path_to_uri, uri_to_path
+
+    class _Count:
+        name = "count"
+        def count(self, t): return len(t.split())
+
+    arm = Arm3PyrightLSP(tokenizer=_Count(), require_editable=False)
+    arm.index(root, {"repo_id": corpus})
+    root = arm.repo_root
+    call_sites: dict[str, set[tuple[int, int]]] = {}
+
+    def calls_in(path: str) -> set[tuple[int, int]]:
+        """(line0, utf16 col) of every call target's name in `path`."""
+        if path not in call_sites:
+            lines, found = arm._lines(path), set()
+            try:
+                tree = ast.parse("\n".join(lines))
+            except SyntaxError:
+                tree = None
+            for node in ast.walk(tree) if tree is not None else ():
+                if isinstance(node, ast.Call):
+                    f = node.func
+                    if isinstance(f, ast.Name):
+                        found.add((f.lineno - 1, utf16_col(lines[f.lineno - 1], f.col_offset)))
+                    elif isinstance(f, ast.Attribute) and f.end_lineno is not None:
+                        line = lines[f.end_lineno - 1]
+                        found.add((f.end_lineno - 1, utf16_col(line, f.end_col_offset - len(f.attr))))
+            call_sites[path] = found
+        return call_sites[path]
+
+    def enclosing(path: str, line: int, char: int) -> dict | None:
+        node, best = arm._symbols(path, {}), None
+        while True:
+            hit = next((s for s in node if arm._contains(s, line, char)), None)
+            if hit is None:
+                return best
+            if int(hit.get("kind", 0)) in _CALLER_KINDS:
+                best = hit
+            node = hit.get("children") or []
+
+    def name_pos(sym: dict) -> tuple[int, int]:
+        pos = sym.get("selectionRange", sym["range"])["start"]
+        return pos["line"], pos["character"]
+
+    def callers_of(key: tuple[str, int, int]) -> set[tuple[tuple[str, int, int], str]]:
+        path, line, char = key
+        arm._open(path, {})
+        refs = arm.client.request("textDocument/references", {
+            "textDocument": {"uri": path_to_uri(path)}, "position": {"line": line, "character": char},
+            "context": {"includeDeclaration": False}}) or []
+        out = set()
+        for r in refs:
+            p = str(Path(uri_to_path(r["uri"])).resolve())
+            if not arm._in_repo(p):
+                continue
+            start = r["range"]["start"]
+            if (start["line"], start["character"]) not in calls_in(p):
+                continue
+            sym = enclosing(p, start["line"], start["character"])
+            if sym is None:
+                continue
+            caller = (p, *name_pos(sym))
+            if caller != key:
+                out.add((caller, os.path.relpath(p, root)))
+        return out
+
+    result = {}
+    try:
+        for seed in seeds:
+            path, inner = arm._resolve_seed(seed)
+            sym = arm._find_symbol(arm._symbols(path, {}), inner) if path and inner else None
+            if sym is None:
+                result[seed] = {"seed_found": False, "identities": set()}
+                continue
+            start = (path, *name_pos(sym))
+            found = closure(callers_of, start)
+            result[seed] = {"seed_found": True,
+                            "identities": {(rel, k[1] + 1) for k, (_, rel) in found.items() if is_production(rel)}
+                            - {(os.path.relpath(path, root), start[1] + 1)}}
+    finally:
+        arm.close()
+    return result
 
 
 # -------------------------------------------------------------- TypeScript
@@ -229,7 +364,7 @@ def typescript_run(root: str, corpus: str, seeds: list[str], reverse: bool = Fal
 
 
 # ------------------------------------------------------------------ driver
-def derive(corpus: str) -> dict:
+def derive(corpus: str, verify_with_pyright: bool = False) -> dict:
     from benchmarks.corpora.resolver import resolve
     from benchmarks.ground_truth.loader import load_tasks_from_dir
 
@@ -241,6 +376,11 @@ def derive(corpus: str) -> dict:
     # order-dependent result (e.g. a language server's loaded project set) shows up
     if corpus in PY_CORPORA:
         first, second = python_run(root, seeds), python_run(root, seeds[::-1])
+        if verify_with_pyright:
+            candidates = sorted({t.seed_symbol for t in t2 if
+                                 MIN_CALLERS <= len(gold_names(first[t.seed_symbol]["callers"], t.seed_symbol))
+                                 <= MAX_GOLD})
+            pyright = pyright_run(root, corpus, candidates)
     else:
         first, second = typescript_run(root, corpus, seeds), typescript_run(root, corpus, seeds, reverse=True)
     rows = []
@@ -257,10 +397,36 @@ def derive(corpus: str) -> dict:
             row["status"] = "skipped: seed not found"
         elif len(prod_a) < MIN_CALLERS:
             row["status"] = f"skipped: {len(prod_a)} production caller(s) < {MIN_CALLERS}"
+        elif len(prod_a) > MAX_GOLD:
+            row["status"] = f"excluded: gold set {len(prod_a)} > {MAX_GOLD}"
         else:
             row["status"] = "derived"
+        if row["status"] == "derived" and corpus in PY_CORPORA and verify_with_pyright:
+            check = cross_check(prism_production_identities(a, t.seed_symbol), pyright.get(t.seed_symbol))
+            row["pyright_check"] = check
+            if not check["agree"]:
+                row["status"] = (f"excluded: Pyright disagrees (only PRISM {len(check['only_prism'])}, "
+                                 f"only Pyright {len(check['only_pyright'])})")
         rows.append(row)
     return {"corpus": corpus, "root": root, "rows": rows}
+
+
+def prism_production_identities(run: dict, seed: str) -> set[tuple[str, int]]:
+    """Definition identities of PRISM's production callers (seed excluded)."""
+    ids = {run["identities"][c] for c, (_, rel) in run["callers"].items()
+           if is_production(rel) and run["identities"].get(c) is not None}
+    return ids - {run.get("seed_identity")}
+
+
+def cross_check(prism: set[tuple[str, int]], pyright: dict | None) -> dict:
+    """A task is kept only when PRISM and Pyright find exactly the same
+    production callers (as definition identities)."""
+    if pyright is None or not pyright.get("seed_found"):
+        return {"agree": False, "pyright_seed_found": False, "prism": len(prism), "pyright": 0,
+                "only_prism": sorted(map(list, prism)), "only_pyright": []}
+    other = set(pyright["identities"])
+    return {"agree": prism == other, "pyright_seed_found": True, "prism": len(prism), "pyright": len(other),
+            "only_prism": sorted(map(list, prism - other)), "only_pyright": sorted(map(list, other - prism))}
 
 
 def short_name(t2_task_id: str) -> str:
@@ -287,6 +453,8 @@ def render_yaml(corpus: str, pinned_commit: str, task_id: str, row: dict) -> str
         "# Generated by benchmarks/scripts/derive_t5_from_t2.py; do not edit by hand.",
         f"# Gold affected set: the seed's transitive callers via {method},",
         "# production code only (test/example/docs/benchmark/script code excluded).",
+        *([f"# Cross-verified: Pyright textDocument/references gives the same {len(gold)} production callers."]
+          if row.get("pyright_check", {}).get("agree") else []),
         "# annotation_a and annotation_b are two independent derivation runs (fresh",
         "# build / fresh server); their agreement checks determinism, not human judgement.",
         f"task_id: {task_id}",
@@ -309,9 +477,11 @@ def main(argv=None) -> int:
     ap.add_argument("--corpus", required=True)
     ap.add_argument("--write", action="store_true", help="write the derived tasks' YAML files")
     ap.add_argument("--report", default=None, help="write the per-task derivation report as JSON")
+    ap.add_argument("--verify-with-pyright", action="store_true",
+                    help="Python corpora: keep a task only if Pyright's references give the same callers")
     a = ap.parse_args(argv)
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 10_000))
-    out = derive(a.corpus)
+    out = derive(a.corpus, verify_with_pyright=a.verify_with_pyright)
     pins = json.loads((REPO_ROOT / "benchmarks/corpora/pinned_commits.json").read_text())
     pinned = pins[a.corpus]["pinned_commit"] if isinstance(pins.get(a.corpus), dict) else pins[a.corpus]
     task_dir = REPO_ROOT / f"benchmarks/ground_truth/tasks/{a.corpus}"
