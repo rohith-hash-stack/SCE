@@ -134,6 +134,34 @@ class TestPromptHelpers:
         assert ok is False, "truncated mid-string - json.loads must still genuinely fail"
         assert set(symbols) == candidate_universe
 
+    def test_parse_requested_symbols_fenced_json_parses_in_model_order(self):
+        """The M2 Turn-1 shape on all 5 FastAPI tasks: the JSON wrapped in a
+        ```json fence. It must parse (not fall to salvage), keeping the
+        model's own order."""
+        text = '```json\n{"thought_process": "x", "requested_symbols": ["a.z", "a.b", "a.m"]}\n```'
+        symbols, ok = _parse_requested_symbols(text, {"a.b", "a.m", "a.z"})
+        assert ok is True and symbols == ["a.z", "a.b", "a.m"]
+
+    def test_parse_requested_symbols_untagged_fence_and_prose_preamble_parse(self):
+        text = 'Here you go:\n```\n{"requested_symbols": ["a.z", "a.b"]}\n```\nDone.'
+        assert _parse_requested_symbols(text) == (["a.z", "a.b"], True)
+
+    def test_parse_requested_symbols_unfenced_json_still_parses(self):
+        assert _parse_requested_symbols('  {"requested_symbols": ["a.z", "a.b"]}  ') == (["a.z", "a.b"], True)
+
+    def test_parse_requested_symbols_partial_fence_parses(self):
+        """An opening fence that never closed, around complete JSON."""
+        text = '```json\n{"requested_symbols": ["a.z", "a.b"]}\n'
+        assert _parse_requested_symbols(text) == (["a.z", "a.b"], True)
+
+    def test_parse_requested_symbols_malformed_fenced_json_salvages_in_first_mention_order(self):
+        """Fenced but truncated: json.loads fails, the salvage runs, and it
+        keeps first-mention order with duplicates and unknown names dropped
+        (it no longer sorts)."""
+        text = '```json\n{"requested_symbols": ["a.z", "a.b", "x.unknown", "a.z", "a.m'
+        symbols, ok = _parse_requested_symbols(text, {"a.b", "a.m", "a.z"})
+        assert ok is False and symbols == ["a.z", "a.b"]
+
     def test_parse_requested_symbols_backtick_salvage_still_ignores_unknown_names(self):
         candidate_universe = {"a.b.real"}
         text = '{"thought_process": "See `a.b.real` and also `a.b.not_a_real_candidate`"'

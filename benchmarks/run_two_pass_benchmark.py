@@ -205,8 +205,27 @@ def _salvage_requested_symbols(response_text: str, candidate_universe: set[str] 
     both salvage the exact same way."""
     if not candidate_universe:
         return []
-    salvaged = _QUALIFIED_NAME_RE.findall(response_text)
-    return sorted(set(salvaged) & candidate_universe)
+    # first-mention order, de-duplicated: the model's own request order is
+    # kept (it decides PRISM's delivery order); never sorted
+    return list(dict.fromkeys(n for n in _QUALIFIED_NAME_RE.findall(response_text) if n in candidate_universe))
+
+
+#: A Markdown code fence: an opening ``` (optionally tagged, e.g. ```json)
+#: and its closing ```.
+_FENCED_BLOCK_RE = re.compile(r"```[A-Za-z0-9_+-]*[ \t]*\n?(.*?)```", re.DOTALL)
+_OPEN_FENCE_RE = re.compile(r"^```[A-Za-z0-9_+-]*[ \t]*\n?")
+
+
+def _strip_code_fence(response_text: str) -> str:
+    """The JSON payload of a Turn-1 response: the content of its first
+    fenced block when there is one (models wrap JSON in ```json ... ```),
+    the text after an opening fence that never closed (a truncated
+    response), otherwise the text itself."""
+    text = response_text.strip()
+    block = _FENCED_BLOCK_RE.search(text)
+    if block:
+        return block.group(1).strip()
+    return _OPEN_FENCE_RE.sub("", text, count=1).strip()
 
 
 def _check_turn1_degeneration(
@@ -510,7 +529,7 @@ def _parse_requested_symbols(
     inventing a name, never trusting an unresolvable one.
     """
     try:
-        obj = json.loads(response_text.strip())
+        obj = json.loads(_strip_code_fence(response_text))
     except json.JSONDecodeError:
         return _salvage_requested_symbols(response_text, candidate_universe), False
     if not isinstance(obj, dict):
