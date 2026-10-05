@@ -250,7 +250,7 @@ def adapt_arm4_agent(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswe
     for key in ("turn_count", "tool_calls", "forced_answer", "trajectory"):
         if key not in ctx.build_meta:
             raise ValueError(f"arm4 bundle missing build_meta[{key!r}]")
-    if ctx.build_meta["turn_count"] > C.AGENT_MAX_TURNS + 1:
+    if ctx.build_meta["turn_count"] > int(ctx.build_meta.get("arm4_max_turns", C.ARM4_MAX_TURNS)) + 1:
         raise ValueError("arm4 exceeded the turn cap")
     method = None if ctx.build_meta["forced_answer"] else "answer_tool"
     return ctx, _answer("arm4", task, raw["completion"], method_override=method)

@@ -157,11 +157,11 @@ def test_duplicate_calls_are_suppressed_by_sorted_arguments(repo):
 
 def test_calls_per_turn_and_turn_caps(repo):
     six = tools(*[("read", {"path": "pkg/mod.py", "start_line": i}) for i in range(1, 7)])
-    llm = Scripted(six, *[tools(("glob", {"pattern": f"**/many{i}.py"})) for i in range(C.AGENT_MAX_TURNS)])
+    llm = Scripted(six, *[tools(("glob", {"pattern": f"**/many{i}.py"})) for i in range(C.ARM4_MAX_TURNS)])
     ctx = arm_for(repo, llm).retrieve("q", SEED)
     assert ctx.build_meta["calls_over_cap"] == 1                        # the 6th call of turn 1
-    assert len(llm.seen) == C.AGENT_MAX_TURNS and ctx.build_meta["forced_answer"] is True
-    assert ctx.build_meta["turn_count"] == C.AGENT_MAX_TURNS + 1         # + the forced answer
+    assert len(llm.seen) == C.ARM4_MAX_TURNS and ctx.build_meta["forced_answer"] is True
+    assert ctx.build_meta["turn_count"] == C.ARM4_MAX_TURNS + 1         # + the forced answer
 
 
 def test_answer_in_batch_runs_siblings_first_and_does_not_deliver_them(repo):
@@ -220,7 +220,7 @@ def _task():
 def test_pipeline_uses_the_agent_answer_or_forces_one(repo, answers):
     from harness.pipeline import Pipeline
     turns = [tools(("grep", {"pattern": "def f"})), tools(ANSWER)] if answers else \
-        [tools(("glob", {"pattern": f"**/many{i % 3}.py", "n": i})) for i in range(C.AGENT_MAX_TURNS)]
+        [tools(("glob", {"pattern": f"**/many{i % 3}.py", "n": i})) for i in range(C.ARM4_MAX_TURNS)]
     llm = Scripted(*turns)
     arm = arm_for(repo, llm)
     out = Pipeline({"arm4": arm}, llm, Words()).run_cell("arm4", _task(), seed=42)
@@ -308,3 +308,47 @@ def test_fix3_every_turn_raw_text_is_in_the_bundle(repo, tmp_path):
     assert [s["raw_text"] for s in traj] == turns
     assert [s["is_final"] for s in traj] == [False, False, False, True]
     assert traj[1]["parsed_calls"] == [{"name": "grep", "arguments": {"pattern": "def f"}}] and traj[2]["parsed_calls"] == []
+
+
+# ---- M3 closure fixes: unclosed final block, bare-array answers, configurable turn cap ----
+UNCLOSED_ANSWER = ('<tools>{"name": "answer", "arguments": {"response": "```json\\n{\\"reasoning\\": \\"r\\", '
+                   '\\"symbols\\": [\\"pkg.mod.f\\"]}\\n```"}}')                    # the M3 004 shape: no </tools>
+
+
+def test_an_unclosed_final_answer_block_parses_and_ends_the_loop(repo):
+    calls, blocks, bad = parse_tool_calls(UNCLOSED_ANSWER)
+    assert [c["name"] for c in calls] == ["answer"] and (blocks, bad) == (1, 0)
+    llm = Scripted(tools(("grep", {"pattern": "def f"})), UNCLOSED_ANSWER)
+    ctx = arm_for(repo, llm).retrieve("q", SEED)
+    last = ctx.build_meta["trajectory"][-1]
+    assert last["is_final"] and last["answer_source"] == "answer_tool" and ctx.build_meta["turn_count"] == 2
+    assert ctx.build_meta["forced_answer"] is False and "pkg.mod.f" in ctx.build_meta["agent_answer"]["text"]
+
+
+def test_only_a_parseable_final_block_is_rescued():
+    # an unclosed block followed by a closed one is not the final block
+    text = '<tools>{"name": "grep", "arguments": {"pattern": "a"}} then ' + tools(("glob", {"pattern": "*.py"}))
+    assert [c["name"] for c in parse_tool_calls(text)[0]] == ["glob"]
+    # an unclosed final block whose JSON is incomplete falls through to the existing behaviour
+    assert parse_tool_calls('<tools>{"name": "answer", "arguments": {"response": "trunc')[:2] == ([], 0)
+
+
+def test_a_fenced_bare_array_is_a_direct_answer(repo):
+    from harness.pipeline import Pipeline
+    bare = '```json\n["pkg.mod.f", "pkg.mod.K.m"]\n```'                        # the M3 001 turn-2 shape
+    llm = Scripted(tools(("grep", {"pattern": "def f"})), bare)
+    ctx = arm_for(repo, llm).retrieve("q", SEED)
+    last = ctx.build_meta["trajectory"][-1]
+    assert last["is_final"] and last["answer_source"] == "direct" and last["raw_text"] == bare
+    llm = Scripted(tools(("grep", {"pattern": "def f"})), bare)
+    out = Pipeline({"arm4": arm_for(repo, llm)}, llm, Words()).run_cell("arm4", _task(), seed=42)
+    assert out.ans.answer_symbols == ["pkg.mod.f", "pkg.mod.K.m"] and out.ans.extraction_success
+
+
+def test_the_turn_cap_is_configurable(repo, monkeypatch):
+    monkeypatch.setattr(C, "ARM4_MAX_TURNS", 15)
+    llm = Scripted(*[tools(("glob", {"pattern": f"**/many{i % 3}.py", "n": i})) for i in range(15)])
+    ctx = arm_for(repo, llm).retrieve("q", SEED)
+    assert len(llm.seen) == 15 and ctx.build_meta["arm4_max_turns"] == 15
+    assert ctx.build_meta["forced_answer"] is True and ctx.build_meta["turn_count"] == 16
+    assert C.ARM4_MAX_CALLS_PER_TURN == 5

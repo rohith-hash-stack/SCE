@@ -65,7 +65,9 @@ from harness.scoring.adapters import extract_answer
 from harness.scoring.canonical import DeliveredContext, DeliveredItem, ItemKind
 from harness.scoring.latency import timed
 
-TOOLS_RE = re.compile(r"<tools>\s*(.*?)\s*</tools>", re.DOTALL)
+#: a closed block; its body never contains another opening tag, so an unclosed
+#: block cannot swallow the next one
+TOOLS_RE = re.compile(r"<tools>\s*((?:(?!<tools>).)*?)\s*</tools>", re.DOTALL)
 HERMES_RE = re.compile(r"<tool_call>")
 TOOL_NAMES = ("grep", "glob", "read", "answer")
 
@@ -129,11 +131,32 @@ class ToolResult:
     outcome: str = "ok"
 
 
+def _unclosed_final_block(text: str) -> str | None:
+    """The body of a final `<tools>` block the model never closed (it
+    stopped generating after the JSON), when the body parses as JSON;
+    else None. Only the text after the last `</tools>` is considered, so an
+    intermediate block is never rescued this way."""
+    tail = text.rsplit("</tools>", 1)[-1]
+    start = tail.rfind("<tools>")
+    if start < 0:
+        return None
+    body = tail[start + len("<tools>"):].strip()
+    try:
+        json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    return body
+
+
 def parse_tool_calls(text: str) -> tuple[list[dict], int, int]:
     """Every <tools> block in `text` -> (calls, blocks, unparseable_blocks).
-    A block holds one JSON object or a list of them."""
+    A block holds one JSON object or a list of them. A final block left
+    unclosed counts when its body parses as JSON."""
     calls, bad = [], 0
     blocks = TOOLS_RE.findall(text or "")
+    tail = _unclosed_final_block(text or "")
+    if tail is not None:
+        blocks.append(tail)
     for raw in blocks:
         try:
             obj = json.loads(raw)
@@ -386,7 +409,7 @@ class Arm4AgentLoop(RetrievalArm):
         last_prompt_tokens = 0
         window_limit = C.CONTEXT_WINDOW - C.GENERATION_RESERVE
         with timed(lat, "L_retrieve"):
-            for turn in range(1, C.AGENT_MAX_TURNS + 1):
+            for turn in range(1, C.ARM4_MAX_TURNS + 1):
                 msgs = self._conversation(base, turns)
                 if self._tokens(msgs) > C.AGENT_COMPACTION_FRACTION * C.CONTEXT_WINDOW:
                     with timed(lat, "L_compact"):
@@ -406,12 +429,13 @@ class Arm4AgentLoop(RetrievalArm):
                               "completion_tokens": comp.completion_tokens, "finish_reason": comp.finish_reason,
                               "is_error": False}
                 turn_results: list[ToolResult] = []
-                if not n_blocks and self._direct_answer(comp.text, task_type):
+                direct = self._direct_answer(comp.text, task_type) if not n_blocks else None
+                if direct is not None:
                     # the model answered in the response format without the answer tool: accept it
                     stats["direct_answers"] += 1
                     step.update(is_final=True, answered=True, answer_source="direct")
                     trajectory.append(step)
-                    answer, answer_text = comp, comp.text
+                    answer, answer_text = comp, direct
                     break
                 if n_blocks and not calls:            # every block failed to parse
                     stats["parse_error_turns"] += 1
@@ -427,10 +451,10 @@ class Arm4AgentLoop(RetrievalArm):
                 others = [c for c in calls if c["name"] != "answer"]
                 # answer-in-batch: sibling calls run first, then the answer ends the loop
                 for k, call in enumerate(others, start=1):
-                    if k > C.AGENT_MAX_CALLS_PER_TURN:
+                    if k > C.ARM4_MAX_CALLS_PER_TURN:
                         stats["calls_over_cap"] += 1
                         turn_results.append(ToolResult(f"r{turn}.{k}", call["name"], call["arguments"],
-                                                       f"error: at most {C.AGENT_MAX_CALLS_PER_TURN} calls per turn",
+                                                       f"error: at most {C.ARM4_MAX_CALLS_PER_TURN} calls per turn",
                                                        is_error=True))
                         continue
                     turn_results.append(self._execute(f"r{turn}.{k}", call, seen, stats, lat))
@@ -452,6 +476,7 @@ class Arm4AgentLoop(RetrievalArm):
         meta = {**self.fidelity_meta(), "query": query, "task_type": task_type, "over_budget": False,
                 "ranking_method": "agent_trajectory", "turn_count": len(trajectory) + (1 if forced else 0),
                 **stats, "forced_answer": forced, "trajectory": trajectory, "latency_ms": lat,
+                "arm4_max_turns": C.ARM4_MAX_TURNS,
                 "agent_prompt_tokens": last_prompt_tokens}
         if not forced:
             assert answer is not None
@@ -480,14 +505,24 @@ class Arm4AgentLoop(RetrievalArm):
                           outcome=extra.get("outcome", "error" if extra.get("is_error") else "ok"))
 
     @staticmethod
-    def _direct_answer(text: str, task_type: str) -> bool:
-        """A no-tool turn is an answer when it parses as one with the same
-        extraction every arm's answer goes through (T2/T5: the JSON object
-        with a non-empty `symbols` list; T3/T4: a fenced code block)."""
+    def _direct_answer(text: str, task_type: str) -> str | None:
+        """The answer text when a no-tool turn is an answer, else None.
+
+        Accepted, through the same extraction every arm's answer goes
+        through: T2/T5, the JSON object with a non-empty `symbols` list, or a
+        fenced bare JSON array of strings (the form the task texts
+        themselves show), rewritten as that object; T3/T4, a fenced code
+        block. T1 prose is never a direct answer."""
         if task_type not in DIRECT_ANSWER_TYPES:
-            return False
+            return None
         _text, symbols, _method, ok = extract_answer(text, task_type)
-        return ok and (bool(symbols) or task_type in ("T3_codegen", "T4_edit"))
+        if ok and (symbols or task_type in ("T3_codegen", "T4_edit")):
+            return text
+        if task_type in ("T2_localization", "T5_blast_radius"):
+            array = _bare_symbol_array(text)
+            if array:
+                return f"```json\n{json.dumps({'reasoning': '', 'symbols': array})}\n```"
+        return None
 
     @staticmethod
     def _answer_text(args: dict, task_type: str) -> str:
@@ -529,6 +564,24 @@ class Arm4AgentLoop(RetrievalArm):
         the uniform answer prompt over what it gathered."""
         meta = ctx.build_meta
         return compose_user_prompt(render_items(ctx), meta["query"], meta["task_type"])
+
+
+_FENCE_RE = re.compile(r"```[\w+-]*\s*\n?([\s\S]*?)```")
+
+
+def _bare_symbol_array(text: str) -> list[str] | None:
+    """A non-empty JSON array of strings, fenced or bare; else None."""
+    for cand in [b for b in _FENCE_RE.findall(text or "")] + [text or ""]:
+        cand = cand.strip()
+        if not cand.startswith("["):
+            continue
+        try:
+            arr = json.loads(cand)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(arr, list) and arr and all(isinstance(s, str) and s.strip() for s in arr):
+            return [s.strip() for s in arr]
+    return None
 
 
 def _id_key(msg_id: str) -> tuple[int, int]:

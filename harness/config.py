@@ -221,8 +221,9 @@ ARM3_REQUIRE_EDITABLE_INSTALL = os.environ.get("HARNESS_ARM3_REQUIRE_EDITABLE", 
 # --------------------------------------------------------------------------
 # Arm 4 — agent loop (M3)
 # --------------------------------------------------------------------------
-AGENT_MAX_TURNS = 10
-AGENT_MAX_CALLS_PER_TURN = 5
+#: Arm 4's turn cap (M4 tests 15 and 20 against this default) and per-turn call cap.
+ARM4_MAX_TURNS: int = 10
+ARM4_MAX_CALLS_PER_TURN: int = 5
 AGENT_GREP_MAX_LINES = 30
 AGENT_READ_MAX_LINES = 150
 AGENT_COMPACTION_FRACTION = 0.60
