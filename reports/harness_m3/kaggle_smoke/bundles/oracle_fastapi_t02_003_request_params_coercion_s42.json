@@ -1,0 +1,120 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "fastapi_t02_003_request_params_coercion",
+  "items": [
+   {
+    "source_id": "fastapi/dependencies/utils.py:740-816",
+    "content": "# fastapi/dependencies/utils.py:740-816  (fastapi.dependencies.utils.request_params_to_args)\ndef request_params_to_args(\n    fields: Sequence[ModelField],\n    received_params: Union[Mapping[str, Any], QueryParams, Headers],\n) -> Tuple[Dict[str, Any], List[Any]]:\n    values: Dict[str, Any] = {}\n    errors: List[Dict[str, Any]] = []\n\n    if not fields:\n        return values, errors\n\n    first_field = fields[0]\n    fields_to_extract = fields\n    single_not_embedded_field = False\n    default_convert_underscores = True\n    if len(fields) == 1 and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n        single_not_embedded_field = True\n        # If headers are in a Pydantic model, the way to disable convert_underscores\n        # would be with Header(convert_underscores=False) at the Pydantic model level\n        default_convert_underscores = getattr(\n            first_field.field_info, \"convert_underscores\", True\n        )\n\n    params_to_process: Dict[str, Any] = {}\n\n    processed_keys = set()\n\n    for field in fields_to_extract:\n        alias = None\n        if isinstance(received_params, Headers):\n            # Handle fields extracted from a Pydantic Model for a header, each field\n            # doesn't have a FieldInfo of type Header with the default convert_underscores=True\n            convert_underscores = getattr(\n                field.field_info, \"convert_underscores\", default_convert_underscores\n            )\n            if convert_underscores:\n                alias = (\n                    field.alias\n                    if field.alias != field.name\n                    else field.name.replace(\"_\", \"-\")\n                )\n        value = _get_multidict_value(field, received_params, alias=alias)\n        if value is not None:\n            params_to_process[field.name] = value\n        processed_keys.add(alias or field.alias)\n        processed_keys.add(field.name)\n\n    for key, value in received_params.items():\n        if key not in processed_keys:\n            params_to_process[key] = value\n\n    if single_not_embedded_field:\n        field_info = first_field.field_info\n        assert isinstance(field_info, params.Param), (\n            \"Params must be subclasses of Param\"\n        )\n        loc: Tuple[str, ...] = (field_info.in_.value,)\n        v_, errors_ = _validate_value_with_model_field(\n            field=first_field, value=params_to_process, values=values, loc=loc\n        )\n        return {first_field.name: v_}, errors_\n\n    for field in fields:\n        value = _get_multidict_value(field, received_params)\n        field_info = field.field_info\n        assert isinstance(field_info, params.Param), (\n            \"Params must be subclasses of Param\"\n        )\n        loc = (field_info.in_.value, field.alias)\n        v_, errors_ = _validate_value_with_model_field(\n            field=field, value=value, values=values, loc=loc\n        )\n        if errors_:\n            errors.extend(errors_)\n        else:\n            values[field.name] = v_\n    return values, errors",
+    "token_count": 679,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.dependencies.utils.request_params_to_args"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 679
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:716-737",
+    "content": "# fastapi/dependencies/utils.py:716-737  (fastapi.dependencies.utils._get_multidict_value)\ndef _get_multidict_value(\n    field: ModelField, values: Mapping[str, Any], alias: Union[str, None] = None\n) -> Any:\n    alias = alias or field.alias\n    if is_sequence_field(field) and isinstance(values, (ImmutableMultiDict, Headers)):\n        value = values.getlist(alias)\n    else:\n        value = values.get(alias, None)\n    if (\n        value is None\n        or (\n            isinstance(field.field_info, params.Form)\n            and isinstance(value, str)  # For type checks\n            and value == \"\"\n        )\n        or (is_sequence_field(field) and len(value) == 0)\n    ):\n        if field.required:\n            return\n        else:\n            return deepcopy(field.default)\n    return value",
+    "token_count": 187,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.dependencies.utils._get_multidict_value"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 187
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:698-713",
+    "content": "# fastapi/dependencies/utils.py:698-713  (fastapi.dependencies.utils._validate_value_with_model_field)\ndef _validate_value_with_model_field(\n    *, field: ModelField, value: Any, values: Dict[str, Any], loc: Tuple[str, ...]\n) -> Tuple[Any, List[Any]]:\n    if value is None:\n        if field.required:\n            return None, [get_missing_field_error(loc=loc)]\n        else:\n            return deepcopy(field.default), []\n    v_, errors_ = field.validate(value, values, loc=loc)\n    if isinstance(errors_, ErrorWrapper):\n        return None, [errors_]\n    elif isinstance(errors_, list):\n        new_errors = _regenerate_error_with_loc(errors=errors_, loc_prefix=())\n        return None, new_errors\n    else:\n        return v_, []",
+    "token_count": 175,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.dependencies.utils._validate_value_with_model_field"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 175
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:534-542",
+    "content": "# fastapi/_compat.py:534-542  (fastapi._compat._regenerate_error_with_loc)\ndef _regenerate_error_with_loc(\n    *, errors: Sequence[Any], loc_prefix: Tuple[Union[str, int], ...]\n) -> List[Dict[str, Any]]:\n    updated_loc_errors: List[Any] = [\n        {**err, \"loc\": loc_prefix + err.get(\"loc\", ())}\n        for err in _normalize_errors(errors)\n    ]\n\n    return updated_loc_errors",
+    "token_count": 107,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi._compat._regenerate_error_with_loc"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:662-664",
+    "content": "# fastapi/_compat.py:662-664  (fastapi._compat.get_cached_model_fields)\n@lru_cache\ndef get_cached_model_fields(model: Type[BaseModel]) -> List[ModelField]:\n    return get_model_fields(model)",
+    "token_count": 55,
+    "rank": 5,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi._compat.get_cached_model_fields"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:275-280",
+    "content": "# fastapi/_compat.py:275-280  (fastapi._compat.get_missing_field_error)\n    def get_missing_field_error(loc: Tuple[str, ...]) -> Dict[str, Any]:\n        error = ValidationError.from_exception_data(\n            \"Field required\", [{\"type\": \"missing\", \"loc\": loc, \"input\": {}}]\n        ).errors(include_url=False)[0]\n        error[\"input\"] = None\n        return error  # type: ignore[return-value]",
+    "token_count": 103,
+    "rank": 6,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi._compat.get_missing_field_error"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 103
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1306,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how FastAPI extracts and validates a single real request parameter (path/query/header/cookie) in fastapi/dependencies/utils.py. Starting from `request_params_to_args`, trace the causal pipeline for the general (not single-embedded-Pydantic-model) case: how the raw value is pulled out of the request's multidict, and how it is then validated/coerced through the field's own Pydantic validation.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear.\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 6,
+   "unresolved_universe": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1306,
+   "prompt_tokens": 1588,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1601,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/dependencies/utils.py:740-816  (fastapi.dependencies.utils.request_params_to_args)\ndef request_params_to_args(\n    fields: Sequence[ModelField],\n    received_params: Union[Mapping[str, Any], QueryParams, Headers],\n) -> Tuple[Dict[str, Any], List[Any]]:\n    values: Dict[str, Any] = {}\n    errors: List[Dict[str, Any]] = []\n\n    if not fields:\n        return values, errors\n\n    first_field = fields[0]\n    fields_to_extract = fields\n    single_not_embedded_field = False\n    default_convert_underscores = True\n    if len(fields) == 1 and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n        single_not_embedded_field = True\n        # If headers are in a Pydantic model, the way to disable convert_underscores\n        # would be with Header(convert_underscores=False) at the Pydantic model level\n        default_convert_underscores = getattr(\n            first_field.field_info, \"convert_underscores\", True\n        )\n\n    params_to_process: Dict[str, Any] = {}\n\n    processed_keys = set()\n\n    for field in fields_to_extract:\n        alias = None\n        if isinstance(received_params, Headers):\n            # Handle fields extracted from a Pydantic Model for a header, each field\n            # doesn't have a FieldInfo of type Header with the default convert_underscores=True\n            convert_underscores = getattr(\n                field.field_info, \"convert_underscores\", default_convert_underscores\n            )\n            if convert_underscores:\n                alias = (\n                    field.alias\n                    if field.alias != field.name\n                    else field.name.replace(\"_\", \"-\")\n                )\n        value = _get_multidict_value(field, received_params, alias=alias)\n        if value is not None:\n            params_to_process[field.name] = value\n        processed_keys.add(alias or field.alias)\n        processed_keys.add(field.name)\n\n    for key, value in received_params.items():\n        if key not in processed_keys:\n            params_to_process[key] = value\n\n    if single_not_embedded_field:\n        field_info = first_field.field_info\n        assert isinstance(field_info, params.Param), (\n            \"Params must be subclasses of Param\"\n        )\n        loc: Tuple[str, ...] = (field_info.in_.value,)\n        v_, errors_ = _validate_value_with_model_field(\n            field=first_field, value=params_to_process, values=values, loc=loc\n        )\n        return {first_field.name: v_}, errors_\n\n    for field in fields:\n        value = _get_multidict_value(field, received_params)\n        field_info = field.field_info\n        assert isinstance(field_info, params.Param), (\n            \"Params must be subclasses of Param\"\n        )\n        loc = (field_info.in_.value, field.alias)\n        v_, errors_ = _validate_value_with_model_field(\n            field=field, value=value, values=values, loc=loc\n        )\n        if errors_:\n            errors.extend(errors_)\n        else:\n            values[field.name] = v_\n    return values, errors\n\n# fastapi/dependencies/utils.py:716-737  (fastapi.dependencies.utils._get_multidict_value)\ndef _get_multidict_value(\n    field: ModelField, values: Mapping[str, Any], alias: Union[str, None] = None\n) -> Any:\n    alias = alias or field.alias\n    if is_sequence_field(field) and isinstance(values, (ImmutableMultiDict, Headers)):\n        value = values.getlist(alias)\n    else:\n        value = values.get(alias, None)\n    if (\n        value is None\n        or (\n            isinstance(field.field_info, params.Form)\n            and isinstance(value, str)  # For type checks\n            and value == \"\"\n        )\n        or (is_sequence_field(field) and len(value) == 0)\n    ):\n        if field.required:\n            return\n        else:\n            return deepcopy(field.default)\n    return value\n\n# fastapi/dependencies/utils.py:698-713  (fastapi.dependencies.utils._validate_value_with_model_field)\ndef _validate_value_with_model_field(\n    *, field: ModelField, value: Any, values: Dict[str, Any], loc: Tuple[str, ...]\n) -> Tuple[Any, List[Any]]:\n    if value is None:\n        if field.required:\n            return None, [get_missing_field_error(loc=loc)]\n        else:\n            return deepcopy(field.default), []\n    v_, errors_ = field.validate(value, values, loc=loc)\n    if isinstance(errors_, ErrorWrapper):\n        return None, [errors_]\n    elif isinstance(errors_, list):\n        new_errors = _regenerate_error_with_loc(errors=errors_, loc_prefix=())\n        return None, new_errors\n    else:\n        return v_, []\n\n# fastapi/_compat.py:534-542  (fastapi._compat._regenerate_error_with_loc)\ndef _regenerate_error_with_loc(\n    *, errors: Sequence[Any], loc_prefix: Tuple[Union[str, int], ...]\n) -> List[Dict[str, Any]]:\n    updated_loc_errors: List[Any] = [\n        {**err, \"loc\": loc_prefix + err.get(\"loc\", ())}\n        for err in _normalize_errors(errors)\n    ]\n\n    return updated_loc_errors\n\n# fastapi/_compat.py:662-664  (fastapi._compat.get_cached_model_fields)\n@lru_cache\ndef get_cached_model_fields(model: Type[BaseModel]) -> List[ModelField]:\n    return get_model_fields(model)\n\n# fastapi/_compat.py:275-280  (fastapi._compat.get_missing_field_error)\n    def get_missing_field_error(loc: Tuple[str, ...]) -> Dict[str, Any]:\n        error = ValidationError.from_exception_data(\n            \"Field required\", [{\"type\": \"missing\", \"loc\": loc, \"input\": {}}]\n        ).errors(include_url=False)[0]\n        error[\"input\"] = None\n        return error  # type: ignore[return-value]\n\n## Task\n\nYou are investigating how FastAPI extracts and validates a single real request parameter (path/query/header/cookie) in fastapi/dependencies/utils.py. Starting from `request_params_to_args`, trace the causal pipeline for the general (not single-embedded-Pydantic-model) case: how the raw value is pulled out of the request's multidict, and how it is then validated/coerced through the field's own Pydantic validation.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}
