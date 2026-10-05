@@ -327,7 +327,10 @@ def test_two_symbols_on_one_line_map_to_distinct_fqns(tmp_path):
     position decides which one a location names (line-only matching
     labelled both `m.f.call`)."""
     path = str(tmp_path / "m.py")
-    rng = lambda l0, c0, l1, c1: {"start": {"line": l0, "character": c0}, "end": {"line": l1, "character": c1}}
+
+    def rng(l0, c0, l1, c1):
+        return {"start": {"line": l0, "character": c0}, "end": {"line": l1, "character": c1}}
+
     outline = [{"name": "f", "kind": 12, "range": rng(0, 0, 1, 12), "selectionRange": rng(0, 4, 0, 5),
                 "children": [{"name": "call", "kind": 13, "range": rng(0, 6, 0, 10), "selectionRange": rng(0, 6, 0, 10)}]}]
     arm = Arm3PyrightLSP(tokenizer=Words(), require_editable=False)
