@@ -1425,8 +1425,11 @@ def test_django_blast_tasks_load_and_gate_correctly():
     assert not result.rejected
 
     blast_tasks = {t.task_id: t for t in result.accepted if t.task_type == "blast"}
-    assert len(blast_tasks) == 4
-    for task in blast_tasks.values():
+    # the 4 hand-annotated T13 tasks; the M4 derived T5 tasks (django_t5_*) are covered
+    # by tests/test_t5_derived_tasks.py
+    hand = {k: t for k, t in blast_tasks.items() if k.startswith("django_t13_")}
+    assert len(hand) == 4
+    for task in hand.values():
         assert task.adjudicated.critical_callers
         assert task.cohen_kappa >= 0.60  # the loader's own agreement gate already enforces this
 

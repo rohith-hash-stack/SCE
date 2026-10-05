@@ -143,3 +143,12 @@ matters for any future single-arm experiment: PRISM's index cost (about
   `PRISM_TURN1_STRICT_PROMPT`).
 - t02_005 re-design with an accepted-alternatives field.
 - Arm 1's `ARM1_EXCLUDE_DIRS` ablation (docs_src/tests pollution).
+- PRISM bug, deferred to post-M4: `symbol_table.add()` renames a demoted
+  overload stub to `#N` but does not move its def-node entry, so on a fresh
+  build the stub has no def-node (the cache rebuild is correct). Details and
+  a 10-line reproduction in `docs/prism_known_bugs.md`. The test
+  `test_index_cache_consistency::test_cache_hit_rehydrates_every_def_node`
+  is `xfail(strict=True)`.
+- `test_prism_selection_regressions[t02_017-_urlparse]` is a deliberate,
+  accepted exception at budget 2000 (`docs/design_formalism.md`, Sec 10.4).
+  M4 runs at 13,000, where the issue does not apply.
