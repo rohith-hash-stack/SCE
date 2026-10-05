@@ -241,17 +241,26 @@ class Arm3PyrightLSP(RetrievalArm):
         return p.startswith(self.repo_root + os.sep) and p.endswith(".py")
 
     @staticmethod
-    def _contains(sym: dict, line: int) -> bool:
+    def _contains(sym: dict, line: int, character: int | None = None) -> bool:
+        """Range containment by (line, character) position; by line only
+        when `character` is None. Line-only matching mislabels a position
+        on a one-line `def f(call):` as the parameter `f.call`, whose range
+        is on the same line."""
         rng = sym.get("range") or {}
-        return rng.get("start", {}).get("line", -1) <= line <= rng.get("end", {}).get("line", -2)
+        start, end = rng.get("start", {}), rng.get("end", {})
+        if character is None:
+            return start.get("line", -1) <= line <= end.get("line", -2)
+        pos = (line, character)
+        return (start.get("line", -1), start.get("character", 0)) <= pos <= \
+            (end.get("line", -2), end.get("character", 0))
 
-    def fqn_at(self, path: str, line: int, lat: dict) -> tuple[str, dict | None]:
+    def fqn_at(self, path: str, line: int, lat: dict, character: int | None = None) -> tuple[str, dict | None]:
         """The fully-qualified name of the innermost outline symbol whose
-        range contains `line` in `path` (the module itself if none), and
-        that symbol."""
+        range contains the position (`line`, `character`) in `path` (the
+        module itself if none), and that symbol."""
         parts, node, best = [self._module_of(path)], self._symbols(path, lat), None
         while True:
-            hit = next((s for s in node if self._contains(s, line)), None)
+            hit = next((s for s in node if self._contains(s, line, character)), None)
             if hit is None:
                 break
             parts.append(hit["name"])
@@ -331,7 +340,7 @@ class Arm3PyrightLSP(RetrievalArm):
         if target is not None:
             pos = target.get("selectionRange", target["range"])["start"]
             text = self._hover(seed_path, pos["line"], pos["character"], lat)
-            fq, _ = self.fqn_at(seed_path, pos["line"], lat)
+            fq, _ = self.fqn_at(seed_path, pos["line"], lat, pos["character"])
             if text:
                 cands.append(self._cand(f"{rel}:{pos['line'] + 1}", fq, text, "lsp_hover", [fq], 1, "seed",
                                         "textDocument/hover"))
@@ -390,7 +399,7 @@ class Arm3PyrightLSP(RetrievalArm):
     def _def_hover(self, loc: dict, cands: list[dict], lat: dict, hop: int, origin: str) -> None:
         path, line, char = loc["path"], loc["line"], loc["character"]
         text = self._hover(path, line, char, lat)
-        fq, _ = self.fqn_at(path, line, lat)
+        fq, _ = self.fqn_at(path, line, lat, char)
         if text:
             cands.append(self._cand(f"{os.path.relpath(path, self.repo_root)}:{line + 1}", fq, text, "lsp_hover",
                                     [fq], hop, origin, "textDocument/hover"))

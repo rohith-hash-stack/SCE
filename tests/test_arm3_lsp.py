@@ -319,3 +319,31 @@ def test_real_method_seed_and_fqn_mapping(fastapi_arm):
     path = os.path.join(FASTAPI, "fastapi/dependencies/models.py")
     fq, _sym = fastapi_arm.fqn_at(path, 20, {})
     assert fq.startswith("fastapi.dependencies.models.Dependant")
+
+
+# ------------------------------------------------- FQN mapping by position
+def test_two_symbols_on_one_line_map_to_distinct_fqns(tmp_path):
+    """`def f(call):` puts the function and its parameter on one line; the
+    position decides which one a location names (line-only matching
+    labelled both `m.f.call`)."""
+    path = str(tmp_path / "m.py")
+    rng = lambda l0, c0, l1, c1: {"start": {"line": l0, "character": c0}, "end": {"line": l1, "character": c1}}
+    outline = [{"name": "f", "kind": 12, "range": rng(0, 0, 1, 12), "selectionRange": rng(0, 4, 0, 5),
+                "children": [{"name": "call", "kind": 13, "range": rng(0, 6, 0, 10), "selectionRange": rng(0, 6, 0, 10)}]}]
+    arm = Arm3PyrightLSP(tokenizer=Words(), require_editable=False)
+    arm.repo_root, arm._outline = str(tmp_path), {path: outline}
+    assert arm.fqn_at(path, 0, {}, 4)[0] == "m.f"            # the function's name
+    assert arm.fqn_at(path, 0, {}, 7)[0] == "m.f.call"       # the parameter
+    assert arm.fqn_at(path, 1, {}, 4)[0] == "m.f"            # the body
+    assert arm.fqn_at(path, 0, {})[0] == "m.f.call"          # line only (no character): the old, ambiguous match
+
+
+@real
+def test_real_one_line_def_maps_to_the_function(fastapi_arm):
+    ctx = fastapi_arm.retrieve("q", {**SEED, "seed_symbol": "fastapi.dependencies.utils.solve_dependencies"})
+    names = {s for it in ctx.items if it.kind == "lsp_hover" for s in it.symbols}
+    fns = ["is_gen_callable", "is_async_gen_callable", "is_coroutine_callable"]       # each a one-line `def f(call: ...)`
+    assert {f"fastapi.dependencies.utils.{f}" for f in fns} <= names
+    assert not any(f"fastapi.dependencies.utils.{f}.call" in names for f in fns)
+    # a real local is still named as one: `call = sub_dependant.call` inside solve_dependencies
+    assert "fastapi.dependencies.utils.solve_dependencies.call" in names
