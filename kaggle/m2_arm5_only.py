@@ -5,9 +5,10 @@
 # Run this AFTER the M2 notebook's own setup cells, in the same session:
 # clone of harness/eight-arm-slm at SCE_DIR, Ollama serving the q8_0 model,
 # the transformers pin with its fallback, onnxruntime, pyright, the FastAPI
-# editable install and the sitecustomize shim. This cell installs nothing:
-# it checks that setup's effects (preflight) and stops if one is missing,
-# so the environment is exactly the M2 one.
+# editable install and the sitecustomize shim. Apart from the apt step
+# below (zstd, curl, ripgrep: Arm 4's grep tool and the hallucination
+# scorer call `rg`), this cell installs nothing: it checks that setup's
+# effects (preflight) and stops if one is missing.
 #
 # Then: CPU smoke test -> gate (HARNESS_ACTIVE_ARMS=arm0,arm5,oracle) ->
 # diff_vs_m2.json -> push to reports/harness_m2/arm5_only/ (tar.gz first,
@@ -40,6 +41,13 @@ def run(cmd, cwd=None, check=True, env=None, capture=False):
     return subprocess.run(cmd, cwd=cwd, check=check, env=env, shell=isinstance(cmd, str),
                           capture_output=capture, text=True)
 
+
+# ---- environment: apt packages (same line for the M3 script and later single-arm scripts) ----
+run("apt-get update -qq && apt-get install -y -qq zstd curl ripgrep", check=False)
+rg_path = shutil.which("rg")
+print("rg:", rg_path)
+if rg_path is None:
+    raise SystemExit("ripgrep (rg) is not on PATH after apt-get install: Arm 4's grep tool cannot run")
 
 # ---- preflight: the M2 setup's effects, verified, never installed here ----
 problems = []
