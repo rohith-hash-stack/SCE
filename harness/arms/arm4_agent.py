@@ -102,6 +102,9 @@ class ToolResult:
     lines: tuple[int, int] | None = None          # read: the line range returned
     hits: list[tuple[str, int]] = field(default_factory=list)   # grep: (file, line)
     digest: str | None = None                     # set by compaction
+    #: ok | grep_empty | read_empty | read_nonexistent | read_out_of_bounds | timeout | redundant |
+    #: path_rejected | unknown_tool | error (for tool_fpr)
+    outcome: str = "ok"
 
 
 def parse_tool_calls(text: str) -> tuple[list[dict], int, int]:
@@ -215,7 +218,7 @@ class Arm4AgentLoop(RetrievalArm):
         full = self._resolve(str(args.get("path") or "."))
         if full is None:
             stats["path_rejected"] += 1
-            return "error: path is outside the repository", {"is_error": True}
+            return "error: path is outside the repository", {"is_error": True, "outcome": "path_rejected"}
         cmd = [self.rg, "--line-number", "--no-heading", "--color", "never", "--max-columns", "300",
                "-m", str(C.AGENT_GREP_MAX_LINES)]
         if args.get("glob"):
@@ -225,7 +228,7 @@ class Arm4AgentLoop(RetrievalArm):
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.tool_timeout, cwd=self.repo_root)
         except subprocess.TimeoutExpired:
             stats["timeouts"] += 1
-            return f"error: grep timed out after {self.tool_timeout:.0f}s", {"is_error": True}
+            return f"error: grep timed out after {self.tool_timeout:.0f}s", {"is_error": True, "outcome": "timeout"}
         if proc.returncode not in (0, 1):
             return f"error: grep failed: {proc.stderr.strip()[:200]}", {"is_error": True}
         lines = [ln for ln in proc.stdout.splitlines() if ln]
@@ -241,13 +244,15 @@ class Arm4AgentLoop(RetrievalArm):
         if not lines:
             stats["grep_empty"] += 1
         body = "\n".join(shown) + (f"\n[{more} more matching lines not shown]" if more > 0 else "")
-        return body or "no matches", {"hits": hits, "files": sorted({h[0] for h in hits})}
+        return body or "no matches", {"hits": hits, "files": sorted({h[0] for h in hits}),
+                                      "outcome": "ok" if lines else "grep_empty"}
 
     def tool_glob(self, args: dict, stats: dict) -> tuple[str, dict]:
         pattern = str(args.get("pattern") or "")
         if not pattern or os.path.isabs(pattern) or ".." in Path(pattern).parts:
             stats["path_rejected"] += 1
-            return "error: glob needs a relative pattern inside the repository", {"is_error": True}
+            return "error: glob needs a relative pattern inside the repository", {"is_error": True,
+                                                                                   "outcome": "path_rejected"}
         found = sorted(self._rel(str(p)) for p in Path(self.repo_root).glob(pattern)
                        if self._resolve(self._rel(str(p))) and p.is_file())
         shown = found[:C.AGENT_GREP_MAX_LINES]
@@ -259,11 +264,12 @@ class Arm4AgentLoop(RetrievalArm):
         full = self._resolve(str(args.get("path") or ""))
         if full is None:
             stats["path_rejected"] += 1
-            return "error: path is outside the repository", {"is_error": True}
+            return "error: path is outside the repository", {"is_error": True, "outcome": "path_rejected"}
         if not os.path.isfile(full):
             stats["read_nonexistent"] += 1
-            return f"error: no such file: {args.get('path')}", {"is_error": True}
-        lines = Path(full).read_text(encoding="utf-8", errors="replace").split("\n")
+            return f"error: no such file: {args.get('path')}", {"is_error": True, "outcome": "read_nonexistent"}
+        source = Path(full).read_text(encoding="utf-8", errors="replace")
+        lines = source.split("\n")
         try:
             start = max(1, int(args.get("start_line") or 1))
             end = int(args.get("end_line") or start + C.AGENT_READ_MAX_LINES - 1)
@@ -271,12 +277,16 @@ class Arm4AgentLoop(RetrievalArm):
             return "error: start_line/end_line must be integers", {"is_error": True}
         if start > len(lines):
             stats["read_out_of_bounds"] += 1
-            return f"error: {args.get('path')} has {len(lines)} lines", {"is_error": True}
+            return f"error: {args.get('path')} has {len(lines)} lines", {"is_error": True,
+                                                                         "outcome": "read_out_of_bounds"}
         end = min(end, start + C.AGENT_READ_MAX_LINES - 1, len(lines))
+        if end < start or not source.strip():
+            stats["read_empty"] += 1
+            return f"error: no lines in {args.get('path')} {start}-{end}", {"is_error": True, "outcome": "read_empty"}
         rel = self._rel(full)
         body = "\n".join(f"{n}: {lines[n - 1]}" for n in range(start, end + 1))
         note = f"\n[lines {start}-{end} of {len(lines)}]"
-        return body + note, {"files": [rel], "lines": (start, end)}
+        return body + note, {"files": [rel], "lines": (start, end), "outcome": "ok"}
 
     # ----------------------------------------------------------- the loop
     def _chat(self, messages: list[dict], seed, purpose: str) -> Completion:
@@ -340,7 +350,7 @@ class Arm4AgentLoop(RetrievalArm):
         llm_seed = seed.get("llm_seed")
         lat: dict[str, list[float]] = {}
         stats = {"tool_calls": 0, "duplicates": 0, "timeouts": 0, "parse_error_turns": 0, "calls_over_cap": 0,
-                 "path_rejected": 0, "grep_empty": 0, "read_nonexistent": 0, "read_out_of_bounds": 0,
+                 "path_rejected": 0, "grep_empty": 0, "read_empty": 0, "read_nonexistent": 0, "read_out_of_bounds": 0,
                  "unknown_tool": 0, "hermes_blocks": 0, "compactions": 0, "digested": 0, "no_tool_turns": 0,
                  "executed_after_answer": 0}
         base = [{"role": "system", "content": AGENT_SYSTEM_PROMPT},
@@ -396,7 +406,8 @@ class Arm4AgentLoop(RetrievalArm):
                         continue
                     turn_results.append(self._execute(f"r{turn}.{k}", call, seen, stats, lat))
                     step["calls"].append({"tool": call["name"], "args": call["arguments"],
-                                          "msg_id": turn_results[-1].msg_id, "is_error": turn_results[-1].is_error})
+                                          "msg_id": turn_results[-1].msg_id, "is_error": turn_results[-1].is_error,
+                                          "outcome": turn_results[-1].outcome})
                 trajectory.append(step)
                 if answer_call is not None:
                     answer = comp
@@ -425,17 +436,19 @@ class Arm4AgentLoop(RetrievalArm):
         if name not in TOOL_NAMES:
             stats["unknown_tool"] += 1
             return ToolResult(msg_id, name, args, f"error: unknown tool {name!r}; tools: grep, glob, read, answer",
-                              is_error=True)
+                              is_error=True, outcome="unknown_tool")
         key = call_key(name, args)
         if key in seen:
             stats["duplicates"] += 1
-            return ToolResult(msg_id, name, args, f"duplicate call: same as result {seen[key]}", is_error=True)
+            return ToolResult(msg_id, name, args, f"duplicate call: same as result {seen[key]}", is_error=True,
+                              outcome="redundant")
         stats["tool_calls"] += 1
         with timed(lat, "L_tool_exec"):
             text, extra = getattr(self, f"tool_{name}")(args, stats)
         seen[key] = msg_id
         return ToolResult(msg_id, name, args, text, is_error=bool(extra.get("is_error")),
-                          files=extra.get("files", []), lines=extra.get("lines"), hits=extra.get("hits", []))
+                          files=extra.get("files", []), lines=extra.get("lines"), hits=extra.get("hits", []),
+                          outcome=extra.get("outcome", "error" if extra.get("is_error") else "ok"))
 
     @staticmethod
     def _answer_text(args: dict, task_type: str) -> str:

@@ -245,3 +245,15 @@ def test_adapter_rejects_foreign_kinds_and_missing_meta():
         adapt("arm4", raw([DeliveredItem("c", "x", 1, 1, "code_chunk", [])], meta), task)
     with pytest.raises(ValueError, match="trajectory"):
         adapt("arm4", raw(ok, {k: v for k, v in meta.items() if k != "trajectory"}), task)
+
+
+def test_trajectory_records_call_outcomes_for_tool_fpr(repo):
+    from harness.scoring.agent_diagnostics import tool_fpr
+    llm = Scripted(tools(("grep", {"pattern": "zzz_no_such_text"}), ("read", {"path": "pkg/nope.py"}),
+                         ("read", {"path": "pkg/mod.py", "start_line": 500})),
+                   tools(("grep", {"pattern": "zzz_no_such_text"}), ("read", {"path": "pkg/mod.py"})), tools(ANSWER))
+    ctx = arm_for(repo, llm).retrieve("q", SEED)
+    out = tool_fpr(ctx.build_meta["trajectory"])
+    assert (out["total_calls"], out["grep_empty"], out["read_nonexistent"], out["read_out_of_bounds"],
+            out["redundant"]) == (5, 1, 1, 1, 1)
+    assert out["fpr"] == 3 / 5

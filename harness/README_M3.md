@@ -72,11 +72,23 @@ read-only tools and answers through an `answer` tool.
    `<tool_results>` tags rather than a `tool` role, because calls are parsed
    from text rather than through Ollama's tools API.
 
-### Not yet implemented
+### Agent diagnostics (`harness/scoring/agent_diagnostics.py`)
 
-`tool_fpr` and `digest_safety_loss` (`harness/scoring/agent_diagnostics.py`)
-still raise. The trajectory they need (`build_meta["trajectory"]`, the
-counters, and digest originals in provenance) is now recorded.
+Computed per Arm 4 cell by the scorer; None for every other arm.
+
+- **`tool_fpr`** (column `tool_fpr`, breakdown in `tool_fpr_json`):
+  - counted from each dispatched call's outcome in
+    `build_meta["trajectory"]`;
+  - fpr = (grep_empty + read_empty + read_nonexistent + read_out_of_bounds
+    + timeouts) / total_calls;
+  - redundant (duplicate-suppressed) calls count in the total, not as false
+    positives.
+- **`digest_safety_loss`:** 1.0 when the final answer names an identifier
+  that, at answer time, survived only in digested tool output.
+  - Identifiers are at least 4 characters and matched by leaf name with a
+    word-boundary regex.
+  - The task prompt counts as preserved.
+  - 0.0 when nothing was digested or the answer names no identifier.
 
 ### Verification (local)
 

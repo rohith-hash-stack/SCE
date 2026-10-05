@@ -35,7 +35,7 @@ EFFICIENCY = ["budget_tokens", "total_tokens", "budget_utilization",
 DIAGNOSTICS = ["extraction_success", "over_budget", "turn_count", "digest_safety_loss", "tool_fpr",
                "verification_lift", "recovery_rate", "total_tool_output_tokens", "hallucination_breakdown_json",
                "finish_reason", "generation_capped", "repetition_count",
-               "delivered_symbols_resolved", "delivered_symbols_named_only"]
+               "delivered_symbols_resolved", "delivered_symbols_named_only", "tool_fpr_json"]
 COLUMNS = ID_COLUMNS + UNIVERSAL + TYPE_SPECIFIC + EFFICIENCY + DIAGNOSTICS
 
 #: Column-name fragments that would indicate a composite / cross-type score.
@@ -76,6 +76,8 @@ def score_to_row(res, corpus: str | None = None) -> dict:
         if c in d:
             row[c] = d[c]
     row["hallucination_breakdown_json"] = json.dumps(d.get("hallucination_breakdown") or {}, sort_keys=True)
+    # Arm 4 only: the tool_fpr breakdown (None for every other arm, like tool_fpr itself)
+    row["tool_fpr_json"] = json.dumps(d["tool_fpr_breakdown"], sort_keys=True) if d.get("tool_fpr_breakdown") else None
     return row
 
 

@@ -69,8 +69,11 @@ METRICS: dict[str, dict] = {
     "latency_l_e2e_p50":          {"higher_is_better": False, "where": "aggregate"},
     "latency_l_e2e_p95":          {"higher_is_better": False, "where": "aggregate"},
     # Diagnostics (arm-specific)
-    "digest_safety_loss":     {"type": "arm4", "range": [0, 1], "higher_is_better": False, "where": "row"},
-    "tool_fpr":               {"type": "arm4", "range": [0, 1], "higher_is_better": False, "where": "row"},
+    #: Arm 4 only (None elsewhere): agent_diagnostics.digest_safety_loss / tool_fpr
+    "digest_safety_loss":     {"type": "arm4", "applicable_arms": ["arm4"], "range": [0, 1],
+                               "higher_is_better": False, "where": "row"},
+    "tool_fpr":               {"type": "arm4", "applicable_arms": ["arm4"], "range": [0, 1],
+                               "higher_is_better": False, "where": "row"},
     "verification_lift":      {"type": "prism", "higher_is_better": True, "where": "row"},
     "recovery_rate":          {"type": "prism", "range": [0, 1], "higher_is_better": True, "where": "row"},
     "total_tool_output_tokens": {"type": "arm4", "range": [0, None], "where": "row"},

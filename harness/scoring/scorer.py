@@ -48,6 +48,7 @@ from harness import config as C
 from harness.scoring import registry as R
 from harness.scoring.canonical import DeliveredContext, DeliveredItem, NormalizedAnswer
 from harness.scoring.fairness import verify_ranking
+from harness.scoring.agent_diagnostics import digest_safety_loss, tool_fpr
 from harness.scoring.hallucination import hallucination_rate
 from harness.tasks.schema import TaskType
 
@@ -106,8 +107,13 @@ class ScoreResult:
     extraction_success: bool
     over_budget: bool
     seed: Optional[int] = None
+    #: Arm 4 only (None for every other arm): 1.0 when the answer named an
+    #: identifier that survived only in digested tool output
     digest_safety_loss: Optional[float] = None
+    #: Arm 4 only: the false-positive rate of its tool calls; the full
+    #: breakdown is tool_fpr_breakdown (parquet column tool_fpr_json)
     tool_fpr: Optional[float] = None
+    tool_fpr_breakdown: Optional[dict] = None
     verification_lift: Optional[float] = None
     recovery_rate: Optional[float] = None
     total_tool_output_tokens: Optional[int] = None
@@ -358,9 +364,23 @@ def score(task, ctx: DeliveredContext, ans: NormalizedAnswer, *, judge: Judge | 
         repetition_count=ans.repetition_count,
         delivered_symbols_resolved=len(ctx.delivered_symbols_resolved),
         delivered_symbols_named_only=len(ctx.delivered_symbols_named_only),
+        **_agent_diagnostics(ctx, ans),
     )
     _validate(result)
     return result
+
+
+def _agent_diagnostics(ctx: DeliveredContext, ans: NormalizedAnswer) -> dict:
+    """tool_fpr and digest_safety_loss for Arm 4; nothing for other arms."""
+    if ctx.arm != "arm4":
+        return {}
+    fpr = tool_fpr(ctx.build_meta.get("trajectory") or [])
+    results = [{"msg_id": it.provenance.get("msg_id", it.source_id),
+                "text": it.provenance.get("original", it.content) if it.kind == "tool_result_digest" else it.content}
+               for it in ctx.items]
+    digested = {r["msg_id"] for r, it in zip(results, ctx.items) if it.kind == "tool_result_digest"}
+    loss = digest_safety_loss(results, ans.raw_text, digested, preserved_text=str(ctx.build_meta.get("query") or ""))
+    return {"tool_fpr": fpr["fpr"], "tool_fpr_breakdown": fpr, "digest_safety_loss": loss}
 
 
 def _validate(res: ScoreResult) -> None:
@@ -372,3 +392,5 @@ def _validate(res: ScoreResult) -> None:
         if name in R.METRICS and isinstance(value, (int, float)):
             R.check_value(name, value)
     R.check_value("tsr", res.tsr)
+    for name in ("tool_fpr", "digest_safety_loss"):
+        R.check_value(name, getattr(res, name))
