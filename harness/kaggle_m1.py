@@ -41,8 +41,9 @@ def _scripted_llm():
             if "<tool_results>" not in user:
                 call = {"name": "grep", "arguments": {"pattern": "def get_typed_annotation", "glob": "*.py"}}
             else:
-                resp = ("```python\ndef f(): return 1\n```" if "fenced ```python" in user else
-                        "It evaluates `fastapi.dependencies.utils.get_typed_annotation`." if "few sentences of prose" in user
+                spec = system + user   # Arm 4's response contract lives in the answer tool's description
+                resp = ("```python\ndef f(): return 1\n```" if "fenced ```python" in spec else
+                        "It evaluates `fastapi.dependencies.utils.get_typed_annotation`." if "few sentences of prose" in spec
                         else '```json\n{"reasoning": "s", "symbols": ["fastapi.dependencies.utils.get_typed_annotation"]}\n```')
                 call = {"name": "answer", "arguments": {"response": resp}}
             return Completion(f"<tools>{json.dumps(call)}</tools>", 0, 9, 0.0, model="scripted", purpose=purpose)

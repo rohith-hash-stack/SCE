@@ -7,7 +7,8 @@ Each run directory is what `harness.kaggle_m1` writes (cells.parquet,
 bundles/). For every (arm, task) present in both runs it reports the old
 and new value of tsr, answer_gold_recall, hallucination_rate and
 finish_reason, and the hydrated (delivered) symbol list with whether its
-set or its order changed. Arm 5 cells also carry turn1_parsed_ok.
+set or its order changed. Arm 5 cells also carry turn1_parsed_ok; Arm 4 cells
+carry turn_count, tool_fpr, digest_safety_loss and forced_answer.
 """
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ from pathlib import Path
 import pandas as pd
 
 METRICS = ("tsr", "answer_gold_recall", "hallucination_rate", "finish_reason")
+#: Arm 4's own diagnostics (parquet columns), compared when both runs have them
+ARM4_METRICS = ("turn_count", "tool_fpr", "digest_safety_loss")
 
 
 def _value(v):
@@ -59,7 +62,16 @@ def compare(new_dir: str | Path, old_dir: str | Path, arms: list[str]) -> dict:
         if r.arm == "arm5":
             cell["turn1_parsed_ok"] = {"old": (ob or {}).get("build_meta", {}).get("turn1_parsed_ok"),
                                        "new": (nb or {}).get("build_meta", {}).get("turn1_parsed_ok")}
-        diffs = [m for m in METRICS if cell[m]["old"] != cell[m]["new"]
+        compared = list(METRICS)
+        if r.arm == "arm4":
+            for m in ARM4_METRICS:
+                if f"{m}_old" in r.index and f"{m}_new" in r.index:
+                    cell[m] = {"old": _value(r[f"{m}_old"]), "new": _value(r[f"{m}_new"])}
+                    compared.append(m)
+            cell["forced_answer"] = {"old": (ob or {}).get("build_meta", {}).get("forced_answer"),
+                                     "new": (nb or {}).get("build_meta", {}).get("forced_answer")}
+            compared.append("forced_answer")
+        diffs = [m for m in compared if cell[m]["old"] != cell[m]["new"]
                  and not (cell[m]["old"] is None and cell[m]["new"] is None)]
         if cell["hydrated"]["set_changed"] or cell["hydrated"]["order_changed"]:
             diffs.append("hydrated")

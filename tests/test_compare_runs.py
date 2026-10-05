@@ -73,3 +73,16 @@ def test_changed_tsr_and_hydration_order_are_reported(tmp_path):
     assert cell["tsr"] == {"old": 0.0, "new": 1.0}
     assert cell["hydrated"]["order_changed"] and not cell["hydrated"]["set_changed"]
     assert out["mean_tsr_real_tasks"]["arm5"]["new"] == pytest.approx(0.6)
+
+
+M3 = "/home/user/SCE/reports/harness_m3/kaggle_smoke"
+
+
+@pytest.mark.skipif(not os.path.isdir(M3), reason="M3 artifacts missing")
+def test_arm4_cells_carry_their_diagnostics():
+    out = compare(M3, M3, ["arm0", "arm4", "oracle"])
+    cell = next(c for c in out["cells"] if c["arm"] == "arm4" and "t02_003" in c["task_id"])
+    assert {"turn_count", "tool_fpr", "digest_safety_loss", "forced_answer"} <= set(cell)
+    assert cell["forced_answer"] == {"old": True, "new": True} and cell["turn_count"]["new"] == 11
+    assert out["changed_cells"] == []
+    assert "forced_answer" not in next(c for c in out["cells"] if c["arm"] == "arm0")

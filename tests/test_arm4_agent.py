@@ -257,3 +257,54 @@ def test_trajectory_records_call_outcomes_for_tool_fpr(repo):
     assert (out["total_calls"], out["grep_empty"], out["read_nonexistent"], out["read_out_of_bounds"],
             out["redundant"]) == (5, 1, 1, 1, 1)
     assert out["fpr"] == 3 / 5
+
+
+# ---- M3 fixes: direct answers, the contract in the answer tool, raw turn text ----
+DIRECT = '```json\n{"reasoning": "r", "symbols": ["pkg.mod.f", "pkg.mod.K.m"]}\n```'
+
+
+def test_fix1_a_no_tool_turn_that_parses_as_an_answer_ends_the_loop(repo):
+    llm = Scripted(tools(("grep", {"pattern": "def f"})), DIRECT, tools(ANSWER))
+    ctx = arm_for(repo, llm).retrieve("q", SEED)
+    meta, last = ctx.build_meta, ctx.build_meta["trajectory"][-1]
+    assert len(llm.seen) == 2 and meta["turn_count"] == 2                   # stopped at the answering turn
+    assert last["is_final"] is True and last["answer_source"] == "direct" and meta["forced_answer"] is False
+    assert meta["agent_answer"]["text"] == DIRECT and meta["direct_answers"] == 1 and meta["no_tool_turns"] == 0
+
+
+@pytest.mark.parametrize("text,task_type", [("I will grep for f first.", "T2_localization"),
+                                            ('```json\n{"reasoning": "r", "symbols": []}\n```', "T2_localization"),
+                                            ("It evaluates pkg.mod.f.", "T1_conceptual")])
+def test_fix1_narration_empty_answers_and_prose_tasks_are_not_direct_answers(repo, text, task_type):
+    llm = Scripted(text, tools(ANSWER))
+    ctx = arm_for(repo, llm).retrieve("q", {**SEED, "task_type": task_type})
+    first = ctx.build_meta["trajectory"][0]
+    assert first["is_final"] is False and ctx.build_meta["no_tool_turns"] == 1
+    assert ctx.build_meta["trajectory"][-1]["answer_source"] == "answer_tool"
+
+
+def test_fix2_the_answer_tool_owns_the_response_contract():
+    from harness.arms.arm4_agent import agent_system_prompt, agent_task_message
+    from harness.arms.base import RESPONSE_CONTRACTS
+    for tt, contract in RESPONSE_CONTRACTS.items():
+        system = agent_system_prompt(tt)
+        before, _, answer_tool = system.partition("- answer:")
+        first_line = contract.split("\n")[0]
+        assert first_line in answer_tool.split("Example (a different repository)")[0]   # in the answer tool...
+        assert first_line not in before and system.count(first_line) == 1               # ...and only there
+        assert "Do not produce a final answer without calling the answer tool." in before
+    message = agent_task_message("Where is f?")
+    assert "Response format" not in message and "nothing else" not in message and "call answer" in message
+
+
+def test_fix3_every_turn_raw_text_is_in_the_bundle(repo, tmp_path):
+    from harness.pipeline import Pipeline
+    turns = ["Let me think about where f lives.", tools(("grep", {"pattern": "def f"})), "<tools>{oops</tools>",
+             tools(ANSWER)]
+    llm = Scripted(*turns)
+    Pipeline({"arm4": arm_for(repo, llm)}, llm, Words(), out_dir=tmp_path).run_cell("arm4", _task(), seed=42)
+    (bundle,) = (tmp_path / "bundles").glob("arm4_*.json")
+    traj = json.loads(bundle.read_text())["bundle"]["build_meta"]["trajectory"]
+    assert [s["raw_text"] for s in traj] == turns
+    assert [s["is_final"] for s in traj] == [False, False, False, True]
+    assert traj[1]["parsed_calls"] == [{"name": "grep", "arguments": {"pattern": "def f"}}] and traj[2]["parsed_calls"] == []

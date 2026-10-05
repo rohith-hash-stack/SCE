@@ -61,6 +61,32 @@ read-only tools and answers through an `answer` tool.
   `__call__` delegates to it, so the other arms' requests are unchanged.
   Tool results return as a user message wrapped in `<tool_results>`.
 
+### M3 gate finding and fixes
+
+In the M3 gate Arm 4 scored 0/4 on Gate B with a forced answer on 3 of 4
+tasks. The cause was a contradiction in its own prompt, not the agent: its
+first message ended with the uniform response contract ("Respond with a
+single fenced JSON object and nothing else") and then asked it to call
+`answer`. When the model answered in the contract's format without a
+tool call, the loop discarded the turn as "no tool call", nudged it, and
+it re-grepped (on t02_002, the same 5 greps 4 times) until the cap.
+
+1. **Direct answers accepted.** A turn with no `<tools>` block that parses
+   as an answer through the same extraction every arm uses (T2/T5: the
+   JSON object with a non-empty `symbols` list; T3/T4: a fenced code block)
+   ends the loop as the answer (`answer_source="direct"`,
+   `direct_answers`). T1 prose can't be told apart from narration, so T1
+   still needs the `answer` tool.
+2. **The contract belongs to the answer tool.** It now appears only in the
+   `answer` tool's description in the system prompt. The task message is
+   the task and "Explore the repository with grep, glob and read, then
+   call answer." The system prompt says "Do not produce a final answer
+   without calling the answer tool." The task texts themselves (unchanged
+   task data) still ask for a JSON block, which is why fix 1 stays as the
+   fallback.
+3. **Every turn's raw text** is in the trajectory (`raw_text`,
+   `parsed_calls`, `is_final`), so a run can be diagnosed from its bundle.
+
 ### Spec interpretations (declared in `build_meta["simplifications"]`)
 
 1. **Old reads digested:** "preserve last 3 reads verbatim; digest grep/glob

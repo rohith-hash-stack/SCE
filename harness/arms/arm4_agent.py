@@ -61,6 +61,7 @@ from harness.arms.base import (RESPONSE_CONTRACTS, SYSTEM_PROMPT, RetrievalArm, 
                                render_items)
 from harness.ast_splitter import module_name
 from harness.llm import Completion
+from harness.scoring.adapters import extract_answer
 from harness.scoring.canonical import DeliveredContext, DeliveredItem, ItemKind
 from harness.scoring.latency import timed
 
@@ -70,7 +71,9 @@ TOOL_NAMES = ("grep", "glob", "read", "answer")
 
 AGENT_SYSTEM_PROMPT = SYSTEM_PROMPT + """
 
-You are working in a code repository through tools. Call a tool by writing one JSON object inside <tools></tools> tags:
+You have four tools: grep, glob, read, answer. Explore the repository with grep, glob and read, then call answer with your resolution. Do not produce a final answer without calling the answer tool.
+
+Call a tool by writing one JSON object inside <tools></tools> tags:
 <tools>{"name": "<tool>", "arguments": {...}}</tools>
 You may make up to 5 calls in one turn (one <tools> block each). Tool results come back in the next message.
 
@@ -78,7 +81,8 @@ Tools:
 - grep: search file contents with a regular expression. Arguments: {"pattern": str, "path": str (optional, default "."), "glob": str (optional, e.g. "*.py")}. At most 30 matching lines are returned.
 - glob: list files matching a pattern. Arguments: {"pattern": str, e.g. "**/routing.py"}.
 - read: read lines of a file. Arguments: {"path": str, "start_line": int (optional), "end_line": int (optional)}. At most 150 lines per call.
-- answer: give your final answer and stop. Arguments: {"response": str}, where response is exactly what the task's Response format asks for.
+- answer: give your final answer and stop. Arguments: {"response": str}. The response must follow this format:
+{answer_format}
 
 Example (a different repository):
 <tools>{"name": "grep", "arguments": {"pattern": "def parse_config", "glob": "*.py"}}</tools>
@@ -89,6 +93,24 @@ And finally:
 <tools>{"name": "answer", "arguments": {"response": "```json\\n{\\"reasoning\\": \\"parse_config reads the file and calls load_env.\\", \\"symbols\\": [\\"app.config.parse_config\\", \\"app.config.load_env\\"]}\\n```"}}</tools>
 
 Only use names you have seen in tool results. Paths are relative to the repository root."""
+
+
+def agent_system_prompt(task_type: str) -> str:
+    """The system prompt with the task type's response contract inside the
+    answer tool's description (the only place the format is stated)."""
+    contract = "\n".join("    " + ln for ln in RESPONSE_CONTRACTS[task_type].split("\n"))
+    return AGENT_SYSTEM_PROMPT.replace("{answer_format}", contract)
+
+
+def agent_task_message(query: str) -> str:
+    """The task, without the response contract (that belongs to the answer tool)."""
+    return f"## Task\n\n{query}\n\nExplore the repository with grep, glob and read, then call answer."
+
+
+#: Task types whose contract is structured enough that a direct (no-tool)
+#: answer can be recognised reliably; a T1 prose answer cannot be told
+#: apart from ordinary narration, so T1 must use the answer tool.
+DIRECT_ANSWER_TYPES = ("T2_localization", "T5_blast_radius", "T3_codegen", "T4_edit")
 
 
 @dataclass
@@ -352,10 +374,9 @@ class Arm4AgentLoop(RetrievalArm):
         stats = {"tool_calls": 0, "duplicates": 0, "timeouts": 0, "parse_error_turns": 0, "calls_over_cap": 0,
                  "path_rejected": 0, "grep_empty": 0, "read_empty": 0, "read_nonexistent": 0, "read_out_of_bounds": 0,
                  "unknown_tool": 0, "hermes_blocks": 0, "compactions": 0, "digested": 0, "no_tool_turns": 0,
-                 "executed_after_answer": 0}
-        base = [{"role": "system", "content": AGENT_SYSTEM_PROMPT},
-                {"role": "user", "content": compose_user_prompt("", query, task_type)
-                 + "\n\nExplore the repository with the tools, then call answer."}]
+                 "executed_after_answer": 0, "direct_answers": 0}
+        base = [{"role": "system", "content": agent_system_prompt(task_type)},
+                {"role": "user", "content": agent_task_message(query)}]
         turns: list[tuple[str, list[ToolResult]]] = []
         results: list[ToolResult] = []
         seen: dict[tuple, str] = {}
@@ -380,10 +401,18 @@ class Arm4AgentLoop(RetrievalArm):
                     comp = self._chat(msgs, llm_seed, "agent_turn")
                 calls, n_blocks, n_bad = parse_tool_calls(comp.text)
                 stats["hermes_blocks"] += len(HERMES_RE.findall(comp.text or ""))
-                step: dict = {"turn": turn, "blocks": n_blocks, "unparseable_blocks": n_bad, "calls": [],
-                        "completion_tokens": comp.completion_tokens, "finish_reason": comp.finish_reason,
-                        "is_error": False}
+                step: dict = {"turn": turn, "raw_text": comp.text, "parsed_calls": calls, "is_final": False,
+                              "blocks": n_blocks, "unparseable_blocks": n_bad, "calls": [],
+                              "completion_tokens": comp.completion_tokens, "finish_reason": comp.finish_reason,
+                              "is_error": False}
                 turn_results: list[ToolResult] = []
+                if not n_blocks and self._direct_answer(comp.text, task_type):
+                    # the model answered in the response format without the answer tool: accept it
+                    stats["direct_answers"] += 1
+                    step.update(is_final=True, answered=True, answer_source="direct")
+                    trajectory.append(step)
+                    answer, answer_text = comp, comp.text
+                    break
                 if n_blocks and not calls:            # every block failed to parse
                     stats["parse_error_turns"] += 1
                     step["is_error"] = True
@@ -413,7 +442,7 @@ class Arm4AgentLoop(RetrievalArm):
                     answer = comp
                     answer_text = self._answer_text(answer_call["arguments"], task_type)
                     stats["executed_after_answer"] += len(others)
-                    trajectory[-1]["answered"] = True
+                    trajectory[-1].update(is_final=True, answered=True, answer_source="answer_tool")
                     break
                 turns.append((comp.text, turn_results))
                 results.extend(r for r in turn_results if r.tool in ("grep", "glob", "read"))
@@ -449,6 +478,16 @@ class Arm4AgentLoop(RetrievalArm):
         return ToolResult(msg_id, name, args, text, is_error=bool(extra.get("is_error")),
                           files=extra.get("files", []), lines=extra.get("lines"), hits=extra.get("hits", []),
                           outcome=extra.get("outcome", "error" if extra.get("is_error") else "ok"))
+
+    @staticmethod
+    def _direct_answer(text: str, task_type: str) -> bool:
+        """A no-tool turn is an answer when it parses as one with the same
+        extraction every arm's answer goes through (T2/T5: the JSON object
+        with a non-empty `symbols` list; T3/T4: a fenced code block)."""
+        if task_type not in DIRECT_ANSWER_TYPES:
+            return False
+        _text, symbols, _method, ok = extract_answer(text, task_type)
+        return ok and (bool(symbols) or task_type in ("T3_codegen", "T4_edit"))
 
     @staticmethod
     def _answer_text(args: dict, task_type: str) -> str:
