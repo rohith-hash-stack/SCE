@@ -250,7 +250,8 @@ def _run(args, out_dir: Path, report: dict) -> int:
     builder = arms["arm5"].engine.builder if arms.get("arm5") else None
     _index("oracle", lambda: build_arm("oracle", tokenizer=tok, builder=builder), {})
     emb, rr = _fake_encoders() if args.fake_encoders else (None, None)
-    _index("arm1", lambda: build_arm("arm1", tokenizer=tok, embedder=emb, reranker=rr), {"repo_id": "fastapi"})
+    if "arm1" in C.ACTIVE_ARMS:
+        _index("arm1", lambda: build_arm("arm1", tokenizer=tok, embedder=emb, reranker=rr), {"repo_id": "fastapi"})
     if "arm2" in C.ACTIVE_ARMS:
         _index("arm2", lambda: build_arm("arm2", tokenizer=tok), {})
     if "arm3" in C.ACTIVE_ARMS:   # needs pyright-langserver and the editable install (charter)

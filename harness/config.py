@@ -93,6 +93,16 @@ FIDELITY = {
 #: Arms implemented so far (M1: 0, 1, 5, oracle; M2: 2, 3). The others raise NotImplementedError.
 ACTIVE_ARMS = ["arm0", "arm1", "arm2", "arm3", "arm5", "oracle"]
 STUB_MILESTONE = {"arm4": "M3"}
+#: Run-time subset of the implemented arms, e.g. HARNESS_ACTIVE_ARMS=arm0,arm5,oracle
+#: for a single-arm baseline. Unknown or not-yet-implemented arms are rejected.
+_ACTIVE_ARMS_OVERRIDE = os.environ.get("HARNESS_ACTIVE_ARMS")
+if _ACTIVE_ARMS_OVERRIDE:
+    _requested = [a.strip() for a in _ACTIVE_ARMS_OVERRIDE.split(",") if a.strip()]
+    _unknown = [a for a in _requested if a not in ACTIVE_ARMS]
+    if _unknown or not _requested:
+        raise ValueError(f"HARNESS_ACTIVE_ARMS={_ACTIVE_ARMS_OVERRIDE!r}: {_unknown or 'empty'} not among the "
+                         f"implemented arms {ACTIVE_ARMS}")
+    ACTIVE_ARMS = _requested
 #: Arms 2 and 3 are Python-only (Python tree-sitter splitter; Pyright).
 PYTHON_ONLY_ARMS = {"arm2", "arm3"}
 
