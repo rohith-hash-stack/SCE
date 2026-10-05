@@ -4,6 +4,19 @@ The context is what a language server knows about the code around the
 seed symbol, fetched over LSP from `pyright-langserver --stdio` through the
 raw JSON-RPC client in `harness.pyright_client` (no multilspy).
 
+Routing by corpus (M4, `config.CORPUS_LANGUAGE`): Python corpora (FastAPI,
+Django) use Pyright as below; TypeScript corpora (Express, tRPC) use
+`typescript-language-server --stdio` through `harness.ts_lsp_client`, with
+the same handshake order, the same two-hop retrieval and the same items.
+For TypeScript: no editable-install check (it is a Python import check);
+the probes are five top-level definitions of the corpus (found with the
+TypeScript splitter's rules); readiness opens the corpus entry point and
+waits for tsserver's project load and stable probe counts (see that
+module); references in the seed's body are located with tree-sitter
+(`ts_reference_positions`); and a seed nested inside another function
+(Express's `lib.router.next`, inside `handle`) is found by name anywhere in
+its file's outline.
+
 Index (`index()`), once per repository:
 1. Editable-install check (charter step 1): the repository's top-level
    module must import from the checkout itself, so imports resolve to the
@@ -43,8 +56,11 @@ from pathlib import Path
 
 from harness import config as C
 from harness.arms.base import RetrievalArm, item_header
-from harness.ast_splitter import iter_python_files, module_name
+from harness.ast_splitter import (
+    LANGUAGE_EXTENSIONS, TypeScriptSplitter, corpus_language, iter_python_files, iter_source_files, module_name,
+)
 from harness.pyright_client import LspError, PyrightClient, ReadyReport
+from harness.ts_lsp_client import TypeScriptLspClient
 from harness.scoring.canonical import DeliveredContext, DeliveredItem
 from harness.scoring.latency import timed
 
@@ -112,6 +128,44 @@ def reference_positions(tree: ast.AST) -> list[tuple[str, int, int]]:
     return sorted(found, key=lambda f: (f[1], f[2]))
 
 
+def ts_reference_positions(node) -> list[tuple[str, int, int]]:
+    """(name, row0, byte_col) of each referenced name in a tree-sitter
+    TypeScript/JavaScript node, in source order: call targets (`f(...)`,
+    `a.b.f(...)` at `f`), `new X(...)` targets, type references (annotations,
+    generics) and `extends` / `implements` targets."""
+    found: list[tuple[str, int, int]] = []
+
+    def ref(n) -> None:
+        if n is None:
+            return
+        if n.type in ("identifier", "type_identifier", "property_identifier"):
+            found.append((n.text.decode("utf-8", errors="replace"), n.start_point[0], n.start_point[1]))
+        elif n.type == "member_expression":
+            ref(n.child_by_field_name("property"))
+        elif n.type in ("generic_type", "nested_type_identifier"):
+            ref(n.child_by_field_name("name") or (n.named_children[-1] if n.named_children else None))
+
+    stack = [node]
+    while stack:
+        n = stack.pop()
+        if n.type == "call_expression":
+            ref(n.child_by_field_name("function"))
+        elif n.type == "new_expression":
+            ref(n.child_by_field_name("constructor"))
+        elif n.type == "type_identifier" and n.parent is not None and n.parent.type not in (
+                "generic_type", "nested_type_identifier", "type_alias_declaration", "interface_declaration",
+                "class_declaration", "abstract_class_declaration", "type_parameter"):
+            ref(n)
+        elif n.type == "generic_type":
+            ref(n)
+        elif n.type in ("extends_clause", "implements_clause", "class_heritage"):
+            for c in n.named_children:
+                if c.type in ("identifier", "member_expression", "type_identifier", "generic_type"):
+                    ref(c)
+        stack.extend(reversed(n.named_children))
+    return sorted(set(found), key=lambda f: (f[1], f[2], f[0]))
+
+
 def _find_ast(tree: ast.Module, names: list[str]) -> ast.AST | None:
     node: ast.AST = tree
     for name in names:
@@ -144,8 +198,11 @@ class Arm3PyrightLSP(RetrievalArm):
             f"classes), at most {C.ARM3_MAX_DEFINITIONS} distinct names, located with Python's ast",
             "definitions outside the repository (typeshed, site-packages) are not followed",
             "an outline item (lsp_symbol) names every symbol it lists",
-            "Python files only (FastAPI and Django)",
+            "TypeScript corpora (Express, tRPC): typescript-language-server, no editable-install check, "
+            "readiness = anchor didOpen + tsserver projectInfo + workspace/symbol counts stable for 2 s, "
+            "references located with tree-sitter",
         ]
+        self.language = "python"
 
     @property
     def tok(self):
@@ -174,9 +231,43 @@ class Arm3PyrightLSP(RetrievalArm):
                 break
         return [package, "__init__"] + names[:3]
 
+    def ts_probes(self, repo_path: str, project_files: list[str] | None = None) -> list[str]:
+        """Five distinct top-level definition names of a TypeScript corpus:
+        never task data. Files are taken shallowest first, then by path
+        (the entry point's own package before examples and tests), from the
+        language server's loaded project when `project_files` is given."""
+        splitter, names = TypeScriptSplitter(tokenizer=None), []
+        files = iter_source_files(repo_path, "typescript")
+        if project_files is not None:
+            loaded = {str(Path(f).resolve()) for f in project_files}
+            files = [f for f in files if str(Path(f).resolve()) in loaded] or files
+        for f in sorted(files, key=lambda f: (os.path.relpath(f, repo_path).count(os.sep), f)):
+            rel = os.path.relpath(f, repo_path)
+            tree = splitter._parser_for(rel).parse(Path(f).read_bytes())
+            for child in tree.root_node.named_children:
+                found = splitter._top_definition(child)
+                if found and found[0] not in names and not found[0].startswith("_") and found[0] != "default":
+                    names.append(found[0])
+            if len(names) >= 5:
+                break
+        return names[:5]
+
+    @staticmethod
+    def _ts_anchor(repo_path: str) -> str | None:
+        """The corpus entry point (top-level index.ts/.tsx/.js), else its
+        first source file."""
+        for name in ("index.ts", "index.tsx", "index.js"):
+            if os.path.isfile(os.path.join(repo_path, name)):
+                return os.path.join(repo_path, name)
+        files = iter_source_files(repo_path, "typescript")
+        return files[0] if files else None
+
     def index(self, repo_path: str, config: dict | None = None) -> None:
         config = config or {}
         self.repo_root = str(Path(repo_path).resolve())
+        self.language = corpus_language(self.repo_root, config)
+        if self.language == "typescript":
+            return self._index_typescript(config)
         self.package = config.get("package") or Path(self.repo_root).name
         cmd = self.cmd or list(config.get("cmd") or ["pyright-langserver", "--stdio"])
         with timed(self.index_latency, "L_index"):
@@ -196,6 +287,24 @@ class Arm3PyrightLSP(RetrievalArm):
         self._modules = {module_name(os.path.relpath(f, self.repo_root)): f for f in iter_python_files(self.repo_root)}
         self._outline: dict[str, list[dict]] = {}
         self._source: dict[str, list[str]] = {}
+
+    def _index_typescript(self, config: dict) -> None:
+        cmd = self.cmd or list(config.get("cmd") or ["typescript-language-server", "--stdio"])
+        self.package = config.get("repo_id") or Path(self.repo_root).name
+        with timed(self.index_latency, "L_index"):
+            if shutil.which(cmd[0]) is None and not os.path.exists(cmd[0]):
+                raise PyrightNotFound(f"{cmd[0]} not found: typescript-language-server not found "
+                                      f"(npm install -g typescript typescript-language-server)")
+            anchor = config.get("anchor") or self._ts_anchor(self.repo_root)
+            self.client = TypeScriptLspClient(self.repo_root, cmd=cmd, anchor=anchor)
+            self.client.start()
+            atexit.register(self.close)
+            probes = config.get("probes") or (lambda files: self.ts_probes(self.repo_root, files))
+            self.ready = self.client.handshake(probes, ready_timeout=config.get("ready_timeout", C.ARM3_READY_TIMEOUT_S))
+        self._modules = {module_name(os.path.relpath(f, self.repo_root)): f
+                         for f in iter_source_files(self.repo_root, "typescript")}
+        self._outline = {}
+        self._source = {}
 
     def close(self) -> None:
         if self.client is not None:
@@ -238,7 +347,7 @@ class Arm3PyrightLSP(RetrievalArm):
 
     def _in_repo(self, path: str) -> bool:
         p = str(Path(path).resolve())
-        return p.startswith(self.repo_root + os.sep) and p.endswith(".py")
+        return p.startswith(self.repo_root + os.sep) and p.endswith(LANGUAGE_EXTENSIONS[self.language])
 
     @staticmethod
     def _contains(sym: dict, line: int, character: int | None = None) -> bool:
@@ -285,6 +394,14 @@ class Arm3PyrightLSP(RetrievalArm):
             if hit is None:
                 break
             found, node = hit, hit.get("children") or []
+        if found is None and self.language == "typescript" and names:
+            # a function nested anywhere in the file (Express's lib.router.next): first by name, depth-first
+            stack = list(reversed(outline))
+            while stack:
+                s = stack.pop()
+                if s.get("name") == names[-1]:
+                    return s
+                stack.extend(reversed(s.get("children") or []))
         return found
 
     def _outline_item(self, path: str, lat: dict, members: bool) -> tuple[str, list[str]]:
@@ -325,6 +442,8 @@ class Arm3PyrightLSP(RetrievalArm):
             **self.fidelity_meta(), "query": query, "task_type": seed.get("task_type"), "turn_count": 1,
             "over_budget": False, "ranking_method": "lsp_hop_order",
             "seed_file": os.path.relpath(seed_path, self.repo_root) if seed_path else None,
+            "language": self.language,
+            "language_server": "typescript-language-server" if self.language == "typescript" else "pyright-langserver",
             "n_candidates": len(cands), "n_delivered": len(items), **stats,
             "ready": {"seconds": round(self.ready.seconds, 2), "source_files": self.ready.source_files,
                       "probes": self.ready.probes, "rounds": self.ready.rounds} if self.ready else None,
@@ -349,15 +468,19 @@ class Arm3PyrightLSP(RetrievalArm):
             cands.append(self._cand(f"{rel}#outline", self._module_of(seed_path) + " outline", body, "lsp_symbol",
                                     fqns, 1, "seed_outline", "textDocument/documentSymbol"))
         # definitions at the references in the seed symbol's body
-        try:
-            tree = ast.parse("\n".join(self._lines(seed_path)))
-        except SyntaxError:
-            return
-        node = _find_ast(tree, inner) if inner else None
-        if node is None:
+        if self.language == "typescript":
+            positions = self._ts_references(seed_path, target)
+        else:
+            try:
+                tree = ast.parse("\n".join(self._lines(seed_path)))
+            except SyntaxError:
+                return
+            node = _find_ast(tree, inner) if inner else None
+            positions = reference_positions(node) if node is not None else None
+        if positions is None:
             return
         refs, seen = [], set()
-        for name, line, col in reference_positions(node):
+        for name, line, col in positions:
             if name not in seen:
                 seen.add(name)
                 refs.append((name, line, col))
@@ -396,6 +519,30 @@ class Arm3PyrightLSP(RetrievalArm):
                                         self._module_of(path) + " outline", body, "lsp_symbol", fqns, 2,
                                         "hop2_outline", "textDocument/documentSymbol"))
 
+    def _ts_references(self, path: str, target: dict | None) -> list[tuple[str, int, int]] | None:
+        """References in the seed's definition (the tree-sitter node that
+        spans its outline range); None when the seed has no outline entry.
+        Columns are UTF-8 bytes, like `ast`'s, converted by the caller."""
+        if target is None:
+            return None
+        rng = target["range"]
+        splitter = TypeScriptSplitter(tokenizer=None)
+        tree = splitter._parser_for(os.path.relpath(path, self.repo_root)).parse(Path(path).read_bytes())
+        lines = self._lines(path)
+
+        def point(p: dict) -> tuple[int, int]:      # LSP UTF-16 column -> UTF-8 byte column
+            line = lines[p["line"]] if p["line"] < len(lines) else ""
+            units, col = 0, 0
+            for ch in line:
+                if units >= p["character"]:
+                    break
+                units += len(ch.encode("utf-16-le")) // 2
+                col += len(ch.encode("utf-8"))
+            return p["line"], col
+
+        node = tree.root_node.descendant_for_point_range(point(rng["start"]), point(rng["end"]))
+        return ts_reference_positions(node) if node is not None else None
+
     def _def_hover(self, loc: dict, cands: list[dict], lat: dict, hop: int, origin: str) -> None:
         path, line, char = loc["path"], loc["line"], loc["character"]
         text = self._hover(path, line, char, lat)
@@ -430,4 +577,5 @@ class Arm3PyrightLSP(RetrievalArm):
         return self.build_prompt_default(ctx)
 
 
-__all__ = ["Arm3PyrightLSP", "EditableInstallError", "PyrightNotFound", "reference_positions", "utf16_col"]
+__all__ = ["Arm3PyrightLSP", "EditableInstallError", "PyrightNotFound", "reference_positions",
+           "ts_reference_positions", "utf16_col"]

@@ -25,6 +25,13 @@ Checks
  3d. arm4_agent_tools      Arm 4's tools on the real FastAPI checkout with a scripted
                             agent (grep -> read + glob -> answer): ripgrep present,
                             caps hold, results map to FQNs, the answer is taken.
+ 3e. ts_chunk_parse        M4: Express and tRPC files -> TypeScript chunks; every
+                            chunk parses on its own (tree-sitter-typescript) and
+                            every non-blank line is covered.
+ 3f. arm3_ts_lsp_ready     M4: Arm 3 on Express and tRPC through
+                            typescript-language-server: ready, >= 5 probes with
+                            >= 1 symbol, one real T2 task each retrieves a seed
+                            hover within budget. BLOCKED when the server is absent.
  4. arm5_trimming           a PRISM output over 13,000 harness tokens is
                             trimmed from the lowest rank to <= 13,000.
  5. tokenizer_parity        HF tokenizer vs a (mocked) llama-server
@@ -57,7 +64,7 @@ import traceback
 from harness import config as C
 
 FASTAPI_FILE = "fastapi/dependencies/utils.py"
-NETWORK_HINTS = ("pyright-langserver not found", "ConnectError", "ConnectionError", "LocalEntryNotFoundError", "OSError", "HTTPError",
+NETWORK_HINTS = ("pyright-langserver not found", "typescript-language-server not found", "ConnectError", "ConnectionError", "LocalEntryNotFoundError", "OSError", "HTTPError",
                  "huggingface", "Max retries", "proxy", "403", "offline", "resolve", "Repository Not Found",
                  "We couldn't connect")
 
@@ -175,6 +182,62 @@ def check_arm3_lsp_ready(tok):
     return ok, (f"ready in {ready.seconds:.1f}s ({ready.source_files} files, {ready.rounds} probe rounds); probes "
                 f"{ready.probes}; {task.task_id}: {len(ctx.items)} items, {ctx.total_tokens} tokens; editable-install "
                 f"check {'on' if arm.require_editable else 'off'}")
+
+
+TS_CORPORA = ("express", "trpc")
+
+
+def check_ts_chunk_parse(tok):
+    """TypeScript splitter on two real files per TS corpus (the T2 seed
+    files' modules): every chunk parses on its own, every non-blank line is
+    covered, every chunk is under the cap or flagged oversized."""
+    from benchmarks.corpora.resolver import resolve
+    from harness.ast_splitter import TypeScriptSplitter
+    files = {"express": ["lib/application.js", "lib/router/index.js"],
+             "trpc": ["core/internals/procedureBuilder.ts", "http/resolveHTTPResponse.ts"]}
+    sp, notes, ok = TypeScriptSplitter(tok, C.RAG_MAX_CHUNK_TOKENS), [], True
+    for corpus in TS_CORPORA:
+        root = str(resolve(corpus))
+        for rel in files[corpus]:
+            path = os.path.join(root, rel)
+            chunks = sp.split_file(path, root)
+            lines = open(path, encoding="utf-8").read().split("\n")
+            covered = set().union(*(c.source_rows for c in chunks)) if chunks else set()
+            missing = sum(1 for i, ln in enumerate(lines) if ln.strip() and i not in covered)
+            bad = sum(1 for c in chunks if not sp.parses(c.content, c.file))
+            capped = all(c.token_count <= C.RAG_MAX_CHUNK_TOKENS or c.oversized for c in chunks)
+            ok &= bool(chunks) and missing == 0 and bad == 0 and capped
+            notes.append(f"{corpus}/{rel}: {len(chunks)} chunks, {bad} unparseable, {missing} uncovered")
+    return ok, "; ".join(notes)
+
+
+def check_arm3_ts_lsp_ready(tok):
+    """Arm 3 through typescript-language-server on Express and tRPC: ready
+    within ARM3_READY_TIMEOUT_S, >= 5 probes with >= 1 symbol, and the first
+    real T2 task retrieves a seed hover within budget."""
+    from benchmarks.corpora.resolver import resolve
+    from harness.arms.arm3_lsp import Arm3PyrightLSP
+    from harness.scoring.fairness import verify_ranking
+    from harness.tasks.loaders import load_tasks
+    notes, ok = [], True
+    for corpus in TS_CORPORA:
+        root = str(resolve(corpus))
+        arm = Arm3PyrightLSP(tokenizer=tok)
+        try:
+            arm.index(root, {"repo_id": corpus})
+            ready = arm.ready
+            task = load_tasks(corpus, repo_root=root, limit=1)[0]
+            ctx = arm.retrieve(task.query, task.seed_dict())
+            verify_ranking(ctx.items)
+        finally:
+            arm.close()
+        seed_hover = any(i.provenance.get("origin") == "seed" for i in ctx.items)
+        ok &= (ready.seconds < C.ARM3_READY_TIMEOUT_S and len(ready.probes) >= 5 and ready.total_probe_results >= 1
+               and seed_hover and 0 < ctx.total_tokens <= C.RETRIEVAL_BUDGET)
+        notes.append(f"{corpus}: ready in {ready.seconds:.1f}s ({ready.source_files} project files), probes "
+                     f"{ready.probes}; {task.task_id}: {len(ctx.items)} items, {ctx.total_tokens} tokens, "
+                     f"seed hover {seed_hover}")
+    return ok, "; ".join(notes)
 
 
 def check_arm4_agent_tools(tok):
@@ -402,6 +465,8 @@ CHECKS = [
     ("arm1_dense_encoder", check_arm1_dense_encoder),
     ("arm2_packing", check_arm2_packing),
     ("arm3_lsp_ready", check_arm3_lsp_ready),
+    ("ts_chunk_parse", check_ts_chunk_parse),
+    ("arm3_ts_lsp_ready", check_arm3_ts_lsp_ready),
     ("arm4_agent_tools", check_arm4_agent_tools),
     ("arm5_trimming", check_arm5_trimming),
     ("tokenizer_parity", check_tokenizer_parity),

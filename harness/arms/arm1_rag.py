@@ -2,8 +2,12 @@
 harness; shares nothing with `benchmarks/baselines/hybrid_rag.py`.
 
 Pipeline:
-1. Chunking: `harness.ast_splitter.PythonSplitter`, max 800 tokens per
-   chunk (harness tokenizer), functions/methods/classes/module blocks.
+1. Chunking: `harness.ast_splitter.CodeSplitter`, max 800 tokens per
+   chunk (harness tokenizer), functions/methods/classes/module blocks. It
+   routes by extension: Python files to `PythonSplitter`, TypeScript and
+   JavaScript files to `TypeScriptSplitter`. The corpus's language
+   (`config.CORPUS_LANGUAGE`, via the index config's `repo_id` or
+   `language`) decides which files are indexed.
 2. Sparse: `rank_bm25.BM25Okapi(k1=1.5, b=0.75)` over identifier-aware
    tokens (camelCase / snake_case split, plus the whole identifier).
 3. Dense: `jinaai/jina-embeddings-v2-base-code` via sentence-transformers on
@@ -32,7 +36,7 @@ import numpy as np
 
 from harness import config as C
 from harness.arms.base import RetrievalArm, item_header
-from harness.ast_splitter import Chunk, PythonSplitter, iter_python_files
+from harness.ast_splitter import Chunk, CodeSplitter, corpus_language, iter_source_files
 from harness.scoring.canonical import DeliveredContext, DeliveredItem
 from harness.scoring.latency import timed
 
@@ -190,7 +194,8 @@ class Arm1RAG(RetrievalArm):
         self.budget = budget
         self.cache_embeddings = cache_embeddings
         self.simplifications = [
-            "Python files only in M1 (TypeScript chunking arrives with the multi-corpus pipeline)",
+            "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for "
+            "Express and tRPC",
             "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
             "reranker sees at most a quarter of its 512-token window for the query",
         ]
@@ -226,8 +231,9 @@ class Arm1RAG(RetrievalArm):
                 except Exception as exc:  # noqa: BLE001 - re-raised with context
                     raise RuntimeError(f"arm1: reranker unavailable: {type(exc).__name__}: {exc}") from exc
             with timed(self.index_latency, "L_chunk"):
-                splitter = PythonSplitter(self.tok, C.RAG_MAX_CHUNK_TOKENS)
-                files = config.get("files") or iter_python_files(repo_path)
+                splitter = CodeSplitter(self.tok, C.RAG_MAX_CHUNK_TOKENS)
+                self.language = corpus_language(repo_path, config)
+                files = config.get("files") or iter_source_files(repo_path, self.language)
                 # M4 ablation lever; empty by default, so nothing is excluded
                 exclude = set(config.get("exclude_dirs", C.ARM1_EXCLUDE_DIRS))
                 if exclude:
@@ -236,7 +242,7 @@ class Arm1RAG(RetrievalArm):
                 self.excluded_dirs = sorted(exclude)
                 self.chunks: list[Chunk] = [c for f in files for c in splitter.split_file(f, repo_path)]
             if not self.chunks:
-                raise RuntimeError(f"arm1: no Python chunks under {repo_path}")
+                raise RuntimeError(f"arm1: no {self.language} chunks under {repo_path}")
             with timed(self.index_latency, "L_bm25_build"):
                 self.bm25 = BM25Okapi([lexical_tokens(f"{c.qualified_name} {c.content}") for c in self.chunks],
                                       k1=C.RAG_BM25_K1, b=C.RAG_BM25_B)
@@ -262,7 +268,7 @@ class Arm1RAG(RetrievalArm):
 
     # ---------------------------------------------------------- retrieve
     def _symbols(self, c: Chunk) -> list[str]:
-        return [] if c.kind == "module_block" else [c.qualified_name]
+        return [] if c.kind == "module_block" else [c.qualified_name, *c.inner_symbols]
 
     def retrieve(self, query: str, seed: dict) -> DeliveredContext:
         lat: dict[str, list[float]] = {}
@@ -305,7 +311,7 @@ class Arm1RAG(RetrievalArm):
             "n_chunks_indexed": len(self.chunks), "n_fused_candidates": len(fused),
             "skipped_for_budget": skipped, "over_budget": False, "turn_count": 1,
             "embedder": self.embedder.name, "reranker": self.reranker.name,
-            "excluded_dirs": list(getattr(self, "excluded_dirs", [])),
+            "excluded_dirs": list(getattr(self, "excluded_dirs", [])), "language": getattr(self, "language", None),
             "ranking_method": "cross_encoder", "latency_ms": lat,
         }
         return DeliveredContext("arm1", seed["task_id"], items, total, self.budget, meta)

@@ -103,8 +103,6 @@ if _ACTIVE_ARMS_OVERRIDE:
         raise ValueError(f"HARNESS_ACTIVE_ARMS={_ACTIVE_ARMS_OVERRIDE!r}: {_unknown or 'empty'} not among the "
                          f"implemented arms {ACTIVE_ARMS}")
     ACTIVE_ARMS = _requested
-#: Arms 2 and 3 are Python-only (Python tree-sitter splitter; Pyright).
-PYTHON_ONLY_ARMS = {"arm2", "arm3"}
 
 
 # --------------------------------------------------------------------------
@@ -112,6 +110,11 @@ PYTHON_ONLY_ARMS = {"arm2", "arm3"}
 # --------------------------------------------------------------------------
 CORPORA = ["fastapi", "django", "express", "trpc"]
 PYTHON_CORPORA = {"fastapi", "django"}
+#: Splitter / language-server language per corpus (M4): Arms 1 and 2 chunk
+#: the corpus's files of this language; Arm 3 runs Pyright for "python" and
+#: typescript-language-server for "typescript" (Express is JavaScript, which
+#: the TypeScript grammar and server both cover).
+CORPUS_LANGUAGE = {"fastapi": "python", "django": "python", "express": "typescript", "trpc": "typescript"}
 TASKS_DIR_TEMPLATE = str(REPO_ROOT / "benchmarks/ground_truth/tasks/{repo}")
 TASK_TYPES = ["T1_conceptual", "T2_localization", "T3_codegen", "T4_edit", "T5_blast_radius"]
 #: Task types with real tasks in this run. T1 has a real scorer but no
@@ -229,6 +232,36 @@ AGENT_READ_MAX_LINES = 150
 AGENT_COMPACTION_FRACTION = 0.60
 AGENT_PRESERVE_LAST_READS = 3
 AGENT_TOOL_TIMEOUT_S = 10
+
+
+# --------------------------------------------------------------------------
+# T1 judge (M4)
+# --------------------------------------------------------------------------
+#: Held-out judge for T1 (faithfulness, answer relevancy). Never a Qwen
+#: model: every arm answers with one. "deepseek" or "gemini", each through
+#: its OpenAI-compatible chat-completions endpoint. Without the API key in
+#: the environment, T1 scores NaN (judge_status "unavailable"), as before.
+T1_JUDGE_PROVIDER: str = os.environ.get("HARNESS_T1_JUDGE_PROVIDER", "deepseek")
+T1_JUDGE_PROVIDERS = {
+    "deepseek": {"base_url": "https://api.deepseek.com", "api_key_env": "DEEPSEEK_API_KEY",
+                 "model": "deepseek-chat"},
+    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "api_key_env": "GEMINI_API_KEY",
+               "model": "gemini-2.5-flash"},
+}
+if T1_JUDGE_PROVIDER not in T1_JUDGE_PROVIDERS:
+    raise ValueError(f"HARNESS_T1_JUDGE_PROVIDER={T1_JUDGE_PROVIDER!r}: not one of {sorted(T1_JUDGE_PROVIDERS)}")
+#: Name of the environment variable that holds the judge's API key.
+T1_JUDGE_API_KEY_ENV: str = os.environ.get("HARNESS_T1_JUDGE_API_KEY_ENV",
+                                           T1_JUDGE_PROVIDERS[T1_JUDGE_PROVIDER]["api_key_env"])
+T1_JUDGE_MODEL: str = os.environ.get("HARNESS_T1_JUDGE_MODEL", T1_JUDGE_PROVIDERS[T1_JUDGE_PROVIDER]["model"])
+T1_JUDGE_TEMPERATURE = 0.0
+T1_JUDGE_MAX_TOKENS = 1024
+T1_JUDGE_TIMEOUT_S = 120
+#: waits before each retry on HTTP 429 / 5xx / network errors; then the call fails
+T1_JUDGE_BACKOFF_S = (2, 4, 8, 16)
+#: Delivered context shown to the judge is capped at this many characters
+#: (about the 13,000-token retrieval budget); the cut is recorded.
+T1_JUDGE_MAX_CONTEXT_CHARS = 60_000
 
 
 # --------------------------------------------------------------------------

@@ -5,8 +5,9 @@ priority ordering, a binary-searched priority cutoff, and the `<first>`
 fallback from a full body to a signature stub. The retriever is a stand-in.
 
 Pipeline
-1. Chunks: `harness.ast_splitter.PythonSplitter` (the same splitter and
-   800-token cap as Arm 1, unchanged).
+1. Chunks: `harness.ast_splitter.CodeSplitter` (the same splitter, file
+   selection and 800-token cap as Arm 1: Python for FastAPI and Django,
+   TypeScript/JavaScript for Express and tRPC).
 2. Retrieval: BM25 (`rank_bm25.BM25Okapi`, k1=1.5, b=0.75) over the chunks,
    identifier-aware tokens. Chosen for speed and determinism, and so the
    packing is the isolated variable (no second embedder on CPU). Cursor's
@@ -50,7 +51,7 @@ import ast
 
 from harness import config as C
 from harness.arms.base import RetrievalArm, item_header
-from harness.ast_splitter import Chunk, PythonSplitter, iter_python_files
+from harness.ast_splitter import Chunk, CodeSplitter, corpus_language, iter_source_files
 from harness.scoring.canonical import DeliveredContext, DeliveredItem
 from harness.scoring.latency import timed
 
@@ -67,9 +68,13 @@ def _doc_first_line(node) -> str | None:
 def signature_stub(chunk: Chunk) -> str:
     """The chunk's signature: enclosing class headers, decorators, the
     def/class header, the first docstring line, then `...`. "" when the
-    chunk has no signature of its own."""
+    chunk has no signature of its own. A TypeScript chunk's stub is built
+    by its splitter (`Chunk.signature`: the leading comment's first line,
+    the header through the body's `{`, `// ...`, the closing rows)."""
     if chunk.kind == "module_block" or chunk.part > 1:
         return ""
+    if chunk.language == "typescript":
+        return chunk.signature
     try:
         tree = ast.parse(chunk.content)
     except SyntaxError:
@@ -120,7 +125,8 @@ class Arm2Priompt(RetrievalArm):
             "the body priorities 1000 and 500-10*rank)",
             "seed-file priority 1000 minus chunk distance from the seed symbol, floor "
             f"{C.PRIOMPT_SEED_PRIORITY_FLOOR} (inferred; a flat 1000 is all-or-nothing)",
-            "Python files only (FastAPI and Django)",
+            "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the "
+            "body's `{`, then `// ...` and the closing rows",
         ]
         self.index_latency: dict[str, list[float]] = {}
 
@@ -133,16 +139,23 @@ class Arm2Priompt(RetrievalArm):
         self.repo_root = repo_path
         with timed(self.index_latency, "L_index"):
             with timed(self.index_latency, "L_ast_parse"):
-                splitter = PythonSplitter(self.tok, C.RAG_MAX_CHUNK_TOKENS)
-                files = config.get("files") or iter_python_files(repo_path)
+                splitter = CodeSplitter(self.tok, C.RAG_MAX_CHUNK_TOKENS)
+                self.language = corpus_language(repo_path, config)
+                files = config.get("files") or iter_source_files(repo_path, self.language)
                 self.chunks: list[Chunk] = [c for f in files for c in splitter.split_file(f, repo_path)]
             if not self.chunks:
-                raise RuntimeError(f"arm2: no Python chunks under {repo_path}")
+                raise RuntimeError(f"arm2: no {self.language} chunks under {repo_path}")
             self.bm25 = BM25Okapi([lexical_tokens(f"{c.qualified_name} {c.content}") for c in self.chunks],
                                   k1=C.RAG_BM25_K1, b=C.RAG_BM25_B)
             self._file_of: dict[str, str] = {}
             for c in self.chunks:
                 if c.kind != "module_block":
+                    self._file_of.setdefault(c.qualified_name, c.file)
+                    for inner in c.inner_symbols:          # TypeScript: nested named functions
+                        self._file_of.setdefault(inner, c.file)
+                elif c.language == "typescript":
+                    # a TypeScript seed may be a function nested anywhere in its module
+                    # (Express's `lib.router.next`): the module is its file
                     self._file_of.setdefault(c.qualified_name, c.file)
             self._by_file: dict[str, list[int]] = {}
             for i, c in enumerate(self.chunks):
@@ -173,6 +186,14 @@ class Arm2Priompt(RetrievalArm):
             return 0
         names = [self.chunks[i].qualified_name for i in seed_idx]
         parts = seed_symbol.split(".")
+        # TypeScript: the chunk that holds the seed as a nested function
+        # (exact FQN first, then the leaf name: `lib.router.next` is nested in
+        # `lib.router.handle` as `lib.router.handle.next`)
+        if seed_symbol not in names:
+            for match in (lambda s: s == seed_symbol, lambda s: s.rsplit(".", 1)[-1] == parts[-1]):
+                for pos, i in enumerate(seed_idx):
+                    if any(match(s) for s in self.chunks[i].inner_symbols):
+                        return pos
         for k in range(len(parts), 0, -1):
             prefix = ".".join(parts[:k])
             for pos, q in enumerate(names):
@@ -278,7 +299,7 @@ class Arm2Priompt(RetrievalArm):
                     source_id=c.source_id + ("#signature" if which == "stub" else ""), content=content,
                     token_count=self._cost_of(comp["chunk"], which), rank=len(items) + 1,
                     kind="code_chunk" if which == "full" else "signature_stub",
-                    symbols=[] if c.kind == "module_block" else [c.qualified_name],
+                    symbols=[] if c.kind == "module_block" else [c.qualified_name, *c.inner_symbols],
                     provenance={"origin": comp["origin"], "priority": comp["priority"],
                                 "stub_priority": comp["stub_priority"], "rendered": which,
                                 "bm25_rank": comp.get("bm25_rank"), "chunk_kind": c.kind},

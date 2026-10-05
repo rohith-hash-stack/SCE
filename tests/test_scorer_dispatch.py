@@ -47,7 +47,11 @@ def test_every_type_dispatches_and_every_metric_computes(tasks):
                                          _ans(tasks["T3_codegen"], [])).task_specific["stub"] is True
 
 
-def test_t1_without_judge_is_nan_not_crash_and_judge_is_used(tasks):
+def test_t1_without_judge_is_nan_not_crash_and_judge_is_used(tasks, monkeypatch):
+    from harness import config as C
+    from harness.scoring import judge as J
+    monkeypatch.delenv(C.T1_JUDGE_API_KEY_ENV, raising=False)       # hermetic: no real judge
+    monkeypatch.setattr(J, "_CONFIGURED", None)
     t1 = tasks["T1_conceptual"]
     res = score(t1, _ctx(t1, [[TARGET]]), _ans(t1, [TARGET]))
     assert math.isnan(res.tsr) and res.task_success is False

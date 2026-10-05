@@ -35,7 +35,8 @@ is a secondary, binarised view of it (False when tsr is NaN).
   0.8). `recall_at_5` (gold affected present in the top-5 delivered items)
   is a RETRIEVAL diagnostic, not part of task_success.
   false_negative_rate = 1 - tsr.
-- T1: judge-scored (faithfulness, answer relevancy); NaN without a judge.
+- T1: judge-scored (faithfulness, answer relevancy; TSR = the minimum) by a
+  held-out judge (harness/scoring/judge.py); NaN without its API key.
 - T3/T4: stubs (NaN) until a sandboxed test runner exists.
 """
 from __future__ import annotations
@@ -200,25 +201,32 @@ def average_precision(rel: list[int], n_gold: int) -> float:
 # per-type scorers
 # --------------------------------------------------------------------------
 #: (task, answer, context) -> {"faithfulness": float, "answer_relevancy": float}
+#: (the protocol and the held-out implementation: harness/scoring/judge.py)
 Judge = Callable[[object, NormalizedAnswer, DeliveredContext], dict]
 
 
 def default_judge(task, ans: NormalizedAnswer, ctx: DeliveredContext) -> dict:
-    # Held-out judge required — must NOT be a Qwen model. Every arm's
-    # answer comes from a Qwen model; a Qwen judge would grade its own
-    # family's output. Wire an independent judge here (M4).
-    raise NotImplementedError("T1 judge not configured: held-out judge required — must NOT be a Qwen model")
+    """The held-out judge config.T1_JUDGE_* describes (DeepSeek or Gemini,
+    never a Qwen model: every arm's answer comes from one). Raises
+    NotImplementedError when its API key is not in the environment."""
+    from harness.scoring.judge import configured_judge
+    return configured_judge()(task, ans, ctx)
 
 
 def _score_t1(task, ans, ctx, judge: Judge | None) -> tuple[float, dict]:
+    from harness.scoring.judge import JudgeError
     try:
         verdict = (judge or default_judge)(task, ans, ctx)
     except NotImplementedError as exc:
         return NAN, {"faithfulness": NAN, "answer_relevancy": NAN, "judge_status": f"unavailable: {exc}"}
+    except JudgeError as exc:          # API failure after retries, or an unparseable verdict: this cell only
+        return NAN, {"faithfulness": NAN, "answer_relevancy": NAN, "judge_status": f"error: {exc}"}
     faith, relev = float(verdict["faithfulness"]), float(verdict["answer_relevancy"])
     # Both must hold: a faithful but irrelevant answer, or a relevant but
     # unfaithful one, is not a success.
-    return min(faith, relev), {"faithfulness": faith, "answer_relevancy": relev, "judge_status": "ok"}
+    out = {"faithfulness": faith, "answer_relevancy": relev, "judge_status": "ok"}
+    out.update({k: verdict[k] for k in ("judge", "rationale", "context_truncated") if k in verdict})
+    return min(faith, relev), out
 
 
 #: class FQN -> every ancestor class FQN (transitive), from the code graph

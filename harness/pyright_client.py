@@ -279,8 +279,12 @@ class PyrightClient:
             return
         text = Path(path).read_text(encoding="utf-8", errors="replace")
         self.notify("textDocument/didOpen", {"textDocument": {
-            "uri": path_to_uri(path), "languageId": "python", "version": 1, "text": text}})
+            "uri": path_to_uri(path), "languageId": self.language_id(path), "version": 1, "text": text}})
         self.opened.add(path)
+
+    def language_id(self, path: str) -> str:
+        """The LSP languageId sent with didOpen."""
+        return "python"
 
     def _require_open(self, path: str) -> str:
         path = str(Path(path).resolve())
