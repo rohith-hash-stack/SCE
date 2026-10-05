@@ -108,3 +108,31 @@ def test_real_prism_manifest_t02_002():
                                   arm5_prism._downstream_distances(arm.engine, task.seed_symbol), 2.0)
     assert (len(universe), len(keep)) == (52, 27)
     assert set(task.ground_truth.pipeline_symbols) <= keep
+
+
+# ---- PRISM_TURN1_STRICT_PROMPT scaffold (off by default) ----
+class SystemCapturingLLM(EchoManifestLLM):
+    def __call__(self, system, user, max_tokens=0, seed=None, purpose=""):
+        self.system = system
+        return super().__call__(system, user, max_tokens, seed, purpose)
+
+
+def test_turn1_strict_prompt_default_off_and_variants_differ():
+    from benchmarks.run_two_pass_benchmark import TURN1_SYSTEM_PROMPT
+    assert C.PRISM_TURN1_STRICT_PROMPT is False and C.PRISM_TURN1_TARGET_MAX == 20
+    off = arm5_prism.turn1_system_prompt(TURN1_SYSTEM_PROMPT, False, 20)
+    on = arm5_prism.turn1_system_prompt(TURN1_SYSTEM_PROMPT, True, 20)
+    assert off == TURN1_SYSTEM_PROMPT                                   # flag off: PRISM's prompt, unchanged
+    assert on != off and on.startswith(TURN1_SYSTEM_PROMPT) and "at most 20 symbols" in on
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_turn1_strict_prompt_reaches_the_turn1_call_and_build_meta(monkeypatch, strict):
+    from benchmarks.run_two_pass_benchmark import TURN1_SYSTEM_PROMPT
+    monkeypatch.setattr(C, "PRISM_TURN1_STRICT_PROMPT", strict)
+    llm = SystemCapturingLLM()
+    arm = Arm5Prism(llm=llm, tokenizer=Words(), engine=FakeEngine())
+    ctx = arm.retrieve("q", {"task_id": "t", "task_type": "T2_localization", "seed_symbol": "p.seed"})
+    assert (llm.system != TURN1_SYSTEM_PROMPT) is strict
+    assert ctx.build_meta["prism_turn1_strict_prompt"] is strict
+    assert ctx.build_meta["turn1_requested_count"] == len(SYMS)        # the echo LLM requests the whole manifest

@@ -176,6 +176,13 @@ PRIOMPT_SEED_PRIORITY_FLOOR = 501
 #: M3 ablation lever; do not enable outside it.
 PRISM_MANIFEST_STRICT: bool = False
 PRISM_MANIFEST_STRICT_MAX_HOPS = 2.0
+#: When True, PRISM's Turn-1 system prompt gains a selection-discipline
+#: instruction asking for at most PRISM_TURN1_TARGET_MAX symbols (a soft
+#: cap: stated to the model, never enforced on its answer). M3 ablation
+#: lever (004 requested 50 names, 8 repeats, from a 41-symbol manifest);
+#: do not enable outside it.
+PRISM_TURN1_STRICT_PROMPT: bool = False
+PRISM_TURN1_TARGET_MAX: int = 20
 
 
 # --------------------------------------------------------------------------

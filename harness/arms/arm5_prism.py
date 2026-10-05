@@ -49,6 +49,15 @@ def strict_manifest(manifest: str, universe: set[str], seed: str, distances: dic
     return "\n".join([lines[0], *body, lines[-1]]), keep
 
 
+def turn1_system_prompt(base: str, strict: bool, target_max: int) -> str:
+    """PRISM's Turn-1 system prompt; with `strict`, plus a selection-
+    discipline instruction (a soft cap: the answer is never truncated)."""
+    if not strict:
+        return base
+    return (f"{base} Request at most {target_max} symbols. Prefer fewer, higher-precision picks. "
+            "Only include a symbol if you cannot answer without its body.")
+
+
 def _downstream_distances(engine, seed: str) -> dict[str, float]:
     """PRISM's own weighted downstream distances, to the manifest's own horizon."""
     from prism.packer.candidate_index import CANDIDATE_INDEX_MAX_HOPS
@@ -112,7 +121,8 @@ class Arm5Prism(RetrievalArm):
         root_imports = list(seed.get("root_imports") or [])
         meta = {**self.fidelity_meta(), "query": query, "task_type": seed.get("task_type"), "anchor": anchor,
                 "turn2b_triggered": False, "turn_count": 1, "over_budget": False, "ranking_method": "prism_order",
-                "prism_manifest_strict": C.PRISM_MANIFEST_STRICT}
+                "prism_manifest_strict": C.PRISM_MANIFEST_STRICT,
+                "prism_turn1_strict_prompt": C.PRISM_TURN1_STRICT_PROMPT}
         if not anchor:
             meta.update({"no_seed": True, "latency_ms": lat})
             return DeliveredContext("arm5", seed["task_id"], [], 0, self.budget, meta)
@@ -128,7 +138,8 @@ class Arm5Prism(RetrievalArm):
                     manifest, universe = strict_manifest(manifest, universe, anchor,
                                                          _downstream_distances(self.engine, anchor),
                                                          C.PRISM_MANIFEST_STRICT_MAX_HOPS)
-            t1 = self.llm(TURN1_SYSTEM_PROMPT, _turn1_user_prompt(manifest, query), max_tokens=TURN1_MAX_TOKENS,
+            t1_system = turn1_system_prompt(TURN1_SYSTEM_PROMPT, C.PRISM_TURN1_STRICT_PROMPT, C.PRISM_TURN1_TARGET_MAX)
+            t1 = self.llm(t1_system, _turn1_user_prompt(manifest, query), max_tokens=TURN1_MAX_TOKENS,
                           seed=llm_seed, purpose="turn1")
             requested, parsed_ok = _parse_requested_symbols(t1.text, universe)
             requested, degenerate = _check_turn1_degeneration(t1.text, t1.completion_tokens, TURN1_MAX_TOKENS,
@@ -158,6 +169,7 @@ class Arm5Prism(RetrievalArm):
             "turn_count": len(turns) + 1,   # retrieval turns + the answer turn
             "manifest_candidates": len(universe), "manifest_candidates_unfiltered": unfiltered,
             "prism_manifest_strict": C.PRISM_MANIFEST_STRICT, "requested_symbols": list(requested),
+            "turn1_requested_count": len(requested),
             "turn1_parsed_ok": parsed_ok, "turn1_degenerate": degenerate,
             "external_requested": ext_requested, "skipped_hallucinated": list(skipped),
             "retrieval_turns": turns, "latency_ms": lat,
