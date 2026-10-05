@@ -227,3 +227,19 @@ def test_gate_summary_keeps_synthetic_and_real_t2_apart(tmp_path):
     assert a.loc["arm0", "mean_tsr"] == 1.0
     with pytest.raises(ValueError):
         gate_summary(results, gates[:-1])
+
+
+# ---- Gate B exclusions (t02_005: ambiguous inherited-member gold, docs/m2_closure.md) ----
+def test_gate_b_excludes_listed_tasks_and_records_why(tmp_path, monkeypatch):
+    import os
+    if not os.path.isdir("/home/user/SCE/.benchmarks/corpora/fastapi"):
+        pytest.skip("FastAPI checkout missing")
+    from harness import kaggle_m1
+    assert "fastapi_t02_005_request_validation_error_response" in C.GATE_B_EXCLUDED_TASKS
+    monkeypatch.setattr(C, "ACTIVE_ARMS", ["arm0"])
+    code = kaggle_m1.main(["--dry-run", "--fake-encoders", "--real-tasks", "5", "--bootstrap-reps", "50",
+                           "--out", str(tmp_path)])
+    report = json.loads((tmp_path / "gate_report.json").read_text())
+    gate_b = {r["task_id"] for r in report["rows"] if r["gate"] == "B_real_fastapi_T2"}
+    assert code == 0 and len(gate_b) == 4 and "fastapi_t02_005_request_validation_error_response" not in gate_b
+    assert list(report["gate_b_excluded"]) == ["fastapi_t02_005_request_validation_error_response"]

@@ -279,8 +279,11 @@ def _run(args, out_dir: Path, report: dict) -> int:
             print(f"[m1] {report['aborted']}", flush=True)
             return 1
 
-    gates = {"A_type_coverage": synthetic_tasks(root), "B_real_fastapi_T2": load_tasks("fastapi", repo_root=root,
-                                                                                         limit=args.real_tasks)}
+    real = load_tasks("fastapi", repo_root=root, limit=args.real_tasks)
+    report["gate_b_excluded"] = {t.task_id: C.GATE_B_EXCLUDED_TASKS[t.task_id] for t in real
+                                 if t.task_id in C.GATE_B_EXCLUDED_TASKS}
+    gates = {"A_type_coverage": synthetic_tasks(root),
+             "B_real_fastapi_T2": [t for t in real if t.task_id not in C.GATE_B_EXCLUDED_TASKS]}
     results = []
     result_gates: list[str] = []   # the gate of each entry in `results`
     arm1_diag: list[dict] = []

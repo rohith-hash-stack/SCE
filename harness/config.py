@@ -117,6 +117,15 @@ TASK_TYPES = ["T1_conceptual", "T2_localization", "T3_codegen", "T4_edit", "T5_b
 #: Task types with real tasks in this run. T1 has a real scorer but no
 #: tasks (no judge yet); T3/T4 have stub scorers.
 ACTIVE_TASK_TYPES = ["T2_localization", "T5_blast_radius"]
+#: Real tasks left out of Gate B scoring, with the reason (recorded in the
+#: gate report). The task files are unchanged. See docs/m2_closure.md,
+#: "Task-set caveats".
+GATE_B_EXCLUDED_TASKS = {
+    "fastapi_t02_005_request_validation_error_response":
+        "gold ValidationException.errors is invoked through the subclass (RequestValidationError.errors, "
+        "not a definition); the model names either form, so the strict answer check is ambiguous. "
+        "Out of scope until re-designed with accepted alternatives (M4 annotation backlog).",
+}
 #: How the existing ground-truth task files map onto the taxonomy.
 LEGACY_TASK_TYPE_MAP = {"debug": "T2_localization", "blast": "T5_blast_radius"}
 
