@@ -190,3 +190,34 @@ def test_t5_bias_control_compares_arm3_with_the_other_retrieval_arms():
     assert res["comparison_arms_mean_overlap"] == pytest.approx(0.2)
     assert res["arm3_ratio"] == pytest.approx(4.0)
     assert set(res["by_corpus"]) == {"express", "trpc"}
+
+
+def test_ts_caller_inside_a_local_variable_is_credited_to_the_enclosing_function():
+    """`var layer = new Layer(...)` inside `use`: the caller is `use`, not
+    the local `layer` (kinds: 12 function, 6 method, 13 variable, 14
+    constant, 7 property)."""
+    def sym(name, kind, start, end, children=()):
+        return {"name": name, "kind": kind, "children": list(children),
+                "range": {"start": {"line": start, "character": 0}, "end": {"line": end, "character": 0}}}
+
+    def contains(s, line, character):
+        return s["range"]["start"]["line"] <= line <= s["range"]["end"]["line"]
+
+    outline = [
+        sym("use", 12, 1, 30, [sym("layer", 13, 10, 12)]),
+        sym("createRouterInner", 12, 40, 80, [
+            sym("router", 14, 45, 70, [sym("createCaller", 6, 50, 60), sym("_def", 7, 62, 66)])]),
+        sym("proto", 13, 90, 95),
+    ]
+    k = D._CALLER_KINDS
+    assert D.named_fqn("lib.router", outline, 11, 0, contains, kinds=k)[0] == "lib.router.use"
+    # a method of an object literal held by a local const is a caller, named by its outline path
+    assert D.named_fqn("core.router", outline, 55, 0, contains, kinds=k)[0] == \
+        "core.router.createRouterInner.router.createCaller"
+    # a property value inside that const is not: the enclosing function is
+    assert D.named_fqn("core.router", outline, 64, 0, contains, kinds=k)[0] == "core.router.createRouterInner"
+    # a module-level variable has no enclosing caller at all
+    name, best = D.named_fqn("lib.router", outline, 92, 0, contains, kinds=k)
+    assert name == "lib.router" and best is None
+    # without `kinds` (the seed's own name) every named symbol counts, as before
+    assert D.named_fqn("lib.router", outline, 11, 0, contains)[0] == "lib.router.use.layer"

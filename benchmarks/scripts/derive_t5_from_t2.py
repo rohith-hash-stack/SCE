@@ -11,9 +11,10 @@ is the seed's transitive callers, restricted to production code:
 - TypeScript (Express, tRPC): typescript-language-server, the server Arm 3
   uses. `textDocument/references` on the seed's definition; each reference
   that is a call (`f(...)`, `a.f(...)`, `new F(...)`, checked with
-  tree-sitter) maps to its enclosing outline symbol (the nearest named
-  one: anonymous callbacks are not symbols), and that symbol's callers are
-  followed in turn. Call sites outside any symbol
+  tree-sitter) maps to its innermost enclosing named function, method,
+  constructor or class in tsserver's outline (anonymous callbacks, local
+  variables, constants and object-literal properties are not callers), and
+  that symbol's callers are followed in turn. Call sites outside any symbol
   (module-level code) have no caller symbol and are counted, not kept.
 
 Production code: callers defined under test, example, docs, benchmark or
@@ -73,23 +74,37 @@ def is_production(rel_path: str) -> bool:
 
 
 _IDENT = re.compile(r"^[A-Za-z_$][\w$]*$")
+#: LSP SymbolKinds that can be a caller (TypeScript and the Python cross-check):
+#: class, method, constructor, function. Variables (13), constants (14) and
+#: properties (7) are not callers.
+_CALLER_KINDS = {5, 6, 9, 12}
 
 
-def named_fqn(module: str, outline: list[dict], line: int, character: int, contains) -> tuple[str, dict | None]:
+def named_fqn(module: str, outline: list[dict], line: int, character: int, contains,
+              kinds: set[int] | None = None) -> tuple[str, dict | None]:
     """The fully-qualified name of the innermost *named* outline symbol whose
-    range contains the position, and that symbol (None at module level).
-    The walk stops at the first symbol whose name is not an identifier:
-    tsserver names anonymous callbacks `<function>` or
-    `self.process_params() callback`, so a call inside one is credited to
-    the nearest named enclosing symbol."""
-    parts, node, best = [module], outline, None
+    range contains the position, and that symbol (None when there is none).
+
+    - The walk stops at the first symbol whose name is not an identifier:
+      tsserver names anonymous callbacks `<function>` or
+      `self.process_params() callback`, so a call inside one is credited to
+      the nearest named enclosing symbol.
+    - With `kinds` (LSP SymbolKinds), only symbols of those kinds can be the
+      result: the walk still descends through other symbols (a local
+      `const router = {...}` holding a method), but a call that sits inside
+      a variable, a property or an object-literal value is credited to the
+      innermost enclosing symbol of a listed kind. The name is that
+      symbol's outline path, so it stays the name tsserver and Arm 3 use."""
+    parts, node, best, best_len = [module], outline, None, 1
     while True:
         hit = next((s for s in node if contains(s, line, character)), None)
         if hit is None or not _IDENT.match(hit.get("name", "")):
             break
         parts.append(hit["name"])
-        best, node = hit, hit.get("children") or []
-    return ".".join(p for p in parts if p), best
+        if kinds is None or int(hit.get("kind", 0)) in kinds:
+            best, best_len = hit, len(parts)
+        node = hit.get("children") or []
+    return ".".join(p for p in parts[:best_len] if p), best
 
 
 _COLLISION_SUFFIX = re.compile(r"#\d+$")
@@ -168,8 +183,6 @@ def definition_identity(root: str, path: str, name: str, start_line: int) -> tup
 
 
 # ----------------------------------------------------- Python cross-check
-#: LSP SymbolKinds that can be a caller: class, method, constructor, function
-_CALLER_KINDS = {5, 6, 9, 12}
 
 
 def pyright_run(root: str, corpus: str, seeds: list[str]) -> dict[str, dict]:
@@ -338,8 +351,9 @@ def typescript_run(root: str, corpus: str, seeds: list[str], reverse: bool = Fal
             arm._open(p, {})
             if not is_call(p, start["line"], start["character"]):
                 continue
+            # a caller is a function, method, constructor or class, never a variable or property
             caller, sym = named_fqn(arm._module_of(p), arm._symbols(p, {}), start["line"], start["character"],
-                                    arm._contains)
+                                    arm._contains, kinds=_CALLER_KINDS)
             if sym is None:
                 module_level["n"] += 1
                 continue

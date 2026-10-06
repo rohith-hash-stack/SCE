@@ -28,7 +28,7 @@ production callers are skipped. No T2 task file is modified.
 
 T5 gold sets are capped at 30 symbols. Above this, the task measures
 enumeration rather than retrieval. Four derived Django tasks were excluded on
-this rule. The rule also excluded one tRPC task, `trpc_t02_018` (36 callers).
+this rule. The rule also excluded one tRPC task, `trpc_t02_018` (47 callers).
 Excluded tasks are dropped, not truncated.
 
 | Corpus | Derived | Existing T5 | Total | Excluded: cap | Excluded: Pyright |
@@ -46,7 +46,7 @@ Excluded by the cap:
 | django_t02_009 | 55 |
 | django_t02_016 | 218 |
 | django_t02_019 | 84 |
-| trpc_t02_018 | 36 |
+| trpc_t02_018 | 47 |
 
 Excluded by the Pyright check: `django_t02_015` (`AdminSite.each_context`).
 PRISM finds 18 production callers and Pyright 6, a strict subset: 12 only in
@@ -81,6 +81,37 @@ Gold names stay PRISM's, the convention of the T2 gold.
 The 4 hand-annotated Django T13 tasks predate this and are not
 re-verified. Their gold also came from PRISM's graph (BCCR's caller
 detector).
+
+### TypeScript gold: caller rule
+
+A caller is a function, method, constructor or class: tsserver outline kinds
+12, 6, 9 and 5, the same kinds as the Python cross-check. These are not
+callers:
+- local variables and `var`/`let`/`const` bindings (kinds 13, 14);
+- object-literal properties (kind 7);
+- anonymous callbacks.
+
+A call inside one of those is credited to the innermost enclosing function,
+method, constructor or class. Example: `new Layer(...)` in
+`var layer = new Layer(...)` inside `use` is credited to `lib.router.use`.
+Arrow functions bound to a `const` are reported as functions (kind 12), so
+they remain callers.
+
+An earlier derivation credited calls to the innermost named outline entry of
+any kind, putting local variables into the gold (`lib.router.use.layer`).
+That was a bug in the gold and was fixed before any M4 session. Task counts
+did not change (Express 2, tRPC 14); 11 of the 16 TypeScript gold sets did.
+
+Oracle reachability (checked locally: the Oracle's retrieval needs no GPU):
+the Oracle delivers 98 of the 101 TypeScript gold names. The other 3 are
+real functions, present in tsserver's outline, that PRISM's symbol table,
+which the Oracle reads, names differently or lacks:
+
+| Task | Gold name (tsserver) | In PRISM |
+|---|---|---|
+| express_t5_001 | `lib.router.handle.trim_prefix` | `lib.router.trim_prefix` |
+| express_t5_002 | `lib.router.route.Route.all` | `lib.router.route.all` |
+| trpc_t5_002 | `core.initTRPC.createTRPCInner.initTRPCInner` | not indexed |
 
 ### TypeScript gold: bias disclosed
 
