@@ -106,7 +106,9 @@ def test_legacy_loader_maps_debug_to_t2_and_blast_to_t5():
     t2 = load_tasks("fastapi", repo_root="/nonexistent", limit=5)
     assert len(t2) == 5 and all(t.task_type == "T2_localization" for t in t2)
     t5 = load_tasks("django", task_types=["T5_blast_radius"], repo_root="/nonexistent")
-    assert len(t5) == 4 and all(t.gold_affected for t in t5)
+    assert all(t.gold_affected for t in t5)
+    # the 4 hand-annotated T13 tasks; M4's derived django_t5_* tasks are in tests/test_t5_derived_tasks.py
+    assert len([t for t in t5 if t.task_id.startswith("django_t13_")]) == 4
     # G*_universe equals the legacy harness's universe, task by task
     legacy = {t.task_id: t for t in load_tasks_from_dir(Path(C.TASKS_DIR_TEMPLATE.format(repo="django"))).accepted}
     for t in t5:

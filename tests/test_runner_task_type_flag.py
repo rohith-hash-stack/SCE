@@ -11,9 +11,9 @@ from benchmarks.ground_truth.loader import load_tasks_from_dir
 DJANGO_TASKS_DIR = Path("benchmarks/ground_truth/tasks/django")
 
 
-def test_task_type_all_loads_24():
-    """The real ground-truth directory has 24 accepted Django tasks
-    total (20 T02 debug + 4 T13 blast) - the same real count
+def test_task_type_all_loads_28():
+    """The real ground-truth directory has 28 accepted Django tasks
+    total (20 T02 debug + 4 T13 blast + 4 M4-derived T5 blast) - the same real count
     run_evaluation's own task_type="all" (default) path preserves,
     replicating that function's exact filter expression (a no-op when
     task_type != "debug")."""
@@ -23,7 +23,7 @@ def test_task_type_all_loads_24():
     task_type = "all"
     if task_type == "debug":
         tasks = [t for t in tasks if t.task_type == "debug"]
-    assert len(tasks) == 24
+    assert len(tasks) == 28
 
 
 def test_task_type_debug_loads_20():
