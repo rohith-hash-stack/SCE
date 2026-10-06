@@ -1,0 +1,312 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "fastapi_t02_022_http_digest_auth_extraction",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"fastapi/security/http.py\", \"pattern\": \"def __call__\"})\n82:    async def __call__(:\n187:    async def __call__(  # type: ignore\n301:    async def __call__(:\n403:    async def __call__(:",
+    "token_count": 75,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def __call__",
+      "path": "fastapi/security/http.py"
+     },
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 90, \"path\": \"fastapi/security/http.py\", \"start_line\": 70})\n70:     def __init__(\n71:         self,\n72:         *,\n73:         scheme: str,\n74:         scheme_name: Optional[str] = None,\n75:         description: Optional[str] = None,\n76:         auto_error: bool = True,\n77:     ):\n78:         self.model = HTTPBaseModel(scheme=scheme, description=description)\n79:         self.scheme_name = scheme_name or self.__class__.__name__\n80:         self.auto_error = auto_error\n81: \n82:     async def __call__(\n83:         self, request: Request\n84:     ) -> Optional[HTTPAuthorizationCredentials]:\n85:         authorization = request.headers.get(\"Authorization\")\n86:         scheme, credentials = get_authorization_scheme_param(authorization)\n87:         if not (authorization and scheme and credentials):\n88:             if self.auto_error:\n89:                 raise HTTPException(\n90:                     status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n[lines 70-90 of 424]",
+    "token_count": 277,
+    "rank": 2,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.security.http.HTTPBase",
+     "fastapi.security.http.HTTPBase.__init__",
+     "fastapi.security.http.HTTPBase.__call__"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/security/http.py",
+      "start_line": 70,
+      "end_line": 90
+     },
+     "engine_token_count": 277
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (grep {\"glob\": \"*.py\", \"pattern\": \"def get_authorization_scheme_param\"})\nfastapi/security/utils.py:4:def get_authorization_scheme_param(",
+    "token_count": 39,
+    "rank": 3,
+    "kind": "tool_result_grep",
+    "symbols": [
+     "fastapi.security.utils.get_authorization_scheme_param"
+    ],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def get_authorization_scheme_param",
+      "glob": "*.py"
+     },
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r4.1",
+    "content": "# r4.1  (read {\"end_line\": 20, \"path\": \"fastapi/security/utils.py\", \"start_line\": 1})\n1: from typing import Optional, Tuple\n2: \n3: \n4: def get_authorization_scheme_param(\n5:     authorization_header_value: Optional[str],\n6: ) -> Tuple[str, str]:\n7:     if not authorization_header_value:\n8:         return \"\", \"\"\n9:     scheme, _, param = authorization_header_value.partition(\" \")\n10:     return scheme, param\n11: \n[lines 1-11 of 11]",
+    "token_count": 130,
+    "rank": 4,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.security.utils.get_authorization_scheme_param"
+    ],
+    "provenance": {
+     "msg_id": "r4.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/security/utils.py",
+      "start_line": 1,
+      "end_line": 20
+     },
+     "engine_token_count": 130
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 521,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating FastAPI's HTTP Digest auth dependency in fastapi/security/http.py. Starting from `HTTPDigest.__call__`, trace how the real Authorization header is parsed before the digest-scheme check.",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 5,
+   "tool_calls": 4,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "Let's start by finding the `HTTPDigest.__call__` method in the FastAPI repository.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def __call__\", \"path\": \"fastapi/security/http.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def __call__",
+        "path": "fastapi/security/http.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def __call__",
+        "path": "fastapi/security/http.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 54,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The `HTTPDigest.__call__` method is defined in `fastapi/security/http.py` at line 82. Let's read the lines around this method to understand how the Authorization header is parsed before the digest-scheme check.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/security/http.py\", \"start_line\": 70, \"end_line\": 90}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/security/http.py",
+        "start_line": 70,
+        "end_line": 90
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/security/http.py",
+        "start_line": 70,
+        "end_line": 90
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 88,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "The `HTTPDigest.__call__` method retrieves the Authorization header from the request and then parses it using the `get_authorization_scheme_param` function. This function splits the Authorization header into the scheme and credentials.\n\nLet's find the definition of `get_authorization_scheme_param` to understand how the header is parsed.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def get_authorization_scheme_param\", \"glob\": \"*.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def get_authorization_scheme_param",
+        "glob": "*.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def get_authorization_scheme_param",
+        "glob": "*.py"
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 96,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "raw_text": "The `get_authorization_scheme_param` function is defined in `fastapi/security/utils.py`. Let's read the lines around this function to understand how it parses the Authorization header.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/security/utils.py\", \"start_line\": 1, \"end_line\": 20}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/security/utils.py",
+        "start_line": 1,
+        "end_line": 20
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/security/utils.py",
+        "start_line": 1,
+        "end_line": 20
+       },
+       "msg_id": "r4.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 75,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 5,
+     "raw_text": "The `get_authorization_scheme_param` function splits the Authorization header into the scheme and credentials using the `partition` method. The scheme is the part before the first space, and the credentials are the part after the first space.\n\nNow we have traced how the real Authorization header is parsed before the digest-scheme check in the `HTTPDigest.__call__` method.\n\n<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The Authorization header is parsed in HTTPDigest.__call__ by calling get_authorization_scheme_param, which splits the header into the scheme and credentials using the partition method.\\\", \\\"symbols\\\": [\\\"fastapi.security.http.HTTPDigest.__call__\\\", \\\"fastapi.security.utils.get_authorization_scheme_param\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The Authorization header is parsed in HTTPDigest.__call__ by calling get_authorization_scheme_param, which splits the header into the scheme and credentials using the partition method.\", \"symbols\": [\"fastapi.security.http.HTTPDigest.__call__\", \"fastapi.security.utils.get_authorization_scheme_param\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 165,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     3825.515747,
+     5672.272411,
+     6567.857503,
+     4854.193607,
+     10721.128345
+    ],
+    "L_tool_exec": [
+     4.288876,
+     0.350553,
+     25.472009,
+     0.331404
+    ],
+    "L_retrieve": [
+     31737.386306
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1514,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The Authorization header is parsed in HTTPDigest.__call__ by calling get_authorization_scheme_param, which splits the header into the scheme and credentials using the partition method.\", \"symbols\": [\"fastapi.security.http.HTTPDigest.__call__\", \"fastapi.security.utils.get_authorization_scheme_param\"]}\n```",
+    "generation_tokens": 165,
+    "latency_seconds": 10.720954395001172,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1567,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 521,
+   "prompt_tokens": 1514,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1567,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

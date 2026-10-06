@@ -1,0 +1,61 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "fastapi_t02_014_http_basic_auth_extraction",
+  "items": [
+   {
+    "source_id": "fastapi/security/http.py:187-217",
+    "content": "# fastapi/security/http.py:187-217  (fastapi.security.http.HTTPBasic.__call__)\n    async def __call__(  # type: ignore\n        self, request: Request\n    ) -> Optional[HTTPBasicCredentials]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, param = get_authorization_scheme_param(authorization)\n        if self.realm:\n            unauthorized_headers = {\"WWW-Authenticate\": f'Basic realm=\"{self.realm}\"'}\n        else:\n            unauthorized_headers = {\"WWW-Authenticate\": \"Basic\"}\n        if not authorization or scheme.lower() != \"basic\":\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_401_UNAUTHORIZED,\n                    detail=\"Not authenticated\",\n                    headers=unauthorized_headers,\n                )\n            else:\n                return None\n        invalid_user_credentials_exc = HTTPException(\n            status_code=HTTP_401_UNAUTHORIZED,\n            detail=\"Invalid authentication credentials\",\n            headers=unauthorized_headers,\n        )\n        try:\n            data = b64decode(param).decode(\"ascii\")\n        except (ValueError, UnicodeDecodeError, binascii.Error):\n            raise invalid_user_credentials_exc  # noqa: B904\n        username, separator, password = data.partition(\":\")\n        if not separator:\n            raise invalid_user_credentials_exc\n        return HTTPBasicCredentials(username=username, password=password)",
+    "token_count": 286,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.security.http.HTTPBasic.__call__"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 286
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/utils.py:4-10",
+    "content": "# fastapi/security/utils.py:4-10  (fastapi.security.utils.get_authorization_scheme_param)\ndef get_authorization_scheme_param(\n    authorization_header_value: Optional[str],\n) -> Tuple[str, str]:\n    if not authorization_header_value:\n        return \"\", \"\"\n    scheme, _, param = authorization_header_value.partition(\" \")\n    return scheme, param",
+    "token_count": 73,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "fastapi.security.utils.get_authorization_scheme_param"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 359,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating FastAPI's HTTP Basic auth dependency in fastapi/security/http.py. Starting from `HTTPBasic.__call__`, trace how the real Authorization header is split into a scheme and a parameter before the Basic-specific base64 decoding happens.",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 2,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 359,
+   "prompt_tokens": 544,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 557,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/security/http.py:187-217  (fastapi.security.http.HTTPBasic.__call__)\n    async def __call__(  # type: ignore\n        self, request: Request\n    ) -> Optional[HTTPBasicCredentials]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, param = get_authorization_scheme_param(authorization)\n        if self.realm:\n            unauthorized_headers = {\"WWW-Authenticate\": f'Basic realm=\"{self.realm}\"'}\n        else:\n            unauthorized_headers = {\"WWW-Authenticate\": \"Basic\"}\n        if not authorization or scheme.lower() != \"basic\":\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_401_UNAUTHORIZED,\n                    detail=\"Not authenticated\",\n                    headers=unauthorized_headers,\n                )\n            else:\n                return None\n        invalid_user_credentials_exc = HTTPException(\n            status_code=HTTP_401_UNAUTHORIZED,\n            detail=\"Invalid authentication credentials\",\n            headers=unauthorized_headers,\n        )\n        try:\n            data = b64decode(param).decode(\"ascii\")\n        except (ValueError, UnicodeDecodeError, binascii.Error):\n            raise invalid_user_credentials_exc  # noqa: B904\n        username, separator, password = data.partition(\":\")\n        if not separator:\n            raise invalid_user_credentials_exc\n        return HTTPBasicCredentials(username=username, password=password)\n\n# fastapi/security/utils.py:4-10  (fastapi.security.utils.get_authorization_scheme_param)\ndef get_authorization_scheme_param(\n    authorization_header_value: Optional[str],\n) -> Tuple[str, str]:\n    if not authorization_header_value:\n        return \"\", \"\"\n    scheme, _, param = authorization_header_value.partition(\" \")\n    return scheme, param\n\n## Task\n\nYou are investigating FastAPI's HTTP Basic auth dependency in fastapi/security/http.py. Starting from `HTTPBasic.__call__`, trace how the real Authorization header is split into a scheme and a parameter before the Basic-specific base64 decoding happens.\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

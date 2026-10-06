@@ -1,0 +1,1005 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "fastapi_t02_015_http_bearer_auth_extraction",
+  "items": [
+   {
+    "source_id": "fastapi/security/http.py:30-66",
+    "content": "# fastapi/security/http.py:30-66  (fastapi.security.http.HTTPAuthorizationCredentials)\nclass HTTPAuthorizationCredentials(BaseModel):\n    \"\"\"\n    The HTTP authorization credentials in the result of using `HTTPBearer` or\n    `HTTPDigest` in a dependency.\n\n    The HTTP authorization header value is split by the first space.\n\n    The first part is the `scheme`, the second part is the `credentials`.\n\n    For example, in an HTTP Bearer token scheme, the client will send a header\n    like:\n\n    ```\n    Authorization: Bearer deadbeef12346\n    ```\n\n    In this case:\n\n    * `scheme` will have the value `\"Bearer\"`\n    * `credentials` will have the value `\"deadbeef12346\"`\n    \"\"\"\n\n    scheme: Annotated[\n        str,\n        Doc(\n            \"\"\"\n            The HTTP authorization scheme extracted from the header value.\n            \"\"\"\n        ),\n    ]\n    credentials: Annotated[\n        str,\n        Doc(\n            \"\"\"\n            The HTTP authorization credentials extracted from the header value.\n            \"\"\"\n        ),\n    ]",
+    "token_count": 227,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.http.HTTPAuthorizationCredentials"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 19,
+     "rerank_score": 4.798076629638672,
+     "bm25_rank": 1,
+     "dense_rank": 88,
+     "oversized_chunk": false,
+     "engine_token_count": 227
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:221-250",
+    "content": "# fastapi/security/http.py:221-250  (fastapi.security.http.HTTPBearer)\nclass HTTPBearer(HTTPBase):\n    \"\"\"\n    HTTP Bearer token authentication.\n\n    ## Usage\n\n    Create an instance object and use that object as the dependency in `Depends()`.\n\n    The dependency result will be an `HTTPAuthorizationCredentials` object containing\n    the `scheme` and the `credentials`.\n\n    ## Example\n\n    ```python\n    from typing import Annotated\n\n    from fastapi import Depends, FastAPI\n    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer\n\n    app = FastAPI()\n\n    security = HTTPBearer()\n\n\n    @app.get(\"/users/me\")\n    def read_current_user(\n        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]\n    ):\n        return {\"scheme\": credentials.scheme, \"credentials\": credentials.credentials}\n    ```\n    \"\"\"",
+    "token_count": 183,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.http.HTTPBearer"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 5,
+     "rerank_score": 3.530346393585205,
+     "bm25_rank": 2,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 183
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_description.py:1-7",
+    "content": "# tests/test_security_http_bearer_description.py:1-7  (tests.test_security_http_bearer_description)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBearer(description=\"HTTP Bearer token scheme\")",
+    "token_count": 70,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": 3.030670166015625,
+     "bm25_rank": 4,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:301-321",
+    "content": "# fastapi/security/http.py:301-321  (fastapi.security.http.HTTPBearer.__call__)\nclass HTTPBearer(HTTPBase):\n    async def __call__(\n        self, request: Request\n    ) -> Optional[HTTPAuthorizationCredentials]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, credentials = get_authorization_scheme_param(authorization)\n        if not (authorization and scheme and credentials):\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        if scheme.lower() != \"bearer\":\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN,\n                    detail=\"Invalid authentication credentials\",\n                )\n            else:\n                return None\n        return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)",
+    "token_count": 186,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.http.HTTPBearer.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": 2.954468250274658,
+     "bm25_rank": 6,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 186
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer.py:1-7",
+    "content": "# tests/test_security_http_bearer.py:1-7  (tests.test_security_http_bearer)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBearer()",
+    "token_count": 61,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 4,
+     "rerank_score": 2.734788417816162,
+     "bm25_rank": 5,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_webhooks_security.py:1-11",
+    "content": "# tests/test_webhooks_security.py:1-11  (tests.test_webhooks_security)\nfrom datetime import datetime\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\nbearer_scheme = HTTPBearer()",
+    "token_count": 76,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 8,
+     "rerank_score": 2.5182719230651855,
+     "bm25_rank": 11,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer.py:18-21",
+    "content": "# tests/test_security_http_bearer.py:18-21  (tests.test_security_http_bearer.test_security_http_bearer)\ndef test_security_http_bearer():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Bearer foobar\"})\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"scheme\": \"Bearer\", \"credentials\": \"foobar\"}",
+    "token_count": 85,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer.test_security_http_bearer"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 14,
+     "rerank_score": 2.174492835998535,
+     "bm25_rank": 24,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_description.py:18-21",
+    "content": "# tests/test_security_http_bearer_description.py:18-21  (tests.test_security_http_bearer_description.test_security_http_bearer)\ndef test_security_http_bearer():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Bearer foobar\"})\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"scheme\": \"Bearer\", \"credentials\": \"foobar\"}",
+    "token_count": 87,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer_description.test_security_http_bearer"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 15,
+     "rerank_score": 2.174492835998535,
+     "bm25_rank": 25,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 87
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_optional.py:24-27",
+    "content": "# tests/test_security_http_bearer_optional.py:24-27  (tests.test_security_http_bearer_optional.test_security_http_bearer)\ndef test_security_http_bearer():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Bearer foobar\"})\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"scheme\": \"Bearer\", \"credentials\": \"foobar\"}",
+    "token_count": 87,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer_optional.test_security_http_bearer"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 16,
+     "rerank_score": 2.174492835998535,
+     "bm25_rank": 26,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 87
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:488-500",
+    "content": "# fastapi/security/oauth2.py:488-500  (fastapi.security.oauth2.OAuth2PasswordBearer.__call__)\nclass OAuth2PasswordBearer(OAuth2):\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, param = get_authorization_scheme_param(authorization)\n        if not authorization or scheme.lower() != \"bearer\":\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_401_UNAUTHORIZED,\n                    detail=\"Not authenticated\",\n                    headers={\"WWW-Authenticate\": \"Bearer\"},\n                )\n            else:\n                return None\n        return param",
+    "token_count": 140,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.oauth2.OAuth2PasswordBearer.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": 2.1021580696105957,
+     "bm25_rank": 8,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_optional.py:1-9",
+    "content": "# tests/test_security_http_bearer_optional.py:1-9  (tests.test_security_http_bearer_optional)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBearer(auto_error=False)",
+    "token_count": 71,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 2,
+     "rerank_score": 1.8471494913101196,
+     "bm25_rank": 7,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial001.py:1-6",
+    "content": "# docs_src/security/tutorial001.py:1-6  (docs_src.security.tutorial001)\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+    "token_count": 61,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": 1.7581796646118164,
+     "bm25_rank": 39,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:252-299",
+    "content": "# fastapi/security/http.py:252-299  (fastapi.security.http.HTTPBearer.__init__)\nclass HTTPBearer(HTTPBase):\n    def __init__(\n        self,\n        *,\n        bearerFormat: Annotated[Optional[str], Doc(\"Bearer token format.\")] = None,\n        scheme_name: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme name.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        description: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme description.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        auto_error: Annotated[\n            bool,\n            Doc(\n                \"\"\"\n                By default, if the HTTP Bearer token is not provided (in an\n                `Authorization` header), `HTTPBearer` will automatically cancel the\n                request and send the client an error.\n\n                If `auto_error` is set to `False`, when the HTTP Bearer token\n                is not available, instead of erroring out, the dependency result will\n                be `None`.\n\n                This is useful when you want to have optional authentication.\n\n                It is also useful when you want to have authentication that can be\n                provided in one of multiple optional ways (for example, in an HTTP\n                Bearer token or in a cookie).\n                \"\"\"\n            ),\n        ] = True,\n    ):\n        self.model = HTTPBearerModel(bearerFormat=bearerFormat, description=description)\n        self.scheme_name = scheme_name or self.__class__.__name__\n        self.auto_error = auto_error",
+    "token_count": 358,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.http.HTTPBearer.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": 1.5666035413742065,
+     "bm25_rank": 3,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 358
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:598-610",
+    "content": "# fastapi/security/oauth2.py:598-610  (fastapi.security.oauth2.OAuth2AuthorizationCodeBearer.__call__)\nclass OAuth2AuthorizationCodeBearer(OAuth2):\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, param = get_authorization_scheme_param(authorization)\n        if not authorization or scheme.lower() != \"bearer\":\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_401_UNAUTHORIZED,\n                    detail=\"Not authenticated\",\n                    headers={\"WWW-Authenticate\": \"Bearer\"},\n                )\n            else:\n                return None  # pragma: nocover\n        return param",
+    "token_count": 148,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.oauth2.OAuth2AuthorizationCodeBearer.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 6,
+     "rerank_score": 0.8565092086791992,
+     "bm25_rank": 9,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 148
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:82-94",
+    "content": "# fastapi/security/http.py:82-94  (fastapi.security.http.HTTPBase.__call__)\nclass HTTPBase(SecurityBase):\n    async def __call__(\n        self, request: Request\n    ) -> Optional[HTTPAuthorizationCredentials]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, credentials = get_authorization_scheme_param(authorization)\n        if not (authorization and scheme and credentials):\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)",
+    "token_count": 136,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.http.HTTPBase.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 45,
+     "rerank_score": 0.8372814655303955,
+     "bm25_rank": 41,
+     "dense_rank": 79,
+     "oversized_chunk": false,
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:98-128",
+    "content": "# fastapi/security/http.py:98-128  (fastapi.security.http.HTTPBasic)\nclass HTTPBasic(HTTPBase):\n    \"\"\"\n    HTTP Basic authentication.\n\n    ## Usage\n\n    Create an instance object and use that object as the dependency in `Depends()`.\n\n    The dependency result will be an `HTTPBasicCredentials` object containing the\n    `username` and the `password`.\n\n    Read more about it in the\n    [FastAPI docs for HTTP Basic Auth](https://fastapi.tiangolo.com/advanced/security/http-basic-auth/).\n\n    ## Example\n\n    ```python\n    from typing import Annotated\n\n    from fastapi import Depends, FastAPI\n    from fastapi.security import HTTPBasic, HTTPBasicCredentials\n\n    app = FastAPI()\n\n    security = HTTPBasic()\n\n\n    @app.get(\"/users/me\")\n    def read_current_user(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):\n        return {\"username\": credentials.username, \"password\": credentials.password}\n    ```\n    \"\"\"",
+    "token_count": 211,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.http.HTTPBasic"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 44,
+     "rerank_score": 0.7942707538604736,
+     "bm25_rank": 31,
+     "dense_rank": 96,
+     "oversized_chunk": false,
+     "engine_token_count": 211
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/models.py:406-406",
+    "content": "# fastapi/openapi/models.py:406-406  (fastapi.openapi.models)\nSecurityScheme = Union[APIKey, HTTPBase, OAuth2, OpenIdConnect, HTTPBearer]",
+    "token_count": 43,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 26,
+     "rerank_score": 0.6184902787208557,
+     "bm25_rank": 14,
+     "dense_rank": 60,
+     "oversized_chunk": false,
+     "engine_token_count": 43
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_base.py:1-7",
+    "content": "# tests/test_security_http_base.py:1-7  (tests.test_security_http_base)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security.http import HTTPAuthorizationCredentials, HTTPBase\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBase(scheme=\"Other\")",
+    "token_count": 64,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 31,
+     "rerank_score": 0.5501123666763306,
+     "bm25_rank": 62,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial002_py310.py:1-7",
+    "content": "# docs_src/security/tutorial002_py310.py:1-7  (docs_src.security.tutorial002_py310)\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+    "token_count": 76,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": 0.513709545135498,
+     "bm25_rank": 40,
+     "dense_rank": 27,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_base_description.py:1-7",
+    "content": "# tests/test_security_http_base_description.py:1-7  (tests.test_security_http_base_description)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security.http import HTTPAuthorizationCredentials, HTTPBase\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBase(scheme=\"Other\", description=\"Other Security Scheme\")",
+    "token_count": 72,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 32,
+     "rerank_score": 0.2776077091693878,
+     "bm25_rank": 60,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:325-354",
+    "content": "# fastapi/security/http.py:325-354  (fastapi.security.http.HTTPDigest)\nclass HTTPDigest(HTTPBase):\n    \"\"\"\n    HTTP Digest authentication.\n\n    ## Usage\n\n    Create an instance object and use that object as the dependency in `Depends()`.\n\n    The dependency result will be an `HTTPAuthorizationCredentials` object containing\n    the `scheme` and the `credentials`.\n\n    ## Example\n\n    ```python\n    from typing import Annotated\n\n    from fastapi import Depends, FastAPI\n    from fastapi.security import HTTPAuthorizationCredentials, HTTPDigest\n\n    app = FastAPI()\n\n    security = HTTPDigest()\n\n\n    @app.get(\"/users/me\")\n    def read_current_user(\n        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]\n    ):\n        return {\"scheme\": credentials.scheme, \"credentials\": credentials.credentials}\n    ```\n    \"\"\"",
+    "token_count": 181,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.http.HTTPDigest"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 36,
+     "rerank_score": 0.21500200033187866,
+     "bm25_rank": 16,
+     "dense_rank": 98,
+     "oversized_chunk": false,
+     "engine_token_count": 181
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial001_an_py39.py:1-8",
+    "content": "# docs_src/security/tutorial001_an_py39.py:1-8  (docs_src.security.tutorial001_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+    "token_count": 75,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 24,
+     "rerank_score": 0.16730442643165588,
+     "bm25_rank": 37,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial001_an.py:1-7",
+    "content": "# docs_src/security/tutorial001_an.py:1-7  (docs_src.security.tutorial001_an)\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+    "token_count": 70,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 30,
+     "rerank_score": -0.08165914565324783,
+     "bm25_rank": 50,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial002.py:1-9",
+    "content": "# docs_src/security/tutorial002.py:1-9  (docs_src.security.tutorial002)\nfrom typing import Union\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+    "token_count": 73,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 37,
+     "rerank_score": -0.15439584851264954,
+     "bm25_rank": 56,
+     "dense_rank": 33,
+     "oversized_chunk": false,
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_oauth2_password_bearer_optional_description.py:1-13",
+    "content": "# tests/test_security_oauth2_password_bearer_optional_description.py:1-13  (tests.test_security_oauth2_password_bearer_optional_description)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"/token\",\n    description=\"OAuth2PasswordBearer security scheme\",\n    auto_error=False,\n)",
+    "token_count": 99,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 17,
+     "rerank_score": -0.2538599669933319,
+     "bm25_rank": 33,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 99
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial005_py310.py:60-67",
+    "content": "# docs_src/security/tutorial005_py310.py:60-67  (docs_src.security.tutorial005_py310)\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\n\noauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"token\",\n    scopes={\"me\": \"Read information about the current user.\", \"items\": \"Read items.\"},\n)\n\napp = FastAPI()",
+    "token_count": 89,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -0.26725026965141296,
+     "bm25_rank": 66,
+     "dense_rank": 74,
+     "oversized_chunk": false,
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial005_an_py310.py:61-68",
+    "content": "# docs_src/security/tutorial005_an_py310.py:61-68  (docs_src.security.tutorial005_an_py310)\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\n\noauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"token\",\n    scopes={\"me\": \"Read information about the current user.\", \"items\": \"Read items.\"},\n)\n\napp = FastAPI()",
+    "token_count": 91,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -0.26725026965141296,
+     "bm25_rank": 68,
+     "dense_rank": 72,
+     "oversized_chunk": false,
+     "engine_token_count": 91
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:379-388",
+    "content": "# fastapi/security/oauth2.py:379-388  (fastapi.security.oauth2.OAuth2.__call__)\nclass OAuth2(SecurityBase):\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        if not authorization:\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        return authorization",
+    "token_count": 106,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.oauth2.OAuth2.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 34,
+     "rerank_score": -0.427008718252182,
+     "bm25_rank": 61,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 106
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_oauth2_authorization_code_bearer_description.py:1-14",
+    "content": "# tests/test_security_oauth2_authorization_code_bearer_description.py:1-14  (tests.test_security_oauth2_authorization_code_bearer_description)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import OAuth2AuthorizationCodeBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\noauth2_scheme = OAuth2AuthorizationCodeBearer(\n    authorizationUrl=\"authorize\",\n    tokenUrl=\"token\",\n    description=\"OAuth2 Code Bearer\",\n    auto_error=True,\n)",
+    "token_count": 108,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": -0.43117958307266235,
+     "bm25_rank": 19,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 108
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_oauth2_authorization_code_bearer.py:1-11",
+    "content": "# tests/test_security_oauth2_authorization_code_bearer.py:1-11  (tests.test_security_oauth2_authorization_code_bearer)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import OAuth2AuthorizationCodeBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\noauth2_scheme = OAuth2AuthorizationCodeBearer(\n    authorizationUrl=\"authorize\", tokenUrl=\"token\", auto_error=True\n)",
+    "token_count": 95,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 12,
+     "rerank_score": -0.4694477617740631,
+     "bm25_rank": 22,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 95
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_oauth2_password_bearer_optional.py:1-9",
+    "content": "# tests/test_security_oauth2_password_bearer_optional.py:1-9  (tests.test_security_oauth2_password_bearer_optional)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"/token\", auto_error=False)",
+    "token_count": 82,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -0.49355441331863403,
+     "bm25_rank": 38,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/models.py:361-362",
+    "content": "# fastapi/openapi/models.py:361-362  (fastapi.openapi.models.HTTPBearer)\nclass HTTPBearer(HTTPBase):\n    scheme: Literal[\"bearer\"] = \"bearer\"\n    bearerFormat: Optional[str] = None",
+    "token_count": 50,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.models.HTTPBearer"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 10,
+     "rerank_score": -0.4959409236907959,
+     "bm25_rank": 12,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_optional.py:36-39",
+    "content": "# tests/test_security_http_bearer_optional.py:36-39  (tests.test_security_http_bearer_optional.test_security_http_bearer_incorrect_scheme_credentials)\ndef test_security_http_bearer_incorrect_scheme_credentials():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Basic notreally\"})\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"msg\": \"Create an account first\"}",
+    "token_count": 92,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer_optional.test_security_http_bearer_incorrect_scheme_credentials"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 22,
+     "rerank_score": -0.7211011648178101,
+     "bm25_rank": 30,
+     "dense_rank": 31,
+     "oversized_chunk": false,
+     "engine_token_count": 92
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial002_an_py39.py:1-9",
+    "content": "# docs_src/security/tutorial002_an_py39.py:1-9  (docs_src.security.tutorial002_an_py39)\nfrom typing import Annotated, Union\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+    "token_count": 84,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 39,
+     "rerank_score": -0.747974157333374,
+     "bm25_rank": 49,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:509-596",
+    "content": "# fastapi/security/oauth2.py:509-596  (fastapi.security.oauth2.OAuth2AuthorizationCodeBearer.__init__)\nclass OAuth2AuthorizationCodeBearer(OAuth2):\n    def __init__(\n        self,\n        authorizationUrl: str,\n        tokenUrl: Annotated[\n            str,\n            Doc(\n                \"\"\"\n                The URL to obtain the OAuth2 token.\n                \"\"\"\n            ),\n        ],\n        refreshUrl: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                The URL to refresh the token and obtain a new one.\n                \"\"\"\n            ),\n        ] = None,\n        scheme_name: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme name.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        scopes: Annotated[\n            Optional[Dict[str, str]],\n            Doc(\n                \"\"\"\n                The OAuth2 scopes that would be required by the *path operations* that\n                use this dependency.\n                \"\"\"\n            ),\n        ] = None,\n        description: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme description.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        auto_error: Annotated[\n            bool,\n            Doc(\n                \"\"\"\n                By default, if no HTTP Authorization header is provided, required for\n                OAuth2 authentication, it will automatically cancel the request and\n                send the client an error.\n\n                If `auto_error` is set to `False`, when the HTTP Authorization header\n                is not available, instead of erroring out, the dependency result will\n                be `None`.\n\n                This is useful when you want to have optional authentication.\n\n                It is also useful when you want to have authentication that can be\n                provided in one of multiple optional ways (for example, with OAuth2\n                or in a cookie).\n                \"\"\"\n            ),\n        ] = True,\n    ):\n        if not scopes:\n            scopes = {}\n        flows = OAuthFlowsModel(\n            authorizationCode=cast(\n                Any,\n                {\n                    \"authorizationUrl\": authorizationUrl,\n                    \"tokenUrl\": tokenUrl,\n                    \"refreshUrl\": refreshUrl,\n                    \"scopes\": scopes,\n                },\n            )\n        )\n        super().__init__(\n            flows=flows,\n            scheme_name=scheme_name,\n            description=description,\n            auto_error=auto_error,\n        )",
+    "token_count": 517,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.oauth2.OAuth2AuthorizationCodeBearer.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 13,
+     "rerank_score": -0.7976642847061157,
+     "bm25_rank": 13,
+     "dense_rank": 25,
+     "oversized_chunk": false,
+     "engine_token_count": 517
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial002_an_py310.py:1-9",
+    "content": "# docs_src/security/tutorial002_an_py310.py:1-9  (docs_src.security.tutorial002_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+    "token_count": 84,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 41,
+     "rerank_score": -0.7996688485145569,
+     "bm25_rank": 45,
+     "dense_rank": 48,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_base_optional.py:1-9",
+    "content": "# tests/test_security_http_base_optional.py:1-9  (tests.test_security_http_base_optional)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security.http import HTTPAuthorizationCredentials, HTTPBase\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBase(scheme=\"Other\", auto_error=False)",
+    "token_count": 75,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 33,
+     "rerank_score": -0.9087952375411987,
+     "bm25_rank": 73,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_digest.py:1-7",
+    "content": "# tests/test_security_http_digest.py:1-7  (tests.test_security_http_digest)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPDigest\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPDigest()",
+    "token_count": 59,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -1.1647998094558716,
+     "bm25_rank": 89,
+     "dense_rank": 30,
+     "oversized_chunk": false,
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_digest_description.py:1-7",
+    "content": "# tests/test_security_http_digest_description.py:1-7  (tests.test_security_http_digest_description)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPDigest\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPDigest(description=\"HTTPDigest scheme\")",
+    "token_count": 66,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -1.172430157661438,
+     "bm25_rank": 64,
+     "dense_rank": 29,
+     "oversized_chunk": false,
+     "engine_token_count": 66
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:400-486",
+    "content": "# fastapi/security/oauth2.py:400-486  (fastapi.security.oauth2.OAuth2PasswordBearer.__init__)\nclass OAuth2PasswordBearer(OAuth2):\n    def __init__(\n        self,\n        tokenUrl: Annotated[\n            str,\n            Doc(\n                \"\"\"\n                The URL to obtain the OAuth2 token. This would be the *path operation*\n                that has `OAuth2PasswordRequestForm` as a dependency.\n                \"\"\"\n            ),\n        ],\n        scheme_name: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme name.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        scopes: Annotated[\n            Optional[Dict[str, str]],\n            Doc(\n                \"\"\"\n                The OAuth2 scopes that would be required by the *path operations* that\n                use this dependency.\n                \"\"\"\n            ),\n        ] = None,\n        description: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme description.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        auto_error: Annotated[\n            bool,\n            Doc(\n                \"\"\"\n                By default, if no HTTP Authorization header is provided, required for\n                OAuth2 authentication, it will automatically cancel the request and\n                send the client an error.\n\n                If `auto_error` is set to `False`, when the HTTP Authorization header\n                is not available, instead of erroring out, the dependency result will\n                be `None`.\n\n                This is useful when you want to have optional authentication.\n\n                It is also useful when you want to have authentication that can be\n                provided in one of multiple optional ways (for example, with OAuth2\n                or in a cookie).\n                \"\"\"\n            ),\n        ] = True,\n        refreshUrl: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                The URL to refresh the token and obtain a new one.\n                \"\"\"\n            ),\n        ] = None,\n    ):\n        if not scopes:\n            scopes = {}\n        flows = OAuthFlowsModel(\n            password=cast(\n                Any,\n                {\n                    \"tokenUrl\": tokenUrl,\n                    \"refreshUrl\": refreshUrl,\n                    \"scopes\": scopes,\n                },\n            )\n        )\n        super().__init__(\n            flows=flows,\n            scheme_name=scheme_name,\n            description=description,\n            auto_error=auto_error,\n        )",
+    "token_count": 522,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.oauth2.OAuth2PasswordBearer.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 29,
+     "rerank_score": -1.3694146871566772,
+     "bm25_rank": 15,
+     "dense_rank": 69,
+     "oversized_chunk": false,
+     "engine_token_count": 522
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer.py:30-33",
+    "content": "# tests/test_security_http_bearer.py:30-33  (tests.test_security_http_bearer.test_security_http_bearer_incorrect_scheme_credentials)\ndef test_security_http_bearer_incorrect_scheme_credentials():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Basic notreally\"})\n    assert response.status_code == 403, response.text\n    assert response.json() == {\"detail\": \"Invalid authentication credentials\"}",
+    "token_count": 89,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer.test_security_http_bearer_incorrect_scheme_credentials"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 25,
+     "rerank_score": -1.4807835817337036,
+     "bm25_rank": 28,
+     "dense_rank": 35,
+     "oversized_chunk": false,
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_description.py:30-33",
+    "content": "# tests/test_security_http_bearer_description.py:30-33  (tests.test_security_http_bearer_description.test_security_http_bearer_incorrect_scheme_credentials)\ndef test_security_http_bearer_incorrect_scheme_credentials():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Basic notreally\"})\n    assert response.status_code == 403, response.text\n    assert response.json() == {\"detail\": \"Invalid authentication credentials\"}",
+    "token_count": 91,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer_description.test_security_http_bearer_incorrect_scheme_credentials"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 27,
+     "rerank_score": -1.4807835817337036,
+     "bm25_rank": 29,
+     "dense_rank": 36,
+     "oversized_chunk": false,
+     "engine_token_count": 91
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_digest_optional.py:1-9",
+    "content": "# tests/test_security_http_digest_optional.py:1-9  (tests.test_security_http_digest_optional)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPDigest\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPDigest(auto_error=False)",
+    "token_count": 69,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 40,
+     "rerank_score": -1.7090624570846558,
+     "bm25_rank": 98,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:1-13",
+    "content": "# fastapi/security/http.py:1-13  (fastapi.security.http)\nimport binascii\nfrom base64 import b64decode\nfrom typing import Optional\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import HTTPBase as HTTPBaseModel\nfrom fastapi.openapi.models import HTTPBearer as HTTPBearerModel\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom pydantic import BaseModel\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\nfrom typing_extensions import Annotated, Doc",
+    "token_count": 136,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 21,
+     "rerank_score": -1.768883466720581,
+     "bm25_rank": 23,
+     "dense_rank": 34,
+     "oversized_chunk": false,
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/security/tutorial002_an.py:1-10",
+    "content": "# docs_src/security/tutorial002_an.py:1-10  (docs_src.security.tutorial002_an)\nfrom typing import Union\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+    "token_count": 83,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 43,
+     "rerank_score": -2.0766849517822266,
+     "bm25_rank": 59,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:392-398",
+    "content": "# fastapi/security/oauth2.py:392-398  (fastapi.security.oauth2.OAuth2PasswordBearer)\nclass OAuth2PasswordBearer(OAuth2):\n    \"\"\"\n    OAuth2 flow for authentication using a bearer token obtained with a password.\n    An instance of it would be used as a dependency.\n\n    Read more about it in the\n    [FastAPI docs for Simple OAuth2 with Password and Bearer](https://fastapi.tiangolo.com/tutorial/security/simple-oauth2/).\n    \"\"\"",
+    "token_count": 107,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.oauth2.OAuth2PasswordBearer"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 23,
+     "rerank_score": -2.659059762954712,
+     "bm25_rank": 34,
+     "dense_rank": 28,
+     "oversized_chunk": false,
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_optional.py:30-33",
+    "content": "# tests/test_security_http_bearer_optional.py:30-33  (tests.test_security_http_bearer_optional.test_security_http_bearer_no_credentials)\ndef test_security_http_bearer_no_credentials():\n    response = client.get(\"/users/me\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"msg\": \"Create an account first\"}",
+    "token_count": 79,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer_optional.test_security_http_bearer_no_credentials"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 50,
+     "rerank_score": -3.1187117099761963,
+     "bm25_rank": 75,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer.py:24-27",
+    "content": "# tests/test_security_http_bearer.py:24-27  (tests.test_security_http_bearer.test_security_http_bearer_no_credentials)\ndef test_security_http_bearer_no_credentials():\n    response = client.get(\"/users/me\")\n    assert response.status_code == 403, response.text\n    assert response.json() == {\"detail\": \"Not authenticated\"}",
+    "token_count": 75,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer.test_security_http_bearer_no_credentials"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 47,
+     "rerank_score": -3.384488105773926,
+     "bm25_rank": 71,
+     "dense_rank": 67,
+     "oversized_chunk": false,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:504-507",
+    "content": "# fastapi/security/oauth2.py:504-507  (fastapi.security.oauth2.OAuth2AuthorizationCodeBearer)\nclass OAuth2AuthorizationCodeBearer(OAuth2):\n    \"\"\"\n    OAuth2 flow for authentication using a bearer token obtained with an OAuth2 code\n    flow. An instance of it would be used as a dependency.\n    \"\"\"",
+    "token_count": 74,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.oauth2.OAuth2AuthorizationCodeBearer"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 35,
+     "rerank_score": -3.454561710357666,
+     "bm25_rank": 47,
+     "dense_rank": 32,
+     "oversized_chunk": false,
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:1-13",
+    "content": "# fastapi/security/oauth2.py:1-13  (fastapi.security.oauth2)\nfrom typing import Any, Dict, List, Optional, Union, cast\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import OAuth2 as OAuth2Model\nfrom fastapi.openapi.models import OAuthFlows as OAuthFlowsModel\nfrom fastapi.param_functions import Form\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\n\n# TODO: import from typing when deprecating Python 3.9\nfrom typing_extensions import Annotated, Doc",
+    "token_count": 153,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 46,
+     "rerank_score": -4.987191200256348,
+     "bm25_rank": 91,
+     "dense_rank": 39,
+     "oversized_chunk": false,
+     "engine_token_count": 153
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 6016,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are investigating FastAPI's HTTP Bearer auth dependency in fastapi/security/http.py. Starting from `HTTPBearer.__call__`, trace how the real Authorization header is split before the bearer-scheme check.",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 5398,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     65.913656
+    ],
+    "L_embed_query": [
+     161.018887
+    ],
+    "L_dense": [
+     8.321065
+    ],
+    "L_rrf": [
+     0.174912
+    ],
+    "L_rerank": [
+     28139.194696
+    ],
+    "L_retrieve": [
+     28406.206879
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 6016,
+   "prompt_tokens": 6199,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 6212,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/security/http.py:30-66  (fastapi.security.http.HTTPAuthorizationCredentials)\nclass HTTPAuthorizationCredentials(BaseModel):\n    \"\"\"\n    The HTTP authorization credentials in the result of using `HTTPBearer` or\n    `HTTPDigest` in a dependency.\n\n    The HTTP authorization header value is split by the first space.\n\n    The first part is the `scheme`, the second part is the `credentials`.\n\n    For example, in an HTTP Bearer token scheme, the client will send a header\n    like:\n\n    ```\n    Authorization: Bearer deadbeef12346\n    ```\n\n    In this case:\n\n    * `scheme` will have the value `\"Bearer\"`\n    * `credentials` will have the value `\"deadbeef12346\"`\n    \"\"\"\n\n    scheme: Annotated[\n        str,\n        Doc(\n            \"\"\"\n            The HTTP authorization scheme extracted from the header value.\n            \"\"\"\n        ),\n    ]\n    credentials: Annotated[\n        str,\n        Doc(\n            \"\"\"\n            The HTTP authorization credentials extracted from the header value.\n            \"\"\"\n        ),\n    ]\n\n# fastapi/security/http.py:221-250  (fastapi.security.http.HTTPBearer)\nclass HTTPBearer(HTTPBase):\n    \"\"\"\n    HTTP Bearer token authentication.\n\n    ## Usage\n\n    Create an instance object and use that object as the dependency in `Depends()`.\n\n    The dependency result will be an `HTTPAuthorizationCredentials` object containing\n    the `scheme` and the `credentials`.\n\n    ## Example\n\n    ```python\n    from typing import Annotated\n\n    from fastapi import Depends, FastAPI\n    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer\n\n    app = FastAPI()\n\n    security = HTTPBearer()\n\n\n    @app.get(\"/users/me\")\n    def read_current_user(\n        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]\n    ):\n        return {\"scheme\": credentials.scheme, \"credentials\": credentials.credentials}\n    ```\n    \"\"\"\n\n# tests/test_security_http_bearer_description.py:1-7  (tests.test_security_http_bearer_description)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBearer(description=\"HTTP Bearer token scheme\")\n\n# fastapi/security/http.py:301-321  (fastapi.security.http.HTTPBearer.__call__)\nclass HTTPBearer(HTTPBase):\n    async def __call__(\n        self, request: Request\n    ) -> Optional[HTTPAuthorizationCredentials]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, credentials = get_authorization_scheme_param(authorization)\n        if not (authorization and scheme and credentials):\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        if scheme.lower() != \"bearer\":\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN,\n                    detail=\"Invalid authentication credentials\",\n                )\n            else:\n                return None\n        return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)\n\n# tests/test_security_http_bearer.py:1-7  (tests.test_security_http_bearer)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBearer()\n\n# tests/test_webhooks_security.py:1-11  (tests.test_webhooks_security)\nfrom datetime import datetime\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\nbearer_scheme = HTTPBearer()\n\n# tests/test_security_http_bearer.py:18-21  (tests.test_security_http_bearer.test_security_http_bearer)\ndef test_security_http_bearer():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Bearer foobar\"})\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"scheme\": \"Bearer\", \"credentials\": \"foobar\"}\n\n# tests/test_security_http_bearer_description.py:18-21  (tests.test_security_http_bearer_description.test_security_http_bearer)\ndef test_security_http_bearer():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Bearer foobar\"})\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"scheme\": \"Bearer\", \"credentials\": \"foobar\"}\n\n# tests/test_security_http_bearer_optional.py:24-27  (tests.test_security_http_bearer_optional.test_security_http_bearer)\ndef test_security_http_bearer():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Bearer foobar\"})\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"scheme\": \"Bearer\", \"credentials\": \"foobar\"}\n\n# fastapi/security/oauth2.py:488-500  (fastapi.security.oauth2.OAuth2PasswordBearer.__call__)\nclass OAuth2PasswordBearer(OAuth2):\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, param = get_authorization_scheme_param(authorization)\n        if not authorization or scheme.lower() != \"bearer\":\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_401_UNAUTHORIZED,\n                    detail=\"Not authenticated\",\n                    headers={\"WWW-Authenticate\": \"Bearer\"},\n                )\n            else:\n                return None\n        return param\n\n# tests/test_security_http_bearer_optional.py:1-9  (tests.test_security_http_bearer_optional)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBearer(auto_error=False)\n\n# docs_src/security/tutorial001.py:1-6  (docs_src.security.tutorial001)\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# fastapi/security/http.py:252-299  (fastapi.security.http.HTTPBearer.__init__)\nclass HTTPBearer(HTTPBase):\n    def __init__(\n        self,\n        *,\n        bearerFormat: Annotated[Optional[str], Doc(\"Bearer token format.\")] = None,\n        scheme_name: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme name.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        description: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme description.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        auto_error: Annotated[\n            bool,\n            Doc(\n                \"\"\"\n                By default, if the HTTP Bearer token is not provided (in an\n                `Authorization` header), `HTTPBearer` will automatically cancel the\n                request and send the client an error.\n\n                If `auto_error` is set to `False`, when the HTTP Bearer token\n                is not available, instead of erroring out, the dependency result will\n                be `None`.\n\n                This is useful when you want to have optional authentication.\n\n                It is also useful when you want to have authentication that can be\n                provided in one of multiple optional ways (for example, in an HTTP\n                Bearer token or in a cookie).\n                \"\"\"\n            ),\n        ] = True,\n    ):\n        self.model = HTTPBearerModel(bearerFormat=bearerFormat, description=description)\n        self.scheme_name = scheme_name or self.__class__.__name__\n        self.auto_error = auto_error\n\n# fastapi/security/oauth2.py:598-610  (fastapi.security.oauth2.OAuth2AuthorizationCodeBearer.__call__)\nclass OAuth2AuthorizationCodeBearer(OAuth2):\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, param = get_authorization_scheme_param(authorization)\n        if not authorization or scheme.lower() != \"bearer\":\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_401_UNAUTHORIZED,\n                    detail=\"Not authenticated\",\n                    headers={\"WWW-Authenticate\": \"Bearer\"},\n                )\n            else:\n                return None  # pragma: nocover\n        return param\n\n# fastapi/security/http.py:82-94  (fastapi.security.http.HTTPBase.__call__)\nclass HTTPBase(SecurityBase):\n    async def __call__(\n        self, request: Request\n    ) -> Optional[HTTPAuthorizationCredentials]:\n        authorization = request.headers.get(\"Authorization\")\n        scheme, credentials = get_authorization_scheme_param(authorization)\n        if not (authorization and scheme and credentials):\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)\n\n# fastapi/security/http.py:98-128  (fastapi.security.http.HTTPBasic)\nclass HTTPBasic(HTTPBase):\n    \"\"\"\n    HTTP Basic authentication.\n\n    ## Usage\n\n    Create an instance object and use that object as the dependency in `Depends()`.\n\n    The dependency result will be an `HTTPBasicCredentials` object containing the\n    `username` and the `password`.\n\n    Read more about it in the\n    [FastAPI docs for HTTP Basic Auth](https://fastapi.tiangolo.com/advanced/security/http-basic-auth/).\n\n    ## Example\n\n    ```python\n    from typing import Annotated\n\n    from fastapi import Depends, FastAPI\n    from fastapi.security import HTTPBasic, HTTPBasicCredentials\n\n    app = FastAPI()\n\n    security = HTTPBasic()\n\n\n    @app.get(\"/users/me\")\n    def read_current_user(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):\n        return {\"username\": credentials.username, \"password\": credentials.password}\n    ```\n    \"\"\"\n\n# fastapi/openapi/models.py:406-406  (fastapi.openapi.models)\nSecurityScheme = Union[APIKey, HTTPBase, OAuth2, OpenIdConnect, HTTPBearer]\n\n# tests/test_security_http_base.py:1-7  (tests.test_security_http_base)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security.http import HTTPAuthorizationCredentials, HTTPBase\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBase(scheme=\"Other\")\n\n# docs_src/security/tutorial002_py310.py:1-7  (docs_src.security.tutorial002_py310)\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# tests/test_security_http_base_description.py:1-7  (tests.test_security_http_base_description)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security.http import HTTPAuthorizationCredentials, HTTPBase\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBase(scheme=\"Other\", description=\"Other Security Scheme\")\n\n# fastapi/security/http.py:325-354  (fastapi.security.http.HTTPDigest)\nclass HTTPDigest(HTTPBase):\n    \"\"\"\n    HTTP Digest authentication.\n\n    ## Usage\n\n    Create an instance object and use that object as the dependency in `Depends()`.\n\n    The dependency result will be an `HTTPAuthorizationCredentials` object containing\n    the `scheme` and the `credentials`.\n\n    ## Example\n\n    ```python\n    from typing import Annotated\n\n    from fastapi import Depends, FastAPI\n    from fastapi.security import HTTPAuthorizationCredentials, HTTPDigest\n\n    app = FastAPI()\n\n    security = HTTPDigest()\n\n\n    @app.get(\"/users/me\")\n    def read_current_user(\n        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]\n    ):\n        return {\"scheme\": credentials.scheme, \"credentials\": credentials.credentials}\n    ```\n    \"\"\"\n\n# docs_src/security/tutorial001_an_py39.py:1-8  (docs_src.security.tutorial001_an_py39)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# docs_src/security/tutorial001_an.py:1-7  (docs_src.security.tutorial001_an)\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# docs_src/security/tutorial002.py:1-9  (docs_src.security.tutorial002)\nfrom typing import Union\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# tests/test_security_oauth2_password_bearer_optional_description.py:1-13  (tests.test_security_oauth2_password_bearer_optional_description)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"/token\",\n    description=\"OAuth2PasswordBearer security scheme\",\n    auto_error=False,\n)\n\n# docs_src/security/tutorial005_py310.py:60-67  (docs_src.security.tutorial005_py310)\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\n\noauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"token\",\n    scopes={\"me\": \"Read information about the current user.\", \"items\": \"Read items.\"},\n)\n\napp = FastAPI()\n\n# docs_src/security/tutorial005_an_py310.py:61-68  (docs_src.security.tutorial005_an_py310)\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\n\noauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"token\",\n    scopes={\"me\": \"Read information about the current user.\", \"items\": \"Read items.\"},\n)\n\napp = FastAPI()\n\n# fastapi/security/oauth2.py:379-388  (fastapi.security.oauth2.OAuth2.__call__)\nclass OAuth2(SecurityBase):\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        if not authorization:\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        return authorization\n\n# tests/test_security_oauth2_authorization_code_bearer_description.py:1-14  (tests.test_security_oauth2_authorization_code_bearer_description)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import OAuth2AuthorizationCodeBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\noauth2_scheme = OAuth2AuthorizationCodeBearer(\n    authorizationUrl=\"authorize\",\n    tokenUrl=\"token\",\n    description=\"OAuth2 Code Bearer\",\n    auto_error=True,\n)\n\n# tests/test_security_oauth2_authorization_code_bearer.py:1-11  (tests.test_security_oauth2_authorization_code_bearer)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import OAuth2AuthorizationCodeBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\noauth2_scheme = OAuth2AuthorizationCodeBearer(\n    authorizationUrl=\"authorize\", tokenUrl=\"token\", auto_error=True\n)\n\n# tests/test_security_oauth2_password_bearer_optional.py:1-9  (tests.test_security_oauth2_password_bearer_optional)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"/token\", auto_error=False)\n\n# fastapi/openapi/models.py:361-362  (fastapi.openapi.models.HTTPBearer)\nclass HTTPBearer(HTTPBase):\n    scheme: Literal[\"bearer\"] = \"bearer\"\n    bearerFormat: Optional[str] = None\n\n# tests/test_security_http_bearer_optional.py:36-39  (tests.test_security_http_bearer_optional.test_security_http_bearer_incorrect_scheme_credentials)\ndef test_security_http_bearer_incorrect_scheme_credentials():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Basic notreally\"})\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"msg\": \"Create an account first\"}\n\n# docs_src/security/tutorial002_an_py39.py:1-9  (docs_src.security.tutorial002_an_py39)\nfrom typing import Annotated, Union\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# fastapi/security/oauth2.py:509-596  (fastapi.security.oauth2.OAuth2AuthorizationCodeBearer.__init__)\nclass OAuth2AuthorizationCodeBearer(OAuth2):\n    def __init__(\n        self,\n        authorizationUrl: str,\n        tokenUrl: Annotated[\n            str,\n            Doc(\n                \"\"\"\n                The URL to obtain the OAuth2 token.\n                \"\"\"\n            ),\n        ],\n        refreshUrl: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                The URL to refresh the token and obtain a new one.\n                \"\"\"\n            ),\n        ] = None,\n        scheme_name: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme name.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        scopes: Annotated[\n            Optional[Dict[str, str]],\n            Doc(\n                \"\"\"\n                The OAuth2 scopes that would be required by the *path operations* that\n                use this dependency.\n                \"\"\"\n            ),\n        ] = None,\n        description: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme description.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        auto_error: Annotated[\n            bool,\n            Doc(\n                \"\"\"\n                By default, if no HTTP Authorization header is provided, required for\n                OAuth2 authentication, it will automatically cancel the request and\n                send the client an error.\n\n                If `auto_error` is set to `False`, when the HTTP Authorization header\n                is not available, instead of erroring out, the dependency result will\n                be `None`.\n\n                This is useful when you want to have optional authentication.\n\n                It is also useful when you want to have authentication that can be\n                provided in one of multiple optional ways (for example, with OAuth2\n                or in a cookie).\n                \"\"\"\n            ),\n        ] = True,\n    ):\n        if not scopes:\n            scopes = {}\n        flows = OAuthFlowsModel(\n            authorizationCode=cast(\n                Any,\n                {\n                    \"authorizationUrl\": authorizationUrl,\n                    \"tokenUrl\": tokenUrl,\n                    \"refreshUrl\": refreshUrl,\n                    \"scopes\": scopes,\n                },\n            )\n        )\n        super().__init__(\n            flows=flows,\n            scheme_name=scheme_name,\n            description=description,\n            auto_error=auto_error,\n        )\n\n# docs_src/security/tutorial002_an_py310.py:1-9  (docs_src.security.tutorial002_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# tests/test_security_http_base_optional.py:1-9  (tests.test_security_http_base_optional)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security.http import HTTPAuthorizationCredentials, HTTPBase\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPBase(scheme=\"Other\", auto_error=False)\n\n# tests/test_security_http_digest.py:1-7  (tests.test_security_http_digest)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPDigest\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPDigest()\n\n# tests/test_security_http_digest_description.py:1-7  (tests.test_security_http_digest_description)\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPDigest\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPDigest(description=\"HTTPDigest scheme\")\n\n# fastapi/security/oauth2.py:400-486  (fastapi.security.oauth2.OAuth2PasswordBearer.__init__)\nclass OAuth2PasswordBearer(OAuth2):\n    def __init__(\n        self,\n        tokenUrl: Annotated[\n            str,\n            Doc(\n                \"\"\"\n                The URL to obtain the OAuth2 token. This would be the *path operation*\n                that has `OAuth2PasswordRequestForm` as a dependency.\n                \"\"\"\n            ),\n        ],\n        scheme_name: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme name.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        scopes: Annotated[\n            Optional[Dict[str, str]],\n            Doc(\n                \"\"\"\n                The OAuth2 scopes that would be required by the *path operations* that\n                use this dependency.\n                \"\"\"\n            ),\n        ] = None,\n        description: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme description.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        auto_error: Annotated[\n            bool,\n            Doc(\n                \"\"\"\n                By default, if no HTTP Authorization header is provided, required for\n                OAuth2 authentication, it will automatically cancel the request and\n                send the client an error.\n\n                If `auto_error` is set to `False`, when the HTTP Authorization header\n                is not available, instead of erroring out, the dependency result will\n                be `None`.\n\n                This is useful when you want to have optional authentication.\n\n                It is also useful when you want to have authentication that can be\n                provided in one of multiple optional ways (for example, with OAuth2\n                or in a cookie).\n                \"\"\"\n            ),\n        ] = True,\n        refreshUrl: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                The URL to refresh the token and obtain a new one.\n                \"\"\"\n            ),\n        ] = None,\n    ):\n        if not scopes:\n            scopes = {}\n        flows = OAuthFlowsModel(\n            password=cast(\n                Any,\n                {\n                    \"tokenUrl\": tokenUrl,\n                    \"refreshUrl\": refreshUrl,\n                    \"scopes\": scopes,\n                },\n            )\n        )\n        super().__init__(\n            flows=flows,\n            scheme_name=scheme_name,\n            description=description,\n            auto_error=auto_error,\n        )\n\n# tests/test_security_http_bearer.py:30-33  (tests.test_security_http_bearer.test_security_http_bearer_incorrect_scheme_credentials)\ndef test_security_http_bearer_incorrect_scheme_credentials():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Basic notreally\"})\n    assert response.status_code == 403, response.text\n    assert response.json() == {\"detail\": \"Invalid authentication credentials\"}\n\n# tests/test_security_http_bearer_description.py:30-33  (tests.test_security_http_bearer_description.test_security_http_bearer_incorrect_scheme_credentials)\ndef test_security_http_bearer_incorrect_scheme_credentials():\n    response = client.get(\"/users/me\", headers={\"Authorization\": \"Basic notreally\"})\n    assert response.status_code == 403, response.text\n    assert response.json() == {\"detail\": \"Invalid authentication credentials\"}\n\n# tests/test_security_http_digest_optional.py:1-9  (tests.test_security_http_digest_optional)\nfrom typing import Optional\n\nfrom fastapi import FastAPI, Security\nfrom fastapi.security import HTTPAuthorizationCredentials, HTTPDigest\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nsecurity = HTTPDigest(auto_error=False)\n\n# fastapi/security/http.py:1-13  (fastapi.security.http)\nimport binascii\nfrom base64 import b64decode\nfrom typing import Optional\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import HTTPBase as HTTPBaseModel\nfrom fastapi.openapi.models import HTTPBearer as HTTPBearerModel\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom pydantic import BaseModel\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\nfrom typing_extensions import Annotated, Doc\n\n# docs_src/security/tutorial002_an.py:1-10  (docs_src.security.tutorial002_an)\nfrom typing import Union\n\nfrom fastapi import Depends, FastAPI\nfrom fastapi.security import OAuth2PasswordBearer\nfrom pydantic import BaseModel\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# fastapi/security/oauth2.py:392-398  (fastapi.security.oauth2.OAuth2PasswordBearer)\nclass OAuth2PasswordBearer(OAuth2):\n    \"\"\"\n    OAuth2 flow for authentication using a bearer token obtained with a password.\n    An instance of it would be used as a dependency.\n\n    Read more about it in the\n    [FastAPI docs for Simple OAuth2 with Password and Bearer](https://fastapi.tiangolo.com/tutorial/security/simple-oauth2/).\n    \"\"\"\n\n# tests/test_security_http_bearer_optional.py:30-33  (tests.test_security_http_bearer_optional.test_security_http_bearer_no_credentials)\ndef test_security_http_bearer_no_credentials():\n    response = client.get(\"/users/me\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\"msg\": \"Create an account first\"}\n\n# tests/test_security_http_bearer.py:24-27  (tests.test_security_http_bearer.test_security_http_bearer_no_credentials)\ndef test_security_http_bearer_no_credentials():\n    response = client.get(\"/users/me\")\n    assert response.status_code == 403, response.text\n    assert response.json() == {\"detail\": \"Not authenticated\"}\n\n# fastapi/security/oauth2.py:504-507  (fastapi.security.oauth2.OAuth2AuthorizationCodeBearer)\nclass OAuth2AuthorizationCodeBearer(OAuth2):\n    \"\"\"\n    OAuth2 flow for authentication using a bearer token obtained with an OAuth2 code\n    flow. An instance of it would be used as a dependency.\n    \"\"\"\n\n# fastapi/security/oauth2.py:1-13  (fastapi.security.oauth2)\nfrom typing import Any, Dict, List, Optional, Union, cast\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import OAuth2 as OAuth2Model\nfrom fastapi.openapi.models import OAuthFlows as OAuthFlowsModel\nfrom fastapi.param_functions import Form\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\n\n# TODO: import from typing when deprecating Python 3.9\nfrom typing_extensions import Annotated, Doc\n\n## Task\n\nYou are investigating FastAPI's HTTP Bearer auth dependency in fastapi/security/http.py. Starting from `HTTPBearer.__call__`, trace how the real Authorization header is split before the bearer-scheme check.\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

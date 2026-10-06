@@ -1,0 +1,203 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "fastapi_t02_008_add_api_websocket_route",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"fastapi/routing.py\", \"pattern\": \"def add_api_websocket_route\"})\n1026:    def add_api_websocket_route(:",
+    "token_count": 42,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def add_api_websocket_route",
+      "path": "fastapi/routing.py"
+     },
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 1100, \"path\": \"fastapi/routing.py\", \"start_line\": 1026})\n1026:     def add_api_websocket_route(\n1027:         self,\n1028:         path: str,\n1029:         endpoint: Callable[..., Any],\n1030:         name: Optional[str] = None,\n1031:         *,\n1032:         dependencies: Optional[Sequence[params.Depends]] = None,\n1033:     ) -> None:\n1034:         current_dependencies = self.dependencies.copy()\n1035:         if dependencies:\n1036:             current_dependencies.extend(dependencies)\n1037: \n1038:         route = APIWebSocketRoute(\n1039:             self.prefix + path,\n1040:             endpoint=endpoint,\n1041:             name=name,\n1042:             dependencies=current_dependencies,\n1043:             dependency_overrides_provider=self.dependency_overrides_provider,\n1044:         )\n1045:         self.routes.append(route)\n1046: \n1047:     def websocket(\n1048:         self,\n1049:         path: Annotated[\n1050:             str,\n1051:             Doc(\n1052:                 \"\"\"\n1053:                 WebSocket path.\n1054:                 \"\"\"\n1055:             ),\n1056:         ],\n1057:         name: Annotated[\n1058:             Optional[str],\n1059:             Doc(\n1060:                 \"\"\"\n1061:                 A name for the WebSocket. Only used internally.\n1062:                 \"\"\"\n1063:             ),\n1064:         ] = None,\n1065:         *,\n1066:         dependencies: Annotated[\n1067:             Optional[Sequence[params.Depends]],\n1068:             Doc(\n1069:                 \"\"\"\n1070:                 A list of dependencies (using `Depends()`) to be used for this\n1071:                 WebSocket.\n1072: \n1073:                 Read more about it in the\n1074:                 [FastAPI docs for WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).\n1075:                 \"\"\"\n1076:             ),\n1077:         ] = None,\n1078:     ) -> Callable[[DecoratedCallable], DecoratedCallable]:\n1079:         \"\"\"\n1080:         Decorate a WebSocket function.\n1081: \n1082:         Read more about it in the\n1083:         [FastAPI docs for WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).\n1084: \n1085:         **Example**\n1086: \n1087:         ## Example\n1088: \n1089:         ```python\n1090:         from fastapi import APIRouter, FastAPI, WebSocket\n1091: \n1092:         app = FastAPI()\n1093:         router = APIRouter()\n1094: \n1095:         @router.websocket(\"/ws\")\n1096:         async def websocket_endpoint(websocket: WebSocket):\n1097:             await websocket.accept()\n1098:             while True:\n1099:                 data = await websocket.receive_text()\n1100:                 await websocket.send_text(f\"Message text was: {data}\")\n[lines 1026-1100 of 4441]",
+    "token_count": 849,
+    "rank": 2,
+    "kind": "tool_result_read",
+    "symbols": [
+     "fastapi.routing.APIRouter",
+     "fastapi.routing.APIRouter.add_api_websocket_route",
+     "fastapi.routing.APIRouter.websocket"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "fastapi/routing.py",
+      "start_line": 1026,
+      "end_line": 1100
+     },
+     "engine_token_count": 849
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 891,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating fastapi/routing.py's WebSocket route registration. Starting from `add_api_websocket_route`, trace the causal pipeline: it merges the router's own dependencies with any route-specific ones, then constructs the concrete route object - identify that real construction step by the class it instantiates (a verified, direct INSTANTIATES edge in the indexed graph - the route object's own `__init__` is not further reachable from here, so the pipeline correctly stops at the class itself).\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"fastapi.routing.APIRouter.add_api_websocket_route\", \"fastapi.routing.APIWebSocketRoute\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 2,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To investigate the WebSocket route registration in `fastapi/routing.py`, we need to trace the causal pipeline starting from the `add_api_websocket_route` method. This method likely merges the router's own dependencies with any route-specific ones and then constructs the concrete route object. We need to identify the class instantiation step that marks the end of this pipeline.\n\nLet's start by searching for the `add_api_websocket_route` method and then trace its execution path.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def add_api_websocket_route\", \"path\": \"fastapi/routing.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def add_api_websocket_route",
+        "path": "fastapi/routing.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def add_api_websocket_route",
+        "path": "fastapi/routing.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 129,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The `add_api_websocket_route` method is defined in `fastapi/routing.py` at line 1026. Next, we need to trace how this method constructs the concrete route object. We will search for the instantiation of the route object within this method.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"fastapi/routing.py\", \"start_line\": 1026, \"end_line\": 1100}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "fastapi/routing.py",
+        "start_line": 1026,
+        "end_line": 1100
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "fastapi/routing.py",
+        "start_line": 1026,
+        "end_line": 1100
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 100,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "The `add_api_websocket_route` method merges the router's own dependencies with any route-specific ones and then constructs the concrete route object by instantiating the `APIWebSocketRoute` class. The instantiation occurs at line 1038:\n\n```python\nroute = APIWebSocketRoute(\n    self.prefix + path,\n    endpoint=endpoint,\n    name=name,\n    dependencies=current_dependencies,\n    dependency_overrides_provider=self.dependency_overrides_provider,\n)\n```\n\nThe causal pipeline stops at the instantiation of the `APIWebSocketRoute` class.\n\n<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The add_api_websocket_route method merges dependencies and constructs the route object by instantiating the APIWebSocketRoute class.\\\", \\\"symbols\\\": [\\\"fastapi.routing.APIRouter.add_api_websocket_route\\\", \\\"fastapi.routing.APIWebSocketRoute\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The add_api_websocket_route method merges dependencies and constructs the route object by instantiating the APIWebSocketRoute class.\", \"symbols\": [\"fastapi.routing.APIRouter.add_api_websocket_route\", \"fastapi.routing.APIWebSocketRoute\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 188,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     9629.436271,
+     6400.655735,
+     13462.429432
+    ],
+    "L_tool_exec": [
+     4.380008,
+     0.908432
+    ],
+    "L_retrieve": [
+     29539.715145
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1908,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The add_api_websocket_route method merges dependencies and constructs the route object by instantiating the APIWebSocketRoute class.\", \"symbols\": [\"fastapi.routing.APIRouter.add_api_websocket_route\", \"fastapi.routing.APIWebSocketRoute\"]}\n```",
+    "generation_tokens": 188,
+    "latency_seconds": 13.462220374000026,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1941,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 891,
+   "prompt_tokens": 1908,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1941,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

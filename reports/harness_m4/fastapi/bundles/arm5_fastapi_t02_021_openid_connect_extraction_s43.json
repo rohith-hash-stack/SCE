@@ -1,0 +1,104 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "fastapi_t02_021_openid_connect_extraction",
+  "items": [
+   {
+    "source_id": "fastapi/security/open_id_connect_url.py:11-84",
+    "content": "# fastapi/security/open_id_connect_url.py:11-84  (fastapi.security.open_id_connect_url.OpenIdConnect)\nclass OpenIdConnect(SecurityBase):\n    \"\"\"\n    OpenID Connect authentication class. An instance of it would be used as a\n    dependency.\n    \"\"\"\n\n    def __init__(\n        self,\n        *,\n        openIdConnectUrl: Annotated[\n            str,\n            Doc(\n                \"\"\"\n            The OpenID Connect URL.\n            \"\"\"\n            ),\n        ],\n        scheme_name: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme name.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        description: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme description.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        auto_error: Annotated[\n            bool,\n            Doc(\n                \"\"\"\n                By default, if no HTTP Authorization header is provided, required for\n                OpenID Connect authentication, it will automatically cancel the request\n                and send the client an error.\n\n                If `auto_error` is set to `False`, when the HTTP Authorization header\n                is not available, instead of erroring out, the dependency result will\n                be `None`.\n\n                This is useful when you want to have optional authentication.\n\n                It is also useful when you want to have authentication that can be\n                provided in one of multiple optional ways (for example, with OpenID\n                Connect or in a cookie).\n                \"\"\"\n            ),\n        ] = True,\n    ):\n        self.model = OpenIdConnectModel(\n            openIdConnectUrl=openIdConnectUrl, description=description\n        )\n        self.scheme_name = scheme_name or self.__class__.__name__\n        self.auto_error = auto_error\n\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        if not authorization:\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        return authorization",
+    "token_count": 468,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.open_id_connect_url.OpenIdConnect"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 438,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/open_id_connect_url.py:75-84",
+    "content": "# fastapi/security/open_id_connect_url.py:75-84  (fastapi.security.open_id_connect_url.OpenIdConnect.__call__)\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        if not authorization:\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        return authorization",
+    "token_count": 101,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.security.open_id_connect_url.OpenIdConnect.__call__"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 69,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 569,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating FastAPI's OpenID Connect dependency in fastapi/security/open_id_connect_url.py. Starting from `OpenIdConnect.__call__`, identify what it does - the shallowest case in this security family: it reads the Authorization header and returns it directly, with no scheme-parsing helper call at all, unlike HTTPBasic/HTTPBearer/OAuth2PasswordBearer.",
+   "task_type": "T2_localization",
+   "anchor": "fastapi.security.open_id_connect_url.OpenIdConnect.__call__",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 1,
+   "manifest_candidates_unfiltered": 1,
+   "requested_symbols": [
+    "fastapi.security.open_id_connect_url.OpenIdConnect.__call__",
+    "starlette.exceptions.HTTPException"
+   ],
+   "turn1_requested_count": 2,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "starlette.exceptions.HTTPException"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `OpenIdConnect.__call__` method is the seed function that directly reads the Authorization header from the request and returns it without any additional parsing or helper calls. This makes it the shallowest case in the security family for handling OpenID Connect.\",\n  \"requested_symbols\": [\n    \"fastapi.security.open_id_connect_url.OpenIdConnect.__call__\",\n    \"starlette.exceptions.HTTPException\"\n  ]\n}\n```",
+     "prompt_tokens": 370,
+     "completion_tokens": 96,
+     "latency_seconds": 6.546182353000404,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     52.651276
+    ],
+    "L_turn2_hydrate": [
+     162.789026
+    ],
+    "L_retrieve": [
+     6764.317302
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 569,
+   "prompt_tokens": 781,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 794,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/security/open_id_connect_url.py:11-84  (fastapi.security.open_id_connect_url.OpenIdConnect)\nclass OpenIdConnect(SecurityBase):\n    \"\"\"\n    OpenID Connect authentication class. An instance of it would be used as a\n    dependency.\n    \"\"\"\n\n    def __init__(\n        self,\n        *,\n        openIdConnectUrl: Annotated[\n            str,\n            Doc(\n                \"\"\"\n            The OpenID Connect URL.\n            \"\"\"\n            ),\n        ],\n        scheme_name: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme name.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        description: Annotated[\n            Optional[str],\n            Doc(\n                \"\"\"\n                Security scheme description.\n\n                It will be included in the generated OpenAPI (e.g. visible at `/docs`).\n                \"\"\"\n            ),\n        ] = None,\n        auto_error: Annotated[\n            bool,\n            Doc(\n                \"\"\"\n                By default, if no HTTP Authorization header is provided, required for\n                OpenID Connect authentication, it will automatically cancel the request\n                and send the client an error.\n\n                If `auto_error` is set to `False`, when the HTTP Authorization header\n                is not available, instead of erroring out, the dependency result will\n                be `None`.\n\n                This is useful when you want to have optional authentication.\n\n                It is also useful when you want to have authentication that can be\n                provided in one of multiple optional ways (for example, with OpenID\n                Connect or in a cookie).\n                \"\"\"\n            ),\n        ] = True,\n    ):\n        self.model = OpenIdConnectModel(\n            openIdConnectUrl=openIdConnectUrl, description=description\n        )\n        self.scheme_name = scheme_name or self.__class__.__name__\n        self.auto_error = auto_error\n\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        if not authorization:\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        return authorization\n\n# fastapi/security/open_id_connect_url.py:75-84  (fastapi.security.open_id_connect_url.OpenIdConnect.__call__)\n    async def __call__(self, request: Request) -> Optional[str]:\n        authorization = request.headers.get(\"Authorization\")\n        if not authorization:\n            if self.auto_error:\n                raise HTTPException(\n                    status_code=HTTP_403_FORBIDDEN, detail=\"Not authenticated\"\n                )\n            else:\n                return None\n        return authorization\n\n## Task\n\nYou are investigating FastAPI's OpenID Connect dependency in fastapi/security/open_id_connect_url.py. Starting from `OpenIdConnect.__call__`, identify what it does - the shallowest case in this security family: it reads the Authorization header and returns it directly, with no scheme-parsing helper call at all, unlike HTTPBasic/HTTPBearer/OAuth2PasswordBearer.\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

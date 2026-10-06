@@ -1,0 +1,1217 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "fastapi_t5_007_openapi_security_definitions_serialization",
+  "items": [
+   {
+    "source_id": "fastapi/openapi/utils.py:78-92",
+    "content": "# fastapi/openapi/utils.py:78-92  (fastapi.openapi.utils.get_openapi_security_definitions)\ndef get_openapi_security_definitions(\n    flat_dependant: Dependant,\n) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:\n    security_definitions = {}\n    operation_security = []\n    for security_requirement in flat_dependant.security_requirements:\n        security_definition = jsonable_encoder(\n            security_requirement.security_scheme.model,\n            by_alias=True,\n            exclude_none=True,\n        )\n        security_name = security_requirement.security_scheme.scheme_name\n        security_definitions[security_name] = security_definition\n        operation_security.append({security_name: security_requirement.scopes})\n    return security_definitions, operation_security",
+    "token_count": 151,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_security_definitions"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 151
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:1-75",
+    "content": "# fastapi/openapi/utils.py:1-75  (fastapi.openapi.utils)\nimport http.client\nimport inspect\nimport warnings\nfrom typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union, cast\n\nfrom fastapi import routing\nfrom fastapi._compat import (\n    GenerateJsonSchema,\n    JsonSchemaValue,\n    ModelField,\n    Undefined,\n    get_compat_model_name_map,\n    get_definitions,\n    get_schema_from_model_field,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _get_flat_fields_from_params,\n    get_flat_dependant,\n    get_flat_params,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.openapi.constants import METHODS_WITH_BODY, REF_PREFIX, REF_TEMPLATE\nfrom fastapi.openapi.models import OpenAPI\nfrom fastapi.params import Body, ParamTypes\nfrom fastapi.responses import Response\nfrom fastapi.types import ModelNameMap\nfrom fastapi.utils import (\n    deep_dict_update,\n    generate_operation_id_for_path,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette.responses import JSONResponse\nfrom starlette.routing import BaseRoute\nfrom starlette.status import HTTP_422_UNPROCESSABLE_ENTITY\nfrom typing_extensions import Literal\n\nvalidation_error_definition = {\n    \"title\": \"ValidationError\",\n    \"type\": \"object\",\n    \"properties\": {\n        \"loc\": {\n            \"title\": \"Location\",\n            \"type\": \"array\",\n            \"items\": {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"integer\"}]},\n        },\n        \"msg\": {\"title\": \"Message\", \"type\": \"string\"},\n        \"type\": {\"title\": \"Error Type\", \"type\": \"string\"},\n    },\n    \"required\": [\"loc\", \"msg\", \"type\"],\n}\n\nvalidation_error_response_definition = {\n    \"title\": \"HTTPValidationError\",\n    \"type\": \"object\",\n    \"properties\": {\n        \"detail\": {\n            \"title\": \"Detail\",\n            \"type\": \"array\",\n            \"items\": {\"$ref\": REF_PREFIX + \"ValidationError\"},\n        }\n    },\n}\n\nstatus_code_ranges: Dict[str, str] = {\n    \"1XX\": \"Information\",\n    \"2XX\": \"Success\",\n    \"3XX\": \"Redirection\",\n    \"4XX\": \"Client Error\",\n    \"5XX\": \"Server Error\",\n    \"DEFAULT\": \"Default Response\",\n}",
+    "token_count": 528,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 528
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:95-167",
+    "content": "# fastapi/openapi/utils.py:95-167  (fastapi.openapi.utils._get_openapi_operation_parameters)\ndef _get_openapi_operation_parameters(\n    *,\n    dependant: Dependant,\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> List[Dict[str, Any]]:\n    parameters = []\n    flat_dependant = get_flat_dependant(dependant, skip_repeats=True)\n    path_params = _get_flat_fields_from_params(flat_dependant.path_params)\n    query_params = _get_flat_fields_from_params(flat_dependant.query_params)\n    header_params = _get_flat_fields_from_params(flat_dependant.header_params)\n    cookie_params = _get_flat_fields_from_params(flat_dependant.cookie_params)\n    parameter_groups = [\n        (ParamTypes.path, path_params),\n        (ParamTypes.query, query_params),\n        (ParamTypes.header, header_params),\n        (ParamTypes.cookie, cookie_params),\n    ]\n    default_convert_underscores = True\n    if len(flat_dependant.header_params) == 1:\n        first_field = flat_dependant.header_params[0]\n        if lenient_issubclass(first_field.type_, BaseModel):\n            default_convert_underscores = getattr(\n                first_field.field_info, \"convert_underscores\", True\n            )\n    for param_type, param_group in parameter_groups:\n        for param in param_group:\n            field_info = param.field_info\n            # field_info = cast(Param, field_info)\n            if not getattr(field_info, \"include_in_schema\", True):\n                continue\n            param_schema = get_schema_from_model_field(\n                field=param,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            name = param.alias\n            convert_underscores = getattr(\n                param.field_info,\n                \"convert_underscores\",\n                default_convert_underscores,\n            )\n            if (\n                param_type == ParamTypes.header\n                and param.alias == param.name\n                and convert_underscores\n            ):\n                name = param.name.replace(\"_\", \"-\")\n\n            parameter = {\n                \"name\": name,\n                \"in\": param_type.value,\n                \"required\": param.required,\n                \"schema\": param_schema,\n            }\n            if field_info.description:\n                parameter[\"description\"] = field_info.description\n            openapi_examples = getattr(field_info, \"openapi_examples\", None)\n            example = getattr(field_info, \"example\", None)\n            if openapi_examples:\n                parameter[\"examples\"] = jsonable_encoder(openapi_examples)\n            elif example != Undefined:\n                parameter[\"example\"] = jsonable_encoder(example)\n            if getattr(field_info, \"deprecated\", None):\n                parameter[\"deprecated\"] = True\n            parameters.append(parameter)\n    return parameters",
+    "token_count": 635,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils._get_openapi_operation_parameters"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 635
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:170-204",
+    "content": "# fastapi/openapi/utils.py:170-204  (fastapi.openapi.utils.get_openapi_operation_request_body)\ndef get_openapi_operation_request_body(\n    *,\n    body_field: Optional[ModelField],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Optional[Dict[str, Any]]:\n    if not body_field:\n        return None\n    assert isinstance(body_field, ModelField)\n    body_schema = get_schema_from_model_field(\n        field=body_field,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        field_mapping=field_mapping,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    field_info = cast(Body, body_field.field_info)\n    request_media_type = field_info.media_type\n    required = body_field.required\n    request_body_oai: Dict[str, Any] = {}\n    if required:\n        request_body_oai[\"required\"] = required\n    request_media_content: Dict[str, Any] = {\"schema\": body_schema}\n    if field_info.openapi_examples:\n        request_media_content[\"examples\"] = jsonable_encoder(\n            field_info.openapi_examples\n        )\n    elif field_info.example != Undefined:\n        request_media_content[\"example\"] = jsonable_encoder(field_info.example)\n    request_body_oai[\"content\"] = {request_media_type: request_media_content}\n    return request_body_oai",
+    "token_count": 332,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_operation_request_body"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 332
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:207-219",
+    "content": "# fastapi/openapi/utils.py:207-219  (fastapi.openapi.utils.generate_operation_id)\ndef generate_operation_id(\n    *, route: routing.APIRoute, method: str\n) -> str:  # pragma: nocover\n    warnings.warn(\n        \"fastapi.openapi.utils.generate_operation_id() was deprecated, \"\n        \"it is not used internally, and will be removed soon\",\n        DeprecationWarning,\n        stacklevel=2,\n    )\n    if route.operation_id:\n        return route.operation_id\n    path: str = route.path_format\n    return generate_operation_id_for_path(name=route.name, path=path, method=method)",
+    "token_count": 139,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.generate_operation_id"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 139
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:222-225",
+    "content": "# fastapi/openapi/utils.py:222-225  (fastapi.openapi.utils.generate_operation_summary)\ndef generate_operation_summary(*, route: routing.APIRoute, method: str) -> str:\n    if route.summary:\n        return route.summary\n    return route.name.replace(\"_\", \" \").title()",
+    "token_count": 65,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.generate_operation_summary"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:228-251",
+    "content": "# fastapi/openapi/utils.py:228-251  (fastapi.openapi.utils.get_openapi_operation_metadata)\ndef get_openapi_operation_metadata(\n    *, route: routing.APIRoute, method: str, operation_ids: Set[str]\n) -> Dict[str, Any]:\n    operation: Dict[str, Any] = {}\n    if route.tags:\n        operation[\"tags\"] = route.tags\n    operation[\"summary\"] = generate_operation_summary(route=route, method=method)\n    if route.description:\n        operation[\"description\"] = route.description\n    operation_id = route.operation_id or route.unique_id\n    if operation_id in operation_ids:\n        message = (\n            f\"Duplicate Operation ID {operation_id} for function \"\n            + f\"{route.endpoint.__name__}\"\n        )\n        file_name = getattr(route.endpoint, \"__globals__\", {}).get(\"__file__\")\n        if file_name:\n            message += f\" at {file_name}\"\n        warnings.warn(message, stacklevel=1)\n    operation_ids.add(operation_id)\n    operation[\"operationId\"] = operation_id\n    if route.deprecated:\n        operation[\"deprecated\"] = route.deprecated\n    return operation",
+    "token_count": 242,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_operation_metadata"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 242
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:265-274#part1of3",
+    "content": "# fastapi/openapi/utils.py:265-274#part1of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    path = {}\n    security_schemes: Dict[str, Any] = {}\n    definitions: Dict[str, Any] = {}\n    assert route.methods is not None, \"Methods must be a list\"\n    if isinstance(route.response_class, DefaultPlaceholder):\n        current_response_class: Type[Response] = route.response_class.value\n    else:\n        current_response_class = route.response_class\n    assert current_response_class, \"A response class is needed to generate OpenAPI\"\n    route_response_media_type: Optional[str] = current_response_class.media_type",
+    "token_count": 236,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 236
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:275-442#part2of3",
+    "content": "# fastapi/openapi/utils.py:275-442#part2of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    if route.include_in_schema:\n        for method in route.methods:\n            operation = get_openapi_operation_metadata(\n                route=route, method=method, operation_ids=operation_ids\n            )\n            parameters: List[Dict[str, Any]] = []\n            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)\n            security_definitions, operation_security = get_openapi_security_definitions(\n                flat_dependant=flat_dependant\n            )\n            if operation_security:\n                operation.setdefault(\"security\", []).extend(operation_security)\n            if security_definitions:\n                security_schemes.update(security_definitions)\n            operation_parameters = _get_openapi_operation_parameters(\n                dependant=route.dependant,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            parameters.extend(operation_parameters)\n            if parameters:\n                all_parameters = {\n                    (param[\"in\"], param[\"name\"]): param for param in parameters\n                }\n                required_parameters = {\n                    (param[\"in\"], param[\"name\"]): param\n                    for param in parameters\n                    if param.get(\"required\")\n                }\n                # Make sure required definitions of the same parameter take precedence\n                # over non-required definitions\n                all_parameters.update(required_parameters)\n                operation[\"parameters\"] = list(all_parameters.values())\n            if method in METHODS_WITH_BODY:\n                request_body_oai = get_openapi_operation_request_body(\n                    body_field=route.body_field,\n                    schema_generator=schema_generator,\n                    model_name_map=model_name_map,\n                    field_mapping=field_mapping,\n                    separate_input_output_schemas=separate_input_output_schemas,\n                )\n                if request_body_oai:\n                    operation[\"requestBody\"] = request_body_oai\n            if route.callbacks:\n                callbacks = {}\n                for callback in route.callbacks:\n                    if isinstance(callback, routing.APIRoute):\n                        (\n                            cb_path,\n                            cb_security_schemes,\n                            cb_definitions,\n                        ) = get_openapi_path(\n                            route=callback,\n                            operation_ids=operation_ids,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                        callbacks[callback.name] = {callback.path: cb_path}\n                operation[\"callbacks\"] = callbacks\n            if route.status_code is not None:\n                status_code = str(route.status_code)\n            else:\n                # It would probably make more sense for all response classes to have an\n                # explicit default status_code, and to extract it from them, instead of\n                # doing this inspection tricks, that would probably be in the future\n                # TODO: probably make status_code a default class attribute for all\n                # responses in Starlette\n                response_signature = inspect.signature(current_response_class.__init__)\n                status_code_param = response_signature.parameters.get(\"status_code\")\n                if status_code_param is not None:\n                    if isinstance(status_code_param.default, int):\n                        status_code = str(status_code_param.default)\n            operation.setdefault(\"responses\", {}).setdefault(status_code, {})[\n                \"description\"\n            ] = route.response_description\n            if route_response_media_type and is_body_allowed_for_status_code(\n                route.status_code\n            ):\n                response_schema = {\"type\": \"string\"}\n                if lenient_issubclass(current_response_class, JSONResponse):\n                    if route.response_field:\n                        response_schema = get_schema_from_model_field(\n                            field=route.response_field,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                    else:\n                        response_schema = {}\n                operation.setdefault(\"responses\", {}).setdefault(\n                    status_code, {}\n                ).setdefault(\"content\", {}).setdefault(route_response_media_type, {})[\n                    \"schema\"\n                ] = response_schema\n            if route.responses:\n                operation_responses = operation.setdefault(\"responses\", {})\n                for (\n                    additional_status_code,\n                    additional_response,\n                ) in route.responses.items():\n                    process_response = additional_response.copy()\n                    process_response.pop(\"model\", None)\n                    status_code_key = str(additional_status_code).upper()\n                    if status_code_key == \"DEFAULT\":\n                        status_code_key = \"default\"\n                    openapi_response = operation_responses.setdefault(\n                        status_code_key, {}\n                    )\n                    assert isinstance(process_response, dict), (\n                        \"An additional response must be a dict\"\n                    )\n                    field = route.response_fields.get(additional_status_code)\n                    additional_field_schema: Optional[Dict[str, Any]] = None\n                    if field:\n                        additional_field_schema = get_schema_from_model_field(\n                            field=field,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                        media_type = route_response_media_type or \"application/json\"\n                        additional_schema = (\n                            process_response.setdefault(\"content\", {})\n                            .setdefault(media_type, {})\n                            .setdefault(\"schema\", {})\n                        )\n                        deep_dict_update(additional_schema, additional_field_schema)\n                    status_text: Optional[str] = status_code_ranges.get(\n                        str(additional_status_code).upper()\n                    ) or http.client.responses.get(int(additional_status_code))\n                    description = (\n                        process_response.get(\"description\")\n                        or openapi_response.get(\"description\")\n                        or status_text\n                        or \"Additional Response\"\n                    )\n                    deep_dict_update(openapi_response, process_response)\n                    openapi_response[\"description\"] = description\n            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)\n            all_route_params = get_flat_params(route.dependant)\n            if (all_route_params or route.body_field) and not any(\n                status in operation[\"responses\"]\n                for status in [http422, \"4XX\", \"default\"]\n            ):\n                operation[\"responses\"][http422] = {\n                    \"description\": \"Validation Error\",\n                    \"content\": {\n                        \"application/json\": {\n                            \"schema\": {\"$ref\": REF_PREFIX + \"HTTPValidationError\"}\n                        }\n                    },\n                }\n                if \"ValidationError\" not in definitions:\n                    definitions.update(\n                        {\n                            \"ValidationError\": validation_error_definition,\n                            \"HTTPValidationError\": validation_error_response_definition,\n                        }\n                    )\n            if route.openapi_extra:\n                deep_dict_update(operation, route.openapi_extra)\n            path[method.lower()] = operation",
+    "token_count": 1479,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 1479
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:443-443#part3of3",
+    "content": "# fastapi/openapi/utils.py:443-443#part3of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    return path, security_schemes, definitions",
+    "token_count": 135,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:446-474",
+    "content": "# fastapi/openapi/utils.py:446-474  (fastapi.openapi.utils.get_fields_from_routes)\ndef get_fields_from_routes(\n    routes: Sequence[BaseRoute],\n) -> List[ModelField]:\n    body_fields_from_routes: List[ModelField] = []\n    responses_from_routes: List[ModelField] = []\n    request_fields_from_routes: List[ModelField] = []\n    callback_flat_models: List[ModelField] = []\n    for route in routes:\n        if getattr(route, \"include_in_schema\", None) and isinstance(\n            route, routing.APIRoute\n        ):\n            if route.body_field:\n                assert isinstance(route.body_field, ModelField), (\n                    \"A request body must be a Pydantic Field\"\n                )\n                body_fields_from_routes.append(route.body_field)\n            if route.response_field:\n                responses_from_routes.append(route.response_field)\n            if route.response_fields:\n                responses_from_routes.extend(route.response_fields.values())\n            if route.callbacks:\n                callback_flat_models.extend(get_fields_from_routes(route.callbacks))\n            params = get_flat_params(route.dependant)\n            request_fields_from_routes.extend(params)\n\n    flat_models = callback_flat_models + list(\n        body_fields_from_routes + responses_from_routes + request_fields_from_routes\n    )\n    return flat_models",
+    "token_count": 266,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_fields_from_routes"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 266
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:493-568#part1of2",
+    "content": "# fastapi/openapi/utils.py:493-568#part1of2  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    info: Dict[str, Any] = {\"title\": title, \"version\": version}\n    if summary:\n        info[\"summary\"] = summary\n    if description:\n        info[\"description\"] = description\n    if terms_of_service:\n        info[\"termsOfService\"] = terms_of_service\n    if contact:\n        info[\"contact\"] = contact\n    if license_info:\n        info[\"license\"] = license_info\n    output: Dict[str, Any] = {\"openapi\": openapi_version, \"info\": info}\n    if servers:\n        output[\"servers\"] = servers\n    components: Dict[str, Dict[str, Any]] = {}\n    paths: Dict[str, Dict[str, Any]] = {}\n    webhook_paths: Dict[str, Dict[str, Any]] = {}\n    operation_ids: Set[str] = set()\n    all_fields = get_fields_from_routes(list(routes or []) + list(webhooks or []))\n    model_name_map = get_compat_model_name_map(all_fields)\n    schema_generator = GenerateJsonSchema(ref_template=REF_TEMPLATE)\n    field_mapping, definitions = get_definitions(\n        fields=all_fields,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    for route in routes or []:\n        if isinstance(route, routing.APIRoute):\n            result = get_openapi_path(\n                route=route,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    paths.setdefault(route.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    for webhook in webhooks or []:\n        if isinstance(webhook, routing.APIRoute):\n            result = get_openapi_path(\n                route=webhook,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    webhook_paths.setdefault(webhook.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    if definitions:\n        components[\"schemas\"] = {k: definitions[k] for k in sorted(definitions)}\n    if components:\n        output[\"components\"] = components\n    output[\"paths\"] = paths\n    if webhook_paths:\n        output[\"webhooks\"] = webhook_paths\n    if tags:\n        output[\"tags\"] = tags",
+    "token_count": 813,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 813
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:569-569#part2of2",
+    "content": "# fastapi/openapi/utils.py:569-569#part2of2  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    return jsonable_encoder(OpenAPI(**output), by_alias=True, exclude_none=True)  # type: ignore",
+    "token_count": 222,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 989,
+     "stub_priority": 1489,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 222
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_cookie_optional.py:46-73#signature",
+    "content": "# tests/test_security_api_key_cookie_optional.py:46-73  (tests.test_security_api_key_cookie_optional.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...",
+    "token_count": 39,
+    "rank": 14,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_security_api_key_cookie_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "stub",
+     "bm25_rank": 34,
+     "chunk_kind": "function",
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_header_description.py:40-71#signature",
+    "content": "# tests/test_security_api_key_header_description.py:40-71  (tests.test_security_api_key_header_description.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...",
+    "token_count": 39,
+    "rank": 15,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_security_api_key_header_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "stub",
+     "bm25_rank": 35,
+     "chunk_kind": "function",
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_cookie_description.py:39-71#signature",
+    "content": "# tests/test_security_api_key_cookie_description.py:39-71  (tests.test_security_api_key_cookie_description.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...",
+    "token_count": 39,
+    "rank": 16,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_security_api_key_cookie_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "stub",
+     "bm25_rank": 36,
+     "chunk_kind": "function",
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_tutorial/test_security/test_tutorial001.py:44-73#signature",
+    "content": "# tests/test_tutorial/test_security/test_tutorial001.py:44-73  (tests.test_tutorial.test_security.test_tutorial001.test_openapi_schema [signature])\ndef test_openapi_schema(client: TestClient):\n    ...",
+    "token_count": 53,
+    "rank": 17,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_tutorial.test_security.test_tutorial001.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "stub",
+     "bm25_rank": 37,
+     "chunk_kind": "function",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_oauth2_authorization_code_bearer.py:40-75#signature",
+    "content": "# tests/test_security_oauth2_authorization_code_bearer.py:40-75  (tests.test_security_oauth2_authorization_code_bearer.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...",
+    "token_count": 45,
+    "rank": 18,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_security_oauth2_authorization_code_bearer.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "stub",
+     "bm25_rank": 38,
+     "chunk_kind": "function",
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/models.py:339-340#signature",
+    "content": "# fastapi/openapi/models.py:339-340  (fastapi.openapi.models.SecurityBase [signature])\nclass SecurityBase(BaseModelWithConfig):\n    ...",
+    "token_count": 36,
+    "rank": 19,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.openapi.models.SecurityBase"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "stub",
+     "bm25_rank": 39,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_oauth2_authorization_code_bearer_description.py:43-79#signature",
+    "content": "# tests/test_security_oauth2_authorization_code_bearer_description.py:43-79  (tests.test_security_oauth2_authorization_code_bearer_description.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...",
+    "token_count": 47,
+    "rank": 20,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_security_oauth2_authorization_code_bearer_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "stub",
+     "bm25_rank": 41,
+     "chunk_kind": "function",
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/models.py:356-357#signature",
+    "content": "# fastapi/openapi/models.py:356-357  (fastapi.openapi.models.HTTPBase [signature])\nclass HTTPBase(SecurityBase):\n    ...",
+    "token_count": 35,
+    "rank": 21,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.openapi.models.HTTPBase"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "stub",
+     "bm25_rank": 42,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 35
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/models.py:430-440#signature",
+    "content": "# fastapi/openapi/models.py:430-440  (fastapi.openapi.models.OpenAPI [signature])\nclass OpenAPI(BaseModelWithConfig):\n    ...",
+    "token_count": 36,
+    "rank": 22,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.openapi.models.OpenAPI"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "stub",
+     "bm25_rank": 45,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/utils.py:4-10#signature",
+    "content": "# fastapi/security/utils.py:4-10  (fastapi.security.utils.get_authorization_scheme_param [signature])\ndef get_authorization_scheme_param(\n    authorization_header_value: Optional[str],\n) -> Tuple[str, str]:\n    ...",
+    "token_count": 49,
+    "rank": 23,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.security.utils.get_authorization_scheme_param"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "stub",
+     "bm25_rank": 46,
+     "chunk_kind": "function",
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/models.py:395-396#signature",
+    "content": "# fastapi/openapi/models.py:395-396  (fastapi.openapi.models.OAuth2 [signature])\nclass OAuth2(SecurityBase):\n    ...",
+    "token_count": 36,
+    "rank": 24,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.openapi.models.OAuth2"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "stub",
+     "bm25_rank": 47,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/models.py:400-403#signature",
+    "content": "# fastapi/openapi/models.py:400-403  (fastapi.openapi.models.OpenIdConnect [signature])\nclass OpenIdConnect(SecurityBase):\n    ...",
+    "token_count": 37,
+    "rank": 25,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.openapi.models.OpenIdConnect"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "stub",
+     "bm25_rank": 49,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 37
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:142-171#signature",
+    "content": "# fastapi/dependencies/utils.py:142-171  (fastapi.dependencies.utils.get_sub_dependant [signature])\ndef get_sub_dependant(\n    *,\n    depends: params.Depends,\n    dependency: Callable[..., Any],\n    path: str,\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n) -> Dependant:\n    ...",
+    "token_count": 83,
+    "rank": 26,
+    "kind": "signature_stub",
+    "symbols": [
+     "fastapi.dependencies.utils.get_sub_dependant"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "stub",
+     "bm25_rank": 50,
+     "chunk_kind": "function",
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/extending_openapi/tutorial001.py:1-4",
+    "content": "# docs_src/extending_openapi/tutorial001.py:1-4  (docs_src.extending_openapi.tutorial001)\nfrom fastapi import FastAPI\nfrom fastapi.openapi.utils import get_openapi\n\napp = FastAPI()",
+    "token_count": 52,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "module_block",
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:1-13",
+    "content": "# fastapi/security/http.py:1-13  (fastapi.security.http)\nimport binascii\nfrom base64 import b64decode\nfrom typing import Optional\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import HTTPBase as HTTPBaseModel\nfrom fastapi.openapi.models import HTTPBearer as HTTPBearerModel\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom pydantic import BaseModel\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\nfrom typing_extensions import Annotated, Doc",
+    "token_count": 136,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "module_block",
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:1-13",
+    "content": "# fastapi/security/oauth2.py:1-13  (fastapi.security.oauth2)\nfrom typing import Any, Dict, List, Optional, Union, cast\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import OAuth2 as OAuth2Model\nfrom fastapi.openapi.models import OAuthFlows as OAuthFlowsModel\nfrom fastapi.param_functions import Form\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\n\n# TODO: import from typing when deprecating Python 3.9\nfrom typing_extensions import Annotated, Doc",
+    "token_count": 153,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "module_block",
+     "engine_token_count": 153
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_additional_responses_bad.py:13-35",
+    "content": "# tests/test_additional_responses_bad.py:13-35  (tests.test_additional_responses_bad)\nopenapi_schema = {\n    \"openapi\": \"3.1.0\",\n    \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n    \"paths\": {\n        \"/a\": {\n            \"get\": {\n                \"responses\": {\n                    # this is how one would imagine the openapi schema to be\n                    # but since the key is not valid, openapi.utils.get_openapi will raise ValueError\n                    \"hello\": {\"description\": \"Not a valid additional response\"},\n                    \"200\": {\n                        \"description\": \"Successful Response\",\n                        \"content\": {\"application/json\": {\"schema\": {}}},\n                    },\n                },\n                \"summary\": \"A\",\n                \"operationId\": \"a_a_get\",\n            }\n        }\n    },\n}\n\nclient = TestClient(app)",
+    "token_count": 190,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "module_block",
+     "engine_token_count": 190
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/extending_openapi/tutorial001.py:12-26",
+    "content": "# docs_src/extending_openapi/tutorial001.py:12-26  (docs_src.extending_openapi.tutorial001.custom_openapi)\ndef custom_openapi():\n    if app.openapi_schema:\n        return app.openapi_schema\n    openapi_schema = get_openapi(\n        title=\"Custom title\",\n        version=\"2.5.0\",\n        summary=\"This is a very custom OpenAPI schema\",\n        description=\"Here's a longer description of the custom **OpenAPI** schema\",\n        routes=app.routes,\n    )\n    openapi_schema[\"info\"][\"x-logo\"] = {\n        \"url\": \"https://fastapi.tiangolo.com/img/logo-margin/logo-teal.png\"\n    }\n    app.openapi_schema = openapi_schema\n    return app.openapi_schema",
+    "token_count": 162,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.extending_openapi.tutorial001.custom_openapi"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "function",
+     "engine_token_count": 162
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/base.py:1-1",
+    "content": "# fastapi/security/base.py:1-1  (fastapi.security.base)\nfrom fastapi.openapi.models import SecurityBase as SecurityBaseModel",
+    "token_count": 29,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "module_block",
+     "engine_token_count": 29
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/applications.py:966-996",
+    "content": "# fastapi/applications.py:966-996  (fastapi.applications.FastAPI.openapi)\nclass FastAPI(Starlette):\n    def openapi(self) -> Dict[str, Any]:\n        \"\"\"\n        Generate the OpenAPI schema of the application. This is called by FastAPI\n        internally.\n\n        The first time it is called it stores the result in the attribute\n        `app.openapi_schema`, and next times it is called, it just returns that same\n        result. To avoid the cost of generating the schema every time.\n\n        If you need to modify the generated OpenAPI schema, you could modify it.\n\n        Read more in the\n        [FastAPI docs for OpenAPI](https://fastapi.tiangolo.com/how-to/extending-openapi/).\n        \"\"\"\n        if not self.openapi_schema:\n            self.openapi_schema = get_openapi(\n                title=self.title,\n                version=self.version,\n                openapi_version=self.openapi_version,\n                summary=self.summary,\n                description=self.description,\n                terms_of_service=self.terms_of_service,\n                contact=self.contact,\n                license_info=self.license_info,\n                routes=self.routes,\n                webhooks=self.webhooks.routes,\n                tags=self.openapi_tags,\n                servers=self.servers,\n                separate_input_output_schemas=self.separate_input_output_schemas,\n            )\n        return self.openapi_schema",
+    "token_count": 276,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.applications.FastAPI.openapi"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 276
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_base_description.py:30-60",
+    "content": "# tests/test_security_http_base_description.py:30-60  (tests.test_security_http_base_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBase\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"HTTPBase\": {\n                    \"type\": \"http\",\n                    \"scheme\": \"Other\",\n                    \"description\": \"Other Security Scheme\",\n                }\n            }\n        },\n    }",
+    "token_count": 237,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_base_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "function",
+     "engine_token_count": 237
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_tutorial/test_conditional_openapi/test_tutorial001.py:1-5",
+    "content": "# tests/test_tutorial/test_conditional_openapi/test_tutorial001.py:1-5  (tests.test_tutorial.test_conditional_openapi.test_tutorial001)\nimport importlib\n\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_pydanticv2",
+    "token_count": 62,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "module_block",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_base.py:30-54",
+    "content": "# tests/test_security_http_base.py:30-54  (tests.test_security_http_base.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBase\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBase\": {\"type\": \"http\", \"scheme\": \"Other\"}}\n        },\n    }",
+    "token_count": 217,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_base.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "function",
+     "engine_token_count": 217
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer.py:36-60",
+    "content": "# tests/test_security_http_bearer.py:36-60  (tests.test_security_http_bearer.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}\n        },\n    }",
+    "token_count": 219,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "function",
+     "engine_token_count": 219
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_digest.py:38-62",
+    "content": "# tests/test_security_http_digest.py:38-62  (tests.test_security_http_digest.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPDigest\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPDigest\": {\"type\": \"http\", \"scheme\": \"digest\"}}\n        },\n    }",
+    "token_count": 217,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_digest.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "function",
+     "engine_token_count": 217
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_base_optional.py:36-60",
+    "content": "# tests/test_security_http_base_optional.py:36-60  (tests.test_security_http_base_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBase\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBase\": {\"type\": \"http\", \"scheme\": \"Other\"}}\n        },\n    }",
+    "token_count": 219,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_base_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "function",
+     "engine_token_count": 219
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_basic_optional.py:53-77",
+    "content": "# tests/test_security_http_basic_optional.py:53-77  (tests.test_security_http_basic_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBasic\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBasic\": {\"type\": \"http\", \"scheme\": \"basic\"}}\n        },\n    }",
+    "token_count": 219,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_basic_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "function",
+     "engine_token_count": 219
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_basic_realm.py:51-75",
+    "content": "# tests/test_security_http_basic_realm.py:51-75  (tests.test_security_http_basic_realm.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBasic\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBasic\": {\"type\": \"http\", \"scheme\": \"basic\"}}\n        },\n    }",
+    "token_count": 221,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_basic_realm.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "function",
+     "engine_token_count": 221
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_optional.py:42-66",
+    "content": "# tests/test_security_http_bearer_optional.py:42-66  (tests.test_security_http_bearer_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}\n        },\n    }",
+    "token_count": 221,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "function",
+     "engine_token_count": 221
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_digest_optional.py:44-68",
+    "content": "# tests/test_security_http_digest_optional.py:44-68  (tests.test_security_http_digest_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPDigest\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPDigest\": {\"type\": \"http\", \"scheme\": \"digest\"}}\n        },\n    }",
+    "token_count": 219,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_digest_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "function",
+     "engine_token_count": 219
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_bearer_description.py:36-66",
+    "content": "# tests/test_security_http_bearer_description.py:36-66  (tests.test_security_http_bearer_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"HTTPBearer\": {\n                    \"type\": \"http\",\n                    \"scheme\": \"bearer\",\n                    \"description\": \"HTTP Bearer token scheme\",\n                }\n            }\n        },\n    }",
+    "token_count": 241,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_bearer_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "function",
+     "engine_token_count": 241
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_digest_description.py:38-68",
+    "content": "# tests/test_security_http_digest_description.py:38-68  (tests.test_security_http_digest_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPDigest\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"HTTPDigest\": {\n                    \"type\": \"http\",\n                    \"scheme\": \"digest\",\n                    \"description\": \"HTTPDigest scheme\",\n                }\n            }\n        },\n    }",
+    "token_count": 237,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_digest_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "function",
+     "engine_token_count": 237
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_header.py:40-66",
+    "content": "# tests/test_security_api_key_header.py:40-66  (tests.test_security_api_key_header.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyHeader\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyHeader\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"header\"}\n            }\n        },\n    }",
+    "token_count": 231,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_api_key_header.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "function",
+     "engine_token_count": 231
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_query.py:40-66",
+    "content": "# tests/test_security_api_key_query.py:40-66  (tests.test_security_api_key_query.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyQuery\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyQuery\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"query\"}\n            }\n        },\n    }",
+    "token_count": 231,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_api_key_query.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "function",
+     "engine_token_count": 231
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_http_basic_realm_description.py:51-81",
+    "content": "# tests/test_security_http_basic_realm_description.py:51-81  (tests.test_security_http_basic_realm_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBasic\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"HTTPBasic\": {\n                    \"type\": \"http\",\n                    \"scheme\": \"basic\",\n                    \"description\": \"HTTPBasic scheme\",\n                }\n            }\n        },\n    }",
+    "token_count": 241,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_http_basic_realm_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "function",
+     "engine_token_count": 241
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_openid_connect_description.py:48-78",
+    "content": "# tests/test_security_openid_connect_description.py:48-78  (tests.test_security_openid_connect_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"OpenIdConnect\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OpenIdConnect\": {\n                    \"type\": \"openIdConnect\",\n                    \"openIdConnectUrl\": \"/openid\",\n                    \"description\": \"OpenIdConnect security scheme\",\n                }\n            }\n        },\n    }",
+    "token_count": 248,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_openid_connect_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "function",
+     "engine_token_count": 248
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_header_optional.py:46-72",
+    "content": "# tests/test_security_api_key_header_optional.py:46-72  (tests.test_security_api_key_header_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyHeader\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyHeader\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"header\"}\n            }\n        },\n    }",
+    "token_count": 233,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_api_key_header_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "full",
+     "bm25_rank": 24,
+     "chunk_kind": "function",
+     "engine_token_count": 233
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_query_optional.py:46-72",
+    "content": "# tests/test_security_api_key_query_optional.py:46-72  (tests.test_security_api_key_query_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyQuery\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyQuery\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"query\"}\n            }\n        },\n    }",
+    "token_count": 233,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_api_key_query_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "full",
+     "bm25_rank": 25,
+     "chunk_kind": "function",
+     "engine_token_count": 233
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_openid_connect.py:46-75",
+    "content": "# tests/test_security_openid_connect.py:46-75  (tests.test_security_openid_connect.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"OpenIdConnect\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OpenIdConnect\": {\n                    \"type\": \"openIdConnect\",\n                    \"openIdConnectUrl\": \"/openid\",\n                }\n            }\n        },\n    }",
+    "token_count": 235,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_openid_connect.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "full",
+     "bm25_rank": 26,
+     "chunk_kind": "function",
+     "engine_token_count": 235
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_tutorial/test_security/test_tutorial006.py:56-80",
+    "content": "# tests/test_tutorial/test_security/test_tutorial006.py:56-80  (tests.test_tutorial.test_security.test_tutorial006.test_openapi_schema)\ndef test_openapi_schema(client: TestClient):\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBasic\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBasic\": {\"type\": \"http\", \"scheme\": \"basic\"}}\n        },\n    }",
+    "token_count": 235,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_tutorial.test_security.test_tutorial006.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "full",
+     "bm25_rank": 27,
+     "chunk_kind": "function",
+     "engine_token_count": 235
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_openid_connect_optional.py:52-81",
+    "content": "# tests/test_security_openid_connect_optional.py:52-81  (tests.test_security_openid_connect_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"OpenIdConnect\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OpenIdConnect\": {\n                    \"type\": \"openIdConnect\",\n                    \"openIdConnectUrl\": \"/openid\",\n                }\n            }\n        },\n    }",
+    "token_count": 237,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_openid_connect_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "full",
+     "bm25_rank": 28,
+     "chunk_kind": "function",
+     "engine_token_count": 237
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/applications.py:998-1049",
+    "content": "# fastapi/applications.py:998-1049  (fastapi.applications.FastAPI.setup)\nclass FastAPI(Starlette):\n    def setup(self) -> None:\n        if self.openapi_url:\n            urls = (server_data.get(\"url\") for server_data in self.servers)\n            server_urls = {url for url in urls if url}\n\n            async def openapi(req: Request) -> JSONResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                if root_path not in server_urls:\n                    if root_path and self.root_path_in_servers:\n                        self.servers.insert(0, {\"url\": root_path})\n                        server_urls.add(root_path)\n                return JSONResponse(self.openapi())\n\n            self.add_route(self.openapi_url, openapi, include_in_schema=False)\n        if self.openapi_url and self.docs_url:\n\n            async def swagger_ui_html(req: Request) -> HTMLResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                openapi_url = root_path + self.openapi_url\n                oauth2_redirect_url = self.swagger_ui_oauth2_redirect_url\n                if oauth2_redirect_url:\n                    oauth2_redirect_url = root_path + oauth2_redirect_url\n                return get_swagger_ui_html(\n                    openapi_url=openapi_url,\n                    title=f\"{self.title} - Swagger UI\",\n                    oauth2_redirect_url=oauth2_redirect_url,\n                    init_oauth=self.swagger_ui_init_oauth,\n                    swagger_ui_parameters=self.swagger_ui_parameters,\n                )\n\n            self.add_route(self.docs_url, swagger_ui_html, include_in_schema=False)\n\n            if self.swagger_ui_oauth2_redirect_url:\n\n                async def swagger_ui_redirect(req: Request) -> HTMLResponse:\n                    return get_swagger_ui_oauth2_redirect_html()\n\n                self.add_route(\n                    self.swagger_ui_oauth2_redirect_url,\n                    swagger_ui_redirect,\n                    include_in_schema=False,\n                )\n        if self.openapi_url and self.redoc_url:\n\n            async def redoc_html(req: Request) -> HTMLResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                openapi_url = root_path + self.openapi_url\n                return get_redoc_html(\n                    openapi_url=openapi_url, title=f\"{self.title} - ReDoc\"\n                )\n\n            self.add_route(self.redoc_url, redoc_html, include_in_schema=False)",
+    "token_count": 485,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.applications.FastAPI.setup"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "full",
+     "bm25_rank": 29,
+     "chunk_kind": "method",
+     "engine_token_count": 485
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_cookie.py:39-66",
+    "content": "# tests/test_security_api_key_cookie.py:39-66  (tests.test_security_api_key_cookie.test_openapi_schema)\ndef test_openapi_schema():\n    client = TestClient(app)\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyCookie\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyCookie\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"cookie\"}\n            }\n        },\n    }",
+    "token_count": 238,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_api_key_cookie.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "full",
+     "bm25_rank": 30,
+     "chunk_kind": "function",
+     "engine_token_count": 238
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_api_key_query_description.py:40-71",
+    "content": "# tests/test_security_api_key_query_description.py:40-71  (tests.test_security_api_key_query_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyQuery\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyQuery\": {\n                    \"type\": \"apiKey\",\n                    \"name\": \"key\",\n                    \"in\": \"query\",\n                    \"description\": \"API Key Query\",\n                }\n            }\n        },\n    }",
+    "token_count": 248,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_api_key_query_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "full",
+     "bm25_rank": 31,
+     "chunk_kind": "function",
+     "engine_token_count": 248
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_oauth2_password_bearer_optional.py:40-69",
+    "content": "# tests/test_security_oauth2_password_bearer_optional.py:40-69  (tests.test_security_oauth2_password_bearer_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/items/\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Items\",\n                    \"operationId\": \"read_items_items__get\",\n                    \"security\": [{\"OAuth2PasswordBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OAuth2PasswordBearer\": {\n                    \"type\": \"oauth2\",\n                    \"flows\": {\"password\": {\"scopes\": {}, \"tokenUrl\": \"/token\"}},\n                }\n            }\n        },\n    }",
+    "token_count": 248,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_oauth2_password_bearer_optional.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "full",
+     "bm25_rank": 32,
+     "chunk_kind": "function",
+     "engine_token_count": 248
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_security_oauth2_password_bearer_optional_description.py:44-74",
+    "content": "# tests/test_security_oauth2_password_bearer_optional_description.py:44-74  (tests.test_security_oauth2_password_bearer_optional_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/items/\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Items\",\n                    \"operationId\": \"read_items_items__get\",\n                    \"security\": [{\"OAuth2PasswordBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OAuth2PasswordBearer\": {\n                    \"type\": \"oauth2\",\n                    \"flows\": {\"password\": {\"scopes\": {}, \"tokenUrl\": \"/token\"}},\n                    \"description\": \"OAuth2PasswordBearer security scheme\",\n                }\n            }\n        },\n    }",
+    "token_count": 262,
+    "rank": 59,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_security_oauth2_password_bearer_optional_description.test_openapi_schema"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "full",
+     "bm25_rank": 33,
+     "chunk_kind": "function",
+     "engine_token_count": 262
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12949,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "What breaks if `fastapi.openapi.utils.get_openapi_security_definitions` changes?",
+   "task_type": "T5_blast_radius",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "fastapi/openapi/utils.py",
+   "cutoff": 170,
+   "n_components": 63,
+   "n_full": 46,
+   "n_stub": 13,
+   "n_dropped": 4,
+   "packed_tokens": 12949,
+   "latency_ms": {
+    "L_priority_sort": [
+     24.078034
+    ],
+    "L_binary_search_tokenize": [
+     0.287032
+    ],
+    "L_retrieve": [
+     26.287783
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12949,
+   "prompt_tokens": 13105,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13118,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/openapi/utils.py:78-92  (fastapi.openapi.utils.get_openapi_security_definitions)\ndef get_openapi_security_definitions(\n    flat_dependant: Dependant,\n) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:\n    security_definitions = {}\n    operation_security = []\n    for security_requirement in flat_dependant.security_requirements:\n        security_definition = jsonable_encoder(\n            security_requirement.security_scheme.model,\n            by_alias=True,\n            exclude_none=True,\n        )\n        security_name = security_requirement.security_scheme.scheme_name\n        security_definitions[security_name] = security_definition\n        operation_security.append({security_name: security_requirement.scopes})\n    return security_definitions, operation_security\n\n# fastapi/openapi/utils.py:1-75  (fastapi.openapi.utils)\nimport http.client\nimport inspect\nimport warnings\nfrom typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union, cast\n\nfrom fastapi import routing\nfrom fastapi._compat import (\n    GenerateJsonSchema,\n    JsonSchemaValue,\n    ModelField,\n    Undefined,\n    get_compat_model_name_map,\n    get_definitions,\n    get_schema_from_model_field,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _get_flat_fields_from_params,\n    get_flat_dependant,\n    get_flat_params,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.openapi.constants import METHODS_WITH_BODY, REF_PREFIX, REF_TEMPLATE\nfrom fastapi.openapi.models import OpenAPI\nfrom fastapi.params import Body, ParamTypes\nfrom fastapi.responses import Response\nfrom fastapi.types import ModelNameMap\nfrom fastapi.utils import (\n    deep_dict_update,\n    generate_operation_id_for_path,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette.responses import JSONResponse\nfrom starlette.routing import BaseRoute\nfrom starlette.status import HTTP_422_UNPROCESSABLE_ENTITY\nfrom typing_extensions import Literal\n\nvalidation_error_definition = {\n    \"title\": \"ValidationError\",\n    \"type\": \"object\",\n    \"properties\": {\n        \"loc\": {\n            \"title\": \"Location\",\n            \"type\": \"array\",\n            \"items\": {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"integer\"}]},\n        },\n        \"msg\": {\"title\": \"Message\", \"type\": \"string\"},\n        \"type\": {\"title\": \"Error Type\", \"type\": \"string\"},\n    },\n    \"required\": [\"loc\", \"msg\", \"type\"],\n}\n\nvalidation_error_response_definition = {\n    \"title\": \"HTTPValidationError\",\n    \"type\": \"object\",\n    \"properties\": {\n        \"detail\": {\n            \"title\": \"Detail\",\n            \"type\": \"array\",\n            \"items\": {\"$ref\": REF_PREFIX + \"ValidationError\"},\n        }\n    },\n}\n\nstatus_code_ranges: Dict[str, str] = {\n    \"1XX\": \"Information\",\n    \"2XX\": \"Success\",\n    \"3XX\": \"Redirection\",\n    \"4XX\": \"Client Error\",\n    \"5XX\": \"Server Error\",\n    \"DEFAULT\": \"Default Response\",\n}\n\n# fastapi/openapi/utils.py:95-167  (fastapi.openapi.utils._get_openapi_operation_parameters)\ndef _get_openapi_operation_parameters(\n    *,\n    dependant: Dependant,\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> List[Dict[str, Any]]:\n    parameters = []\n    flat_dependant = get_flat_dependant(dependant, skip_repeats=True)\n    path_params = _get_flat_fields_from_params(flat_dependant.path_params)\n    query_params = _get_flat_fields_from_params(flat_dependant.query_params)\n    header_params = _get_flat_fields_from_params(flat_dependant.header_params)\n    cookie_params = _get_flat_fields_from_params(flat_dependant.cookie_params)\n    parameter_groups = [\n        (ParamTypes.path, path_params),\n        (ParamTypes.query, query_params),\n        (ParamTypes.header, header_params),\n        (ParamTypes.cookie, cookie_params),\n    ]\n    default_convert_underscores = True\n    if len(flat_dependant.header_params) == 1:\n        first_field = flat_dependant.header_params[0]\n        if lenient_issubclass(first_field.type_, BaseModel):\n            default_convert_underscores = getattr(\n                first_field.field_info, \"convert_underscores\", True\n            )\n    for param_type, param_group in parameter_groups:\n        for param in param_group:\n            field_info = param.field_info\n            # field_info = cast(Param, field_info)\n            if not getattr(field_info, \"include_in_schema\", True):\n                continue\n            param_schema = get_schema_from_model_field(\n                field=param,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            name = param.alias\n            convert_underscores = getattr(\n                param.field_info,\n                \"convert_underscores\",\n                default_convert_underscores,\n            )\n            if (\n                param_type == ParamTypes.header\n                and param.alias == param.name\n                and convert_underscores\n            ):\n                name = param.name.replace(\"_\", \"-\")\n\n            parameter = {\n                \"name\": name,\n                \"in\": param_type.value,\n                \"required\": param.required,\n                \"schema\": param_schema,\n            }\n            if field_info.description:\n                parameter[\"description\"] = field_info.description\n            openapi_examples = getattr(field_info, \"openapi_examples\", None)\n            example = getattr(field_info, \"example\", None)\n            if openapi_examples:\n                parameter[\"examples\"] = jsonable_encoder(openapi_examples)\n            elif example != Undefined:\n                parameter[\"example\"] = jsonable_encoder(example)\n            if getattr(field_info, \"deprecated\", None):\n                parameter[\"deprecated\"] = True\n            parameters.append(parameter)\n    return parameters\n\n# fastapi/openapi/utils.py:170-204  (fastapi.openapi.utils.get_openapi_operation_request_body)\ndef get_openapi_operation_request_body(\n    *,\n    body_field: Optional[ModelField],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Optional[Dict[str, Any]]:\n    if not body_field:\n        return None\n    assert isinstance(body_field, ModelField)\n    body_schema = get_schema_from_model_field(\n        field=body_field,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        field_mapping=field_mapping,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    field_info = cast(Body, body_field.field_info)\n    request_media_type = field_info.media_type\n    required = body_field.required\n    request_body_oai: Dict[str, Any] = {}\n    if required:\n        request_body_oai[\"required\"] = required\n    request_media_content: Dict[str, Any] = {\"schema\": body_schema}\n    if field_info.openapi_examples:\n        request_media_content[\"examples\"] = jsonable_encoder(\n            field_info.openapi_examples\n        )\n    elif field_info.example != Undefined:\n        request_media_content[\"example\"] = jsonable_encoder(field_info.example)\n    request_body_oai[\"content\"] = {request_media_type: request_media_content}\n    return request_body_oai\n\n# fastapi/openapi/utils.py:207-219  (fastapi.openapi.utils.generate_operation_id)\ndef generate_operation_id(\n    *, route: routing.APIRoute, method: str\n) -> str:  # pragma: nocover\n    warnings.warn(\n        \"fastapi.openapi.utils.generate_operation_id() was deprecated, \"\n        \"it is not used internally, and will be removed soon\",\n        DeprecationWarning,\n        stacklevel=2,\n    )\n    if route.operation_id:\n        return route.operation_id\n    path: str = route.path_format\n    return generate_operation_id_for_path(name=route.name, path=path, method=method)\n\n# fastapi/openapi/utils.py:222-225  (fastapi.openapi.utils.generate_operation_summary)\ndef generate_operation_summary(*, route: routing.APIRoute, method: str) -> str:\n    if route.summary:\n        return route.summary\n    return route.name.replace(\"_\", \" \").title()\n\n# fastapi/openapi/utils.py:228-251  (fastapi.openapi.utils.get_openapi_operation_metadata)\ndef get_openapi_operation_metadata(\n    *, route: routing.APIRoute, method: str, operation_ids: Set[str]\n) -> Dict[str, Any]:\n    operation: Dict[str, Any] = {}\n    if route.tags:\n        operation[\"tags\"] = route.tags\n    operation[\"summary\"] = generate_operation_summary(route=route, method=method)\n    if route.description:\n        operation[\"description\"] = route.description\n    operation_id = route.operation_id or route.unique_id\n    if operation_id in operation_ids:\n        message = (\n            f\"Duplicate Operation ID {operation_id} for function \"\n            + f\"{route.endpoint.__name__}\"\n        )\n        file_name = getattr(route.endpoint, \"__globals__\", {}).get(\"__file__\")\n        if file_name:\n            message += f\" at {file_name}\"\n        warnings.warn(message, stacklevel=1)\n    operation_ids.add(operation_id)\n    operation[\"operationId\"] = operation_id\n    if route.deprecated:\n        operation[\"deprecated\"] = route.deprecated\n    return operation\n\n# fastapi/openapi/utils.py:265-274#part1of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    path = {}\n    security_schemes: Dict[str, Any] = {}\n    definitions: Dict[str, Any] = {}\n    assert route.methods is not None, \"Methods must be a list\"\n    if isinstance(route.response_class, DefaultPlaceholder):\n        current_response_class: Type[Response] = route.response_class.value\n    else:\n        current_response_class = route.response_class\n    assert current_response_class, \"A response class is needed to generate OpenAPI\"\n    route_response_media_type: Optional[str] = current_response_class.media_type\n\n# fastapi/openapi/utils.py:275-442#part2of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    if route.include_in_schema:\n        for method in route.methods:\n            operation = get_openapi_operation_metadata(\n                route=route, method=method, operation_ids=operation_ids\n            )\n            parameters: List[Dict[str, Any]] = []\n            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)\n            security_definitions, operation_security = get_openapi_security_definitions(\n                flat_dependant=flat_dependant\n            )\n            if operation_security:\n                operation.setdefault(\"security\", []).extend(operation_security)\n            if security_definitions:\n                security_schemes.update(security_definitions)\n            operation_parameters = _get_openapi_operation_parameters(\n                dependant=route.dependant,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            parameters.extend(operation_parameters)\n            if parameters:\n                all_parameters = {\n                    (param[\"in\"], param[\"name\"]): param for param in parameters\n                }\n                required_parameters = {\n                    (param[\"in\"], param[\"name\"]): param\n                    for param in parameters\n                    if param.get(\"required\")\n                }\n                # Make sure required definitions of the same parameter take precedence\n                # over non-required definitions\n                all_parameters.update(required_parameters)\n                operation[\"parameters\"] = list(all_parameters.values())\n            if method in METHODS_WITH_BODY:\n                request_body_oai = get_openapi_operation_request_body(\n                    body_field=route.body_field,\n                    schema_generator=schema_generator,\n                    model_name_map=model_name_map,\n                    field_mapping=field_mapping,\n                    separate_input_output_schemas=separate_input_output_schemas,\n                )\n                if request_body_oai:\n                    operation[\"requestBody\"] = request_body_oai\n            if route.callbacks:\n                callbacks = {}\n                for callback in route.callbacks:\n                    if isinstance(callback, routing.APIRoute):\n                        (\n                            cb_path,\n                            cb_security_schemes,\n                            cb_definitions,\n                        ) = get_openapi_path(\n                            route=callback,\n                            operation_ids=operation_ids,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                        callbacks[callback.name] = {callback.path: cb_path}\n                operation[\"callbacks\"] = callbacks\n            if route.status_code is not None:\n                status_code = str(route.status_code)\n            else:\n                # It would probably make more sense for all response classes to have an\n                # explicit default status_code, and to extract it from them, instead of\n                # doing this inspection tricks, that would probably be in the future\n                # TODO: probably make status_code a default class attribute for all\n                # responses in Starlette\n                response_signature = inspect.signature(current_response_class.__init__)\n                status_code_param = response_signature.parameters.get(\"status_code\")\n                if status_code_param is not None:\n                    if isinstance(status_code_param.default, int):\n                        status_code = str(status_code_param.default)\n            operation.setdefault(\"responses\", {}).setdefault(status_code, {})[\n                \"description\"\n            ] = route.response_description\n            if route_response_media_type and is_body_allowed_for_status_code(\n                route.status_code\n            ):\n                response_schema = {\"type\": \"string\"}\n                if lenient_issubclass(current_response_class, JSONResponse):\n                    if route.response_field:\n                        response_schema = get_schema_from_model_field(\n                            field=route.response_field,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                    else:\n                        response_schema = {}\n                operation.setdefault(\"responses\", {}).setdefault(\n                    status_code, {}\n                ).setdefault(\"content\", {}).setdefault(route_response_media_type, {})[\n                    \"schema\"\n                ] = response_schema\n            if route.responses:\n                operation_responses = operation.setdefault(\"responses\", {})\n                for (\n                    additional_status_code,\n                    additional_response,\n                ) in route.responses.items():\n                    process_response = additional_response.copy()\n                    process_response.pop(\"model\", None)\n                    status_code_key = str(additional_status_code).upper()\n                    if status_code_key == \"DEFAULT\":\n                        status_code_key = \"default\"\n                    openapi_response = operation_responses.setdefault(\n                        status_code_key, {}\n                    )\n                    assert isinstance(process_response, dict), (\n                        \"An additional response must be a dict\"\n                    )\n                    field = route.response_fields.get(additional_status_code)\n                    additional_field_schema: Optional[Dict[str, Any]] = None\n                    if field:\n                        additional_field_schema = get_schema_from_model_field(\n                            field=field,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                        media_type = route_response_media_type or \"application/json\"\n                        additional_schema = (\n                            process_response.setdefault(\"content\", {})\n                            .setdefault(media_type, {})\n                            .setdefault(\"schema\", {})\n                        )\n                        deep_dict_update(additional_schema, additional_field_schema)\n                    status_text: Optional[str] = status_code_ranges.get(\n                        str(additional_status_code).upper()\n                    ) or http.client.responses.get(int(additional_status_code))\n                    description = (\n                        process_response.get(\"description\")\n                        or openapi_response.get(\"description\")\n                        or status_text\n                        or \"Additional Response\"\n                    )\n                    deep_dict_update(openapi_response, process_response)\n                    openapi_response[\"description\"] = description\n            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)\n            all_route_params = get_flat_params(route.dependant)\n            if (all_route_params or route.body_field) and not any(\n                status in operation[\"responses\"]\n                for status in [http422, \"4XX\", \"default\"]\n            ):\n                operation[\"responses\"][http422] = {\n                    \"description\": \"Validation Error\",\n                    \"content\": {\n                        \"application/json\": {\n                            \"schema\": {\"$ref\": REF_PREFIX + \"HTTPValidationError\"}\n                        }\n                    },\n                }\n                if \"ValidationError\" not in definitions:\n                    definitions.update(\n                        {\n                            \"ValidationError\": validation_error_definition,\n                            \"HTTPValidationError\": validation_error_response_definition,\n                        }\n                    )\n            if route.openapi_extra:\n                deep_dict_update(operation, route.openapi_extra)\n            path[method.lower()] = operation\n\n# fastapi/openapi/utils.py:443-443#part3of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    return path, security_schemes, definitions\n\n# fastapi/openapi/utils.py:446-474  (fastapi.openapi.utils.get_fields_from_routes)\ndef get_fields_from_routes(\n    routes: Sequence[BaseRoute],\n) -> List[ModelField]:\n    body_fields_from_routes: List[ModelField] = []\n    responses_from_routes: List[ModelField] = []\n    request_fields_from_routes: List[ModelField] = []\n    callback_flat_models: List[ModelField] = []\n    for route in routes:\n        if getattr(route, \"include_in_schema\", None) and isinstance(\n            route, routing.APIRoute\n        ):\n            if route.body_field:\n                assert isinstance(route.body_field, ModelField), (\n                    \"A request body must be a Pydantic Field\"\n                )\n                body_fields_from_routes.append(route.body_field)\n            if route.response_field:\n                responses_from_routes.append(route.response_field)\n            if route.response_fields:\n                responses_from_routes.extend(route.response_fields.values())\n            if route.callbacks:\n                callback_flat_models.extend(get_fields_from_routes(route.callbacks))\n            params = get_flat_params(route.dependant)\n            request_fields_from_routes.extend(params)\n\n    flat_models = callback_flat_models + list(\n        body_fields_from_routes + responses_from_routes + request_fields_from_routes\n    )\n    return flat_models\n\n# fastapi/openapi/utils.py:493-568#part1of2  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    info: Dict[str, Any] = {\"title\": title, \"version\": version}\n    if summary:\n        info[\"summary\"] = summary\n    if description:\n        info[\"description\"] = description\n    if terms_of_service:\n        info[\"termsOfService\"] = terms_of_service\n    if contact:\n        info[\"contact\"] = contact\n    if license_info:\n        info[\"license\"] = license_info\n    output: Dict[str, Any] = {\"openapi\": openapi_version, \"info\": info}\n    if servers:\n        output[\"servers\"] = servers\n    components: Dict[str, Dict[str, Any]] = {}\n    paths: Dict[str, Dict[str, Any]] = {}\n    webhook_paths: Dict[str, Dict[str, Any]] = {}\n    operation_ids: Set[str] = set()\n    all_fields = get_fields_from_routes(list(routes or []) + list(webhooks or []))\n    model_name_map = get_compat_model_name_map(all_fields)\n    schema_generator = GenerateJsonSchema(ref_template=REF_TEMPLATE)\n    field_mapping, definitions = get_definitions(\n        fields=all_fields,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    for route in routes or []:\n        if isinstance(route, routing.APIRoute):\n            result = get_openapi_path(\n                route=route,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    paths.setdefault(route.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    for webhook in webhooks or []:\n        if isinstance(webhook, routing.APIRoute):\n            result = get_openapi_path(\n                route=webhook,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    webhook_paths.setdefault(webhook.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    if definitions:\n        components[\"schemas\"] = {k: definitions[k] for k in sorted(definitions)}\n    if components:\n        output[\"components\"] = components\n    output[\"paths\"] = paths\n    if webhook_paths:\n        output[\"webhooks\"] = webhook_paths\n    if tags:\n        output[\"tags\"] = tags\n\n# fastapi/openapi/utils.py:569-569#part2of2  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    return jsonable_encoder(OpenAPI(**output), by_alias=True, exclude_none=True)  # type: ignore\n\n# tests/test_security_api_key_cookie_optional.py:46-73  (tests.test_security_api_key_cookie_optional.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...\n\n# tests/test_security_api_key_header_description.py:40-71  (tests.test_security_api_key_header_description.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...\n\n# tests/test_security_api_key_cookie_description.py:39-71  (tests.test_security_api_key_cookie_description.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...\n\n# tests/test_tutorial/test_security/test_tutorial001.py:44-73  (tests.test_tutorial.test_security.test_tutorial001.test_openapi_schema [signature])\ndef test_openapi_schema(client: TestClient):\n    ...\n\n# tests/test_security_oauth2_authorization_code_bearer.py:40-75  (tests.test_security_oauth2_authorization_code_bearer.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...\n\n# fastapi/openapi/models.py:339-340  (fastapi.openapi.models.SecurityBase [signature])\nclass SecurityBase(BaseModelWithConfig):\n    ...\n\n# tests/test_security_oauth2_authorization_code_bearer_description.py:43-79  (tests.test_security_oauth2_authorization_code_bearer_description.test_openapi_schema [signature])\ndef test_openapi_schema():\n    ...\n\n# fastapi/openapi/models.py:356-357  (fastapi.openapi.models.HTTPBase [signature])\nclass HTTPBase(SecurityBase):\n    ...\n\n# fastapi/openapi/models.py:430-440  (fastapi.openapi.models.OpenAPI [signature])\nclass OpenAPI(BaseModelWithConfig):\n    ...\n\n# fastapi/security/utils.py:4-10  (fastapi.security.utils.get_authorization_scheme_param [signature])\ndef get_authorization_scheme_param(\n    authorization_header_value: Optional[str],\n) -> Tuple[str, str]:\n    ...\n\n# fastapi/openapi/models.py:395-396  (fastapi.openapi.models.OAuth2 [signature])\nclass OAuth2(SecurityBase):\n    ...\n\n# fastapi/openapi/models.py:400-403  (fastapi.openapi.models.OpenIdConnect [signature])\nclass OpenIdConnect(SecurityBase):\n    ...\n\n# fastapi/dependencies/utils.py:142-171  (fastapi.dependencies.utils.get_sub_dependant [signature])\ndef get_sub_dependant(\n    *,\n    depends: params.Depends,\n    dependency: Callable[..., Any],\n    path: str,\n    name: Optional[str] = None,\n    security_scopes: Optional[List[str]] = None,\n) -> Dependant:\n    ...\n\n# docs_src/extending_openapi/tutorial001.py:1-4  (docs_src.extending_openapi.tutorial001)\nfrom fastapi import FastAPI\nfrom fastapi.openapi.utils import get_openapi\n\napp = FastAPI()\n\n# fastapi/security/http.py:1-13  (fastapi.security.http)\nimport binascii\nfrom base64 import b64decode\nfrom typing import Optional\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import HTTPBase as HTTPBaseModel\nfrom fastapi.openapi.models import HTTPBearer as HTTPBearerModel\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom pydantic import BaseModel\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\nfrom typing_extensions import Annotated, Doc\n\n# fastapi/security/oauth2.py:1-13  (fastapi.security.oauth2)\nfrom typing import Any, Dict, List, Optional, Union, cast\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import OAuth2 as OAuth2Model\nfrom fastapi.openapi.models import OAuthFlows as OAuthFlowsModel\nfrom fastapi.param_functions import Form\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\n\n# TODO: import from typing when deprecating Python 3.9\nfrom typing_extensions import Annotated, Doc\n\n# tests/test_additional_responses_bad.py:13-35  (tests.test_additional_responses_bad)\nopenapi_schema = {\n    \"openapi\": \"3.1.0\",\n    \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n    \"paths\": {\n        \"/a\": {\n            \"get\": {\n                \"responses\": {\n                    # this is how one would imagine the openapi schema to be\n                    # but since the key is not valid, openapi.utils.get_openapi will raise ValueError\n                    \"hello\": {\"description\": \"Not a valid additional response\"},\n                    \"200\": {\n                        \"description\": \"Successful Response\",\n                        \"content\": {\"application/json\": {\"schema\": {}}},\n                    },\n                },\n                \"summary\": \"A\",\n                \"operationId\": \"a_a_get\",\n            }\n        }\n    },\n}\n\nclient = TestClient(app)\n\n# docs_src/extending_openapi/tutorial001.py:12-26  (docs_src.extending_openapi.tutorial001.custom_openapi)\ndef custom_openapi():\n    if app.openapi_schema:\n        return app.openapi_schema\n    openapi_schema = get_openapi(\n        title=\"Custom title\",\n        version=\"2.5.0\",\n        summary=\"This is a very custom OpenAPI schema\",\n        description=\"Here's a longer description of the custom **OpenAPI** schema\",\n        routes=app.routes,\n    )\n    openapi_schema[\"info\"][\"x-logo\"] = {\n        \"url\": \"https://fastapi.tiangolo.com/img/logo-margin/logo-teal.png\"\n    }\n    app.openapi_schema = openapi_schema\n    return app.openapi_schema\n\n# fastapi/security/base.py:1-1  (fastapi.security.base)\nfrom fastapi.openapi.models import SecurityBase as SecurityBaseModel\n\n# fastapi/applications.py:966-996  (fastapi.applications.FastAPI.openapi)\nclass FastAPI(Starlette):\n    def openapi(self) -> Dict[str, Any]:\n        \"\"\"\n        Generate the OpenAPI schema of the application. This is called by FastAPI\n        internally.\n\n        The first time it is called it stores the result in the attribute\n        `app.openapi_schema`, and next times it is called, it just returns that same\n        result. To avoid the cost of generating the schema every time.\n\n        If you need to modify the generated OpenAPI schema, you could modify it.\n\n        Read more in the\n        [FastAPI docs for OpenAPI](https://fastapi.tiangolo.com/how-to/extending-openapi/).\n        \"\"\"\n        if not self.openapi_schema:\n            self.openapi_schema = get_openapi(\n                title=self.title,\n                version=self.version,\n                openapi_version=self.openapi_version,\n                summary=self.summary,\n                description=self.description,\n                terms_of_service=self.terms_of_service,\n                contact=self.contact,\n                license_info=self.license_info,\n                routes=self.routes,\n                webhooks=self.webhooks.routes,\n                tags=self.openapi_tags,\n                servers=self.servers,\n                separate_input_output_schemas=self.separate_input_output_schemas,\n            )\n        return self.openapi_schema\n\n# tests/test_security_http_base_description.py:30-60  (tests.test_security_http_base_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBase\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"HTTPBase\": {\n                    \"type\": \"http\",\n                    \"scheme\": \"Other\",\n                    \"description\": \"Other Security Scheme\",\n                }\n            }\n        },\n    }\n\n# tests/test_tutorial/test_conditional_openapi/test_tutorial001.py:1-5  (tests.test_tutorial.test_conditional_openapi.test_tutorial001)\nimport importlib\n\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_pydanticv2\n\n# tests/test_security_http_base.py:30-54  (tests.test_security_http_base.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBase\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBase\": {\"type\": \"http\", \"scheme\": \"Other\"}}\n        },\n    }\n\n# tests/test_security_http_bearer.py:36-60  (tests.test_security_http_bearer.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}\n        },\n    }\n\n# tests/test_security_http_digest.py:38-62  (tests.test_security_http_digest.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPDigest\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPDigest\": {\"type\": \"http\", \"scheme\": \"digest\"}}\n        },\n    }\n\n# tests/test_security_http_base_optional.py:36-60  (tests.test_security_http_base_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBase\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBase\": {\"type\": \"http\", \"scheme\": \"Other\"}}\n        },\n    }\n\n# tests/test_security_http_basic_optional.py:53-77  (tests.test_security_http_basic_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBasic\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBasic\": {\"type\": \"http\", \"scheme\": \"basic\"}}\n        },\n    }\n\n# tests/test_security_http_basic_realm.py:51-75  (tests.test_security_http_basic_realm.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBasic\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBasic\": {\"type\": \"http\", \"scheme\": \"basic\"}}\n        },\n    }\n\n# tests/test_security_http_bearer_optional.py:42-66  (tests.test_security_http_bearer_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}\n        },\n    }\n\n# tests/test_security_http_digest_optional.py:44-68  (tests.test_security_http_digest_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPDigest\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPDigest\": {\"type\": \"http\", \"scheme\": \"digest\"}}\n        },\n    }\n\n# tests/test_security_http_bearer_description.py:36-66  (tests.test_security_http_bearer_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"HTTPBearer\": {\n                    \"type\": \"http\",\n                    \"scheme\": \"bearer\",\n                    \"description\": \"HTTP Bearer token scheme\",\n                }\n            }\n        },\n    }\n\n# tests/test_security_http_digest_description.py:38-68  (tests.test_security_http_digest_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPDigest\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"HTTPDigest\": {\n                    \"type\": \"http\",\n                    \"scheme\": \"digest\",\n                    \"description\": \"HTTPDigest scheme\",\n                }\n            }\n        },\n    }\n\n# tests/test_security_api_key_header.py:40-66  (tests.test_security_api_key_header.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyHeader\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyHeader\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"header\"}\n            }\n        },\n    }\n\n# tests/test_security_api_key_query.py:40-66  (tests.test_security_api_key_query.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyQuery\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyQuery\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"query\"}\n            }\n        },\n    }\n\n# tests/test_security_http_basic_realm_description.py:51-81  (tests.test_security_http_basic_realm_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBasic\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"HTTPBasic\": {\n                    \"type\": \"http\",\n                    \"scheme\": \"basic\",\n                    \"description\": \"HTTPBasic scheme\",\n                }\n            }\n        },\n    }\n\n# tests/test_security_openid_connect_description.py:48-78  (tests.test_security_openid_connect_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"OpenIdConnect\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OpenIdConnect\": {\n                    \"type\": \"openIdConnect\",\n                    \"openIdConnectUrl\": \"/openid\",\n                    \"description\": \"OpenIdConnect security scheme\",\n                }\n            }\n        },\n    }\n\n# tests/test_security_api_key_header_optional.py:46-72  (tests.test_security_api_key_header_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyHeader\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyHeader\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"header\"}\n            }\n        },\n    }\n\n# tests/test_security_api_key_query_optional.py:46-72  (tests.test_security_api_key_query_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyQuery\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyQuery\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"query\"}\n            }\n        },\n    }\n\n# tests/test_security_openid_connect.py:46-75  (tests.test_security_openid_connect.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"OpenIdConnect\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OpenIdConnect\": {\n                    \"type\": \"openIdConnect\",\n                    \"openIdConnectUrl\": \"/openid\",\n                }\n            }\n        },\n    }\n\n# tests/test_tutorial/test_security/test_tutorial006.py:56-80  (tests.test_tutorial.test_security.test_tutorial006.test_openapi_schema)\ndef test_openapi_schema(client: TestClient):\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"HTTPBasic\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\"HTTPBasic\": {\"type\": \"http\", \"scheme\": \"basic\"}}\n        },\n    }\n\n# tests/test_security_openid_connect_optional.py:52-81  (tests.test_security_openid_connect_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"OpenIdConnect\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OpenIdConnect\": {\n                    \"type\": \"openIdConnect\",\n                    \"openIdConnectUrl\": \"/openid\",\n                }\n            }\n        },\n    }\n\n# fastapi/applications.py:998-1049  (fastapi.applications.FastAPI.setup)\nclass FastAPI(Starlette):\n    def setup(self) -> None:\n        if self.openapi_url:\n            urls = (server_data.get(\"url\") for server_data in self.servers)\n            server_urls = {url for url in urls if url}\n\n            async def openapi(req: Request) -> JSONResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                if root_path not in server_urls:\n                    if root_path and self.root_path_in_servers:\n                        self.servers.insert(0, {\"url\": root_path})\n                        server_urls.add(root_path)\n                return JSONResponse(self.openapi())\n\n            self.add_route(self.openapi_url, openapi, include_in_schema=False)\n        if self.openapi_url and self.docs_url:\n\n            async def swagger_ui_html(req: Request) -> HTMLResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                openapi_url = root_path + self.openapi_url\n                oauth2_redirect_url = self.swagger_ui_oauth2_redirect_url\n                if oauth2_redirect_url:\n                    oauth2_redirect_url = root_path + oauth2_redirect_url\n                return get_swagger_ui_html(\n                    openapi_url=openapi_url,\n                    title=f\"{self.title} - Swagger UI\",\n                    oauth2_redirect_url=oauth2_redirect_url,\n                    init_oauth=self.swagger_ui_init_oauth,\n                    swagger_ui_parameters=self.swagger_ui_parameters,\n                )\n\n            self.add_route(self.docs_url, swagger_ui_html, include_in_schema=False)\n\n            if self.swagger_ui_oauth2_redirect_url:\n\n                async def swagger_ui_redirect(req: Request) -> HTMLResponse:\n                    return get_swagger_ui_oauth2_redirect_html()\n\n                self.add_route(\n                    self.swagger_ui_oauth2_redirect_url,\n                    swagger_ui_redirect,\n                    include_in_schema=False,\n                )\n        if self.openapi_url and self.redoc_url:\n\n            async def redoc_html(req: Request) -> HTMLResponse:\n                root_path = req.scope.get(\"root_path\", \"\").rstrip(\"/\")\n                openapi_url = root_path + self.openapi_url\n                return get_redoc_html(\n                    openapi_url=openapi_url, title=f\"{self.title} - ReDoc\"\n                )\n\n            self.add_route(self.redoc_url, redoc_html, include_in_schema=False)\n\n# tests/test_security_api_key_cookie.py:39-66  (tests.test_security_api_key_cookie.test_openapi_schema)\ndef test_openapi_schema():\n    client = TestClient(app)\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyCookie\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyCookie\": {\"type\": \"apiKey\", \"name\": \"key\", \"in\": \"cookie\"}\n            }\n        },\n    }\n\n# tests/test_security_api_key_query_description.py:40-71  (tests.test_security_api_key_query_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/users/me\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Current User\",\n                    \"operationId\": \"read_current_user_users_me_get\",\n                    \"security\": [{\"APIKeyQuery\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"APIKeyQuery\": {\n                    \"type\": \"apiKey\",\n                    \"name\": \"key\",\n                    \"in\": \"query\",\n                    \"description\": \"API Key Query\",\n                }\n            }\n        },\n    }\n\n# tests/test_security_oauth2_password_bearer_optional.py:40-69  (tests.test_security_oauth2_password_bearer_optional.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/items/\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Items\",\n                    \"operationId\": \"read_items_items__get\",\n                    \"security\": [{\"OAuth2PasswordBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OAuth2PasswordBearer\": {\n                    \"type\": \"oauth2\",\n                    \"flows\": {\"password\": {\"scopes\": {}, \"tokenUrl\": \"/token\"}},\n                }\n            }\n        },\n    }\n\n# tests/test_security_oauth2_password_bearer_optional_description.py:44-74  (tests.test_security_oauth2_password_bearer_optional_description.test_openapi_schema)\ndef test_openapi_schema():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200, response.text\n    assert response.json() == {\n        \"openapi\": \"3.1.0\",\n        \"info\": {\"title\": \"FastAPI\", \"version\": \"0.1.0\"},\n        \"paths\": {\n            \"/items/\": {\n                \"get\": {\n                    \"responses\": {\n                        \"200\": {\n                            \"description\": \"Successful Response\",\n                            \"content\": {\"application/json\": {\"schema\": {}}},\n                        }\n                    },\n                    \"summary\": \"Read Items\",\n                    \"operationId\": \"read_items_items__get\",\n                    \"security\": [{\"OAuth2PasswordBearer\": []}],\n                }\n            }\n        },\n        \"components\": {\n            \"securitySchemes\": {\n                \"OAuth2PasswordBearer\": {\n                    \"type\": \"oauth2\",\n                    \"flows\": {\"password\": {\"scopes\": {}, \"tokenUrl\": \"/token\"}},\n                    \"description\": \"OAuth2PasswordBearer security scheme\",\n                }\n            }\n        },\n    }\n\n## Task\n\nWhat breaks if `fastapi.openapi.utils.get_openapi_security_definitions` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

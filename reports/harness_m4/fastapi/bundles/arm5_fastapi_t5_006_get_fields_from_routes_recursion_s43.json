@@ -1,0 +1,159 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "fastapi_t5_006_get_fields_from_routes_recursion",
+  "items": [
+   {
+    "source_id": "fastapi/openapi/utils.py:446-474",
+    "content": "# fastapi/openapi/utils.py:446-474  (fastapi.openapi.utils.get_fields_from_routes)\ndef get_fields_from_routes(\n    routes: Sequence[BaseRoute],\n) -> List[ModelField]:\n    body_fields_from_routes: List[ModelField] = []\n    responses_from_routes: List[ModelField] = []\n    request_fields_from_routes: List[ModelField] = []\n    callback_flat_models: List[ModelField] = []\n    for route in routes:\n        if getattr(route, \"include_in_schema\", None) and isinstance(\n            route, routing.APIRoute\n        ):\n            if route.body_field:\n                assert isinstance(route.body_field, ModelField), (\n                    \"A request body must be a Pydantic Field\"\n                )\n                body_fields_from_routes.append(route.body_field)\n            if route.response_field:\n                responses_from_routes.append(route.response_field)\n            if route.response_fields:\n                responses_from_routes.extend(route.response_fields.values())\n            if route.callbacks:\n                callback_flat_models.extend(get_fields_from_routes(route.callbacks))\n            params = get_flat_params(route.dependant)\n            request_fields_from_routes.extend(params)\n\n    flat_models = callback_flat_models + list(\n        body_fields_from_routes + responses_from_routes + request_fields_from_routes\n    )\n    return flat_models",
+    "token_count": 266,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_fields_from_routes"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 240,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:477-569",
+    "content": "# fastapi/openapi/utils.py:477-569  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    info: Dict[str, Any] = {\"title\": title, \"version\": version}\n    if summary:\n        info[\"summary\"] = summary\n    if description:\n        info[\"description\"] = description\n    if terms_of_service:\n        info[\"termsOfService\"] = terms_of_service\n    if contact:\n        info[\"contact\"] = contact\n    if license_info:\n        info[\"license\"] = license_info\n    output: Dict[str, Any] = {\"openapi\": openapi_version, \"info\": info}\n    if servers:\n        output[\"servers\"] = servers\n    components: Dict[str, Dict[str, Any]] = {}\n    paths: Dict[str, Dict[str, Any]] = {}\n    webhook_paths: Dict[str, Dict[str, Any]] = {}\n    operation_ids: Set[str] = set()\n    all_fields = get_fields_from_routes(list(routes or []) + list(webhooks or []))\n    model_name_map = get_compat_model_name_map(all_fields)\n    schema_generator = GenerateJsonSchema(ref_template=REF_TEMPLATE)\n    field_mapping, definitions = get_definitions(\n        fields=all_fields,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    for route in routes or []:\n        if isinstance(route, routing.APIRoute):\n            result = get_openapi_path(\n                route=route,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    paths.setdefault(route.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    for webhook in webhooks or []:\n        if isinstance(webhook, routing.APIRoute):\n            result = get_openapi_path(\n                route=webhook,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    webhook_paths.setdefault(webhook.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    if definitions:\n        components[\"schemas\"] = {k: definitions[k] for k in sorted(definitions)}\n    if components:\n        output[\"components\"] = components\n    output[\"paths\"] = paths\n    if webhook_paths:\n        output[\"webhooks\"] = webhook_paths\n    if tags:\n        output[\"tags\"] = tags\n    return jsonable_encoder(OpenAPI(**output), by_alias=True, exclude_none=True)  # type: ignore",
+    "token_count": 833,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 808,
+     "distance": 0.6666666666666666
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:222-228",
+    "content": "# fastapi/dependencies/utils.py:222-228  (fastapi.dependencies.utils.get_flat_params)\ndef get_flat_params(dependant: Dependant) -> List[ModelField]:\n    flat_dependant = get_flat_dependant(dependant, skip_repeats=True)\n    path_params = _get_flat_fields_from_params(flat_dependant.path_params)\n    query_params = _get_flat_fields_from_params(flat_dependant.query_params)\n    header_params = _get_flat_fields_from_params(flat_dependant.header_params)\n    cookie_params = _get_flat_fields_from_params(flat_dependant.cookie_params)\n    return path_params + query_params + header_params + cookie_params",
+    "token_count": 139,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_flat_params"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 114,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:212-219",
+    "content": "# fastapi/dependencies/utils.py:212-219  (fastapi.dependencies.utils._get_flat_fields_from_params)\ndef _get_flat_fields_from_params(fields: List[ModelField]) -> List[ModelField]:\n    if not fields:\n        return fields\n    first_field = fields[0]\n    if len(fields) == 1 and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n        return fields_to_extract\n    return fields",
+    "token_count": 108,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils._get_flat_fields_from_params"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 80,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:662-664",
+    "content": "# fastapi/_compat.py:662-664  (fastapi._compat.get_cached_model_fields)\n@lru_cache\ndef get_cached_model_fields(model: Type[BaseModel]) -> List[ModelField]:\n    return get_model_fields(model)",
+    "token_count": 55,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi._compat.get_cached_model_fields"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 30,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1401,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `fastapi.openapi.utils.get_fields_from_routes` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "fastapi.openapi.utils.get_fields_from_routes",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 7,
+   "manifest_candidates_unfiltered": 7,
+   "requested_symbols": [
+    "fastapi.openapi.utils.get_openapi",
+    "fastapi.openapi.utils.get_fields_from_routes",
+    "fastapi.dependencies.utils.get_flat_params",
+    "fastapi.dependencies.utils._get_flat_fields_from_params",
+    "fastapi._compat.get_cached_model_fields",
+    "fastapi._compat.lenient_issubclass"
+   ],
+   "turn1_requested_count": 6,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "fastapi._compat.lenient_issubclass"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"If `fastapi.openapi.utils.get_fields_from_routes` changes, it could break the execution chain that leads to generating OpenAPI documentation because it is directly called by `fastapi.openapi.utils.get_openapi`. Any changes that affect the return value or behavior of `get_fields_from_routes` could impact how OpenAPI schemas are generated.\",\n  \"requested_symbols\": [\n    \"fastapi.openapi.utils.get_openapi\",\n    \"fastapi.openapi.utils.get_fields_from_routes\",\n    \"fastapi.dependencies.utils.get_flat_params\",\n    \"fastapi.dependencies.utils._get_flat_fields_from_params\",\n    \"fastapi._compat.get_cached_model_fields\",\n    \"fastapi._compat.lenient_issubclass\"\n  ]\n}\n```",
+     "prompt_tokens": 659,
+     "completion_tokens": 155,
+     "latency_seconds": 10.815460384999824,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     69.111676
+    ],
+    "L_turn2_hydrate": [
+     186.218169
+    ],
+    "L_retrieve": [
+     11076.489032
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1401,
+   "prompt_tokens": 1544,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1557,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/openapi/utils.py:446-474  (fastapi.openapi.utils.get_fields_from_routes)\ndef get_fields_from_routes(\n    routes: Sequence[BaseRoute],\n) -> List[ModelField]:\n    body_fields_from_routes: List[ModelField] = []\n    responses_from_routes: List[ModelField] = []\n    request_fields_from_routes: List[ModelField] = []\n    callback_flat_models: List[ModelField] = []\n    for route in routes:\n        if getattr(route, \"include_in_schema\", None) and isinstance(\n            route, routing.APIRoute\n        ):\n            if route.body_field:\n                assert isinstance(route.body_field, ModelField), (\n                    \"A request body must be a Pydantic Field\"\n                )\n                body_fields_from_routes.append(route.body_field)\n            if route.response_field:\n                responses_from_routes.append(route.response_field)\n            if route.response_fields:\n                responses_from_routes.extend(route.response_fields.values())\n            if route.callbacks:\n                callback_flat_models.extend(get_fields_from_routes(route.callbacks))\n            params = get_flat_params(route.dependant)\n            request_fields_from_routes.extend(params)\n\n    flat_models = callback_flat_models + list(\n        body_fields_from_routes + responses_from_routes + request_fields_from_routes\n    )\n    return flat_models\n\n# fastapi/openapi/utils.py:477-569  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    info: Dict[str, Any] = {\"title\": title, \"version\": version}\n    if summary:\n        info[\"summary\"] = summary\n    if description:\n        info[\"description\"] = description\n    if terms_of_service:\n        info[\"termsOfService\"] = terms_of_service\n    if contact:\n        info[\"contact\"] = contact\n    if license_info:\n        info[\"license\"] = license_info\n    output: Dict[str, Any] = {\"openapi\": openapi_version, \"info\": info}\n    if servers:\n        output[\"servers\"] = servers\n    components: Dict[str, Dict[str, Any]] = {}\n    paths: Dict[str, Dict[str, Any]] = {}\n    webhook_paths: Dict[str, Dict[str, Any]] = {}\n    operation_ids: Set[str] = set()\n    all_fields = get_fields_from_routes(list(routes or []) + list(webhooks or []))\n    model_name_map = get_compat_model_name_map(all_fields)\n    schema_generator = GenerateJsonSchema(ref_template=REF_TEMPLATE)\n    field_mapping, definitions = get_definitions(\n        fields=all_fields,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    for route in routes or []:\n        if isinstance(route, routing.APIRoute):\n            result = get_openapi_path(\n                route=route,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    paths.setdefault(route.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    for webhook in webhooks or []:\n        if isinstance(webhook, routing.APIRoute):\n            result = get_openapi_path(\n                route=webhook,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    webhook_paths.setdefault(webhook.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    if definitions:\n        components[\"schemas\"] = {k: definitions[k] for k in sorted(definitions)}\n    if components:\n        output[\"components\"] = components\n    output[\"paths\"] = paths\n    if webhook_paths:\n        output[\"webhooks\"] = webhook_paths\n    if tags:\n        output[\"tags\"] = tags\n    return jsonable_encoder(OpenAPI(**output), by_alias=True, exclude_none=True)  # type: ignore\n\n# fastapi/dependencies/utils.py:222-228  (fastapi.dependencies.utils.get_flat_params)\ndef get_flat_params(dependant: Dependant) -> List[ModelField]:\n    flat_dependant = get_flat_dependant(dependant, skip_repeats=True)\n    path_params = _get_flat_fields_from_params(flat_dependant.path_params)\n    query_params = _get_flat_fields_from_params(flat_dependant.query_params)\n    header_params = _get_flat_fields_from_params(flat_dependant.header_params)\n    cookie_params = _get_flat_fields_from_params(flat_dependant.cookie_params)\n    return path_params + query_params + header_params + cookie_params\n\n# fastapi/dependencies/utils.py:212-219  (fastapi.dependencies.utils._get_flat_fields_from_params)\ndef _get_flat_fields_from_params(fields: List[ModelField]) -> List[ModelField]:\n    if not fields:\n        return fields\n    first_field = fields[0]\n    if len(fields) == 1 and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n        return fields_to_extract\n    return fields\n\n# fastapi/_compat.py:662-664  (fastapi._compat.get_cached_model_fields)\n@lru_cache\ndef get_cached_model_fields(model: Type[BaseModel]) -> List[ModelField]:\n    return get_model_fields(model)\n\n## Task\n\nWhat breaks if `fastapi.openapi.utils.get_fields_from_routes` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

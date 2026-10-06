@@ -1,0 +1,1083 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "fastapi_t5_006_get_fields_from_routes_recursion",
+  "items": [
+   {
+    "source_id": "fastapi/openapi/utils.py:446-474",
+    "content": "# fastapi/openapi/utils.py:446-474  (fastapi.openapi.utils.get_fields_from_routes)\ndef get_fields_from_routes(\n    routes: Sequence[BaseRoute],\n) -> List[ModelField]:\n    body_fields_from_routes: List[ModelField] = []\n    responses_from_routes: List[ModelField] = []\n    request_fields_from_routes: List[ModelField] = []\n    callback_flat_models: List[ModelField] = []\n    for route in routes:\n        if getattr(route, \"include_in_schema\", None) and isinstance(\n            route, routing.APIRoute\n        ):\n            if route.body_field:\n                assert isinstance(route.body_field, ModelField), (\n                    \"A request body must be a Pydantic Field\"\n                )\n                body_fields_from_routes.append(route.body_field)\n            if route.response_field:\n                responses_from_routes.append(route.response_field)\n            if route.response_fields:\n                responses_from_routes.extend(route.response_fields.values())\n            if route.callbacks:\n                callback_flat_models.extend(get_fields_from_routes(route.callbacks))\n            params = get_flat_params(route.dependant)\n            request_fields_from_routes.extend(params)\n\n    flat_models = callback_flat_models + list(\n        body_fields_from_routes + responses_from_routes + request_fields_from_routes\n    )\n    return flat_models",
+    "token_count": 266,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_fields_from_routes"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 266
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:443-443#part3of3",
+    "content": "# fastapi/openapi/utils.py:443-443#part3of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    return path, security_schemes, definitions",
+    "token_count": 135,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:493-568#part1of2",
+    "content": "# fastapi/openapi/utils.py:493-568#part1of2  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    info: Dict[str, Any] = {\"title\": title, \"version\": version}\n    if summary:\n        info[\"summary\"] = summary\n    if description:\n        info[\"description\"] = description\n    if terms_of_service:\n        info[\"termsOfService\"] = terms_of_service\n    if contact:\n        info[\"contact\"] = contact\n    if license_info:\n        info[\"license\"] = license_info\n    output: Dict[str, Any] = {\"openapi\": openapi_version, \"info\": info}\n    if servers:\n        output[\"servers\"] = servers\n    components: Dict[str, Dict[str, Any]] = {}\n    paths: Dict[str, Dict[str, Any]] = {}\n    webhook_paths: Dict[str, Dict[str, Any]] = {}\n    operation_ids: Set[str] = set()\n    all_fields = get_fields_from_routes(list(routes or []) + list(webhooks or []))\n    model_name_map = get_compat_model_name_map(all_fields)\n    schema_generator = GenerateJsonSchema(ref_template=REF_TEMPLATE)\n    field_mapping, definitions = get_definitions(\n        fields=all_fields,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    for route in routes or []:\n        if isinstance(route, routing.APIRoute):\n            result = get_openapi_path(\n                route=route,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    paths.setdefault(route.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    for webhook in webhooks or []:\n        if isinstance(webhook, routing.APIRoute):\n            result = get_openapi_path(\n                route=webhook,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    webhook_paths.setdefault(webhook.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    if definitions:\n        components[\"schemas\"] = {k: definitions[k] for k in sorted(definitions)}\n    if components:\n        output[\"components\"] = components\n    output[\"paths\"] = paths\n    if webhook_paths:\n        output[\"webhooks\"] = webhook_paths\n    if tags:\n        output[\"tags\"] = tags",
+    "token_count": 813,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 813
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:275-442#part2of3",
+    "content": "# fastapi/openapi/utils.py:275-442#part2of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    if route.include_in_schema:\n        for method in route.methods:\n            operation = get_openapi_operation_metadata(\n                route=route, method=method, operation_ids=operation_ids\n            )\n            parameters: List[Dict[str, Any]] = []\n            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)\n            security_definitions, operation_security = get_openapi_security_definitions(\n                flat_dependant=flat_dependant\n            )\n            if operation_security:\n                operation.setdefault(\"security\", []).extend(operation_security)\n            if security_definitions:\n                security_schemes.update(security_definitions)\n            operation_parameters = _get_openapi_operation_parameters(\n                dependant=route.dependant,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            parameters.extend(operation_parameters)\n            if parameters:\n                all_parameters = {\n                    (param[\"in\"], param[\"name\"]): param for param in parameters\n                }\n                required_parameters = {\n                    (param[\"in\"], param[\"name\"]): param\n                    for param in parameters\n                    if param.get(\"required\")\n                }\n                # Make sure required definitions of the same parameter take precedence\n                # over non-required definitions\n                all_parameters.update(required_parameters)\n                operation[\"parameters\"] = list(all_parameters.values())\n            if method in METHODS_WITH_BODY:\n                request_body_oai = get_openapi_operation_request_body(\n                    body_field=route.body_field,\n                    schema_generator=schema_generator,\n                    model_name_map=model_name_map,\n                    field_mapping=field_mapping,\n                    separate_input_output_schemas=separate_input_output_schemas,\n                )\n                if request_body_oai:\n                    operation[\"requestBody\"] = request_body_oai\n            if route.callbacks:\n                callbacks = {}\n                for callback in route.callbacks:\n                    if isinstance(callback, routing.APIRoute):\n                        (\n                            cb_path,\n                            cb_security_schemes,\n                            cb_definitions,\n                        ) = get_openapi_path(\n                            route=callback,\n                            operation_ids=operation_ids,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                        callbacks[callback.name] = {callback.path: cb_path}\n                operation[\"callbacks\"] = callbacks\n            if route.status_code is not None:\n                status_code = str(route.status_code)\n            else:\n                # It would probably make more sense for all response classes to have an\n                # explicit default status_code, and to extract it from them, instead of\n                # doing this inspection tricks, that would probably be in the future\n                # TODO: probably make status_code a default class attribute for all\n                # responses in Starlette\n                response_signature = inspect.signature(current_response_class.__init__)\n                status_code_param = response_signature.parameters.get(\"status_code\")\n                if status_code_param is not None:\n                    if isinstance(status_code_param.default, int):\n                        status_code = str(status_code_param.default)\n            operation.setdefault(\"responses\", {}).setdefault(status_code, {})[\n                \"description\"\n            ] = route.response_description\n            if route_response_media_type and is_body_allowed_for_status_code(\n                route.status_code\n            ):\n                response_schema = {\"type\": \"string\"}\n                if lenient_issubclass(current_response_class, JSONResponse):\n                    if route.response_field:\n                        response_schema = get_schema_from_model_field(\n                            field=route.response_field,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                    else:\n                        response_schema = {}\n                operation.setdefault(\"responses\", {}).setdefault(\n                    status_code, {}\n                ).setdefault(\"content\", {}).setdefault(route_response_media_type, {})[\n                    \"schema\"\n                ] = response_schema\n            if route.responses:\n                operation_responses = operation.setdefault(\"responses\", {})\n                for (\n                    additional_status_code,\n                    additional_response,\n                ) in route.responses.items():\n                    process_response = additional_response.copy()\n                    process_response.pop(\"model\", None)\n                    status_code_key = str(additional_status_code).upper()\n                    if status_code_key == \"DEFAULT\":\n                        status_code_key = \"default\"\n                    openapi_response = operation_responses.setdefault(\n                        status_code_key, {}\n                    )\n                    assert isinstance(process_response, dict), (\n                        \"An additional response must be a dict\"\n                    )\n                    field = route.response_fields.get(additional_status_code)\n                    additional_field_schema: Optional[Dict[str, Any]] = None\n                    if field:\n                        additional_field_schema = get_schema_from_model_field(\n                            field=field,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                        media_type = route_response_media_type or \"application/json\"\n                        additional_schema = (\n                            process_response.setdefault(\"content\", {})\n                            .setdefault(media_type, {})\n                            .setdefault(\"schema\", {})\n                        )\n                        deep_dict_update(additional_schema, additional_field_schema)\n                    status_text: Optional[str] = status_code_ranges.get(\n                        str(additional_status_code).upper()\n                    ) or http.client.responses.get(int(additional_status_code))\n                    description = (\n                        process_response.get(\"description\")\n                        or openapi_response.get(\"description\")\n                        or status_text\n                        or \"Additional Response\"\n                    )\n                    deep_dict_update(openapi_response, process_response)\n                    openapi_response[\"description\"] = description\n            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)\n            all_route_params = get_flat_params(route.dependant)\n            if (all_route_params or route.body_field) and not any(\n                status in operation[\"responses\"]\n                for status in [http422, \"4XX\", \"default\"]\n            ):\n                operation[\"responses\"][http422] = {\n                    \"description\": \"Validation Error\",\n                    \"content\": {\n                        \"application/json\": {\n                            \"schema\": {\"$ref\": REF_PREFIX + \"HTTPValidationError\"}\n                        }\n                    },\n                }\n                if \"ValidationError\" not in definitions:\n                    definitions.update(\n                        {\n                            \"ValidationError\": validation_error_definition,\n                            \"HTTPValidationError\": validation_error_response_definition,\n                        }\n                    )\n            if route.openapi_extra:\n                deep_dict_update(operation, route.openapi_extra)\n            path[method.lower()] = operation",
+    "token_count": 1479,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 1479
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:569-569#part2of2",
+    "content": "# fastapi/openapi/utils.py:569-569#part2of2  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    return jsonable_encoder(OpenAPI(**output), by_alias=True, exclude_none=True)  # type: ignore",
+    "token_count": 222,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 222
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:265-274#part1of3",
+    "content": "# fastapi/openapi/utils.py:265-274#part1of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    path = {}\n    security_schemes: Dict[str, Any] = {}\n    definitions: Dict[str, Any] = {}\n    assert route.methods is not None, \"Methods must be a list\"\n    if isinstance(route.response_class, DefaultPlaceholder):\n        current_response_class: Type[Response] = route.response_class.value\n    else:\n        current_response_class = route.response_class\n    assert current_response_class, \"A response class is needed to generate OpenAPI\"\n    route_response_media_type: Optional[str] = current_response_class.media_type",
+    "token_count": 236,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function_part",
+     "engine_token_count": 236
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:228-251",
+    "content": "# fastapi/openapi/utils.py:228-251  (fastapi.openapi.utils.get_openapi_operation_metadata)\ndef get_openapi_operation_metadata(\n    *, route: routing.APIRoute, method: str, operation_ids: Set[str]\n) -> Dict[str, Any]:\n    operation: Dict[str, Any] = {}\n    if route.tags:\n        operation[\"tags\"] = route.tags\n    operation[\"summary\"] = generate_operation_summary(route=route, method=method)\n    if route.description:\n        operation[\"description\"] = route.description\n    operation_id = route.operation_id or route.unique_id\n    if operation_id in operation_ids:\n        message = (\n            f\"Duplicate Operation ID {operation_id} for function \"\n            + f\"{route.endpoint.__name__}\"\n        )\n        file_name = getattr(route.endpoint, \"__globals__\", {}).get(\"__file__\")\n        if file_name:\n            message += f\" at {file_name}\"\n        warnings.warn(message, stacklevel=1)\n    operation_ids.add(operation_id)\n    operation[\"operationId\"] = operation_id\n    if route.deprecated:\n        operation[\"deprecated\"] = route.deprecated\n    return operation",
+    "token_count": 242,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_operation_metadata"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 242
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:222-225",
+    "content": "# fastapi/openapi/utils.py:222-225  (fastapi.openapi.utils.generate_operation_summary)\ndef generate_operation_summary(*, route: routing.APIRoute, method: str) -> str:\n    if route.summary:\n        return route.summary\n    return route.name.replace(\"_\", \" \").title()",
+    "token_count": 65,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.generate_operation_summary"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:207-219",
+    "content": "# fastapi/openapi/utils.py:207-219  (fastapi.openapi.utils.generate_operation_id)\ndef generate_operation_id(\n    *, route: routing.APIRoute, method: str\n) -> str:  # pragma: nocover\n    warnings.warn(\n        \"fastapi.openapi.utils.generate_operation_id() was deprecated, \"\n        \"it is not used internally, and will be removed soon\",\n        DeprecationWarning,\n        stacklevel=2,\n    )\n    if route.operation_id:\n        return route.operation_id\n    path: str = route.path_format\n    return generate_operation_id_for_path(name=route.name, path=path, method=method)",
+    "token_count": 139,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.generate_operation_id"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 139
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:170-204",
+    "content": "# fastapi/openapi/utils.py:170-204  (fastapi.openapi.utils.get_openapi_operation_request_body)\ndef get_openapi_operation_request_body(\n    *,\n    body_field: Optional[ModelField],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Optional[Dict[str, Any]]:\n    if not body_field:\n        return None\n    assert isinstance(body_field, ModelField)\n    body_schema = get_schema_from_model_field(\n        field=body_field,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        field_mapping=field_mapping,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    field_info = cast(Body, body_field.field_info)\n    request_media_type = field_info.media_type\n    required = body_field.required\n    request_body_oai: Dict[str, Any] = {}\n    if required:\n        request_body_oai[\"required\"] = required\n    request_media_content: Dict[str, Any] = {\"schema\": body_schema}\n    if field_info.openapi_examples:\n        request_media_content[\"examples\"] = jsonable_encoder(\n            field_info.openapi_examples\n        )\n    elif field_info.example != Undefined:\n        request_media_content[\"example\"] = jsonable_encoder(field_info.example)\n    request_body_oai[\"content\"] = {request_media_type: request_media_content}\n    return request_body_oai",
+    "token_count": 332,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_operation_request_body"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 332
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:95-167",
+    "content": "# fastapi/openapi/utils.py:95-167  (fastapi.openapi.utils._get_openapi_operation_parameters)\ndef _get_openapi_operation_parameters(\n    *,\n    dependant: Dependant,\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> List[Dict[str, Any]]:\n    parameters = []\n    flat_dependant = get_flat_dependant(dependant, skip_repeats=True)\n    path_params = _get_flat_fields_from_params(flat_dependant.path_params)\n    query_params = _get_flat_fields_from_params(flat_dependant.query_params)\n    header_params = _get_flat_fields_from_params(flat_dependant.header_params)\n    cookie_params = _get_flat_fields_from_params(flat_dependant.cookie_params)\n    parameter_groups = [\n        (ParamTypes.path, path_params),\n        (ParamTypes.query, query_params),\n        (ParamTypes.header, header_params),\n        (ParamTypes.cookie, cookie_params),\n    ]\n    default_convert_underscores = True\n    if len(flat_dependant.header_params) == 1:\n        first_field = flat_dependant.header_params[0]\n        if lenient_issubclass(first_field.type_, BaseModel):\n            default_convert_underscores = getattr(\n                first_field.field_info, \"convert_underscores\", True\n            )\n    for param_type, param_group in parameter_groups:\n        for param in param_group:\n            field_info = param.field_info\n            # field_info = cast(Param, field_info)\n            if not getattr(field_info, \"include_in_schema\", True):\n                continue\n            param_schema = get_schema_from_model_field(\n                field=param,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            name = param.alias\n            convert_underscores = getattr(\n                param.field_info,\n                \"convert_underscores\",\n                default_convert_underscores,\n            )\n            if (\n                param_type == ParamTypes.header\n                and param.alias == param.name\n                and convert_underscores\n            ):\n                name = param.name.replace(\"_\", \"-\")\n\n            parameter = {\n                \"name\": name,\n                \"in\": param_type.value,\n                \"required\": param.required,\n                \"schema\": param_schema,\n            }\n            if field_info.description:\n                parameter[\"description\"] = field_info.description\n            openapi_examples = getattr(field_info, \"openapi_examples\", None)\n            example = getattr(field_info, \"example\", None)\n            if openapi_examples:\n                parameter[\"examples\"] = jsonable_encoder(openapi_examples)\n            elif example != Undefined:\n                parameter[\"example\"] = jsonable_encoder(example)\n            if getattr(field_info, \"deprecated\", None):\n                parameter[\"deprecated\"] = True\n            parameters.append(parameter)\n    return parameters",
+    "token_count": 635,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils._get_openapi_operation_parameters"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 635
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:78-92",
+    "content": "# fastapi/openapi/utils.py:78-92  (fastapi.openapi.utils.get_openapi_security_definitions)\ndef get_openapi_security_definitions(\n    flat_dependant: Dependant,\n) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:\n    security_definitions = {}\n    operation_security = []\n    for security_requirement in flat_dependant.security_requirements:\n        security_definition = jsonable_encoder(\n            security_requirement.security_scheme.model,\n            by_alias=True,\n            exclude_none=True,\n        )\n        security_name = security_requirement.security_scheme.scheme_name\n        security_definitions[security_name] = security_definition\n        operation_security.append({security_name: security_requirement.scopes})\n    return security_definitions, operation_security",
+    "token_count": 151,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.openapi.utils.get_openapi_security_definitions"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 151
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/openapi/utils.py:1-75",
+    "content": "# fastapi/openapi/utils.py:1-75  (fastapi.openapi.utils)\nimport http.client\nimport inspect\nimport warnings\nfrom typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union, cast\n\nfrom fastapi import routing\nfrom fastapi._compat import (\n    GenerateJsonSchema,\n    JsonSchemaValue,\n    ModelField,\n    Undefined,\n    get_compat_model_name_map,\n    get_definitions,\n    get_schema_from_model_field,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _get_flat_fields_from_params,\n    get_flat_dependant,\n    get_flat_params,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.openapi.constants import METHODS_WITH_BODY, REF_PREFIX, REF_TEMPLATE\nfrom fastapi.openapi.models import OpenAPI\nfrom fastapi.params import Body, ParamTypes\nfrom fastapi.responses import Response\nfrom fastapi.types import ModelNameMap\nfrom fastapi.utils import (\n    deep_dict_update,\n    generate_operation_id_for_path,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette.responses import JSONResponse\nfrom starlette.routing import BaseRoute\nfrom starlette.status import HTTP_422_UNPROCESSABLE_ENTITY\nfrom typing_extensions import Literal\n\nvalidation_error_definition = {\n    \"title\": \"ValidationError\",\n    \"type\": \"object\",\n    \"properties\": {\n        \"loc\": {\n            \"title\": \"Location\",\n            \"type\": \"array\",\n            \"items\": {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"integer\"}]},\n        },\n        \"msg\": {\"title\": \"Message\", \"type\": \"string\"},\n        \"type\": {\"title\": \"Error Type\", \"type\": \"string\"},\n    },\n    \"required\": [\"loc\", \"msg\", \"type\"],\n}\n\nvalidation_error_response_definition = {\n    \"title\": \"HTTPValidationError\",\n    \"type\": \"object\",\n    \"properties\": {\n        \"detail\": {\n            \"title\": \"Detail\",\n            \"type\": \"array\",\n            \"items\": {\"$ref\": REF_PREFIX + \"ValidationError\"},\n        }\n    },\n}\n\nstatus_code_ranges: Dict[str, str] = {\n    \"1XX\": \"Information\",\n    \"2XX\": \"Success\",\n    \"3XX\": \"Redirection\",\n    \"4XX\": \"Client Error\",\n    \"5XX\": \"Server Error\",\n    \"DEFAULT\": \"Default Response\",\n}",
+    "token_count": 528,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 528
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:212-219",
+    "content": "# fastapi/dependencies/utils.py:212-219  (fastapi.dependencies.utils._get_flat_fields_from_params)\ndef _get_flat_fields_from_params(fields: List[ModelField]) -> List[ModelField]:\n    if not fields:\n        return fields\n    first_field = fields[0]\n    if len(fields) == 1 and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n        return fields_to_extract\n    return fields",
+    "token_count": 108,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils._get_flat_fields_from_params"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "function",
+     "engine_token_count": 108
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_computed_fields.py:1-5",
+    "content": "# tests/test_computed_fields.py:1-5  (tests.test_computed_fields)\nimport pytest\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\nfrom .utils import needs_pydanticv2",
+    "token_count": 48,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "module_block",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/extending_openapi/tutorial001.py:12-26",
+    "content": "# docs_src/extending_openapi/tutorial001.py:12-26  (docs_src.extending_openapi.tutorial001.custom_openapi)\ndef custom_openapi():\n    if app.openapi_schema:\n        return app.openapi_schema\n    openapi_schema = get_openapi(\n        title=\"Custom title\",\n        version=\"2.5.0\",\n        summary=\"This is a very custom OpenAPI schema\",\n        description=\"Here's a longer description of the custom **OpenAPI** schema\",\n        routes=app.routes,\n    )\n    openapi_schema[\"info\"][\"x-logo\"] = {\n        \"url\": \"https://fastapi.tiangolo.com/img/logo-margin/logo-teal.png\"\n    }\n    app.openapi_schema = openapi_schema\n    return app.openapi_schema",
+    "token_count": 162,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.extending_openapi.tutorial001.custom_openapi"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "function",
+     "engine_token_count": 162
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/extending_openapi/tutorial001.py:1-4",
+    "content": "# docs_src/extending_openapi/tutorial001.py:1-4  (docs_src.extending_openapi.tutorial001)\nfrom fastapi import FastAPI\nfrom fastapi.openapi.utils import get_openapi\n\napp = FastAPI()",
+    "token_count": 52,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "module_block",
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_compat.py:1-18",
+    "content": "# tests/test_compat.py:1-18  (tests.test_compat)\nfrom typing import Any, Dict, List, Union\n\nfrom fastapi import FastAPI, UploadFile\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    get_cached_model_fields,\n    get_model_fields,\n    is_bytes_sequence_annotation,\n    is_scalar_field,\n    is_uploadfile_sequence_annotation,\n)\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseConfig, BaseModel, ConfigDict\nfrom pydantic.fields import FieldInfo\n\nfrom .utils import needs_pydanticv1, needs_pydanticv2",
+    "token_count": 135,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "module_block",
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/applications.py:966-996",
+    "content": "# fastapi/applications.py:966-996  (fastapi.applications.FastAPI.openapi)\nclass FastAPI(Starlette):\n    def openapi(self) -> Dict[str, Any]:\n        \"\"\"\n        Generate the OpenAPI schema of the application. This is called by FastAPI\n        internally.\n\n        The first time it is called it stores the result in the attribute\n        `app.openapi_schema`, and next times it is called, it just returns that same\n        result. To avoid the cost of generating the schema every time.\n\n        If you need to modify the generated OpenAPI schema, you could modify it.\n\n        Read more in the\n        [FastAPI docs for OpenAPI](https://fastapi.tiangolo.com/how-to/extending-openapi/).\n        \"\"\"\n        if not self.openapi_schema:\n            self.openapi_schema = get_openapi(\n                title=self.title,\n                version=self.version,\n                openapi_version=self.openapi_version,\n                summary=self.summary,\n                description=self.description,\n                terms_of_service=self.terms_of_service,\n                contact=self.contact,\n                license_info=self.license_info,\n                routes=self.routes,\n                webhooks=self.webhooks.routes,\n                tags=self.openapi_tags,\n                servers=self.servers,\n                separate_input_output_schemas=self.separate_input_output_schemas,\n            )\n        return self.openapi_schema",
+    "token_count": 276,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.applications.FastAPI.openapi"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "method",
+     "engine_token_count": 276
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:222-228",
+    "content": "# fastapi/dependencies/utils.py:222-228  (fastapi.dependencies.utils.get_flat_params)\ndef get_flat_params(dependant: Dependant) -> List[ModelField]:\n    flat_dependant = get_flat_dependant(dependant, skip_repeats=True)\n    path_params = _get_flat_fields_from_params(flat_dependant.path_params)\n    query_params = _get_flat_fields_from_params(flat_dependant.query_params)\n    header_params = _get_flat_fields_from_params(flat_dependant.header_params)\n    cookie_params = _get_flat_fields_from_params(flat_dependant.cookie_params)\n    return path_params + query_params + header_params + cookie_params",
+    "token_count": 139,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.get_flat_params"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "function",
+     "engine_token_count": 139
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_tutorial/test_body_fields/test_tutorial001.py:1-7",
+    "content": "# tests/test_tutorial/test_body_fields/test_tutorial001.py:1-7  (tests.test_tutorial.test_body_fields.test_tutorial001)\nimport importlib\n\nimport pytest\nfrom dirty_equals import IsDict\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_py39, needs_py310",
+    "token_count": 72,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "module_block",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:838-859",
+    "content": "# fastapi/dependencies/utils.py:838-859  (fastapi.dependencies.utils._should_embed_body_fields)\ndef _should_embed_body_fields(fields: List[ModelField]) -> bool:\n    if not fields:\n        return False\n    # More than one dependency could have the same field, it would show up as multiple\n    # fields but it's the same one, so count them by name\n    body_param_names_set = {field.name for field in fields}\n    # A top level field has to be a single field, not multiple\n    if len(body_param_names_set) > 1:\n        return True\n    first_field = fields[0]\n    # If it explicitly specifies it is embedded, it has to be embedded\n    if getattr(first_field.field_info, \"embed\", None):\n        return True\n    # If it's a Form (or File) field, it has to be a BaseModel (or a union of BaseModels) to be top level\n    # otherwise it has to be embedded, so that the key value pair can be extracted\n    if (\n        isinstance(first_field.field_info, params.Form)\n        and not lenient_issubclass(first_field.type_, BaseModel)\n        and not is_union_of_base_models(first_field.type_)\n    ):\n        return True\n    return False",
+    "token_count": 274,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils._should_embed_body_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "function",
+     "engine_token_count": 274
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:905-948",
+    "content": "# fastapi/dependencies/utils.py:905-948  (fastapi.dependencies.utils.request_body_to_args)\nasync def request_body_to_args(\n    body_fields: List[ModelField],\n    received_body: Optional[Union[Dict[str, Any], FormData]],\n    embed_body_fields: bool,\n) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:\n    values: Dict[str, Any] = {}\n    errors: List[Dict[str, Any]] = []\n    assert body_fields, \"request_body_to_args() should be called with fields\"\n    single_not_embedded_field = len(body_fields) == 1 and not embed_body_fields\n    first_field = body_fields[0]\n    body_to_process = received_body\n\n    fields_to_extract: List[ModelField] = body_fields\n\n    if single_not_embedded_field and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n\n    if isinstance(received_body, FormData):\n        body_to_process = await _extract_form_body(fields_to_extract, received_body)\n\n    if single_not_embedded_field:\n        loc: Tuple[str, ...] = (\"body\",)\n        v_, errors_ = _validate_value_with_model_field(\n            field=first_field, value=body_to_process, values=values, loc=loc\n        )\n        return {first_field.name: v_}, errors_\n    for field in body_fields:\n        loc = (\"body\", field.alias)\n        value: Optional[Any] = None\n        if body_to_process is not None:\n            try:\n                value = body_to_process.get(field.alias)\n            # If the received body is a list, not a dict\n            except AttributeError:\n                errors.append(get_missing_field_error(loc))\n                continue\n        v_, errors_ = _validate_value_with_model_field(\n            field=field, value=value, values=values, loc=loc\n        )\n        if errors_:\n            errors.extend(errors_)\n        else:\n            values[field.name] = v_\n    return values, errors",
+    "token_count": 433,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.request_body_to_args"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "function",
+     "engine_token_count": 433
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:42-56",
+    "content": "# fastapi/utils.py:42-56  (fastapi.utils.is_body_allowed_for_status_code)\ndef is_body_allowed_for_status_code(status_code: Union[int, str, None]) -> bool:\n    if status_code is None:\n        return True\n    # Ref: https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#patterned-fields-1\n    if status_code in {\n        \"default\",\n        \"1XX\",\n        \"2XX\",\n        \"3XX\",\n        \"4XX\",\n        \"5XX\",\n    }:\n        return True\n    current_status_code = int(status_code)\n    return not (current_status_code < 200 or current_status_code in {204, 205, 304})",
+    "token_count": 170,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.utils.is_body_allowed_for_status_code"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "function",
+     "engine_token_count": 170
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_tutorial/test_conditional_openapi/test_tutorial001.py:1-5",
+    "content": "# tests/test_tutorial/test_conditional_openapi/test_tutorial001.py:1-5  (tests.test_tutorial.test_conditional_openapi.test_tutorial001)\nimport importlib\n\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_pydanticv2",
+    "token_count": 62,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "module_block",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_openapi_separate_input_output_schemas.py:1-7",
+    "content": "# tests/test_openapi_separate_input_output_schemas.py:1-7  (tests.test_openapi_separate_input_output_schemas)\nfrom typing import List, Optional\n\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\nfrom .utils import PYDANTIC_V2, needs_pydanticv2",
+    "token_count": 76,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "module_block",
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/params.py:1-15",
+    "content": "# fastapi/params.py:1-15  (fastapi.params)\nimport warnings\nfrom enum import Enum\nfrom typing import Any, Callable, Dict, List, Optional, Sequence, Union\n\nfrom fastapi.openapi.models import Example\nfrom pydantic.fields import FieldInfo\nfrom typing_extensions import Annotated, deprecated\n\nfrom ._compat import (\n    PYDANTIC_V2,\n    PYDANTIC_VERSION_MINOR_TUPLE,\n    Undefined,\n)\n\n_Unset: Any = Undefined",
+    "token_count": 101,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "module_block",
+     "engine_token_count": 101
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:740-816",
+    "content": "# fastapi/dependencies/utils.py:740-816  (fastapi.dependencies.utils.request_params_to_args)\ndef request_params_to_args(\n    fields: Sequence[ModelField],\n    received_params: Union[Mapping[str, Any], QueryParams, Headers],\n) -> Tuple[Dict[str, Any], List[Any]]:\n    values: Dict[str, Any] = {}\n    errors: List[Dict[str, Any]] = []\n\n    if not fields:\n        return values, errors\n\n    first_field = fields[0]\n    fields_to_extract = fields\n    single_not_embedded_field = False\n    default_convert_underscores = True\n    if len(fields) == 1 and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n        single_not_embedded_field = True\n        # If headers are in a Pydantic model, the way to disable convert_underscores\n        # would be with Header(convert_underscores=False) at the Pydantic model level\n        default_convert_underscores = getattr(\n            first_field.field_info, \"convert_underscores\", True\n        )\n\n    params_to_process: Dict[str, Any] = {}\n\n    processed_keys = set()\n\n    for field in fields_to_extract:\n        alias = None\n        if isinstance(received_params, Headers):\n            # Handle fields extracted from a Pydantic Model for a header, each field\n            # doesn't have a FieldInfo of type Header with the default convert_underscores=True\n            convert_underscores = getattr(\n                field.field_info, \"convert_underscores\", default_convert_underscores\n            )\n            if convert_underscores:\n                alias = (\n                    field.alias\n                    if field.alias != field.name\n                    else field.name.replace(\"_\", \"-\")\n                )\n        value = _get_multidict_value(field, received_params, alias=alias)\n        if value is not None:\n            params_to_process[field.name] = value\n        processed_keys.add(alias or field.alias)\n        processed_keys.add(field.name)\n\n    for key, value in received_params.items():\n        if key not in processed_keys:\n            params_to_process[key] = value\n\n    if single_not_embedded_field:\n        field_info = first_field.field_info\n        assert isinstance(field_info, params.Param), (\n            \"Params must be subclasses of Param\"\n        )\n        loc: Tuple[str, ...] = (field_info.in_.value,)\n        v_, errors_ = _validate_value_with_model_field(\n            field=first_field, value=params_to_process, values=values, loc=loc\n        )\n        return {first_field.name: v_}, errors_\n\n    for field in fields:\n        value = _get_multidict_value(field, received_params)\n        field_info = field.field_info\n        assert isinstance(field_info, params.Param), (\n            \"Params must be subclasses of Param\"\n        )\n        loc = (field_info.in_.value, field.alias)\n        v_, errors_ = _validate_value_with_model_field(\n            field=field, value=value, values=values, loc=loc\n        )\n        if errors_:\n            errors.extend(errors_)\n        else:\n            values[field.name] = v_\n    return values, errors",
+    "token_count": 679,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.request_params_to_args"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "function",
+     "engine_token_count": 679
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/utils.py:1-39",
+    "content": "# fastapi/utils.py:1-39  (fastapi.utils)\nimport re\nimport warnings\nfrom dataclasses import is_dataclass\nfrom typing import (\n    TYPE_CHECKING,\n    Any,\n    Dict,\n    MutableMapping,\n    Optional,\n    Set,\n    Type,\n    Union,\n    cast,\n)\nfrom weakref import WeakKeyDictionary\n\nimport fastapi\nfrom fastapi._compat import (\n    PYDANTIC_V2,\n    BaseConfig,\n    ModelField,\n    PydanticSchemaGenerationError,\n    Undefined,\n    UndefinedType,\n    Validator,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import DefaultPlaceholder, DefaultType\nfrom pydantic import BaseModel, create_model\nfrom pydantic.fields import FieldInfo\nfrom typing_extensions import Literal\n\nif TYPE_CHECKING:  # pragma: nocover\n    from .routing import APIRoute\n\n# Cache for `create_cloned_field`\n_CLONED_TYPES_CACHE: MutableMapping[Type[BaseModel], Type[BaseModel]] = (\n    WeakKeyDictionary()\n)",
+    "token_count": 220,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "module_block",
+     "engine_token_count": 220
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_tutorial/test_separate_openapi_schemas/test_tutorial001.py:1-6",
+    "content": "# tests/test_tutorial/test_separate_openapi_schemas/test_tutorial001.py:1-6  (tests.test_tutorial.test_separate_openapi_schemas.test_tutorial001)\nimport importlib\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_py39, needs_py310, needs_pydanticv2",
+    "token_count": 80,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "module_block",
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_tutorial/test_separate_openapi_schemas/test_tutorial002.py:1-6",
+    "content": "# tests/test_tutorial/test_separate_openapi_schemas/test_tutorial002.py:1-6  (tests.test_tutorial.test_separate_openapi_schemas.test_tutorial002)\nimport importlib\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_py39, needs_py310, needs_pydanticv2",
+    "token_count": 80,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "module_block",
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/http.py:1-13",
+    "content": "# fastapi/security/http.py:1-13  (fastapi.security.http)\nimport binascii\nfrom base64 import b64decode\nfrom typing import Optional\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import HTTPBase as HTTPBaseModel\nfrom fastapi.openapi.models import HTTPBearer as HTTPBearerModel\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom pydantic import BaseModel\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\nfrom typing_extensions import Annotated, Doc",
+    "token_count": 136,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "module_block",
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/applications.py:1-45",
+    "content": "# fastapi/applications.py:1-45  (fastapi.applications)\nfrom enum import Enum\nfrom typing import (\n    Any,\n    Awaitable,\n    Callable,\n    Coroutine,\n    Dict,\n    List,\n    Optional,\n    Sequence,\n    Type,\n    TypeVar,\n    Union,\n)\n\nfrom fastapi import routing\nfrom fastapi.datastructures import Default, DefaultPlaceholder\nfrom fastapi.exception_handlers import (\n    http_exception_handler,\n    request_validation_exception_handler,\n    websocket_request_validation_exception_handler,\n)\nfrom fastapi.exceptions import RequestValidationError, WebSocketRequestValidationError\nfrom fastapi.logger import logger\nfrom fastapi.openapi.docs import (\n    get_redoc_html,\n    get_swagger_ui_html,\n    get_swagger_ui_oauth2_redirect_html,\n)\nfrom fastapi.openapi.utils import get_openapi\nfrom fastapi.params import Depends\nfrom fastapi.types import DecoratedCallable, IncEx\nfrom fastapi.utils import generate_unique_id\nfrom starlette.applications import Starlette\nfrom starlette.datastructures import State\nfrom starlette.exceptions import HTTPException\nfrom starlette.middleware import Middleware\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom starlette.requests import Request\nfrom starlette.responses import HTMLResponse, JSONResponse, Response\nfrom starlette.routing import BaseRoute\nfrom starlette.types import ASGIApp, Lifespan, Receive, Scope, Send\nfrom typing_extensions import Annotated, Doc, deprecated\n\nAppType = TypeVar(\"AppType\", bound=\"FastAPI\")",
+    "token_count": 308,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "module_block",
+     "engine_token_count": 308
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/oauth2.py:1-13",
+    "content": "# fastapi/security/oauth2.py:1-13  (fastapi.security.oauth2)\nfrom typing import Any, Dict, List, Optional, Union, cast\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import OAuth2 as OAuth2Model\nfrom fastapi.openapi.models import OAuthFlows as OAuthFlowsModel\nfrom fastapi.param_functions import Form\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\n\n# TODO: import from typing when deprecating Python 3.9\nfrom typing_extensions import Annotated, Doc",
+    "token_count": 153,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "module_block",
+     "engine_token_count": 153
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_extra_routes.py:1-9",
+    "content": "# tests/test_extra_routes.py:1-9  (tests.test_extra_routes)\nfrom typing import Optional\n\nfrom dirty_equals import IsDict\nfrom fastapi import FastAPI\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()",
+    "token_count": 65,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "module_block",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_custom_route_class.py:64-71",
+    "content": "# tests/test_custom_route_class.py:64-71  (tests.test_custom_route_class.test_route_classes)\ndef test_route_classes():\n    routes = {}\n    for r in app.router.routes:\n        assert isinstance(r, Route)\n        routes[r.path] = r\n    assert getattr(routes[\"/a/\"], \"x_type\") == \"A\"  # noqa: B009\n    assert getattr(routes[\"/a/b/\"], \"x_type\") == \"B\"  # noqa: B009\n    assert getattr(routes[\"/a/b/c/\"], \"x_type\") == \"C\"  # noqa: B009",
+    "token_count": 136,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_custom_route_class.test_route_classes"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "function",
+     "engine_token_count": 136
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_tutorial/test_openapi_webhooks/test_tutorial001.py:14-16",
+    "content": "# tests/test_tutorial/test_openapi_webhooks/test_tutorial001.py:14-16  (tests.test_tutorial.test_openapi_webhooks.test_tutorial001.test_dummy_webhook)\ndef test_dummy_webhook():\n    # Just for coverage\n    app.webhooks.routes[0].endpoint({})",
+    "token_count": 68,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_tutorial.test_openapi_webhooks.test_tutorial001.test_dummy_webhook"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "full",
+     "bm25_rank": 24,
+     "chunk_kind": "function",
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:662-695#part2of2",
+    "content": "# fastapi/dependencies/utils.py:662-695#part2of2  (fastapi.dependencies.utils.solve_dependencies)\nasync def solve_dependencies(\n    *,\n    request: Union[Request, WebSocket],\n    dependant: Dependant,\n    body: Optional[Union[Dict[str, Any], FormData]] = None,\n    background_tasks: Optional[StarletteBackgroundTasks] = None,\n    response: Optional[Response] = None,\n    dependency_overrides_provider: Optional[Any] = None,\n    dependency_cache: Optional[Dict[Tuple[Callable[..., Any], Tuple[str]], Any]] = None,\n    async_exit_stack: AsyncExitStack,\n    embed_body_fields: bool,\n) -> SolvedDependency:\n    if dependant.body_params:\n        (\n            body_values,\n            body_errors,\n        ) = await request_body_to_args(  # body_params checked above\n            body_fields=dependant.body_params,\n            received_body=body,\n            embed_body_fields=embed_body_fields,\n        )\n        values.update(body_values)\n        errors.extend(body_errors)\n    if dependant.http_connection_param_name:\n        values[dependant.http_connection_param_name] = request\n    if dependant.request_param_name and isinstance(request, Request):\n        values[dependant.request_param_name] = request\n    elif dependant.websocket_param_name and isinstance(request, WebSocket):\n        values[dependant.websocket_param_name] = request\n    if dependant.background_tasks_param_name:\n        if background_tasks is None:\n            background_tasks = BackgroundTasks()\n        values[dependant.background_tasks_param_name] = background_tasks\n    if dependant.response_param_name:\n        values[dependant.response_param_name] = response\n    if dependant.security_scopes_param_name:\n        values[dependant.security_scopes_param_name] = SecurityScopes(\n            scopes=dependant.security_scopes\n        )\n    return SolvedDependency(\n        values=values,\n        errors=errors,\n        background_tasks=background_tasks,\n        response=response,\n        dependency_cache=dependency_cache,\n    )",
+    "token_count": 422,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.solve_dependencies"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "full",
+     "bm25_rank": 25,
+     "chunk_kind": "function_part",
+     "engine_token_count": 422
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:514-527",
+    "content": "# fastapi/dependencies/utils.py:514-527  (fastapi.dependencies.utils.add_param_to_fields)\ndef add_param_to_fields(*, field: ModelField, dependant: Dependant) -> None:\n    field_info = field.field_info\n    field_info_in = getattr(field_info, \"in_\", None)\n    if field_info_in == params.ParamTypes.path:\n        dependant.path_params.append(field)\n    elif field_info_in == params.ParamTypes.query:\n        dependant.query_params.append(field)\n    elif field_info_in == params.ParamTypes.header:\n        dependant.header_params.append(field)\n    else:\n        assert field_info_in == params.ParamTypes.cookie, (\n            f\"non-body parameters must be in path, query, header or cookie: {field.name}\"\n        )\n        dependant.cookie_params.append(field)",
+    "token_count": 172,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils.add_param_to_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "full",
+     "bm25_rank": 26,
+     "chunk_kind": "function",
+     "engine_token_count": 172
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/body_fields/tutorial001.py:1-6",
+    "content": "# docs_src/body_fields/tutorial001.py:1-6  (docs_src.body_fields.tutorial001)\nfrom typing import Union\n\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()",
+    "token_count": 54,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "full",
+     "bm25_rank": 27,
+     "chunk_kind": "module_block",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/security/utils.py:1-1",
+    "content": "# fastapi/security/utils.py:1-1  (fastapi.security.utils)\nfrom typing import Optional, Tuple",
+    "token_count": 23,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "full",
+     "bm25_rank": 28,
+     "chunk_kind": "module_block",
+     "engine_token_count": 23
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_custom_schema_fields.py:1-6",
+    "content": "# tests/test_custom_schema_fields.py:1-6  (tests.test_custom_schema_fields)\nfrom fastapi import FastAPI\nfrom fastapi._compat import PYDANTIC_V2\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()",
+    "token_count": 60,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "full",
+     "bm25_rank": 29,
+     "chunk_kind": "module_block",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/path_operation_advanced_configuration/tutorial002.py:12-21",
+    "content": "# docs_src/path_operation_advanced_configuration/tutorial002.py:12-21  (docs_src.path_operation_advanced_configuration.tutorial002.use_route_names_as_operation_ids)\ndef use_route_names_as_operation_ids(app: FastAPI) -> None:\n    \"\"\"\n    Simplify operation IDs so that generated API clients have simpler function\n    names.\n\n    Should be called only after all routes have been added.\n    \"\"\"\n    for route in app.routes:\n        if isinstance(route, APIRoute):\n            route.operation_id = route.name  # in this case, 'read_items'",
+    "token_count": 118,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "docs_src.path_operation_advanced_configuration.tutorial002.use_route_names_as_operation_ids"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "full",
+     "bm25_rank": 30,
+     "chunk_kind": "function",
+     "engine_token_count": 118
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/body_fields/tutorial001_py310.py:1-4",
+    "content": "# docs_src/body_fields/tutorial001_py310.py:1-4  (docs_src.body_fields.tutorial001_py310)\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()",
+    "token_count": 57,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "full",
+     "bm25_rank": 31,
+     "chunk_kind": "module_block",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/body_fields/tutorial001_an_py310.py:1-6",
+    "content": "# docs_src/body_fields/tutorial001_an_py310.py:1-6  (docs_src.body_fields.tutorial001_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()",
+    "token_count": 65,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "full",
+     "bm25_rank": 32,
+     "chunk_kind": "module_block",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/_compat.py:662-664",
+    "content": "# fastapi/_compat.py:662-664  (fastapi._compat.get_cached_model_fields)\n@lru_cache\ndef get_cached_model_fields(model: Type[BaseModel]) -> List[ModelField]:\n    return get_model_fields(model)",
+    "token_count": 55,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi._compat.get_cached_model_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "full",
+     "bm25_rank": 33,
+     "chunk_kind": "function",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_compat.py:108-120",
+    "content": "# tests/test_compat.py:108-120  (tests.test_compat.test_get_model_fields_cached)\ndef test_get_model_fields_cached():\n    class Model(BaseModel):\n        foo: str\n\n    non_cached_fields = get_model_fields(Model)\n    non_cached_fields2 = get_model_fields(Model)\n    cached_fields = get_cached_model_fields(Model)\n    cached_fields2 = get_cached_model_fields(Model)\n    for f1, f2 in zip(cached_fields, cached_fields2):\n        assert f1 is f2\n\n    assert non_cached_fields is not non_cached_fields2\n    assert cached_fields is cached_fields2",
+    "token_count": 129,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_compat.test_get_model_fields_cached"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "full",
+     "bm25_rank": 34,
+     "chunk_kind": "function",
+     "engine_token_count": 129
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/body_fields/tutorial001_an_py39.py:1-6",
+    "content": "# docs_src/body_fields/tutorial001_an_py39.py:1-6  (docs_src.body_fields.tutorial001_an_py39)\nfrom typing import Annotated, Union\n\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()",
+    "token_count": 65,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "full",
+     "bm25_rank": 35,
+     "chunk_kind": "module_block",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "docs_src/body_fields/tutorial001_an.py:1-7",
+    "content": "# docs_src/body_fields/tutorial001_an.py:1-7  (docs_src.body_fields.tutorial001_an)\nfrom typing import Union\n\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\nfrom typing_extensions import Annotated\n\napp = FastAPI()",
+    "token_count": 63,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "full",
+     "bm25_rank": 36,
+     "chunk_kind": "module_block",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_typing_python39.py:1-4",
+    "content": "# tests/test_typing_python39.py:1-4  (tests.test_typing_python39)\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\nfrom .utils import needs_py310",
+    "token_count": 48,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "full",
+     "bm25_rank": 37,
+     "chunk_kind": "module_block",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/dependencies/utils.py:862-902",
+    "content": "# fastapi/dependencies/utils.py:862-902  (fastapi.dependencies.utils._extract_form_body)\nasync def _extract_form_body(\n    body_fields: List[ModelField],\n    received_body: FormData,\n) -> Dict[str, Any]:\n    values = {}\n    first_field = body_fields[0]\n    first_field_info = first_field.field_info\n\n    for field in body_fields:\n        value = _get_multidict_value(field, received_body)\n        if (\n            isinstance(first_field_info, params.File)\n            and is_bytes_field(field)\n            and isinstance(value, UploadFile)\n        ):\n            value = await value.read()\n        elif (\n            is_bytes_sequence_field(field)\n            and isinstance(first_field_info, params.File)\n            and value_is_sequence(value)\n        ):\n            # For types\n            assert isinstance(value, sequence_types)  # type: ignore[arg-type]\n            results: List[Union[bytes, str]] = []\n\n            async def process_fn(\n                fn: Callable[[], Coroutine[Any, Any, Any]],\n            ) -> None:\n                result = await fn()\n                results.append(result)  # noqa: B023\n\n            async with anyio.create_task_group() as tg:\n                for sub_value in value:\n                    tg.start_soon(process_fn, sub_value.read)\n            value = serialize_sequence_value(field=field, value=results)\n        if value is not None:\n            values[field.alias] = value\n    for key, value in received_body.items():\n        if key not in values:\n            values[key] = value\n    return values",
+    "token_count": 329,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.dependencies.utils._extract_form_body"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "full",
+     "bm25_rank": 38,
+     "chunk_kind": "function",
+     "engine_token_count": 329
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/encoders.py:243-263#part3of6",
+    "content": "# fastapi/encoders.py:243-263#part3of6  (fastapi.encoders.jsonable_encoder)\ndef jsonable_encoder(\n    obj: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            The input object to convert to JSON.\n            \"\"\"\n        ),\n    ],\n    include: Annotated[\n        Optional[IncEx],\n        Doc(\n            \"\"\"\n            Pydantic's `include` parameter, passed to Pydantic models to set the\n            fields to include.\n            \"\"\"\n        ),\n    ] = None,\n    exclude: Annotated[\n        Optional[IncEx],\n        Doc(\n            \"\"\"\n            Pydantic's `exclude` parameter, passed to Pydantic models to set the\n            fields to exclude.\n            \"\"\"\n        ),\n    ] = None,\n    by_alias: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `by_alias` parameter, passed to Pydantic models to define if\n            the output should use the alias names (when provided) or the Python\n            attribute names. In an API, if you set an alias, it's probably because you\n            want to use it in the result, so you probably want to leave this set to\n            `True`.\n            \"\"\"\n        ),\n    ] = True,\n    exclude_unset: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_unset` parameter, passed to Pydantic models to define\n            if it should exclude from the output the fields that were not explicitly\n            set (and that only had their default values).\n            \"\"\"\n        ),\n    ] = False,\n    exclude_defaults: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_defaults` parameter, passed to Pydantic models to define\n            if it should exclude from the output the fields that had the same default\n            value, even when they were explicitly set.\n            \"\"\"\n        ),\n    ] = False,\n    exclude_none: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_none` parameter, passed to Pydantic models to define\n            if it should exclude from the output any fields that have a `None` value.\n            \"\"\"\n        ),\n    ] = False,\n    custom_encoder: Annotated[\n        Optional[Dict[Any, Callable[[Any], Any]]],\n        Doc(\n            \"\"\"\n            Pydantic's `custom_encoder` parameter, passed to Pydantic models to define\n            a custom encoder.\n            \"\"\"\n        ),\n    ] = None,\n    sqlalchemy_safe: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Exclude from the output any fields that start with the name `_sa`.\n\n            This is mainly a hack for compatibility with SQLAlchemy objects, they\n            store internal SQLAlchemy-specific state in attributes named with `_sa`,\n            and those objects can't (and shouldn't be) serialized to JSON.\n            \"\"\"\n        ),\n    ] = True,\n) -> Any:\n    if dataclasses.is_dataclass(obj):\n        obj_dict = dataclasses.asdict(obj)\n        return jsonable_encoder(\n            obj_dict,\n            include=include,\n            exclude=exclude,\n            by_alias=by_alias,\n            exclude_unset=exclude_unset,\n            exclude_defaults=exclude_defaults,\n            exclude_none=exclude_none,\n            custom_encoder=custom_encoder,\n            sqlalchemy_safe=sqlalchemy_safe,\n        )\n    if isinstance(obj, Enum):\n        return obj.value\n    if isinstance(obj, PurePath):\n        return str(obj)\n    if isinstance(obj, (str, int, float, type(None))):\n        return obj\n    if isinstance(obj, UndefinedType):\n        return None",
+    "token_count": 756,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.encoders.jsonable_encoder"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "full",
+     "bm25_rank": 39,
+     "chunk_kind": "function_part",
+     "engine_token_count": 756
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/encoders.py:192-215#part1of6",
+    "content": "# fastapi/encoders.py:192-215#part1of6  (fastapi.encoders.jsonable_encoder)\ndef jsonable_encoder(\n    obj: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            The input object to convert to JSON.\n            \"\"\"\n        ),\n    ],\n    include: Annotated[\n        Optional[IncEx],\n        Doc(\n            \"\"\"\n            Pydantic's `include` parameter, passed to Pydantic models to set the\n            fields to include.\n            \"\"\"\n        ),\n    ] = None,\n    exclude: Annotated[\n        Optional[IncEx],\n        Doc(\n            \"\"\"\n            Pydantic's `exclude` parameter, passed to Pydantic models to set the\n            fields to exclude.\n            \"\"\"\n        ),\n    ] = None,\n    by_alias: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `by_alias` parameter, passed to Pydantic models to define if\n            the output should use the alias names (when provided) or the Python\n            attribute names. In an API, if you set an alias, it's probably because you\n            want to use it in the result, so you probably want to leave this set to\n            `True`.\n            \"\"\"\n        ),\n    ] = True,\n    exclude_unset: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_unset` parameter, passed to Pydantic models to define\n            if it should exclude from the output the fields that were not explicitly\n            set (and that only had their default values).\n            \"\"\"\n        ),\n    ] = False,\n    exclude_defaults: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_defaults` parameter, passed to Pydantic models to define\n            if it should exclude from the output the fields that had the same default\n            value, even when they were explicitly set.\n            \"\"\"\n        ),\n    ] = False,\n    exclude_none: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_none` parameter, passed to Pydantic models to define\n            if it should exclude from the output any fields that have a `None` value.\n            \"\"\"\n        ),\n    ] = False,\n    custom_encoder: Annotated[\n        Optional[Dict[Any, Callable[[Any], Any]]],\n        Doc(\n            \"\"\"\n            Pydantic's `custom_encoder` parameter, passed to Pydantic models to define\n            a custom encoder.\n            \"\"\"\n        ),\n    ] = None,\n    sqlalchemy_safe: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Exclude from the output any fields that start with the name `_sa`.\n\n            This is mainly a hack for compatibility with SQLAlchemy objects, they\n            store internal SQLAlchemy-specific state in attributes named with `_sa`,\n            and those objects can't (and shouldn't be) serialized to JSON.\n            \"\"\"\n        ),\n    ] = True,\n) -> Any:\n    \"\"\"\n    Convert any object to something that can be encoded in JSON.\n\n    This is used internally by FastAPI to make sure anything you return can be\n    encoded as JSON before it is sent to the client.\n\n    You can also use it yourself, for example to convert objects before saving them\n    in a database that supports only JSON.\n\n    Read more about it in the\n    [FastAPI docs for JSON Compatible Encoder](https://fastapi.tiangolo.com/tutorial/encoder/).\n    \"\"\"\n    custom_encoder = custom_encoder or {}\n    if custom_encoder:\n        if type(obj) in custom_encoder:\n            return custom_encoder[type(obj)](obj)\n        else:\n            for encoder_type, encoder_instance in custom_encoder.items():\n                if isinstance(obj, encoder_type):\n                    return encoder_instance(obj)\n    if include is not None and not isinstance(include, (set, dict)):\n        include = set(include)\n    if exclude is not None and not isinstance(exclude, (set, dict)):\n        exclude = set(exclude)",
+    "token_count": 827,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [
+     "fastapi.encoders.jsonable_encoder"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "full",
+     "bm25_rank": 40,
+     "chunk_kind": "function_part",
+     "engine_token_count": 827
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "fastapi/routing.py:1-77",
+    "content": "# fastapi/routing.py:1-77  (fastapi.routing)\nimport asyncio\nimport dataclasses\nimport email.message\nimport inspect\nimport json\nfrom contextlib import AsyncExitStack, asynccontextmanager\nfrom enum import Enum, IntEnum\nfrom typing import (\n    Any,\n    AsyncIterator,\n    Callable,\n    Collection,\n    Coroutine,\n    Dict,\n    List,\n    Mapping,\n    Optional,\n    Sequence,\n    Set,\n    Tuple,\n    Type,\n    Union,\n)\n\nfrom fastapi import params\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    _model_dump,\n    _normalize_errors,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import Default, DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _should_embed_body_fields,\n    get_body_field,\n    get_dependant,\n    get_flat_dependant,\n    get_parameterless_sub_dependant,\n    get_typed_return_annotation,\n    solve_dependencies,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.exceptions import (\n    FastAPIError,\n    RequestValidationError,\n    ResponseValidationError,\n    WebSocketRequestValidationError,\n)\nfrom fastapi.types import DecoratedCallable, IncEx\nfrom fastapi.utils import (\n    create_cloned_field,\n    create_model_field,\n    generate_unique_id,\n    get_value_or_default,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette import routing\nfrom starlette.concurrency import run_in_threadpool\nfrom starlette.exceptions import HTTPException\nfrom starlette.requests import Request\nfrom starlette.responses import JSONResponse, Response\nfrom starlette.routing import (\n    BaseRoute,\n    Match,\n    compile_path,\n    get_name,\n    request_response,\n    websocket_session,\n)\nfrom starlette.routing import Mount as Mount  # noqa\nfrom starlette.types import AppType, ASGIApp, Lifespan, Scope\nfrom starlette.websockets import WebSocket\nfrom typing_extensions import Annotated, Doc, deprecated",
+    "token_count": 428,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "full",
+     "bm25_rank": 41,
+     "chunk_kind": "module_block",
+     "engine_token_count": 428
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12947,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "What breaks if `fastapi.openapi.utils.get_fields_from_routes` changes?",
+   "task_type": "T5_blast_radius",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "fastapi/openapi/utils.py",
+   "cutoff": 90,
+   "n_components": 63,
+   "n_full": 54,
+   "n_stub": 0,
+   "n_dropped": 9,
+   "packed_tokens": 12947,
+   "latency_ms": {
+    "L_priority_sort": [
+     27.547301
+    ],
+    "L_binary_search_tokenize": [
+     0.300844
+    ],
+    "L_retrieve": [
+     28.210222
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12947,
+   "prompt_tokens": 13120,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13133,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# fastapi/openapi/utils.py:446-474  (fastapi.openapi.utils.get_fields_from_routes)\ndef get_fields_from_routes(\n    routes: Sequence[BaseRoute],\n) -> List[ModelField]:\n    body_fields_from_routes: List[ModelField] = []\n    responses_from_routes: List[ModelField] = []\n    request_fields_from_routes: List[ModelField] = []\n    callback_flat_models: List[ModelField] = []\n    for route in routes:\n        if getattr(route, \"include_in_schema\", None) and isinstance(\n            route, routing.APIRoute\n        ):\n            if route.body_field:\n                assert isinstance(route.body_field, ModelField), (\n                    \"A request body must be a Pydantic Field\"\n                )\n                body_fields_from_routes.append(route.body_field)\n            if route.response_field:\n                responses_from_routes.append(route.response_field)\n            if route.response_fields:\n                responses_from_routes.extend(route.response_fields.values())\n            if route.callbacks:\n                callback_flat_models.extend(get_fields_from_routes(route.callbacks))\n            params = get_flat_params(route.dependant)\n            request_fields_from_routes.extend(params)\n\n    flat_models = callback_flat_models + list(\n        body_fields_from_routes + responses_from_routes + request_fields_from_routes\n    )\n    return flat_models\n\n# fastapi/openapi/utils.py:443-443#part3of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    return path, security_schemes, definitions\n\n# fastapi/openapi/utils.py:493-568#part1of2  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    info: Dict[str, Any] = {\"title\": title, \"version\": version}\n    if summary:\n        info[\"summary\"] = summary\n    if description:\n        info[\"description\"] = description\n    if terms_of_service:\n        info[\"termsOfService\"] = terms_of_service\n    if contact:\n        info[\"contact\"] = contact\n    if license_info:\n        info[\"license\"] = license_info\n    output: Dict[str, Any] = {\"openapi\": openapi_version, \"info\": info}\n    if servers:\n        output[\"servers\"] = servers\n    components: Dict[str, Dict[str, Any]] = {}\n    paths: Dict[str, Dict[str, Any]] = {}\n    webhook_paths: Dict[str, Dict[str, Any]] = {}\n    operation_ids: Set[str] = set()\n    all_fields = get_fields_from_routes(list(routes or []) + list(webhooks or []))\n    model_name_map = get_compat_model_name_map(all_fields)\n    schema_generator = GenerateJsonSchema(ref_template=REF_TEMPLATE)\n    field_mapping, definitions = get_definitions(\n        fields=all_fields,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    for route in routes or []:\n        if isinstance(route, routing.APIRoute):\n            result = get_openapi_path(\n                route=route,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    paths.setdefault(route.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    for webhook in webhooks or []:\n        if isinstance(webhook, routing.APIRoute):\n            result = get_openapi_path(\n                route=webhook,\n                operation_ids=operation_ids,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            if result:\n                path, security_schemes, path_definitions = result\n                if path:\n                    webhook_paths.setdefault(webhook.path_format, {}).update(path)\n                if security_schemes:\n                    components.setdefault(\"securitySchemes\", {}).update(\n                        security_schemes\n                    )\n                if path_definitions:\n                    definitions.update(path_definitions)\n    if definitions:\n        components[\"schemas\"] = {k: definitions[k] for k in sorted(definitions)}\n    if components:\n        output[\"components\"] = components\n    output[\"paths\"] = paths\n    if webhook_paths:\n        output[\"webhooks\"] = webhook_paths\n    if tags:\n        output[\"tags\"] = tags\n\n# fastapi/openapi/utils.py:275-442#part2of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    if route.include_in_schema:\n        for method in route.methods:\n            operation = get_openapi_operation_metadata(\n                route=route, method=method, operation_ids=operation_ids\n            )\n            parameters: List[Dict[str, Any]] = []\n            flat_dependant = get_flat_dependant(route.dependant, skip_repeats=True)\n            security_definitions, operation_security = get_openapi_security_definitions(\n                flat_dependant=flat_dependant\n            )\n            if operation_security:\n                operation.setdefault(\"security\", []).extend(operation_security)\n            if security_definitions:\n                security_schemes.update(security_definitions)\n            operation_parameters = _get_openapi_operation_parameters(\n                dependant=route.dependant,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            parameters.extend(operation_parameters)\n            if parameters:\n                all_parameters = {\n                    (param[\"in\"], param[\"name\"]): param for param in parameters\n                }\n                required_parameters = {\n                    (param[\"in\"], param[\"name\"]): param\n                    for param in parameters\n                    if param.get(\"required\")\n                }\n                # Make sure required definitions of the same parameter take precedence\n                # over non-required definitions\n                all_parameters.update(required_parameters)\n                operation[\"parameters\"] = list(all_parameters.values())\n            if method in METHODS_WITH_BODY:\n                request_body_oai = get_openapi_operation_request_body(\n                    body_field=route.body_field,\n                    schema_generator=schema_generator,\n                    model_name_map=model_name_map,\n                    field_mapping=field_mapping,\n                    separate_input_output_schemas=separate_input_output_schemas,\n                )\n                if request_body_oai:\n                    operation[\"requestBody\"] = request_body_oai\n            if route.callbacks:\n                callbacks = {}\n                for callback in route.callbacks:\n                    if isinstance(callback, routing.APIRoute):\n                        (\n                            cb_path,\n                            cb_security_schemes,\n                            cb_definitions,\n                        ) = get_openapi_path(\n                            route=callback,\n                            operation_ids=operation_ids,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                        callbacks[callback.name] = {callback.path: cb_path}\n                operation[\"callbacks\"] = callbacks\n            if route.status_code is not None:\n                status_code = str(route.status_code)\n            else:\n                # It would probably make more sense for all response classes to have an\n                # explicit default status_code, and to extract it from them, instead of\n                # doing this inspection tricks, that would probably be in the future\n                # TODO: probably make status_code a default class attribute for all\n                # responses in Starlette\n                response_signature = inspect.signature(current_response_class.__init__)\n                status_code_param = response_signature.parameters.get(\"status_code\")\n                if status_code_param is not None:\n                    if isinstance(status_code_param.default, int):\n                        status_code = str(status_code_param.default)\n            operation.setdefault(\"responses\", {}).setdefault(status_code, {})[\n                \"description\"\n            ] = route.response_description\n            if route_response_media_type and is_body_allowed_for_status_code(\n                route.status_code\n            ):\n                response_schema = {\"type\": \"string\"}\n                if lenient_issubclass(current_response_class, JSONResponse):\n                    if route.response_field:\n                        response_schema = get_schema_from_model_field(\n                            field=route.response_field,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                    else:\n                        response_schema = {}\n                operation.setdefault(\"responses\", {}).setdefault(\n                    status_code, {}\n                ).setdefault(\"content\", {}).setdefault(route_response_media_type, {})[\n                    \"schema\"\n                ] = response_schema\n            if route.responses:\n                operation_responses = operation.setdefault(\"responses\", {})\n                for (\n                    additional_status_code,\n                    additional_response,\n                ) in route.responses.items():\n                    process_response = additional_response.copy()\n                    process_response.pop(\"model\", None)\n                    status_code_key = str(additional_status_code).upper()\n                    if status_code_key == \"DEFAULT\":\n                        status_code_key = \"default\"\n                    openapi_response = operation_responses.setdefault(\n                        status_code_key, {}\n                    )\n                    assert isinstance(process_response, dict), (\n                        \"An additional response must be a dict\"\n                    )\n                    field = route.response_fields.get(additional_status_code)\n                    additional_field_schema: Optional[Dict[str, Any]] = None\n                    if field:\n                        additional_field_schema = get_schema_from_model_field(\n                            field=field,\n                            schema_generator=schema_generator,\n                            model_name_map=model_name_map,\n                            field_mapping=field_mapping,\n                            separate_input_output_schemas=separate_input_output_schemas,\n                        )\n                        media_type = route_response_media_type or \"application/json\"\n                        additional_schema = (\n                            process_response.setdefault(\"content\", {})\n                            .setdefault(media_type, {})\n                            .setdefault(\"schema\", {})\n                        )\n                        deep_dict_update(additional_schema, additional_field_schema)\n                    status_text: Optional[str] = status_code_ranges.get(\n                        str(additional_status_code).upper()\n                    ) or http.client.responses.get(int(additional_status_code))\n                    description = (\n                        process_response.get(\"description\")\n                        or openapi_response.get(\"description\")\n                        or status_text\n                        or \"Additional Response\"\n                    )\n                    deep_dict_update(openapi_response, process_response)\n                    openapi_response[\"description\"] = description\n            http422 = str(HTTP_422_UNPROCESSABLE_ENTITY)\n            all_route_params = get_flat_params(route.dependant)\n            if (all_route_params or route.body_field) and not any(\n                status in operation[\"responses\"]\n                for status in [http422, \"4XX\", \"default\"]\n            ):\n                operation[\"responses\"][http422] = {\n                    \"description\": \"Validation Error\",\n                    \"content\": {\n                        \"application/json\": {\n                            \"schema\": {\"$ref\": REF_PREFIX + \"HTTPValidationError\"}\n                        }\n                    },\n                }\n                if \"ValidationError\" not in definitions:\n                    definitions.update(\n                        {\n                            \"ValidationError\": validation_error_definition,\n                            \"HTTPValidationError\": validation_error_response_definition,\n                        }\n                    )\n            if route.openapi_extra:\n                deep_dict_update(operation, route.openapi_extra)\n            path[method.lower()] = operation\n\n# fastapi/openapi/utils.py:569-569#part2of2  (fastapi.openapi.utils.get_openapi)\ndef get_openapi(\n    *,\n    title: str,\n    version: str,\n    openapi_version: str = \"3.1.0\",\n    summary: Optional[str] = None,\n    description: Optional[str] = None,\n    routes: Sequence[BaseRoute],\n    webhooks: Optional[Sequence[BaseRoute]] = None,\n    tags: Optional[List[Dict[str, Any]]] = None,\n    servers: Optional[List[Dict[str, Union[str, Any]]]] = None,\n    terms_of_service: Optional[str] = None,\n    contact: Optional[Dict[str, Union[str, Any]]] = None,\n    license_info: Optional[Dict[str, Union[str, Any]]] = None,\n    separate_input_output_schemas: bool = True,\n) -> Dict[str, Any]:\n    return jsonable_encoder(OpenAPI(**output), by_alias=True, exclude_none=True)  # type: ignore\n\n# fastapi/openapi/utils.py:265-274#part1of3  (fastapi.openapi.utils.get_openapi_path)\ndef get_openapi_path(\n    *,\n    route: routing.APIRoute,\n    operation_ids: Set[str],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:\n    path = {}\n    security_schemes: Dict[str, Any] = {}\n    definitions: Dict[str, Any] = {}\n    assert route.methods is not None, \"Methods must be a list\"\n    if isinstance(route.response_class, DefaultPlaceholder):\n        current_response_class: Type[Response] = route.response_class.value\n    else:\n        current_response_class = route.response_class\n    assert current_response_class, \"A response class is needed to generate OpenAPI\"\n    route_response_media_type: Optional[str] = current_response_class.media_type\n\n# fastapi/openapi/utils.py:228-251  (fastapi.openapi.utils.get_openapi_operation_metadata)\ndef get_openapi_operation_metadata(\n    *, route: routing.APIRoute, method: str, operation_ids: Set[str]\n) -> Dict[str, Any]:\n    operation: Dict[str, Any] = {}\n    if route.tags:\n        operation[\"tags\"] = route.tags\n    operation[\"summary\"] = generate_operation_summary(route=route, method=method)\n    if route.description:\n        operation[\"description\"] = route.description\n    operation_id = route.operation_id or route.unique_id\n    if operation_id in operation_ids:\n        message = (\n            f\"Duplicate Operation ID {operation_id} for function \"\n            + f\"{route.endpoint.__name__}\"\n        )\n        file_name = getattr(route.endpoint, \"__globals__\", {}).get(\"__file__\")\n        if file_name:\n            message += f\" at {file_name}\"\n        warnings.warn(message, stacklevel=1)\n    operation_ids.add(operation_id)\n    operation[\"operationId\"] = operation_id\n    if route.deprecated:\n        operation[\"deprecated\"] = route.deprecated\n    return operation\n\n# fastapi/openapi/utils.py:222-225  (fastapi.openapi.utils.generate_operation_summary)\ndef generate_operation_summary(*, route: routing.APIRoute, method: str) -> str:\n    if route.summary:\n        return route.summary\n    return route.name.replace(\"_\", \" \").title()\n\n# fastapi/openapi/utils.py:207-219  (fastapi.openapi.utils.generate_operation_id)\ndef generate_operation_id(\n    *, route: routing.APIRoute, method: str\n) -> str:  # pragma: nocover\n    warnings.warn(\n        \"fastapi.openapi.utils.generate_operation_id() was deprecated, \"\n        \"it is not used internally, and will be removed soon\",\n        DeprecationWarning,\n        stacklevel=2,\n    )\n    if route.operation_id:\n        return route.operation_id\n    path: str = route.path_format\n    return generate_operation_id_for_path(name=route.name, path=path, method=method)\n\n# fastapi/openapi/utils.py:170-204  (fastapi.openapi.utils.get_openapi_operation_request_body)\ndef get_openapi_operation_request_body(\n    *,\n    body_field: Optional[ModelField],\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> Optional[Dict[str, Any]]:\n    if not body_field:\n        return None\n    assert isinstance(body_field, ModelField)\n    body_schema = get_schema_from_model_field(\n        field=body_field,\n        schema_generator=schema_generator,\n        model_name_map=model_name_map,\n        field_mapping=field_mapping,\n        separate_input_output_schemas=separate_input_output_schemas,\n    )\n    field_info = cast(Body, body_field.field_info)\n    request_media_type = field_info.media_type\n    required = body_field.required\n    request_body_oai: Dict[str, Any] = {}\n    if required:\n        request_body_oai[\"required\"] = required\n    request_media_content: Dict[str, Any] = {\"schema\": body_schema}\n    if field_info.openapi_examples:\n        request_media_content[\"examples\"] = jsonable_encoder(\n            field_info.openapi_examples\n        )\n    elif field_info.example != Undefined:\n        request_media_content[\"example\"] = jsonable_encoder(field_info.example)\n    request_body_oai[\"content\"] = {request_media_type: request_media_content}\n    return request_body_oai\n\n# fastapi/openapi/utils.py:95-167  (fastapi.openapi.utils._get_openapi_operation_parameters)\ndef _get_openapi_operation_parameters(\n    *,\n    dependant: Dependant,\n    schema_generator: GenerateJsonSchema,\n    model_name_map: ModelNameMap,\n    field_mapping: Dict[\n        Tuple[ModelField, Literal[\"validation\", \"serialization\"]], JsonSchemaValue\n    ],\n    separate_input_output_schemas: bool = True,\n) -> List[Dict[str, Any]]:\n    parameters = []\n    flat_dependant = get_flat_dependant(dependant, skip_repeats=True)\n    path_params = _get_flat_fields_from_params(flat_dependant.path_params)\n    query_params = _get_flat_fields_from_params(flat_dependant.query_params)\n    header_params = _get_flat_fields_from_params(flat_dependant.header_params)\n    cookie_params = _get_flat_fields_from_params(flat_dependant.cookie_params)\n    parameter_groups = [\n        (ParamTypes.path, path_params),\n        (ParamTypes.query, query_params),\n        (ParamTypes.header, header_params),\n        (ParamTypes.cookie, cookie_params),\n    ]\n    default_convert_underscores = True\n    if len(flat_dependant.header_params) == 1:\n        first_field = flat_dependant.header_params[0]\n        if lenient_issubclass(first_field.type_, BaseModel):\n            default_convert_underscores = getattr(\n                first_field.field_info, \"convert_underscores\", True\n            )\n    for param_type, param_group in parameter_groups:\n        for param in param_group:\n            field_info = param.field_info\n            # field_info = cast(Param, field_info)\n            if not getattr(field_info, \"include_in_schema\", True):\n                continue\n            param_schema = get_schema_from_model_field(\n                field=param,\n                schema_generator=schema_generator,\n                model_name_map=model_name_map,\n                field_mapping=field_mapping,\n                separate_input_output_schemas=separate_input_output_schemas,\n            )\n            name = param.alias\n            convert_underscores = getattr(\n                param.field_info,\n                \"convert_underscores\",\n                default_convert_underscores,\n            )\n            if (\n                param_type == ParamTypes.header\n                and param.alias == param.name\n                and convert_underscores\n            ):\n                name = param.name.replace(\"_\", \"-\")\n\n            parameter = {\n                \"name\": name,\n                \"in\": param_type.value,\n                \"required\": param.required,\n                \"schema\": param_schema,\n            }\n            if field_info.description:\n                parameter[\"description\"] = field_info.description\n            openapi_examples = getattr(field_info, \"openapi_examples\", None)\n            example = getattr(field_info, \"example\", None)\n            if openapi_examples:\n                parameter[\"examples\"] = jsonable_encoder(openapi_examples)\n            elif example != Undefined:\n                parameter[\"example\"] = jsonable_encoder(example)\n            if getattr(field_info, \"deprecated\", None):\n                parameter[\"deprecated\"] = True\n            parameters.append(parameter)\n    return parameters\n\n# fastapi/openapi/utils.py:78-92  (fastapi.openapi.utils.get_openapi_security_definitions)\ndef get_openapi_security_definitions(\n    flat_dependant: Dependant,\n) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:\n    security_definitions = {}\n    operation_security = []\n    for security_requirement in flat_dependant.security_requirements:\n        security_definition = jsonable_encoder(\n            security_requirement.security_scheme.model,\n            by_alias=True,\n            exclude_none=True,\n        )\n        security_name = security_requirement.security_scheme.scheme_name\n        security_definitions[security_name] = security_definition\n        operation_security.append({security_name: security_requirement.scopes})\n    return security_definitions, operation_security\n\n# fastapi/openapi/utils.py:1-75  (fastapi.openapi.utils)\nimport http.client\nimport inspect\nimport warnings\nfrom typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union, cast\n\nfrom fastapi import routing\nfrom fastapi._compat import (\n    GenerateJsonSchema,\n    JsonSchemaValue,\n    ModelField,\n    Undefined,\n    get_compat_model_name_map,\n    get_definitions,\n    get_schema_from_model_field,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _get_flat_fields_from_params,\n    get_flat_dependant,\n    get_flat_params,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.openapi.constants import METHODS_WITH_BODY, REF_PREFIX, REF_TEMPLATE\nfrom fastapi.openapi.models import OpenAPI\nfrom fastapi.params import Body, ParamTypes\nfrom fastapi.responses import Response\nfrom fastapi.types import ModelNameMap\nfrom fastapi.utils import (\n    deep_dict_update,\n    generate_operation_id_for_path,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette.responses import JSONResponse\nfrom starlette.routing import BaseRoute\nfrom starlette.status import HTTP_422_UNPROCESSABLE_ENTITY\nfrom typing_extensions import Literal\n\nvalidation_error_definition = {\n    \"title\": \"ValidationError\",\n    \"type\": \"object\",\n    \"properties\": {\n        \"loc\": {\n            \"title\": \"Location\",\n            \"type\": \"array\",\n            \"items\": {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"integer\"}]},\n        },\n        \"msg\": {\"title\": \"Message\", \"type\": \"string\"},\n        \"type\": {\"title\": \"Error Type\", \"type\": \"string\"},\n    },\n    \"required\": [\"loc\", \"msg\", \"type\"],\n}\n\nvalidation_error_response_definition = {\n    \"title\": \"HTTPValidationError\",\n    \"type\": \"object\",\n    \"properties\": {\n        \"detail\": {\n            \"title\": \"Detail\",\n            \"type\": \"array\",\n            \"items\": {\"$ref\": REF_PREFIX + \"ValidationError\"},\n        }\n    },\n}\n\nstatus_code_ranges: Dict[str, str] = {\n    \"1XX\": \"Information\",\n    \"2XX\": \"Success\",\n    \"3XX\": \"Redirection\",\n    \"4XX\": \"Client Error\",\n    \"5XX\": \"Server Error\",\n    \"DEFAULT\": \"Default Response\",\n}\n\n# fastapi/dependencies/utils.py:212-219  (fastapi.dependencies.utils._get_flat_fields_from_params)\ndef _get_flat_fields_from_params(fields: List[ModelField]) -> List[ModelField]:\n    if not fields:\n        return fields\n    first_field = fields[0]\n    if len(fields) == 1 and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n        return fields_to_extract\n    return fields\n\n# tests/test_computed_fields.py:1-5  (tests.test_computed_fields)\nimport pytest\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\nfrom .utils import needs_pydanticv2\n\n# docs_src/extending_openapi/tutorial001.py:12-26  (docs_src.extending_openapi.tutorial001.custom_openapi)\ndef custom_openapi():\n    if app.openapi_schema:\n        return app.openapi_schema\n    openapi_schema = get_openapi(\n        title=\"Custom title\",\n        version=\"2.5.0\",\n        summary=\"This is a very custom OpenAPI schema\",\n        description=\"Here's a longer description of the custom **OpenAPI** schema\",\n        routes=app.routes,\n    )\n    openapi_schema[\"info\"][\"x-logo\"] = {\n        \"url\": \"https://fastapi.tiangolo.com/img/logo-margin/logo-teal.png\"\n    }\n    app.openapi_schema = openapi_schema\n    return app.openapi_schema\n\n# docs_src/extending_openapi/tutorial001.py:1-4  (docs_src.extending_openapi.tutorial001)\nfrom fastapi import FastAPI\nfrom fastapi.openapi.utils import get_openapi\n\napp = FastAPI()\n\n# tests/test_compat.py:1-18  (tests.test_compat)\nfrom typing import Any, Dict, List, Union\n\nfrom fastapi import FastAPI, UploadFile\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    get_cached_model_fields,\n    get_model_fields,\n    is_bytes_sequence_annotation,\n    is_scalar_field,\n    is_uploadfile_sequence_annotation,\n)\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseConfig, BaseModel, ConfigDict\nfrom pydantic.fields import FieldInfo\n\nfrom .utils import needs_pydanticv1, needs_pydanticv2\n\n# fastapi/applications.py:966-996  (fastapi.applications.FastAPI.openapi)\nclass FastAPI(Starlette):\n    def openapi(self) -> Dict[str, Any]:\n        \"\"\"\n        Generate the OpenAPI schema of the application. This is called by FastAPI\n        internally.\n\n        The first time it is called it stores the result in the attribute\n        `app.openapi_schema`, and next times it is called, it just returns that same\n        result. To avoid the cost of generating the schema every time.\n\n        If you need to modify the generated OpenAPI schema, you could modify it.\n\n        Read more in the\n        [FastAPI docs for OpenAPI](https://fastapi.tiangolo.com/how-to/extending-openapi/).\n        \"\"\"\n        if not self.openapi_schema:\n            self.openapi_schema = get_openapi(\n                title=self.title,\n                version=self.version,\n                openapi_version=self.openapi_version,\n                summary=self.summary,\n                description=self.description,\n                terms_of_service=self.terms_of_service,\n                contact=self.contact,\n                license_info=self.license_info,\n                routes=self.routes,\n                webhooks=self.webhooks.routes,\n                tags=self.openapi_tags,\n                servers=self.servers,\n                separate_input_output_schemas=self.separate_input_output_schemas,\n            )\n        return self.openapi_schema\n\n# fastapi/dependencies/utils.py:222-228  (fastapi.dependencies.utils.get_flat_params)\ndef get_flat_params(dependant: Dependant) -> List[ModelField]:\n    flat_dependant = get_flat_dependant(dependant, skip_repeats=True)\n    path_params = _get_flat_fields_from_params(flat_dependant.path_params)\n    query_params = _get_flat_fields_from_params(flat_dependant.query_params)\n    header_params = _get_flat_fields_from_params(flat_dependant.header_params)\n    cookie_params = _get_flat_fields_from_params(flat_dependant.cookie_params)\n    return path_params + query_params + header_params + cookie_params\n\n# tests/test_tutorial/test_body_fields/test_tutorial001.py:1-7  (tests.test_tutorial.test_body_fields.test_tutorial001)\nimport importlib\n\nimport pytest\nfrom dirty_equals import IsDict\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_py39, needs_py310\n\n# fastapi/dependencies/utils.py:838-859  (fastapi.dependencies.utils._should_embed_body_fields)\ndef _should_embed_body_fields(fields: List[ModelField]) -> bool:\n    if not fields:\n        return False\n    # More than one dependency could have the same field, it would show up as multiple\n    # fields but it's the same one, so count them by name\n    body_param_names_set = {field.name for field in fields}\n    # A top level field has to be a single field, not multiple\n    if len(body_param_names_set) > 1:\n        return True\n    first_field = fields[0]\n    # If it explicitly specifies it is embedded, it has to be embedded\n    if getattr(first_field.field_info, \"embed\", None):\n        return True\n    # If it's a Form (or File) field, it has to be a BaseModel (or a union of BaseModels) to be top level\n    # otherwise it has to be embedded, so that the key value pair can be extracted\n    if (\n        isinstance(first_field.field_info, params.Form)\n        and not lenient_issubclass(first_field.type_, BaseModel)\n        and not is_union_of_base_models(first_field.type_)\n    ):\n        return True\n    return False\n\n# fastapi/dependencies/utils.py:905-948  (fastapi.dependencies.utils.request_body_to_args)\nasync def request_body_to_args(\n    body_fields: List[ModelField],\n    received_body: Optional[Union[Dict[str, Any], FormData]],\n    embed_body_fields: bool,\n) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:\n    values: Dict[str, Any] = {}\n    errors: List[Dict[str, Any]] = []\n    assert body_fields, \"request_body_to_args() should be called with fields\"\n    single_not_embedded_field = len(body_fields) == 1 and not embed_body_fields\n    first_field = body_fields[0]\n    body_to_process = received_body\n\n    fields_to_extract: List[ModelField] = body_fields\n\n    if single_not_embedded_field and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n\n    if isinstance(received_body, FormData):\n        body_to_process = await _extract_form_body(fields_to_extract, received_body)\n\n    if single_not_embedded_field:\n        loc: Tuple[str, ...] = (\"body\",)\n        v_, errors_ = _validate_value_with_model_field(\n            field=first_field, value=body_to_process, values=values, loc=loc\n        )\n        return {first_field.name: v_}, errors_\n    for field in body_fields:\n        loc = (\"body\", field.alias)\n        value: Optional[Any] = None\n        if body_to_process is not None:\n            try:\n                value = body_to_process.get(field.alias)\n            # If the received body is a list, not a dict\n            except AttributeError:\n                errors.append(get_missing_field_error(loc))\n                continue\n        v_, errors_ = _validate_value_with_model_field(\n            field=field, value=value, values=values, loc=loc\n        )\n        if errors_:\n            errors.extend(errors_)\n        else:\n            values[field.name] = v_\n    return values, errors\n\n# fastapi/utils.py:42-56  (fastapi.utils.is_body_allowed_for_status_code)\ndef is_body_allowed_for_status_code(status_code: Union[int, str, None]) -> bool:\n    if status_code is None:\n        return True\n    # Ref: https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#patterned-fields-1\n    if status_code in {\n        \"default\",\n        \"1XX\",\n        \"2XX\",\n        \"3XX\",\n        \"4XX\",\n        \"5XX\",\n    }:\n        return True\n    current_status_code = int(status_code)\n    return not (current_status_code < 200 or current_status_code in {204, 205, 304})\n\n# tests/test_tutorial/test_conditional_openapi/test_tutorial001.py:1-5  (tests.test_tutorial.test_conditional_openapi.test_tutorial001)\nimport importlib\n\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_pydanticv2\n\n# tests/test_openapi_separate_input_output_schemas.py:1-7  (tests.test_openapi_separate_input_output_schemas)\nfrom typing import List, Optional\n\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\nfrom .utils import PYDANTIC_V2, needs_pydanticv2\n\n# fastapi/params.py:1-15  (fastapi.params)\nimport warnings\nfrom enum import Enum\nfrom typing import Any, Callable, Dict, List, Optional, Sequence, Union\n\nfrom fastapi.openapi.models import Example\nfrom pydantic.fields import FieldInfo\nfrom typing_extensions import Annotated, deprecated\n\nfrom ._compat import (\n    PYDANTIC_V2,\n    PYDANTIC_VERSION_MINOR_TUPLE,\n    Undefined,\n)\n\n_Unset: Any = Undefined\n\n# fastapi/dependencies/utils.py:740-816  (fastapi.dependencies.utils.request_params_to_args)\ndef request_params_to_args(\n    fields: Sequence[ModelField],\n    received_params: Union[Mapping[str, Any], QueryParams, Headers],\n) -> Tuple[Dict[str, Any], List[Any]]:\n    values: Dict[str, Any] = {}\n    errors: List[Dict[str, Any]] = []\n\n    if not fields:\n        return values, errors\n\n    first_field = fields[0]\n    fields_to_extract = fields\n    single_not_embedded_field = False\n    default_convert_underscores = True\n    if len(fields) == 1 and lenient_issubclass(first_field.type_, BaseModel):\n        fields_to_extract = get_cached_model_fields(first_field.type_)\n        single_not_embedded_field = True\n        # If headers are in a Pydantic model, the way to disable convert_underscores\n        # would be with Header(convert_underscores=False) at the Pydantic model level\n        default_convert_underscores = getattr(\n            first_field.field_info, \"convert_underscores\", True\n        )\n\n    params_to_process: Dict[str, Any] = {}\n\n    processed_keys = set()\n\n    for field in fields_to_extract:\n        alias = None\n        if isinstance(received_params, Headers):\n            # Handle fields extracted from a Pydantic Model for a header, each field\n            # doesn't have a FieldInfo of type Header with the default convert_underscores=True\n            convert_underscores = getattr(\n                field.field_info, \"convert_underscores\", default_convert_underscores\n            )\n            if convert_underscores:\n                alias = (\n                    field.alias\n                    if field.alias != field.name\n                    else field.name.replace(\"_\", \"-\")\n                )\n        value = _get_multidict_value(field, received_params, alias=alias)\n        if value is not None:\n            params_to_process[field.name] = value\n        processed_keys.add(alias or field.alias)\n        processed_keys.add(field.name)\n\n    for key, value in received_params.items():\n        if key not in processed_keys:\n            params_to_process[key] = value\n\n    if single_not_embedded_field:\n        field_info = first_field.field_info\n        assert isinstance(field_info, params.Param), (\n            \"Params must be subclasses of Param\"\n        )\n        loc: Tuple[str, ...] = (field_info.in_.value,)\n        v_, errors_ = _validate_value_with_model_field(\n            field=first_field, value=params_to_process, values=values, loc=loc\n        )\n        return {first_field.name: v_}, errors_\n\n    for field in fields:\n        value = _get_multidict_value(field, received_params)\n        field_info = field.field_info\n        assert isinstance(field_info, params.Param), (\n            \"Params must be subclasses of Param\"\n        )\n        loc = (field_info.in_.value, field.alias)\n        v_, errors_ = _validate_value_with_model_field(\n            field=field, value=value, values=values, loc=loc\n        )\n        if errors_:\n            errors.extend(errors_)\n        else:\n            values[field.name] = v_\n    return values, errors\n\n# fastapi/utils.py:1-39  (fastapi.utils)\nimport re\nimport warnings\nfrom dataclasses import is_dataclass\nfrom typing import (\n    TYPE_CHECKING,\n    Any,\n    Dict,\n    MutableMapping,\n    Optional,\n    Set,\n    Type,\n    Union,\n    cast,\n)\nfrom weakref import WeakKeyDictionary\n\nimport fastapi\nfrom fastapi._compat import (\n    PYDANTIC_V2,\n    BaseConfig,\n    ModelField,\n    PydanticSchemaGenerationError,\n    Undefined,\n    UndefinedType,\n    Validator,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import DefaultPlaceholder, DefaultType\nfrom pydantic import BaseModel, create_model\nfrom pydantic.fields import FieldInfo\nfrom typing_extensions import Literal\n\nif TYPE_CHECKING:  # pragma: nocover\n    from .routing import APIRoute\n\n# Cache for `create_cloned_field`\n_CLONED_TYPES_CACHE: MutableMapping[Type[BaseModel], Type[BaseModel]] = (\n    WeakKeyDictionary()\n)\n\n# tests/test_tutorial/test_separate_openapi_schemas/test_tutorial001.py:1-6  (tests.test_tutorial.test_separate_openapi_schemas.test_tutorial001)\nimport importlib\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_py39, needs_py310, needs_pydanticv2\n\n# tests/test_tutorial/test_separate_openapi_schemas/test_tutorial002.py:1-6  (tests.test_tutorial.test_separate_openapi_schemas.test_tutorial002)\nimport importlib\n\nimport pytest\nfrom fastapi.testclient import TestClient\n\nfrom ...utils import needs_py39, needs_py310, needs_pydanticv2\n\n# fastapi/security/http.py:1-13  (fastapi.security.http)\nimport binascii\nfrom base64 import b64decode\nfrom typing import Optional\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import HTTPBase as HTTPBaseModel\nfrom fastapi.openapi.models import HTTPBearer as HTTPBearerModel\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom pydantic import BaseModel\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\nfrom typing_extensions import Annotated, Doc\n\n# fastapi/applications.py:1-45  (fastapi.applications)\nfrom enum import Enum\nfrom typing import (\n    Any,\n    Awaitable,\n    Callable,\n    Coroutine,\n    Dict,\n    List,\n    Optional,\n    Sequence,\n    Type,\n    TypeVar,\n    Union,\n)\n\nfrom fastapi import routing\nfrom fastapi.datastructures import Default, DefaultPlaceholder\nfrom fastapi.exception_handlers import (\n    http_exception_handler,\n    request_validation_exception_handler,\n    websocket_request_validation_exception_handler,\n)\nfrom fastapi.exceptions import RequestValidationError, WebSocketRequestValidationError\nfrom fastapi.logger import logger\nfrom fastapi.openapi.docs import (\n    get_redoc_html,\n    get_swagger_ui_html,\n    get_swagger_ui_oauth2_redirect_html,\n)\nfrom fastapi.openapi.utils import get_openapi\nfrom fastapi.params import Depends\nfrom fastapi.types import DecoratedCallable, IncEx\nfrom fastapi.utils import generate_unique_id\nfrom starlette.applications import Starlette\nfrom starlette.datastructures import State\nfrom starlette.exceptions import HTTPException\nfrom starlette.middleware import Middleware\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom starlette.requests import Request\nfrom starlette.responses import HTMLResponse, JSONResponse, Response\nfrom starlette.routing import BaseRoute\nfrom starlette.types import ASGIApp, Lifespan, Receive, Scope, Send\nfrom typing_extensions import Annotated, Doc, deprecated\n\nAppType = TypeVar(\"AppType\", bound=\"FastAPI\")\n\n# fastapi/security/oauth2.py:1-13  (fastapi.security.oauth2)\nfrom typing import Any, Dict, List, Optional, Union, cast\n\nfrom fastapi.exceptions import HTTPException\nfrom fastapi.openapi.models import OAuth2 as OAuth2Model\nfrom fastapi.openapi.models import OAuthFlows as OAuthFlowsModel\nfrom fastapi.param_functions import Form\nfrom fastapi.security.base import SecurityBase\nfrom fastapi.security.utils import get_authorization_scheme_param\nfrom starlette.requests import Request\nfrom starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN\n\n# TODO: import from typing when deprecating Python 3.9\nfrom typing_extensions import Annotated, Doc\n\n# tests/test_extra_routes.py:1-9  (tests.test_extra_routes)\nfrom typing import Optional\n\nfrom dirty_equals import IsDict\nfrom fastapi import FastAPI\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\n# tests/test_custom_route_class.py:64-71  (tests.test_custom_route_class.test_route_classes)\ndef test_route_classes():\n    routes = {}\n    for r in app.router.routes:\n        assert isinstance(r, Route)\n        routes[r.path] = r\n    assert getattr(routes[\"/a/\"], \"x_type\") == \"A\"  # noqa: B009\n    assert getattr(routes[\"/a/b/\"], \"x_type\") == \"B\"  # noqa: B009\n    assert getattr(routes[\"/a/b/c/\"], \"x_type\") == \"C\"  # noqa: B009\n\n# tests/test_tutorial/test_openapi_webhooks/test_tutorial001.py:14-16  (tests.test_tutorial.test_openapi_webhooks.test_tutorial001.test_dummy_webhook)\ndef test_dummy_webhook():\n    # Just for coverage\n    app.webhooks.routes[0].endpoint({})\n\n# fastapi/dependencies/utils.py:662-695#part2of2  (fastapi.dependencies.utils.solve_dependencies)\nasync def solve_dependencies(\n    *,\n    request: Union[Request, WebSocket],\n    dependant: Dependant,\n    body: Optional[Union[Dict[str, Any], FormData]] = None,\n    background_tasks: Optional[StarletteBackgroundTasks] = None,\n    response: Optional[Response] = None,\n    dependency_overrides_provider: Optional[Any] = None,\n    dependency_cache: Optional[Dict[Tuple[Callable[..., Any], Tuple[str]], Any]] = None,\n    async_exit_stack: AsyncExitStack,\n    embed_body_fields: bool,\n) -> SolvedDependency:\n    if dependant.body_params:\n        (\n            body_values,\n            body_errors,\n        ) = await request_body_to_args(  # body_params checked above\n            body_fields=dependant.body_params,\n            received_body=body,\n            embed_body_fields=embed_body_fields,\n        )\n        values.update(body_values)\n        errors.extend(body_errors)\n    if dependant.http_connection_param_name:\n        values[dependant.http_connection_param_name] = request\n    if dependant.request_param_name and isinstance(request, Request):\n        values[dependant.request_param_name] = request\n    elif dependant.websocket_param_name and isinstance(request, WebSocket):\n        values[dependant.websocket_param_name] = request\n    if dependant.background_tasks_param_name:\n        if background_tasks is None:\n            background_tasks = BackgroundTasks()\n        values[dependant.background_tasks_param_name] = background_tasks\n    if dependant.response_param_name:\n        values[dependant.response_param_name] = response\n    if dependant.security_scopes_param_name:\n        values[dependant.security_scopes_param_name] = SecurityScopes(\n            scopes=dependant.security_scopes\n        )\n    return SolvedDependency(\n        values=values,\n        errors=errors,\n        background_tasks=background_tasks,\n        response=response,\n        dependency_cache=dependency_cache,\n    )\n\n# fastapi/dependencies/utils.py:514-527  (fastapi.dependencies.utils.add_param_to_fields)\ndef add_param_to_fields(*, field: ModelField, dependant: Dependant) -> None:\n    field_info = field.field_info\n    field_info_in = getattr(field_info, \"in_\", None)\n    if field_info_in == params.ParamTypes.path:\n        dependant.path_params.append(field)\n    elif field_info_in == params.ParamTypes.query:\n        dependant.query_params.append(field)\n    elif field_info_in == params.ParamTypes.header:\n        dependant.header_params.append(field)\n    else:\n        assert field_info_in == params.ParamTypes.cookie, (\n            f\"non-body parameters must be in path, query, header or cookie: {field.name}\"\n        )\n        dependant.cookie_params.append(field)\n\n# docs_src/body_fields/tutorial001.py:1-6  (docs_src.body_fields.tutorial001)\nfrom typing import Union\n\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\n# fastapi/security/utils.py:1-1  (fastapi.security.utils)\nfrom typing import Optional, Tuple\n\n# tests/test_custom_schema_fields.py:1-6  (tests.test_custom_schema_fields)\nfrom fastapi import FastAPI\nfrom fastapi._compat import PYDANTIC_V2\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\n# docs_src/path_operation_advanced_configuration/tutorial002.py:12-21  (docs_src.path_operation_advanced_configuration.tutorial002.use_route_names_as_operation_ids)\ndef use_route_names_as_operation_ids(app: FastAPI) -> None:\n    \"\"\"\n    Simplify operation IDs so that generated API clients have simpler function\n    names.\n\n    Should be called only after all routes have been added.\n    \"\"\"\n    for route in app.routes:\n        if isinstance(route, APIRoute):\n            route.operation_id = route.name  # in this case, 'read_items'\n\n# docs_src/body_fields/tutorial001_py310.py:1-4  (docs_src.body_fields.tutorial001_py310)\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\n# docs_src/body_fields/tutorial001_an_py310.py:1-6  (docs_src.body_fields.tutorial001_an_py310)\nfrom typing import Annotated\n\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\n# fastapi/_compat.py:662-664  (fastapi._compat.get_cached_model_fields)\n@lru_cache\ndef get_cached_model_fields(model: Type[BaseModel]) -> List[ModelField]:\n    return get_model_fields(model)\n\n# tests/test_compat.py:108-120  (tests.test_compat.test_get_model_fields_cached)\ndef test_get_model_fields_cached():\n    class Model(BaseModel):\n        foo: str\n\n    non_cached_fields = get_model_fields(Model)\n    non_cached_fields2 = get_model_fields(Model)\n    cached_fields = get_cached_model_fields(Model)\n    cached_fields2 = get_cached_model_fields(Model)\n    for f1, f2 in zip(cached_fields, cached_fields2):\n        assert f1 is f2\n\n    assert non_cached_fields is not non_cached_fields2\n    assert cached_fields is cached_fields2\n\n# docs_src/body_fields/tutorial001_an_py39.py:1-6  (docs_src.body_fields.tutorial001_an_py39)\nfrom typing import Annotated, Union\n\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\n# docs_src/body_fields/tutorial001_an.py:1-7  (docs_src.body_fields.tutorial001_an)\nfrom typing import Union\n\nfrom fastapi import Body, FastAPI\nfrom pydantic import BaseModel, Field\nfrom typing_extensions import Annotated\n\napp = FastAPI()\n\n# tests/test_typing_python39.py:1-4  (tests.test_typing_python39)\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\nfrom .utils import needs_py310\n\n# fastapi/dependencies/utils.py:862-902  (fastapi.dependencies.utils._extract_form_body)\nasync def _extract_form_body(\n    body_fields: List[ModelField],\n    received_body: FormData,\n) -> Dict[str, Any]:\n    values = {}\n    first_field = body_fields[0]\n    first_field_info = first_field.field_info\n\n    for field in body_fields:\n        value = _get_multidict_value(field, received_body)\n        if (\n            isinstance(first_field_info, params.File)\n            and is_bytes_field(field)\n            and isinstance(value, UploadFile)\n        ):\n            value = await value.read()\n        elif (\n            is_bytes_sequence_field(field)\n            and isinstance(first_field_info, params.File)\n            and value_is_sequence(value)\n        ):\n            # For types\n            assert isinstance(value, sequence_types)  # type: ignore[arg-type]\n            results: List[Union[bytes, str]] = []\n\n            async def process_fn(\n                fn: Callable[[], Coroutine[Any, Any, Any]],\n            ) -> None:\n                result = await fn()\n                results.append(result)  # noqa: B023\n\n            async with anyio.create_task_group() as tg:\n                for sub_value in value:\n                    tg.start_soon(process_fn, sub_value.read)\n            value = serialize_sequence_value(field=field, value=results)\n        if value is not None:\n            values[field.alias] = value\n    for key, value in received_body.items():\n        if key not in values:\n            values[key] = value\n    return values\n\n# fastapi/encoders.py:243-263#part3of6  (fastapi.encoders.jsonable_encoder)\ndef jsonable_encoder(\n    obj: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            The input object to convert to JSON.\n            \"\"\"\n        ),\n    ],\n    include: Annotated[\n        Optional[IncEx],\n        Doc(\n            \"\"\"\n            Pydantic's `include` parameter, passed to Pydantic models to set the\n            fields to include.\n            \"\"\"\n        ),\n    ] = None,\n    exclude: Annotated[\n        Optional[IncEx],\n        Doc(\n            \"\"\"\n            Pydantic's `exclude` parameter, passed to Pydantic models to set the\n            fields to exclude.\n            \"\"\"\n        ),\n    ] = None,\n    by_alias: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `by_alias` parameter, passed to Pydantic models to define if\n            the output should use the alias names (when provided) or the Python\n            attribute names. In an API, if you set an alias, it's probably because you\n            want to use it in the result, so you probably want to leave this set to\n            `True`.\n            \"\"\"\n        ),\n    ] = True,\n    exclude_unset: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_unset` parameter, passed to Pydantic models to define\n            if it should exclude from the output the fields that were not explicitly\n            set (and that only had their default values).\n            \"\"\"\n        ),\n    ] = False,\n    exclude_defaults: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_defaults` parameter, passed to Pydantic models to define\n            if it should exclude from the output the fields that had the same default\n            value, even when they were explicitly set.\n            \"\"\"\n        ),\n    ] = False,\n    exclude_none: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_none` parameter, passed to Pydantic models to define\n            if it should exclude from the output any fields that have a `None` value.\n            \"\"\"\n        ),\n    ] = False,\n    custom_encoder: Annotated[\n        Optional[Dict[Any, Callable[[Any], Any]]],\n        Doc(\n            \"\"\"\n            Pydantic's `custom_encoder` parameter, passed to Pydantic models to define\n            a custom encoder.\n            \"\"\"\n        ),\n    ] = None,\n    sqlalchemy_safe: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Exclude from the output any fields that start with the name `_sa`.\n\n            This is mainly a hack for compatibility with SQLAlchemy objects, they\n            store internal SQLAlchemy-specific state in attributes named with `_sa`,\n            and those objects can't (and shouldn't be) serialized to JSON.\n            \"\"\"\n        ),\n    ] = True,\n) -> Any:\n    if dataclasses.is_dataclass(obj):\n        obj_dict = dataclasses.asdict(obj)\n        return jsonable_encoder(\n            obj_dict,\n            include=include,\n            exclude=exclude,\n            by_alias=by_alias,\n            exclude_unset=exclude_unset,\n            exclude_defaults=exclude_defaults,\n            exclude_none=exclude_none,\n            custom_encoder=custom_encoder,\n            sqlalchemy_safe=sqlalchemy_safe,\n        )\n    if isinstance(obj, Enum):\n        return obj.value\n    if isinstance(obj, PurePath):\n        return str(obj)\n    if isinstance(obj, (str, int, float, type(None))):\n        return obj\n    if isinstance(obj, UndefinedType):\n        return None\n\n# fastapi/encoders.py:192-215#part1of6  (fastapi.encoders.jsonable_encoder)\ndef jsonable_encoder(\n    obj: Annotated[\n        Any,\n        Doc(\n            \"\"\"\n            The input object to convert to JSON.\n            \"\"\"\n        ),\n    ],\n    include: Annotated[\n        Optional[IncEx],\n        Doc(\n            \"\"\"\n            Pydantic's `include` parameter, passed to Pydantic models to set the\n            fields to include.\n            \"\"\"\n        ),\n    ] = None,\n    exclude: Annotated[\n        Optional[IncEx],\n        Doc(\n            \"\"\"\n            Pydantic's `exclude` parameter, passed to Pydantic models to set the\n            fields to exclude.\n            \"\"\"\n        ),\n    ] = None,\n    by_alias: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `by_alias` parameter, passed to Pydantic models to define if\n            the output should use the alias names (when provided) or the Python\n            attribute names. In an API, if you set an alias, it's probably because you\n            want to use it in the result, so you probably want to leave this set to\n            `True`.\n            \"\"\"\n        ),\n    ] = True,\n    exclude_unset: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_unset` parameter, passed to Pydantic models to define\n            if it should exclude from the output the fields that were not explicitly\n            set (and that only had their default values).\n            \"\"\"\n        ),\n    ] = False,\n    exclude_defaults: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_defaults` parameter, passed to Pydantic models to define\n            if it should exclude from the output the fields that had the same default\n            value, even when they were explicitly set.\n            \"\"\"\n        ),\n    ] = False,\n    exclude_none: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Pydantic's `exclude_none` parameter, passed to Pydantic models to define\n            if it should exclude from the output any fields that have a `None` value.\n            \"\"\"\n        ),\n    ] = False,\n    custom_encoder: Annotated[\n        Optional[Dict[Any, Callable[[Any], Any]]],\n        Doc(\n            \"\"\"\n            Pydantic's `custom_encoder` parameter, passed to Pydantic models to define\n            a custom encoder.\n            \"\"\"\n        ),\n    ] = None,\n    sqlalchemy_safe: Annotated[\n        bool,\n        Doc(\n            \"\"\"\n            Exclude from the output any fields that start with the name `_sa`.\n\n            This is mainly a hack for compatibility with SQLAlchemy objects, they\n            store internal SQLAlchemy-specific state in attributes named with `_sa`,\n            and those objects can't (and shouldn't be) serialized to JSON.\n            \"\"\"\n        ),\n    ] = True,\n) -> Any:\n    \"\"\"\n    Convert any object to something that can be encoded in JSON.\n\n    This is used internally by FastAPI to make sure anything you return can be\n    encoded as JSON before it is sent to the client.\n\n    You can also use it yourself, for example to convert objects before saving them\n    in a database that supports only JSON.\n\n    Read more about it in the\n    [FastAPI docs for JSON Compatible Encoder](https://fastapi.tiangolo.com/tutorial/encoder/).\n    \"\"\"\n    custom_encoder = custom_encoder or {}\n    if custom_encoder:\n        if type(obj) in custom_encoder:\n            return custom_encoder[type(obj)](obj)\n        else:\n            for encoder_type, encoder_instance in custom_encoder.items():\n                if isinstance(obj, encoder_type):\n                    return encoder_instance(obj)\n    if include is not None and not isinstance(include, (set, dict)):\n        include = set(include)\n    if exclude is not None and not isinstance(exclude, (set, dict)):\n        exclude = set(exclude)\n\n# fastapi/routing.py:1-77  (fastapi.routing)\nimport asyncio\nimport dataclasses\nimport email.message\nimport inspect\nimport json\nfrom contextlib import AsyncExitStack, asynccontextmanager\nfrom enum import Enum, IntEnum\nfrom typing import (\n    Any,\n    AsyncIterator,\n    Callable,\n    Collection,\n    Coroutine,\n    Dict,\n    List,\n    Mapping,\n    Optional,\n    Sequence,\n    Set,\n    Tuple,\n    Type,\n    Union,\n)\n\nfrom fastapi import params\nfrom fastapi._compat import (\n    ModelField,\n    Undefined,\n    _get_model_config,\n    _model_dump,\n    _normalize_errors,\n    lenient_issubclass,\n)\nfrom fastapi.datastructures import Default, DefaultPlaceholder\nfrom fastapi.dependencies.models import Dependant\nfrom fastapi.dependencies.utils import (\n    _should_embed_body_fields,\n    get_body_field,\n    get_dependant,\n    get_flat_dependant,\n    get_parameterless_sub_dependant,\n    get_typed_return_annotation,\n    solve_dependencies,\n)\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.exceptions import (\n    FastAPIError,\n    RequestValidationError,\n    ResponseValidationError,\n    WebSocketRequestValidationError,\n)\nfrom fastapi.types import DecoratedCallable, IncEx\nfrom fastapi.utils import (\n    create_cloned_field,\n    create_model_field,\n    generate_unique_id,\n    get_value_or_default,\n    is_body_allowed_for_status_code,\n)\nfrom pydantic import BaseModel\nfrom starlette import routing\nfrom starlette.concurrency import run_in_threadpool\nfrom starlette.exceptions import HTTPException\nfrom starlette.requests import Request\nfrom starlette.responses import JSONResponse, Response\nfrom starlette.routing import (\n    BaseRoute,\n    Match,\n    compile_path,\n    get_name,\n    request_response,\n    websocket_session,\n)\nfrom starlette.routing import Mount as Mount  # noqa\nfrom starlette.types import AppType, ASGIApp, Lifespan, Scope\nfrom starlette.websockets import WebSocket\nfrom typing_extensions import Annotated, Doc, deprecated\n\n## Task\n\nWhat breaks if `fastapi.openapi.utils.get_fields_from_routes` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}
