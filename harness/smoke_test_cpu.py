@@ -7,6 +7,9 @@ BLOCKED means the check could not run in this environment (e.g. model
 weights unreachable), which is not a pass: it must be re-run where the
 weights are available (the Kaggle notebook runs this same script).
 `--allow-blocked` only changes the exit code; the table still says BLOCKED.
+`--corpus` (default fastapi) is the session's corpus: the two Arm 3
+readiness checks target it, and the one that does not apply to its language
+reports SKIP (never a failure).
 
 Checks
  1. arm1_chunk_reassembly   real FastAPI file -> chunks; py_compile every
@@ -18,7 +21,7 @@ Checks
                             embeds.
  3b. arm2_packing          Arm 2 packs 5 real FastAPI T2 tasks within 13,000
                             tokens; every full chunk and stub compiles.
- 3c. arm3_lsp_ready         Arm 3: pyright-langserver on FastAPI is ready
+ 3c. arm3_lsp_ready         Arm 3: pyright-langserver on the --corpus checkout is ready
                             within 120 s and its >= 5 workspace/symbol probes
                             return >= 1 symbol; one real task retrieves within
                             budget. BLOCKED when pyright-langserver is absent.
@@ -28,7 +31,7 @@ Checks
  3e. ts_chunk_parse        M4: Express and tRPC files -> TypeScript chunks; every
                             chunk parses on its own (tree-sitter-typescript) and
                             every non-blank line is covered.
- 3f. arm3_ts_lsp_ready     M4: Arm 3 on Express and tRPC through
+ 3f. arm3_ts_lsp_ready     M4: Arm 3 on the --corpus TS checkout (Express or tRPC) through
                             typescript-language-server: ready, >= 5 probes with
                             >= 1 symbol, one real T2 task each retrieves a seed
                             hover within budget. BLOCKED when the server is absent.
@@ -158,28 +161,43 @@ def check_arm2_packing(tok):
                 f"({n_full} full, {n_stub} stubs), {errors} compile errors")
 
 
+#: The corpus the session runs (`--corpus`): the Arm 3 checks target it. The
+#: other checks are corpus-independent (FastAPI-grounded unit-style checks).
+TARGET_CORPUS = "fastapi"
+
+
+class SkipCheck(Exception):
+    """The check does not apply to the target corpus (status SKIP)."""
+
+
 def check_arm3_lsp_ready(tok):
-    """Arm 3 reaches readiness on FastAPI within ARM3_READY_TIMEOUT_S, at
-    least 5 probes return at least 1 symbol in total, and one real T2 task
-    retrieves hover/outline items within budget. The editable-install check
-    follows ARM3_REQUIRE_EDITABLE_INSTALL (on unless the environment opts out)."""
+    """Arm 3 (Pyright) reaches readiness on the target corpus's checkout
+    within ARM3_READY_TIMEOUT_S, at least 5 probes return at least 1 symbol
+    in total, and its first real T2 task retrieves hover/outline items within
+    budget. The editable-install check (on unless the environment opts out)
+    is therefore the target corpus's own: `django` for a Django session.
+    SKIP for a TypeScript corpus (see arm3_ts_lsp_ready)."""
+    from benchmarks.corpora.resolver import resolve
     from harness.arms.arm3_lsp import Arm3PyrightLSP
     from harness.scoring.fairness import verify_ranking
     from harness.tasks.loaders import load_tasks
-    root = _fastapi_root()
+    corpus = TARGET_CORPUS
+    if C.CORPUS_LANGUAGE[corpus] != "python":
+        raise SkipCheck(f"{corpus} is a TypeScript corpus: Arm 3 runs typescript-language-server (arm3_ts_lsp_ready)")
+    root = str(resolve(corpus))
     arm = Arm3PyrightLSP(tokenizer=tok)
     try:
-        arm.index(root, {})
+        arm.index(root, {"repo_id": corpus})
         ready = arm.ready
         assert ready is not None
-        task = load_tasks("fastapi", repo_root=root, limit=1)[0]
+        task = load_tasks(corpus, task_types=["T2_localization"], repo_root=root, limit=1)[0]
         ctx = arm.retrieve(task.query, task.seed_dict())
         verify_ranking(ctx.items)
     finally:
         arm.close()
     ok = (ready.seconds < C.ARM3_READY_TIMEOUT_S and len(ready.probes) >= 5 and ready.total_probe_results >= 1
           and 0 < ctx.total_tokens <= C.RETRIEVAL_BUDGET)
-    return ok, (f"ready in {ready.seconds:.1f}s ({ready.source_files} files, {ready.rounds} probe rounds); probes "
+    return ok, (f"{corpus}: ready in {ready.seconds:.1f}s ({ready.source_files} files, {ready.rounds} probe rounds); probes "
                 f"{ready.probes}; {task.task_id}: {len(ctx.items)} items, {ctx.total_tokens} tokens; editable-install "
                 f"check {'on' if arm.require_editable else 'off'}")
 
@@ -214,13 +232,16 @@ def check_ts_chunk_parse(tok):
 def check_arm3_ts_lsp_ready(tok):
     """Arm 3 through typescript-language-server on Express and tRPC: ready
     within ARM3_READY_TIMEOUT_S, >= 5 probes with >= 1 symbol, and the first
-    real T2 task retrieves a seed hover within budget."""
+    real T2 task retrieves a seed hover within budget. Targets the session's
+    corpus (`--corpus`); SKIP for a Python corpus (see arm3_lsp_ready)."""
     from benchmarks.corpora.resolver import resolve
     from harness.arms.arm3_lsp import Arm3PyrightLSP
     from harness.scoring.fairness import verify_ranking
     from harness.tasks.loaders import load_tasks
+    if C.CORPUS_LANGUAGE[TARGET_CORPUS] != "typescript":
+        raise SkipCheck(f"{TARGET_CORPUS} is a Python corpus: Arm 3 runs Pyright (arm3_lsp_ready)")
     notes, ok = [], True
-    for corpus in TS_CORPORA:
+    for corpus in (TARGET_CORPUS,):
         root = str(resolve(corpus))
         arm = Arm3PyrightLSP(tokenizer=tok)
         try:
@@ -489,6 +510,8 @@ def run(only: list[str] | None = None) -> list[dict]:
         try:
             ok, detail = fn(tok)
             status = "PASS" if ok else "FAIL"
+        except SkipCheck as exc:
+            status, detail = "SKIP", str(exc)
         except Exception as exc:  # noqa: BLE001 - every check must report, not crash the table
             status = "BLOCKED" if _blocked(exc) else "FAIL"
             detail = f"{type(exc).__name__}: {str(exc).splitlines()[0][:220] if str(exc) else ''}"
@@ -504,17 +527,22 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-blocked", action="store_true")
     ap.add_argument("--json", default=None)
     ap.add_argument("--only", nargs="*", default=None)
+    ap.add_argument("--corpus", choices=C.CORPORA, default="fastapi",
+                    help="the session's corpus: the Arm 3 readiness checks target it (default fastapi)")
     args = ap.parse_args(argv)
+    global TARGET_CORPUS
+    TARGET_CORPUS = args.corpus
+    print(f"[smoke] target corpus: {TARGET_CORPUS}", flush=True)
     rows = run(args.only)
     print("\n" + "-" * 72)
     print(f"{'CHECK':26s}{'STATUS':10s}")
     for r in rows:
         print(f"{r['check']:26s}{r['status']:10s}")
-    counts = {s: sum(r["status"] == s for r in rows) for s in ("PASS", "FAIL", "BLOCKED")}
-    print(f"PASS {counts['PASS']}  FAIL {counts['FAIL']}  BLOCKED {counts['BLOCKED']}")
+    counts = {s: sum(r["status"] == s for r in rows) for s in ("PASS", "FAIL", "BLOCKED", "SKIP")}
+    print(f"PASS {counts['PASS']}  FAIL {counts['FAIL']}  BLOCKED {counts['BLOCKED']}  SKIP {counts['SKIP']}")
     if args.json:
         with open(args.json, "w") as fh:
-            json.dump({"rows": rows, "counts": counts}, fh, indent=1)
+            json.dump({"corpus": TARGET_CORPUS, "rows": rows, "counts": counts}, fh, indent=1)
     if counts["FAIL"] or (counts["BLOCKED"] and not args.allow_blocked):
         return 1
     return 0

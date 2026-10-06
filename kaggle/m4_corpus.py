@@ -132,7 +132,7 @@ if os.path.exists(pushed) and not os.path.exists(f"{OUT}/checkpoint.json"):
     print(f"restored {n} checkpointed cells from {DEST}: the runner skips the completed ones")
 
 # ---- CPU smoke test (recorded; a BLOCKED check is reported, not fatal here) ----
-smoke = run([sys.executable, "-m", "harness.smoke_test_cpu", "--json", f"{OUT}/smoke_cpu.json"],
+smoke = run([sys.executable, "-m", "harness.smoke_test_cpu", "--corpus", CORPUS, "--json", f"{OUT}/smoke_cpu.json"],
             cwd=SCE_DIR, env=harness_env, check=False)
 print("CPU smoke exit code:", smoke.returncode)
 
