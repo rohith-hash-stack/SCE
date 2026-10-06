@@ -77,7 +77,8 @@ assert CORPUS in ("fastapi", "django", "express", "trpc"), CORPUS
 
 # ---- environment: apt + npm (idempotent) ----
 run("apt-get update -qq && apt-get install -y -qq zstd curl ripgrep", check=False)
-run("npm install -g pyright typescript typescript-language-server", check=False)
+# fail fast: without typescript-language-server, Arm 3 cannot index Express or tRPC
+run(["npm", "install", "-g", "pyright", "typescript", "typescript-language-server"], check=True)
 for tool in ("rg", "pyright-langserver", "typescript-language-server"):
     print(f"{tool}: {shutil.which(tool)}")
 

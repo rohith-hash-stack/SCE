@@ -157,3 +157,45 @@ also reports `arm3_ratio`: Arm 3's mean overlap over the mean of Arms 1, 2, 4
 and 5.
 - **Ratio well above 1:** the bias is measurable.
 - **Ratio near 1:** the bias is theoretical.
+
+## M4 results notes
+
+### Oracle T2 ceiling
+
+Oracle T2 mean TSR on FastAPI is 0.931 (not 1.00). On t02_010 the Oracle
+delivered all 5 gold bodies on all 3 seeds; the model named 4 of 5, omitting
+`fastapi.openapi.utils.generate_operation_summary` every time. Two other
+cells miss gold symbols on one seed each (t02_002 seed 43: 3 of 4 missed;
+t02_011 seed 44: 1 of 2 missed). This is the model's answer-extraction
+ceiling, not a retrieval failure: the bundles show the Oracle delivered every
+gold body in all 5 cells. On T5, the `delivered_symbols == gold_affected`
+assertion in `adapt_oracle` enforces this on every cell. The strict "name
+every gold" T2 rule is unchanged, and no task is excluded.
+
+| Task | Seed | Gold size | Named | Missing | Delivered |
+|---|---|---|---|---|---|
+| fastapi_t02_002_solve_dependencies_runtime_resolution | 43 | 4 | 1 | `fastapi.dependencies.utils.request_params_to_args`, `fastapi.dependencies.utils.request_body_to_args`, `fastapi.dependencies.utils.solve_generator` | 4/4 |
+| fastapi_t02_010_get_openapi_path_operation_metadata | 42 | 5 | 4 | `fastapi.openapi.utils.generate_operation_summary` | 5/5 |
+| fastapi_t02_010_get_openapi_path_operation_metadata | 43 | 5 | 4 | `fastapi.openapi.utils.generate_operation_summary` | 5/5 |
+| fastapi_t02_010_get_openapi_path_operation_metadata | 44 | 5 | 4 | `fastapi.openapi.utils.generate_operation_summary` | 5/5 |
+| fastapi_t02_011_get_fields_from_routes_recursion | 44 | 2 | 1 | `fastapi.dependencies.utils.get_flat_params` | 2/2 |
+
+### T5: prompt-gold gap
+
+T5 gold is transitive closure. The T5 prompt asks what breaks if X changes,
+which the model interprets as direct callers. This is a prompt-gold gap:
+Oracle T5 on FastAPI is 0.557 despite delivering the full transitive gold set
+on every cell. Reported as "direct-caller coverage at transitive-gold
+scoring". A transitive-prompt variant is a documented ablation for a
+follow-up, not part of M4.
+
+The FastAPI T5 numbers are kept; they are valid under this interpretation.
+For the paper: T5 numbers measure direct-caller retrieval against a
+transitive-reference gold, which is a conservative lower bound.
+
+### Cross-session drift
+
+Cross-session drift on FastAPI T2 was 50% of same-prompt cells (12 of 24) with
+1 TSR change. Prior runs: 2-8%. Under investigation; Django will indicate
+whether systemic.
+
