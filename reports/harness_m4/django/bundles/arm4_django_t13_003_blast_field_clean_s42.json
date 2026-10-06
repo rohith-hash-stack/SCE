@@ -1,0 +1,216 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t13_003_blast_field_clean",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"django/forms/fields.py\", \"pattern\": \"\\\\.clean\\\\(\"})\n680:        return super().clean(data):\n930:        value = super().clean(value):\n1006:        value = super().clean(value):\n1035:        super().clean(value):\n1037:            value = field.clean(value):\n1093:        DateField.clean(value[0]) and TimeField.clean(value[1]).:\n1130:                clean_data.append(field.clean(field_value)):",
+    "token_count": 122,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "\\.clean\\(",
+      "path": "django/forms/fields.py"
+     },
+     "engine_token_count": 122
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 1135, \"path\": \"django/forms/fields.py\", \"start_line\": 675})\n675:             # it should be validated from here on out as None (so it will be\n676:             # caught by the required check).\n677:             data = None\n678:         if not data and initial:\n679:             return initial\n680:         return super().clean(data)\n681: \n682:     def bound_data(self, _, initial):\n683:         return initial\n684: \n685:     def has_changed(self, initial, data):\n686:         return not self.disabled and data is not None\n687: \n688: \n689: class ImageField(FileField):\n690:     default_validators = [validators.validate_image_file_extension]\n691:     default_error_messages = {\n692:         \"invalid_image\": _(\n693:             \"Upload a valid image. The file you uploaded was either not an \"\n694:             \"image or a corrupted image.\"\n695:         ),\n696:     }\n697: \n698:     def to_python(self, data):\n699:         \"\"\"\n700:         Check that the file-upload field data contains a valid image (GIF, JPG,\n701:         PNG, etc. -- whatever Pillow supports).\n702:         \"\"\"\n703:         f = super().to_python(data)\n704:         if f is None:\n705:             return None\n706: \n707:         from PIL import Image\n708: \n709:         # We need to get a file object for Pillow. We might have a path or we might\n710:         # have to read the data into memory.\n711:         if hasattr(data, \"temporary_file_path\"):\n712:             file = data.temporary_file_path()\n713:         else:\n714:             if hasattr(data, \"read\"):\n715:                 file = BytesIO(data.read())\n716:             else:\n717:                 file = BytesIO(data[\"content\"])\n718: \n719:         try:\n720:             # load() could spot a truncated JPEG, but it loads the entire\n721:             # image in memory, which is a DoS vector. See #3848 and #18520.\n722:             image = Image.open(file)\n723:             # verify() must be called immediately after the constructor.\n724:             image.verify()\n725: \n726:             # Annotating so subclasses can reuse it for their own validation\n727:             f.image = image\n728:             # Pillow doesn't detect the MIME type of all formats. In those\n729:             # cases, content_type will be None.\n730:             f.content_type = Image.MIME.get(image.format)\n731:         except Exception as exc:\n732:             # Pillow doesn't recognize it as an image.\n733:             raise ValidationError(\n734:                 self.error_messages[\"invalid_image\"],\n735:                 code=\"invalid_image\",\n736:             ) from exc\n737:         if hasattr(f, \"seek\") and callable(f.seek):\n738:             f.seek(0)\n739:         return f\n740: \n741:     def widget_attrs(self, widget):\n742:         attrs = super().widget_attrs(widget)\n743:         if isinstance(widget, FileInput) and \"accept\" not in widget.attrs:\n744:             attrs.setdefault(\"accept\", \"image/*\")\n745:         return attrs\n746: \n747: \n748: class URLField(CharField):\n749:     widget = URLInput\n750:     default_error_messages = {\n751:         \"invalid\": _(\"Enter a valid URL.\"),\n752:     }\n753:     default_validators = [validators.URLValidator()]\n754: \n755:     def __init__(self, **kwargs):\n756:         super().__init__(strip=True, **kwargs)\n757: \n758:     def to_python(self, value):\n759:         value = super().to_python(value)\n760:         if value:\n761:             # Detect scheme via partition to avoid calling urlsplit() on\n762:             # potentially large or slow-to-normalize inputs.\n763:             scheme, sep, _ = value.partition(\":\")\n764:             if (\n765:                 not sep\n766:                 or not scheme\n767:                 or not scheme[0].isascii()\n768:                 or not scheme[0].isalpha()\n769:                 or \"/\" in scheme\n770:             ):\n771:                 # No valid scheme found -- prepend the assumed scheme. Handle\n772:                 # scheme-relative URLs (\"//example.com\") separately.\n773:                 if value.startswith(\"//\"):\n774:                     value = \"http:\" + value\n775:                 else:\n776:                     value = \"http://\" + value\n777:         return value\n778: \n779: \n780: class BooleanField(Field):\n781:     widget = CheckboxInput\n782: \n783:     def to_python(self, value):\n784:         \"\"\"Return a Python boolean object.\"\"\"\n785:         # Explicitly check for the string 'False', which is what a hidden field\n786:         # will submit for False. Also check for '0', since this is what\n787:         # RadioSelect will provide. Because bool(\"True\") == bool('1') == True,\n788:         # we don't need to handle that explicitly.\n789:         if isinstance(value, str) and value.lower() in (\"false\", \"0\"):\n790:             value = False\n791:         else:\n792:             value = bool(value)\n793:         return super().to_python(value)\n794: \n795:     def validate(self, value):\n796:         if not value and self.required:\n797:             raise ValidationError(self.error_messages[\"required\"], code=\"required\")\n798: \n799:     def has_changed(self, initial, data):\n800:         if self.disabled:\n801:             return False\n802:         # Sometimes data or initial may be a string equivalent of a boolean\n803:         # so we should run it through to_python first to get a boolean value\n804:         return self.to_python(initial) != self.to_python(data)\n805: \n806: \n807: class NullBooleanField(BooleanField):\n808:     \"\"\"\n809:     A field whose valid values are None, True, and False. Clean invalid values\n810:     to None.\n811:     \"\"\"\n812: \n813:     widget = NullBooleanSelect\n814: \n815:     def to_python(self, value):\n816:         \"\"\"\n817:         Explicitly check for the string 'True' and 'False', which is what a\n818:         hidden field will submit for True and False, for 'true' and 'false',\n819:         which are likely to be returned by JavaScript serializations of forms,\n820:         and for '1' and '0', which is what a RadioField will submit. Unlike\n821:         the Booleanfield, this field must check for True because it doesn't\n822:         use the bool() function.\n823:         \"\"\"\n824:         if value in (True, \"True\", \"true\", \"1\"):\n[lines 675-824 of 1385]",
+    "token_count": 1808,
+    "rank": 2,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.forms.fields.FileField",
+     "django.forms.fields.FileField.clean",
+     "django.forms.fields.FileField.bound_data",
+     "django.forms.fields.FileField.has_changed",
+     "django.forms.fields.ImageField",
+     "django.forms.fields.ImageField.to_python",
+     "django.forms.fields.ImageField.widget_attrs",
+     "django.forms.fields.URLField",
+     "django.forms.fields.URLField.__init__",
+     "django.forms.fields.URLField.to_python",
+     "django.forms.fields.BooleanField",
+     "django.forms.fields.BooleanField.to_python",
+     "django.forms.fields.BooleanField.validate",
+     "django.forms.fields.BooleanField.has_changed",
+     "django.forms.fields.NullBooleanField",
+     "django.forms.fields.NullBooleanField.to_python"
+    ],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "django/forms/fields.py",
+      "start_line": 675,
+      "end_line": 1135
+     },
+     "engine_token_count": 1808
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1930,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are assessing the blast radius of changing what `Field.clean`\nreturns (e.g. wrapping the cleaned value in a result object instead\nof returning it directly) in django/forms/fields.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.clean(...)`'s return value - callers that only\ncall `.clean(...)` for validation side effects without binding the\nresult do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 2,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "Let's start by identifying where `Field.clean` is called within the repository. We'll use `grep` to search for occurrences of `.clean(` in the `django/forms/fields.py` file.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"\\\\.clean\\\\(\", \"path\": \"django/forms/fields.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "\\.clean\\(",
+        "path": "django/forms/fields.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "\\.clean\\(",
+        "path": "django/forms/fields.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 74,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "Based on the grep results, we have identified several calls to `Field.clean` in `django/forms/fields.py`. However, we need to determine which of these calls bind or unpack the return value of `Field.clean`.\n\nLet's read the relevant lines to understand the context of each call.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/forms/fields.py\", \"start_line\": 675, \"end_line\": 1135}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/forms/fields.py",
+        "start_line": 675,
+        "end_line": 1135
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/forms/fields.py",
+        "start_line": 675,
+        "end_line": 1135
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 102,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "From the grep and read results, we can see that the following lines bind or unpack the return value of `Field.clean`:\n\n1. **Line 680**: `return super().clean(data)`\n2. **Line 930**: `value = super().clean(value)`\n3. **Line 1006**: `value = super().clean(value)`\n4. **Line 1093**: `DateField.clean(value[0]) and TimeField.clean(value[1]).`\n\nThe other calls to `.clean` (lines 1035, 1037, and 1130) do not bind or unpack the return value.\n\nNow, let's identify the fully-qualified names of the affected symbols:\n\n1. `django.forms.fields.Field.clean`\n2. `django.forms.fields.DateField.clean`\n3. `django.forms.fields.TimeField.clean`\n\n<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The calls to Field.clean in lines 680, 930, 1006, and 1093 bind or unpack the return value. The other calls do not.\\\", \\\"symbols\\\": [\\\"django.forms.fields.Field.clean\\\", \\\"django.forms.fields.DateField.clean\\\", \\\"django.forms.fields.TimeField.clean\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The calls to Field.clean in lines 680, 930, 1006, and 1093 bind or unpack the return value. The other calls do not.\", \"symbols\": [\"django.forms.fields.Field.clean\", \"django.forms.fields.DateField.clean\", \"django.forms.fields.TimeField.clean\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 284,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     6074.35115,
+     6583.324652,
+     20528.629152
+    ],
+    "L_tool_exec": [
+     3.581767,
+     0.54456
+    ],
+    "L_retrieve": [
+     33229.427029
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 2808,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The calls to Field.clean in lines 680, 930, 1006, and 1093 bind or unpack the return value. The other calls do not.\", \"symbols\": [\"django.forms.fields.Field.clean\", \"django.forms.fields.DateField.clean\", \"django.forms.fields.TimeField.clean\"]}\n```",
+    "generation_tokens": 284,
+    "latency_seconds": 20.528445742998883,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2841,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1930,
+   "prompt_tokens": 2808,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2841,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

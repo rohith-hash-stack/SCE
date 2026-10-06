@@ -1,0 +1,681 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t13_001_blast_reverse",
+  "items": [
+   {
+    "source_id": "django/utils/regex_helper.py:1-26",
+    "content": "# django/utils/regex_helper.py:1-26  (django.utils.regex_helper)\n\"\"\"\nFunctions for reversing a regular expression (used in reverse URL resolving).\nUsed internally by Django and not intended for external use.\n\nThis is not, and is not intended to be, a complete reg-exp decompiler. It\nshould be good enough for a large class of URLS, however.\n\"\"\"\nimport re\n\nfrom django.utils.functional import SimpleLazyObject\n\n# Mapping of an escape character to a representative of that class. So, e.g.,\n# \"\\w\" is replaced by \"x\" in a reverse URL. A value of None means to ignore\n# this sequence. Any missing key is mapped to itself.\nESCAPE_MAPPINGS = {\n    \"A\": None,\n    \"b\": None,\n    \"B\": None,\n    \"d\": \"0\",\n    \"D\": \"x\",\n    \"s\": \" \",\n    \"S\": \"x\",\n    \"w\": \"x\",\n    \"W\": \"!\",\n    \"Z\": None,\n}",
+    "token_count": 216,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": 0.4559890329837799,
+     "bm25_rank": 1,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 216
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/base.py:1-91",
+    "content": "# django/template/base.py:1-91  (django.template.base)\n\"\"\"\nThis is the Django template system.\n\nHow it works:\n\nThe Lexer.tokenize() method converts a template string (i.e., a string\ncontaining markup with custom template tags) to tokens, which can be either\nplain text (TokenType.TEXT), variables (TokenType.VAR), or block statements\n(TokenType.BLOCK).\n\nThe Parser() class takes a list of tokens in its constructor, and its parse()\nmethod returns a compiled template -- which is, under the hood, a list of\nNode objects.\n\nEach Node is responsible for creating some sort of output -- e.g. simple text\n(TextNode), variable values in a given context (VariableNode), results of basic\nlogic (IfNode), results of looping (ForNode), or anything else. The core Node\ntypes are TextNode, VariableNode, IfNode and ForNode, but plugin modules can\ndefine their own custom node types.\n\nEach Node has a render() method, which takes a Context and returns a string of\nthe rendered node. For example, the render() method of a Variable Node returns\nthe variable's value as a string. The render() method of a ForNode returns the\nrendered output of whatever was inside the loop, recursively.\n\nThe Template class is a convenient wrapper that takes care of template\ncompilation and rendering.\n\nUsage:\n\nThe only thing you should ever use directly in this file is the Template class.\nCreate a compiled template object with a template_string, then call render()\nwith a context. In the compilation stage, the TemplateSyntaxError exception\nwill be raised if the template doesn't have proper syntax.\n\nSample code:\n\n>>> from django import template\n>>> s = '<html>{% if test %}<h1>{{ varvalue }}</h1>{% endif %}</html>'\n>>> t = template.Template(s)\n\n(t is now a compiled template, and its render() method can be called multiple\ntimes with multiple contexts)\n\n>>> c = template.Context({'test':True, 'varvalue': 'Hello'})\n>>> t.render(c)\n'<html><h1>Hello</h1></html>'\n>>> c = template.Context({'test':False, 'varvalue': 'Hello'})\n>>> t.render(c)\n'<html></html>'\n\"\"\"\n\nimport inspect\nimport logging\nimport re\nfrom enum import Enum\n\nfrom django.template.context import BaseContext\nfrom django.utils.formats import localize\nfrom django.utils.html import conditional_escape, escape\nfrom django.utils.regex_helper import _lazy_re_compile\nfrom django.utils.safestring import SafeData, SafeString, mark_safe\nfrom django.utils.text import get_text_list, smart_split, unescape_string_literal\nfrom django.utils.timezone import template_localtime\nfrom django.utils.translation import gettext_lazy, pgettext_lazy\n\nfrom .exceptions import TemplateSyntaxError\n\n# template syntax constants\nFILTER_SEPARATOR = \"|\"\nFILTER_ARGUMENT_SEPARATOR = \":\"\nVARIABLE_ATTRIBUTE_SEPARATOR = \".\"\nBLOCK_TAG_START = \"{%\"\nBLOCK_TAG_END = \"%}\"\nVARIABLE_TAG_START = \"{{\"\nVARIABLE_TAG_END = \"}}\"\nCOMMENT_TAG_START = \"{#\"\nCOMMENT_TAG_END = \"#}\"\nSINGLE_BRACE_START = \"{\"\nSINGLE_BRACE_END = \"}\"\n\n# what to report as the origin for templates that come from non-loader sources\n# (e.g. strings)\nUNKNOWN_SOURCE = \"<unknown source>\"\n\n# Match BLOCK_TAG_*, VARIABLE_TAG_*, and COMMENT_TAG_* tags and capture the\n# entire tag, including start/end delimiters. Using re.compile() is faster\n# than instantiating SimpleLazyObject with _lazy_re_compile().\ntag_re = re.compile(r\"({%.*?%}|{{.*?}}|{#.*?#})\")\n\nlogger = logging.getLogger(\"django.template\")",
+    "token_count": 770,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -0.19754663109779358,
+     "bm25_rank": 25,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 770
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:1-408",
+    "content": "# tests/urlpatterns_reverse/tests.py:1-408  (tests.urlpatterns_reverse.tests)\n\"\"\"\nUnit tests for reverse URL lookups.\n\"\"\"\nimport pickle\nimport sys\nimport threading\n\nfrom admin_scripts.tests import AdminScriptTestCase\n\nfrom django.conf import settings\nfrom django.contrib.auth.models import User\nfrom django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist\nfrom django.http import HttpRequest, HttpResponsePermanentRedirect, HttpResponseRedirect\nfrom django.shortcuts import redirect\nfrom django.test import RequestFactory, SimpleTestCase, TestCase, override_settings\nfrom django.test.utils import override_script_prefix\nfrom django.urls import (\n    NoReverseMatch,\n    Resolver404,\n    ResolverMatch,\n    URLPattern,\n    URLResolver,\n    get_callable,\n    get_resolver,\n    get_urlconf,\n    include,\n    path,\n    re_path,\n    resolve,\n    reverse,\n    reverse_lazy,\n)\nfrom django.urls.resolvers import RegexPattern\n\nfrom . import middleware, urlconf_outer, views\nfrom .utils import URLObject\nfrom .views import empty_view\n\nresolve_test_data = (\n    # These entries are in the format:\n    #   (path, url_name, app_name, namespace, view_name, func, args, kwargs)\n    # Simple case\n    (\n        \"/normal/42/37/\",\n        \"normal-view\",\n        \"\",\n        \"\",\n        \"normal-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/view_class/42/37/\",\n        \"view-class\",\n        \"\",\n        \"\",\n        \"view-class\",\n        views.view_class_instance,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/normal/42/37/\",\n        \"inc-normal-view\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-normal-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/view_class/42/37/\",\n        \"inc-view-class\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-view-class\",\n        views.view_class_instance,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    # Unnamed args are dropped if you have *any* kwargs in a pattern\n    (\n        \"/mixed_args/42/37/\",\n        \"mixed-args\",\n        \"\",\n        \"\",\n        \"mixed-args\",\n        views.empty_view,\n        (),\n        {\"extra\": True, \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/mixed_args/42/37/\",\n        \"inc-mixed-args\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-mixed-args\",\n        views.empty_view,\n        (),\n        {\"arg2\": \"37\"},\n    ),\n    (\n        \"/included/12/mixed_args/42/37/\",\n        \"inc-mixed-args\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-mixed-args\",\n        views.empty_view,\n        (),\n        {\"arg2\": \"37\"},\n    ),\n    # Unnamed views should have None as the url_name. Regression data for #21157.\n    (\n        \"/unnamed/normal/42/37/\",\n        None,\n        \"\",\n        \"\",\n        \"urlpatterns_reverse.views.empty_view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/unnamed/view_class/42/37/\",\n        None,\n        \"\",\n        \"\",\n        \"urlpatterns_reverse.views.ViewClass\",\n        views.view_class_instance,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    # If you have no kwargs, you get an args list.\n    (\n        \"/no_kwargs/42/37/\",\n        \"no-kwargs\",\n        \"\",\n        \"\",\n        \"no-kwargs\",\n        views.empty_view,\n        (\"42\", \"37\"),\n        {},\n    ),\n    (\n        \"/included/no_kwargs/42/37/\",\n        \"inc-no-kwargs\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-no-kwargs\",\n        views.empty_view,\n        (\"42\", \"37\"),\n        {},\n    ),\n    (\n        \"/included/12/no_kwargs/42/37/\",\n        \"inc-no-kwargs\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-no-kwargs\",\n        views.empty_view,\n        (\"12\", \"42\", \"37\"),\n        {},\n    ),\n    # Namespaces\n    (\n        \"/test1/inner/42/37/\",\n        \"urlobject-view\",\n        \"testapp\",\n        \"test-ns1\",\n        \"test-ns1:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:testapp\",\n        \"included_namespace_urls:test-ns3\",\n        \"included_namespace_urls:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/ns-included1/normal/42/37/\",\n        \"inc-normal-view\",\n        \"included_namespace_urls\",\n        \"inc-ns1\",\n        \"inc-ns1:inc-normal-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:testapp\",\n        \"included_namespace_urls:test-ns3\",\n        \"included_namespace_urls:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/default/inner/42/37/\",\n        \"urlobject-view\",\n        \"testapp\",\n        \"testapp\",\n        \"testapp:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/other2/inner/42/37/\",\n        \"urlobject-view\",\n        \"nodefault\",\n        \"other-ns2\",\n        \"other-ns2:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/other1/inner/42/37/\",\n        \"urlobject-view\",\n        \"nodefault\",\n        \"other-ns1\",\n        \"other-ns1:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    # Nested namespaces\n    (\n        \"/ns-included1/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:testapp\",\n        \"inc-ns1:test-ns3\",\n        \"inc-ns1:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/ns-included1/ns-included4/ns-included2/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:namespace_urls:included_namespace_urls:testapp\",\n        \"inc-ns1:inc-ns4:inc-ns2:test-ns3\",\n        \"inc-ns1:inc-ns4:inc-ns2:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/app-included/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:testapp\",\n        \"inc-app:test-ns3\",\n        \"inc-app:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/app-included/ns-included4/ns-included2/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:namespace_urls:included_namespace_urls:testapp\",\n        \"inc-app:inc-ns4:inc-ns2:test-ns3\",\n        \"inc-app:inc-ns4:inc-ns2:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    # Namespaces capturing variables\n    (\n        \"/inc70/\",\n        \"inner-nothing\",\n        \"included_urls\",\n        \"inc-ns5\",\n        \"inc-ns5:inner-nothing\",\n        views.empty_view,\n        (),\n        {\"outer\": \"70\"},\n    ),\n    (\n        \"/inc78/extra/foobar/\",\n        \"inner-extra\",\n        \"included_urls\",\n        \"inc-ns5\",\n        \"inc-ns5:inner-extra\",\n        views.empty_view,\n        (),\n        {\"outer\": \"78\", \"extra\": \"foobar\"},\n    ),\n)\n\ntest_data = (\n    (\"places\", \"/places/3/\", [3], {}),\n    (\"places\", \"/places/3/\", [\"3\"], {}),\n    (\"places\", NoReverseMatch, [\"a\"], {}),\n    (\"places\", NoReverseMatch, [], {}),\n    (\"places?\", \"/place/\", [], {}),\n    (\"places+\", \"/places/\", [], {}),\n    (\"places*\", \"/place/\", [], {}),\n    (\"places2?\", \"/\", [], {}),\n    (\"places2+\", \"/places/\", [], {}),\n    (\"places2*\", \"/\", [], {}),\n    (\"places3\", \"/places/4/\", [4], {}),\n    (\"places3\", \"/places/harlem/\", [\"harlem\"], {}),\n    (\"places3\", NoReverseMatch, [\"harlem64\"], {}),\n    (\"places4\", \"/places/3/\", [], {\"id\": 3}),\n    (\"people\", NoReverseMatch, [], {}),\n    (\"people\", \"/people/adrian/\", [\"adrian\"], {}),\n    (\"people\", \"/people/adrian/\", [], {\"name\": \"adrian\"}),\n    (\"people\", NoReverseMatch, [\"name with spaces\"], {}),\n    (\"people\", NoReverseMatch, [], {\"name\": \"name with spaces\"}),\n    (\"people2\", \"/people/name/\", [], {}),\n    (\"people2a\", \"/people/name/fred/\", [\"fred\"], {}),\n    (\"people_backref\", \"/people/nate-nate/\", [\"nate\"], {}),\n    (\"people_backref\", \"/people/nate-nate/\", [], {\"name\": \"nate\"}),\n    (\"optional\", \"/optional/fred/\", [], {\"name\": \"fred\"}),\n    (\"optional\", \"/optional/fred/\", [\"fred\"], {}),\n    (\"named_optional\", \"/optional/1/\", [1], {}),\n    (\"named_optional\", \"/optional/1/\", [], {\"arg1\": 1}),\n    (\"named_optional\", \"/optional/1/2/\", [1, 2], {}),\n    (\"named_optional\", \"/optional/1/2/\", [], {\"arg1\": 1, \"arg2\": 2}),\n    (\"named_optional_terminated\", \"/optional/1/\", [1], {}),\n    (\"named_optional_terminated\", \"/optional/1/\", [], {\"arg1\": 1}),\n    (\"named_optional_terminated\", \"/optional/1/2/\", [1, 2], {}),\n    (\"named_optional_terminated\", \"/optional/1/2/\", [], {\"arg1\": 1, \"arg2\": 2}),\n    (\"hardcoded\", \"/hardcoded/\", [], {}),\n    (\"hardcoded2\", \"/hardcoded/doc.pdf\", [], {}),\n    (\"people3\", \"/people/il/adrian/\", [], {\"state\": \"il\", \"name\": \"adrian\"}),\n    (\"people3\", NoReverseMatch, [], {\"state\": \"il\"}),\n    (\"people3\", NoReverseMatch, [], {\"name\": \"adrian\"}),\n    (\"people4\", NoReverseMatch, [], {\"state\": \"il\", \"name\": \"adrian\"}),\n    (\"people6\", \"/people/il/test/adrian/\", [\"il/test\", \"adrian\"], {}),\n    (\"people6\", \"/people//adrian/\", [\"adrian\"], {}),\n    (\"range\", \"/character_set/a/\", [], {}),\n    (\"range2\", \"/character_set/x/\", [], {}),\n    (\"price\", \"/price/$10/\", [\"10\"], {}),\n    (\"price2\", \"/price/$10/\", [\"10\"], {}),\n    (\"price3\", \"/price/$10/\", [\"10\"], {}),\n    (\n        \"product\",\n        \"/product/chocolate+($2.00)/\",\n        [],\n        {\"price\": \"2.00\", \"product\": \"chocolate\"},\n    ),\n    (\"headlines\", \"/headlines/2007.5.21/\", [], {\"year\": 2007, \"month\": 5, \"day\": 21}),\n    (\n        \"windows\",\n        r\"/windows_path/C:%5CDocuments%20and%20Settings%5Cspam/\",\n        [],\n        {\"drive_name\": \"C\", \"path\": r\"Documents and Settings\\spam\"},\n    ),\n    (\"special\", r\"/special_chars/~@+%5C$*%7C/\", [r\"~@+\\$*|\"], {}),\n    (\"special\", r\"/special_chars/some%20resource/\", [r\"some resource\"], {}),\n    (\"special\", r\"/special_chars/10%25%20complete/\", [r\"10% complete\"], {}),\n    (\"special\", r\"/special_chars/some%20resource/\", [], {\"chars\": r\"some resource\"}),\n    (\"special\", r\"/special_chars/10%25%20complete/\", [], {\"chars\": r\"10% complete\"}),\n    (\"special\", NoReverseMatch, [\"\"], {}),\n    (\"mixed\", \"/john/0/\", [], {\"name\": \"john\"}),\n    (\"repeats\", \"/repeats/a/\", [], {}),\n    (\"repeats2\", \"/repeats/aa/\", [], {}),\n    (\"repeats3\", \"/repeats/aa/\", [], {}),\n    (\"test\", \"/test/1\", [], {}),\n    (\"inner-nothing\", \"/outer/42/\", [], {\"outer\": \"42\"}),\n    (\"inner-nothing\", \"/outer/42/\", [\"42\"], {}),\n    (\"inner-nothing\", NoReverseMatch, [\"foo\"], {}),\n    (\"inner-extra\", \"/outer/42/extra/inner/\", [], {\"extra\": \"inner\", \"outer\": \"42\"}),\n    (\"inner-extra\", \"/outer/42/extra/inner/\", [\"42\", \"inner\"], {}),\n    (\"inner-extra\", NoReverseMatch, [\"fred\", \"inner\"], {}),\n    (\"inner-no-kwargs\", \"/outer-no-kwargs/42/inner-no-kwargs/1/\", [\"42\", \"1\"], {}),\n    (\"disjunction\", NoReverseMatch, [\"foo\"], {}),\n    (\"inner-disjunction\", NoReverseMatch, [\"10\", \"11\"], {}),\n    (\"extra-places\", \"/e-places/10/\", [\"10\"], {}),\n    (\"extra-people\", \"/e-people/fred/\", [\"fred\"], {}),\n    (\"extra-people\", \"/e-people/fred/\", [], {\"name\": \"fred\"}),\n    (\"part\", \"/part/one/\", [], {\"value\": \"one\"}),\n    (\"part\", \"/prefix/xx/part/one/\", [], {\"value\": \"one\", \"prefix\": \"xx\"}),\n    (\"part2\", \"/part2/one/\", [], {\"value\": \"one\"}),\n    (\"part2\", \"/part2/\", [], {}),\n    (\"part2\", \"/prefix/xx/part2/one/\", [], {\"value\": \"one\", \"prefix\": \"xx\"}),\n    (\"part2\", \"/prefix/xx/part2/\", [], {\"prefix\": \"xx\"}),\n    # Tests for nested groups. Nested capturing groups will only work if you\n    # *only* supply the correct outer group.\n    (\"nested-noncapture\", \"/nested/noncapture/opt\", [], {\"p\": \"opt\"}),\n    (\"nested-capture\", \"/nested/capture/opt/\", [\"opt/\"], {}),\n    (\"nested-capture\", NoReverseMatch, [], {\"p\": \"opt\"}),\n    (\"nested-mixedcapture\", \"/nested/capture/mixed/opt\", [\"opt\"], {}),\n    (\"nested-mixedcapture\", NoReverseMatch, [], {\"p\": \"opt\"}),\n    (\"nested-namedcapture\", \"/nested/capture/named/opt/\", [], {\"outer\": \"opt/\"}),\n    (\"nested-namedcapture\", NoReverseMatch, [], {\"outer\": \"opt/\", \"inner\": \"opt\"}),\n    (\"nested-namedcapture\", NoReverseMatch, [], {\"inner\": \"opt\"}),\n    (\"non_path_include\", \"/includes/non_path_include/\", [], {}),\n    # Tests for #13154\n    (\"defaults\", \"/defaults_view1/3/\", [], {\"arg1\": 3, \"arg2\": 1}),\n    (\"defaults\", \"/defaults_view2/3/\", [], {\"arg1\": 3, \"arg2\": 2}),\n    (\"defaults\", NoReverseMatch, [], {\"arg1\": 3, \"arg2\": 3}),\n    (\"defaults\", NoReverseMatch, [], {\"arg2\": 1}),\n    # Security tests\n    (\"security\", \"/%2Fexample.com/security/\", [\"/example.com\"], {}),\n)",
+    "token_count": 3830,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 40,
+     "rerank_score": -0.720496654510498,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": true,
+     "engine_token_count": 3830
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:1-30",
+    "content": "# django/urls/resolvers.py:1-30  (django.urls.resolvers)\n\"\"\"\nThis module converts requested URLs to callback view functions.\n\nURLResolver is the main class here. Its resolve() method takes a URL (as\na string) and returns a ResolverMatch object which provides access to all\nattributes of the resolved URL match.\n\"\"\"\nimport functools\nimport inspect\nimport re\nimport string\nfrom importlib import import_module\nfrom pickle import PicklingError\nfrom urllib.parse import quote\n\nfrom asgiref.local import Local\n\nfrom django.conf import settings\nfrom django.core.checks import Error, Warning\nfrom django.core.checks.urls import check_resolver\nfrom django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.functional import cached_property\nfrom django.utils.http import RFC3986_SUBDELIMS, escape_leading_slashes\nfrom django.utils.regex_helper import _lazy_re_compile, normalize\nfrom django.utils.translation import get_language\n\nfrom .converters import get_converter\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .utils import get_callable",
+    "token_count": 239,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -1.2469385862350464,
+     "bm25_rank": null,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 239
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context_processors.py:1-14",
+    "content": "# django/template/context_processors.py:1-14  (django.template.context_processors)\n\"\"\"\nA set of request processors that return dictionaries to be merged into a\ntemplate context. Each function takes the request object as its only parameter\nand returns a dictionary to add to the context.\n\nThese are referenced from the 'context_processors' option of the configuration\nof a DjangoTemplates backend and used by RequestContext.\n\"\"\"\n\nimport itertools\n\nfrom django.conf import settings\nfrom django.middleware.csrf import get_token\nfrom django.utils.functional import SimpleLazyObject, lazy",
+    "token_count": 109,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 39,
+     "rerank_score": -1.696294903755188,
+     "bm25_rank": 20,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns/tests.py:140-142",
+    "content": "# tests/urlpatterns/tests.py:140-142  (tests.urlpatterns.tests.SimplifiedURLTests.test_path_reverse_without_parameter)\nclass SimplifiedURLTests(SimpleTestCase):\n    def test_path_reverse_without_parameter(self):\n        url = reverse(\"articles-2003\")\n        self.assertEqual(url, \"/articles/2003/\")",
+    "token_count": 73,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns.tests.SimplifiedURLTests.test_path_reverse_without_parameter"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 22,
+     "rerank_score": -1.8801064491271973,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/nested_foreign_keys/tests.py:1-32",
+    "content": "# tests/nested_foreign_keys/tests.py:1-32  (tests.nested_foreign_keys.tests)\nfrom django.test import TestCase\n\nfrom .models import (\n    Event,\n    Movie,\n    Package,\n    PackageNullFK,\n    Person,\n    Screening,\n    ScreeningNullFK,\n)\n\n\n# These are tests for #16715. The basic scheme is always the same: 3 models with\n# 2 relations. The first relation may be null, while the second is non-nullable.\n# In some cases, Django would pick the wrong join type for the second relation,\n# resulting in missing objects in the queryset.\n#\n#   Model A\n#   | (Relation A/B : nullable)\n#   Model B\n#   | (Relation B/C : non-nullable)\n#   Model C\n#\n# Because of the possibility of NULL rows resulting from the LEFT OUTER JOIN\n# between Model A and Model B (i.e. instances of A without reference to B),\n# the second join must also be LEFT OUTER JOIN, so that we do not ignore\n# instances of A that do not reference B.\n#\n# Relation A/B can either be an explicit foreign key or an implicit reverse\n# relation such as introduced by one-to-one relations (through multi-table\n# inheritance).",
+    "token_count": 266,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": -2.2356278896331787,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 266
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/resolve_url/tests.py:53-60",
+    "content": "# tests/resolve_url/tests.py:53-60  (tests.resolve_url.tests.ResolveUrlTests.test_lazy_reverse)\nclass ResolveUrlTests(SimpleTestCase):\n    def test_lazy_reverse(self):\n        \"\"\"\n        Passing the result of reverse_lazy is resolved to a real URL\n        string.\n        \"\"\"\n        resolved_url = resolve_url(reverse_lazy(\"some-view\"))\n        self.assertIsInstance(resolved_url, str)\n        self.assertEqual(\"/some-url/\", resolved_url)",
+    "token_count": 93,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.resolve_url.tests.ResolveUrlTests.test_lazy_reverse"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 27,
+     "rerank_score": -2.4007859230041504,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 93
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/functions/text.py:253-254",
+    "content": "# django/db/models/functions/text.py:253-254  (django.db.models.functions.text.Reverse)\nclass Reverse(Transform):\n    function = \"REVERSE\"\n    lookup_name = \"reverse\"",
+    "token_count": 42,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.functions.text.Reverse"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 50,
+     "rerank_score": -2.425516128540039,
+     "bm25_rank": null,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 42
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns/tests.py:180-182",
+    "content": "# tests/urlpatterns/tests.py:180-182  (tests.urlpatterns.tests.SimplifiedURLTests.test_path_inclusion_is_reversible)\nclass SimplifiedURLTests(SimpleTestCase):\n    def test_path_inclusion_is_reversible(self):\n        url = reverse(\"inner-extra\", kwargs={\"extra\": \"something\"})\n        self.assertEqual(url, \"/included_urls/extra/something/\")",
+    "token_count": 80,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns.tests.SimplifiedURLTests.test_path_inclusion_is_reversible"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 14,
+     "rerank_score": -2.6487369537353516,
+     "bm25_rank": null,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/user_commands/management/commands/reverse_url.py:6-8",
+    "content": "# tests/user_commands/management/commands/reverse_url.py:6-8  (tests.user_commands.management.commands.reverse_url.Command)\nclass Command(BaseCommand):\n    \"\"\"\n    This command returns a URL from a reverse() call.\n    \"\"\"",
+    "token_count": 48,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.user_commands.management.commands.reverse_url.Command"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 44,
+     "rerank_score": -2.723865032196045,
+     "bm25_rank": null,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:1-18",
+    "content": "# django/urls/base.py:1-18  (django.urls.base)\nfrom urllib.parse import unquote, urlsplit, urlunsplit\n\nfrom asgiref.local import Local\n\nfrom django.utils.functional import lazy\nfrom django.utils.translation import override\n\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import _get_cached_resolver, get_ns_resolver, get_resolver\nfrom .utils import get_callable\n\n# SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for\n# the current thread (which is the only one we ever access), it is assumed to\n# be empty.\n_prefixes = Local()\n\n# Overridden URLconfs for each thread are stored here.\n_urlconfs = Local()",
+    "token_count": 156,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -2.8695335388183594,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_views.py:102-128",
+    "content": "# tests/auth_tests/test_views.py:102-128  (tests.auth_tests.test_views.AuthViewNamedURLTests.test_named_urls)\nclass AuthViewNamedURLTests(AuthViewsTestCase):\n    def test_named_urls(self):\n        \"Named URLs should be reversible\"\n        expected_named_urls = [\n            (\"login\", [], {}),\n            (\"logout\", [], {}),\n            (\"password_change\", [], {}),\n            (\"password_change_done\", [], {}),\n            (\"password_reset\", [], {}),\n            (\"password_reset_done\", [], {}),\n            (\n                \"password_reset_confirm\",\n                [],\n                {\n                    \"uidb64\": \"aaaaaaa\",\n                    \"token\": \"1111-aaaaa\",\n                },\n            ),\n            (\"password_reset_complete\", [], {}),\n        ]\n        for name, args, kwargs in expected_named_urls:\n            with self.subTest(name=name):\n                try:\n                    reverse(name, args=args, kwargs=kwargs)\n                except NoReverseMatch:\n                    self.fail(\n                        \"Reversal of url named '%s' failed with NoReverseMatch\" % name\n                    )",
+    "token_count": 220,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.auth_tests.test_views.AuthViewNamedURLTests.test_named_urls"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 49,
+     "rerank_score": -2.8725433349609375,
+     "bm25_rank": null,
+     "dense_rank": 25,
+     "oversized_chunk": false,
+     "engine_token_count": 220
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/backends/base/operations.py:16-500",
+    "content": "# django/db/backends/base/operations.py:16-500  (django.db.backends.base.operations.BaseDatabaseOperations)\nclass BaseDatabaseOperations:\n    \"\"\"\n    Encapsulate backend-specific differences, such as the way a backend\n    performs ordering or calculates the ID of a recently-inserted row.\n    \"\"\"\n\n    compiler_module = \"django.db.models.sql.compiler\"\n\n    # Integer field safe ranges by `internal_type` as documented\n    # in docs/ref/models/fields.txt.\n    integer_field_ranges = {\n        \"SmallIntegerField\": (-32768, 32767),\n        \"IntegerField\": (-2147483648, 2147483647),\n        \"BigIntegerField\": (-9223372036854775808, 9223372036854775807),\n        \"PositiveBigIntegerField\": (0, 9223372036854775807),\n        \"PositiveSmallIntegerField\": (0, 32767),\n        \"PositiveIntegerField\": (0, 2147483647),\n        \"SmallAutoField\": (-32768, 32767),\n        \"AutoField\": (-2147483648, 2147483647),\n        \"BigAutoField\": (-9223372036854775808, 9223372036854775807),\n    }\n    set_operators = {\n        \"union\": \"UNION\",\n        \"intersection\": \"INTERSECT\",\n        \"difference\": \"EXCEPT\",\n    }\n    # Mapping of Field.get_internal_type() (typically the model field's class\n    # name) to the data type to use for the Cast() function, if different from\n    # DatabaseWrapper.data_types.\n    cast_data_types = {}\n    # CharField data type if the max_length argument isn't provided.\n    cast_char_field_without_max_length = None\n\n    # Start and end points for window expressions.\n    PRECEDING = \"PRECEDING\"\n    FOLLOWING = \"FOLLOWING\"\n    UNBOUNDED_PRECEDING = \"UNBOUNDED \" + PRECEDING\n    UNBOUNDED_FOLLOWING = \"UNBOUNDED \" + FOLLOWING\n    CURRENT_ROW = \"CURRENT ROW\"\n\n    # Prefix for EXPLAIN queries, or None EXPLAIN isn't supported.\n    explain_prefix = None\n\n    def __init__(self, connection):\n        self.connection = connection\n        self._cache = None\n\n    def autoinc_sql(self, table, column):\n        \"\"\"\n        Return any SQL needed to support auto-incrementing primary keys, or\n        None if no SQL is necessary.\n\n        This SQL is executed when a table is created.\n        \"\"\"\n        return None\n\n    def bulk_batch_size(self, fields, objs):\n        \"\"\"\n        Return the maximum allowed batch size for the backend. The fields\n        are the fields going to be inserted in the batch, the objs contains\n        all the objects to be inserted.\n        \"\"\"\n        return len(objs)\n\n    def format_for_duration_arithmetic(self, sql):\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"format_for_duration_arithmetic() method.\"\n        )\n\n    def cache_key_culling_sql(self):\n        \"\"\"\n        Return an SQL query that retrieves the first cache key greater than the\n        n smallest.\n\n        This is used by the 'db' cache backend to determine where to start\n        culling.\n        \"\"\"\n        cache_key = self.quote_name(\"cache_key\")\n        return f\"SELECT {cache_key} FROM %s ORDER BY {cache_key} LIMIT 1 OFFSET %%s\"\n\n    def unification_cast_sql(self, output_field):\n        \"\"\"\n        Given a field instance, return the SQL that casts the result of a union\n        to that type. The resulting string should contain a '%s' placeholder\n        for the expression being cast.\n        \"\"\"\n        return \"%s\"\n\n    def date_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        extracts a value from the given date field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_extract_sql() \"\n            \"method\"\n        )\n\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        truncates the given date or datetime field field_name to a date object\n        with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_trunc_sql() \"\n            \"method.\"\n        )\n\n    def datetime_cast_date_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to date value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_date_sql() method.\"\n        )\n\n    def datetime_cast_time_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to time value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_time_sql() method\"\n        )\n\n    def datetime_extract_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that extracts a value from the given\n        datetime field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_extract_sql() \"\n            \"method\"\n        )\n\n    def datetime_trunc_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that truncates the given datetime field\n        field_name to a datetime object with only the given specificity.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_trunc_sql() \"\n            \"method\"\n        )\n\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\n        that truncates the given time or datetime field field_name to a time\n        object with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a time_trunc_sql() method\"\n        )\n\n    def time_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute', or 'second', return the SQL\n        that extracts a value from the given time field field_name.\n        \"\"\"\n        return self.date_extract_sql(lookup_type, sql, params)\n\n    def deferrable_sql(self):\n        \"\"\"\n        Return the SQL to make a constraint \"initially deferred\" during a\n        CREATE TABLE statement.\n        \"\"\"\n        return \"\"\n\n    def distinct_sql(self, fields, params):\n        \"\"\"\n        Return an SQL DISTINCT clause which removes duplicate rows from the\n        result set. If any fields are given, only check the given fields for\n        duplicates.\n        \"\"\"\n        if fields:\n            raise NotSupportedError(\n                \"DISTINCT ON fields is not supported by this database backend\"\n            )\n        else:\n            return [\"DISTINCT\"], []\n\n    def fetch_returned_insert_columns(self, cursor, returning_params):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT...RETURNING\n        statement into a table, return the newly created data.\n        \"\"\"\n        return cursor.fetchone()\n\n    def field_cast_sql(self, db_type, internal_type):\n        \"\"\"\n        Given a column type (e.g. 'BLOB', 'VARCHAR') and an internal type\n        (e.g. 'GenericIPAddressField'), return the SQL to cast it before using\n        it in a WHERE statement. The resulting string should contain a '%s'\n        placeholder for the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def force_no_ordering(self):\n        \"\"\"\n        Return a list used in the \"ORDER BY\" clause to force no ordering at\n        all. Return an empty list to include nothing in the ordering.\n        \"\"\"\n        return []\n\n    def for_update_sql(self, nowait=False, skip_locked=False, of=(), no_key=False):\n        \"\"\"\n        Return the FOR UPDATE SQL clause to lock rows for an update operation.\n        \"\"\"\n        return \"FOR%s UPDATE%s%s%s\" % (\n            \" NO KEY\" if no_key else \"\",\n            \" OF %s\" % \", \".join(of) if of else \"\",\n            \" NOWAIT\" if nowait else \"\",\n            \" SKIP LOCKED\" if skip_locked else \"\",\n        )\n\n    def _get_limit_offset_params(self, low_mark, high_mark):\n        offset = low_mark or 0\n        if high_mark is not None:\n            return (high_mark - offset), offset\n        elif offset:\n            return self.connection.ops.no_limit_value(), offset\n        return None, offset\n\n    def limit_offset_sql(self, low_mark, high_mark):\n        \"\"\"Return LIMIT/OFFSET SQL clause.\"\"\"\n        limit, offset = self._get_limit_offset_params(low_mark, high_mark)\n        return \" \".join(\n            sql\n            for sql in (\n                (\"LIMIT %d\" % limit) if limit else None,\n                (\"OFFSET %d\" % offset) if offset else None,\n            )\n            if sql\n        )\n\n    def last_executed_query(self, cursor, sql, params):\n        \"\"\"\n        Return a string of the query last executed by the given cursor, with\n        placeholders replaced with actual values.\n\n        `sql` is the raw query containing placeholders and `params` is the\n        sequence of parameters. These are used by default, but this method\n        exists for database backends to provide a better implementation\n        according to their own quoting schemes.\n        \"\"\"\n\n        # Convert params to contain string values.\n        def to_string(s):\n            return force_str(s, strings_only=True, errors=\"replace\")\n\n        if isinstance(params, (list, tuple)):\n            u_params = tuple(to_string(val) for val in params)\n        elif params is None:\n            u_params = ()\n        else:\n            u_params = {to_string(k): to_string(v) for k, v in params.items()}\n\n        return \"QUERY = %r - PARAMS = %r\" % (sql, u_params)\n\n    def last_insert_id(self, cursor, table_name, pk_name):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT statement into\n        a table that has an auto-incrementing ID, return the newly created ID.\n\n        `pk_name` is the name of the primary-key column.\n        \"\"\"\n        return cursor.lastrowid\n\n    def lookup_cast(self, lookup_type, internal_type=None):\n        \"\"\"\n        Return the string to use in a query when performing lookups\n        (\"contains\", \"like\", etc.). It should contain a '%s' placeholder for\n        the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def max_in_list_size(self):\n        \"\"\"\n        Return the maximum number of items that can be passed in a single 'IN'\n        list condition, or None if the backend does not impose a limit.\n        \"\"\"\n        return None\n\n    def max_name_length(self):\n        \"\"\"\n        Return the maximum length of table and column names, or None if there\n        is no limit.\n        \"\"\"\n        return None\n\n    def no_limit_value(self):\n        \"\"\"\n        Return the value to use for the LIMIT when we are wanting \"LIMIT\n        infinity\". Return None if the limit clause can be omitted in this case.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a no_limit_value() method\"\n        )\n\n    def pk_default_value(self):\n        \"\"\"\n        Return the value to use during an INSERT statement to specify that\n        the field should use its default value.\n        \"\"\"\n        return \"DEFAULT\"\n\n    def prepare_sql_script(self, sql):\n        \"\"\"\n        Take an SQL script that may contain multiple lines and return a list\n        of statements to feed to successive cursor.execute() calls.\n\n        Since few databases are able to process raw SQL scripts in a single\n        cursor.execute() call and PEP 249 doesn't talk about this use case,\n        the default implementation is conservative.\n        \"\"\"\n        return [\n            sqlparse.format(statement, strip_comments=True)\n            for statement in sqlparse.split(sql)\n            if statement\n        ]\n\n    def process_clob(self, value):\n        \"\"\"\n        Return the value of a CLOB column, for backends that return a locator\n        object that requires additional processing.\n        \"\"\"\n        return value\n\n    def return_insert_columns(self, fields):\n        \"\"\"\n        For backends that support returning columns as part of an insert query,\n        return the SQL and params to append to the INSERT query. The returned\n        fragment should contain a format string to hold the appropriate column.\n        \"\"\"\n        pass\n\n    def compiler(self, compiler_name):\n        \"\"\"\n        Return the SQLCompiler class corresponding to the given name,\n        in the namespace corresponding to the `compiler_module` attribute\n        on this backend.\n        \"\"\"\n        if self._cache is None:\n            self._cache = import_module(self.compiler_module)\n        return getattr(self._cache, compiler_name)\n\n    def quote_name(self, name):\n        \"\"\"\n        Return a quoted version of the given table, index, or column name. Do\n        not quote the given name if it's already been quoted.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a quote_name() method\"\n        )\n\n    def regex_lookup(self, lookup_type):\n        \"\"\"\n        Return the string to use in a query when performing regular expression\n        lookups (using \"regex\" or \"iregex\"). It should contain a '%s'\n        placeholder for the column being searched against.\n\n        If the feature is not supported (or part of it is not supported), raise\n        NotImplementedError.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a regex_lookup() method\"\n        )\n\n    def savepoint_create_sql(self, sid):\n        \"\"\"\n        Return the SQL for starting a new savepoint. Only required if the\n        \"uses_savepoints\" feature is True. The \"sid\" parameter is a string\n        for the savepoint id.\n        \"\"\"\n        return \"SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_commit_sql(self, sid):\n        \"\"\"\n        Return the SQL for committing the given savepoint.\n        \"\"\"\n        return \"RELEASE SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_rollback_sql(self, sid):\n        \"\"\"\n        Return the SQL for rolling back the given savepoint.\n        \"\"\"\n        return \"ROLLBACK TO SAVEPOINT %s\" % self.quote_name(sid)\n\n    def set_time_zone_sql(self):\n        \"\"\"\n        Return the SQL that will set the connection's time zone.\n\n        Return '' if the backend doesn't support time zones.\n        \"\"\"\n        return \"\"\n\n    def sql_flush(self, style, tables, *, reset_sequences=False, allow_cascade=False):\n        \"\"\"\n        Return a list of SQL statements required to remove all data from\n        the given database tables (without actually removing the tables\n        themselves).\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n\n        If `reset_sequences` is True, the list includes SQL statements required\n        to reset the sequences.\n\n        The `allow_cascade` argument determines whether truncation may cascade\n        to tables with foreign keys pointing the tables being truncated.\n        PostgreSQL requires a cascade even if these tables are empty.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations must provide an sql_flush() method\"\n        )\n\n    def execute_sql_flush(self, sql_list):\n        \"\"\"Execute a list of SQL statements to flush the database.\"\"\"\n        with transaction.atomic(\n            using=self.connection.alias,\n            savepoint=self.connection.features.can_rollback_ddl,\n        ):\n            with self.connection.cursor() as cursor:\n                for sql in sql_list:\n                    cursor.execute(sql)\n\n    def sequence_reset_by_name_sql(self, style, sequences):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences\n        passed in `sequences`.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []\n\n    def sequence_reset_sql(self, style, model_list):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences for\n        the given models.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []  # No sequence reset required by default.\n\n    def start_transaction_sql(self):\n        \"\"\"Return the SQL statement required to start a transaction.\"\"\"\n        return \"BEGIN;\"\n\n    def end_transaction_sql(self, success=True):\n        \"\"\"Return the SQL statement required to end a transaction.\"\"\"\n        if not success:\n            return \"ROLLBACK;\"\n        return \"COMMIT;\"\n\n    def tablespace_sql(self, tablespace, inline=False):\n        \"\"\"\n        Return the SQL that will be used in a query to define the tablespace.\n\n        Return '' if the backend doesn't support tablespaces.\n\n        If `inline` is True, append the SQL to a row; otherwise append it to\n        the entire CREATE TABLE or CREATE INDEX statement.\n        \"\"\"\n        return \"\"\n\n    def prep_for_like_query(self, x):\n        \"\"\"Prepare a value for use in a LIKE query.\"\"\"\n        return str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(\"%\", r\"\\%\").replace(\"_\", r\"\\_\")\n\n    # Same as prep_for_like_query(), but called for \"iexact\" matches, which\n    # need not necessarily be implemented using \"LIKE\" in the backend.\n    prep_for_iexact_query = prep_for_like_query",
+    "token_count": 3912,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.backends.base.operations.BaseDatabaseOperations"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 16,
+     "rerank_score": -2.949465274810791,
+     "bm25_rank": 8,
+     "dense_rank": null,
+     "oversized_chunk": true,
+     "engine_token_count": 3912
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/shortcuts.py:117-155",
+    "content": "# django/shortcuts.py:117-155  (django.shortcuts.resolve_url)\ndef resolve_url(to, *args, **kwargs):\n    \"\"\"\n    Return a URL appropriate for the arguments passed.\n\n    The arguments could be:\n\n        * A model: the model's `get_absolute_url()` function will be called.\n\n        * A view name, possibly with arguments: `urls.reverse()` will be used\n          to reverse-resolve the name.\n\n        * A URL, which will be returned as-is.\n    \"\"\"\n    # If it's a model, use get_absolute_url()\n    if hasattr(to, \"get_absolute_url\"):\n        return to.get_absolute_url()\n\n    if isinstance(to, Promise):\n        # Expand the lazy instance, as it can cause issues when it is passed\n        # further to some Python functions like urlparse.\n        to = str(to)\n\n    # Handle relative URLs\n    if isinstance(to, str) and to.startswith((\"./\", \"../\")):\n        return to\n\n    # Next try a reverse URL resolution.\n    try:\n        return reverse(to, args=args, kwargs=kwargs)\n    except NoReverseMatch:\n        # If this is a callable, re-raise.\n        if callable(to):\n            raise\n        # If this doesn't \"feel\" like a URL, re-raise.\n        if \"/\" not in to and \".\" not in to:\n            raise\n\n    # Finally, fall back and assume it's a URL\n    return to",
+    "token_count": 302,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.shortcuts.resolve_url"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 3,
+     "rerank_score": -3.147735118865967,
+     "bm25_rank": 4,
+     "dense_rank": 42,
+     "oversized_chunk": false,
+     "engine_token_count": 302
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:558-579",
+    "content": "# tests/urlpatterns_reverse/tests.py:558-579  (tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse_conflict)\nclass ResolverTests(SimpleTestCase):\n    def test_resolver_reverse_conflict(self):\n        \"\"\"\n        URL pattern name arguments don't need to be unique. The last registered\n        pattern takes precedence for conflicting names.\n        \"\"\"\n        resolver = get_resolver(\"urlpatterns_reverse.named_urls_conflict\")\n        test_urls = [\n            # (name, args, kwargs, expected)\n            # Without arguments, the last URL in urlpatterns has precedence.\n            (\"name-conflict\", (), {}, \"conflict/\"),\n            # With an arg, the last URL in urlpatterns has precedence.\n            (\"name-conflict\", (\"arg\",), {}, \"conflict-last/arg/\"),\n            # With a kwarg, other URL patterns can be reversed.\n            (\"name-conflict\", (), {\"first\": \"arg\"}, \"conflict-first/arg/\"),\n            (\"name-conflict\", (), {\"middle\": \"arg\"}, \"conflict-middle/arg/\"),\n            (\"name-conflict\", (), {\"last\": \"arg\"}, \"conflict-last/arg/\"),\n            # The number and order of the arguments don't interfere with reversing.\n            (\"name-conflict\", (\"arg\", \"arg\"), {}, \"conflict/arg/arg/\"),\n        ]\n        for name, args, kwargs, expected in test_urls:\n            with self.subTest(name=name, args=args, kwargs=kwargs):\n                self.assertEqual(resolver.reverse(name, *args, **kwargs), expected)",
+    "token_count": 323,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse_conflict"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 12,
+     "rerank_score": -3.2767508029937744,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 323
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:738-739",
+    "content": "# django/urls/resolvers.py:738-739  (django.urls.resolvers.URLResolver.reverse)\nclass URLResolver:\n    def reverse(self, lookup_view, *args, **kwargs):\n        return self._reverse_with_prefix(lookup_view, \"\", *args, **kwargs)",
+    "token_count": 61,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLResolver.reverse"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": -3.4252045154571533,
+     "bm25_rank": null,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaultfilters.py:576-585",
+    "content": "# django/template/defaultfilters.py:576-585  (django.template.defaultfilters.dictsortreversed)\n@register.filter(is_safe=False)\ndef dictsortreversed(value, arg):\n    \"\"\"\n    Given a list of dicts, return that list sorted in reverse order by the\n    property given in the argument.\n    \"\"\"\n    try:\n        return sorted(value, key=_property_resolver(arg), reverse=True)\n    except (AttributeError, TypeError):\n        return \"\"",
+    "token_count": 96,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.defaultfilters.dictsortreversed"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 35,
+     "rerank_score": -3.47957706451416,
+     "bm25_rank": 18,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:594-641",
+    "content": "# tests/urlpatterns_reverse/tests.py:594-641  (tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names)\nclass ResolverTests(SimpleTestCase):\n    def test_404_tried_urls_have_names(self):\n        \"\"\"\n        The list of URLs that come back from a Resolver404 exception contains\n        a list in the right format for printing out in the DEBUG 404 page with\n        both the patterns and URL names, if available.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        # this list matches the expected URL types and names returned when\n        # you try to resolve a nonexistent URL in the first level of included\n        # URLs in named_urls.py (e.g., '/included/nonexistent-url')\n        url_types_names = [\n            [{\"type\": URLPattern, \"name\": \"named-url1\"}],\n            [{\"type\": URLPattern, \"name\": \"named-url2\"}],\n            [{\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url3\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url4\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLResolver}],\n        ]\n        with self.assertRaisesMessage(Resolver404, \"tried\") as cm:\n            resolve(\"/included/nonexistent-url\", urlconf=urls)\n        e = cm.exception\n        # make sure we at least matched the root ('/') url resolver:\n        self.assertIn(\"tried\", e.args[0])\n        self.assertEqual(\n            len(e.args[0][\"tried\"]),\n            len(url_types_names),\n            \"Wrong number of tried URLs returned.  Expected %s, got %s.\"\n            % (len(url_types_names), len(e.args[0][\"tried\"])),\n        )\n        for tried, expected in zip(e.args[0][\"tried\"], url_types_names):\n            for t, e in zip(tried, expected):\n                with self.subTest(t):\n                    self.assertIsInstance(\n                        t, e[\"type\"]\n                    ), \"%s is not an instance of %s\" % (t, e[\"type\"])\n                    if \"name\" in e:\n                        if not e[\"name\"]:\n                            self.assertIsNone(\n                                t.name, \"Expected no URL name but found %s.\" % t.name\n                            )\n                        else:\n                            self.assertEqual(\n                                t.name,\n                                e[\"name\"],\n                                'Wrong URL name.  Expected \"%s\", got \"%s\".'\n                                % (e[\"name\"], t.name),\n                            )",
+    "token_count": 567,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 25,
+     "rerank_score": -3.576854705810547,
+     "bm25_rank": 13,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 567
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:441-444",
+    "content": "# tests/urlpatterns_reverse/tests.py:441-444  (tests.urlpatterns_reverse.tests.URLPatternReverse.test_reverse_none)\nclass URLPatternReverse(SimpleTestCase):\n    def test_reverse_none(self):\n        # Reversing None should raise an error, not return the last un-named view.\n        with self.assertRaises(NoReverseMatch):\n            reverse(None)",
+    "token_count": 77,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.URLPatternReverse.test_reverse_none"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 46,
+     "rerank_score": -3.698408603668213,
+     "bm25_rank": null,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 77
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:481-487",
+    "content": "# tests/urlpatterns_reverse/tests.py:481-487  (tests.urlpatterns_reverse.tests.URLPatternReverse.test_patterns_reported)\nclass URLPatternReverse(SimpleTestCase):\n    def test_patterns_reported(self):\n        # Regression for #17076\n        with self.assertRaisesMessage(\n            NoReverseMatch, r\"1 pattern(s) tried: ['people/(?P<name>\\\\w+)/$']\"\n        ):\n            # this url exists, but requires an argument\n            reverse(\"people\", args=[])",
+    "token_count": 110,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.URLPatternReverse.test_patterns_reported"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 18,
+     "rerank_score": -3.705048084259033,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 110
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:475-479",
+    "content": "# tests/urlpatterns_reverse/tests.py:475-479  (tests.urlpatterns_reverse.tests.URLPatternReverse.test_non_urlsafe_prefix_with_args)\nclass URLPatternReverse(SimpleTestCase):\n    @override_script_prefix(\"/%7Eme/\")\n    def test_non_urlsafe_prefix_with_args(self):\n        # Regression for #20022, adjusted for #24013 because ~ is an unreserved\n        # character. Tests whether % is escaped.\n        self.assertEqual(\"/%257Eme/places/1/\", reverse(\"places\", args=[1]))",
+    "token_count": 122,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.URLPatternReverse.test_non_urlsafe_prefix_with_args"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -3.743927478790283,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 122
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:793-806",
+    "content": "# tests/urlpatterns_reverse/tests.py:793-806  (tests.urlpatterns_reverse.tests.NamespaceTests.test_ambiguous_object)\nclass NamespaceTests(SimpleTestCase):\n    def test_ambiguous_object(self):\n        \"\"\"\n        Names deployed via dynamic URL objects that require namespaces can't\n        be resolved.\n        \"\"\"\n        test_urls = [\n            (\"urlobject-view\", [], {}),\n            (\"urlobject-view\", [37, 42], {}),\n            (\"urlobject-view\", [], {\"arg1\": 42, \"arg2\": 37}),\n        ]\n        for name, args, kwargs in test_urls:\n            with self.subTest(name=name, args=args, kwargs=kwargs):\n                with self.assertRaises(NoReverseMatch):\n                    reverse(name, args=args, kwargs=kwargs)",
+    "token_count": 167,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.NamespaceTests.test_ambiguous_object"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 38,
+     "rerank_score": -3.848155975341797,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 167
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:776-780",
+    "content": "# tests/urlpatterns_reverse/tests.py:776-780  (tests.urlpatterns_reverse.tests.ReverseShortcutTests.test_reverse_by_path_nested)\nclass ReverseShortcutTests(SimpleTestCase):\n    def test_reverse_by_path_nested(self):\n        # Views added to urlpatterns using include() should be reversible.\n        from .views import nested_view\n\n        self.assertEqual(reverse(nested_view), \"/includes/nested_path/\")",
+    "token_count": 83,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ReverseShortcutTests.test_reverse_by_path_nested"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": -3.919302463531494,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:546-556",
+    "content": "# tests/urlpatterns_reverse/tests.py:546-556  (tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse)\nclass ResolverTests(SimpleTestCase):\n    def test_resolver_reverse(self):\n        resolver = get_resolver(\"urlpatterns_reverse.named_urls\")\n        test_urls = [\n            # (name, args, kwargs, expected)\n            (\"named-url1\", (), {}, \"\"),\n            (\"named-url2\", (\"arg\",), {}, \"extra/arg/\"),\n            (\"named-url2\", (), {\"extra\": \"arg\"}, \"extra/arg/\"),\n        ]\n        for name, args, kwargs, expected in test_urls:\n            with self.subTest(name=name, args=args, kwargs=kwargs):\n                self.assertEqual(resolver.reverse(name, *args, **kwargs), expected)",
+    "token_count": 161,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 36,
+     "rerank_score": -4.048866271972656,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 161
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/__init__.py:1-53",
+    "content": "# django/urls/__init__.py:1-53  (django.urls)\nfrom .base import (\n    clear_script_prefix,\n    clear_url_caches,\n    get_script_prefix,\n    get_urlconf,\n    is_valid_path,\n    resolve,\n    reverse,\n    reverse_lazy,\n    set_script_prefix,\n    set_urlconf,\n    translate_url,\n)\nfrom .conf import include, path, re_path\nfrom .converters import register_converter\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import (\n    LocalePrefixPattern,\n    ResolverMatch,\n    URLPattern,\n    URLResolver,\n    get_ns_resolver,\n    get_resolver,\n)\nfrom .utils import get_callable, get_mod_func\n\n__all__ = [\n    \"LocalePrefixPattern\",\n    \"NoReverseMatch\",\n    \"URLPattern\",\n    \"URLResolver\",\n    \"Resolver404\",\n    \"ResolverMatch\",\n    \"clear_script_prefix\",\n    \"clear_url_caches\",\n    \"get_callable\",\n    \"get_mod_func\",\n    \"get_ns_resolver\",\n    \"get_resolver\",\n    \"get_script_prefix\",\n    \"get_urlconf\",\n    \"include\",\n    \"is_valid_path\",\n    \"path\",\n    \"re_path\",\n    \"register_converter\",\n    \"resolve\",\n    \"reverse\",\n    \"reverse_lazy\",\n    \"set_script_prefix\",\n    \"set_urlconf\",\n    \"translate_url\",\n]",
+    "token_count": 291,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -4.157864570617676,
+     "bm25_rank": null,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 291
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:91-91",
+    "content": "# django/urls/base.py:91-91  (django.urls.base)\nreverse_lazy = lazy(reverse, str)",
+    "token_count": 26,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 19,
+     "rerank_score": -4.270063877105713,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 26
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:834-844",
+    "content": "# tests/urlpatterns_reverse/tests.py:834-844  (tests.urlpatterns_reverse.tests.NamespaceTests.test_normal_name)\nclass NamespaceTests(SimpleTestCase):\n    def test_normal_name(self):\n        \"\"\"Normal lookups work as expected.\"\"\"\n        test_urls = [\n            (\"normal-view\", [], {}, \"/normal/\"),\n            (\"normal-view\", [37, 42], {}, \"/normal/37/42/\"),\n            (\"normal-view\", [], {\"arg1\": 42, \"arg2\": 37}, \"/normal/42/37/\"),\n            (\"special-view\", [], {}, \"/+%5C$*/\"),\n        ]\n        for name, args, kwargs, expected in test_urls:\n            with self.subTest(name=name, args=args, kwargs=kwargs):\n                self.assertEqual(reverse(name, args=args, kwargs=kwargs), expected)",
+    "token_count": 182,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.NamespaceTests.test_normal_name"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 34,
+     "rerank_score": -4.275951385498047,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 182
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:536-544",
+    "content": "# tests/urlpatterns_reverse/tests.py:536-544  (tests.urlpatterns_reverse.tests.ResolverTests.test_reverse_lazy_object_coercion_by_resolve)\nclass ResolverTests(SimpleTestCase):\n    def test_reverse_lazy_object_coercion_by_resolve(self):\n        \"\"\"\n        Verifies lazy object returned by reverse_lazy is coerced to\n        text by resolve(). Previous to #21043, this would raise a TypeError.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        proxy_url = reverse_lazy(\"named-url1\", urlconf=urls)\n        resolver = get_resolver(urls)\n        resolver.resolve(proxy_url)",
+    "token_count": 131,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_reverse_lazy_object_coercion_by_resolve"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 32,
+     "rerank_score": -4.4159698486328125,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/utils.py:400-410",
+    "content": "# django/test/utils.py:400-410  (django.test.utils.TestContextDecorator)\nclass TestContextDecorator:\n    \"\"\"\n    A base class that can either be used as a context manager during tests\n    or as a test function or unittest.TestCase subclass decorator to perform\n    temporary alterations.\n\n    `attr_name`: attribute assigned the return value of enable() if used as\n                 a class decorator.\n\n    `kwarg_name`: keyword argument passing the return value of enable() if\n                  used as a function decorator.\n    \"\"\"",
+    "token_count": 111,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.utils.TestContextDecorator"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 28,
+     "rerank_score": -4.4568681716918945,
+     "bm25_rank": 15,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/gis/db/models/functions.py:503-503",
+    "content": "# django/contrib/gis/db/models/functions.py:503-503  (django.contrib.gis.db.models.functions.Reverse)\nclass Reverse(GeoFunc):\n    arity = 1",
+    "token_count": 40,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.gis.db.models.functions.Reverse"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 15,
+     "rerank_score": -4.481777191162109,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12904,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are assessing the blast radius of changing the return value shape\nof `django.urls.base.reverse` (e.g. changing it from a plain URL\nstring to a wrapper object) in django/urls/base.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `reverse`'s return value (a plain `x = reverse(...)`\nassignment, or a caller of such a caller two hops out) - callers that\nmerely pass `reverse(...)` straight through to another function\nwithout binding it locally do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "tests/urlpatterns/tests.py:239-269",
+    "django/urls/base.py:160-187",
+    "django/db/models/sql/query.py:1786-1869#part1of2",
+    "django/urls/resolvers.py:741-828",
+    "tests/urlpatterns_reverse/tests.py:1775-1785",
+    "django/core/management/base.py:184-268",
+    "tests/forms_tests/tests/test_forms.py:1628-1629#part4of4",
+    "django/urls/base.py:27-88",
+    "tests/forms_tests/tests/test_forms.py:2775-2786",
+    "django/db/models/fields/related_descriptors.py:953-958",
+    "django/utils/regex_helper.py:42-76#part1of3",
+    "django/template/defaulttags.py:1163-1228",
+    "django/core/cache/backends/base.py:216-233",
+    "django/db/models/fields/related_descriptors.py:1-82",
+    "django/db/transaction.py:143-174",
+    "django/db/models/deletion.py:118-140",
+    "django/template/context_processors.py:17-33",
+    "django/templatetags/i18n.py:358-453",
+    "django/template/loader_tags.py:277-298"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1271.746654
+    ],
+    "L_embed_query": [
+     242.398178
+    ],
+    "L_dense": [
+     57.34842
+    ],
+    "L_rrf": [
+     0.204901
+    ],
+    "L_rerank": [
+     26972.008671
+    ],
+    "L_retrieve": [
+     28627.818879
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12904,
+   "prompt_tokens": 13172,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13185,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/utils/regex_helper.py:1-26  (django.utils.regex_helper)\n\"\"\"\nFunctions for reversing a regular expression (used in reverse URL resolving).\nUsed internally by Django and not intended for external use.\n\nThis is not, and is not intended to be, a complete reg-exp decompiler. It\nshould be good enough for a large class of URLS, however.\n\"\"\"\nimport re\n\nfrom django.utils.functional import SimpleLazyObject\n\n# Mapping of an escape character to a representative of that class. So, e.g.,\n# \"\\w\" is replaced by \"x\" in a reverse URL. A value of None means to ignore\n# this sequence. Any missing key is mapped to itself.\nESCAPE_MAPPINGS = {\n    \"A\": None,\n    \"b\": None,\n    \"B\": None,\n    \"d\": \"0\",\n    \"D\": \"x\",\n    \"s\": \" \",\n    \"S\": \"x\",\n    \"w\": \"x\",\n    \"W\": \"!\",\n    \"Z\": None,\n}\n\n# django/template/base.py:1-91  (django.template.base)\n\"\"\"\nThis is the Django template system.\n\nHow it works:\n\nThe Lexer.tokenize() method converts a template string (i.e., a string\ncontaining markup with custom template tags) to tokens, which can be either\nplain text (TokenType.TEXT), variables (TokenType.VAR), or block statements\n(TokenType.BLOCK).\n\nThe Parser() class takes a list of tokens in its constructor, and its parse()\nmethod returns a compiled template -- which is, under the hood, a list of\nNode objects.\n\nEach Node is responsible for creating some sort of output -- e.g. simple text\n(TextNode), variable values in a given context (VariableNode), results of basic\nlogic (IfNode), results of looping (ForNode), or anything else. The core Node\ntypes are TextNode, VariableNode, IfNode and ForNode, but plugin modules can\ndefine their own custom node types.\n\nEach Node has a render() method, which takes a Context and returns a string of\nthe rendered node. For example, the render() method of a Variable Node returns\nthe variable's value as a string. The render() method of a ForNode returns the\nrendered output of whatever was inside the loop, recursively.\n\nThe Template class is a convenient wrapper that takes care of template\ncompilation and rendering.\n\nUsage:\n\nThe only thing you should ever use directly in this file is the Template class.\nCreate a compiled template object with a template_string, then call render()\nwith a context. In the compilation stage, the TemplateSyntaxError exception\nwill be raised if the template doesn't have proper syntax.\n\nSample code:\n\n>>> from django import template\n>>> s = '<html>{% if test %}<h1>{{ varvalue }}</h1>{% endif %}</html>'\n>>> t = template.Template(s)\n\n(t is now a compiled template, and its render() method can be called multiple\ntimes with multiple contexts)\n\n>>> c = template.Context({'test':True, 'varvalue': 'Hello'})\n>>> t.render(c)\n'<html><h1>Hello</h1></html>'\n>>> c = template.Context({'test':False, 'varvalue': 'Hello'})\n>>> t.render(c)\n'<html></html>'\n\"\"\"\n\nimport inspect\nimport logging\nimport re\nfrom enum import Enum\n\nfrom django.template.context import BaseContext\nfrom django.utils.formats import localize\nfrom django.utils.html import conditional_escape, escape\nfrom django.utils.regex_helper import _lazy_re_compile\nfrom django.utils.safestring import SafeData, SafeString, mark_safe\nfrom django.utils.text import get_text_list, smart_split, unescape_string_literal\nfrom django.utils.timezone import template_localtime\nfrom django.utils.translation import gettext_lazy, pgettext_lazy\n\nfrom .exceptions import TemplateSyntaxError\n\n# template syntax constants\nFILTER_SEPARATOR = \"|\"\nFILTER_ARGUMENT_SEPARATOR = \":\"\nVARIABLE_ATTRIBUTE_SEPARATOR = \".\"\nBLOCK_TAG_START = \"{%\"\nBLOCK_TAG_END = \"%}\"\nVARIABLE_TAG_START = \"{{\"\nVARIABLE_TAG_END = \"}}\"\nCOMMENT_TAG_START = \"{#\"\nCOMMENT_TAG_END = \"#}\"\nSINGLE_BRACE_START = \"{\"\nSINGLE_BRACE_END = \"}\"\n\n# what to report as the origin for templates that come from non-loader sources\n# (e.g. strings)\nUNKNOWN_SOURCE = \"<unknown source>\"\n\n# Match BLOCK_TAG_*, VARIABLE_TAG_*, and COMMENT_TAG_* tags and capture the\n# entire tag, including start/end delimiters. Using re.compile() is faster\n# than instantiating SimpleLazyObject with _lazy_re_compile().\ntag_re = re.compile(r\"({%.*?%}|{{.*?}}|{#.*?#})\")\n\nlogger = logging.getLogger(\"django.template\")\n\n# tests/urlpatterns_reverse/tests.py:1-408  (tests.urlpatterns_reverse.tests)\n\"\"\"\nUnit tests for reverse URL lookups.\n\"\"\"\nimport pickle\nimport sys\nimport threading\n\nfrom admin_scripts.tests import AdminScriptTestCase\n\nfrom django.conf import settings\nfrom django.contrib.auth.models import User\nfrom django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist\nfrom django.http import HttpRequest, HttpResponsePermanentRedirect, HttpResponseRedirect\nfrom django.shortcuts import redirect\nfrom django.test import RequestFactory, SimpleTestCase, TestCase, override_settings\nfrom django.test.utils import override_script_prefix\nfrom django.urls import (\n    NoReverseMatch,\n    Resolver404,\n    ResolverMatch,\n    URLPattern,\n    URLResolver,\n    get_callable,\n    get_resolver,\n    get_urlconf,\n    include,\n    path,\n    re_path,\n    resolve,\n    reverse,\n    reverse_lazy,\n)\nfrom django.urls.resolvers import RegexPattern\n\nfrom . import middleware, urlconf_outer, views\nfrom .utils import URLObject\nfrom .views import empty_view\n\nresolve_test_data = (\n    # These entries are in the format:\n    #   (path, url_name, app_name, namespace, view_name, func, args, kwargs)\n    # Simple case\n    (\n        \"/normal/42/37/\",\n        \"normal-view\",\n        \"\",\n        \"\",\n        \"normal-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/view_class/42/37/\",\n        \"view-class\",\n        \"\",\n        \"\",\n        \"view-class\",\n        views.view_class_instance,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/normal/42/37/\",\n        \"inc-normal-view\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-normal-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/view_class/42/37/\",\n        \"inc-view-class\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-view-class\",\n        views.view_class_instance,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    # Unnamed args are dropped if you have *any* kwargs in a pattern\n    (\n        \"/mixed_args/42/37/\",\n        \"mixed-args\",\n        \"\",\n        \"\",\n        \"mixed-args\",\n        views.empty_view,\n        (),\n        {\"extra\": True, \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/mixed_args/42/37/\",\n        \"inc-mixed-args\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-mixed-args\",\n        views.empty_view,\n        (),\n        {\"arg2\": \"37\"},\n    ),\n    (\n        \"/included/12/mixed_args/42/37/\",\n        \"inc-mixed-args\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-mixed-args\",\n        views.empty_view,\n        (),\n        {\"arg2\": \"37\"},\n    ),\n    # Unnamed views should have None as the url_name. Regression data for #21157.\n    (\n        \"/unnamed/normal/42/37/\",\n        None,\n        \"\",\n        \"\",\n        \"urlpatterns_reverse.views.empty_view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/unnamed/view_class/42/37/\",\n        None,\n        \"\",\n        \"\",\n        \"urlpatterns_reverse.views.ViewClass\",\n        views.view_class_instance,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    # If you have no kwargs, you get an args list.\n    (\n        \"/no_kwargs/42/37/\",\n        \"no-kwargs\",\n        \"\",\n        \"\",\n        \"no-kwargs\",\n        views.empty_view,\n        (\"42\", \"37\"),\n        {},\n    ),\n    (\n        \"/included/no_kwargs/42/37/\",\n        \"inc-no-kwargs\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-no-kwargs\",\n        views.empty_view,\n        (\"42\", \"37\"),\n        {},\n    ),\n    (\n        \"/included/12/no_kwargs/42/37/\",\n        \"inc-no-kwargs\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls\",\n        \"included_namespace_urls:inc-no-kwargs\",\n        views.empty_view,\n        (\"12\", \"42\", \"37\"),\n        {},\n    ),\n    # Namespaces\n    (\n        \"/test1/inner/42/37/\",\n        \"urlobject-view\",\n        \"testapp\",\n        \"test-ns1\",\n        \"test-ns1:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:testapp\",\n        \"included_namespace_urls:test-ns3\",\n        \"included_namespace_urls:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/ns-included1/normal/42/37/\",\n        \"inc-normal-view\",\n        \"included_namespace_urls\",\n        \"inc-ns1\",\n        \"inc-ns1:inc-normal-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/included/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:testapp\",\n        \"included_namespace_urls:test-ns3\",\n        \"included_namespace_urls:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/default/inner/42/37/\",\n        \"urlobject-view\",\n        \"testapp\",\n        \"testapp\",\n        \"testapp:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/other2/inner/42/37/\",\n        \"urlobject-view\",\n        \"nodefault\",\n        \"other-ns2\",\n        \"other-ns2:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/other1/inner/42/37/\",\n        \"urlobject-view\",\n        \"nodefault\",\n        \"other-ns1\",\n        \"other-ns1:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    # Nested namespaces\n    (\n        \"/ns-included1/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:testapp\",\n        \"inc-ns1:test-ns3\",\n        \"inc-ns1:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/ns-included1/ns-included4/ns-included2/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:namespace_urls:included_namespace_urls:testapp\",\n        \"inc-ns1:inc-ns4:inc-ns2:test-ns3\",\n        \"inc-ns1:inc-ns4:inc-ns2:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/app-included/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:testapp\",\n        \"inc-app:test-ns3\",\n        \"inc-app:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    (\n        \"/app-included/ns-included4/ns-included2/test3/inner/42/37/\",\n        \"urlobject-view\",\n        \"included_namespace_urls:namespace_urls:included_namespace_urls:testapp\",\n        \"inc-app:inc-ns4:inc-ns2:test-ns3\",\n        \"inc-app:inc-ns4:inc-ns2:test-ns3:urlobject-view\",\n        views.empty_view,\n        (),\n        {\"arg1\": \"42\", \"arg2\": \"37\"},\n    ),\n    # Namespaces capturing variables\n    (\n        \"/inc70/\",\n        \"inner-nothing\",\n        \"included_urls\",\n        \"inc-ns5\",\n        \"inc-ns5:inner-nothing\",\n        views.empty_view,\n        (),\n        {\"outer\": \"70\"},\n    ),\n    (\n        \"/inc78/extra/foobar/\",\n        \"inner-extra\",\n        \"included_urls\",\n        \"inc-ns5\",\n        \"inc-ns5:inner-extra\",\n        views.empty_view,\n        (),\n        {\"outer\": \"78\", \"extra\": \"foobar\"},\n    ),\n)\n\ntest_data = (\n    (\"places\", \"/places/3/\", [3], {}),\n    (\"places\", \"/places/3/\", [\"3\"], {}),\n    (\"places\", NoReverseMatch, [\"a\"], {}),\n    (\"places\", NoReverseMatch, [], {}),\n    (\"places?\", \"/place/\", [], {}),\n    (\"places+\", \"/places/\", [], {}),\n    (\"places*\", \"/place/\", [], {}),\n    (\"places2?\", \"/\", [], {}),\n    (\"places2+\", \"/places/\", [], {}),\n    (\"places2*\", \"/\", [], {}),\n    (\"places3\", \"/places/4/\", [4], {}),\n    (\"places3\", \"/places/harlem/\", [\"harlem\"], {}),\n    (\"places3\", NoReverseMatch, [\"harlem64\"], {}),\n    (\"places4\", \"/places/3/\", [], {\"id\": 3}),\n    (\"people\", NoReverseMatch, [], {}),\n    (\"people\", \"/people/adrian/\", [\"adrian\"], {}),\n    (\"people\", \"/people/adrian/\", [], {\"name\": \"adrian\"}),\n    (\"people\", NoReverseMatch, [\"name with spaces\"], {}),\n    (\"people\", NoReverseMatch, [], {\"name\": \"name with spaces\"}),\n    (\"people2\", \"/people/name/\", [], {}),\n    (\"people2a\", \"/people/name/fred/\", [\"fred\"], {}),\n    (\"people_backref\", \"/people/nate-nate/\", [\"nate\"], {}),\n    (\"people_backref\", \"/people/nate-nate/\", [], {\"name\": \"nate\"}),\n    (\"optional\", \"/optional/fred/\", [], {\"name\": \"fred\"}),\n    (\"optional\", \"/optional/fred/\", [\"fred\"], {}),\n    (\"named_optional\", \"/optional/1/\", [1], {}),\n    (\"named_optional\", \"/optional/1/\", [], {\"arg1\": 1}),\n    (\"named_optional\", \"/optional/1/2/\", [1, 2], {}),\n    (\"named_optional\", \"/optional/1/2/\", [], {\"arg1\": 1, \"arg2\": 2}),\n    (\"named_optional_terminated\", \"/optional/1/\", [1], {}),\n    (\"named_optional_terminated\", \"/optional/1/\", [], {\"arg1\": 1}),\n    (\"named_optional_terminated\", \"/optional/1/2/\", [1, 2], {}),\n    (\"named_optional_terminated\", \"/optional/1/2/\", [], {\"arg1\": 1, \"arg2\": 2}),\n    (\"hardcoded\", \"/hardcoded/\", [], {}),\n    (\"hardcoded2\", \"/hardcoded/doc.pdf\", [], {}),\n    (\"people3\", \"/people/il/adrian/\", [], {\"state\": \"il\", \"name\": \"adrian\"}),\n    (\"people3\", NoReverseMatch, [], {\"state\": \"il\"}),\n    (\"people3\", NoReverseMatch, [], {\"name\": \"adrian\"}),\n    (\"people4\", NoReverseMatch, [], {\"state\": \"il\", \"name\": \"adrian\"}),\n    (\"people6\", \"/people/il/test/adrian/\", [\"il/test\", \"adrian\"], {}),\n    (\"people6\", \"/people//adrian/\", [\"adrian\"], {}),\n    (\"range\", \"/character_set/a/\", [], {}),\n    (\"range2\", \"/character_set/x/\", [], {}),\n    (\"price\", \"/price/$10/\", [\"10\"], {}),\n    (\"price2\", \"/price/$10/\", [\"10\"], {}),\n    (\"price3\", \"/price/$10/\", [\"10\"], {}),\n    (\n        \"product\",\n        \"/product/chocolate+($2.00)/\",\n        [],\n        {\"price\": \"2.00\", \"product\": \"chocolate\"},\n    ),\n    (\"headlines\", \"/headlines/2007.5.21/\", [], {\"year\": 2007, \"month\": 5, \"day\": 21}),\n    (\n        \"windows\",\n        r\"/windows_path/C:%5CDocuments%20and%20Settings%5Cspam/\",\n        [],\n        {\"drive_name\": \"C\", \"path\": r\"Documents and Settings\\spam\"},\n    ),\n    (\"special\", r\"/special_chars/~@+%5C$*%7C/\", [r\"~@+\\$*|\"], {}),\n    (\"special\", r\"/special_chars/some%20resource/\", [r\"some resource\"], {}),\n    (\"special\", r\"/special_chars/10%25%20complete/\", [r\"10% complete\"], {}),\n    (\"special\", r\"/special_chars/some%20resource/\", [], {\"chars\": r\"some resource\"}),\n    (\"special\", r\"/special_chars/10%25%20complete/\", [], {\"chars\": r\"10% complete\"}),\n    (\"special\", NoReverseMatch, [\"\"], {}),\n    (\"mixed\", \"/john/0/\", [], {\"name\": \"john\"}),\n    (\"repeats\", \"/repeats/a/\", [], {}),\n    (\"repeats2\", \"/repeats/aa/\", [], {}),\n    (\"repeats3\", \"/repeats/aa/\", [], {}),\n    (\"test\", \"/test/1\", [], {}),\n    (\"inner-nothing\", \"/outer/42/\", [], {\"outer\": \"42\"}),\n    (\"inner-nothing\", \"/outer/42/\", [\"42\"], {}),\n    (\"inner-nothing\", NoReverseMatch, [\"foo\"], {}),\n    (\"inner-extra\", \"/outer/42/extra/inner/\", [], {\"extra\": \"inner\", \"outer\": \"42\"}),\n    (\"inner-extra\", \"/outer/42/extra/inner/\", [\"42\", \"inner\"], {}),\n    (\"inner-extra\", NoReverseMatch, [\"fred\", \"inner\"], {}),\n    (\"inner-no-kwargs\", \"/outer-no-kwargs/42/inner-no-kwargs/1/\", [\"42\", \"1\"], {}),\n    (\"disjunction\", NoReverseMatch, [\"foo\"], {}),\n    (\"inner-disjunction\", NoReverseMatch, [\"10\", \"11\"], {}),\n    (\"extra-places\", \"/e-places/10/\", [\"10\"], {}),\n    (\"extra-people\", \"/e-people/fred/\", [\"fred\"], {}),\n    (\"extra-people\", \"/e-people/fred/\", [], {\"name\": \"fred\"}),\n    (\"part\", \"/part/one/\", [], {\"value\": \"one\"}),\n    (\"part\", \"/prefix/xx/part/one/\", [], {\"value\": \"one\", \"prefix\": \"xx\"}),\n    (\"part2\", \"/part2/one/\", [], {\"value\": \"one\"}),\n    (\"part2\", \"/part2/\", [], {}),\n    (\"part2\", \"/prefix/xx/part2/one/\", [], {\"value\": \"one\", \"prefix\": \"xx\"}),\n    (\"part2\", \"/prefix/xx/part2/\", [], {\"prefix\": \"xx\"}),\n    # Tests for nested groups. Nested capturing groups will only work if you\n    # *only* supply the correct outer group.\n    (\"nested-noncapture\", \"/nested/noncapture/opt\", [], {\"p\": \"opt\"}),\n    (\"nested-capture\", \"/nested/capture/opt/\", [\"opt/\"], {}),\n    (\"nested-capture\", NoReverseMatch, [], {\"p\": \"opt\"}),\n    (\"nested-mixedcapture\", \"/nested/capture/mixed/opt\", [\"opt\"], {}),\n    (\"nested-mixedcapture\", NoReverseMatch, [], {\"p\": \"opt\"}),\n    (\"nested-namedcapture\", \"/nested/capture/named/opt/\", [], {\"outer\": \"opt/\"}),\n    (\"nested-namedcapture\", NoReverseMatch, [], {\"outer\": \"opt/\", \"inner\": \"opt\"}),\n    (\"nested-namedcapture\", NoReverseMatch, [], {\"inner\": \"opt\"}),\n    (\"non_path_include\", \"/includes/non_path_include/\", [], {}),\n    # Tests for #13154\n    (\"defaults\", \"/defaults_view1/3/\", [], {\"arg1\": 3, \"arg2\": 1}),\n    (\"defaults\", \"/defaults_view2/3/\", [], {\"arg1\": 3, \"arg2\": 2}),\n    (\"defaults\", NoReverseMatch, [], {\"arg1\": 3, \"arg2\": 3}),\n    (\"defaults\", NoReverseMatch, [], {\"arg2\": 1}),\n    # Security tests\n    (\"security\", \"/%2Fexample.com/security/\", [\"/example.com\"], {}),\n)\n\n# django/urls/resolvers.py:1-30  (django.urls.resolvers)\n\"\"\"\nThis module converts requested URLs to callback view functions.\n\nURLResolver is the main class here. Its resolve() method takes a URL (as\na string) and returns a ResolverMatch object which provides access to all\nattributes of the resolved URL match.\n\"\"\"\nimport functools\nimport inspect\nimport re\nimport string\nfrom importlib import import_module\nfrom pickle import PicklingError\nfrom urllib.parse import quote\n\nfrom asgiref.local import Local\n\nfrom django.conf import settings\nfrom django.core.checks import Error, Warning\nfrom django.core.checks.urls import check_resolver\nfrom django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.functional import cached_property\nfrom django.utils.http import RFC3986_SUBDELIMS, escape_leading_slashes\nfrom django.utils.regex_helper import _lazy_re_compile, normalize\nfrom django.utils.translation import get_language\n\nfrom .converters import get_converter\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .utils import get_callable\n\n# django/template/context_processors.py:1-14  (django.template.context_processors)\n\"\"\"\nA set of request processors that return dictionaries to be merged into a\ntemplate context. Each function takes the request object as its only parameter\nand returns a dictionary to add to the context.\n\nThese are referenced from the 'context_processors' option of the configuration\nof a DjangoTemplates backend and used by RequestContext.\n\"\"\"\n\nimport itertools\n\nfrom django.conf import settings\nfrom django.middleware.csrf import get_token\nfrom django.utils.functional import SimpleLazyObject, lazy\n\n# tests/urlpatterns/tests.py:140-142  (tests.urlpatterns.tests.SimplifiedURLTests.test_path_reverse_without_parameter)\nclass SimplifiedURLTests(SimpleTestCase):\n    def test_path_reverse_without_parameter(self):\n        url = reverse(\"articles-2003\")\n        self.assertEqual(url, \"/articles/2003/\")\n\n# tests/nested_foreign_keys/tests.py:1-32  (tests.nested_foreign_keys.tests)\nfrom django.test import TestCase\n\nfrom .models import (\n    Event,\n    Movie,\n    Package,\n    PackageNullFK,\n    Person,\n    Screening,\n    ScreeningNullFK,\n)\n\n\n# These are tests for #16715. The basic scheme is always the same: 3 models with\n# 2 relations. The first relation may be null, while the second is non-nullable.\n# In some cases, Django would pick the wrong join type for the second relation,\n# resulting in missing objects in the queryset.\n#\n#   Model A\n#   | (Relation A/B : nullable)\n#   Model B\n#   | (Relation B/C : non-nullable)\n#   Model C\n#\n# Because of the possibility of NULL rows resulting from the LEFT OUTER JOIN\n# between Model A and Model B (i.e. instances of A without reference to B),\n# the second join must also be LEFT OUTER JOIN, so that we do not ignore\n# instances of A that do not reference B.\n#\n# Relation A/B can either be an explicit foreign key or an implicit reverse\n# relation such as introduced by one-to-one relations (through multi-table\n# inheritance).\n\n# tests/resolve_url/tests.py:53-60  (tests.resolve_url.tests.ResolveUrlTests.test_lazy_reverse)\nclass ResolveUrlTests(SimpleTestCase):\n    def test_lazy_reverse(self):\n        \"\"\"\n        Passing the result of reverse_lazy is resolved to a real URL\n        string.\n        \"\"\"\n        resolved_url = resolve_url(reverse_lazy(\"some-view\"))\n        self.assertIsInstance(resolved_url, str)\n        self.assertEqual(\"/some-url/\", resolved_url)\n\n# django/db/models/functions/text.py:253-254  (django.db.models.functions.text.Reverse)\nclass Reverse(Transform):\n    function = \"REVERSE\"\n    lookup_name = \"reverse\"\n\n# tests/urlpatterns/tests.py:180-182  (tests.urlpatterns.tests.SimplifiedURLTests.test_path_inclusion_is_reversible)\nclass SimplifiedURLTests(SimpleTestCase):\n    def test_path_inclusion_is_reversible(self):\n        url = reverse(\"inner-extra\", kwargs={\"extra\": \"something\"})\n        self.assertEqual(url, \"/included_urls/extra/something/\")\n\n# tests/user_commands/management/commands/reverse_url.py:6-8  (tests.user_commands.management.commands.reverse_url.Command)\nclass Command(BaseCommand):\n    \"\"\"\n    This command returns a URL from a reverse() call.\n    \"\"\"\n\n# django/urls/base.py:1-18  (django.urls.base)\nfrom urllib.parse import unquote, urlsplit, urlunsplit\n\nfrom asgiref.local import Local\n\nfrom django.utils.functional import lazy\nfrom django.utils.translation import override\n\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import _get_cached_resolver, get_ns_resolver, get_resolver\nfrom .utils import get_callable\n\n# SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for\n# the current thread (which is the only one we ever access), it is assumed to\n# be empty.\n_prefixes = Local()\n\n# Overridden URLconfs for each thread are stored here.\n_urlconfs = Local()\n\n# tests/auth_tests/test_views.py:102-128  (tests.auth_tests.test_views.AuthViewNamedURLTests.test_named_urls)\nclass AuthViewNamedURLTests(AuthViewsTestCase):\n    def test_named_urls(self):\n        \"Named URLs should be reversible\"\n        expected_named_urls = [\n            (\"login\", [], {}),\n            (\"logout\", [], {}),\n            (\"password_change\", [], {}),\n            (\"password_change_done\", [], {}),\n            (\"password_reset\", [], {}),\n            (\"password_reset_done\", [], {}),\n            (\n                \"password_reset_confirm\",\n                [],\n                {\n                    \"uidb64\": \"aaaaaaa\",\n                    \"token\": \"1111-aaaaa\",\n                },\n            ),\n            (\"password_reset_complete\", [], {}),\n        ]\n        for name, args, kwargs in expected_named_urls:\n            with self.subTest(name=name):\n                try:\n                    reverse(name, args=args, kwargs=kwargs)\n                except NoReverseMatch:\n                    self.fail(\n                        \"Reversal of url named '%s' failed with NoReverseMatch\" % name\n                    )\n\n# django/db/backends/base/operations.py:16-500  (django.db.backends.base.operations.BaseDatabaseOperations)\nclass BaseDatabaseOperations:\n    \"\"\"\n    Encapsulate backend-specific differences, such as the way a backend\n    performs ordering or calculates the ID of a recently-inserted row.\n    \"\"\"\n\n    compiler_module = \"django.db.models.sql.compiler\"\n\n    # Integer field safe ranges by `internal_type` as documented\n    # in docs/ref/models/fields.txt.\n    integer_field_ranges = {\n        \"SmallIntegerField\": (-32768, 32767),\n        \"IntegerField\": (-2147483648, 2147483647),\n        \"BigIntegerField\": (-9223372036854775808, 9223372036854775807),\n        \"PositiveBigIntegerField\": (0, 9223372036854775807),\n        \"PositiveSmallIntegerField\": (0, 32767),\n        \"PositiveIntegerField\": (0, 2147483647),\n        \"SmallAutoField\": (-32768, 32767),\n        \"AutoField\": (-2147483648, 2147483647),\n        \"BigAutoField\": (-9223372036854775808, 9223372036854775807),\n    }\n    set_operators = {\n        \"union\": \"UNION\",\n        \"intersection\": \"INTERSECT\",\n        \"difference\": \"EXCEPT\",\n    }\n    # Mapping of Field.get_internal_type() (typically the model field's class\n    # name) to the data type to use for the Cast() function, if different from\n    # DatabaseWrapper.data_types.\n    cast_data_types = {}\n    # CharField data type if the max_length argument isn't provided.\n    cast_char_field_without_max_length = None\n\n    # Start and end points for window expressions.\n    PRECEDING = \"PRECEDING\"\n    FOLLOWING = \"FOLLOWING\"\n    UNBOUNDED_PRECEDING = \"UNBOUNDED \" + PRECEDING\n    UNBOUNDED_FOLLOWING = \"UNBOUNDED \" + FOLLOWING\n    CURRENT_ROW = \"CURRENT ROW\"\n\n    # Prefix for EXPLAIN queries, or None EXPLAIN isn't supported.\n    explain_prefix = None\n\n    def __init__(self, connection):\n        self.connection = connection\n        self._cache = None\n\n    def autoinc_sql(self, table, column):\n        \"\"\"\n        Return any SQL needed to support auto-incrementing primary keys, or\n        None if no SQL is necessary.\n\n        This SQL is executed when a table is created.\n        \"\"\"\n        return None\n\n    def bulk_batch_size(self, fields, objs):\n        \"\"\"\n        Return the maximum allowed batch size for the backend. The fields\n        are the fields going to be inserted in the batch, the objs contains\n        all the objects to be inserted.\n        \"\"\"\n        return len(objs)\n\n    def format_for_duration_arithmetic(self, sql):\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"format_for_duration_arithmetic() method.\"\n        )\n\n    def cache_key_culling_sql(self):\n        \"\"\"\n        Return an SQL query that retrieves the first cache key greater than the\n        n smallest.\n\n        This is used by the 'db' cache backend to determine where to start\n        culling.\n        \"\"\"\n        cache_key = self.quote_name(\"cache_key\")\n        return f\"SELECT {cache_key} FROM %s ORDER BY {cache_key} LIMIT 1 OFFSET %%s\"\n\n    def unification_cast_sql(self, output_field):\n        \"\"\"\n        Given a field instance, return the SQL that casts the result of a union\n        to that type. The resulting string should contain a '%s' placeholder\n        for the expression being cast.\n        \"\"\"\n        return \"%s\"\n\n    def date_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        extracts a value from the given date field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_extract_sql() \"\n            \"method\"\n        )\n\n    def date_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', or 'day', return the SQL that\n        truncates the given date or datetime field field_name to a date object\n        with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a date_trunc_sql() \"\n            \"method.\"\n        )\n\n    def datetime_cast_date_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to date value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_date_sql() method.\"\n        )\n\n    def datetime_cast_time_sql(self, sql, params, tzname):\n        \"\"\"\n        Return the SQL to cast a datetime value to time value.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a \"\n            \"datetime_cast_time_sql() method\"\n        )\n\n    def datetime_extract_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that extracts a value from the given\n        datetime field field_name.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_extract_sql() \"\n            \"method\"\n        )\n\n    def datetime_trunc_sql(self, lookup_type, sql, params, tzname):\n        \"\"\"\n        Given a lookup_type of 'year', 'month', 'day', 'hour', 'minute', or\n        'second', return the SQL that truncates the given datetime field\n        field_name to a datetime object with only the given specificity.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a datetime_trunc_sql() \"\n            \"method\"\n        )\n\n    def time_trunc_sql(self, lookup_type, sql, params, tzname=None):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute' or 'second', return the SQL\n        that truncates the given time or datetime field field_name to a time\n        object with only the given specificity.\n\n        If `tzname` is provided, the given value is truncated in a specific\n        timezone.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a time_trunc_sql() method\"\n        )\n\n    def time_extract_sql(self, lookup_type, sql, params):\n        \"\"\"\n        Given a lookup_type of 'hour', 'minute', or 'second', return the SQL\n        that extracts a value from the given time field field_name.\n        \"\"\"\n        return self.date_extract_sql(lookup_type, sql, params)\n\n    def deferrable_sql(self):\n        \"\"\"\n        Return the SQL to make a constraint \"initially deferred\" during a\n        CREATE TABLE statement.\n        \"\"\"\n        return \"\"\n\n    def distinct_sql(self, fields, params):\n        \"\"\"\n        Return an SQL DISTINCT clause which removes duplicate rows from the\n        result set. If any fields are given, only check the given fields for\n        duplicates.\n        \"\"\"\n        if fields:\n            raise NotSupportedError(\n                \"DISTINCT ON fields is not supported by this database backend\"\n            )\n        else:\n            return [\"DISTINCT\"], []\n\n    def fetch_returned_insert_columns(self, cursor, returning_params):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT...RETURNING\n        statement into a table, return the newly created data.\n        \"\"\"\n        return cursor.fetchone()\n\n    def field_cast_sql(self, db_type, internal_type):\n        \"\"\"\n        Given a column type (e.g. 'BLOB', 'VARCHAR') and an internal type\n        (e.g. 'GenericIPAddressField'), return the SQL to cast it before using\n        it in a WHERE statement. The resulting string should contain a '%s'\n        placeholder for the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def force_no_ordering(self):\n        \"\"\"\n        Return a list used in the \"ORDER BY\" clause to force no ordering at\n        all. Return an empty list to include nothing in the ordering.\n        \"\"\"\n        return []\n\n    def for_update_sql(self, nowait=False, skip_locked=False, of=(), no_key=False):\n        \"\"\"\n        Return the FOR UPDATE SQL clause to lock rows for an update operation.\n        \"\"\"\n        return \"FOR%s UPDATE%s%s%s\" % (\n            \" NO KEY\" if no_key else \"\",\n            \" OF %s\" % \", \".join(of) if of else \"\",\n            \" NOWAIT\" if nowait else \"\",\n            \" SKIP LOCKED\" if skip_locked else \"\",\n        )\n\n    def _get_limit_offset_params(self, low_mark, high_mark):\n        offset = low_mark or 0\n        if high_mark is not None:\n            return (high_mark - offset), offset\n        elif offset:\n            return self.connection.ops.no_limit_value(), offset\n        return None, offset\n\n    def limit_offset_sql(self, low_mark, high_mark):\n        \"\"\"Return LIMIT/OFFSET SQL clause.\"\"\"\n        limit, offset = self._get_limit_offset_params(low_mark, high_mark)\n        return \" \".join(\n            sql\n            for sql in (\n                (\"LIMIT %d\" % limit) if limit else None,\n                (\"OFFSET %d\" % offset) if offset else None,\n            )\n            if sql\n        )\n\n    def last_executed_query(self, cursor, sql, params):\n        \"\"\"\n        Return a string of the query last executed by the given cursor, with\n        placeholders replaced with actual values.\n\n        `sql` is the raw query containing placeholders and `params` is the\n        sequence of parameters. These are used by default, but this method\n        exists for database backends to provide a better implementation\n        according to their own quoting schemes.\n        \"\"\"\n\n        # Convert params to contain string values.\n        def to_string(s):\n            return force_str(s, strings_only=True, errors=\"replace\")\n\n        if isinstance(params, (list, tuple)):\n            u_params = tuple(to_string(val) for val in params)\n        elif params is None:\n            u_params = ()\n        else:\n            u_params = {to_string(k): to_string(v) for k, v in params.items()}\n\n        return \"QUERY = %r - PARAMS = %r\" % (sql, u_params)\n\n    def last_insert_id(self, cursor, table_name, pk_name):\n        \"\"\"\n        Given a cursor object that has just performed an INSERT statement into\n        a table that has an auto-incrementing ID, return the newly created ID.\n\n        `pk_name` is the name of the primary-key column.\n        \"\"\"\n        return cursor.lastrowid\n\n    def lookup_cast(self, lookup_type, internal_type=None):\n        \"\"\"\n        Return the string to use in a query when performing lookups\n        (\"contains\", \"like\", etc.). It should contain a '%s' placeholder for\n        the column being searched against.\n        \"\"\"\n        return \"%s\"\n\n    def max_in_list_size(self):\n        \"\"\"\n        Return the maximum number of items that can be passed in a single 'IN'\n        list condition, or None if the backend does not impose a limit.\n        \"\"\"\n        return None\n\n    def max_name_length(self):\n        \"\"\"\n        Return the maximum length of table and column names, or None if there\n        is no limit.\n        \"\"\"\n        return None\n\n    def no_limit_value(self):\n        \"\"\"\n        Return the value to use for the LIMIT when we are wanting \"LIMIT\n        infinity\". Return None if the limit clause can be omitted in this case.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a no_limit_value() method\"\n        )\n\n    def pk_default_value(self):\n        \"\"\"\n        Return the value to use during an INSERT statement to specify that\n        the field should use its default value.\n        \"\"\"\n        return \"DEFAULT\"\n\n    def prepare_sql_script(self, sql):\n        \"\"\"\n        Take an SQL script that may contain multiple lines and return a list\n        of statements to feed to successive cursor.execute() calls.\n\n        Since few databases are able to process raw SQL scripts in a single\n        cursor.execute() call and PEP 249 doesn't talk about this use case,\n        the default implementation is conservative.\n        \"\"\"\n        return [\n            sqlparse.format(statement, strip_comments=True)\n            for statement in sqlparse.split(sql)\n            if statement\n        ]\n\n    def process_clob(self, value):\n        \"\"\"\n        Return the value of a CLOB column, for backends that return a locator\n        object that requires additional processing.\n        \"\"\"\n        return value\n\n    def return_insert_columns(self, fields):\n        \"\"\"\n        For backends that support returning columns as part of an insert query,\n        return the SQL and params to append to the INSERT query. The returned\n        fragment should contain a format string to hold the appropriate column.\n        \"\"\"\n        pass\n\n    def compiler(self, compiler_name):\n        \"\"\"\n        Return the SQLCompiler class corresponding to the given name,\n        in the namespace corresponding to the `compiler_module` attribute\n        on this backend.\n        \"\"\"\n        if self._cache is None:\n            self._cache = import_module(self.compiler_module)\n        return getattr(self._cache, compiler_name)\n\n    def quote_name(self, name):\n        \"\"\"\n        Return a quoted version of the given table, index, or column name. Do\n        not quote the given name if it's already been quoted.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a quote_name() method\"\n        )\n\n    def regex_lookup(self, lookup_type):\n        \"\"\"\n        Return the string to use in a query when performing regular expression\n        lookups (using \"regex\" or \"iregex\"). It should contain a '%s'\n        placeholder for the column being searched against.\n\n        If the feature is not supported (or part of it is not supported), raise\n        NotImplementedError.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations may require a regex_lookup() method\"\n        )\n\n    def savepoint_create_sql(self, sid):\n        \"\"\"\n        Return the SQL for starting a new savepoint. Only required if the\n        \"uses_savepoints\" feature is True. The \"sid\" parameter is a string\n        for the savepoint id.\n        \"\"\"\n        return \"SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_commit_sql(self, sid):\n        \"\"\"\n        Return the SQL for committing the given savepoint.\n        \"\"\"\n        return \"RELEASE SAVEPOINT %s\" % self.quote_name(sid)\n\n    def savepoint_rollback_sql(self, sid):\n        \"\"\"\n        Return the SQL for rolling back the given savepoint.\n        \"\"\"\n        return \"ROLLBACK TO SAVEPOINT %s\" % self.quote_name(sid)\n\n    def set_time_zone_sql(self):\n        \"\"\"\n        Return the SQL that will set the connection's time zone.\n\n        Return '' if the backend doesn't support time zones.\n        \"\"\"\n        return \"\"\n\n    def sql_flush(self, style, tables, *, reset_sequences=False, allow_cascade=False):\n        \"\"\"\n        Return a list of SQL statements required to remove all data from\n        the given database tables (without actually removing the tables\n        themselves).\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n\n        If `reset_sequences` is True, the list includes SQL statements required\n        to reset the sequences.\n\n        The `allow_cascade` argument determines whether truncation may cascade\n        to tables with foreign keys pointing the tables being truncated.\n        PostgreSQL requires a cascade even if these tables are empty.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseDatabaseOperations must provide an sql_flush() method\"\n        )\n\n    def execute_sql_flush(self, sql_list):\n        \"\"\"Execute a list of SQL statements to flush the database.\"\"\"\n        with transaction.atomic(\n            using=self.connection.alias,\n            savepoint=self.connection.features.can_rollback_ddl,\n        ):\n            with self.connection.cursor() as cursor:\n                for sql in sql_list:\n                    cursor.execute(sql)\n\n    def sequence_reset_by_name_sql(self, style, sequences):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences\n        passed in `sequences`.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []\n\n    def sequence_reset_sql(self, style, model_list):\n        \"\"\"\n        Return a list of the SQL statements required to reset sequences for\n        the given models.\n\n        The `style` argument is a Style object as returned by either\n        color_style() or no_style() in django.core.management.color.\n        \"\"\"\n        return []  # No sequence reset required by default.\n\n    def start_transaction_sql(self):\n        \"\"\"Return the SQL statement required to start a transaction.\"\"\"\n        return \"BEGIN;\"\n\n    def end_transaction_sql(self, success=True):\n        \"\"\"Return the SQL statement required to end a transaction.\"\"\"\n        if not success:\n            return \"ROLLBACK;\"\n        return \"COMMIT;\"\n\n    def tablespace_sql(self, tablespace, inline=False):\n        \"\"\"\n        Return the SQL that will be used in a query to define the tablespace.\n\n        Return '' if the backend doesn't support tablespaces.\n\n        If `inline` is True, append the SQL to a row; otherwise append it to\n        the entire CREATE TABLE or CREATE INDEX statement.\n        \"\"\"\n        return \"\"\n\n    def prep_for_like_query(self, x):\n        \"\"\"Prepare a value for use in a LIKE query.\"\"\"\n        return str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(\"%\", r\"\\%\").replace(\"_\", r\"\\_\")\n\n    # Same as prep_for_like_query(), but called for \"iexact\" matches, which\n    # need not necessarily be implemented using \"LIKE\" in the backend.\n    prep_for_iexact_query = prep_for_like_query\n\n# django/shortcuts.py:117-155  (django.shortcuts.resolve_url)\ndef resolve_url(to, *args, **kwargs):\n    \"\"\"\n    Return a URL appropriate for the arguments passed.\n\n    The arguments could be:\n\n        * A model: the model's `get_absolute_url()` function will be called.\n\n        * A view name, possibly with arguments: `urls.reverse()` will be used\n          to reverse-resolve the name.\n\n        * A URL, which will be returned as-is.\n    \"\"\"\n    # If it's a model, use get_absolute_url()\n    if hasattr(to, \"get_absolute_url\"):\n        return to.get_absolute_url()\n\n    if isinstance(to, Promise):\n        # Expand the lazy instance, as it can cause issues when it is passed\n        # further to some Python functions like urlparse.\n        to = str(to)\n\n    # Handle relative URLs\n    if isinstance(to, str) and to.startswith((\"./\", \"../\")):\n        return to\n\n    # Next try a reverse URL resolution.\n    try:\n        return reverse(to, args=args, kwargs=kwargs)\n    except NoReverseMatch:\n        # If this is a callable, re-raise.\n        if callable(to):\n            raise\n        # If this doesn't \"feel\" like a URL, re-raise.\n        if \"/\" not in to and \".\" not in to:\n            raise\n\n    # Finally, fall back and assume it's a URL\n    return to\n\n# tests/urlpatterns_reverse/tests.py:558-579  (tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse_conflict)\nclass ResolverTests(SimpleTestCase):\n    def test_resolver_reverse_conflict(self):\n        \"\"\"\n        URL pattern name arguments don't need to be unique. The last registered\n        pattern takes precedence for conflicting names.\n        \"\"\"\n        resolver = get_resolver(\"urlpatterns_reverse.named_urls_conflict\")\n        test_urls = [\n            # (name, args, kwargs, expected)\n            # Without arguments, the last URL in urlpatterns has precedence.\n            (\"name-conflict\", (), {}, \"conflict/\"),\n            # With an arg, the last URL in urlpatterns has precedence.\n            (\"name-conflict\", (\"arg\",), {}, \"conflict-last/arg/\"),\n            # With a kwarg, other URL patterns can be reversed.\n            (\"name-conflict\", (), {\"first\": \"arg\"}, \"conflict-first/arg/\"),\n            (\"name-conflict\", (), {\"middle\": \"arg\"}, \"conflict-middle/arg/\"),\n            (\"name-conflict\", (), {\"last\": \"arg\"}, \"conflict-last/arg/\"),\n            # The number and order of the arguments don't interfere with reversing.\n            (\"name-conflict\", (\"arg\", \"arg\"), {}, \"conflict/arg/arg/\"),\n        ]\n        for name, args, kwargs, expected in test_urls:\n            with self.subTest(name=name, args=args, kwargs=kwargs):\n                self.assertEqual(resolver.reverse(name, *args, **kwargs), expected)\n\n# django/urls/resolvers.py:738-739  (django.urls.resolvers.URLResolver.reverse)\nclass URLResolver:\n    def reverse(self, lookup_view, *args, **kwargs):\n        return self._reverse_with_prefix(lookup_view, \"\", *args, **kwargs)\n\n# django/template/defaultfilters.py:576-585  (django.template.defaultfilters.dictsortreversed)\n@register.filter(is_safe=False)\ndef dictsortreversed(value, arg):\n    \"\"\"\n    Given a list of dicts, return that list sorted in reverse order by the\n    property given in the argument.\n    \"\"\"\n    try:\n        return sorted(value, key=_property_resolver(arg), reverse=True)\n    except (AttributeError, TypeError):\n        return \"\"\n\n# tests/urlpatterns_reverse/tests.py:594-641  (tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names)\nclass ResolverTests(SimpleTestCase):\n    def test_404_tried_urls_have_names(self):\n        \"\"\"\n        The list of URLs that come back from a Resolver404 exception contains\n        a list in the right format for printing out in the DEBUG 404 page with\n        both the patterns and URL names, if available.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        # this list matches the expected URL types and names returned when\n        # you try to resolve a nonexistent URL in the first level of included\n        # URLs in named_urls.py (e.g., '/included/nonexistent-url')\n        url_types_names = [\n            [{\"type\": URLPattern, \"name\": \"named-url1\"}],\n            [{\"type\": URLPattern, \"name\": \"named-url2\"}],\n            [{\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url3\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url4\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLResolver}],\n        ]\n        with self.assertRaisesMessage(Resolver404, \"tried\") as cm:\n            resolve(\"/included/nonexistent-url\", urlconf=urls)\n        e = cm.exception\n        # make sure we at least matched the root ('/') url resolver:\n        self.assertIn(\"tried\", e.args[0])\n        self.assertEqual(\n            len(e.args[0][\"tried\"]),\n            len(url_types_names),\n            \"Wrong number of tried URLs returned.  Expected %s, got %s.\"\n            % (len(url_types_names), len(e.args[0][\"tried\"])),\n        )\n        for tried, expected in zip(e.args[0][\"tried\"], url_types_names):\n            for t, e in zip(tried, expected):\n                with self.subTest(t):\n                    self.assertIsInstance(\n                        t, e[\"type\"]\n                    ), \"%s is not an instance of %s\" % (t, e[\"type\"])\n                    if \"name\" in e:\n                        if not e[\"name\"]:\n                            self.assertIsNone(\n                                t.name, \"Expected no URL name but found %s.\" % t.name\n                            )\n                        else:\n                            self.assertEqual(\n                                t.name,\n                                e[\"name\"],\n                                'Wrong URL name.  Expected \"%s\", got \"%s\".'\n                                % (e[\"name\"], t.name),\n                            )\n\n# tests/urlpatterns_reverse/tests.py:441-444  (tests.urlpatterns_reverse.tests.URLPatternReverse.test_reverse_none)\nclass URLPatternReverse(SimpleTestCase):\n    def test_reverse_none(self):\n        # Reversing None should raise an error, not return the last un-named view.\n        with self.assertRaises(NoReverseMatch):\n            reverse(None)\n\n# tests/urlpatterns_reverse/tests.py:481-487  (tests.urlpatterns_reverse.tests.URLPatternReverse.test_patterns_reported)\nclass URLPatternReverse(SimpleTestCase):\n    def test_patterns_reported(self):\n        # Regression for #17076\n        with self.assertRaisesMessage(\n            NoReverseMatch, r\"1 pattern(s) tried: ['people/(?P<name>\\\\w+)/$']\"\n        ):\n            # this url exists, but requires an argument\n            reverse(\"people\", args=[])\n\n# tests/urlpatterns_reverse/tests.py:475-479  (tests.urlpatterns_reverse.tests.URLPatternReverse.test_non_urlsafe_prefix_with_args)\nclass URLPatternReverse(SimpleTestCase):\n    @override_script_prefix(\"/%7Eme/\")\n    def test_non_urlsafe_prefix_with_args(self):\n        # Regression for #20022, adjusted for #24013 because ~ is an unreserved\n        # character. Tests whether % is escaped.\n        self.assertEqual(\"/%257Eme/places/1/\", reverse(\"places\", args=[1]))\n\n# tests/urlpatterns_reverse/tests.py:793-806  (tests.urlpatterns_reverse.tests.NamespaceTests.test_ambiguous_object)\nclass NamespaceTests(SimpleTestCase):\n    def test_ambiguous_object(self):\n        \"\"\"\n        Names deployed via dynamic URL objects that require namespaces can't\n        be resolved.\n        \"\"\"\n        test_urls = [\n            (\"urlobject-view\", [], {}),\n            (\"urlobject-view\", [37, 42], {}),\n            (\"urlobject-view\", [], {\"arg1\": 42, \"arg2\": 37}),\n        ]\n        for name, args, kwargs in test_urls:\n            with self.subTest(name=name, args=args, kwargs=kwargs):\n                with self.assertRaises(NoReverseMatch):\n                    reverse(name, args=args, kwargs=kwargs)\n\n# tests/urlpatterns_reverse/tests.py:776-780  (tests.urlpatterns_reverse.tests.ReverseShortcutTests.test_reverse_by_path_nested)\nclass ReverseShortcutTests(SimpleTestCase):\n    def test_reverse_by_path_nested(self):\n        # Views added to urlpatterns using include() should be reversible.\n        from .views import nested_view\n\n        self.assertEqual(reverse(nested_view), \"/includes/nested_path/\")\n\n# tests/urlpatterns_reverse/tests.py:546-556  (tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse)\nclass ResolverTests(SimpleTestCase):\n    def test_resolver_reverse(self):\n        resolver = get_resolver(\"urlpatterns_reverse.named_urls\")\n        test_urls = [\n            # (name, args, kwargs, expected)\n            (\"named-url1\", (), {}, \"\"),\n            (\"named-url2\", (\"arg\",), {}, \"extra/arg/\"),\n            (\"named-url2\", (), {\"extra\": \"arg\"}, \"extra/arg/\"),\n        ]\n        for name, args, kwargs, expected in test_urls:\n            with self.subTest(name=name, args=args, kwargs=kwargs):\n                self.assertEqual(resolver.reverse(name, *args, **kwargs), expected)\n\n# django/urls/__init__.py:1-53  (django.urls)\nfrom .base import (\n    clear_script_prefix,\n    clear_url_caches,\n    get_script_prefix,\n    get_urlconf,\n    is_valid_path,\n    resolve,\n    reverse,\n    reverse_lazy,\n    set_script_prefix,\n    set_urlconf,\n    translate_url,\n)\nfrom .conf import include, path, re_path\nfrom .converters import register_converter\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import (\n    LocalePrefixPattern,\n    ResolverMatch,\n    URLPattern,\n    URLResolver,\n    get_ns_resolver,\n    get_resolver,\n)\nfrom .utils import get_callable, get_mod_func\n\n__all__ = [\n    \"LocalePrefixPattern\",\n    \"NoReverseMatch\",\n    \"URLPattern\",\n    \"URLResolver\",\n    \"Resolver404\",\n    \"ResolverMatch\",\n    \"clear_script_prefix\",\n    \"clear_url_caches\",\n    \"get_callable\",\n    \"get_mod_func\",\n    \"get_ns_resolver\",\n    \"get_resolver\",\n    \"get_script_prefix\",\n    \"get_urlconf\",\n    \"include\",\n    \"is_valid_path\",\n    \"path\",\n    \"re_path\",\n    \"register_converter\",\n    \"resolve\",\n    \"reverse\",\n    \"reverse_lazy\",\n    \"set_script_prefix\",\n    \"set_urlconf\",\n    \"translate_url\",\n]\n\n# django/urls/base.py:91-91  (django.urls.base)\nreverse_lazy = lazy(reverse, str)\n\n# tests/urlpatterns_reverse/tests.py:834-844  (tests.urlpatterns_reverse.tests.NamespaceTests.test_normal_name)\nclass NamespaceTests(SimpleTestCase):\n    def test_normal_name(self):\n        \"\"\"Normal lookups work as expected.\"\"\"\n        test_urls = [\n            (\"normal-view\", [], {}, \"/normal/\"),\n            (\"normal-view\", [37, 42], {}, \"/normal/37/42/\"),\n            (\"normal-view\", [], {\"arg1\": 42, \"arg2\": 37}, \"/normal/42/37/\"),\n            (\"special-view\", [], {}, \"/+%5C$*/\"),\n        ]\n        for name, args, kwargs, expected in test_urls:\n            with self.subTest(name=name, args=args, kwargs=kwargs):\n                self.assertEqual(reverse(name, args=args, kwargs=kwargs), expected)\n\n# tests/urlpatterns_reverse/tests.py:536-544  (tests.urlpatterns_reverse.tests.ResolverTests.test_reverse_lazy_object_coercion_by_resolve)\nclass ResolverTests(SimpleTestCase):\n    def test_reverse_lazy_object_coercion_by_resolve(self):\n        \"\"\"\n        Verifies lazy object returned by reverse_lazy is coerced to\n        text by resolve(). Previous to #21043, this would raise a TypeError.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        proxy_url = reverse_lazy(\"named-url1\", urlconf=urls)\n        resolver = get_resolver(urls)\n        resolver.resolve(proxy_url)\n\n# django/test/utils.py:400-410  (django.test.utils.TestContextDecorator)\nclass TestContextDecorator:\n    \"\"\"\n    A base class that can either be used as a context manager during tests\n    or as a test function or unittest.TestCase subclass decorator to perform\n    temporary alterations.\n\n    `attr_name`: attribute assigned the return value of enable() if used as\n                 a class decorator.\n\n    `kwarg_name`: keyword argument passing the return value of enable() if\n                  used as a function decorator.\n    \"\"\"\n\n# django/contrib/gis/db/models/functions.py:503-503  (django.contrib.gis.db.models.functions.Reverse)\nclass Reverse(GeoFunc):\n    arity = 1\n\n## Task\n\nYou are assessing the blast radius of changing the return value shape\nof `django.urls.base.reverse` (e.g. changing it from a plain URL\nstring to a wrapper object) in django/urls/base.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `reverse`'s return value (a plain `x = reverse(...)`\nassignment, or a caller of such a caller two hops out) - callers that\nmerely pass `reverse(...)` straight through to another function\nwithout binding it locally do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

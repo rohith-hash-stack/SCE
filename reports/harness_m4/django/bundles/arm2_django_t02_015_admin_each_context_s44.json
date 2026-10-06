@@ -1,0 +1,1643 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_015_admin_each_context",
+  "items": [
+   {
+    "source_id": "django/contrib/admin/sites.py:320-340",
+    "content": "# django/contrib/admin/sites.py:320-340  (django.contrib.admin.sites.AdminSite.each_context)\nclass AdminSite:\n    def each_context(self, request):\n        \"\"\"\n        Return a dictionary of variables to put in the template context for\n        *every* page in the admin site.\n\n        For sites running on a subpath, use the SCRIPT_NAME value if site_url\n        hasn't been customized.\n        \"\"\"\n        script_name = request.META[\"SCRIPT_NAME\"]\n        site_url = (\n            script_name if self.site_url == \"/\" and script_name else self.site_url\n        )\n        return {\n            \"site_title\": self.site_title,\n            \"site_header\": self.site_header,\n            \"site_url\": site_url,\n            \"has_permission\": self.has_permission(request),\n            \"available_apps\": self.get_app_list(request),\n            \"is_popup\": False,\n            \"is_nav_sidebar_enabled\": self.enable_nav_sidebar,\n        }",
+    "token_count": 197,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.each_context"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 197
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:316-318",
+    "content": "# django/contrib/admin/sites.py:316-318  (django.contrib.admin.sites.AdminSite.urls)\nclass AdminSite:\n    @property\n    def urls(self):\n        return self.get_urls(), \"admin\", self.name",
+    "token_count": 50,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.urls"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:342-358",
+    "content": "# django/contrib/admin/sites.py:342-358  (django.contrib.admin.sites.AdminSite.password_change)\nclass AdminSite:\n    def password_change(self, request, extra_context=None):\n        \"\"\"\n        Handle the \"change password\" task -- both form display and validation.\n        \"\"\"\n        from django.contrib.admin.forms import AdminPasswordChangeForm\n        from django.contrib.auth.views import PasswordChangeView\n\n        url = reverse(\"admin:password_change_done\", current_app=self.name)\n        defaults = {\n            \"form_class\": AdminPasswordChangeForm,\n            \"success_url\": url,\n            \"extra_context\": {**self.each_context(request), **(extra_context or {})},\n        }\n        if self.password_change_template is not None:\n            defaults[\"template_name\"] = self.password_change_template\n        request.current_app = self.name\n        return PasswordChangeView.as_view(**defaults)(request)",
+    "token_count": 185,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.password_change"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 185
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:252-314",
+    "content": "# django/contrib/admin/sites.py:252-314  (django.contrib.admin.sites.AdminSite.get_urls)\nclass AdminSite:\n    def get_urls(self):\n        # Since this module gets imported in the application's root package,\n        # it cannot import models from other applications at the module level,\n        # and django.contrib.contenttypes.views imports ContentType.\n        from django.contrib.contenttypes import views as contenttype_views\n        from django.urls import include, path, re_path\n\n        def wrap(view, cacheable=False):\n            def wrapper(*args, **kwargs):\n                return self.admin_view(view, cacheable)(*args, **kwargs)\n\n            wrapper.admin_site = self\n            return update_wrapper(wrapper, view)\n\n        # Admin-site-wide views.\n        urlpatterns = [\n            path(\"\", wrap(self.index), name=\"index\"),\n            path(\"login/\", self.login, name=\"login\"),\n            path(\"logout/\", wrap(self.logout), name=\"logout\"),\n            path(\n                \"password_change/\",\n                wrap(self.password_change, cacheable=True),\n                name=\"password_change\",\n            ),\n            path(\n                \"password_change/done/\",\n                wrap(self.password_change_done, cacheable=True),\n                name=\"password_change_done\",\n            ),\n            path(\"autocomplete/\", wrap(self.autocomplete_view), name=\"autocomplete\"),\n            path(\"jsi18n/\", wrap(self.i18n_javascript, cacheable=True), name=\"jsi18n\"),\n            path(\n                \"r/<int:content_type_id>/<path:object_id>/\",\n                wrap(contenttype_views.shortcut),\n                name=\"view_on_site\",\n            ),\n        ]\n\n        # Add in each model's views, and create a list of valid URLS for the\n        # app_index\n        valid_app_labels = []\n        for model, model_admin in self._registry.items():\n            urlpatterns += [\n                path(\n                    \"%s/%s/\" % (model._meta.app_label, model._meta.model_name),\n                    include(model_admin.urls),\n                ),\n            ]\n            if model._meta.app_label not in valid_app_labels:\n                valid_app_labels.append(model._meta.app_label)\n\n        # If there were ModelAdmins registered, we should have a list of app\n        # labels for which we need to allow access to the app_index view,\n        if valid_app_labels:\n            regex = r\"^(?P<app_label>\" + \"|\".join(valid_app_labels) + \")/$\"\n            urlpatterns += [\n                re_path(regex, wrap(self.app_index), name=\"app_list\"),\n            ]\n\n        if self.final_catch_all_view:\n            urlpatterns.append(re_path(r\"(?P<url>.*)$\", wrap(self.catch_all_view)))\n\n        return urlpatterns",
+    "token_count": 557,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.get_urls"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 557
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:360-372",
+    "content": "# django/contrib/admin/sites.py:360-372  (django.contrib.admin.sites.AdminSite.password_change_done)\nclass AdminSite:\n    def password_change_done(self, request, extra_context=None):\n        \"\"\"\n        Display the \"success\" page after a password change.\n        \"\"\"\n        from django.contrib.auth.views import PasswordChangeDoneView\n\n        defaults = {\n            \"extra_context\": {**self.each_context(request), **(extra_context or {})},\n        }\n        if self.password_change_done_template is not None:\n            defaults[\"template_name\"] = self.password_change_done_template\n        request.current_app = self.name\n        return PasswordChangeDoneView.as_view(**defaults)(request)",
+    "token_count": 143,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.password_change_done"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 143
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:205-250",
+    "content": "# django/contrib/admin/sites.py:205-250  (django.contrib.admin.sites.AdminSite.admin_view)\nclass AdminSite:\n    def admin_view(self, view, cacheable=False):\n        \"\"\"\n        Decorator to create an admin view attached to this ``AdminSite``. This\n        wraps the view and provides permission checking by calling\n        ``self.has_permission``.\n\n        You'll want to use this from within ``AdminSite.get_urls()``:\n\n            class MyAdminSite(AdminSite):\n\n                def get_urls(self):\n                    from django.urls import path\n\n                    urls = super().get_urls()\n                    urls += [\n                        path('my_view/', self.admin_view(some_view))\n                    ]\n                    return urls\n\n        By default, admin_views are marked non-cacheable using the\n        ``never_cache`` decorator. If the view can be safely cached, set\n        cacheable=True.\n        \"\"\"\n\n        def inner(request, *args, **kwargs):\n            if not self.has_permission(request):\n                if request.path == reverse(\"admin:logout\", current_app=self.name):\n                    index_path = reverse(\"admin:index\", current_app=self.name)\n                    return HttpResponseRedirect(index_path)\n                # Inner import to prevent django.contrib.admin (app) from\n                # importing django.contrib.auth.models.User (unrelated model).\n                from django.contrib.auth.views import redirect_to_login\n\n                return redirect_to_login(\n                    request.get_full_path(),\n                    reverse(\"admin:login\", current_app=self.name),\n                )\n            return view(request, *args, **kwargs)\n\n        if not cacheable:\n            inner = never_cache(inner)\n        # We add csrf_protect here so this function can be used as a utility\n        # function for any view, without having to repeat 'csrf_protect'.\n        if not getattr(view, \"csrf_exempt\", False):\n            inner = csrf_protect(inner)\n        return update_wrapper(inner, view)",
+    "token_count": 394,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.admin_view"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 394
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:374-381",
+    "content": "# django/contrib/admin/sites.py:374-381  (django.contrib.admin.sites.AdminSite.i18n_javascript)\nclass AdminSite:\n    def i18n_javascript(self, request, extra_context=None):\n        \"\"\"\n        Display the i18n JavaScript that the Django admin requires.\n\n        `extra_context` is unused but present for consistency with the other\n        admin views.\n        \"\"\"\n        return JavaScriptCatalog.as_view(packages=[\"django.contrib.admin\"])(request)",
+    "token_count": 104,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.i18n_javascript"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 104
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:198-203",
+    "content": "# django/contrib/admin/sites.py:198-203  (django.contrib.admin.sites.AdminSite.has_permission)\nclass AdminSite:\n    def has_permission(self, request):\n        \"\"\"\n        Return True if the given HttpRequest has permission to view\n        *at least one* page in the admin site.\n        \"\"\"\n        return request.user.is_active and request.user.is_staff",
+    "token_count": 78,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.has_permission"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:383-403",
+    "content": "# django/contrib/admin/sites.py:383-403  (django.contrib.admin.sites.AdminSite.logout)\nclass AdminSite:\n    def logout(self, request, extra_context=None):\n        \"\"\"\n        Log out the user for the given HttpRequest.\n\n        This should *not* assume the user is already logged in.\n        \"\"\"\n        from django.contrib.auth.views import LogoutView\n\n        defaults = {\n            \"extra_context\": {\n                **self.each_context(request),\n                # Since the user isn't logged out at this point, the value of\n                # has_permission must be overridden.\n                \"has_permission\": False,\n                **(extra_context or {}),\n            },\n        }\n        if self.logout_template is not None:\n            defaults[\"template_name\"] = self.logout_template\n        request.current_app = self.name\n        return LogoutView.as_view(**defaults)(request)",
+    "token_count": 178,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.logout"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 178
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:191-196",
+    "content": "# django/contrib/admin/sites.py:191-196  (django.contrib.admin.sites.AdminSite.actions)\nclass AdminSite:\n    @property\n    def actions(self):\n        \"\"\"\n        Get all the enabled actions as an iterable of (name, func).\n        \"\"\"\n        return self._actions.items()",
+    "token_count": 65,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.actions"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:405-441",
+    "content": "# django/contrib/admin/sites.py:405-441  (django.contrib.admin.sites.AdminSite.login)\nclass AdminSite:\n    @method_decorator(never_cache)\n    def login(self, request, extra_context=None):\n        \"\"\"\n        Display the login form for the given HttpRequest.\n        \"\"\"\n        if request.method == \"GET\" and self.has_permission(request):\n            # Already logged-in, redirect to admin index\n            index_path = reverse(\"admin:index\", current_app=self.name)\n            return HttpResponseRedirect(index_path)\n\n        # Since this module gets imported in the application's root package,\n        # it cannot import models from other applications at the module level,\n        # and django.contrib.admin.forms eventually imports User.\n        from django.contrib.admin.forms import AdminAuthenticationForm\n        from django.contrib.auth.views import LoginView\n\n        context = {\n            **self.each_context(request),\n            \"title\": _(\"Log in\"),\n            \"subtitle\": None,\n            \"app_path\": request.get_full_path(),\n            \"username\": request.user.get_username(),\n        }\n        if (\n            REDIRECT_FIELD_NAME not in request.GET\n            and REDIRECT_FIELD_NAME not in request.POST\n        ):\n            context[REDIRECT_FIELD_NAME] = reverse(\"admin:index\", current_app=self.name)\n        context.update(extra_context or {})\n\n        defaults = {\n            \"extra_context\": context,\n            \"authentication_form\": self.login_form or AdminAuthenticationForm,\n            \"template_name\": self.login_template or \"admin/login.html\",\n        }\n        request.current_app = self.name\n        return LoginView.as_view(**defaults)(request)",
+    "token_count": 326,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.login"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 326
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:184-189",
+    "content": "# django/contrib/admin/sites.py:184-189  (django.contrib.admin.sites.AdminSite.get_action)\nclass AdminSite:\n    def get_action(self, name):\n        \"\"\"\n        Explicitly get a registered global action whether it's enabled or\n        not. Raise KeyError for invalid names.\n        \"\"\"\n        return self._global_actions[name]",
+    "token_count": 74,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.get_action"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:443-444",
+    "content": "# django/contrib/admin/sites.py:443-444  (django.contrib.admin.sites.AdminSite.autocomplete_view)\nclass AdminSite:\n    def autocomplete_view(self, request):\n        return AutocompleteJsonView.as_view(admin_site=self)(request)",
+    "token_count": 54,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.autocomplete_view"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:178-182",
+    "content": "# django/contrib/admin/sites.py:178-182  (django.contrib.admin.sites.AdminSite.disable_action)\nclass AdminSite:\n    def disable_action(self, name):\n        \"\"\"\n        Disable a globally-registered action. Raise KeyError for invalid names.\n        \"\"\"\n        del self._actions[name]",
+    "token_count": 64,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.disable_action"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:446-457",
+    "content": "# django/contrib/admin/sites.py:446-457  (django.contrib.admin.sites.AdminSite.catch_all_view)\nclass AdminSite:\n    @no_append_slash\n    def catch_all_view(self, request, url):\n        if settings.APPEND_SLASH and not url.endswith(\"/\"):\n            urlconf = getattr(request, \"urlconf\", None)\n            try:\n                match = resolve(\"%s/\" % request.path_info, urlconf)\n            except Resolver404:\n                pass\n            else:\n                if getattr(match.func, \"should_append_slash\", True):\n                    return HttpResponsePermanentRedirect(\"%s/\" % request.path)\n        raise Http404",
+    "token_count": 139,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.catch_all_view"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 139
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:170-176",
+    "content": "# django/contrib/admin/sites.py:170-176  (django.contrib.admin.sites.AdminSite.add_action)\nclass AdminSite:\n    def add_action(self, action, name=None):\n        \"\"\"\n        Register an action to be available globally.\n        \"\"\"\n        name = name or action.__name__\n        self._actions[name] = action\n        self._global_actions[name] = action",
+    "token_count": 82,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.add_action"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 82
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:459-529",
+    "content": "# django/contrib/admin/sites.py:459-529  (django.contrib.admin.sites.AdminSite._build_app_dict)\nclass AdminSite:\n    def _build_app_dict(self, request, label=None):\n        \"\"\"\n        Build the app dictionary. The optional `label` parameter filters models\n        of a specific app.\n        \"\"\"\n        app_dict = {}\n\n        if label:\n            models = {\n                m: m_a\n                for m, m_a in self._registry.items()\n                if m._meta.app_label == label\n            }\n        else:\n            models = self._registry\n\n        for model, model_admin in models.items():\n            app_label = model._meta.app_label\n\n            has_module_perms = model_admin.has_module_permission(request)\n            if not has_module_perms:\n                continue\n\n            perms = model_admin.get_model_perms(request)\n\n            # Check whether user has any perm for this module.\n            # If so, add the module to the model_list.\n            if True not in perms.values():\n                continue\n\n            info = (app_label, model._meta.model_name)\n            model_dict = {\n                \"model\": model,\n                \"name\": capfirst(model._meta.verbose_name_plural),\n                \"object_name\": model._meta.object_name,\n                \"perms\": perms,\n                \"admin_url\": None,\n                \"add_url\": None,\n            }\n            if perms.get(\"change\") or perms.get(\"view\"):\n                model_dict[\"view_only\"] = not perms.get(\"change\")\n                try:\n                    model_dict[\"admin_url\"] = reverse(\n                        \"admin:%s_%s_changelist\" % info, current_app=self.name\n                    )\n                except NoReverseMatch:\n                    pass\n            if perms.get(\"add\"):\n                try:\n                    model_dict[\"add_url\"] = reverse(\n                        \"admin:%s_%s_add\" % info, current_app=self.name\n                    )\n                except NoReverseMatch:\n                    pass\n\n            if app_label in app_dict:\n                app_dict[app_label][\"models\"].append(model_dict)\n            else:\n                app_dict[app_label] = {\n                    \"name\": apps.get_app_config(app_label).verbose_name,\n                    \"app_label\": app_label,\n                    \"app_url\": reverse(\n                        \"admin:app_list\",\n                        kwargs={\"app_label\": app_label},\n                        current_app=self.name,\n                    ),\n                    \"has_module_perms\": has_module_perms,\n                    \"models\": [model_dict],\n                }\n\n        return app_dict",
+    "token_count": 510,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite._build_app_dict"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 510
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:164-168",
+    "content": "# django/contrib/admin/sites.py:164-168  (django.contrib.admin.sites.AdminSite.is_registered)\nclass AdminSite:\n    def is_registered(self, model):\n        \"\"\"\n        Check if a model class is registered with this `AdminSite`.\n        \"\"\"\n        return model in self._registry",
+    "token_count": 64,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.is_registered"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:531-545",
+    "content": "# django/contrib/admin/sites.py:531-545  (django.contrib.admin.sites.AdminSite.get_app_list)\nclass AdminSite:\n    def get_app_list(self, request, app_label=None):\n        \"\"\"\n        Return a sorted list of all the installed apps that have been\n        registered in this site.\n        \"\"\"\n        app_dict = self._build_app_dict(request, app_label)\n\n        # Sort the apps alphabetically.\n        app_list = sorted(app_dict.values(), key=lambda x: x[\"name\"].lower())\n\n        # Sort the models alphabetically within each app.\n        for app in app_list:\n            app[\"models\"].sort(key=lambda x: x[\"name\"])\n\n        return app_list",
+    "token_count": 146,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.get_app_list"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 146
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:151-162",
+    "content": "# django/contrib/admin/sites.py:151-162  (django.contrib.admin.sites.AdminSite.unregister)\nclass AdminSite:\n    def unregister(self, model_or_iterable):\n        \"\"\"\n        Unregister the given model(s).\n\n        If a model isn't already registered, raise NotRegistered.\n        \"\"\"\n        if isinstance(model_or_iterable, ModelBase):\n            model_or_iterable = [model_or_iterable]\n        for model in model_or_iterable:\n            if model not in self._registry:\n                raise NotRegistered(\"The model %s is not registered\" % model.__name__)\n            del self._registry[model]",
+    "token_count": 131,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.unregister"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:547-566",
+    "content": "# django/contrib/admin/sites.py:547-566  (django.contrib.admin.sites.AdminSite.index)\nclass AdminSite:\n    def index(self, request, extra_context=None):\n        \"\"\"\n        Display the main admin index page, which lists all of the installed\n        apps that have been registered in this site.\n        \"\"\"\n        app_list = self.get_app_list(request)\n\n        context = {\n            **self.each_context(request),\n            \"title\": self.index_title,\n            \"subtitle\": None,\n            \"app_list\": app_list,\n            **(extra_context or {}),\n        }\n\n        request.current_app = self.name\n\n        return TemplateResponse(\n            request, self.index_template or \"admin/index.html\", context\n        )",
+    "token_count": 151,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.index"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 151
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:100-149",
+    "content": "# django/contrib/admin/sites.py:100-149  (django.contrib.admin.sites.AdminSite.register)\nclass AdminSite:\n    def register(self, model_or_iterable, admin_class=None, **options):\n        \"\"\"\n        Register the given model(s) with the given admin class.\n\n        The model(s) should be Model classes, not instances.\n\n        If an admin class isn't given, use ModelAdmin (the default admin\n        options). If keyword arguments are given -- e.g., list_display --\n        apply them as options to the admin class.\n\n        If a model is already registered, raise AlreadyRegistered.\n\n        If a model is abstract, raise ImproperlyConfigured.\n        \"\"\"\n        admin_class = admin_class or ModelAdmin\n        if isinstance(model_or_iterable, ModelBase):\n            model_or_iterable = [model_or_iterable]\n        for model in model_or_iterable:\n            if model._meta.abstract:\n                raise ImproperlyConfigured(\n                    \"The model %s is abstract, so it cannot be registered with admin.\"\n                    % model.__name__\n                )\n\n            if model in self._registry:\n                registered_admin = str(self._registry[model])\n                msg = \"The model %s is already registered \" % model.__name__\n                if registered_admin.endswith(\".ModelAdmin\"):\n                    # Most likely registered without a ModelAdmin subclass.\n                    msg += \"in app %r.\" % re.sub(r\"\\.ModelAdmin$\", \"\", registered_admin)\n                else:\n                    msg += \"with %r.\" % registered_admin\n                raise AlreadyRegistered(msg)\n\n            # Ignore the registration if the model has been\n            # swapped out.\n            if not model._meta.swapped:\n                # If we got **options then dynamically construct a subclass of\n                # admin_class with those **options.\n                if options:\n                    # For reasons I don't quite understand, without a __module__\n                    # the created class appears to \"live\" in the wrong place,\n                    # which causes issues later on.\n                    options[\"__module__\"] = __name__\n                    admin_class = type(\n                        \"%sAdmin\" % model.__name__, (admin_class,), options\n                    )\n\n                # Instantiate the admin class to save in the registry\n                self._registry[model] = admin_class(model, self)",
+    "token_count": 475,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.register"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 989,
+     "stub_priority": 1489,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 475
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:568-590",
+    "content": "# django/contrib/admin/sites.py:568-590  (django.contrib.admin.sites.AdminSite.app_index)\nclass AdminSite:\n    def app_index(self, request, app_label, extra_context=None):\n        app_list = self.get_app_list(request, app_label)\n\n        if not app_list:\n            raise Http404(\"The requested admin page does not exist.\")\n\n        context = {\n            **self.each_context(request),\n            \"title\": _(\"%(app)s administration\") % {\"app\": app_list[0][\"name\"]},\n            \"subtitle\": None,\n            \"app_list\": app_list,\n            \"app_label\": app_label,\n            **(extra_context or {}),\n        }\n\n        request.current_app = self.name\n\n        return TemplateResponse(\n            request,\n            self.app_index_template\n            or [\"admin/%s/app_index.html\" % app_label, \"admin/app_index.html\"],\n            context,\n        )",
+    "token_count": 192,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.app_index"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 989,
+     "stub_priority": 1489,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 192
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:82-98",
+    "content": "# django/contrib/admin/sites.py:82-98  (django.contrib.admin.sites.AdminSite.check)\nclass AdminSite:\n    def check(self, app_configs):\n        \"\"\"\n        Run the system checks on all ModelAdmins, except if they aren't\n        customized at all.\n        \"\"\"\n        if app_configs is None:\n            app_configs = apps.get_app_configs()\n        app_configs = set(app_configs)  # Speed up lookups below\n\n        errors = []\n        modeladmins = (\n            o for o in self._registry.values() if o.__class__ is not ModelAdmin\n        )\n        for modeladmin in modeladmins:\n            if modeladmin.model._meta.app_config in app_configs:\n                errors.extend(modeladmin.check())\n        return errors",
+    "token_count": 156,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.check"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 988,
+     "stub_priority": 1488,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:594-596",
+    "content": "# django/contrib/admin/sites.py:594-596  (django.contrib.admin.sites.DefaultAdminSite._setup)\nclass DefaultAdminSite(LazyObject):\n    def _setup(self):\n        AdminSiteClass = import_string(apps.get_app_config(\"admin\").default_site)\n        self._wrapped = AdminSiteClass()",
+    "token_count": 69,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.DefaultAdminSite._setup"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 988,
+     "stub_priority": 1488,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:79-80",
+    "content": "# django/contrib/admin/sites.py:79-80  (django.contrib.admin.sites.AdminSite.__repr__)\nclass AdminSite:\n    def __repr__(self):\n        return f\"{self.__class__.__name__}(name={self.name!r})\"",
+    "token_count": 55,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.__repr__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 987,
+     "stub_priority": 1487,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:598-599",
+    "content": "# django/contrib/admin/sites.py:598-599  (django.contrib.admin.sites.DefaultAdminSite.__repr__)\nclass DefaultAdminSite(LazyObject):\n    def __repr__(self):\n        return repr(self._wrapped)",
+    "token_count": 50,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.DefaultAdminSite.__repr__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 987,
+     "stub_priority": 1487,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:72-77",
+    "content": "# django/contrib/admin/sites.py:72-77  (django.contrib.admin.sites.AdminSite.__init__)\nclass AdminSite:\n    def __init__(self, name=\"admin\"):\n        self._registry = {}  # model_class class -> admin_class instance\n        self.name = name\n        self._actions = {\"delete_selected\": actions.delete_selected}\n        self._global_actions = self._actions.copy()\n        all_sites.add(self)",
+    "token_count": 92,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite.__init__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 986,
+     "stub_priority": 1486,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 92
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:602-606",
+    "content": "# django/contrib/admin/sites.py:602-606  (django.contrib.admin.sites)\n# This global object represents the default admin site, for the common case.\n# You can provide your own AdminSite using the (Simple)AdminConfig.default_site\n# attribute. You can also instantiate AdminSite in your own code to create a\n# custom admin site.\nsite = DefaultAdminSite()",
+    "token_count": 84,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 986,
+     "stub_priority": 1486,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:38-70",
+    "content": "# django/contrib/admin/sites.py:38-70  (django.contrib.admin.sites.AdminSite)\nclass AdminSite:\n    \"\"\"\n    An AdminSite object encapsulates an instance of the Django admin application, ready\n    to be hooked in to your URLconf. Models are registered with the AdminSite using the\n    register() method, and the get_urls() method can then be used to access Django view\n    functions that present a full admin interface for the collection of registered\n    models.\n    \"\"\"\n\n    # Text to put at the end of each page's <title>.\n    site_title = gettext_lazy(\"Django site admin\")\n\n    # Text to put in each page's <h1>.\n    site_header = gettext_lazy(\"Django administration\")\n\n    # Text to put at the top of the admin index page.\n    index_title = gettext_lazy(\"Site administration\")\n\n    # URL for the \"View site\" link at the top of each admin page.\n    site_url = \"/\"\n\n    enable_nav_sidebar = True\n\n    empty_value_display = \"-\"\n\n    login_form = None\n    index_template = None\n    app_index_template = None\n    login_template = None\n    logout_template = None\n    password_change_template = None\n    password_change_done_template = None\n\n    final_catch_all_view = True",
+    "token_count": 272,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 985,
+     "stub_priority": 1485,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:34-34",
+    "content": "# django/contrib/admin/sites.py:34-34  (django.contrib.admin.sites.NotRegistered)\nclass NotRegistered(Exception):\n    pass",
+    "token_count": 30,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.NotRegistered"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 984,
+     "stub_priority": 1484,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:30-30",
+    "content": "# django/contrib/admin/sites.py:30-30  (django.contrib.admin.sites.AlreadyRegistered)\nclass AlreadyRegistered(Exception):\n    pass",
+    "token_count": 31,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.sites.AlreadyRegistered"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 983,
+     "stub_priority": 1483,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 31
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:1-26",
+    "content": "# django/contrib/admin/sites.py:1-26  (django.contrib.admin.sites)\nimport re\nfrom functools import update_wrapper\nfrom weakref import WeakSet\n\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.contrib.admin import ModelAdmin, actions\nfrom django.contrib.admin.views.autocomplete import AutocompleteJsonView\nfrom django.contrib.auth import REDIRECT_FIELD_NAME\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.db.models.base import ModelBase\nfrom django.http import Http404, HttpResponsePermanentRedirect, HttpResponseRedirect\nfrom django.template.response import TemplateResponse\nfrom django.urls import NoReverseMatch, Resolver404, resolve, reverse\nfrom django.utils.decorators import method_decorator\nfrom django.utils.functional import LazyObject\nfrom django.utils.module_loading import import_string\nfrom django.utils.text import capfirst\nfrom django.utils.translation import gettext as _\nfrom django.utils.translation import gettext_lazy\nfrom django.views.decorators.cache import never_cache\nfrom django.views.decorators.common import no_append_slash\nfrom django.views.decorators.csrf import csrf_protect\nfrom django.views.i18n import JavaScriptCatalog\n\nall_sites = WeakSet()",
+    "token_count": 237,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 982,
+     "stub_priority": 1482,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 237
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/tests.py:8244-8268#signature",
+    "content": "# tests/admin_views/tests.py:8244-8268  (tests.admin_views.tests.AdminViewOnSiteTests.test_check [signature])\nclass AdminViewOnSiteTests(TestCase):\n    def test_check(self):\n        'The view_on_site value is either a boolean or a callable'\n        ...",
+    "token_count": 63,
+    "rank": 34,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_views.tests.AdminViewOnSiteTests.test_check"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "stub",
+     "bm25_rank": 25,
+     "chunk_kind": "method",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/templatetags/log.py:28-69#signature",
+    "content": "# django/contrib/admin/templatetags/log.py:28-69  (django.contrib.admin.templatetags.log.get_admin_log [signature])\n@register.tag\ndef get_admin_log(parser, token):\n    'Populate a template variable with the admin log for the given criteria.'\n    ...",
+    "token_count": 64,
+    "rank": 35,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.templatetags.log.get_admin_log"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "stub",
+     "bm25_rank": 26,
+     "chunk_kind": "function",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/templatetags/admin_modify.py:11-48#signature",
+    "content": "# django/contrib/admin/templatetags/admin_modify.py:11-48  (django.contrib.admin.templatetags.admin_modify.prepopulated_fields_js [signature])\ndef prepopulated_fields_js(context):\n    'Create a list of prepopulated_fields that should render JavaScript for'\n    ...",
+    "token_count": 65,
+    "rank": 36,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.templatetags.admin_modify.prepopulated_fields_js"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "stub",
+     "bm25_rank": 27,
+     "chunk_kind": "function",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_docs/test_views.py:161-171#signature",
+    "content": "# tests/admin_docs/test_views.py:161-171  (tests.admin_docs.test_views.AdminDocViewTests.test_no_sites_framework [signature])\nclass AdminDocViewTests(TestDataMixin, AdminDocsTestCase):\n    @modify_settings(INSTALLED_APPS={\"remove\": \"django.contrib.sites\"})\n    @override_settings(SITE_ID=None)  # will restore SITE_ID after the test\n    def test_no_sites_framework(self):\n        'Without the sites framework, should not access SITE_ID or Site'\n        ...",
+    "token_count": 107,
+    "rank": 37,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_docs.test_views.AdminDocViewTests.test_no_sites_framework"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "stub",
+     "bm25_rank": 29,
+     "chunk_kind": "method",
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/test_views.py:687-697#signature",
+    "content": "# tests/auth_tests/test_views.py:687-697  (tests.auth_tests.test_views.LoginTest.test_current_site_in_context_after_login [signature])\nclass LoginTest(AuthViewsTestCase):\n    def test_current_site_in_context_after_login(self):\n        ...",
+    "token_count": 54,
+    "rank": 38,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.auth_tests.test_views.LoginTest.test_current_site_in_context_after_login"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "stub",
+     "bm25_rank": 30,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/tests.py:751-780#signature",
+    "content": "# tests/admin_views/tests.py:751-780  (tests.admin_views.tests.AdminViewBasicTest.test_sort_indicators_admin_order [signature])\nclass AdminViewBasicTest(AdminViewBasicTestCase):\n    def test_sort_indicators_admin_order(self):\n        \"The admin shows default sort indicators for all kinds of 'ordering'\"\n        ...",
+    "token_count": 71,
+    "rank": 39,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_views.tests.AdminViewBasicTest.test_sort_indicators_admin_order"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "stub",
+     "bm25_rank": 31,
+     "chunk_kind": "method",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context.py:172-187#signature",
+    "content": "# django/template/context.py:172-187  (django.template.context.RenderContext [signature])\nclass RenderContext(BaseContext):\n    'A stack container for storing Template state.'\n    ...",
+    "token_count": 41,
+    "rank": 40,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.context.RenderContext"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "stub",
+     "bm25_rank": 32,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_checks/tests.py:858-877#signature",
+    "content": "# tests/admin_checks/tests.py:858-877  (tests.admin_checks.tests.SystemChecksTestCase.test_graceful_m2m_fail [signature])\nclass SystemChecksTestCase(SimpleTestCase):\n    def test_graceful_m2m_fail(self):\n        'Regression test for #12203/#12237 - Fail more gracefully when a M2M field that'\n        ...",
+    "token_count": 85,
+    "rank": 41,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_checks.tests.SystemChecksTestCase.test_graceful_m2m_fail"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "stub",
+     "bm25_rank": 33,
+     "chunk_kind": "method",
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/apps.py:8-13#signature",
+    "content": "# django/contrib/admin/apps.py:8-13  (django.contrib.admin.apps.SimpleAdminConfig [signature])\nclass SimpleAdminConfig(AppConfig):\n    'Simple AppConfig which does not do automatic discovery.'\n    ...",
+    "token_count": 44,
+    "rank": 42,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.apps.SimpleAdminConfig"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "stub",
+     "bm25_rank": 34,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 44
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:39-84#signature",
+    "content": "# django/contrib/auth/models.py:39-84  (django.contrib.auth.models.Permission [signature])\nclass Permission(models.Model):\n    'The permissions system provides a way to assign permissions to specific'\n    ...",
+    "token_count": 44,
+    "rank": 43,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.models.Permission"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "stub",
+     "bm25_rank": 35,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 44
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_checks/tests.py:120-158#signature",
+    "content": "# tests/admin_checks/tests.py:120-158  (tests.admin_checks.tests.SystemChecksTestCase.test_context_processor_dependencies [signature])\nclass SystemChecksTestCase(SimpleTestCase):\n    @override_settings(\n        TEMPLATES=[\n            {\n                \"BACKEND\": \"django.template.backends.django.DjangoTemplates\",\n                \"DIRS\": [],\n                \"APP_DIRS\": True,\n                \"OPTIONS\": {\n                    \"context_processors\": [],\n                },\n            }\n        ],\n    )\n    def test_context_processor_dependencies(self):\n        ...",
+    "token_count": 107,
+    "rank": 44,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_checks.tests.SystemChecksTestCase.test_context_processor_dependencies"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "stub",
+     "bm25_rank": 36,
+     "chunk_kind": "method",
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaulttags.py:1163-1228#signature",
+    "content": "# django/template/defaulttags.py:1163-1228  (django.template.defaulttags.regroup [signature])\n@register.tag\ndef regroup(parser, token):\n    'Regroup a list of alike objects by a common attribute.'\n    ...",
+    "token_count": 53,
+    "rank": 45,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.defaulttags.regroup"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "stub",
+     "bm25_rank": 37,
+     "chunk_kind": "function",
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/apps/config.py:16-56#signature",
+    "content": "# django/apps/config.py:16-56  (django.apps.config.AppConfig.__init__ [signature])\nclass AppConfig:\n    def __init__(self, app_name, app_module):\n        # Full Python path to the application e.g. 'django.contrib.admin'.\n        ...",
+    "token_count": 58,
+    "rank": 46,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.apps.config.AppConfig.__init__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "stub",
+     "bm25_rank": 38,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_changelist/tests.py:256-281#signature",
+    "content": "# tests/admin_changelist/tests.py:256-281  (tests.admin_changelist.tests.ChangeListTests.test_result_list_set_empty_value_display_on_admin_site [signature])\nclass ChangeListTests(TestCase):\n    def test_result_list_set_empty_value_display_on_admin_site(self):\n        'Empty value display can be set on AdminSite.'\n        ...",
+    "token_count": 74,
+    "rank": 47,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_changelist.tests.ChangeListTests.test_result_list_set_empty_value_display_on_admin_site"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "stub",
+     "bm25_rank": 39,
+     "chunk_kind": "method",
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:99-123#signature",
+    "content": "# django/contrib/auth/models.py:99-123  (django.contrib.auth.models.Group [signature])\nclass Group(models.Model):\n    'Groups are a generic way of categorizing users to apply permissions, or'\n    ...",
+    "token_count": 48,
+    "rank": 48,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.models.Group"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "stub",
+     "bm25_rank": 40,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/syndication/views.py:125-133#signature",
+    "content": "# django/contrib/syndication/views.py:125-133  (django.contrib.syndication.views.Feed.get_context_data [signature])\nclass Feed:\n    def get_context_data(self, **kwargs):\n        'Return a dictionary to use as extra context if either'\n        ...",
+    "token_count": 61,
+    "rank": 49,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.syndication.views.Feed.get_context_data"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "stub",
+     "bm25_rank": 41,
+     "chunk_kind": "method",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1034-1059#signature",
+    "content": "# django/contrib/admin/options.py:1034-1059  (django.contrib.admin.options.ModelAdmin.get_action [signature])\nclass ModelAdmin(BaseModelAdmin):\n    def get_action(self, action):\n        'Return a given action from a parameter, which can either be a callable,'\n        ...",
+    "token_count": 64,
+    "rank": 50,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.get_action"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "stub",
+     "bm25_rank": 42,
+     "chunk_kind": "method",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/custom_has_permission_admin.py:26-29#signature",
+    "content": "# tests/admin_views/custom_has_permission_admin.py:26-29  (tests.admin_views.custom_has_permission_admin.HasPermissionAdmin.has_permission [signature])\nclass HasPermissionAdmin(admin.AdminSite):\n    def has_permission(self, request):\n        ...",
+    "token_count": 50,
+    "rank": 51,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_views.custom_has_permission_admin.HasPermissionAdmin.has_permission"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "stub",
+     "bm25_rank": 43,
+     "chunk_kind": "method",
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/tests.py:8160-8200#signature",
+    "content": "# tests/admin_views/tests.py:8160-8200  (tests.admin_views.tests.AdminViewOnSiteTests.test_add_view_form_and_formsets_run_validation [signature])\nclass AdminViewOnSiteTests(TestCase):\n    def test_add_view_form_and_formsets_run_validation(self):\n        'Issue #20522'\n        ...",
+    "token_count": 72,
+    "rank": 52,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_views.tests.AdminViewOnSiteTests.test_add_view_form_and_formsets_run_validation"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "stub",
+     "bm25_rank": 45,
+     "chunk_kind": "method",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1011-1021#signature",
+    "content": "# django/contrib/admin/options.py:1011-1021  (django.contrib.admin.options.ModelAdmin.get_actions [signature])\nclass ModelAdmin(BaseModelAdmin):\n    def get_actions(self, request):\n        'Return a dictionary mapping the names of all actions for this'\n        ...",
+    "token_count": 60,
+    "rank": 53,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.get_actions"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "stub",
+     "bm25_rank": 46,
+     "chunk_kind": "method",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/tests.py:2603-2618#signature",
+    "content": "# tests/admin_views/tests.py:2603-2618  (tests.admin_views.tests.AdminViewPermissionsTest.test_change_view_without_object_change_permission [signature])\nclass AdminViewPermissionsTest(TestCase):\n    def test_change_view_without_object_change_permission(self):\n        'The object should be read-only if the user has permission to view it'\n        ...",
+    "token_count": 73,
+    "rank": 54,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_views.tests.AdminViewPermissionsTest.test_change_view_without_object_change_permission"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "stub",
+     "bm25_rank": 47,
+     "chunk_kind": "method",
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/checks.py:46-52#signature",
+    "content": "# django/contrib/admin/checks.py:46-52  (django.contrib.admin.checks.check_admin_app [signature])\ndef check_admin_app(app_configs, **kwargs):\n    ...",
+    "token_count": 39,
+    "rank": 55,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.checks.check_admin_app"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "stub",
+     "bm25_rank": 48,
+     "chunk_kind": "function",
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/tests.py:1269-1276#signature",
+    "content": "# tests/admin_views/tests.py:1269-1276  (tests.admin_views.tests.AdminViewBasicTest.test_adminsite_display_site_url [signature])\nclass AdminViewBasicTest(AdminViewBasicTestCase):\n    def test_adminsite_display_site_url(self):\n        \"#13749 - Admin should display link to front-end site 'View site'\"\n        ...",
+    "token_count": 78,
+    "rank": 56,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.admin_views.tests.AdminViewBasicTest.test_adminsite_display_site_url"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "stub",
+     "bm25_rank": 49,
+     "chunk_kind": "method",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sites/models.py:48-68#signature",
+    "content": "# django/contrib/sites/models.py:48-68  (django.contrib.sites.models.SiteManager.get_current [signature])\nclass SiteManager(models.Manager):\n    def get_current(self, request=None):\n        \"Return the current Site based on the SITE_ID in the project's settings.\"\n        ...",
+    "token_count": 61,
+    "rank": 57,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.sites.models.SiteManager.get_current"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "stub",
+     "bm25_rank": 50,
+     "chunk_kind": "method",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/test_adminsite.py:21-26",
+    "content": "# tests/admin_views/test_adminsite.py:21-26  (tests.admin_views.test_adminsite.SiteEachContextTest)\n@override_settings(ROOT_URLCONF=\"admin_views.test_adminsite\")\nclass SiteEachContextTest(TestCase):\n    \"\"\"\n    Check each_context contains the documented variables and that available_apps context\n    variable structure is the expected one.\n    \"\"\"\n\n    request_factory = RequestFactory()",
+    "token_count": 80,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_views.test_adminsite.SiteEachContextTest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/test_adminsite.py:34-37",
+    "content": "# tests/admin_views/test_adminsite.py:34-37  (tests.admin_views.test_adminsite.SiteEachContextTest.setUp)\nclass SiteEachContextTest(TestCase):\n    def setUp(self):\n        request = self.request_factory.get(reverse(\"test_adminsite:index\"))\n        request.user = self.u1\n        self.ctx = site.each_context(request)",
+    "token_count": 71,
+    "rank": 59,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_views.test_adminsite.SiteEachContextTest.setUp"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/checks.py:55-173",
+    "content": "# django/contrib/admin/checks.py:55-173  (django.contrib.admin.checks.check_dependencies)\ndef check_dependencies(**kwargs):\n    \"\"\"\n    Check that the admin's dependencies are correctly installed.\n    \"\"\"\n    from django.contrib.admin.sites import all_sites\n\n    if not apps.is_installed(\"django.contrib.admin\"):\n        return []\n    errors = []\n    app_dependencies = (\n        (\"django.contrib.contenttypes\", 401),\n        (\"django.contrib.auth\", 405),\n        (\"django.contrib.messages\", 406),\n    )\n    for app_name, error_code in app_dependencies:\n        if not apps.is_installed(app_name):\n            errors.append(\n                checks.Error(\n                    \"'%s' must be in INSTALLED_APPS in order to use the admin \"\n                    \"application.\" % app_name,\n                    id=\"admin.E%d\" % error_code,\n                )\n            )\n    for engine in engines.all():\n        if isinstance(engine, DjangoTemplates):\n            django_templates_instance = engine.engine\n            break\n    else:\n        django_templates_instance = None\n    if not django_templates_instance:\n        errors.append(\n            checks.Error(\n                \"A 'django.template.backends.django.DjangoTemplates' instance \"\n                \"must be configured in TEMPLATES in order to use the admin \"\n                \"application.\",\n                id=\"admin.E403\",\n            )\n        )\n    else:\n        if (\n            \"django.contrib.auth.context_processors.auth\"\n            not in django_templates_instance.context_processors\n            and _contains_subclass(\n                \"django.contrib.auth.backends.ModelBackend\",\n                settings.AUTHENTICATION_BACKENDS,\n            )\n        ):\n            errors.append(\n                checks.Error(\n                    \"'django.contrib.auth.context_processors.auth' must be \"\n                    \"enabled in DjangoTemplates (TEMPLATES) if using the default \"\n                    \"auth backend in order to use the admin application.\",\n                    id=\"admin.E402\",\n                )\n            )\n        if (\n            \"django.contrib.messages.context_processors.messages\"\n            not in django_templates_instance.context_processors\n        ):\n            errors.append(\n                checks.Error(\n                    \"'django.contrib.messages.context_processors.messages' must \"\n                    \"be enabled in DjangoTemplates (TEMPLATES) in order to use \"\n                    \"the admin application.\",\n                    id=\"admin.E404\",\n                )\n            )\n        sidebar_enabled = any(site.enable_nav_sidebar for site in all_sites)\n        if (\n            sidebar_enabled\n            and \"django.template.context_processors.request\"\n            not in django_templates_instance.context_processors\n        ):\n            errors.append(\n                checks.Warning(\n                    \"'django.template.context_processors.request' must be enabled \"\n                    \"in DjangoTemplates (TEMPLATES) in order to use the admin \"\n                    \"navigation sidebar.\",\n                    id=\"admin.W411\",\n                )\n            )\n\n    if not _contains_subclass(\n        \"django.contrib.auth.middleware.AuthenticationMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                id=\"admin.E408\",\n            )\n        )\n    if not _contains_subclass(\n        \"django.contrib.messages.middleware.MessageMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.messages.middleware.MessageMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                id=\"admin.E409\",\n            )\n        )\n    if not _contains_subclass(\n        \"django.contrib.sessions.middleware.SessionMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.sessions.middleware.SessionMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                hint=(\n                    \"Insert \"\n                    \"'django.contrib.sessions.middleware.SessionMiddleware' \"\n                    \"before \"\n                    \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n                ),\n                id=\"admin.E410\",\n            )\n        )\n    return errors",
+    "token_count": 817,
+    "rank": 60,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.checks.check_dependencies"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "function",
+     "engine_token_count": 817
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/decorators.py:80-111",
+    "content": "# django/contrib/admin/decorators.py:80-111  (django.contrib.admin.decorators.register)\ndef register(*models, site=None):\n    \"\"\"\n    Register the given model(s) classes and wrapped ModelAdmin class with\n    admin site:\n\n    @register(Author)\n    class AuthorAdmin(admin.ModelAdmin):\n        pass\n\n    The `site` kwarg is an admin site to use instead of the default admin site.\n    \"\"\"\n    from django.contrib.admin import ModelAdmin\n    from django.contrib.admin.sites import AdminSite\n    from django.contrib.admin.sites import site as default_site\n\n    def _model_admin_wrapper(admin_class):\n        if not models:\n            raise ValueError(\"At least one model must be passed to register.\")\n\n        admin_site = site or default_site\n\n        if not isinstance(admin_site, AdminSite):\n            raise ValueError(\"site must subclass AdminSite\")\n\n        if not issubclass(admin_class, ModelAdmin):\n            raise ValueError(\"Wrapped class must subclass ModelAdmin.\")\n\n        admin_site.register(models, admin_class=admin_class)\n\n        return admin_class\n\n    return _model_admin_wrapper",
+    "token_count": 225,
+    "rank": 61,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.decorators.register"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "function",
+     "engine_token_count": 225
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/test_adminsite.py:39-44",
+    "content": "# tests/admin_views/test_adminsite.py:39-44  (tests.admin_views.test_adminsite.SiteEachContextTest.test_each_context)\nclass SiteEachContextTest(TestCase):\n    def test_each_context(self):\n        ctx = self.ctx\n        self.assertEqual(ctx[\"site_header\"], \"Django administration\")\n        self.assertEqual(ctx[\"site_title\"], \"Django site admin\")\n        self.assertEqual(ctx[\"site_url\"], \"/\")\n        self.assertIs(ctx[\"has_permission\"], True)",
+    "token_count": 97,
+    "rank": 62,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_views.test_adminsite.SiteEachContextTest.test_each_context"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "method",
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/test_adminsite.py:46-51",
+    "content": "# tests/admin_views/test_adminsite.py:46-51  (tests.admin_views.test_adminsite.SiteEachContextTest.test_each_context_site_url_with_script_name)\nclass SiteEachContextTest(TestCase):\n    def test_each_context_site_url_with_script_name(self):\n        request = self.request_factory.get(\n            reverse(\"test_adminsite:index\"), SCRIPT_NAME=\"/my-script-name/\"\n        )\n        request.user = self.u1\n        self.assertEqual(site.each_context(request)[\"site_url\"], \"/my-script-name/\")",
+    "token_count": 103,
+    "rank": 63,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_views.test_adminsite.SiteEachContextTest.test_each_context_site_url_with_script_name"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "method",
+     "engine_token_count": 103
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_changelist/tests.py:1266-1311",
+    "content": "# tests/admin_changelist/tests.py:1266-1311  (tests.admin_changelist.tests.ChangeListTests.test_deterministic_order_for_model_ordered_by_its_manager)\nclass ChangeListTests(TestCase):\n    def test_deterministic_order_for_model_ordered_by_its_manager(self):\n        \"\"\"\n        The primary key is used in the ordering of the changelist's results to\n        guarantee a deterministic order, even when the model has a manager that\n        defines a default ordering (#17198).\n        \"\"\"\n        superuser = self._create_superuser(\"superuser\")\n\n        for counter in range(1, 51):\n            OrderedObject.objects.create(id=counter, bool=True, number=counter)\n\n        class OrderedObjectAdmin(admin.ModelAdmin):\n            list_per_page = 10\n\n        def check_results_order(ascending=False):\n            custom_site.register(OrderedObject, OrderedObjectAdmin)\n            model_admin = OrderedObjectAdmin(OrderedObject, custom_site)\n            counter = 0 if ascending else 51\n            for page in range(1, 6):\n                request = self._mocked_authenticated_request(\n                    \"/orderedobject/?p=%s\" % page, superuser\n                )\n                response = model_admin.changelist_view(request)\n                for result in response.context_data[\"cl\"].result_list:\n                    counter += 1 if ascending else -1\n                    self.assertEqual(result.id, counter)\n            custom_site.unregister(OrderedObject)\n\n        # When no order is defined at all, use the model's default ordering\n        # (i.e. 'number').\n        check_results_order(ascending=True)\n\n        # When an order field is defined but multiple records have the same\n        # value for that field, make sure everything gets ordered by -pk as well.\n        OrderedObjectAdmin.ordering = [\"bool\"]\n        check_results_order()\n\n        # When order fields are defined, including the pk itself, use them.\n        OrderedObjectAdmin.ordering = [\"bool\", \"-pk\"]\n        check_results_order()\n        OrderedObjectAdmin.ordering = [\"bool\", \"pk\"]\n        check_results_order(ascending=True)\n        OrderedObjectAdmin.ordering = [\"-id\", \"bool\"]\n        check_results_order()\n        OrderedObjectAdmin.ordering = [\"id\", \"bool\"]\n        check_results_order(ascending=True)",
+    "token_count": 482,
+    "rank": 64,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_changelist.tests.ChangeListTests.test_deterministic_order_for_model_ordered_by_its_manager"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 482
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/widgets.py:223-228",
+    "content": "# django/contrib/admin/widgets.py:223-228  (django.contrib.admin.widgets.ManyToManyRawIdWidget.get_context)\nclass ManyToManyRawIdWidget(ForeignKeyRawIdWidget):\n    def get_context(self, name, value, attrs):\n        context = super().get_context(name, value, attrs)\n        if self.rel.model in self.admin_site._registry:\n            # The related object is registered with the same AdminSite\n            context[\"widget\"][\"attrs\"][\"class\"] = \"vManyToManyRawIdAdminField\"\n        return context",
+    "token_count": 113,
+    "rank": 65,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.widgets.ManyToManyRawIdWidget.get_context"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "method",
+     "engine_token_count": 113
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admindocs/views.py:52-58",
+    "content": "# django/contrib/admindocs/views.py:52-58  (django.contrib.admindocs.views.BaseAdminDocsView.get_context_data)\nclass BaseAdminDocsView(TemplateView):\n    def get_context_data(self, **kwargs):\n        return super().get_context_data(\n            **{\n                **kwargs,\n                **admin.site.each_context(self.request),\n            }\n        )",
+    "token_count": 78,
+    "rank": 66,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admindocs.views.BaseAdminDocsView.get_context_data"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sites/shortcuts.py:6-18",
+    "content": "# django/contrib/sites/shortcuts.py:6-18  (django.contrib.sites.shortcuts.get_current_site)\ndef get_current_site(request):\n    \"\"\"\n    Check if contrib.sites is installed and return either the current\n    ``Site`` object or a ``RequestSite`` object based on the request.\n    \"\"\"\n    # Import is inside the function because its point is to avoid importing the\n    # Site models when django.contrib.sites isn't installed.\n    if apps.is_installed(\"django.contrib.sites\"):\n        from .models import Site\n\n        return Site.objects.get_current(request)\n    else:\n        return RequestSite(request)",
+    "token_count": 130,
+    "rank": 67,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sites.shortcuts.get_current_site"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "function",
+     "engine_token_count": 130
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sites/requests.py:2-8",
+    "content": "# django/contrib/sites/requests.py:2-8  (django.contrib.sites.requests.RequestSite)\nclass RequestSite:\n    \"\"\"\n    A class that shares the primary interface of Site (i.e., it has ``domain``\n    and ``name`` attributes) but gets its data from an HttpRequest object\n    rather than from a database.\n\n    The save() and delete() methods raise NotImplementedError.\n    \"\"\"",
+    "token_count": 83,
+    "rank": 68,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sites.requests.RequestSite"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1853-1884#part2of2",
+    "content": "# django/contrib/admin/options.py:1853-1884#part2of2  (django.contrib.admin.options.ModelAdmin._changeform_view)\nclass ModelAdmin(BaseModelAdmin):\n    def _changeform_view(self, request, object_id, form_url, extra_context):\n        context = {\n            **self.admin_site.each_context(request),\n            \"title\": title % self.opts.verbose_name,\n            \"subtitle\": str(obj) if obj else None,\n            \"adminform\": admin_form,\n            \"object_id\": object_id,\n            \"original\": obj,\n            \"is_popup\": IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,\n            \"to_field\": to_field,\n            \"media\": media,\n            \"inline_admin_formsets\": inline_formsets,\n            \"errors\": helpers.AdminErrorList(form, formsets),\n            \"preserved_filters\": self.get_preserved_filters(request),\n        }\n\n        # Hide the \"Save\" and \"Save and continue\" buttons if \"Save as New\" was\n        # previously chosen to prevent the interface from getting confusing.\n        if (\n            request.method == \"POST\"\n            and not form_validated\n            and \"_saveasnew\" in request.POST\n        ):\n            context[\"show_save\"] = False\n            context[\"show_save_and_continue\"] = False\n            # Use the change template instead of the add template.\n            add = False\n\n        context.update(extra_context or {})\n\n        return self.render_change_form(\n            request, context, add=add, change=not add, obj=obj, form_url=form_url\n        )",
+    "token_count": 331,
+    "rank": 69,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin._changeform_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "function_part",
+     "engine_token_count": 331
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/flatpages/templatetags/flatpages.py:21-43",
+    "content": "# django/contrib/flatpages/templatetags/flatpages.py:21-43  (django.contrib.flatpages.templatetags.flatpages.FlatpageNode.render)\nclass FlatpageNode(template.Node):\n    def render(self, context):\n        if \"request\" in context:\n            site_pk = get_current_site(context[\"request\"]).pk\n        else:\n            site_pk = settings.SITE_ID\n        flatpages = FlatPage.objects.filter(sites__id=site_pk)\n        # If a prefix was specified, add a filter\n        if self.starts_with:\n            flatpages = flatpages.filter(\n                url__startswith=self.starts_with.resolve(context)\n            )\n\n        # If the provided user is not authenticated, or no user\n        # was provided, filter the list to only public flatpages.\n        if self.user:\n            user = self.user.resolve(context)\n            if not user.is_authenticated:\n                flatpages = flatpages.filter(registration_required=False)\n        else:\n            flatpages = flatpages.filter(registration_required=False)\n\n        context[self.context_name] = flatpages\n        return \"\"",
+    "token_count": 231,
+    "rank": 70,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.flatpages.templatetags.flatpages.FlatpageNode.render"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 231
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context_processors.py:1-14",
+    "content": "# django/template/context_processors.py:1-14  (django.template.context_processors)\n\"\"\"\nA set of request processors that return dictionaries to be merged into a\ntemplate context. Each function takes the request object as its only parameter\nand returns a dictionary to add to the context.\n\nThese are referenced from the 'context_processors' option of the configuration\nof a DjangoTemplates backend and used by RequestContext.\n\"\"\"\n\nimport itertools\n\nfrom django.conf import settings\nfrom django.middleware.csrf import get_token\nfrom django.utils.functional import SimpleLazyObject, lazy",
+    "token_count": 109,
+    "rank": 71,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "module_block",
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:2176-2234",
+    "content": "# django/contrib/admin/options.py:2176-2234  (django.contrib.admin.options.ModelAdmin.history_view)\nclass ModelAdmin(BaseModelAdmin):\n    def history_view(self, request, object_id, extra_context=None):\n        \"The 'history' admin view for this model.\"\n        from django.contrib.admin.models import LogEntry\n        from django.contrib.admin.views.main import PAGE_VAR\n\n        # First check if the user can see this history.\n        model = self.model\n        obj = self.get_object(request, unquote(object_id))\n        if obj is None:\n            return self._get_obj_does_not_exist_redirect(\n                request, model._meta, object_id\n            )\n\n        if not self.has_view_or_change_permission(request, obj):\n            raise PermissionDenied\n\n        # Then get the history for this object.\n        app_label = self.opts.app_label\n        action_list = (\n            LogEntry.objects.filter(\n                object_id=unquote(object_id),\n                content_type=get_content_type_for_model(model),\n            )\n            .select_related()\n            .order_by(\"action_time\")\n        )\n\n        paginator = self.get_paginator(request, action_list, 100)\n        page_number = request.GET.get(PAGE_VAR, 1)\n        page_obj = paginator.get_page(page_number)\n        page_range = paginator.get_elided_page_range(page_obj.number)\n\n        context = {\n            **self.admin_site.each_context(request),\n            \"title\": _(\"Change history: %s\") % obj,\n            \"subtitle\": None,\n            \"action_list\": page_obj,\n            \"page_range\": page_range,\n            \"page_var\": PAGE_VAR,\n            \"pagination_required\": paginator.count > 100,\n            \"module_name\": str(capfirst(self.opts.verbose_name_plural)),\n            \"object\": obj,\n            \"opts\": self.opts,\n            \"preserved_filters\": self.get_preserved_filters(request),\n            **(extra_context or {}),\n        }\n\n        request.current_app = self.admin_site.name\n\n        return TemplateResponse(\n            request,\n            self.object_history_template\n            or [\n                \"admin/%s/%s/object_history.html\" % (app_label, self.opts.model_name),\n                \"admin/%s/object_history.html\" % app_label,\n                \"admin/object_history.html\",\n            ],\n            context,\n        )",
+    "token_count": 475,
+    "rank": 72,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin.history_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "method",
+     "engine_token_count": 475
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/actions.py:15-96",
+    "content": "# django/contrib/admin/actions.py:15-96  (django.contrib.admin.actions.delete_selected)\n@action(\n    permissions=[\"delete\"],\n    description=gettext_lazy(\"Delete selected %(verbose_name_plural)s\"),\n)\ndef delete_selected(modeladmin, request, queryset):\n    \"\"\"\n    Default action which deletes the selected objects.\n\n    This action first displays a confirmation page which shows all the\n    deletable objects, or, if the user has no permission one of the related\n    childs (foreignkeys), a \"permission denied\" message.\n\n    Next, it deletes all selected objects and redirects back to the change list.\n    \"\"\"\n    opts = modeladmin.model._meta\n    app_label = opts.app_label\n\n    # Populate deletable_objects, a data structure of all related objects that\n    # will also be deleted.\n    (\n        deletable_objects,\n        model_count,\n        perms_needed,\n        protected,\n    ) = modeladmin.get_deleted_objects(queryset, request)\n\n    # The user has already confirmed the deletion.\n    # Do the deletion and return None to display the change list view again.\n    if request.POST.get(\"post\") and not protected:\n        if perms_needed:\n            raise PermissionDenied\n        n = queryset.count()\n        if n:\n            for obj in queryset:\n                obj_display = str(obj)\n                modeladmin.log_deletion(request, obj, obj_display)\n            modeladmin.delete_queryset(request, queryset)\n            modeladmin.message_user(\n                request,\n                _(\"Successfully deleted %(count)d %(items)s.\")\n                % {\"count\": n, \"items\": model_ngettext(modeladmin.opts, n)},\n                messages.SUCCESS,\n            )\n        # Return None to display the change list page again.\n        return None\n\n    objects_name = model_ngettext(queryset)\n\n    if perms_needed or protected:\n        title = _(\"Cannot delete %(name)s\") % {\"name\": objects_name}\n    else:\n        title = _(\"Are you sure?\")\n\n    context = {\n        **modeladmin.admin_site.each_context(request),\n        \"title\": title,\n        \"subtitle\": None,\n        \"objects_name\": str(objects_name),\n        \"deletable_objects\": [deletable_objects],\n        \"model_count\": dict(model_count).items(),\n        \"queryset\": queryset,\n        \"perms_lacking\": perms_needed,\n        \"protected\": protected,\n        \"opts\": opts,\n        \"action_checkbox_name\": helpers.ACTION_CHECKBOX_NAME,\n        \"media\": modeladmin.media,\n    }\n\n    request.current_app = modeladmin.admin_site.name\n\n    # Display the confirmation page\n    return TemplateResponse(\n        request,\n        modeladmin.delete_selected_confirmation_template\n        or [\n            \"admin/%s/%s/delete_selected_confirmation.html\"\n            % (app_label, opts.model_name),\n            \"admin/%s/delete_selected_confirmation.html\" % app_label,\n            \"admin/delete_selected_confirmation.html\",\n        ],\n        context,\n    )",
+    "token_count": 596,
+    "rank": 73,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.actions.delete_selected"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "function",
+     "engine_token_count": 596
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/admin.py:121-147",
+    "content": "# django/contrib/auth/admin.py:121-147  (django.contrib.auth.admin.UserAdmin._add_view)\nclass UserAdmin(admin.ModelAdmin):\n    def _add_view(self, request, form_url=\"\", extra_context=None):\n        # It's an error for a user to have add permission but NOT change\n        # permission for users. If we allowed such users to add users, they\n        # could create superusers, which would mean they would essentially have\n        # the permission to change users. To avoid the problem entirely, we\n        # disallow users from adding users if they don't have change\n        # permission.\n        if not self.has_change_permission(request):\n            if self.has_add_permission(request) and settings.DEBUG:\n                # Raise Http404 in debug mode so that the user gets a helpful\n                # error message.\n                raise Http404(\n                    'Your user does not have the \"Change user\" permission. In '\n                    \"order to add users, Django requires that your user \"\n                    'account have both the \"Add user\" and \"Change user\" '\n                    \"permissions set.\"\n                )\n            raise PermissionDenied\n        if extra_context is None:\n            extra_context = {}\n        username_field = self.opts.get_field(self.model.USERNAME_FIELD)\n        defaults = {\n            \"auto_populated_fields\": (),\n            \"username_help_text\": username_field.help_text,\n        }\n        extra_context.update(defaults)\n        return super().add_view(request, form_url, extra_context)",
+    "token_count": 313,
+    "rank": 74,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.admin.UserAdmin._add_view"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "method",
+     "engine_token_count": 313
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_changelist/tests.py:1220-1264",
+    "content": "# tests/admin_changelist/tests.py:1220-1264  (tests.admin_changelist.tests.ChangeListTests.test_deterministic_order_for_unordered_model)\nclass ChangeListTests(TestCase):\n    def test_deterministic_order_for_unordered_model(self):\n        \"\"\"\n        The primary key is used in the ordering of the changelist's results to\n        guarantee a deterministic order, even when the model doesn't have any\n        default ordering defined (#17198).\n        \"\"\"\n        superuser = self._create_superuser(\"superuser\")\n\n        for counter in range(1, 51):\n            UnorderedObject.objects.create(id=counter, bool=True)\n\n        class UnorderedObjectAdmin(admin.ModelAdmin):\n            list_per_page = 10\n\n        def check_results_order(ascending=False):\n            custom_site.register(UnorderedObject, UnorderedObjectAdmin)\n            model_admin = UnorderedObjectAdmin(UnorderedObject, custom_site)\n            counter = 0 if ascending else 51\n            for page in range(1, 6):\n                request = self._mocked_authenticated_request(\n                    \"/unorderedobject/?p=%s\" % page, superuser\n                )\n                response = model_admin.changelist_view(request)\n                for result in response.context_data[\"cl\"].result_list:\n                    counter += 1 if ascending else -1\n                    self.assertEqual(result.id, counter)\n            custom_site.unregister(UnorderedObject)\n\n        # When no order is defined at all, everything is ordered by '-pk'.\n        check_results_order()\n\n        # When an order field is defined but multiple records have the same\n        # value for that field, make sure everything gets ordered by -pk as well.\n        UnorderedObjectAdmin.ordering = [\"bool\"]\n        check_results_order()\n\n        # When order fields are defined, including the pk itself, use them.\n        UnorderedObjectAdmin.ordering = [\"bool\", \"-pk\"]\n        check_results_order()\n        UnorderedObjectAdmin.ordering = [\"bool\", \"pk\"]\n        check_results_order(ascending=True)\n        UnorderedObjectAdmin.ordering = [\"-id\", \"bool\"]\n        check_results_order()\n        UnorderedObjectAdmin.ordering = [\"id\", \"bool\"]\n        check_results_order(ascending=True)",
+    "token_count": 468,
+    "rank": 75,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_changelist.tests.ChangeListTests.test_deterministic_order_for_unordered_model"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "method",
+     "engine_token_count": 468
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/templatetags/admin_list.py:509-515",
+    "content": "# django/contrib/admin/templatetags/admin_list.py:509-515  (django.contrib.admin.templatetags.admin_list.admin_actions)\ndef admin_actions(context):\n    \"\"\"\n    Track the number of times the action field has been rendered on the page,\n    so we know which value to use.\n    \"\"\"\n    context[\"action_index\"] = context.get(\"action_index\", -1) + 1\n    return context",
+    "token_count": 93,
+    "rank": 76,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.templatetags.admin_list.admin_actions"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "function",
+     "engine_token_count": 93
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_views/test_adminsite.py:28-32",
+    "content": "# tests/admin_views/test_adminsite.py:28-32  (tests.admin_views.test_adminsite.SiteEachContextTest.setUpTestData)\nclass SiteEachContextTest(TestCase):\n    @classmethod\n    def setUpTestData(cls):\n        cls.u1 = User.objects.create_superuser(\n            username=\"super\", password=\"secret\", email=\"super@example.com\"\n        )",
+    "token_count": 73,
+    "rank": 77,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_views.test_adminsite.SiteEachContextTest.setUpTestData"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/widgets.py:145-177",
+    "content": "# django/contrib/admin/widgets.py:145-177  (django.contrib.admin.widgets.ForeignKeyRawIdWidget.get_context)\nclass ForeignKeyRawIdWidget(forms.TextInput):\n    def get_context(self, name, value, attrs):\n        context = super().get_context(name, value, attrs)\n        rel_to = self.rel.model\n        if rel_to in self.admin_site._registry:\n            # The related object is registered with the same AdminSite\n            related_url = reverse(\n                \"admin:%s_%s_changelist\"\n                % (\n                    rel_to._meta.app_label,\n                    rel_to._meta.model_name,\n                ),\n                current_app=self.admin_site.name,\n            )\n\n            params = self.url_parameters()\n            if params:\n                related_url += \"?\" + urlencode(params)\n            context[\"related_url\"] = related_url\n            context[\"link_title\"] = _(\"Lookup\")\n            # The JavaScript code looks for this class.\n            css_class = \"vForeignKeyRawIdAdminField\"\n            if isinstance(self.rel.get_related_field(), UUIDField):\n                css_class += \" vUUIDField\"\n            context[\"widget\"][\"attrs\"].setdefault(\"class\", css_class)\n        else:\n            context[\"related_url\"] = None\n        if context[\"widget\"][\"value\"]:\n            context[\"link_label\"], context[\"link_url\"] = self.label_and_url_for_value(\n                value\n            )\n        else:\n            context[\"link_label\"] = None\n        return context",
+    "token_count": 298,
+    "rank": 78,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.widgets.ForeignKeyRawIdWidget.get_context"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "method",
+     "engine_token_count": 298
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/auth_tests/urls_admin.py:1-18",
+    "content": "# tests/auth_tests/urls_admin.py:1-18  (tests.auth_tests.urls_admin)\n\"\"\"\nTest URLs for auth admins.\n\"\"\"\n\nfrom django.contrib import admin\nfrom django.contrib.auth.admin import GroupAdmin, UserAdmin\nfrom django.contrib.auth.models import Group, User\nfrom django.contrib.auth.urls import urlpatterns\nfrom django.urls import path\n\n# Create a silo'd admin site for just the user/group admins.\nsite = admin.AdminSite(name=\"auth_test_admin\")\nsite.register(User, UserAdmin)\nsite.register(Group, GroupAdmin)\n\nurlpatterns += [\n    path(\"admin/\", site.urls),\n]",
+    "token_count": 123,
+    "rank": 79,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "module_block",
+     "engine_token_count": 123
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admindocs/views.py:44-50",
+    "content": "# django/contrib/admindocs/views.py:44-50  (django.contrib.admindocs.views.BaseAdminDocsView.dispatch)\nclass BaseAdminDocsView(TemplateView):\n    @method_decorator(staff_member_required)\n    def dispatch(self, request, *args, **kwargs):\n        if not utils.docutils_is_available:\n            # Display an error message for people without docutils\n            self.template_name = \"admin_doc/missing_docutils.html\"\n            return self.render_to_response(admin.site.each_context(request))\n        return super().dispatch(request, *args, **kwargs)",
+    "token_count": 120,
+    "rank": 80,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admindocs.views.BaseAdminDocsView.dispatch"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "method",
+     "engine_token_count": 120
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12480,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging what gets put into the template context for every\npage of the Django admin site, in django/contrib/admin/sites.py.\nStarting from `AdminSite.each_context`, trace the real causal\npipeline that produces that context, in the order each stage is\nactually reached, up to and including the call that enumerates the\nlist of installed apps available to the current user.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.admin.sites.AdminSite.each_context\", \"django.contrib.admin.sites.AdminSite.has_permission\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/contrib/admin/sites.py",
+   "cutoff": 270,
+   "n_components": 83,
+   "n_full": 56,
+   "n_stub": 24,
+   "n_dropped": 3,
+   "packed_tokens": 12480,
+   "latency_ms": {
+    "L_priority_sort": [
+     1131.276248
+    ],
+    "L_binary_search_tokenize": [
+     0.348647
+    ],
+    "L_retrieve": [
+     1135.286367
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12480,
+   "prompt_tokens": 12801,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 12814,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/admin/sites.py:320-340  (django.contrib.admin.sites.AdminSite.each_context)\nclass AdminSite:\n    def each_context(self, request):\n        \"\"\"\n        Return a dictionary of variables to put in the template context for\n        *every* page in the admin site.\n\n        For sites running on a subpath, use the SCRIPT_NAME value if site_url\n        hasn't been customized.\n        \"\"\"\n        script_name = request.META[\"SCRIPT_NAME\"]\n        site_url = (\n            script_name if self.site_url == \"/\" and script_name else self.site_url\n        )\n        return {\n            \"site_title\": self.site_title,\n            \"site_header\": self.site_header,\n            \"site_url\": site_url,\n            \"has_permission\": self.has_permission(request),\n            \"available_apps\": self.get_app_list(request),\n            \"is_popup\": False,\n            \"is_nav_sidebar_enabled\": self.enable_nav_sidebar,\n        }\n\n# django/contrib/admin/sites.py:316-318  (django.contrib.admin.sites.AdminSite.urls)\nclass AdminSite:\n    @property\n    def urls(self):\n        return self.get_urls(), \"admin\", self.name\n\n# django/contrib/admin/sites.py:342-358  (django.contrib.admin.sites.AdminSite.password_change)\nclass AdminSite:\n    def password_change(self, request, extra_context=None):\n        \"\"\"\n        Handle the \"change password\" task -- both form display and validation.\n        \"\"\"\n        from django.contrib.admin.forms import AdminPasswordChangeForm\n        from django.contrib.auth.views import PasswordChangeView\n\n        url = reverse(\"admin:password_change_done\", current_app=self.name)\n        defaults = {\n            \"form_class\": AdminPasswordChangeForm,\n            \"success_url\": url,\n            \"extra_context\": {**self.each_context(request), **(extra_context or {})},\n        }\n        if self.password_change_template is not None:\n            defaults[\"template_name\"] = self.password_change_template\n        request.current_app = self.name\n        return PasswordChangeView.as_view(**defaults)(request)\n\n# django/contrib/admin/sites.py:252-314  (django.contrib.admin.sites.AdminSite.get_urls)\nclass AdminSite:\n    def get_urls(self):\n        # Since this module gets imported in the application's root package,\n        # it cannot import models from other applications at the module level,\n        # and django.contrib.contenttypes.views imports ContentType.\n        from django.contrib.contenttypes import views as contenttype_views\n        from django.urls import include, path, re_path\n\n        def wrap(view, cacheable=False):\n            def wrapper(*args, **kwargs):\n                return self.admin_view(view, cacheable)(*args, **kwargs)\n\n            wrapper.admin_site = self\n            return update_wrapper(wrapper, view)\n\n        # Admin-site-wide views.\n        urlpatterns = [\n            path(\"\", wrap(self.index), name=\"index\"),\n            path(\"login/\", self.login, name=\"login\"),\n            path(\"logout/\", wrap(self.logout), name=\"logout\"),\n            path(\n                \"password_change/\",\n                wrap(self.password_change, cacheable=True),\n                name=\"password_change\",\n            ),\n            path(\n                \"password_change/done/\",\n                wrap(self.password_change_done, cacheable=True),\n                name=\"password_change_done\",\n            ),\n            path(\"autocomplete/\", wrap(self.autocomplete_view), name=\"autocomplete\"),\n            path(\"jsi18n/\", wrap(self.i18n_javascript, cacheable=True), name=\"jsi18n\"),\n            path(\n                \"r/<int:content_type_id>/<path:object_id>/\",\n                wrap(contenttype_views.shortcut),\n                name=\"view_on_site\",\n            ),\n        ]\n\n        # Add in each model's views, and create a list of valid URLS for the\n        # app_index\n        valid_app_labels = []\n        for model, model_admin in self._registry.items():\n            urlpatterns += [\n                path(\n                    \"%s/%s/\" % (model._meta.app_label, model._meta.model_name),\n                    include(model_admin.urls),\n                ),\n            ]\n            if model._meta.app_label not in valid_app_labels:\n                valid_app_labels.append(model._meta.app_label)\n\n        # If there were ModelAdmins registered, we should have a list of app\n        # labels for which we need to allow access to the app_index view,\n        if valid_app_labels:\n            regex = r\"^(?P<app_label>\" + \"|\".join(valid_app_labels) + \")/$\"\n            urlpatterns += [\n                re_path(regex, wrap(self.app_index), name=\"app_list\"),\n            ]\n\n        if self.final_catch_all_view:\n            urlpatterns.append(re_path(r\"(?P<url>.*)$\", wrap(self.catch_all_view)))\n\n        return urlpatterns\n\n# django/contrib/admin/sites.py:360-372  (django.contrib.admin.sites.AdminSite.password_change_done)\nclass AdminSite:\n    def password_change_done(self, request, extra_context=None):\n        \"\"\"\n        Display the \"success\" page after a password change.\n        \"\"\"\n        from django.contrib.auth.views import PasswordChangeDoneView\n\n        defaults = {\n            \"extra_context\": {**self.each_context(request), **(extra_context or {})},\n        }\n        if self.password_change_done_template is not None:\n            defaults[\"template_name\"] = self.password_change_done_template\n        request.current_app = self.name\n        return PasswordChangeDoneView.as_view(**defaults)(request)\n\n# django/contrib/admin/sites.py:205-250  (django.contrib.admin.sites.AdminSite.admin_view)\nclass AdminSite:\n    def admin_view(self, view, cacheable=False):\n        \"\"\"\n        Decorator to create an admin view attached to this ``AdminSite``. This\n        wraps the view and provides permission checking by calling\n        ``self.has_permission``.\n\n        You'll want to use this from within ``AdminSite.get_urls()``:\n\n            class MyAdminSite(AdminSite):\n\n                def get_urls(self):\n                    from django.urls import path\n\n                    urls = super().get_urls()\n                    urls += [\n                        path('my_view/', self.admin_view(some_view))\n                    ]\n                    return urls\n\n        By default, admin_views are marked non-cacheable using the\n        ``never_cache`` decorator. If the view can be safely cached, set\n        cacheable=True.\n        \"\"\"\n\n        def inner(request, *args, **kwargs):\n            if not self.has_permission(request):\n                if request.path == reverse(\"admin:logout\", current_app=self.name):\n                    index_path = reverse(\"admin:index\", current_app=self.name)\n                    return HttpResponseRedirect(index_path)\n                # Inner import to prevent django.contrib.admin (app) from\n                # importing django.contrib.auth.models.User (unrelated model).\n                from django.contrib.auth.views import redirect_to_login\n\n                return redirect_to_login(\n                    request.get_full_path(),\n                    reverse(\"admin:login\", current_app=self.name),\n                )\n            return view(request, *args, **kwargs)\n\n        if not cacheable:\n            inner = never_cache(inner)\n        # We add csrf_protect here so this function can be used as a utility\n        # function for any view, without having to repeat 'csrf_protect'.\n        if not getattr(view, \"csrf_exempt\", False):\n            inner = csrf_protect(inner)\n        return update_wrapper(inner, view)\n\n# django/contrib/admin/sites.py:374-381  (django.contrib.admin.sites.AdminSite.i18n_javascript)\nclass AdminSite:\n    def i18n_javascript(self, request, extra_context=None):\n        \"\"\"\n        Display the i18n JavaScript that the Django admin requires.\n\n        `extra_context` is unused but present for consistency with the other\n        admin views.\n        \"\"\"\n        return JavaScriptCatalog.as_view(packages=[\"django.contrib.admin\"])(request)\n\n# django/contrib/admin/sites.py:198-203  (django.contrib.admin.sites.AdminSite.has_permission)\nclass AdminSite:\n    def has_permission(self, request):\n        \"\"\"\n        Return True if the given HttpRequest has permission to view\n        *at least one* page in the admin site.\n        \"\"\"\n        return request.user.is_active and request.user.is_staff\n\n# django/contrib/admin/sites.py:383-403  (django.contrib.admin.sites.AdminSite.logout)\nclass AdminSite:\n    def logout(self, request, extra_context=None):\n        \"\"\"\n        Log out the user for the given HttpRequest.\n\n        This should *not* assume the user is already logged in.\n        \"\"\"\n        from django.contrib.auth.views import LogoutView\n\n        defaults = {\n            \"extra_context\": {\n                **self.each_context(request),\n                # Since the user isn't logged out at this point, the value of\n                # has_permission must be overridden.\n                \"has_permission\": False,\n                **(extra_context or {}),\n            },\n        }\n        if self.logout_template is not None:\n            defaults[\"template_name\"] = self.logout_template\n        request.current_app = self.name\n        return LogoutView.as_view(**defaults)(request)\n\n# django/contrib/admin/sites.py:191-196  (django.contrib.admin.sites.AdminSite.actions)\nclass AdminSite:\n    @property\n    def actions(self):\n        \"\"\"\n        Get all the enabled actions as an iterable of (name, func).\n        \"\"\"\n        return self._actions.items()\n\n# django/contrib/admin/sites.py:405-441  (django.contrib.admin.sites.AdminSite.login)\nclass AdminSite:\n    @method_decorator(never_cache)\n    def login(self, request, extra_context=None):\n        \"\"\"\n        Display the login form for the given HttpRequest.\n        \"\"\"\n        if request.method == \"GET\" and self.has_permission(request):\n            # Already logged-in, redirect to admin index\n            index_path = reverse(\"admin:index\", current_app=self.name)\n            return HttpResponseRedirect(index_path)\n\n        # Since this module gets imported in the application's root package,\n        # it cannot import models from other applications at the module level,\n        # and django.contrib.admin.forms eventually imports User.\n        from django.contrib.admin.forms import AdminAuthenticationForm\n        from django.contrib.auth.views import LoginView\n\n        context = {\n            **self.each_context(request),\n            \"title\": _(\"Log in\"),\n            \"subtitle\": None,\n            \"app_path\": request.get_full_path(),\n            \"username\": request.user.get_username(),\n        }\n        if (\n            REDIRECT_FIELD_NAME not in request.GET\n            and REDIRECT_FIELD_NAME not in request.POST\n        ):\n            context[REDIRECT_FIELD_NAME] = reverse(\"admin:index\", current_app=self.name)\n        context.update(extra_context or {})\n\n        defaults = {\n            \"extra_context\": context,\n            \"authentication_form\": self.login_form or AdminAuthenticationForm,\n            \"template_name\": self.login_template or \"admin/login.html\",\n        }\n        request.current_app = self.name\n        return LoginView.as_view(**defaults)(request)\n\n# django/contrib/admin/sites.py:184-189  (django.contrib.admin.sites.AdminSite.get_action)\nclass AdminSite:\n    def get_action(self, name):\n        \"\"\"\n        Explicitly get a registered global action whether it's enabled or\n        not. Raise KeyError for invalid names.\n        \"\"\"\n        return self._global_actions[name]\n\n# django/contrib/admin/sites.py:443-444  (django.contrib.admin.sites.AdminSite.autocomplete_view)\nclass AdminSite:\n    def autocomplete_view(self, request):\n        return AutocompleteJsonView.as_view(admin_site=self)(request)\n\n# django/contrib/admin/sites.py:178-182  (django.contrib.admin.sites.AdminSite.disable_action)\nclass AdminSite:\n    def disable_action(self, name):\n        \"\"\"\n        Disable a globally-registered action. Raise KeyError for invalid names.\n        \"\"\"\n        del self._actions[name]\n\n# django/contrib/admin/sites.py:446-457  (django.contrib.admin.sites.AdminSite.catch_all_view)\nclass AdminSite:\n    @no_append_slash\n    def catch_all_view(self, request, url):\n        if settings.APPEND_SLASH and not url.endswith(\"/\"):\n            urlconf = getattr(request, \"urlconf\", None)\n            try:\n                match = resolve(\"%s/\" % request.path_info, urlconf)\n            except Resolver404:\n                pass\n            else:\n                if getattr(match.func, \"should_append_slash\", True):\n                    return HttpResponsePermanentRedirect(\"%s/\" % request.path)\n        raise Http404\n\n# django/contrib/admin/sites.py:170-176  (django.contrib.admin.sites.AdminSite.add_action)\nclass AdminSite:\n    def add_action(self, action, name=None):\n        \"\"\"\n        Register an action to be available globally.\n        \"\"\"\n        name = name or action.__name__\n        self._actions[name] = action\n        self._global_actions[name] = action\n\n# django/contrib/admin/sites.py:459-529  (django.contrib.admin.sites.AdminSite._build_app_dict)\nclass AdminSite:\n    def _build_app_dict(self, request, label=None):\n        \"\"\"\n        Build the app dictionary. The optional `label` parameter filters models\n        of a specific app.\n        \"\"\"\n        app_dict = {}\n\n        if label:\n            models = {\n                m: m_a\n                for m, m_a in self._registry.items()\n                if m._meta.app_label == label\n            }\n        else:\n            models = self._registry\n\n        for model, model_admin in models.items():\n            app_label = model._meta.app_label\n\n            has_module_perms = model_admin.has_module_permission(request)\n            if not has_module_perms:\n                continue\n\n            perms = model_admin.get_model_perms(request)\n\n            # Check whether user has any perm for this module.\n            # If so, add the module to the model_list.\n            if True not in perms.values():\n                continue\n\n            info = (app_label, model._meta.model_name)\n            model_dict = {\n                \"model\": model,\n                \"name\": capfirst(model._meta.verbose_name_plural),\n                \"object_name\": model._meta.object_name,\n                \"perms\": perms,\n                \"admin_url\": None,\n                \"add_url\": None,\n            }\n            if perms.get(\"change\") or perms.get(\"view\"):\n                model_dict[\"view_only\"] = not perms.get(\"change\")\n                try:\n                    model_dict[\"admin_url\"] = reverse(\n                        \"admin:%s_%s_changelist\" % info, current_app=self.name\n                    )\n                except NoReverseMatch:\n                    pass\n            if perms.get(\"add\"):\n                try:\n                    model_dict[\"add_url\"] = reverse(\n                        \"admin:%s_%s_add\" % info, current_app=self.name\n                    )\n                except NoReverseMatch:\n                    pass\n\n            if app_label in app_dict:\n                app_dict[app_label][\"models\"].append(model_dict)\n            else:\n                app_dict[app_label] = {\n                    \"name\": apps.get_app_config(app_label).verbose_name,\n                    \"app_label\": app_label,\n                    \"app_url\": reverse(\n                        \"admin:app_list\",\n                        kwargs={\"app_label\": app_label},\n                        current_app=self.name,\n                    ),\n                    \"has_module_perms\": has_module_perms,\n                    \"models\": [model_dict],\n                }\n\n        return app_dict\n\n# django/contrib/admin/sites.py:164-168  (django.contrib.admin.sites.AdminSite.is_registered)\nclass AdminSite:\n    def is_registered(self, model):\n        \"\"\"\n        Check if a model class is registered with this `AdminSite`.\n        \"\"\"\n        return model in self._registry\n\n# django/contrib/admin/sites.py:531-545  (django.contrib.admin.sites.AdminSite.get_app_list)\nclass AdminSite:\n    def get_app_list(self, request, app_label=None):\n        \"\"\"\n        Return a sorted list of all the installed apps that have been\n        registered in this site.\n        \"\"\"\n        app_dict = self._build_app_dict(request, app_label)\n\n        # Sort the apps alphabetically.\n        app_list = sorted(app_dict.values(), key=lambda x: x[\"name\"].lower())\n\n        # Sort the models alphabetically within each app.\n        for app in app_list:\n            app[\"models\"].sort(key=lambda x: x[\"name\"])\n\n        return app_list\n\n# django/contrib/admin/sites.py:151-162  (django.contrib.admin.sites.AdminSite.unregister)\nclass AdminSite:\n    def unregister(self, model_or_iterable):\n        \"\"\"\n        Unregister the given model(s).\n\n        If a model isn't already registered, raise NotRegistered.\n        \"\"\"\n        if isinstance(model_or_iterable, ModelBase):\n            model_or_iterable = [model_or_iterable]\n        for model in model_or_iterable:\n            if model not in self._registry:\n                raise NotRegistered(\"The model %s is not registered\" % model.__name__)\n            del self._registry[model]\n\n# django/contrib/admin/sites.py:547-566  (django.contrib.admin.sites.AdminSite.index)\nclass AdminSite:\n    def index(self, request, extra_context=None):\n        \"\"\"\n        Display the main admin index page, which lists all of the installed\n        apps that have been registered in this site.\n        \"\"\"\n        app_list = self.get_app_list(request)\n\n        context = {\n            **self.each_context(request),\n            \"title\": self.index_title,\n            \"subtitle\": None,\n            \"app_list\": app_list,\n            **(extra_context or {}),\n        }\n\n        request.current_app = self.name\n\n        return TemplateResponse(\n            request, self.index_template or \"admin/index.html\", context\n        )\n\n# django/contrib/admin/sites.py:100-149  (django.contrib.admin.sites.AdminSite.register)\nclass AdminSite:\n    def register(self, model_or_iterable, admin_class=None, **options):\n        \"\"\"\n        Register the given model(s) with the given admin class.\n\n        The model(s) should be Model classes, not instances.\n\n        If an admin class isn't given, use ModelAdmin (the default admin\n        options). If keyword arguments are given -- e.g., list_display --\n        apply them as options to the admin class.\n\n        If a model is already registered, raise AlreadyRegistered.\n\n        If a model is abstract, raise ImproperlyConfigured.\n        \"\"\"\n        admin_class = admin_class or ModelAdmin\n        if isinstance(model_or_iterable, ModelBase):\n            model_or_iterable = [model_or_iterable]\n        for model in model_or_iterable:\n            if model._meta.abstract:\n                raise ImproperlyConfigured(\n                    \"The model %s is abstract, so it cannot be registered with admin.\"\n                    % model.__name__\n                )\n\n            if model in self._registry:\n                registered_admin = str(self._registry[model])\n                msg = \"The model %s is already registered \" % model.__name__\n                if registered_admin.endswith(\".ModelAdmin\"):\n                    # Most likely registered without a ModelAdmin subclass.\n                    msg += \"in app %r.\" % re.sub(r\"\\.ModelAdmin$\", \"\", registered_admin)\n                else:\n                    msg += \"with %r.\" % registered_admin\n                raise AlreadyRegistered(msg)\n\n            # Ignore the registration if the model has been\n            # swapped out.\n            if not model._meta.swapped:\n                # If we got **options then dynamically construct a subclass of\n                # admin_class with those **options.\n                if options:\n                    # For reasons I don't quite understand, without a __module__\n                    # the created class appears to \"live\" in the wrong place,\n                    # which causes issues later on.\n                    options[\"__module__\"] = __name__\n                    admin_class = type(\n                        \"%sAdmin\" % model.__name__, (admin_class,), options\n                    )\n\n                # Instantiate the admin class to save in the registry\n                self._registry[model] = admin_class(model, self)\n\n# django/contrib/admin/sites.py:568-590  (django.contrib.admin.sites.AdminSite.app_index)\nclass AdminSite:\n    def app_index(self, request, app_label, extra_context=None):\n        app_list = self.get_app_list(request, app_label)\n\n        if not app_list:\n            raise Http404(\"The requested admin page does not exist.\")\n\n        context = {\n            **self.each_context(request),\n            \"title\": _(\"%(app)s administration\") % {\"app\": app_list[0][\"name\"]},\n            \"subtitle\": None,\n            \"app_list\": app_list,\n            \"app_label\": app_label,\n            **(extra_context or {}),\n        }\n\n        request.current_app = self.name\n\n        return TemplateResponse(\n            request,\n            self.app_index_template\n            or [\"admin/%s/app_index.html\" % app_label, \"admin/app_index.html\"],\n            context,\n        )\n\n# django/contrib/admin/sites.py:82-98  (django.contrib.admin.sites.AdminSite.check)\nclass AdminSite:\n    def check(self, app_configs):\n        \"\"\"\n        Run the system checks on all ModelAdmins, except if they aren't\n        customized at all.\n        \"\"\"\n        if app_configs is None:\n            app_configs = apps.get_app_configs()\n        app_configs = set(app_configs)  # Speed up lookups below\n\n        errors = []\n        modeladmins = (\n            o for o in self._registry.values() if o.__class__ is not ModelAdmin\n        )\n        for modeladmin in modeladmins:\n            if modeladmin.model._meta.app_config in app_configs:\n                errors.extend(modeladmin.check())\n        return errors\n\n# django/contrib/admin/sites.py:594-596  (django.contrib.admin.sites.DefaultAdminSite._setup)\nclass DefaultAdminSite(LazyObject):\n    def _setup(self):\n        AdminSiteClass = import_string(apps.get_app_config(\"admin\").default_site)\n        self._wrapped = AdminSiteClass()\n\n# django/contrib/admin/sites.py:79-80  (django.contrib.admin.sites.AdminSite.__repr__)\nclass AdminSite:\n    def __repr__(self):\n        return f\"{self.__class__.__name__}(name={self.name!r})\"\n\n# django/contrib/admin/sites.py:598-599  (django.contrib.admin.sites.DefaultAdminSite.__repr__)\nclass DefaultAdminSite(LazyObject):\n    def __repr__(self):\n        return repr(self._wrapped)\n\n# django/contrib/admin/sites.py:72-77  (django.contrib.admin.sites.AdminSite.__init__)\nclass AdminSite:\n    def __init__(self, name=\"admin\"):\n        self._registry = {}  # model_class class -> admin_class instance\n        self.name = name\n        self._actions = {\"delete_selected\": actions.delete_selected}\n        self._global_actions = self._actions.copy()\n        all_sites.add(self)\n\n# django/contrib/admin/sites.py:602-606  (django.contrib.admin.sites)\n# This global object represents the default admin site, for the common case.\n# You can provide your own AdminSite using the (Simple)AdminConfig.default_site\n# attribute. You can also instantiate AdminSite in your own code to create a\n# custom admin site.\nsite = DefaultAdminSite()\n\n# django/contrib/admin/sites.py:38-70  (django.contrib.admin.sites.AdminSite)\nclass AdminSite:\n    \"\"\"\n    An AdminSite object encapsulates an instance of the Django admin application, ready\n    to be hooked in to your URLconf. Models are registered with the AdminSite using the\n    register() method, and the get_urls() method can then be used to access Django view\n    functions that present a full admin interface for the collection of registered\n    models.\n    \"\"\"\n\n    # Text to put at the end of each page's <title>.\n    site_title = gettext_lazy(\"Django site admin\")\n\n    # Text to put in each page's <h1>.\n    site_header = gettext_lazy(\"Django administration\")\n\n    # Text to put at the top of the admin index page.\n    index_title = gettext_lazy(\"Site administration\")\n\n    # URL for the \"View site\" link at the top of each admin page.\n    site_url = \"/\"\n\n    enable_nav_sidebar = True\n\n    empty_value_display = \"-\"\n\n    login_form = None\n    index_template = None\n    app_index_template = None\n    login_template = None\n    logout_template = None\n    password_change_template = None\n    password_change_done_template = None\n\n    final_catch_all_view = True\n\n# django/contrib/admin/sites.py:34-34  (django.contrib.admin.sites.NotRegistered)\nclass NotRegistered(Exception):\n    pass\n\n# django/contrib/admin/sites.py:30-30  (django.contrib.admin.sites.AlreadyRegistered)\nclass AlreadyRegistered(Exception):\n    pass\n\n# django/contrib/admin/sites.py:1-26  (django.contrib.admin.sites)\nimport re\nfrom functools import update_wrapper\nfrom weakref import WeakSet\n\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.contrib.admin import ModelAdmin, actions\nfrom django.contrib.admin.views.autocomplete import AutocompleteJsonView\nfrom django.contrib.auth import REDIRECT_FIELD_NAME\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.db.models.base import ModelBase\nfrom django.http import Http404, HttpResponsePermanentRedirect, HttpResponseRedirect\nfrom django.template.response import TemplateResponse\nfrom django.urls import NoReverseMatch, Resolver404, resolve, reverse\nfrom django.utils.decorators import method_decorator\nfrom django.utils.functional import LazyObject\nfrom django.utils.module_loading import import_string\nfrom django.utils.text import capfirst\nfrom django.utils.translation import gettext as _\nfrom django.utils.translation import gettext_lazy\nfrom django.views.decorators.cache import never_cache\nfrom django.views.decorators.common import no_append_slash\nfrom django.views.decorators.csrf import csrf_protect\nfrom django.views.i18n import JavaScriptCatalog\n\nall_sites = WeakSet()\n\n# tests/admin_views/tests.py:8244-8268  (tests.admin_views.tests.AdminViewOnSiteTests.test_check [signature])\nclass AdminViewOnSiteTests(TestCase):\n    def test_check(self):\n        'The view_on_site value is either a boolean or a callable'\n        ...\n\n# django/contrib/admin/templatetags/log.py:28-69  (django.contrib.admin.templatetags.log.get_admin_log [signature])\n@register.tag\ndef get_admin_log(parser, token):\n    'Populate a template variable with the admin log for the given criteria.'\n    ...\n\n# django/contrib/admin/templatetags/admin_modify.py:11-48  (django.contrib.admin.templatetags.admin_modify.prepopulated_fields_js [signature])\ndef prepopulated_fields_js(context):\n    'Create a list of prepopulated_fields that should render JavaScript for'\n    ...\n\n# tests/admin_docs/test_views.py:161-171  (tests.admin_docs.test_views.AdminDocViewTests.test_no_sites_framework [signature])\nclass AdminDocViewTests(TestDataMixin, AdminDocsTestCase):\n    @modify_settings(INSTALLED_APPS={\"remove\": \"django.contrib.sites\"})\n    @override_settings(SITE_ID=None)  # will restore SITE_ID after the test\n    def test_no_sites_framework(self):\n        'Without the sites framework, should not access SITE_ID or Site'\n        ...\n\n# tests/auth_tests/test_views.py:687-697  (tests.auth_tests.test_views.LoginTest.test_current_site_in_context_after_login [signature])\nclass LoginTest(AuthViewsTestCase):\n    def test_current_site_in_context_after_login(self):\n        ...\n\n# tests/admin_views/tests.py:751-780  (tests.admin_views.tests.AdminViewBasicTest.test_sort_indicators_admin_order [signature])\nclass AdminViewBasicTest(AdminViewBasicTestCase):\n    def test_sort_indicators_admin_order(self):\n        \"The admin shows default sort indicators for all kinds of 'ordering'\"\n        ...\n\n# django/template/context.py:172-187  (django.template.context.RenderContext [signature])\nclass RenderContext(BaseContext):\n    'A stack container for storing Template state.'\n    ...\n\n# tests/admin_checks/tests.py:858-877  (tests.admin_checks.tests.SystemChecksTestCase.test_graceful_m2m_fail [signature])\nclass SystemChecksTestCase(SimpleTestCase):\n    def test_graceful_m2m_fail(self):\n        'Regression test for #12203/#12237 - Fail more gracefully when a M2M field that'\n        ...\n\n# django/contrib/admin/apps.py:8-13  (django.contrib.admin.apps.SimpleAdminConfig [signature])\nclass SimpleAdminConfig(AppConfig):\n    'Simple AppConfig which does not do automatic discovery.'\n    ...\n\n# django/contrib/auth/models.py:39-84  (django.contrib.auth.models.Permission [signature])\nclass Permission(models.Model):\n    'The permissions system provides a way to assign permissions to specific'\n    ...\n\n# tests/admin_checks/tests.py:120-158  (tests.admin_checks.tests.SystemChecksTestCase.test_context_processor_dependencies [signature])\nclass SystemChecksTestCase(SimpleTestCase):\n    @override_settings(\n        TEMPLATES=[\n            {\n                \"BACKEND\": \"django.template.backends.django.DjangoTemplates\",\n                \"DIRS\": [],\n                \"APP_DIRS\": True,\n                \"OPTIONS\": {\n                    \"context_processors\": [],\n                },\n            }\n        ],\n    )\n    def test_context_processor_dependencies(self):\n        ...\n\n# django/template/defaulttags.py:1163-1228  (django.template.defaulttags.regroup [signature])\n@register.tag\ndef regroup(parser, token):\n    'Regroup a list of alike objects by a common attribute.'\n    ...\n\n# django/apps/config.py:16-56  (django.apps.config.AppConfig.__init__ [signature])\nclass AppConfig:\n    def __init__(self, app_name, app_module):\n        # Full Python path to the application e.g. 'django.contrib.admin'.\n        ...\n\n# tests/admin_changelist/tests.py:256-281  (tests.admin_changelist.tests.ChangeListTests.test_result_list_set_empty_value_display_on_admin_site [signature])\nclass ChangeListTests(TestCase):\n    def test_result_list_set_empty_value_display_on_admin_site(self):\n        'Empty value display can be set on AdminSite.'\n        ...\n\n# django/contrib/auth/models.py:99-123  (django.contrib.auth.models.Group [signature])\nclass Group(models.Model):\n    'Groups are a generic way of categorizing users to apply permissions, or'\n    ...\n\n# django/contrib/syndication/views.py:125-133  (django.contrib.syndication.views.Feed.get_context_data [signature])\nclass Feed:\n    def get_context_data(self, **kwargs):\n        'Return a dictionary to use as extra context if either'\n        ...\n\n# django/contrib/admin/options.py:1034-1059  (django.contrib.admin.options.ModelAdmin.get_action [signature])\nclass ModelAdmin(BaseModelAdmin):\n    def get_action(self, action):\n        'Return a given action from a parameter, which can either be a callable,'\n        ...\n\n# tests/admin_views/custom_has_permission_admin.py:26-29  (tests.admin_views.custom_has_permission_admin.HasPermissionAdmin.has_permission [signature])\nclass HasPermissionAdmin(admin.AdminSite):\n    def has_permission(self, request):\n        ...\n\n# tests/admin_views/tests.py:8160-8200  (tests.admin_views.tests.AdminViewOnSiteTests.test_add_view_form_and_formsets_run_validation [signature])\nclass AdminViewOnSiteTests(TestCase):\n    def test_add_view_form_and_formsets_run_validation(self):\n        'Issue #20522'\n        ...\n\n# django/contrib/admin/options.py:1011-1021  (django.contrib.admin.options.ModelAdmin.get_actions [signature])\nclass ModelAdmin(BaseModelAdmin):\n    def get_actions(self, request):\n        'Return a dictionary mapping the names of all actions for this'\n        ...\n\n# tests/admin_views/tests.py:2603-2618  (tests.admin_views.tests.AdminViewPermissionsTest.test_change_view_without_object_change_permission [signature])\nclass AdminViewPermissionsTest(TestCase):\n    def test_change_view_without_object_change_permission(self):\n        'The object should be read-only if the user has permission to view it'\n        ...\n\n# django/contrib/admin/checks.py:46-52  (django.contrib.admin.checks.check_admin_app [signature])\ndef check_admin_app(app_configs, **kwargs):\n    ...\n\n# tests/admin_views/tests.py:1269-1276  (tests.admin_views.tests.AdminViewBasicTest.test_adminsite_display_site_url [signature])\nclass AdminViewBasicTest(AdminViewBasicTestCase):\n    def test_adminsite_display_site_url(self):\n        \"#13749 - Admin should display link to front-end site 'View site'\"\n        ...\n\n# django/contrib/sites/models.py:48-68  (django.contrib.sites.models.SiteManager.get_current [signature])\nclass SiteManager(models.Manager):\n    def get_current(self, request=None):\n        \"Return the current Site based on the SITE_ID in the project's settings.\"\n        ...\n\n# tests/admin_views/test_adminsite.py:21-26  (tests.admin_views.test_adminsite.SiteEachContextTest)\n@override_settings(ROOT_URLCONF=\"admin_views.test_adminsite\")\nclass SiteEachContextTest(TestCase):\n    \"\"\"\n    Check each_context contains the documented variables and that available_apps context\n    variable structure is the expected one.\n    \"\"\"\n\n    request_factory = RequestFactory()\n\n# tests/admin_views/test_adminsite.py:34-37  (tests.admin_views.test_adminsite.SiteEachContextTest.setUp)\nclass SiteEachContextTest(TestCase):\n    def setUp(self):\n        request = self.request_factory.get(reverse(\"test_adminsite:index\"))\n        request.user = self.u1\n        self.ctx = site.each_context(request)\n\n# django/contrib/admin/checks.py:55-173  (django.contrib.admin.checks.check_dependencies)\ndef check_dependencies(**kwargs):\n    \"\"\"\n    Check that the admin's dependencies are correctly installed.\n    \"\"\"\n    from django.contrib.admin.sites import all_sites\n\n    if not apps.is_installed(\"django.contrib.admin\"):\n        return []\n    errors = []\n    app_dependencies = (\n        (\"django.contrib.contenttypes\", 401),\n        (\"django.contrib.auth\", 405),\n        (\"django.contrib.messages\", 406),\n    )\n    for app_name, error_code in app_dependencies:\n        if not apps.is_installed(app_name):\n            errors.append(\n                checks.Error(\n                    \"'%s' must be in INSTALLED_APPS in order to use the admin \"\n                    \"application.\" % app_name,\n                    id=\"admin.E%d\" % error_code,\n                )\n            )\n    for engine in engines.all():\n        if isinstance(engine, DjangoTemplates):\n            django_templates_instance = engine.engine\n            break\n    else:\n        django_templates_instance = None\n    if not django_templates_instance:\n        errors.append(\n            checks.Error(\n                \"A 'django.template.backends.django.DjangoTemplates' instance \"\n                \"must be configured in TEMPLATES in order to use the admin \"\n                \"application.\",\n                id=\"admin.E403\",\n            )\n        )\n    else:\n        if (\n            \"django.contrib.auth.context_processors.auth\"\n            not in django_templates_instance.context_processors\n            and _contains_subclass(\n                \"django.contrib.auth.backends.ModelBackend\",\n                settings.AUTHENTICATION_BACKENDS,\n            )\n        ):\n            errors.append(\n                checks.Error(\n                    \"'django.contrib.auth.context_processors.auth' must be \"\n                    \"enabled in DjangoTemplates (TEMPLATES) if using the default \"\n                    \"auth backend in order to use the admin application.\",\n                    id=\"admin.E402\",\n                )\n            )\n        if (\n            \"django.contrib.messages.context_processors.messages\"\n            not in django_templates_instance.context_processors\n        ):\n            errors.append(\n                checks.Error(\n                    \"'django.contrib.messages.context_processors.messages' must \"\n                    \"be enabled in DjangoTemplates (TEMPLATES) in order to use \"\n                    \"the admin application.\",\n                    id=\"admin.E404\",\n                )\n            )\n        sidebar_enabled = any(site.enable_nav_sidebar for site in all_sites)\n        if (\n            sidebar_enabled\n            and \"django.template.context_processors.request\"\n            not in django_templates_instance.context_processors\n        ):\n            errors.append(\n                checks.Warning(\n                    \"'django.template.context_processors.request' must be enabled \"\n                    \"in DjangoTemplates (TEMPLATES) in order to use the admin \"\n                    \"navigation sidebar.\",\n                    id=\"admin.W411\",\n                )\n            )\n\n    if not _contains_subclass(\n        \"django.contrib.auth.middleware.AuthenticationMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.auth.middleware.AuthenticationMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                id=\"admin.E408\",\n            )\n        )\n    if not _contains_subclass(\n        \"django.contrib.messages.middleware.MessageMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.messages.middleware.MessageMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                id=\"admin.E409\",\n            )\n        )\n    if not _contains_subclass(\n        \"django.contrib.sessions.middleware.SessionMiddleware\", settings.MIDDLEWARE\n    ):\n        errors.append(\n            checks.Error(\n                \"'django.contrib.sessions.middleware.SessionMiddleware' must \"\n                \"be in MIDDLEWARE in order to use the admin application.\",\n                hint=(\n                    \"Insert \"\n                    \"'django.contrib.sessions.middleware.SessionMiddleware' \"\n                    \"before \"\n                    \"'django.contrib.auth.middleware.AuthenticationMiddleware'.\"\n                ),\n                id=\"admin.E410\",\n            )\n        )\n    return errors\n\n# django/contrib/admin/decorators.py:80-111  (django.contrib.admin.decorators.register)\ndef register(*models, site=None):\n    \"\"\"\n    Register the given model(s) classes and wrapped ModelAdmin class with\n    admin site:\n\n    @register(Author)\n    class AuthorAdmin(admin.ModelAdmin):\n        pass\n\n    The `site` kwarg is an admin site to use instead of the default admin site.\n    \"\"\"\n    from django.contrib.admin import ModelAdmin\n    from django.contrib.admin.sites import AdminSite\n    from django.contrib.admin.sites import site as default_site\n\n    def _model_admin_wrapper(admin_class):\n        if not models:\n            raise ValueError(\"At least one model must be passed to register.\")\n\n        admin_site = site or default_site\n\n        if not isinstance(admin_site, AdminSite):\n            raise ValueError(\"site must subclass AdminSite\")\n\n        if not issubclass(admin_class, ModelAdmin):\n            raise ValueError(\"Wrapped class must subclass ModelAdmin.\")\n\n        admin_site.register(models, admin_class=admin_class)\n\n        return admin_class\n\n    return _model_admin_wrapper\n\n# tests/admin_views/test_adminsite.py:39-44  (tests.admin_views.test_adminsite.SiteEachContextTest.test_each_context)\nclass SiteEachContextTest(TestCase):\n    def test_each_context(self):\n        ctx = self.ctx\n        self.assertEqual(ctx[\"site_header\"], \"Django administration\")\n        self.assertEqual(ctx[\"site_title\"], \"Django site admin\")\n        self.assertEqual(ctx[\"site_url\"], \"/\")\n        self.assertIs(ctx[\"has_permission\"], True)\n\n# tests/admin_views/test_adminsite.py:46-51  (tests.admin_views.test_adminsite.SiteEachContextTest.test_each_context_site_url_with_script_name)\nclass SiteEachContextTest(TestCase):\n    def test_each_context_site_url_with_script_name(self):\n        request = self.request_factory.get(\n            reverse(\"test_adminsite:index\"), SCRIPT_NAME=\"/my-script-name/\"\n        )\n        request.user = self.u1\n        self.assertEqual(site.each_context(request)[\"site_url\"], \"/my-script-name/\")\n\n# tests/admin_changelist/tests.py:1266-1311  (tests.admin_changelist.tests.ChangeListTests.test_deterministic_order_for_model_ordered_by_its_manager)\nclass ChangeListTests(TestCase):\n    def test_deterministic_order_for_model_ordered_by_its_manager(self):\n        \"\"\"\n        The primary key is used in the ordering of the changelist's results to\n        guarantee a deterministic order, even when the model has a manager that\n        defines a default ordering (#17198).\n        \"\"\"\n        superuser = self._create_superuser(\"superuser\")\n\n        for counter in range(1, 51):\n            OrderedObject.objects.create(id=counter, bool=True, number=counter)\n\n        class OrderedObjectAdmin(admin.ModelAdmin):\n            list_per_page = 10\n\n        def check_results_order(ascending=False):\n            custom_site.register(OrderedObject, OrderedObjectAdmin)\n            model_admin = OrderedObjectAdmin(OrderedObject, custom_site)\n            counter = 0 if ascending else 51\n            for page in range(1, 6):\n                request = self._mocked_authenticated_request(\n                    \"/orderedobject/?p=%s\" % page, superuser\n                )\n                response = model_admin.changelist_view(request)\n                for result in response.context_data[\"cl\"].result_list:\n                    counter += 1 if ascending else -1\n                    self.assertEqual(result.id, counter)\n            custom_site.unregister(OrderedObject)\n\n        # When no order is defined at all, use the model's default ordering\n        # (i.e. 'number').\n        check_results_order(ascending=True)\n\n        # When an order field is defined but multiple records have the same\n        # value for that field, make sure everything gets ordered by -pk as well.\n        OrderedObjectAdmin.ordering = [\"bool\"]\n        check_results_order()\n\n        # When order fields are defined, including the pk itself, use them.\n        OrderedObjectAdmin.ordering = [\"bool\", \"-pk\"]\n        check_results_order()\n        OrderedObjectAdmin.ordering = [\"bool\", \"pk\"]\n        check_results_order(ascending=True)\n        OrderedObjectAdmin.ordering = [\"-id\", \"bool\"]\n        check_results_order()\n        OrderedObjectAdmin.ordering = [\"id\", \"bool\"]\n        check_results_order(ascending=True)\n\n# django/contrib/admin/widgets.py:223-228  (django.contrib.admin.widgets.ManyToManyRawIdWidget.get_context)\nclass ManyToManyRawIdWidget(ForeignKeyRawIdWidget):\n    def get_context(self, name, value, attrs):\n        context = super().get_context(name, value, attrs)\n        if self.rel.model in self.admin_site._registry:\n            # The related object is registered with the same AdminSite\n            context[\"widget\"][\"attrs\"][\"class\"] = \"vManyToManyRawIdAdminField\"\n        return context\n\n# django/contrib/admindocs/views.py:52-58  (django.contrib.admindocs.views.BaseAdminDocsView.get_context_data)\nclass BaseAdminDocsView(TemplateView):\n    def get_context_data(self, **kwargs):\n        return super().get_context_data(\n            **{\n                **kwargs,\n                **admin.site.each_context(self.request),\n            }\n        )\n\n# django/contrib/sites/shortcuts.py:6-18  (django.contrib.sites.shortcuts.get_current_site)\ndef get_current_site(request):\n    \"\"\"\n    Check if contrib.sites is installed and return either the current\n    ``Site`` object or a ``RequestSite`` object based on the request.\n    \"\"\"\n    # Import is inside the function because its point is to avoid importing the\n    # Site models when django.contrib.sites isn't installed.\n    if apps.is_installed(\"django.contrib.sites\"):\n        from .models import Site\n\n        return Site.objects.get_current(request)\n    else:\n        return RequestSite(request)\n\n# django/contrib/sites/requests.py:2-8  (django.contrib.sites.requests.RequestSite)\nclass RequestSite:\n    \"\"\"\n    A class that shares the primary interface of Site (i.e., it has ``domain``\n    and ``name`` attributes) but gets its data from an HttpRequest object\n    rather than from a database.\n\n    The save() and delete() methods raise NotImplementedError.\n    \"\"\"\n\n# django/contrib/admin/options.py:1853-1884#part2of2  (django.contrib.admin.options.ModelAdmin._changeform_view)\nclass ModelAdmin(BaseModelAdmin):\n    def _changeform_view(self, request, object_id, form_url, extra_context):\n        context = {\n            **self.admin_site.each_context(request),\n            \"title\": title % self.opts.verbose_name,\n            \"subtitle\": str(obj) if obj else None,\n            \"adminform\": admin_form,\n            \"object_id\": object_id,\n            \"original\": obj,\n            \"is_popup\": IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,\n            \"to_field\": to_field,\n            \"media\": media,\n            \"inline_admin_formsets\": inline_formsets,\n            \"errors\": helpers.AdminErrorList(form, formsets),\n            \"preserved_filters\": self.get_preserved_filters(request),\n        }\n\n        # Hide the \"Save\" and \"Save and continue\" buttons if \"Save as New\" was\n        # previously chosen to prevent the interface from getting confusing.\n        if (\n            request.method == \"POST\"\n            and not form_validated\n            and \"_saveasnew\" in request.POST\n        ):\n            context[\"show_save\"] = False\n            context[\"show_save_and_continue\"] = False\n            # Use the change template instead of the add template.\n            add = False\n\n        context.update(extra_context or {})\n\n        return self.render_change_form(\n            request, context, add=add, change=not add, obj=obj, form_url=form_url\n        )\n\n# django/contrib/flatpages/templatetags/flatpages.py:21-43  (django.contrib.flatpages.templatetags.flatpages.FlatpageNode.render)\nclass FlatpageNode(template.Node):\n    def render(self, context):\n        if \"request\" in context:\n            site_pk = get_current_site(context[\"request\"]).pk\n        else:\n            site_pk = settings.SITE_ID\n        flatpages = FlatPage.objects.filter(sites__id=site_pk)\n        # If a prefix was specified, add a filter\n        if self.starts_with:\n            flatpages = flatpages.filter(\n                url__startswith=self.starts_with.resolve(context)\n            )\n\n        # If the provided user is not authenticated, or no user\n        # was provided, filter the list to only public flatpages.\n        if self.user:\n            user = self.user.resolve(context)\n            if not user.is_authenticated:\n                flatpages = flatpages.filter(registration_required=False)\n        else:\n            flatpages = flatpages.filter(registration_required=False)\n\n        context[self.context_name] = flatpages\n        return \"\"\n\n# django/template/context_processors.py:1-14  (django.template.context_processors)\n\"\"\"\nA set of request processors that return dictionaries to be merged into a\ntemplate context. Each function takes the request object as its only parameter\nand returns a dictionary to add to the context.\n\nThese are referenced from the 'context_processors' option of the configuration\nof a DjangoTemplates backend and used by RequestContext.\n\"\"\"\n\nimport itertools\n\nfrom django.conf import settings\nfrom django.middleware.csrf import get_token\nfrom django.utils.functional import SimpleLazyObject, lazy\n\n# django/contrib/admin/options.py:2176-2234  (django.contrib.admin.options.ModelAdmin.history_view)\nclass ModelAdmin(BaseModelAdmin):\n    def history_view(self, request, object_id, extra_context=None):\n        \"The 'history' admin view for this model.\"\n        from django.contrib.admin.models import LogEntry\n        from django.contrib.admin.views.main import PAGE_VAR\n\n        # First check if the user can see this history.\n        model = self.model\n        obj = self.get_object(request, unquote(object_id))\n        if obj is None:\n            return self._get_obj_does_not_exist_redirect(\n                request, model._meta, object_id\n            )\n\n        if not self.has_view_or_change_permission(request, obj):\n            raise PermissionDenied\n\n        # Then get the history for this object.\n        app_label = self.opts.app_label\n        action_list = (\n            LogEntry.objects.filter(\n                object_id=unquote(object_id),\n                content_type=get_content_type_for_model(model),\n            )\n            .select_related()\n            .order_by(\"action_time\")\n        )\n\n        paginator = self.get_paginator(request, action_list, 100)\n        page_number = request.GET.get(PAGE_VAR, 1)\n        page_obj = paginator.get_page(page_number)\n        page_range = paginator.get_elided_page_range(page_obj.number)\n\n        context = {\n            **self.admin_site.each_context(request),\n            \"title\": _(\"Change history: %s\") % obj,\n            \"subtitle\": None,\n            \"action_list\": page_obj,\n            \"page_range\": page_range,\n            \"page_var\": PAGE_VAR,\n            \"pagination_required\": paginator.count > 100,\n            \"module_name\": str(capfirst(self.opts.verbose_name_plural)),\n            \"object\": obj,\n            \"opts\": self.opts,\n            \"preserved_filters\": self.get_preserved_filters(request),\n            **(extra_context or {}),\n        }\n\n        request.current_app = self.admin_site.name\n\n        return TemplateResponse(\n            request,\n            self.object_history_template\n            or [\n                \"admin/%s/%s/object_history.html\" % (app_label, self.opts.model_name),\n                \"admin/%s/object_history.html\" % app_label,\n                \"admin/object_history.html\",\n            ],\n            context,\n        )\n\n# django/contrib/admin/actions.py:15-96  (django.contrib.admin.actions.delete_selected)\n@action(\n    permissions=[\"delete\"],\n    description=gettext_lazy(\"Delete selected %(verbose_name_plural)s\"),\n)\ndef delete_selected(modeladmin, request, queryset):\n    \"\"\"\n    Default action which deletes the selected objects.\n\n    This action first displays a confirmation page which shows all the\n    deletable objects, or, if the user has no permission one of the related\n    childs (foreignkeys), a \"permission denied\" message.\n\n    Next, it deletes all selected objects and redirects back to the change list.\n    \"\"\"\n    opts = modeladmin.model._meta\n    app_label = opts.app_label\n\n    # Populate deletable_objects, a data structure of all related objects that\n    # will also be deleted.\n    (\n        deletable_objects,\n        model_count,\n        perms_needed,\n        protected,\n    ) = modeladmin.get_deleted_objects(queryset, request)\n\n    # The user has already confirmed the deletion.\n    # Do the deletion and return None to display the change list view again.\n    if request.POST.get(\"post\") and not protected:\n        if perms_needed:\n            raise PermissionDenied\n        n = queryset.count()\n        if n:\n            for obj in queryset:\n                obj_display = str(obj)\n                modeladmin.log_deletion(request, obj, obj_display)\n            modeladmin.delete_queryset(request, queryset)\n            modeladmin.message_user(\n                request,\n                _(\"Successfully deleted %(count)d %(items)s.\")\n                % {\"count\": n, \"items\": model_ngettext(modeladmin.opts, n)},\n                messages.SUCCESS,\n            )\n        # Return None to display the change list page again.\n        return None\n\n    objects_name = model_ngettext(queryset)\n\n    if perms_needed or protected:\n        title = _(\"Cannot delete %(name)s\") % {\"name\": objects_name}\n    else:\n        title = _(\"Are you sure?\")\n\n    context = {\n        **modeladmin.admin_site.each_context(request),\n        \"title\": title,\n        \"subtitle\": None,\n        \"objects_name\": str(objects_name),\n        \"deletable_objects\": [deletable_objects],\n        \"model_count\": dict(model_count).items(),\n        \"queryset\": queryset,\n        \"perms_lacking\": perms_needed,\n        \"protected\": protected,\n        \"opts\": opts,\n        \"action_checkbox_name\": helpers.ACTION_CHECKBOX_NAME,\n        \"media\": modeladmin.media,\n    }\n\n    request.current_app = modeladmin.admin_site.name\n\n    # Display the confirmation page\n    return TemplateResponse(\n        request,\n        modeladmin.delete_selected_confirmation_template\n        or [\n            \"admin/%s/%s/delete_selected_confirmation.html\"\n            % (app_label, opts.model_name),\n            \"admin/%s/delete_selected_confirmation.html\" % app_label,\n            \"admin/delete_selected_confirmation.html\",\n        ],\n        context,\n    )\n\n# django/contrib/auth/admin.py:121-147  (django.contrib.auth.admin.UserAdmin._add_view)\nclass UserAdmin(admin.ModelAdmin):\n    def _add_view(self, request, form_url=\"\", extra_context=None):\n        # It's an error for a user to have add permission but NOT change\n        # permission for users. If we allowed such users to add users, they\n        # could create superusers, which would mean they would essentially have\n        # the permission to change users. To avoid the problem entirely, we\n        # disallow users from adding users if they don't have change\n        # permission.\n        if not self.has_change_permission(request):\n            if self.has_add_permission(request) and settings.DEBUG:\n                # Raise Http404 in debug mode so that the user gets a helpful\n                # error message.\n                raise Http404(\n                    'Your user does not have the \"Change user\" permission. In '\n                    \"order to add users, Django requires that your user \"\n                    'account have both the \"Add user\" and \"Change user\" '\n                    \"permissions set.\"\n                )\n            raise PermissionDenied\n        if extra_context is None:\n            extra_context = {}\n        username_field = self.opts.get_field(self.model.USERNAME_FIELD)\n        defaults = {\n            \"auto_populated_fields\": (),\n            \"username_help_text\": username_field.help_text,\n        }\n        extra_context.update(defaults)\n        return super().add_view(request, form_url, extra_context)\n\n# tests/admin_changelist/tests.py:1220-1264  (tests.admin_changelist.tests.ChangeListTests.test_deterministic_order_for_unordered_model)\nclass ChangeListTests(TestCase):\n    def test_deterministic_order_for_unordered_model(self):\n        \"\"\"\n        The primary key is used in the ordering of the changelist's results to\n        guarantee a deterministic order, even when the model doesn't have any\n        default ordering defined (#17198).\n        \"\"\"\n        superuser = self._create_superuser(\"superuser\")\n\n        for counter in range(1, 51):\n            UnorderedObject.objects.create(id=counter, bool=True)\n\n        class UnorderedObjectAdmin(admin.ModelAdmin):\n            list_per_page = 10\n\n        def check_results_order(ascending=False):\n            custom_site.register(UnorderedObject, UnorderedObjectAdmin)\n            model_admin = UnorderedObjectAdmin(UnorderedObject, custom_site)\n            counter = 0 if ascending else 51\n            for page in range(1, 6):\n                request = self._mocked_authenticated_request(\n                    \"/unorderedobject/?p=%s\" % page, superuser\n                )\n                response = model_admin.changelist_view(request)\n                for result in response.context_data[\"cl\"].result_list:\n                    counter += 1 if ascending else -1\n                    self.assertEqual(result.id, counter)\n            custom_site.unregister(UnorderedObject)\n\n        # When no order is defined at all, everything is ordered by '-pk'.\n        check_results_order()\n\n        # When an order field is defined but multiple records have the same\n        # value for that field, make sure everything gets ordered by -pk as well.\n        UnorderedObjectAdmin.ordering = [\"bool\"]\n        check_results_order()\n\n        # When order fields are defined, including the pk itself, use them.\n        UnorderedObjectAdmin.ordering = [\"bool\", \"-pk\"]\n        check_results_order()\n        UnorderedObjectAdmin.ordering = [\"bool\", \"pk\"]\n        check_results_order(ascending=True)\n        UnorderedObjectAdmin.ordering = [\"-id\", \"bool\"]\n        check_results_order()\n        UnorderedObjectAdmin.ordering = [\"id\", \"bool\"]\n        check_results_order(ascending=True)\n\n# django/contrib/admin/templatetags/admin_list.py:509-515  (django.contrib.admin.templatetags.admin_list.admin_actions)\ndef admin_actions(context):\n    \"\"\"\n    Track the number of times the action field has been rendered on the page,\n    so we know which value to use.\n    \"\"\"\n    context[\"action_index\"] = context.get(\"action_index\", -1) + 1\n    return context\n\n# tests/admin_views/test_adminsite.py:28-32  (tests.admin_views.test_adminsite.SiteEachContextTest.setUpTestData)\nclass SiteEachContextTest(TestCase):\n    @classmethod\n    def setUpTestData(cls):\n        cls.u1 = User.objects.create_superuser(\n            username=\"super\", password=\"secret\", email=\"super@example.com\"\n        )\n\n# django/contrib/admin/widgets.py:145-177  (django.contrib.admin.widgets.ForeignKeyRawIdWidget.get_context)\nclass ForeignKeyRawIdWidget(forms.TextInput):\n    def get_context(self, name, value, attrs):\n        context = super().get_context(name, value, attrs)\n        rel_to = self.rel.model\n        if rel_to in self.admin_site._registry:\n            # The related object is registered with the same AdminSite\n            related_url = reverse(\n                \"admin:%s_%s_changelist\"\n                % (\n                    rel_to._meta.app_label,\n                    rel_to._meta.model_name,\n                ),\n                current_app=self.admin_site.name,\n            )\n\n            params = self.url_parameters()\n            if params:\n                related_url += \"?\" + urlencode(params)\n            context[\"related_url\"] = related_url\n            context[\"link_title\"] = _(\"Lookup\")\n            # The JavaScript code looks for this class.\n            css_class = \"vForeignKeyRawIdAdminField\"\n            if isinstance(self.rel.get_related_field(), UUIDField):\n                css_class += \" vUUIDField\"\n            context[\"widget\"][\"attrs\"].setdefault(\"class\", css_class)\n        else:\n            context[\"related_url\"] = None\n        if context[\"widget\"][\"value\"]:\n            context[\"link_label\"], context[\"link_url\"] = self.label_and_url_for_value(\n                value\n            )\n        else:\n            context[\"link_label\"] = None\n        return context\n\n# tests/auth_tests/urls_admin.py:1-18  (tests.auth_tests.urls_admin)\n\"\"\"\nTest URLs for auth admins.\n\"\"\"\n\nfrom django.contrib import admin\nfrom django.contrib.auth.admin import GroupAdmin, UserAdmin\nfrom django.contrib.auth.models import Group, User\nfrom django.contrib.auth.urls import urlpatterns\nfrom django.urls import path\n\n# Create a silo'd admin site for just the user/group admins.\nsite = admin.AdminSite(name=\"auth_test_admin\")\nsite.register(User, UserAdmin)\nsite.register(Group, GroupAdmin)\n\nurlpatterns += [\n    path(\"admin/\", site.urls),\n]\n\n# django/contrib/admindocs/views.py:44-50  (django.contrib.admindocs.views.BaseAdminDocsView.dispatch)\nclass BaseAdminDocsView(TemplateView):\n    @method_decorator(staff_member_required)\n    def dispatch(self, request, *args, **kwargs):\n        if not utils.docutils_is_available:\n            # Display an error message for people without docutils\n            self.template_name = \"admin_doc/missing_docutils.html\"\n            return self.render_to_response(admin.site.each_context(request))\n        return super().dispatch(request, *args, **kwargs)\n\n## Task\n\nYou are debugging what gets put into the template context for every\npage of the Django admin site, in django/contrib/admin/sites.py.\nStarting from `AdminSite.each_context`, trace the real causal\npipeline that produces that context, in the order each stage is\nactually reached, up to and including the call that enumerates the\nlist of installed apps available to the current user.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.admin.sites.AdminSite.each_context\", \"django.contrib.admin.sites.AdminSite.has_permission\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

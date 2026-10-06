@@ -1,0 +1,1037 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t02_007_locmem_cache_get_eviction",
+  "items": [
+   {
+    "source_id": "tests/cache/closeable_cache.py:1-1",
+    "content": "# tests/cache/closeable_cache.py:1-1  (tests.cache.closeable_cache)\nfrom django.core.cache.backends.locmem import LocMemCache",
+    "token_count": 30,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": 3.6625659465789795,
+     "bm25_rank": 15,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/liberal_backend.py:1-1",
+    "content": "# tests/cache/liberal_backend.py:1-1  (tests.cache.liberal_backend)\nfrom django.core.cache.backends.locmem import LocMemCache",
+    "token_count": 30,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": 3.6625659465789795,
+     "bm25_rank": 20,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/cache.py:1-55",
+    "content": "# django/middleware/cache.py:1-55  (django.middleware.cache)\n\"\"\"\nCache middleware. If enabled, each Django-powered page will be cached based on\nURL. The canonical way to enable cache middleware is to set\n``UpdateCacheMiddleware`` as your first piece of middleware, and\n``FetchFromCacheMiddleware`` as the last::\n\n    MIDDLEWARE = [\n        'django.middleware.cache.UpdateCacheMiddleware',\n        ...\n        'django.middleware.cache.FetchFromCacheMiddleware'\n    ]\n\nThis is counter-intuitive, but correct: ``UpdateCacheMiddleware`` needs to run\nlast during the response phase, which processes middleware bottom-up;\n``FetchFromCacheMiddleware`` needs to run last during the request phase, which\nprocesses middleware top-down.\n\nThe single-class ``CacheMiddleware`` can be used for some simple sites.\nHowever, if any other piece of middleware needs to affect the cache key, you'll\nneed to use the two-part ``UpdateCacheMiddleware`` and\n``FetchFromCacheMiddleware``. This'll most often happen when you're using\nDjango's ``LocaleMiddleware``.\n\nMore details about how the caching works:\n\n* Only GET or HEAD-requests with status code 200 are cached.\n\n* The number of seconds each page is stored for is set by the \"max-age\" section\n  of the response's \"Cache-Control\" header, falling back to the\n  CACHE_MIDDLEWARE_SECONDS setting if the section was not found.\n\n* This middleware expects that a HEAD request is answered with the same response\n  headers exactly like the corresponding GET request.\n\n* When a hit occurs, a shallow copy of the original response object is returned\n  from process_request.\n\n* Pages will be cached based on the contents of the request headers listed in\n  the response's \"Vary\" header.\n\n* This middleware also sets ETag, Last-Modified, Expires and Cache-Control\n  headers on the response object.\n\n\"\"\"\n\nfrom django.conf import settings\nfrom django.core.cache import DEFAULT_CACHE_ALIAS, caches\nfrom django.utils.cache import (\n    get_cache_key,\n    get_max_age,\n    has_vary_header,\n    learn_cache_key,\n    patch_response_headers,\n)\nfrom django.utils.deprecation import MiddlewareMixin",
+    "token_count": 453,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": 1.9176474809646606,
+     "bm25_rank": 47,
+     "dense_rank": 53,
+     "oversized_chunk": false,
+     "engine_token_count": 453
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:34-42",
+    "content": "# django/core/cache/backends/locmem.py:34-42  (django.core.cache.backends.locmem.LocMemCache.get)\nclass LocMemCache(BaseCache):\n    def get(self, key, default=None, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            if self._has_expired(key):\n                self._delete(key)\n                return default\n            pickled = self._cache[key]\n            self._cache.move_to_end(key, last=False)\n        return pickle.loads(pickled)",
+    "token_count": 117,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 11,
+     "rerank_score": 1.3339853286743164,
+     "bm25_rank": 4,
+     "dense_rank": 56,
+     "oversized_chunk": false,
+     "engine_token_count": 117
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:1-13",
+    "content": "# django/core/cache/backends/locmem.py:1-13  (django.core.cache.backends.locmem)\n\"Thread-safe in-memory cache backend.\"\nimport pickle\nimport time\nfrom collections import OrderedDict\nfrom threading import Lock\n\nfrom django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache\n\n# Global in-memory store of cache data. Keyed by name, to provide\n# multiple named local memory caches.\n_caches = {}\n_expire_info = {}\n_locks = {}",
+    "token_count": 97,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 8,
+     "rerank_score": 0.7298384308815002,
+     "bm25_rank": 29,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:87-89",
+    "content": "# django/core/cache/backends/locmem.py:87-89  (django.core.cache.backends.locmem.LocMemCache._has_expired)\nclass LocMemCache(BaseCache):\n    def _has_expired(self, key):\n        exp = self._expire_info.get(key, -1)\n        return exp is not None and exp <= time.time()",
+    "token_count": 73,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache._has_expired"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": 0.6502789258956909,
+     "bm25_rank": 1,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 73
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:65-77",
+    "content": "# django/core/cache/backends/locmem.py:65-77  (django.core.cache.backends.locmem.LocMemCache.incr)\nclass LocMemCache(BaseCache):\n    def incr(self, key, delta=1, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            if self._has_expired(key):\n                self._delete(key)\n                raise ValueError(\"Key '%s' not found\" % key)\n            pickled = self._cache[key]\n            value = pickle.loads(pickled)\n            new_value = value + delta\n            pickled = pickle.dumps(new_value, self.pickle_protocol)\n            self._cache[key] = pickled\n            self._cache.move_to_end(key, last=False)\n        return new_value",
+    "token_count": 165,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.incr"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 39,
+     "rerank_score": 0.5538448095321655,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 165
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:44-49",
+    "content": "# django/core/cache/backends/locmem.py:44-49  (django.core.cache.backends.locmem.LocMemCache._set)\nclass LocMemCache(BaseCache):\n    def _set(self, key, value, timeout=DEFAULT_TIMEOUT):\n        if len(self._cache) >= self._max_entries:\n            self._cull()\n        self._cache[key] = value\n        self._cache.move_to_end(key, last=False)\n        self._expire_info[key] = self.get_backend_timeout(timeout)",
+    "token_count": 107,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache._set"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 49,
+     "rerank_score": 0.3888835906982422,
+     "bm25_rank": 18,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:91-99",
+    "content": "# django/core/cache/backends/locmem.py:91-99  (django.core.cache.backends.locmem.LocMemCache._cull)\nclass LocMemCache(BaseCache):\n    def _cull(self):\n        if self._cull_frequency == 0:\n            self._cache.clear()\n            self._expire_info.clear()\n        else:\n            count = len(self._cache) // self._cull_frequency\n            for i in range(count):\n                key, _ = self._cache.popitem()\n                del self._expire_info[key]",
+    "token_count": 114,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache._cull"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": 0.37560638785362244,
+     "bm25_rank": 16,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:19-23",
+    "content": "# django/core/cache/backends/locmem.py:19-23  (django.core.cache.backends.locmem.LocMemCache.__init__)\nclass LocMemCache(BaseCache):\n    def __init__(self, name, params):\n        super().__init__(params)\n        self._cache = _caches.setdefault(name, OrderedDict())\n        self._expire_info = _expire_info.setdefault(name, {})\n        self._lock = _locks.setdefault(name, Lock())",
+    "token_count": 94,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": 0.36598342657089233,
+     "bm25_rank": 13,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:57-63",
+    "content": "# django/core/cache/backends/locmem.py:57-63  (django.core.cache.backends.locmem.LocMemCache.touch)\nclass LocMemCache(BaseCache):\n    def touch(self, key, timeout=DEFAULT_TIMEOUT, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            if self._has_expired(key):\n                return False\n            self._expire_info[key] = self.get_backend_timeout(timeout)\n            return True",
+    "token_count": 101,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.touch"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 32,
+     "rerank_score": 0.3056029677391052,
+     "bm25_rank": 3,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 101
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:114-117",
+    "content": "# django/core/cache/backends/locmem.py:114-117  (django.core.cache.backends.locmem.LocMemCache.clear)\nclass LocMemCache(BaseCache):\n    def clear(self):\n        with self._lock:\n            self._cache.clear()\n            self._expire_info.clear()",
+    "token_count": 63,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.clear"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 10,
+     "rerank_score": 0.30241692066192627,
+     "bm25_rank": 11,
+     "dense_rank": 37,
+     "oversized_chunk": false,
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:2179-2179",
+    "content": "# tests/cache/tests.py:2179-2179  (tests.cache.tests.PrefixedCacheUtils)\n@override_settings(\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n            \"KEY_PREFIX\": \"cacheprefix\",\n        },\n    },\n)\nclass PrefixedCacheUtils(CacheUtils):\n    pass",
+    "token_count": 84,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.PrefixedCacheUtils"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 19,
+     "rerank_score": 0.27344390749931335,
+     "bm25_rank": 24,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:25-32",
+    "content": "# django/core/cache/backends/locmem.py:25-32  (django.core.cache.backends.locmem.LocMemCache.add)\nclass LocMemCache(BaseCache):\n    def add(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        pickled = pickle.dumps(value, self.pickle_protocol)\n        with self._lock:\n            if self._has_expired(key):\n                self._set(key, pickled, timeout)\n                return True\n            return False",
+    "token_count": 112,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.add"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 36,
+     "rerank_score": 0.24521350860595703,
+     "bm25_rank": 6,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 112
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:79-85",
+    "content": "# django/core/cache/backends/locmem.py:79-85  (django.core.cache.backends.locmem.LocMemCache.has_key)\nclass LocMemCache(BaseCache):\n    def has_key(self, key, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            if self._has_expired(key):\n                self._delete(key)\n                return False\n            return True",
+    "token_count": 90,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.has_key"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 31,
+     "rerank_score": 0.21654632687568665,
+     "bm25_rank": 2,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 90
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:2459-2459",
+    "content": "# tests/cache/tests.py:2459-2459  (tests.cache.tests.PrefixedCacheI18nTest)\n@override_settings(\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n            \"KEY_PREFIX\": \"cacheprefix\",\n        },\n    },\n)\nclass PrefixedCacheI18nTest(CacheI18nTest):\n    pass",
+    "token_count": 96,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.PrefixedCacheI18nTest"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 22,
+     "rerank_score": 0.18828235566616058,
+     "bm25_rank": 28,
+     "dense_rank": 54,
+     "oversized_chunk": false,
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:51-55",
+    "content": "# django/core/cache/backends/locmem.py:51-55  (django.core.cache.backends.locmem.LocMemCache.set)\nclass LocMemCache(BaseCache):\n    def set(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        pickled = pickle.dumps(value, self.pickle_protocol)\n        with self._lock:\n            self._set(key, pickled, timeout)",
+    "token_count": 97,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.set"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 37,
+     "rerank_score": 0.169277161359787,
+     "bm25_rank": 7,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:1369-1382",
+    "content": "# tests/cache/tests.py:1369-1382  (tests.cache.tests.LocMemCacheTests.test_multiple_caches)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    @override_settings(\n        CACHES={\n            \"default\": {\"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\"},\n            \"other\": {\n                \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n                \"LOCATION\": \"other\",\n            },\n        }\n    )\n    def test_multiple_caches(self):\n        \"Multiple locmem caches are isolated\"\n        cache.set(\"value\", 42)\n        self.assertEqual(caches[\"default\"].get(\"value\"), 42)\n        self.assertIsNone(caches[\"other\"].get(\"value\"))",
+    "token_count": 162,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.LocMemCacheTests.test_multiple_caches"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 40,
+     "rerank_score": 0.078706756234169,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 162
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:1913-1920",
+    "content": "# tests/cache/tests.py:1913-1920  (tests.cache.tests)\nDEFAULT_MEMORY_CACHES_SETTINGS = {\n    \"default\": {\n        \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        \"LOCATION\": \"unique-snowflake\",\n    }\n}\nNEVER_EXPIRING_CACHES_SETTINGS = copy.deepcopy(DEFAULT_MEMORY_CACHES_SETTINGS)\nNEVER_EXPIRING_CACHES_SETTINGS[\"default\"][\"TIMEOUT\"] = None",
+    "token_count": 98,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 6,
+     "rerank_score": -0.06340672075748444,
+     "bm25_rank": 27,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:109-112",
+    "content": "# django/core/cache/backends/locmem.py:109-112  (django.core.cache.backends.locmem.LocMemCache.delete)\nclass LocMemCache(BaseCache):\n    def delete(self, key, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            return self._delete(key)",
+    "token_count": 76,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache.delete"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 34,
+     "rerank_score": -0.12761740386486053,
+     "bm25_rank": 5,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:1404-1416",
+    "content": "# tests/cache/tests.py:1404-1416  (tests.cache.tests.LocMemCacheTests.test_lru_get)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    @limit_locmem_entries\n    def test_lru_get(self):\n        \"\"\"get() moves cache keys.\"\"\"\n        for key in range(9):\n            cache.set(key, key, timeout=None)\n        for key in range(6):\n            self.assertEqual(cache.get(key), key)\n        cache.set(9, 9, timeout=None)\n        for key in range(6):\n            self.assertEqual(cache.get(key), key)\n        for key in range(6, 9):\n            self.assertIsNone(cache.get(key))\n        self.assertEqual(cache.get(9), 9)",
+    "token_count": 158,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.LocMemCacheTests.test_lru_get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 12,
+     "rerank_score": -0.14879174530506134,
+     "bm25_rank": 61,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 158
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:101-107",
+    "content": "# django/core/cache/backends/locmem.py:101-107  (django.core.cache.backends.locmem.LocMemCache._delete)\nclass LocMemCache(BaseCache):\n    def _delete(self, key):\n        try:\n            del self._cache[key]\n            del self._expire_info[key]\n        except KeyError:\n            return False\n        return True",
+    "token_count": 77,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache._delete"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 15,
+     "rerank_score": -0.16463837027549744,
+     "bm25_rank": 12,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 77
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:2001-2005",
+    "content": "# tests/cache/tests.py:2001-2005  (tests.cache.tests.CacheUtils)\n@override_settings(\n    CACHE_MIDDLEWARE_KEY_PREFIX=\"settingsprefix\",\n    CACHE_MIDDLEWARE_SECONDS=1,\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        },\n    },\n    USE_I18N=False,\n    ALLOWED_HOSTS=[\".example.com\"],\n)\nclass CacheUtils(SimpleTestCase):\n    \"\"\"TestCase for django.utils.cache functions.\"\"\"\n\n    host = \"www.example.com\"\n    path = \"/cache/test/\"\n    factory = RequestFactory(headers={\"host\": host})",
+    "token_count": 137,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.CacheUtils"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 27,
+     "rerank_score": -0.22959056496620178,
+     "bm25_rank": 38,
+     "dense_rank": 63,
+     "oversized_chunk": false,
+     "engine_token_count": 137
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:1431-1443",
+    "content": "# tests/cache/tests.py:1431-1443  (tests.cache.tests.LocMemCacheTests.test_lru_incr)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    @limit_locmem_entries\n    def test_lru_incr(self):\n        \"\"\"incr() moves cache keys.\"\"\"\n        for key in range(9):\n            cache.set(key, key, timeout=None)\n        for key in range(6):\n            self.assertEqual(cache.incr(key), key + 1)\n        cache.set(9, 9, timeout=None)\n        for key in range(6):\n            self.assertEqual(cache.get(key), key + 1)\n        for key in range(6, 9):\n            self.assertIsNone(cache.get(key))\n        self.assertEqual(cache.get(9), 9)",
+    "token_count": 167,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.LocMemCacheTests.test_lru_incr"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 13,
+     "rerank_score": -0.23998408019542694,
+     "bm25_rank": 64,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 167
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/memcached.py:73-75",
+    "content": "# django/core/cache/backends/memcached.py:73-75  (django.core.cache.backends.memcached.BaseMemcachedCache.get)\nclass BaseMemcachedCache(BaseCache):\n    def get(self, key, default=None, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        return self._cache.get(key, default)",
+    "token_count": 75,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.memcached.BaseMemcachedCache.get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 42,
+     "rerank_score": -0.4472968280315399,
+     "bm25_rank": 67,
+     "dense_rank": 98,
+     "oversized_chunk": false,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:1418-1429",
+    "content": "# tests/cache/tests.py:1418-1429  (tests.cache.tests.LocMemCacheTests.test_lru_set)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    @limit_locmem_entries\n    def test_lru_set(self):\n        \"\"\"set() moves cache keys.\"\"\"\n        for key in range(9):\n            cache.set(key, key, timeout=None)\n        for key in range(3, 9):\n            cache.set(key, key, timeout=None)\n        cache.set(9, 9, timeout=None)\n        for key in range(3, 10):\n            self.assertEqual(cache.get(key), key)\n        for key in range(3):\n            self.assertIsNone(cache.get(key))",
+    "token_count": 152,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.LocMemCacheTests.test_lru_set"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": -0.4799376130104065,
+     "bm25_rank": 60,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/syntax_tests/test_cache.py:176-205",
+    "content": "# tests/template_tests/syntax_tests/test_cache.py:176-205  (tests.template_tests.syntax_tests.test_cache.CacheTests.test_cache_fragment_cache)\nclass CacheTests(SimpleTestCase):\n    @override_settings(\n        CACHES={\n            \"default\": {\n                \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n                \"LOCATION\": \"default\",\n            },\n            \"template_fragments\": {\n                \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n                \"LOCATION\": \"fragments\",\n            },\n        }\n    )\n    def test_cache_fragment_cache(self):\n        \"\"\"\n        When a cache called \"template_fragments\" is present, the cache tag\n        will use it in preference to 'default'\n        \"\"\"\n        t1 = self.engine.from_string(\n            \"{% load cache %}{% cache 1 fragment %}foo{% endcache %}\"\n        )\n        t2 = self.engine.from_string(\n            '{% load cache %}{% cache 1 fragment using=\"default\" %}bar{% endcache %}'\n        )\n\n        ctx = Context()\n        o1 = t1.render(ctx)\n        o2 = t2.render(ctx)\n\n        self.assertEqual(o1, \"foo\")\n        self.assertEqual(o2, \"bar\")",
+    "token_count": 266,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.template_tests.syntax_tests.test_cache.CacheTests.test_cache_fragment_cache"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -0.6517230868339539,
+     "bm25_rank": 14,
+     "dense_rank": 31,
+     "oversized_chunk": false,
+     "engine_token_count": 266
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:2486-2486",
+    "content": "# tests/cache/tests.py:2486-2486  (tests.cache.tests.CacheMiddlewareTest)\n@override_settings(\n    CACHE_MIDDLEWARE_ALIAS=\"other\",\n    CACHE_MIDDLEWARE_KEY_PREFIX=\"middlewareprefix\",\n    CACHE_MIDDLEWARE_SECONDS=30,\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        },\n        \"other\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n            \"LOCATION\": \"other\",\n            \"TIMEOUT\": \"1\",\n        },\n    },\n)\nclass CacheMiddlewareTest(SimpleTestCase):\n    factory = RequestFactory()",
+    "token_count": 140,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.CacheMiddlewareTest"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 20,
+     "rerank_score": -0.68400639295578,
+     "bm25_rank": 17,
+     "dense_rank": 65,
+     "oversized_chunk": false,
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/__init__.py:1-35",
+    "content": "# django/core/cache/__init__.py:1-35  (django.core.cache)\n\"\"\"\nCaching framework.\n\nThis package defines set of cache backends that all conform to a simple API.\nIn a nutshell, a cache is a set of values -- which can be any object that\nmay be pickled -- identified by string keys.  For the complete API, see\nthe abstract BaseCache class in django.core.cache.backends.base.\n\nClient code should use the `cache` variable defined here to access the default\ncache backend and look up non-default cache backends in the `caches` dict-like\nobject.\n\nSee docs/topics/cache.txt for information on the public API.\n\"\"\"\nfrom django.core import signals\nfrom django.core.cache.backends.base import (\n    BaseCache,\n    CacheKeyWarning,\n    InvalidCacheBackendError,\n    InvalidCacheKey,\n)\nfrom django.utils.connection import BaseConnectionHandler, ConnectionProxy\nfrom django.utils.module_loading import import_string\n\n__all__ = [\n    \"cache\",\n    \"caches\",\n    \"DEFAULT_CACHE_ALIAS\",\n    \"InvalidCacheBackendError\",\n    \"CacheKeyWarning\",\n    \"BaseCache\",\n    \"InvalidCacheKey\",\n]\n\nDEFAULT_CACHE_ALIAS = \"default\"",
+    "token_count": 247,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 14,
+     "rerank_score": -0.6859581470489502,
+     "bm25_rank": 21,
+     "dense_rank": 36,
+     "oversized_chunk": false,
+     "engine_token_count": 247
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:1352-1367",
+    "content": "# tests/cache/tests.py:1352-1367  (tests.cache.tests.LocMemCacheTests.setUp)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    def setUp(self):\n        super().setUp()\n\n        # LocMem requires a hack to make the other caches\n        # share a data store with the 'normal' cache.\n        caches[\"prefix\"]._cache = cache._cache\n        caches[\"prefix\"]._expire_info = cache._expire_info\n\n        caches[\"v2\"]._cache = cache._cache\n        caches[\"v2\"]._expire_info = cache._expire_info\n\n        caches[\"custom_key\"]._cache = cache._cache\n        caches[\"custom_key\"]._expire_info = cache._expire_info\n\n        caches[\"custom_key2\"]._cache = cache._cache\n        caches[\"custom_key2\"]._expire_info = cache._expire_info",
+    "token_count": 185,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.LocMemCacheTests.setUp"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 23,
+     "rerank_score": -0.7643448114395142,
+     "bm25_rank": 31,
+     "dense_rank": 51,
+     "oversized_chunk": false,
+     "engine_token_count": 185
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/cache.py:144-146",
+    "content": "# django/middleware/cache.py:144-146  (django.middleware.cache.FetchFromCacheMiddleware.cache)\nclass FetchFromCacheMiddleware(MiddlewareMixin):\n    @property\n    def cache(self):\n        return caches[self.cache_alias]",
+    "token_count": 50,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.cache.FetchFromCacheMiddleware.cache"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 50,
+     "rerank_score": -0.8442954421043396,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:2192-2193",
+    "content": "# tests/cache/tests.py:2192-2193  (tests.cache.tests.CacheHEADTest)\n@override_settings(\n    CACHE_MIDDLEWARE_SECONDS=60,\n    CACHE_MIDDLEWARE_KEY_PREFIX=\"test\",\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        },\n    },\n)\nclass CacheHEADTest(SimpleTestCase):\n    path = \"/cache/test/\"\n    factory = RequestFactory()",
+    "token_count": 99,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.CacheHEADTest"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 21,
+     "rerank_score": -0.8586977124214172,
+     "bm25_rank": 30,
+     "dense_rank": 48,
+     "oversized_chunk": false,
+     "engine_token_count": 99
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/memcached.py:1-12",
+    "content": "# django/core/cache/backends/memcached.py:1-12  (django.core.cache.backends.memcached)\n\"Memcached cache backend\"\n\nimport re\nimport time\n\nfrom django.core.cache.backends.base import (\n    DEFAULT_TIMEOUT,\n    BaseCache,\n    InvalidCacheKey,\n    memcache_key_warnings,\n)\nfrom django.utils.functional import cached_property",
+    "token_count": 71,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 35,
+     "rerank_score": -0.9401432871818542,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:2244-2245",
+    "content": "# tests/cache/tests.py:2244-2245  (tests.cache.tests.CacheI18nTest)\n@override_settings(\n    CACHE_MIDDLEWARE_KEY_PREFIX=\"settingsprefix\",\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        },\n    },\n    LANGUAGES=[\n        (\"en\", \"English\"),\n        (\"es\", \"Spanish\"),\n    ],\n)\nclass CacheI18nTest(SimpleTestCase):\n    path = \"/cache/test/\"\n    factory = RequestFactory()",
+    "token_count": 118,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.tests.CacheI18nTest"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 16,
+     "rerank_score": -1.0540409088134766,
+     "bm25_rank": 34,
+     "dense_rank": 34,
+     "oversized_chunk": false,
+     "engine_token_count": 118
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/locmem.py:17-17",
+    "content": "# django/core/cache/backends/locmem.py:17-17  (django.core.cache.backends.locmem.LocMemCache)\nclass LocMemCache(BaseCache):\n    pickle_protocol = pickle.HIGHEST_PROTOCOL",
+    "token_count": 45,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.locmem.LocMemCache"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 4,
+     "rerank_score": -1.3212215900421143,
+     "bm25_rank": 8,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/db.py:1-9",
+    "content": "# django/core/cache/backends/db.py:1-9  (django.core.cache.backends.db)\n\"Database cache backend.\"\nimport base64\nimport pickle\nfrom datetime import datetime, timezone\n\nfrom django.conf import settings\nfrom django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache\nfrom django.db import DatabaseError, connections, models, router, transaction\nfrom django.utils.timezone import now as tz_now",
+    "token_count": 83,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -1.6894431114196777,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/closeable_cache.py:12-12",
+    "content": "# tests/cache/closeable_cache.py:12-12  (tests.cache.closeable_cache.CacheClass)\nclass CacheClass(CloseHookMixin, LocMemCache):\n    pass",
+    "token_count": 37,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.closeable_cache.CacheClass"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 44,
+     "rerank_score": -1.7897388935089111,
+     "bm25_rank": 98,
+     "dense_rank": 78,
+     "oversized_chunk": false,
+     "engine_token_count": 37
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/dummy.py:14-16",
+    "content": "# django/core/cache/backends/dummy.py:14-16  (django.core.cache.backends.dummy.DummyCache.get)\nclass DummyCache(BaseCache):\n    def get(self, key, default=None, version=None):\n        self.make_and_validate_key(key, version=version)\n        return default",
+    "token_count": 62,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.dummy.DummyCache.get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": -2.0426347255706787,
+     "bm25_rank": 66,
+     "dense_rank": 68,
+     "oversized_chunk": false,
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/liberal_backend.py:10-10",
+    "content": "# tests/cache/liberal_backend.py:10-10  (tests.cache.liberal_backend.CacheClass)\nclass CacheClass(LiberalKeyValidationMixin, LocMemCache):\n    pass",
+    "token_count": 39,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.cache.liberal_backend.CacheClass"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 18,
+     "rerank_score": -2.090566873550415,
+     "bm25_rank": 88,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/cache/tests.py:1446-1466",
+    "content": "# tests/cache/tests.py:1446-1466  (tests.cache.tests)\n# memcached and redis backends aren't guaranteed to be available.\n# To check the backends, the test settings file will need to contain at least\n# one cache backend setting that points at your cache server.\nconfigured_caches = {}\nfor _cache_params in settings.CACHES.values():\n    configured_caches[_cache_params[\"BACKEND\"]] = _cache_params\n\nPyLibMCCache_params = configured_caches.get(\n    \"django.core.cache.backends.memcached.PyLibMCCache\"\n)\nPyMemcacheCache_params = configured_caches.get(\n    \"django.core.cache.backends.memcached.PyMemcacheCache\"\n)\n\n# The memcached backends don't support cull-related options like `MAX_ENTRIES`.\nmemcached_excluded_caches = {\"cull\", \"zero_cull\"}\n\nRedisCache_params = configured_caches.get(\"django.core.cache.backends.redis.RedisCache\")\n\n# The redis backend does not support cull-related options like `MAX_ENTRIES`.\nredis_excluded_caches = {\"cull\", \"zero_cull\"}",
+    "token_count": 233,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -2.134108066558838,
+     "bm25_rank": 74,
+     "dense_rank": 39,
+     "oversized_chunk": false,
+     "engine_token_count": 233
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/cache.py:398-436",
+    "content": "# django/utils/cache.py:398-436  (django.utils.cache.learn_cache_key)\ndef learn_cache_key(request, response, cache_timeout=None, key_prefix=None, cache=None):\n    \"\"\"\n    Learn what headers to take into account for some request URL from the\n    response object. Store those headers in a global URL registry so that\n    later access to that URL will know what headers to take into account\n    without building the response object itself. The headers are named in the\n    Vary header of the response, but we want to prevent response generation.\n\n    The list of headers to use for cache key generation is stored in the same\n    cache as the pages themselves. If the cache ages some data out of the\n    cache, this just means that we have to build the response once to get at\n    the Vary header and so at the list of headers to use for the cache key.\n    \"\"\"\n    if key_prefix is None:\n        key_prefix = settings.CACHE_MIDDLEWARE_KEY_PREFIX\n    if cache_timeout is None:\n        cache_timeout = settings.CACHE_MIDDLEWARE_SECONDS\n    cache_key = _generate_cache_header_key(key_prefix, request)\n    if cache is None:\n        cache = caches[settings.CACHE_MIDDLEWARE_ALIAS]\n    if response.has_header(\"Vary\"):\n        is_accept_language_redundant = settings.USE_I18N\n        # If i18n is used, the generated cache key will be suffixed with the\n        # current locale. Adding the raw value of Accept-Language is redundant\n        # in that case and would result in storing the same content under\n        # multiple keys in the cache. See #18191 for details.\n        headerlist = []\n        for header in cc_delim_re.split(response.headers[\"Vary\"]):\n            header = header.upper().replace(\"-\", \"_\")\n            if header != \"ACCEPT_LANGUAGE\" or not is_accept_language_redundant:\n                headerlist.append(\"HTTP_\" + header)\n        headerlist.sort()\n        cache.set(cache_key, headerlist, cache_timeout)\n        return _generate_cache_key(request, request.method, headerlist, key_prefix)\n    else:\n        # if there is no Vary header, we still need a cache key\n        # for the request.build_absolute_uri()\n        cache.set(cache_key, [], cache_timeout)\n        return _generate_cache_key(request, request.method, [], key_prefix)",
+    "token_count": 503,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.cache.learn_cache_key"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 46,
+     "rerank_score": -2.2920525074005127,
+     "bm25_rank": 91,
+     "dense_rank": 86,
+     "oversized_chunk": false,
+     "engine_token_count": 503
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/http.py:1-3",
+    "content": "# django/middleware/http.py:1-3  (django.middleware.http)\nfrom django.utils.cache import cc_delim_re, get_conditional_response, set_response_etag\nfrom django.utils.deprecation import MiddlewareMixin\nfrom django.utils.http import parse_http_date_safe",
+    "token_count": 54,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 43,
+     "rerank_score": -2.3327348232269287,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/checks/caches.py:1-12",
+    "content": "# django/core/checks/caches.py:1-12  (django.core.checks.caches)\nimport pathlib\n\nfrom django.conf import settings\nfrom django.core.cache import DEFAULT_CACHE_ALIAS, caches\nfrom django.core.cache.backends.filebased import FileBasedCache\n\nfrom . import Error, Tags, Warning, register\n\nE001 = Error(\n    \"You must define a '%s' cache in your CACHES setting.\" % DEFAULT_CACHE_ALIAS,\n    id=\"caches.E001\",\n)",
+    "token_count": 105,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -2.3675341606140137,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 105
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/db.py:234-254",
+    "content": "# django/core/cache/backends/db.py:234-254  (django.core.cache.backends.db.DatabaseCache.has_key)\nclass DatabaseCache(BaseDatabaseCache):\n    # This class uses cursors provided by the database connection. This means\n    # it reads expiration values as aware or naive datetimes, depending on the\n    # value of USE_TZ and whether the database supports time zones. The ORM's\n    # conversion and adaptation infrastructure is then used to avoid comparing\n    # aware and naive datetimes accidentally.\n\n    def has_key(self, key, version=None):\n        key = self.make_and_validate_key(key, version=version)\n\n        db = router.db_for_read(self.cache_model_class)\n        connection = connections[db]\n        quote_name = connection.ops.quote_name\n\n        now = tz_now().replace(microsecond=0, tzinfo=None)\n\n        with connection.cursor() as cursor:\n            cursor.execute(\n                \"SELECT %s FROM %s WHERE %s = %%s and %s > %%s\"\n                % (\n                    quote_name(\"cache_key\"),\n                    quote_name(self._table),\n                    quote_name(\"cache_key\"),\n                    quote_name(\"expires\"),\n                ),\n                [key, connection.ops.adapt_datetimefield_value(now)],\n            )\n            return cursor.fetchone() is not None",
+    "token_count": 267,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.db.DatabaseCache.has_key"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 30,
+     "rerank_score": -2.8878276348114014,
+     "bm25_rank": 78,
+     "dense_rank": 45,
+     "oversized_chunk": false,
+     "engine_token_count": 267
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/db.py:54-98",
+    "content": "# django/core/cache/backends/db.py:54-98  (django.core.cache.backends.db.DatabaseCache.get_many)\nclass DatabaseCache(BaseDatabaseCache):\n    # This class uses cursors provided by the database connection. This means\n    # it reads expiration values as aware or naive datetimes, depending on the\n    # value of USE_TZ and whether the database supports time zones. The ORM's\n    # conversion and adaptation infrastructure is then used to avoid comparing\n    # aware and naive datetimes accidentally.\n\n    def get_many(self, keys, version=None):\n        if not keys:\n            return {}\n\n        key_map = {\n            self.make_and_validate_key(key, version=version): key for key in keys\n        }\n\n        db = router.db_for_read(self.cache_model_class)\n        connection = connections[db]\n        quote_name = connection.ops.quote_name\n        table = quote_name(self._table)\n\n        with connection.cursor() as cursor:\n            cursor.execute(\n                \"SELECT %s, %s, %s FROM %s WHERE %s IN (%s)\"\n                % (\n                    quote_name(\"cache_key\"),\n                    quote_name(\"value\"),\n                    quote_name(\"expires\"),\n                    table,\n                    quote_name(\"cache_key\"),\n                    \", \".join([\"%s\"] * len(key_map)),\n                ),\n                list(key_map),\n            )\n            rows = cursor.fetchall()\n\n        result = {}\n        expired_keys = []\n        expression = models.Expression(output_field=models.DateTimeField())\n        converters = connection.ops.get_db_converters(\n            expression\n        ) + expression.get_db_converters(connection)\n        for key, value, expires in rows:\n            for converter in converters:\n                expires = converter(expires, expression, connection)\n            if expires < tz_now():\n                expired_keys.append(key)\n            else:\n                value = connection.ops.process_clob(value)\n                value = pickle.loads(base64.b64decode(value.encode()))\n                result[key_map.get(key)] = value\n        self._base_delete_many(expired_keys)\n        return result",
+    "token_count": 414,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.db.DatabaseCache.get_many"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": -2.9069511890411377,
+     "bm25_rank": 68,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 414
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/base.py:192-205",
+    "content": "# django/core/cache/backends/base.py:192-205  (django.core.cache.backends.base.BaseCache.get_many)\nclass BaseCache:\n    def get_many(self, keys, version=None):\n        \"\"\"\n        Fetch a bunch of keys from the cache. For certain backends (memcached,\n        pgsql) this can be *much* faster when fetching multiple values.\n\n        Return a dict mapping each key in keys to its value. If the given\n        key is missing, it will be missing from the response dict.\n        \"\"\"\n        d = {}\n        for k in keys:\n            val = self.get(k, self._missing_key, version=version)\n            if val is not self._missing_key:\n                d[k] = val\n        return d",
+    "token_count": 158,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.base.BaseCache.get_many"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 26,
+     "rerank_score": -2.9937684535980225,
+     "bm25_rank": 35,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 158
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/base.py:110-117",
+    "content": "# django/core/cache/backends/base.py:110-117  (django.core.cache.backends.base.BaseCache.validate_key)\nclass BaseCache:\n    def validate_key(self, key):\n        \"\"\"\n        Warn about keys that would not be portable to the memcached\n        backend. This encourages (but does not force) writing backend-portable\n        cache code.\n        \"\"\"\n        for warning in memcache_key_warnings(key):\n            warnings.warn(warning, CacheKeyWarning)",
+    "token_count": 98,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.base.BaseCache.validate_key"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 25,
+     "rerank_score": -3.2618966102600098,
+     "bm25_rank": 55,
+     "dense_rank": 41,
+     "oversized_chunk": false,
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/db.py:51-52",
+    "content": "# django/core/cache/backends/db.py:51-52  (django.core.cache.backends.db.DatabaseCache.get)\nclass DatabaseCache(BaseDatabaseCache):\n    # This class uses cursors provided by the database connection. This means\n    # it reads expiration values as aware or naive datetimes, depending on the\n    # value of USE_TZ and whether the database supports time zones. The ORM's\n    # conversion and adaptation infrastructure is then used to avoid comparing\n    # aware and naive datetimes accidentally.\n\n    def get(self, key, default=None, version=None):\n        return self.get_many([key], version).get(key, default)",
+    "token_count": 134,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.db.DatabaseCache.get"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 41,
+     "rerank_score": -3.973538398742676,
+     "bm25_rank": 75,
+     "dense_rank": 87,
+     "oversized_chunk": false,
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/base.py:16-16",
+    "content": "# django/core/cache/backends/base.py:16-16  (django.core.cache.backends.base.CacheKeyWarning)\nclass CacheKeyWarning(RuntimeWarning):\n    pass",
+    "token_count": 34,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.base.CacheKeyWarning"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 38,
+     "rerank_score": -4.296878337860107,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 34
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/cache/backends/base.py:57-57",
+    "content": "# django/core/cache/backends/base.py:57-57  (django.core.cache.backends.base.BaseCache)\nclass BaseCache:\n    _missing_key = object()",
+    "token_count": 35,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.cache.backends.base.BaseCache"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 45,
+     "rerank_score": -4.440223693847656,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 35
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 6502,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are debugging a Django local-memory cache read in\ndjango/core/cache/backends/locmem.py. Starting from\n`LocMemCache.get`, trace the real causal pipeline a lookup travels\nthrough, in the order each stage is actually reached, up to and\nincluding the call that evicts a stale entry once it is found to\nhave expired. Assume the entry being looked up has, in fact,\nexpired.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.cache.backends.locmem.LocMemCache.get\", \"django.core.cache.backends.base.BaseCache.make_and_validate_key\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1187.595135
+    ],
+    "L_embed_query": [
+     307.497085
+    ],
+    "L_dense": [
+     60.544438
+    ],
+    "L_rrf": [
+     0.196558
+    ],
+    "L_rerank": [
+     23978.296486
+    ],
+    "L_retrieve": [
+     25563.837511
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 6502,
+   "prompt_tokens": 6838,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 6851,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# tests/cache/closeable_cache.py:1-1  (tests.cache.closeable_cache)\nfrom django.core.cache.backends.locmem import LocMemCache\n\n# tests/cache/liberal_backend.py:1-1  (tests.cache.liberal_backend)\nfrom django.core.cache.backends.locmem import LocMemCache\n\n# django/middleware/cache.py:1-55  (django.middleware.cache)\n\"\"\"\nCache middleware. If enabled, each Django-powered page will be cached based on\nURL. The canonical way to enable cache middleware is to set\n``UpdateCacheMiddleware`` as your first piece of middleware, and\n``FetchFromCacheMiddleware`` as the last::\n\n    MIDDLEWARE = [\n        'django.middleware.cache.UpdateCacheMiddleware',\n        ...\n        'django.middleware.cache.FetchFromCacheMiddleware'\n    ]\n\nThis is counter-intuitive, but correct: ``UpdateCacheMiddleware`` needs to run\nlast during the response phase, which processes middleware bottom-up;\n``FetchFromCacheMiddleware`` needs to run last during the request phase, which\nprocesses middleware top-down.\n\nThe single-class ``CacheMiddleware`` can be used for some simple sites.\nHowever, if any other piece of middleware needs to affect the cache key, you'll\nneed to use the two-part ``UpdateCacheMiddleware`` and\n``FetchFromCacheMiddleware``. This'll most often happen when you're using\nDjango's ``LocaleMiddleware``.\n\nMore details about how the caching works:\n\n* Only GET or HEAD-requests with status code 200 are cached.\n\n* The number of seconds each page is stored for is set by the \"max-age\" section\n  of the response's \"Cache-Control\" header, falling back to the\n  CACHE_MIDDLEWARE_SECONDS setting if the section was not found.\n\n* This middleware expects that a HEAD request is answered with the same response\n  headers exactly like the corresponding GET request.\n\n* When a hit occurs, a shallow copy of the original response object is returned\n  from process_request.\n\n* Pages will be cached based on the contents of the request headers listed in\n  the response's \"Vary\" header.\n\n* This middleware also sets ETag, Last-Modified, Expires and Cache-Control\n  headers on the response object.\n\n\"\"\"\n\nfrom django.conf import settings\nfrom django.core.cache import DEFAULT_CACHE_ALIAS, caches\nfrom django.utils.cache import (\n    get_cache_key,\n    get_max_age,\n    has_vary_header,\n    learn_cache_key,\n    patch_response_headers,\n)\nfrom django.utils.deprecation import MiddlewareMixin\n\n# django/core/cache/backends/locmem.py:34-42  (django.core.cache.backends.locmem.LocMemCache.get)\nclass LocMemCache(BaseCache):\n    def get(self, key, default=None, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            if self._has_expired(key):\n                self._delete(key)\n                return default\n            pickled = self._cache[key]\n            self._cache.move_to_end(key, last=False)\n        return pickle.loads(pickled)\n\n# django/core/cache/backends/locmem.py:1-13  (django.core.cache.backends.locmem)\n\"Thread-safe in-memory cache backend.\"\nimport pickle\nimport time\nfrom collections import OrderedDict\nfrom threading import Lock\n\nfrom django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache\n\n# Global in-memory store of cache data. Keyed by name, to provide\n# multiple named local memory caches.\n_caches = {}\n_expire_info = {}\n_locks = {}\n\n# django/core/cache/backends/locmem.py:87-89  (django.core.cache.backends.locmem.LocMemCache._has_expired)\nclass LocMemCache(BaseCache):\n    def _has_expired(self, key):\n        exp = self._expire_info.get(key, -1)\n        return exp is not None and exp <= time.time()\n\n# django/core/cache/backends/locmem.py:65-77  (django.core.cache.backends.locmem.LocMemCache.incr)\nclass LocMemCache(BaseCache):\n    def incr(self, key, delta=1, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            if self._has_expired(key):\n                self._delete(key)\n                raise ValueError(\"Key '%s' not found\" % key)\n            pickled = self._cache[key]\n            value = pickle.loads(pickled)\n            new_value = value + delta\n            pickled = pickle.dumps(new_value, self.pickle_protocol)\n            self._cache[key] = pickled\n            self._cache.move_to_end(key, last=False)\n        return new_value\n\n# django/core/cache/backends/locmem.py:44-49  (django.core.cache.backends.locmem.LocMemCache._set)\nclass LocMemCache(BaseCache):\n    def _set(self, key, value, timeout=DEFAULT_TIMEOUT):\n        if len(self._cache) >= self._max_entries:\n            self._cull()\n        self._cache[key] = value\n        self._cache.move_to_end(key, last=False)\n        self._expire_info[key] = self.get_backend_timeout(timeout)\n\n# django/core/cache/backends/locmem.py:91-99  (django.core.cache.backends.locmem.LocMemCache._cull)\nclass LocMemCache(BaseCache):\n    def _cull(self):\n        if self._cull_frequency == 0:\n            self._cache.clear()\n            self._expire_info.clear()\n        else:\n            count = len(self._cache) // self._cull_frequency\n            for i in range(count):\n                key, _ = self._cache.popitem()\n                del self._expire_info[key]\n\n# django/core/cache/backends/locmem.py:19-23  (django.core.cache.backends.locmem.LocMemCache.__init__)\nclass LocMemCache(BaseCache):\n    def __init__(self, name, params):\n        super().__init__(params)\n        self._cache = _caches.setdefault(name, OrderedDict())\n        self._expire_info = _expire_info.setdefault(name, {})\n        self._lock = _locks.setdefault(name, Lock())\n\n# django/core/cache/backends/locmem.py:57-63  (django.core.cache.backends.locmem.LocMemCache.touch)\nclass LocMemCache(BaseCache):\n    def touch(self, key, timeout=DEFAULT_TIMEOUT, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            if self._has_expired(key):\n                return False\n            self._expire_info[key] = self.get_backend_timeout(timeout)\n            return True\n\n# django/core/cache/backends/locmem.py:114-117  (django.core.cache.backends.locmem.LocMemCache.clear)\nclass LocMemCache(BaseCache):\n    def clear(self):\n        with self._lock:\n            self._cache.clear()\n            self._expire_info.clear()\n\n# tests/cache/tests.py:2179-2179  (tests.cache.tests.PrefixedCacheUtils)\n@override_settings(\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n            \"KEY_PREFIX\": \"cacheprefix\",\n        },\n    },\n)\nclass PrefixedCacheUtils(CacheUtils):\n    pass\n\n# django/core/cache/backends/locmem.py:25-32  (django.core.cache.backends.locmem.LocMemCache.add)\nclass LocMemCache(BaseCache):\n    def add(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        pickled = pickle.dumps(value, self.pickle_protocol)\n        with self._lock:\n            if self._has_expired(key):\n                self._set(key, pickled, timeout)\n                return True\n            return False\n\n# django/core/cache/backends/locmem.py:79-85  (django.core.cache.backends.locmem.LocMemCache.has_key)\nclass LocMemCache(BaseCache):\n    def has_key(self, key, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            if self._has_expired(key):\n                self._delete(key)\n                return False\n            return True\n\n# tests/cache/tests.py:2459-2459  (tests.cache.tests.PrefixedCacheI18nTest)\n@override_settings(\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n            \"KEY_PREFIX\": \"cacheprefix\",\n        },\n    },\n)\nclass PrefixedCacheI18nTest(CacheI18nTest):\n    pass\n\n# django/core/cache/backends/locmem.py:51-55  (django.core.cache.backends.locmem.LocMemCache.set)\nclass LocMemCache(BaseCache):\n    def set(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        pickled = pickle.dumps(value, self.pickle_protocol)\n        with self._lock:\n            self._set(key, pickled, timeout)\n\n# tests/cache/tests.py:1369-1382  (tests.cache.tests.LocMemCacheTests.test_multiple_caches)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    @override_settings(\n        CACHES={\n            \"default\": {\"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\"},\n            \"other\": {\n                \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n                \"LOCATION\": \"other\",\n            },\n        }\n    )\n    def test_multiple_caches(self):\n        \"Multiple locmem caches are isolated\"\n        cache.set(\"value\", 42)\n        self.assertEqual(caches[\"default\"].get(\"value\"), 42)\n        self.assertIsNone(caches[\"other\"].get(\"value\"))\n\n# tests/cache/tests.py:1913-1920  (tests.cache.tests)\nDEFAULT_MEMORY_CACHES_SETTINGS = {\n    \"default\": {\n        \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        \"LOCATION\": \"unique-snowflake\",\n    }\n}\nNEVER_EXPIRING_CACHES_SETTINGS = copy.deepcopy(DEFAULT_MEMORY_CACHES_SETTINGS)\nNEVER_EXPIRING_CACHES_SETTINGS[\"default\"][\"TIMEOUT\"] = None\n\n# django/core/cache/backends/locmem.py:109-112  (django.core.cache.backends.locmem.LocMemCache.delete)\nclass LocMemCache(BaseCache):\n    def delete(self, key, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        with self._lock:\n            return self._delete(key)\n\n# tests/cache/tests.py:1404-1416  (tests.cache.tests.LocMemCacheTests.test_lru_get)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    @limit_locmem_entries\n    def test_lru_get(self):\n        \"\"\"get() moves cache keys.\"\"\"\n        for key in range(9):\n            cache.set(key, key, timeout=None)\n        for key in range(6):\n            self.assertEqual(cache.get(key), key)\n        cache.set(9, 9, timeout=None)\n        for key in range(6):\n            self.assertEqual(cache.get(key), key)\n        for key in range(6, 9):\n            self.assertIsNone(cache.get(key))\n        self.assertEqual(cache.get(9), 9)\n\n# django/core/cache/backends/locmem.py:101-107  (django.core.cache.backends.locmem.LocMemCache._delete)\nclass LocMemCache(BaseCache):\n    def _delete(self, key):\n        try:\n            del self._cache[key]\n            del self._expire_info[key]\n        except KeyError:\n            return False\n        return True\n\n# tests/cache/tests.py:2001-2005  (tests.cache.tests.CacheUtils)\n@override_settings(\n    CACHE_MIDDLEWARE_KEY_PREFIX=\"settingsprefix\",\n    CACHE_MIDDLEWARE_SECONDS=1,\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        },\n    },\n    USE_I18N=False,\n    ALLOWED_HOSTS=[\".example.com\"],\n)\nclass CacheUtils(SimpleTestCase):\n    \"\"\"TestCase for django.utils.cache functions.\"\"\"\n\n    host = \"www.example.com\"\n    path = \"/cache/test/\"\n    factory = RequestFactory(headers={\"host\": host})\n\n# tests/cache/tests.py:1431-1443  (tests.cache.tests.LocMemCacheTests.test_lru_incr)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    @limit_locmem_entries\n    def test_lru_incr(self):\n        \"\"\"incr() moves cache keys.\"\"\"\n        for key in range(9):\n            cache.set(key, key, timeout=None)\n        for key in range(6):\n            self.assertEqual(cache.incr(key), key + 1)\n        cache.set(9, 9, timeout=None)\n        for key in range(6):\n            self.assertEqual(cache.get(key), key + 1)\n        for key in range(6, 9):\n            self.assertIsNone(cache.get(key))\n        self.assertEqual(cache.get(9), 9)\n\n# django/core/cache/backends/memcached.py:73-75  (django.core.cache.backends.memcached.BaseMemcachedCache.get)\nclass BaseMemcachedCache(BaseCache):\n    def get(self, key, default=None, version=None):\n        key = self.make_and_validate_key(key, version=version)\n        return self._cache.get(key, default)\n\n# tests/cache/tests.py:1418-1429  (tests.cache.tests.LocMemCacheTests.test_lru_set)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    @limit_locmem_entries\n    def test_lru_set(self):\n        \"\"\"set() moves cache keys.\"\"\"\n        for key in range(9):\n            cache.set(key, key, timeout=None)\n        for key in range(3, 9):\n            cache.set(key, key, timeout=None)\n        cache.set(9, 9, timeout=None)\n        for key in range(3, 10):\n            self.assertEqual(cache.get(key), key)\n        for key in range(3):\n            self.assertIsNone(cache.get(key))\n\n# tests/template_tests/syntax_tests/test_cache.py:176-205  (tests.template_tests.syntax_tests.test_cache.CacheTests.test_cache_fragment_cache)\nclass CacheTests(SimpleTestCase):\n    @override_settings(\n        CACHES={\n            \"default\": {\n                \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n                \"LOCATION\": \"default\",\n            },\n            \"template_fragments\": {\n                \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n                \"LOCATION\": \"fragments\",\n            },\n        }\n    )\n    def test_cache_fragment_cache(self):\n        \"\"\"\n        When a cache called \"template_fragments\" is present, the cache tag\n        will use it in preference to 'default'\n        \"\"\"\n        t1 = self.engine.from_string(\n            \"{% load cache %}{% cache 1 fragment %}foo{% endcache %}\"\n        )\n        t2 = self.engine.from_string(\n            '{% load cache %}{% cache 1 fragment using=\"default\" %}bar{% endcache %}'\n        )\n\n        ctx = Context()\n        o1 = t1.render(ctx)\n        o2 = t2.render(ctx)\n\n        self.assertEqual(o1, \"foo\")\n        self.assertEqual(o2, \"bar\")\n\n# tests/cache/tests.py:2486-2486  (tests.cache.tests.CacheMiddlewareTest)\n@override_settings(\n    CACHE_MIDDLEWARE_ALIAS=\"other\",\n    CACHE_MIDDLEWARE_KEY_PREFIX=\"middlewareprefix\",\n    CACHE_MIDDLEWARE_SECONDS=30,\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        },\n        \"other\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n            \"LOCATION\": \"other\",\n            \"TIMEOUT\": \"1\",\n        },\n    },\n)\nclass CacheMiddlewareTest(SimpleTestCase):\n    factory = RequestFactory()\n\n# django/core/cache/__init__.py:1-35  (django.core.cache)\n\"\"\"\nCaching framework.\n\nThis package defines set of cache backends that all conform to a simple API.\nIn a nutshell, a cache is a set of values -- which can be any object that\nmay be pickled -- identified by string keys.  For the complete API, see\nthe abstract BaseCache class in django.core.cache.backends.base.\n\nClient code should use the `cache` variable defined here to access the default\ncache backend and look up non-default cache backends in the `caches` dict-like\nobject.\n\nSee docs/topics/cache.txt for information on the public API.\n\"\"\"\nfrom django.core import signals\nfrom django.core.cache.backends.base import (\n    BaseCache,\n    CacheKeyWarning,\n    InvalidCacheBackendError,\n    InvalidCacheKey,\n)\nfrom django.utils.connection import BaseConnectionHandler, ConnectionProxy\nfrom django.utils.module_loading import import_string\n\n__all__ = [\n    \"cache\",\n    \"caches\",\n    \"DEFAULT_CACHE_ALIAS\",\n    \"InvalidCacheBackendError\",\n    \"CacheKeyWarning\",\n    \"BaseCache\",\n    \"InvalidCacheKey\",\n]\n\nDEFAULT_CACHE_ALIAS = \"default\"\n\n# tests/cache/tests.py:1352-1367  (tests.cache.tests.LocMemCacheTests.setUp)\nclass LocMemCacheTests(BaseCacheTests, TestCase):\n    def setUp(self):\n        super().setUp()\n\n        # LocMem requires a hack to make the other caches\n        # share a data store with the 'normal' cache.\n        caches[\"prefix\"]._cache = cache._cache\n        caches[\"prefix\"]._expire_info = cache._expire_info\n\n        caches[\"v2\"]._cache = cache._cache\n        caches[\"v2\"]._expire_info = cache._expire_info\n\n        caches[\"custom_key\"]._cache = cache._cache\n        caches[\"custom_key\"]._expire_info = cache._expire_info\n\n        caches[\"custom_key2\"]._cache = cache._cache\n        caches[\"custom_key2\"]._expire_info = cache._expire_info\n\n# django/middleware/cache.py:144-146  (django.middleware.cache.FetchFromCacheMiddleware.cache)\nclass FetchFromCacheMiddleware(MiddlewareMixin):\n    @property\n    def cache(self):\n        return caches[self.cache_alias]\n\n# tests/cache/tests.py:2192-2193  (tests.cache.tests.CacheHEADTest)\n@override_settings(\n    CACHE_MIDDLEWARE_SECONDS=60,\n    CACHE_MIDDLEWARE_KEY_PREFIX=\"test\",\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        },\n    },\n)\nclass CacheHEADTest(SimpleTestCase):\n    path = \"/cache/test/\"\n    factory = RequestFactory()\n\n# django/core/cache/backends/memcached.py:1-12  (django.core.cache.backends.memcached)\n\"Memcached cache backend\"\n\nimport re\nimport time\n\nfrom django.core.cache.backends.base import (\n    DEFAULT_TIMEOUT,\n    BaseCache,\n    InvalidCacheKey,\n    memcache_key_warnings,\n)\nfrom django.utils.functional import cached_property\n\n# tests/cache/tests.py:2244-2245  (tests.cache.tests.CacheI18nTest)\n@override_settings(\n    CACHE_MIDDLEWARE_KEY_PREFIX=\"settingsprefix\",\n    CACHES={\n        \"default\": {\n            \"BACKEND\": \"django.core.cache.backends.locmem.LocMemCache\",\n        },\n    },\n    LANGUAGES=[\n        (\"en\", \"English\"),\n        (\"es\", \"Spanish\"),\n    ],\n)\nclass CacheI18nTest(SimpleTestCase):\n    path = \"/cache/test/\"\n    factory = RequestFactory()\n\n# django/core/cache/backends/locmem.py:17-17  (django.core.cache.backends.locmem.LocMemCache)\nclass LocMemCache(BaseCache):\n    pickle_protocol = pickle.HIGHEST_PROTOCOL\n\n# django/core/cache/backends/db.py:1-9  (django.core.cache.backends.db)\n\"Database cache backend.\"\nimport base64\nimport pickle\nfrom datetime import datetime, timezone\n\nfrom django.conf import settings\nfrom django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache\nfrom django.db import DatabaseError, connections, models, router, transaction\nfrom django.utils.timezone import now as tz_now\n\n# tests/cache/closeable_cache.py:12-12  (tests.cache.closeable_cache.CacheClass)\nclass CacheClass(CloseHookMixin, LocMemCache):\n    pass\n\n# django/core/cache/backends/dummy.py:14-16  (django.core.cache.backends.dummy.DummyCache.get)\nclass DummyCache(BaseCache):\n    def get(self, key, default=None, version=None):\n        self.make_and_validate_key(key, version=version)\n        return default\n\n# tests/cache/liberal_backend.py:10-10  (tests.cache.liberal_backend.CacheClass)\nclass CacheClass(LiberalKeyValidationMixin, LocMemCache):\n    pass\n\n# tests/cache/tests.py:1446-1466  (tests.cache.tests)\n# memcached and redis backends aren't guaranteed to be available.\n# To check the backends, the test settings file will need to contain at least\n# one cache backend setting that points at your cache server.\nconfigured_caches = {}\nfor _cache_params in settings.CACHES.values():\n    configured_caches[_cache_params[\"BACKEND\"]] = _cache_params\n\nPyLibMCCache_params = configured_caches.get(\n    \"django.core.cache.backends.memcached.PyLibMCCache\"\n)\nPyMemcacheCache_params = configured_caches.get(\n    \"django.core.cache.backends.memcached.PyMemcacheCache\"\n)\n\n# The memcached backends don't support cull-related options like `MAX_ENTRIES`.\nmemcached_excluded_caches = {\"cull\", \"zero_cull\"}\n\nRedisCache_params = configured_caches.get(\"django.core.cache.backends.redis.RedisCache\")\n\n# The redis backend does not support cull-related options like `MAX_ENTRIES`.\nredis_excluded_caches = {\"cull\", \"zero_cull\"}\n\n# django/utils/cache.py:398-436  (django.utils.cache.learn_cache_key)\ndef learn_cache_key(request, response, cache_timeout=None, key_prefix=None, cache=None):\n    \"\"\"\n    Learn what headers to take into account for some request URL from the\n    response object. Store those headers in a global URL registry so that\n    later access to that URL will know what headers to take into account\n    without building the response object itself. The headers are named in the\n    Vary header of the response, but we want to prevent response generation.\n\n    The list of headers to use for cache key generation is stored in the same\n    cache as the pages themselves. If the cache ages some data out of the\n    cache, this just means that we have to build the response once to get at\n    the Vary header and so at the list of headers to use for the cache key.\n    \"\"\"\n    if key_prefix is None:\n        key_prefix = settings.CACHE_MIDDLEWARE_KEY_PREFIX\n    if cache_timeout is None:\n        cache_timeout = settings.CACHE_MIDDLEWARE_SECONDS\n    cache_key = _generate_cache_header_key(key_prefix, request)\n    if cache is None:\n        cache = caches[settings.CACHE_MIDDLEWARE_ALIAS]\n    if response.has_header(\"Vary\"):\n        is_accept_language_redundant = settings.USE_I18N\n        # If i18n is used, the generated cache key will be suffixed with the\n        # current locale. Adding the raw value of Accept-Language is redundant\n        # in that case and would result in storing the same content under\n        # multiple keys in the cache. See #18191 for details.\n        headerlist = []\n        for header in cc_delim_re.split(response.headers[\"Vary\"]):\n            header = header.upper().replace(\"-\", \"_\")\n            if header != \"ACCEPT_LANGUAGE\" or not is_accept_language_redundant:\n                headerlist.append(\"HTTP_\" + header)\n        headerlist.sort()\n        cache.set(cache_key, headerlist, cache_timeout)\n        return _generate_cache_key(request, request.method, headerlist, key_prefix)\n    else:\n        # if there is no Vary header, we still need a cache key\n        # for the request.build_absolute_uri()\n        cache.set(cache_key, [], cache_timeout)\n        return _generate_cache_key(request, request.method, [], key_prefix)\n\n# django/middleware/http.py:1-3  (django.middleware.http)\nfrom django.utils.cache import cc_delim_re, get_conditional_response, set_response_etag\nfrom django.utils.deprecation import MiddlewareMixin\nfrom django.utils.http import parse_http_date_safe\n\n# django/core/checks/caches.py:1-12  (django.core.checks.caches)\nimport pathlib\n\nfrom django.conf import settings\nfrom django.core.cache import DEFAULT_CACHE_ALIAS, caches\nfrom django.core.cache.backends.filebased import FileBasedCache\n\nfrom . import Error, Tags, Warning, register\n\nE001 = Error(\n    \"You must define a '%s' cache in your CACHES setting.\" % DEFAULT_CACHE_ALIAS,\n    id=\"caches.E001\",\n)\n\n# django/core/cache/backends/db.py:234-254  (django.core.cache.backends.db.DatabaseCache.has_key)\nclass DatabaseCache(BaseDatabaseCache):\n    # This class uses cursors provided by the database connection. This means\n    # it reads expiration values as aware or naive datetimes, depending on the\n    # value of USE_TZ and whether the database supports time zones. The ORM's\n    # conversion and adaptation infrastructure is then used to avoid comparing\n    # aware and naive datetimes accidentally.\n\n    def has_key(self, key, version=None):\n        key = self.make_and_validate_key(key, version=version)\n\n        db = router.db_for_read(self.cache_model_class)\n        connection = connections[db]\n        quote_name = connection.ops.quote_name\n\n        now = tz_now().replace(microsecond=0, tzinfo=None)\n\n        with connection.cursor() as cursor:\n            cursor.execute(\n                \"SELECT %s FROM %s WHERE %s = %%s and %s > %%s\"\n                % (\n                    quote_name(\"cache_key\"),\n                    quote_name(self._table),\n                    quote_name(\"cache_key\"),\n                    quote_name(\"expires\"),\n                ),\n                [key, connection.ops.adapt_datetimefield_value(now)],\n            )\n            return cursor.fetchone() is not None\n\n# django/core/cache/backends/db.py:54-98  (django.core.cache.backends.db.DatabaseCache.get_many)\nclass DatabaseCache(BaseDatabaseCache):\n    # This class uses cursors provided by the database connection. This means\n    # it reads expiration values as aware or naive datetimes, depending on the\n    # value of USE_TZ and whether the database supports time zones. The ORM's\n    # conversion and adaptation infrastructure is then used to avoid comparing\n    # aware and naive datetimes accidentally.\n\n    def get_many(self, keys, version=None):\n        if not keys:\n            return {}\n\n        key_map = {\n            self.make_and_validate_key(key, version=version): key for key in keys\n        }\n\n        db = router.db_for_read(self.cache_model_class)\n        connection = connections[db]\n        quote_name = connection.ops.quote_name\n        table = quote_name(self._table)\n\n        with connection.cursor() as cursor:\n            cursor.execute(\n                \"SELECT %s, %s, %s FROM %s WHERE %s IN (%s)\"\n                % (\n                    quote_name(\"cache_key\"),\n                    quote_name(\"value\"),\n                    quote_name(\"expires\"),\n                    table,\n                    quote_name(\"cache_key\"),\n                    \", \".join([\"%s\"] * len(key_map)),\n                ),\n                list(key_map),\n            )\n            rows = cursor.fetchall()\n\n        result = {}\n        expired_keys = []\n        expression = models.Expression(output_field=models.DateTimeField())\n        converters = connection.ops.get_db_converters(\n            expression\n        ) + expression.get_db_converters(connection)\n        for key, value, expires in rows:\n            for converter in converters:\n                expires = converter(expires, expression, connection)\n            if expires < tz_now():\n                expired_keys.append(key)\n            else:\n                value = connection.ops.process_clob(value)\n                value = pickle.loads(base64.b64decode(value.encode()))\n                result[key_map.get(key)] = value\n        self._base_delete_many(expired_keys)\n        return result\n\n# django/core/cache/backends/base.py:192-205  (django.core.cache.backends.base.BaseCache.get_many)\nclass BaseCache:\n    def get_many(self, keys, version=None):\n        \"\"\"\n        Fetch a bunch of keys from the cache. For certain backends (memcached,\n        pgsql) this can be *much* faster when fetching multiple values.\n\n        Return a dict mapping each key in keys to its value. If the given\n        key is missing, it will be missing from the response dict.\n        \"\"\"\n        d = {}\n        for k in keys:\n            val = self.get(k, self._missing_key, version=version)\n            if val is not self._missing_key:\n                d[k] = val\n        return d\n\n# django/core/cache/backends/base.py:110-117  (django.core.cache.backends.base.BaseCache.validate_key)\nclass BaseCache:\n    def validate_key(self, key):\n        \"\"\"\n        Warn about keys that would not be portable to the memcached\n        backend. This encourages (but does not force) writing backend-portable\n        cache code.\n        \"\"\"\n        for warning in memcache_key_warnings(key):\n            warnings.warn(warning, CacheKeyWarning)\n\n# django/core/cache/backends/db.py:51-52  (django.core.cache.backends.db.DatabaseCache.get)\nclass DatabaseCache(BaseDatabaseCache):\n    # This class uses cursors provided by the database connection. This means\n    # it reads expiration values as aware or naive datetimes, depending on the\n    # value of USE_TZ and whether the database supports time zones. The ORM's\n    # conversion and adaptation infrastructure is then used to avoid comparing\n    # aware and naive datetimes accidentally.\n\n    def get(self, key, default=None, version=None):\n        return self.get_many([key], version).get(key, default)\n\n# django/core/cache/backends/base.py:16-16  (django.core.cache.backends.base.CacheKeyWarning)\nclass CacheKeyWarning(RuntimeWarning):\n    pass\n\n# django/core/cache/backends/base.py:57-57  (django.core.cache.backends.base.BaseCache)\nclass BaseCache:\n    _missing_key = object()\n\n## Task\n\nYou are debugging a Django local-memory cache read in\ndjango/core/cache/backends/locmem.py. Starting from\n`LocMemCache.get`, trace the real causal pipeline a lookup travels\nthrough, in the order each stage is actually reached, up to and\nincluding the call that evicts a stale entry once it is found to\nhave expired. Assume the entry being looked up has, in fact,\nexpired.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.cache.backends.locmem.LocMemCache.get\", \"django.core.cache.backends.base.BaseCache.make_and_validate_key\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

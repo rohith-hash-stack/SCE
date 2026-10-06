@@ -1,0 +1,195 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t02_012_wsgi_entrypoint_dispatch",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"django/core/handlers/wsgi.py\", \"pattern\": \"def __call__\"})\n120:    def __call__(self, environ, start_response):",
+    "token_count": 46,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def __call__",
+      "path": "django/core/handlers/wsgi.py"
+     },
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (read {\"end_line\": 200, \"path\": \"django/core/handlers/wsgi.py\", \"start_line\": 100})\n100:     def COOKIES(self):\n101:         raw_cookie = get_str_from_wsgi(self.environ, \"HTTP_COOKIE\", \"\")\n102:         return parse_cookie(raw_cookie)\n103: \n104:     @property\n105:     def FILES(self):\n106:         if not hasattr(self, \"_files\"):\n107:             self._load_post_and_files()\n108:         return self._files\n109: \n110:     POST = property(_get_post, _set_post)\n111: \n112: \n113: class WSGIHandler(base.BaseHandler):\n114:     request_class = WSGIRequest\n115: \n116:     def __init__(self, *args, **kwargs):\n117:         super().__init__(*args, **kwargs)\n118:         self.load_middleware()\n119: \n120:     def __call__(self, environ, start_response):\n121:         set_script_prefix(get_script_name(environ))\n122:         signals.request_started.send(sender=self.__class__, environ=environ)\n123:         request = self.request_class(environ)\n124:         response = self.get_response(request)\n125: \n126:         response._handler_class = self.__class__\n127: \n128:         status = \"%d %s\" % (response.status_code, response.reason_phrase)\n129:         response_headers = [\n130:             *response.items(),\n131:             *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n132:         ]\n133:         start_response(status, response_headers)\n134:         if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n135:             \"wsgi.file_wrapper\"\n136:         ):\n137:             # If `wsgi.file_wrapper` is used the WSGI server does not call\n138:             # .close on the response, but on the file wrapper. Patch it to use\n139:             # response.close instead which takes care of closing all files.\n140:             response.file_to_stream.close = response.close\n141:             response = environ[\"wsgi.file_wrapper\"](\n142:                 response.file_to_stream, response.block_size\n143:             )\n144:         return response\n145: \n146: \n147: def get_path_info(environ):\n148:     \"\"\"Return the HTTP request's PATH_INFO as a string.\"\"\"\n149:     path_info = get_bytes_from_wsgi(environ, \"PATH_INFO\", \"/\")\n150: \n151:     return repercent_broken_unicode(path_info).decode()\n152: \n153: \n154: def get_script_name(environ):\n155:     \"\"\"\n156:     Return the equivalent of the HTTP request's SCRIPT_NAME environment\n157:     variable. If Apache mod_rewrite is used, return what would have been\n158:     the script name prior to any rewriting (so it's the script name as seen\n159:     from the client's perspective), unless the FORCE_SCRIPT_NAME setting is\n160:     set (to anything).\n161:     \"\"\"\n162:     if settings.FORCE_SCRIPT_NAME is not None:\n163:         return settings.FORCE_SCRIPT_NAME\n164: \n165:     # If Apache's mod_rewrite had a whack at the URL, Apache set either\n166:     # SCRIPT_URL or REDIRECT_URL to the full resource URL before applying any\n167:     # rewrites. Unfortunately not every web server (lighttpd!) passes this\n168:     # information through all the time, so FORCE_SCRIPT_NAME, above, is still\n169:     # needed.\n170:     script_url = get_bytes_from_wsgi(environ, \"SCRIPT_URL\", \"\") or get_bytes_from_wsgi(\n171:         environ, \"REDIRECT_URL\", \"\"\n172:     )\n173: \n174:     if script_url:\n175:         if b\"//\" in script_url:\n176:             # mod_wsgi squashes multiple successive slashes in PATH_INFO,\n177:             # do the same with script_url before manipulating paths (#17133).\n178:             script_url = _slashes_re.sub(b\"/\", script_url)\n179:         path_info = get_bytes_from_wsgi(environ, \"PATH_INFO\", \"\")\n180:         script_name = script_url[: -len(path_info)] if path_info else script_url\n181:     else:\n182:         script_name = get_bytes_from_wsgi(environ, \"SCRIPT_NAME\", \"\")\n183: \n184:     return script_name.decode()\n185: \n186: \n187: def get_bytes_from_wsgi(environ, key, default):\n188:     \"\"\"\n189:     Get a value from the WSGI environ dictionary as bytes.\n190: \n191:     key and default should be strings.\n192:     \"\"\"\n193:     value = environ.get(key, default)\n194:     # Non-ASCII values in the WSGI environ are arbitrarily decoded with\n195:     # ISO-8859-1. This is wrong for Django websites where UTF-8 is the default.\n196:     # Re-encode to recover the original bytestring.\n197:     return value.encode(\"iso-8859-1\")\n198: \n199: \n200: def get_str_from_wsgi(environ, key, default):\n[lines 100-200 of 208]",
+    "token_count": 1352,
+    "rank": 2,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIRequest",
+     "django.core.handlers.wsgi.WSGIRequest.COOKIES",
+     "django.core.handlers.wsgi.WSGIRequest.FILES",
+     "django.core.handlers.wsgi.WSGIHandler",
+     "django.core.handlers.wsgi.WSGIHandler.__init__",
+     "django.core.handlers.wsgi.WSGIHandler.__call__",
+     "django.core.handlers.wsgi.get_path_info",
+     "django.core.handlers.wsgi.get_script_name",
+     "django.core.handlers.wsgi.get_bytes_from_wsgi",
+     "django.core.handlers.wsgi.get_str_from_wsgi"
+    ],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "read",
+     "args": {
+      "path": "django/core/handlers/wsgi.py",
+      "start_line": 100,
+      "end_line": 200
+     },
+     "engine_token_count": 1352
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1398,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are debugging the very first steps of a Django request's\nlifecycle in django/core/handlers/wsgi.py. Starting from\n`WSGIHandler.__call__`, trace the real causal pipeline a request\ntravels through before Django's own request-handling machinery takes\nover, in the order each stage is actually reached, up to and\nincluding the call that hands off to the base handler's own response\npipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.handlers.wsgi.WSGIHandler.__call__\", \"django.core.handlers.wsgi.get_script_name\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 2,
+   "tool_calls": 2,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To understand the pipeline, we need to trace the call flow starting from `WSGIHandler.__call__` and follow the sequence of method calls until the request is handed off to the base handler's response pipeline. This involves identifying the methods and functions that are called in sequence, ensuring that we only include symbols present in the provided context.\n\nLet's start by searching for the `WSGIHandler.__call__` method and understanding its immediate calls.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def __call__\", \"path\": \"django/core/handlers/wsgi.py\"}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/core/handlers/wsgi.py\", \"start_line\": 100, \"end_line\": 200}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def __call__",
+        "path": "django/core/handlers/wsgi.py"
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/core/handlers/wsgi.py",
+        "start_line": 100,
+        "end_line": 200
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def __call__",
+        "path": "django/core/handlers/wsgi.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/core/handlers/wsgi.py",
+        "start_line": 100,
+        "end_line": 200
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 171,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The `WSGIHandler.__call__` method is the entry point for handling a request in Django. It sets the script prefix, sends a request started signal, creates a `WSGIRequest` object, and then calls `self.get_response(request)` to handle the request further. The `get_response` method is part of the base handler and is responsible for processing the request and generating a response.\n\nBased on this, the causal pipeline from `WSGIHandler.__call__` to the base handler's response pipeline can be traced as follows:\n\n1. `django.core.handlers.wsgi.WSGIHandler.__call__`\n2. `django.core.handlers.wsgi.get_script_name`\n3. `django.core.handlers.wsgi.WSGIRequest.__init__`\n4. `django.core.handlers.base.BaseHandler.get_response`\n\n<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"The WSGIHandler's __call__ method sets the script prefix, sends a request started signal, creates a WSGIRequest object, and then calls get_response to handle the request further. The get_response method is part of the base handler and is responsible for processing the request and generating a response.\\\", \\\"symbols\\\": [\\\"django.core.handlers.wsgi.WSGIHandler.__call__\\\", \\\"django.core.handlers.wsgi.get_script_name\\\", \\\"django.core.handlers.wsgi.WSGIRequest.__init__\\\", \\\"django.core.handlers.base.BaseHandler.get_response\\\"]}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"The WSGIHandler's __call__ method sets the script prefix, sends a request started signal, creates a WSGIRequest object, and then calls get_response to handle the request further. The get_response method is part of the base handler and is responsible for processing the request and generating a response.\", \"symbols\": [\"django.core.handlers.wsgi.WSGIHandler.__call__\", \"django.core.handlers.wsgi.get_script_name\", \"django.core.handlers.wsgi.WSGIRequest.__init__\", \"django.core.handlers.base.BaseHandler.get_response\"]}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 312,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     11296.345805,
+     21763.789426
+    ],
+    "L_tool_exec": [
+     3.683606,
+     0.360158
+    ],
+    "L_retrieve": [
+     33091.717076
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 2346,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"The WSGIHandler's __call__ method sets the script prefix, sends a request started signal, creates a WSGIRequest object, and then calls get_response to handle the request further. The get_response method is part of the base handler and is responsible for processing the request and generating a response.\", \"symbols\": [\"django.core.handlers.wsgi.WSGIHandler.__call__\", \"django.core.handlers.wsgi.get_script_name\", \"django.core.handlers.wsgi.WSGIRequest.__init__\", \"django.core.handlers.base.BaseHandler.get_response\"]}\n```",
+    "generation_tokens": 312,
+    "latency_seconds": 21.763637523003126,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2369,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1398,
+   "prompt_tokens": 2346,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2369,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

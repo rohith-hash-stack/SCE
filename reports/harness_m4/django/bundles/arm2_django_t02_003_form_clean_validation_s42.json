@@ -1,0 +1,1729 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_003_form_clean_validation",
+  "items": [
+   {
+    "source_id": "django/forms/forms.py:420-435",
+    "content": "# django/forms/forms.py:420-435  (django.forms.forms.BaseForm.full_clean)\nclass BaseForm(RenderableFormMixin):\n    def full_clean(self):\n        \"\"\"\n        Clean all of self.data and populate self._errors and self.cleaned_data.\n        \"\"\"\n        self._errors = ErrorDict()\n        if not self.is_bound:  # Stop further processing.\n            return\n        self.cleaned_data = {}\n        # If the form is permitted to be empty, and none of the form data has\n        # changed from the initial data, short circuit any validation.\n        if self.empty_permitted and not self.has_changed():\n            return\n\n        self._clean_fields()\n        self._clean_form()\n        self._post_clean()",
+    "token_count": 152,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.full_clean"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:414-418",
+    "content": "# django/forms/forms.py:414-418  (django.forms.forms.BaseForm.has_error)\nclass BaseForm(RenderableFormMixin):\n    def has_error(self, field, code=None):\n        return field in self.errors and (\n            code is None\n            or any(error.code == code for error in self.errors.as_data()[field])\n        )",
+    "token_count": 74,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.has_error"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:437-451",
+    "content": "# django/forms/forms.py:437-451  (django.forms.forms.BaseForm._clean_fields)\nclass BaseForm(RenderableFormMixin):\n    def _clean_fields(self):\n        for name, bf in self._bound_items():\n            field = bf.field\n            value = bf.initial if field.disabled else bf.data\n            try:\n                if isinstance(field, FileField):\n                    value = field.clean(value, bf.initial)\n                else:\n                    value = field.clean(value)\n                self.cleaned_data[name] = value\n                if hasattr(self, \"clean_%s\" % name):\n                    value = getattr(self, \"clean_%s\" % name)()\n                    self.cleaned_data[name] = value\n            except ValidationError as e:\n                self.add_error(name, e)",
+    "token_count": 159,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm._clean_fields"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 159
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:363-412",
+    "content": "# django/forms/forms.py:363-412  (django.forms.forms.BaseForm.add_error)\nclass BaseForm(RenderableFormMixin):\n    def add_error(self, field, error):\n        \"\"\"\n        Update the content of `self._errors`.\n\n        The `field` argument is the name of the field to which the errors\n        should be added. If it's None, treat the errors as NON_FIELD_ERRORS.\n\n        The `error` argument can be a single error, a list of errors, or a\n        dictionary that maps field names to lists of errors. An \"error\" can be\n        either a simple string or an instance of ValidationError with its\n        message attribute set and a \"list or dictionary\" can be an actual\n        `list` or `dict` or an instance of ValidationError with its\n        `error_list` or `error_dict` attribute set.\n\n        If `error` is a dictionary, the `field` argument *must* be None and\n        errors will be added to the fields that correspond to the keys of the\n        dictionary.\n        \"\"\"\n        if not isinstance(error, ValidationError):\n            # Normalize to ValidationError and let its constructor\n            # do the hard work of making sense of the input.\n            error = ValidationError(error)\n\n        if hasattr(error, \"error_dict\"):\n            if field is not None:\n                raise TypeError(\n                    \"The argument `field` must be `None` when the `error` \"\n                    \"argument contains errors for multiple fields.\"\n                )\n            else:\n                error = error.error_dict\n        else:\n            error = {field or NON_FIELD_ERRORS: error.error_list}\n\n        for field, error_list in error.items():\n            if field not in self.errors:\n                if field != NON_FIELD_ERRORS and field not in self.fields:\n                    raise ValueError(\n                        \"'%s' has no field named '%s'.\"\n                        % (self.__class__.__name__, field)\n                    )\n                if field == NON_FIELD_ERRORS:\n                    self._errors[field] = self.error_class(\n                        error_class=\"nonfield\", renderer=self.renderer\n                    )\n                else:\n                    self._errors[field] = self.error_class(renderer=self.renderer)\n            self._errors[field].extend(error_list)\n            if field in self.cleaned_data:\n                del self.cleaned_data[field]",
+    "token_count": 475,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.add_error"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 475
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:453-460",
+    "content": "# django/forms/forms.py:453-460  (django.forms.forms.BaseForm._clean_form)\nclass BaseForm(RenderableFormMixin):\n    def _clean_form(self):\n        try:\n            cleaned_data = self.clean()\n        except ValidationError as e:\n            self.add_error(None, e)\n        else:\n            if cleaned_data is not None:\n                self.cleaned_data = cleaned_data",
+    "token_count": 81,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm._clean_form"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:352-361",
+    "content": "# django/forms/forms.py:352-361  (django.forms.forms.BaseForm.non_field_errors)\nclass BaseForm(RenderableFormMixin):\n    def non_field_errors(self):\n        \"\"\"\n        Return an ErrorList of errors that aren't associated with a particular\n        field -- i.e., from Form.clean(). Return an empty ErrorList if there\n        are none.\n        \"\"\"\n        return self.errors.get(\n            NON_FIELD_ERRORS,\n            self.error_class(error_class=\"nonfield\", renderer=self.renderer),\n        )",
+    "token_count": 107,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.non_field_errors"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:462-467",
+    "content": "# django/forms/forms.py:462-467  (django.forms.forms.BaseForm._post_clean)\nclass BaseForm(RenderableFormMixin):\n    def _post_clean(self):\n        \"\"\"\n        An internal hook for performing additional cleaning after form cleaning\n        is complete. Used for model validation in model forms.\n        \"\"\"\n        pass",
+    "token_count": 69,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm._post_clean"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:319-350",
+    "content": "# django/forms/forms.py:319-350  (django.forms.forms.BaseForm.get_context)\nclass BaseForm(RenderableFormMixin):\n    def get_context(self):\n        fields = []\n        hidden_fields = []\n        top_errors = self.non_field_errors().copy()\n        for name, bf in self._bound_items():\n            bf_errors = self.error_class(bf.errors, renderer=self.renderer)\n            if bf.is_hidden:\n                if bf_errors:\n                    top_errors += [\n                        _(\"(Hidden field %(name)s) %(error)s\")\n                        % {\"name\": name, \"error\": str(e)}\n                        for e in bf_errors\n                    ]\n                hidden_fields.append(bf)\n            else:\n                errors_str = str(bf_errors)\n                # RemovedInDjango50Warning.\n                if not isinstance(errors_str, SafeString):\n                    warnings.warn(\n                        f\"Returning a plain string from \"\n                        f\"{self.error_class.__name__} is deprecated. Please \"\n                        f\"customize via the template system instead.\",\n                        RemovedInDjango50Warning,\n                    )\n                    errors_str = mark_safe(errors_str)\n                fields.append((bf, errors_str))\n        return {\n            \"form\": self,\n            \"fields\": fields,\n            \"hidden_fields\": hidden_fields,\n            \"errors\": top_errors,\n        }",
+    "token_count": 272,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.get_context"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:469-476",
+    "content": "# django/forms/forms.py:469-476  (django.forms.forms.BaseForm.clean)\nclass BaseForm(RenderableFormMixin):\n    def clean(self):\n        \"\"\"\n        Hook for doing any extra form-wide cleaning after Field.clean() has been\n        called on every field. Any ValidationError raised by this method will\n        not be associated with a particular field; it will have a special-case\n        association with the field named '__all__'.\n        \"\"\"\n        return self.cleaned_data",
+    "token_count": 100,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.clean"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 100
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:315-317",
+    "content": "# django/forms/forms.py:315-317  (django.forms.forms.BaseForm.template_name)\nclass BaseForm(RenderableFormMixin):\n    @property\n    def template_name(self):\n        return self.renderer.form_template_name",
+    "token_count": 48,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.template_name"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:478-480",
+    "content": "# django/forms/forms.py:478-480  (django.forms.forms.BaseForm.has_changed)\nclass BaseForm(RenderableFormMixin):\n    def has_changed(self):\n        \"\"\"Return True if data differs from initial.\"\"\"\n        return bool(self.changed_data)",
+    "token_count": 54,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.has_changed"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:222-313",
+    "content": "# django/forms/forms.py:222-313  (django.forms.forms.BaseForm._html_output)\nclass BaseForm(RenderableFormMixin):\n    def _html_output(\n        self, normal_row, error_row, row_ender, help_text_html, errors_on_separate_row\n    ):\n        \"Output HTML. Used by as_table(), as_ul(), as_p().\"\n        warnings.warn(\n            \"django.forms.BaseForm._html_output() is deprecated. \"\n            \"Please use .render() and .get_context() instead.\",\n            RemovedInDjango50Warning,\n            stacklevel=2,\n        )\n        # Errors that should be displayed above all fields.\n        top_errors = self.non_field_errors().copy()\n        output, hidden_fields = [], []\n\n        for name, bf in self._bound_items():\n            field = bf.field\n            html_class_attr = \"\"\n            bf_errors = self.error_class(bf.errors)\n            if bf.is_hidden:\n                if bf_errors:\n                    top_errors.extend(\n                        [\n                            _(\"(Hidden field %(name)s) %(error)s\")\n                            % {\"name\": name, \"error\": str(e)}\n                            for e in bf_errors\n                        ]\n                    )\n                hidden_fields.append(str(bf))\n            else:\n                # Create a 'class=\"...\"' attribute if the row should have any\n                # CSS classes applied.\n                css_classes = bf.css_classes()\n                if css_classes:\n                    html_class_attr = ' class=\"%s\"' % css_classes\n\n                if errors_on_separate_row and bf_errors:\n                    output.append(error_row % str(bf_errors))\n\n                if bf.label:\n                    label = conditional_escape(bf.label)\n                    label = bf.label_tag(label) or \"\"\n                else:\n                    label = \"\"\n\n                if field.help_text:\n                    help_text = help_text_html % field.help_text\n                else:\n                    help_text = \"\"\n\n                output.append(\n                    normal_row\n                    % {\n                        \"errors\": bf_errors,\n                        \"label\": label,\n                        \"field\": bf,\n                        \"help_text\": help_text,\n                        \"html_class_attr\": html_class_attr,\n                        \"css_classes\": css_classes,\n                        \"field_name\": bf.html_name,\n                    }\n                )\n\n        if top_errors:\n            output.insert(0, error_row % top_errors)\n\n        if hidden_fields:  # Insert any hidden fields in the last row.\n            str_hidden = \"\".join(hidden_fields)\n            if output:\n                last_row = output[-1]\n                # Chop off the trailing row_ender (e.g. '</td></tr>') and\n                # insert the hidden fields.\n                if not last_row.endswith(row_ender):\n                    # This can happen in the as_p() case (and possibly others\n                    # that users write): if there are only top errors, we may\n                    # not be able to conscript the last row for our purposes,\n                    # so insert a new, empty row.\n                    last_row = normal_row % {\n                        \"errors\": \"\",\n                        \"label\": \"\",\n                        \"field\": \"\",\n                        \"help_text\": \"\",\n                        \"html_class_attr\": html_class_attr,\n                        \"css_classes\": \"\",\n                        \"field_name\": \"\",\n                    }\n                    output.append(last_row)\n                output[-1] = last_row[: -len(row_ender)] + str_hidden + row_ender\n            else:\n                # If there aren't any rows in the output, just append the\n                # hidden fields.\n                output.append(str_hidden)\n        return mark_safe(\"\\n\".join(output))",
+    "token_count": 727,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm._html_output"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 727
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:482-484",
+    "content": "# django/forms/forms.py:482-484  (django.forms.forms.BaseForm.changed_data)\nclass BaseForm(RenderableFormMixin):\n    @cached_property\n    def changed_data(self):\n        return [name for name, bf in self._bound_items() if bf._has_changed()]",
+    "token_count": 62,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.changed_data"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:216-220",
+    "content": "# django/forms/forms.py:216-220  (django.forms.forms.BaseForm._widget_data_value)\nclass BaseForm(RenderableFormMixin):\n    def _widget_data_value(self, widget, html_name):\n        # value_from_datadict() gets the data from the data dictionaries.\n        # Each widget type knows how to retrieve its own data, because some\n        # widgets split data over several HTML fields.\n        return widget.value_from_datadict(self.data, self.files, html_name)",
+    "token_count": 105,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm._widget_data_value"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 105
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:486-492",
+    "content": "# django/forms/forms.py:486-492  (django.forms.forms.BaseForm.media)\nclass BaseForm(RenderableFormMixin):\n    @property\n    def media(self):\n        \"\"\"Return all media required to render the widgets on this form.\"\"\"\n        media = Media()\n        for field in self.fields.values():\n            media += field.widget.media\n        return media",
+    "token_count": 76,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.media"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:212-214",
+    "content": "# django/forms/forms.py:212-214  (django.forms.forms.BaseForm.add_initial_prefix)\nclass BaseForm(RenderableFormMixin):\n    def add_initial_prefix(self, field_name):\n        \"\"\"Add an 'initial' prefix for checking dynamic initial values.\"\"\"\n        return \"initial-%s\" % self.add_prefix(field_name)",
+    "token_count": 70,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.add_initial_prefix"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:494-499",
+    "content": "# django/forms/forms.py:494-499  (django.forms.forms.BaseForm.is_multipart)\nclass BaseForm(RenderableFormMixin):\n    def is_multipart(self):\n        \"\"\"\n        Return True if the form needs to be multipart-encoded, i.e. it has\n        FileInput, or False otherwise.\n        \"\"\"\n        return any(field.widget.needs_multipart_form for field in self.fields.values())",
+    "token_count": 86,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.is_multipart"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 86
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:203-210",
+    "content": "# django/forms/forms.py:203-210  (django.forms.forms.BaseForm.add_prefix)\nclass BaseForm(RenderableFormMixin):\n    def add_prefix(self, field_name):\n        \"\"\"\n        Return the field name with a prefix appended, if this Form has a\n        prefix set.\n\n        Subclasses may wish to override.\n        \"\"\"\n        return \"%s-%s\" % (self.prefix, field_name) if self.prefix else field_name",
+    "token_count": 93,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.add_prefix"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 93
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:501-506",
+    "content": "# django/forms/forms.py:501-506  (django.forms.forms.BaseForm.hidden_fields)\nclass BaseForm(RenderableFormMixin):\n    def hidden_fields(self):\n        \"\"\"\n        Return a list of all the BoundField objects that are hidden fields.\n        Useful for manual form layout in templates.\n        \"\"\"\n        return [field for field in self if field.is_hidden]",
+    "token_count": 78,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.hidden_fields"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:199-201",
+    "content": "# django/forms/forms.py:199-201  (django.forms.forms.BaseForm.is_valid)\nclass BaseForm(RenderableFormMixin):\n    def is_valid(self):\n        \"\"\"Return True if the form has no errors, or False otherwise.\"\"\"\n        return self.is_bound and not self.errors",
+    "token_count": 61,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.is_valid"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:508-513",
+    "content": "# django/forms/forms.py:508-513  (django.forms.forms.BaseForm.visible_fields)\nclass BaseForm(RenderableFormMixin):\n    def visible_fields(self):\n        \"\"\"\n        Return a list of BoundField objects that aren't hidden fields.\n        The opposite of the hidden_fields() method.\n        \"\"\"\n        return [field for field in self if not field.is_hidden]",
+    "token_count": 79,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.visible_fields"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:192-197",
+    "content": "# django/forms/forms.py:192-197  (django.forms.forms.BaseForm.errors)\nclass BaseForm(RenderableFormMixin):\n    @property\n    def errors(self):\n        \"\"\"Return an ErrorDict for the data provided for the form.\"\"\"\n        if self._errors is None:\n            self.full_clean()\n        return self._errors",
+    "token_count": 71,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.errors"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 989,
+     "stub_priority": 1489,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:515-530",
+    "content": "# django/forms/forms.py:515-530  (django.forms.forms.BaseForm.get_initial_for_field)\nclass BaseForm(RenderableFormMixin):\n    def get_initial_for_field(self, field, field_name):\n        \"\"\"\n        Return initial data for field on form. Use initial data from the form\n        or the field, in that order. Evaluate callable values.\n        \"\"\"\n        value = self.initial.get(field_name, field.initial)\n        if callable(value):\n            value = value()\n        # If this is an auto-generated default date, nix the microseconds\n        # for standardized handling. See #22502.\n        if (\n            isinstance(value, (datetime.datetime, datetime.time))\n            and not field.widget.supports_microseconds\n        ):\n            value = value.replace(microsecond=0)\n        return value",
+    "token_count": 171,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.get_initial_for_field"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 989,
+     "stub_priority": 1489,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 171
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:175-190",
+    "content": "# django/forms/forms.py:175-190  (django.forms.forms.BaseForm.__getitem__)\nclass BaseForm(RenderableFormMixin):\n    def __getitem__(self, name):\n        \"\"\"Return a BoundField with the given name.\"\"\"\n        try:\n            field = self.fields[name]\n        except KeyError:\n            raise KeyError(\n                \"Key '%s' not found in '%s'. Choices are: %s.\"\n                % (\n                    name,\n                    self.__class__.__name__,\n                    \", \".join(sorted(self.fields)),\n                )\n            )\n        if name not in self._bound_fields_cache:\n            self._bound_fields_cache[name] = field.get_bound_field(self, name)\n        return self._bound_fields_cache[name]",
+    "token_count": 149,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.__getitem__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 988,
+     "stub_priority": 1488,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 149
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:534-539",
+    "content": "# django/forms/forms.py:534-539  (django.forms.forms.Form)\nclass Form(BaseForm, metaclass=DeclarativeFieldsMetaclass):\n    \"A collection of Fields, plus their associated data.\"\n    # This is a separate class from BaseForm in order to abstract the way\n    # self.fields is specified. This class (Form) is the one that does the\n    # fancy metaclass stuff purely for the semantic sugar -- it allows one\n    # to define a form using declarative syntax.\n    # BaseForm itself has no way of designating self.fields.",
+    "token_count": 124,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.Form"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 988,
+     "stub_priority": 1488,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 124
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:170-173",
+    "content": "# django/forms/forms.py:170-173  (django.forms.forms.BaseForm.__iter__)\nclass BaseForm(RenderableFormMixin):\n    def __iter__(self):\n        \"\"\"Yield the form's fields as BoundField objects.\"\"\"\n        for name in self.fields:\n            yield self[name]",
+    "token_count": 63,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.__iter__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 987,
+     "stub_priority": 1487,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 63
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:165-168",
+    "content": "# django/forms/forms.py:165-168  (django.forms.forms.BaseForm._bound_items)\nclass BaseForm(RenderableFormMixin):\n    def _bound_items(self):\n        \"\"\"Yield (name, bf) pairs, where bf is a BoundField object.\"\"\"\n        for name in self.fields:\n            yield name, self[name]",
+    "token_count": 72,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm._bound_items"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 986,
+     "stub_priority": 1486,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 72
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:153-163",
+    "content": "# django/forms/forms.py:153-163  (django.forms.forms.BaseForm.__repr__)\nclass BaseForm(RenderableFormMixin):\n    def __repr__(self):\n        if self._errors is None:\n            is_valid = \"Unknown\"\n        else:\n            is_valid = self.is_bound and not self._errors\n        return \"<%(cls)s bound=%(bound)s, valid=%(valid)s, fields=(%(fields)s)>\" % {\n            \"cls\": self.__class__.__name__,\n            \"bound\": self.is_bound,\n            \"valid\": is_valid,\n            \"fields\": \";\".join(self.fields),\n        }",
+    "token_count": 133,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.__repr__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 985,
+     "stub_priority": 1485,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 133
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:131-151",
+    "content": "# django/forms/forms.py:131-151  (django.forms.forms.BaseForm.order_fields)\nclass BaseForm(RenderableFormMixin):\n    def order_fields(self, field_order):\n        \"\"\"\n        Rearrange the fields according to field_order.\n\n        field_order is a list of field names specifying the order. Append fields\n        not included in the list in the default order for backward compatibility\n        with subclasses not overriding field_order. If field_order is None,\n        keep all fields in the order defined in the class. Ignore unknown\n        fields in field_order to allow disabling fields in form subclasses\n        without redefining ordering.\n        \"\"\"\n        if field_order is None:\n            return\n        fields = {}\n        for key in field_order:\n            try:\n                fields[key] = self.fields.pop(key)\n            except KeyError:  # ignore unknown fields\n                pass\n        fields.update(self.fields)  # add remaining fields in original order\n        self.fields = fields",
+    "token_count": 200,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.order_fields"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 984,
+     "stub_priority": 1484,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 200
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:75-129",
+    "content": "# django/forms/forms.py:75-129  (django.forms.forms.BaseForm.__init__)\nclass BaseForm(RenderableFormMixin):\n    def __init__(\n        self,\n        data=None,\n        files=None,\n        auto_id=\"id_%s\",\n        prefix=None,\n        initial=None,\n        error_class=ErrorList,\n        label_suffix=None,\n        empty_permitted=False,\n        field_order=None,\n        use_required_attribute=None,\n        renderer=None,\n    ):\n        self.is_bound = data is not None or files is not None\n        self.data = MultiValueDict() if data is None else data\n        self.files = MultiValueDict() if files is None else files\n        self.auto_id = auto_id\n        if prefix is not None:\n            self.prefix = prefix\n        self.initial = initial or {}\n        self.error_class = error_class\n        # Translators: This is the default suffix added to form field labels\n        self.label_suffix = label_suffix if label_suffix is not None else _(\":\")\n        self.empty_permitted = empty_permitted\n        self._errors = None  # Stores the errors after clean() has been called.\n\n        # The base_fields class attribute is the *class-wide* definition of\n        # fields. Because a particular *instance* of the class might want to\n        # alter self.fields, we create self.fields here by copying base_fields.\n        # Instances should always modify self.fields; they should not modify\n        # self.base_fields.\n        self.fields = copy.deepcopy(self.base_fields)\n        self._bound_fields_cache = {}\n        self.order_fields(self.field_order if field_order is None else field_order)\n\n        if use_required_attribute is not None:\n            self.use_required_attribute = use_required_attribute\n\n        if self.empty_permitted and self.use_required_attribute:\n            raise ValueError(\n                \"The empty_permitted and use_required_attribute arguments may \"\n                \"not both be True.\"\n            )\n\n        # Initialize form renderer. Use a global default if not specified\n        # either as an argument or as self.default_renderer.\n        if renderer is None:\n            if self.default_renderer is None:\n                renderer = get_default_renderer()\n            else:\n                renderer = self.default_renderer\n                if isinstance(self.default_renderer, type):\n                    renderer = renderer()\n        self.renderer = renderer",
+    "token_count": 476,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm.__init__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 983,
+     "stub_priority": 1483,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 476
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:57-73",
+    "content": "# django/forms/forms.py:57-73  (django.forms.forms.BaseForm)\nclass BaseForm(RenderableFormMixin):\n    \"\"\"\n    The main implementation of all the Form logic. Note that this class is\n    different than Form. See the comments by the Form class for more info. Any\n    improvements to the form API should be made to this class, not to the Form\n    class.\n    \"\"\"\n\n    default_renderer = None\n    field_order = None\n    prefix = None\n    use_required_attribute = True\n\n    template_name_div = \"django/forms/div.html\"\n    template_name_p = \"django/forms/p.html\"\n    template_name_table = \"django/forms/table.html\"\n    template_name_ul = \"django/forms/ul.html\"\n    template_name_label = \"django/forms/label.html\"",
+    "token_count": 167,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.BaseForm"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 982,
+     "stub_priority": 1482,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 167
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:28-53",
+    "content": "# django/forms/forms.py:28-53  (django.forms.forms.DeclarativeFieldsMetaclass.__new__)\nclass DeclarativeFieldsMetaclass(MediaDefiningClass):\n    def __new__(mcs, name, bases, attrs):\n        # Collect fields from current class and remove them from attrs.\n        attrs[\"declared_fields\"] = {\n            key: attrs.pop(key)\n            for key, value in list(attrs.items())\n            if isinstance(value, Field)\n        }\n\n        new_class = super().__new__(mcs, name, bases, attrs)\n\n        # Walk through the MRO.\n        declared_fields = {}\n        for base in reversed(new_class.__mro__):\n            # Collect fields from base class.\n            if hasattr(base, \"declared_fields\"):\n                declared_fields.update(base.declared_fields)\n\n            # Field shadowing.\n            for attr, value in base.__dict__.items():\n                if value is None and attr in declared_fields:\n                    declared_fields.pop(attr)\n\n        new_class.base_fields = declared_fields\n        new_class.declared_fields = declared_fields\n\n        return new_class",
+    "token_count": 226,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.DeclarativeFieldsMetaclass.__new__"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 981,
+     "stub_priority": 1481,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 226
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:26-26",
+    "content": "# django/forms/forms.py:26-26  (django.forms.forms.DeclarativeFieldsMetaclass)\nclass DeclarativeFieldsMetaclass(MediaDefiningClass):\n    \"\"\"Collect Fields declared on the base classes.\"\"\"",
+    "token_count": 45,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.forms.DeclarativeFieldsMetaclass"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 980,
+     "stub_priority": 1480,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/forms.py:1-22",
+    "content": "# django/forms/forms.py:1-22  (django.forms.forms)\n\"\"\"\nForm classes\n\"\"\"\n\nimport copy\nimport datetime\nimport warnings\n\nfrom django.core.exceptions import NON_FIELD_ERRORS, ValidationError\nfrom django.forms.fields import Field, FileField\nfrom django.forms.utils import ErrorDict, ErrorList, RenderableFormMixin\nfrom django.forms.widgets import Media, MediaDefiningClass\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.deprecation import RemovedInDjango50Warning\nfrom django.utils.functional import cached_property\nfrom django.utils.html import conditional_escape\nfrom django.utils.safestring import SafeString, mark_safe\nfrom django.utils.translation import gettext as _\n\nfrom .renderers import get_default_renderer\n\n__all__ = (\"BaseForm\", \"Form\")",
+    "token_count": 160,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 979,
+     "stub_priority": 1479,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 160
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/formsets.py:300-338#signature",
+    "content": "# django/forms/formsets.py:300-338  (django.forms.formsets.BaseFormSet.ordered_forms [signature])\nclass BaseFormSet(RenderableFormMixin):\n    @property\n    def ordered_forms(self):\n        'Return a list of form in the order specified by the incoming data.'\n        ...",
+    "token_count": 66,
+    "rank": 35,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.formsets.BaseFormSet.ordered_forms"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "stub",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 66
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:494-503#signature",
+    "content": "# django/forms/models.py:494-503  (django.forms.models.BaseModelForm.validate_unique [signature])\nclass BaseModelForm(BaseForm, AltersData):\n    def validate_unique(self):\n        \"Call the instance's validate_unique() method and update the form's\"\n        ...",
+    "token_count": 60,
+    "rank": 36,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.models.BaseModelForm.validate_unique"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "stub",
+     "bm25_rank": 21,
+     "chunk_kind": "method",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/generic_views/forms.py:23-26#signature",
+    "content": "# tests/generic_views/forms.py:23-26  (tests.generic_views.forms.ConfirmDeleteForm.clean [signature])\nclass ConfirmDeleteForm(forms.Form):\n    def clean(self):\n        ...",
+    "token_count": 41,
+    "rank": 37,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.generic_views.forms.ConfirmDeleteForm.clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "stub",
+     "bm25_rank": 22,
+     "chunk_kind": "method",
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/formsets.py:379-394#signature",
+    "content": "# django/forms/formsets.py:379-394  (django.forms.formsets.BaseFormSet.is_valid [signature])\nclass BaseFormSet(RenderableFormMixin):\n    def is_valid(self):\n        'Return True if every form in self.forms is valid.'\n        ...",
+    "token_count": 58,
+    "rank": 38,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.formsets.BaseFormSet.is_valid"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "stub",
+     "bm25_rank": 23,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_formsets.py:55-62#signature",
+    "content": "# tests/forms_tests/tests/test_formsets.py:55-62  (tests.forms_tests.tests.test_formsets.BaseFavoriteDrinksFormSet.clean [signature])\nclass BaseFavoriteDrinksFormSet(BaseFormSet):\n    def clean(self):\n        ...",
+    "token_count": 52,
+    "rank": 39,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.BaseFavoriteDrinksFormSet.clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "stub",
+     "bm25_rank": 24,
+     "chunk_kind": "method",
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:980-994#signature",
+    "content": "# tests/model_forms/tests.py:980-994  (tests.model_forms.tests.TestFieldOverridesByFormMeta.test_error_messages_overrides [signature])\nclass TestFieldOverridesByFormMeta(SimpleTestCase):\n    def test_error_messages_overrides(self):\n        ...",
+    "token_count": 56,
+    "rank": 40,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.model_forms.tests.TestFieldOverridesByFormMeta.test_error_messages_overrides"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "stub",
+     "bm25_rank": 25,
+     "chunk_kind": "method",
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_formsets.py:1558-1605#signature",
+    "content": "# tests/forms_tests/tests/test_formsets.py:1558-1605  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_repr [signature])\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_repr(self):\n        ...",
+    "token_count": 54,
+    "rank": 41,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_repr"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "stub",
+     "bm25_rank": 26,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:2890-2900#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:2890-2900  (tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_bound_field [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_datetime_clean_disabled_callable_initial_bound_field(self):\n        'The cleaned value for a form with a disabled DateTimeField and callable'\n        ...",
+    "token_count": 135,
+    "rank": 42,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_bound_field"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "stub",
+     "bm25_rank": 27,
+     "chunk_kind": "method",
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:400-416#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:400-416  (tests.forms_tests.tests.test_forms.FormsTestCase.test_cleaned_data_only_fields [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_cleaned_data_only_fields(self):\n        # cleaned_data will always *only* contain a key for fields defined in the\n        # Form, even if you pass extra data when you define the Form. In this\n        # example, we pass a bunch of extra fields to the form constructor,\n        # but cleaned_data contains only the form's fields.\n        ...",
+    "token_count": 178,
+    "rank": 43,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_cleaned_data_only_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "stub",
+     "bm25_rank": 28,
+     "chunk_kind": "method",
+     "engine_token_count": 178
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:3512-3532#signature",
+    "content": "# tests/model_forms/tests.py:3512-3532  (tests.model_forms.tests.FormFieldCallbackTests.test_custom_callback_from_base_form_meta [signature])\nclass FormFieldCallbackTests(SimpleTestCase):\n    def test_custom_callback_from_base_form_meta(self):\n        ...",
+    "token_count": 58,
+    "rank": 44,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.model_forms.tests.FormFieldCallbackTests.test_custom_callback_from_base_form_meta"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "stub",
+     "bm25_rank": 29,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:1996-2011#signature",
+    "content": "# tests/model_forms/tests.py:1996-2011  (tests.model_forms.tests.ModelFormBasicTests.test_recleaning_model_form_instance [signature])\nclass ModelFormBasicTests(TestCase):\n    def test_recleaning_model_form_instance(self):\n        \"Re-cleaning an instance that was added via a ModelForm shouldn't raise\"\n        ...",
+    "token_count": 71,
+    "rank": 45,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.model_forms.tests.ModelFormBasicTests.test_recleaning_model_form_instance"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "stub",
+     "bm25_rank": 30,
+     "chunk_kind": "method",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:4273-4304#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:4273-4304  (tests.forms_tests.tests.test_forms.FormsTestCase.test_baseform_repr [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_baseform_repr(self):\n        'BaseForm.__repr__() should contain some basic information about the'\n        ...",
+    "token_count": 126,
+    "rank": 46,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_baseform_repr"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "stub",
+     "bm25_rank": 31,
+     "chunk_kind": "method",
+     "engine_token_count": 126
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:4349-4365#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:4349-4365  (tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_in_clean [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_changing_cleaned_data_in_clean(self):\n        ...",
+    "token_count": 119,
+    "rank": 47,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_in_clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "stub",
+     "bm25_rank": 32,
+     "chunk_kind": "method",
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:3637-3673#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:3637-3673  (tests.forms_tests.tests.test_forms.FormsTestCase.test_multivalue_field_validation [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_multivalue_field_validation(self):\n        ...",
+    "token_count": 115,
+    "rank": 48,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_multivalue_field_validation"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "stub",
+     "bm25_rank": 33,
+     "chunk_kind": "method",
+     "engine_token_count": 115
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/forms.py:138-147#signature",
+    "content": "# django/contrib/auth/forms.py:138-147  (django.contrib.auth.forms.BaseUserCreationForm._post_clean [signature])\nclass BaseUserCreationForm(forms.ModelForm):\n    def _post_clean(self):\n        ...",
+    "token_count": 48,
+    "rank": 49,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.forms.BaseUserCreationForm._post_clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "stub",
+     "bm25_rank": 34,
+     "chunk_kind": "method",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:4319-4334#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:4319-4334  (tests.forms_tests.tests.test_forms.FormsTestCase.test_accessing_clean [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_accessing_clean(self):\n        ...",
+    "token_count": 111,
+    "rank": 50,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_accessing_clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "stub",
+     "bm25_rank": 35,
+     "chunk_kind": "method",
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:791-882#signature",
+    "content": "# django/forms/models.py:791-882  (django.forms.models.BaseModelFormSet.validate_unique [signature])\nclass BaseModelFormSet(BaseFormSet, AltersData):\n    def validate_unique(self):\n        # Collect unique_checks and date_checks to run from all the forms.\n        ...",
+    "token_count": 62,
+    "rank": 51,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.models.BaseModelFormSet.validate_unique"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "stub",
+     "bm25_rank": 36,
+     "chunk_kind": "method",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/forms.py:160-177#signature",
+    "content": "# django/contrib/auth/forms.py:160-177  (django.contrib.auth.forms.UserCreationForm.clean_username [signature])\nclass UserCreationForm(BaseUserCreationForm):\n    def clean_username(self):\n        'Reject usernames that differ only in case.'\n        ...",
+    "token_count": 56,
+    "rank": 52,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.forms.UserCreationForm.clean_username"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "stub",
+     "bm25_rank": 37,
+     "chunk_kind": "method",
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:2873-2888#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:2873-2888  (tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_microseconds [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_datetime_clean_disabled_callable_initial_microseconds(self):\n        'Cleaning a form with a disabled DateTimeField and callable initial'\n        ...",
+    "token_count": 133,
+    "rank": 53,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_microseconds"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "stub",
+     "bm25_rank": 38,
+     "chunk_kind": "method",
+     "engine_token_count": 133
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/formsets.py:45-51#signature",
+    "content": "# django/forms/formsets.py:45-51  (django.forms.formsets.ManagementForm.clean [signature])\nclass ManagementForm(Form):\n    def clean(self):\n        ...",
+    "token_count": 36,
+    "rank": 54,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.formsets.ManagementForm.clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "stub",
+     "bm25_rank": 39,
+     "chunk_kind": "method",
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/formsets.py:192-199#signature",
+    "content": "# django/forms/formsets.py:192-199  (django.forms.formsets.BaseFormSet.initial_form_count [signature])\nclass BaseFormSet(RenderableFormMixin):\n    def initial_form_count(self):\n        'Return the number of forms that are required in this FormSet.'\n        ...",
+    "token_count": 62,
+    "rank": 55,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.formsets.BaseFormSet.initial_form_count"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "stub",
+     "bm25_rank": 40,
+     "chunk_kind": "method",
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_formsets.py:730-785#signature",
+    "content": "# tests/forms_tests/tests/test_formsets.py:730-785  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formsets_with_ordering [signature])\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_formsets_with_ordering(self):\n        \"formset_factory's can_order argument adds an integer field to each\"\n        ...",
+    "token_count": 76,
+    "rank": 56,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formsets_with_ordering"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "stub",
+     "bm25_rank": 41,
+     "chunk_kind": "method",
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:3477-3497#signature",
+    "content": "# tests/model_forms/tests.py:3477-3497  (tests.model_forms.tests.FormFieldCallbackTests.test_inherit_after_custom_callback [signature])\nclass FormFieldCallbackTests(SimpleTestCase):\n    def test_inherit_after_custom_callback(self):\n        ...",
+    "token_count": 56,
+    "rank": 57,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.model_forms.tests.FormFieldCallbackTests.test_inherit_after_custom_callback"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "stub",
+     "bm25_rank": 42,
+     "chunk_kind": "method",
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_utils/tests.py:1753-1768#signature",
+    "content": "# tests/test_utils/tests.py:1753-1768  (tests.test_utils.tests.AssertFormSetErrorTests.test_form_index_too_big_plural [signature])\nclass AssertFormSetErrorTests(SimpleTestCase):\n    def test_form_index_too_big_plural(self):\n        ...",
+    "token_count": 60,
+    "rank": 58,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_utils.tests.AssertFormSetErrorTests.test_form_index_too_big_plural"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "stub",
+     "bm25_rank": 43,
+     "chunk_kind": "method",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/field_tests/test_multivaluefield.py:85-98#signature",
+    "content": "# tests/forms_tests/field_tests/test_multivaluefield.py:85-98  (tests.forms_tests.field_tests.test_multivaluefield.MultiValueFieldTest.test_clean_disabled_multivalue [signature])\nclass MultiValueFieldTest(SimpleTestCase):\n    def test_clean_disabled_multivalue(self):\n        ...",
+    "token_count": 65,
+    "rank": 59,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.field_tests.test_multivaluefield.MultiValueFieldTest.test_clean_disabled_multivalue"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "stub",
+     "bm25_rank": 44,
+     "chunk_kind": "method",
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/forms.py:128-136#signature",
+    "content": "# django/contrib/auth/forms.py:128-136  (django.contrib.auth.forms.BaseUserCreationForm.clean_password2 [signature])\nclass BaseUserCreationForm(forms.ModelForm):\n    def clean_password2(self):\n        ...",
+    "token_count": 48,
+    "rank": 60,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.auth.forms.BaseUserCreationForm.clean_password2"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "stub",
+     "bm25_rank": 45,
+     "chunk_kind": "method",
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/formsets.py:272-281#signature",
+    "content": "# django/forms/formsets.py:272-281  (django.forms.formsets.BaseFormSet.cleaned_data [signature])\nclass BaseFormSet(RenderableFormMixin):\n    @property\n    def cleaned_data(self):\n        'Return a list of form.cleaned_data dicts for every form in self.forms.'\n        ...",
+    "token_count": 66,
+    "rank": 61,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.formsets.BaseFormSet.cleaned_data"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "stub",
+     "bm25_rank": 46,
+     "chunk_kind": "method",
+     "engine_token_count": 66
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1631-1679#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:1631-1679  (tests.forms_tests.tests.test_forms.FormsTestCase.test_update_error_dict [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_update_error_dict(self):\n        ...",
+    "token_count": 111,
+    "rank": 62,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_update_error_dict"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "stub",
+     "bm25_rank": 47,
+     "chunk_kind": "method",
+     "engine_token_count": 111
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:4336-4347#signature",
+    "content": "# tests/forms_tests/tests/test_forms.py:4336-4347  (tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_nothing_returned [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_changing_cleaned_data_nothing_returned(self):\n        ...",
+    "token_count": 123,
+    "rank": 63,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_nothing_returned"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "stub",
+     "bm25_rank": 48,
+     "chunk_kind": "method",
+     "engine_token_count": 123
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:550-550#signature",
+    "content": "# django/forms/models.py:550-550  (django.forms.models.BaseModelForm [signature])\nclass BaseModelForm(BaseForm, AltersData):\n    ...",
+    "token_count": 36,
+    "rank": 64,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.forms.models.BaseModelForm"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "stub",
+     "bm25_rank": 49,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 36
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_utils/tests.py:1579-1590#signature",
+    "content": "# tests/test_utils/tests.py:1579-1590  (tests.test_utils.tests.AssertFormSetErrorTests.test_multiple_forms [signature])\nclass AssertFormSetErrorTests(SimpleTestCase):\n    def test_multiple_forms(self):\n        ...",
+    "token_count": 52,
+    "rank": 65,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.test_utils.tests.AssertFormSetErrorTests.test_multiple_forms"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "stub",
+     "bm25_rank": 50,
+     "chunk_kind": "method",
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_formsets.py:193-223",
+    "content": "# tests/forms_tests/tests/test_formsets.py:193-223  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_validation_count)\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_formset_validation_count(self):\n        \"\"\"\n        A formset's ManagementForm is validated once per FormSet.is_valid()\n        call and each form of the formset is cleaned once.\n        \"\"\"\n\n        def make_method_counter(func):\n            \"\"\"Add a counter to func for the number of times it's called.\"\"\"\n            counter = Counter()\n            counter.call_count = 0\n\n            def mocked_func(*args, **kwargs):\n                counter.call_count += 1\n                return func(*args, **kwargs)\n\n            return mocked_func, counter\n\n        mocked_is_valid, is_valid_counter = make_method_counter(\n            formsets.ManagementForm.is_valid\n        )\n        mocked_full_clean, full_clean_counter = make_method_counter(BaseForm.full_clean)\n        formset = self.make_choiceformset(\n            [(\"Calexico\", \"100\"), (\"Any1\", \"42\"), (\"Any2\", \"101\")]\n        )\n\n        with mock.patch(\n            \"django.forms.formsets.ManagementForm.is_valid\", mocked_is_valid\n        ), mock.patch(\"django.forms.forms.BaseForm.full_clean\", mocked_full_clean):\n            self.assertTrue(formset.is_valid())\n        self.assertEqual(is_valid_counter.call_count, 1)\n        self.assertEqual(full_clean_counter.call_count, 4)",
+    "token_count": 306,
+    "rank": 66,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_validation_count"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "method",
+     "engine_token_count": 306
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/formsets.py:396-462",
+    "content": "# django/forms/formsets.py:396-462  (django.forms.formsets.BaseFormSet.full_clean)\nclass BaseFormSet(RenderableFormMixin):\n    def full_clean(self):\n        \"\"\"\n        Clean all of self.data and populate self._errors and\n        self._non_form_errors.\n        \"\"\"\n        self._errors = []\n        self._non_form_errors = self.error_class(\n            error_class=\"nonform\", renderer=self.renderer\n        )\n        empty_forms_count = 0\n\n        if not self.is_bound:  # Stop further processing.\n            return\n\n        if not self.management_form.is_valid():\n            error = ValidationError(\n                self.error_messages[\"missing_management_form\"],\n                params={\n                    \"field_names\": \", \".join(\n                        self.management_form.add_prefix(field_name)\n                        for field_name in self.management_form.errors\n                    ),\n                },\n                code=\"missing_management_form\",\n            )\n            self._non_form_errors.append(error)\n\n        for i, form in enumerate(self.forms):\n            # Empty forms are unchanged forms beyond those with initial data.\n            if not form.has_changed() and i >= self.initial_form_count():\n                empty_forms_count += 1\n            # Accessing errors calls full_clean() if necessary.\n            # _should_delete_form() requires cleaned_data.\n            form_errors = form.errors\n            if self.can_delete and self._should_delete_form(form):\n                continue\n            self._errors.append(form_errors)\n        try:\n            if (\n                self.validate_max\n                and self.total_form_count() - len(self.deleted_forms) > self.max_num\n            ) or self.management_form.cleaned_data[\n                TOTAL_FORM_COUNT\n            ] > self.absolute_max:\n                raise ValidationError(\n                    self.error_messages[\"too_many_forms\"] % {\"num\": self.max_num},\n                    code=\"too_many_forms\",\n                )\n            if (\n                self.validate_min\n                and self.total_form_count()\n                - len(self.deleted_forms)\n                - empty_forms_count\n                < self.min_num\n            ):\n                raise ValidationError(\n                    self.error_messages[\"too_few_forms\"] % {\"num\": self.min_num},\n                    code=\"too_few_forms\",\n                )\n            # Give self.clean() a chance to do cross-form validation.\n            self.clean()\n        except ValidationError as e:\n            self._non_form_errors = self.error_class(\n                e.error_list,\n                error_class=\"nonform\",\n                renderer=self.renderer,\n            )",
+    "token_count": 497,
+    "rank": 67,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.formsets.BaseFormSet.full_clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 497
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/formsets.py:362-367",
+    "content": "# django/forms/formsets.py:362-367  (django.forms.formsets.BaseFormSet.errors)\nclass BaseFormSet(RenderableFormMixin):\n    @property\n    def errors(self):\n        \"\"\"Return a list of form.errors for every form in self.forms.\"\"\"\n        if self._errors is None:\n            self.full_clean()\n        return self._errors",
+    "token_count": 76,
+    "rank": 68,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.formsets.BaseFormSet.errors"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "method",
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:425-427",
+    "content": "# django/forms/models.py:425-427  (django.forms.models.BaseModelForm.clean)\nclass BaseModelForm(BaseForm, AltersData):\n    def clean(self):\n        self._validate_unique = True\n        return self.cleaned_data",
+    "token_count": 51,
+    "rank": 69,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.models.BaseModelForm.clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "method",
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:462-492",
+    "content": "# django/forms/models.py:462-492  (django.forms.models.BaseModelForm._post_clean)\nclass BaseModelForm(BaseForm, AltersData):\n    def _post_clean(self):\n        opts = self._meta\n\n        exclude = self._get_validation_exclusions()\n\n        # Foreign Keys being used to represent inline relationships\n        # are excluded from basic field value validation. This is for two\n        # reasons: firstly, the value may not be supplied (#12507; the\n        # case of providing new values to the admin); secondly the\n        # object being referred to may not yet fully exist (#12749).\n        # However, these fields *must* be included in uniqueness checks,\n        # so this can't be part of _get_validation_exclusions().\n        for name, field in self.fields.items():\n            if isinstance(field, InlineForeignKeyField):\n                exclude.add(name)\n\n        try:\n            self.instance = construct_instance(\n                self, self.instance, opts.fields, opts.exclude\n            )\n        except ValidationError as e:\n            self._update_errors(e)\n\n        try:\n            self.instance.full_clean(exclude=exclude, validate_unique=False)\n        except ValidationError as e:\n            self._update_errors(e)\n\n        # Validate uniqueness if needed.\n        if self._validate_unique:\n            self.validate_unique()",
+    "token_count": 279,
+    "rank": 70,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.models.BaseModelForm._post_clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "method",
+     "engine_token_count": 279
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:4306-4317",
+    "content": "# tests/forms_tests/tests/test_forms.py:4306-4317  (tests.forms_tests.tests.test_forms.FormsTestCase.test_baseform_repr_dont_trigger_validation)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_baseform_repr_dont_trigger_validation(self):\n        \"\"\"\n        BaseForm.__repr__() shouldn't trigger the form validation.\n        \"\"\"\n        p = Person(\n            {\"first_name\": \"John\", \"last_name\": \"Lennon\", \"birthday\": \"fakedate\"}\n        )\n        repr(p)\n        with self.assertRaises(AttributeError):\n            p.cleaned_data\n        self.assertFalse(p.is_valid())\n        self.assertEqual(p.cleaned_data, {\"first_name\": \"John\", \"last_name\": \"Lennon\"})",
+    "token_count": 208,
+    "rank": 71,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_baseform_repr_dont_trigger_validation"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "method",
+     "engine_token_count": 208
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/formsets.py:352-360",
+    "content": "# django/forms/formsets.py:352-360  (django.forms.formsets.BaseFormSet.non_form_errors)\nclass BaseFormSet(RenderableFormMixin):\n    def non_form_errors(self):\n        \"\"\"\n        Return an ErrorList of errors that aren't associated with a particular\n        form -- i.e., from formset.clean(). Return an empty ErrorList if there\n        are none.\n        \"\"\"\n        if self._non_form_errors is None:\n            self.full_clean()\n        return self._non_form_errors",
+    "token_count": 107,
+    "rank": 72,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.formsets.BaseFormSet.non_form_errors"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 107
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1628-1629#part4of4",
+    "content": "# tests/forms_tests/tests/test_forms.py:1628-1629#part4of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        with self.assertRaisesMessage(ValueError, \"has no field named\"):\n            f.add_error(\"missing_field\", \"Some error.\")",
+    "token_count": 280,
+    "rank": 73,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "function_part",
+     "engine_token_count": 280
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:380-423",
+    "content": "# django/forms/models.py:380-423  (django.forms.models.BaseModelForm._get_validation_exclusions)\nclass BaseModelForm(BaseForm, AltersData):\n    def _get_validation_exclusions(self):\n        \"\"\"\n        For backwards-compatibility, exclude several types of fields from model\n        validation. See tickets #12507, #12521, #12553.\n        \"\"\"\n        exclude = set()\n        # Build up a list of fields that should be excluded from model field\n        # validation and unique checks.\n        for f in self.instance._meta.fields:\n            field = f.name\n            # Exclude fields that aren't on the form. The developer may be\n            # adding these values to the model after form validation.\n            if field not in self.fields:\n                exclude.add(f.name)\n\n            # Don't perform model validation on fields that were defined\n            # manually on the form and excluded via the ModelForm's Meta\n            # class. See #12901.\n            elif self._meta.fields and field not in self._meta.fields:\n                exclude.add(f.name)\n            elif self._meta.exclude and field in self._meta.exclude:\n                exclude.add(f.name)\n\n            # Exclude fields that failed form validation. There's no need for\n            # the model fields to validate them as well.\n            elif field in self._errors:\n                exclude.add(f.name)\n\n            # Exclude empty fields that are not required by the form, if the\n            # underlying model field is required. This keeps the model field\n            # from raising a required error. Note: don't exclude the field from\n            # validation if the model field allows blanks. If it does, the blank\n            # value may be included in a unique check, so cannot be excluded\n            # from validation.\n            else:\n                form_field = self.fields[field]\n                field_value = self.cleaned_data.get(field)\n                if (\n                    not f.blank\n                    and not form_field.required\n                    and field_value in form_field.empty_values\n                ):\n                    exclude.add(f.name)\n        return exclude",
+    "token_count": 439,
+    "rank": 74,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.models.BaseModelForm._get_validation_exclusions"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 439
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:3857-3877",
+    "content": "# tests/forms_tests/tests/test_forms.py:3857-3877  (tests.forms_tests.tests.test_forms.FormsTestCase.test_custom_empty_values)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_custom_empty_values(self):\n        \"\"\"\n        Form fields can customize what is considered as an empty value\n        for themselves (#19997).\n        \"\"\"\n\n        class CustomJSONField(CharField):\n            empty_values = [None, \"\"]\n\n            def to_python(self, value):\n                # Fake json.loads\n                if value == \"{}\":\n                    return {}\n                return super().to_python(value)\n\n        class JSONForm(forms.Form):\n            json = CustomJSONField()\n\n        form = JSONForm(data={\"json\": \"{}\"})\n        form.full_clean()\n        self.assertEqual(form.cleaned_data, {\"json\": {}})",
+    "token_count": 225,
+    "rank": 75,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_custom_empty_values"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "method",
+     "engine_token_count": 225
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:3136-3156",
+    "content": "# tests/model_forms/tests.py:3136-3156  (tests.model_forms.tests.CustomCleanTests.test_override_clean)\nclass CustomCleanTests(TestCase):\n    def test_override_clean(self):\n        \"\"\"\n        Regression for #12596: Calling super from ModelForm.clean() should be\n        optional.\n        \"\"\"\n\n        class TripleFormWithCleanOverride(forms.ModelForm):\n            class Meta:\n                model = Triple\n                fields = \"__all__\"\n\n            def clean(self):\n                if not self.cleaned_data[\"left\"] == self.cleaned_data[\"right\"]:\n                    raise ValidationError(\"Left and right should be equal\")\n                return self.cleaned_data\n\n        form = TripleFormWithCleanOverride({\"left\": 1, \"middle\": 2, \"right\": 1})\n        self.assertTrue(form.is_valid())\n        # form.instance.left will be None if the instance was not constructed\n        # by form.full_clean().\n        self.assertEqual(form.instance.left, 1)",
+    "token_count": 198,
+    "rank": 76,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.model_forms.tests.CustomCleanTests.test_override_clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "method",
+     "engine_token_count": 198
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1451-1499#part1of4",
+    "content": "# tests/forms_tests/tests/test_forms.py:1451-1499#part1of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        class UserRegistration(Form):\n            username = CharField(max_length=10)\n            password1 = CharField(widget=PasswordInput)\n            password2 = CharField(widget=PasswordInput)\n\n            def clean_password2(self):\n                if (\n                    self.cleaned_data.get(\"password1\")\n                    and self.cleaned_data.get(\"password2\")\n                    and self.cleaned_data[\"password1\"] != self.cleaned_data[\"password2\"]\n                ):\n                    raise ValidationError(\"Please make sure your passwords match.\")\n\n                return self.cleaned_data[\"password2\"]\n\n        f = UserRegistration(auto_id=False)\n        self.assertEqual(f.errors, {})\n        f = UserRegistration({}, auto_id=False)\n        self.assertEqual(f.errors[\"username\"], [\"This field is required.\"])\n        self.assertEqual(f.errors[\"password1\"], [\"This field is required.\"])\n        self.assertEqual(f.errors[\"password2\"], [\"This field is required.\"])\n        f = UserRegistration(\n            {\"username\": \"adrian\", \"password1\": \"foo\", \"password2\": \"bar\"},\n            auto_id=False,\n        )\n        self.assertEqual(\n            f.errors[\"password2\"], [\"Please make sure your passwords match.\"]\n        )\n        f = UserRegistration(\n            {\"username\": \"adrian\", \"password1\": \"foo\", \"password2\": \"foo\"},\n            auto_id=False,\n        )\n        self.assertEqual(f.errors, {})\n        self.assertEqual(f.cleaned_data[\"username\"], \"adrian\")\n        self.assertEqual(f.cleaned_data[\"password1\"], \"foo\")\n        self.assertEqual(f.cleaned_data[\"password2\"], \"foo\")\n\n        # Another way of doing multiple-field validation is by implementing the\n        # Form's clean() method. Usually ValidationError raised by that method\n        # will not be associated with a particular field and will have a\n        # special-case association with the field named '__all__'. It's\n        # possible to associate the errors to particular field with the\n        # Form.add_error() method or by passing a dictionary that maps each\n        # field to one or more errors.\n        #\n        # Note that in Form.clean(), you have access to self.cleaned_data, a\n        # dictionary of all the fields/values that have *not* raised a\n        # ValidationError. Also note Form.clean() is required to return a\n        # dictionary of all clean data.",
+    "token_count": 729,
+    "rank": 77,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "function_part",
+     "engine_token_count": 729
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:3402-3415",
+    "content": "# tests/model_forms/tests.py:3402-3415  (tests.model_forms.tests.FormFieldCallbackTests.test_baseform_with_widgets_in_meta)\nclass FormFieldCallbackTests(SimpleTestCase):\n    def test_baseform_with_widgets_in_meta(self):\n        \"\"\"\n        Using base forms with widgets defined in Meta should not raise errors.\n        \"\"\"\n        widget = forms.Textarea()\n\n        class BaseForm(forms.ModelForm):\n            class Meta:\n                model = Person\n                widgets = {\"name\": widget}\n                fields = \"__all__\"\n\n        Form = modelform_factory(Person, form=BaseForm)\n        self.assertIsInstance(Form.base_fields[\"name\"].widget, forms.Textarea)",
+    "token_count": 139,
+    "rank": 78,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.model_forms.tests.FormFieldCallbackTests.test_baseform_with_widgets_in_meta"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 139
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_forms.py:1500-1531#part2of4",
+    "content": "# tests/forms_tests/tests/test_forms.py:1500-1531#part2of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        class UserRegistration(Form):\n            username = CharField(max_length=10)\n            password1 = CharField(widget=PasswordInput)\n            password2 = CharField(widget=PasswordInput)\n\n            def clean(self):\n                # Test raising a ValidationError as NON_FIELD_ERRORS.\n                if (\n                    self.cleaned_data.get(\"password1\")\n                    and self.cleaned_data.get(\"password2\")\n                    and self.cleaned_data[\"password1\"] != self.cleaned_data[\"password2\"]\n                ):\n                    raise ValidationError(\"Please make sure your passwords match.\")\n\n                # Test raising ValidationError that targets multiple fields.\n                errors = {}\n                if self.cleaned_data.get(\"password1\") == \"FORBIDDEN_VALUE\":\n                    errors[\"password1\"] = \"Forbidden value.\"\n                if self.cleaned_data.get(\"password2\") == \"FORBIDDEN_VALUE\":\n                    errors[\"password2\"] = [\"Forbidden value.\"]\n                if errors:\n                    raise ValidationError(errors)\n\n                # Test Form.add_error()\n                if self.cleaned_data.get(\"password1\") == \"FORBIDDEN_VALUE2\":\n                    self.add_error(None, \"Non-field error 1.\")\n                    self.add_error(\"password1\", \"Forbidden value 2.\")\n                if self.cleaned_data.get(\"password2\") == \"FORBIDDEN_VALUE2\":\n                    self.add_error(\"password2\", \"Forbidden value 2.\")\n                    raise ValidationError(\"Non-field error 2.\")\n\n                return self.cleaned_data",
+    "token_count": 540,
+    "rank": 79,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "function_part",
+     "engine_token_count": 540
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_formsets.py:1388-1405",
+    "content": "# tests/forms_tests/tests/test_formsets.py:1388-1405  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_non_form_errors_run_full_clean)\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_non_form_errors_run_full_clean(self):\n        \"\"\"\n        If non_form_errors() is called without calling is_valid() first,\n        it should ensure that full_clean() is called.\n        \"\"\"\n\n        class BaseCustomFormSet(BaseFormSet):\n            def clean(self):\n                raise ValidationError(\"This is a non-form error\")\n\n        ChoiceFormSet = formset_factory(Choice, formset=BaseCustomFormSet)\n        data = {\n            \"choices-TOTAL_FORMS\": \"1\",\n            \"choices-INITIAL_FORMS\": \"0\",\n        }\n        formset = ChoiceFormSet(data, auto_id=False, prefix=\"choices\")\n        self.assertIsInstance(formset.non_form_errors(), ErrorList)\n        self.assertEqual(list(formset.non_form_errors()), [\"This is a non-form error\"])",
+    "token_count": 211,
+    "rank": 80,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_non_form_errors_run_full_clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "method",
+     "engine_token_count": 211
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/model_forms/tests.py:541-571",
+    "content": "# tests/model_forms/tests.py:541-571  (tests.model_forms.tests.ModelFormBaseTest.test_exclude_and_validation)\nclass ModelFormBaseTest(TestCase):\n    def test_exclude_and_validation(self):\n        # This Price instance generated by this form is not valid because the quantity\n        # field is required, but the form is valid because the field is excluded from\n        # the form. This is for backwards compatibility.\n        class PriceFormWithoutQuantity(forms.ModelForm):\n            class Meta:\n                model = Price\n                exclude = (\"quantity\",)\n\n        form = PriceFormWithoutQuantity({\"price\": \"6.00\"})\n        self.assertTrue(form.is_valid())\n        price = form.save(commit=False)\n        msg = \"{'quantity': ['This field cannot be null.']}\"\n        with self.assertRaisesMessage(ValidationError, msg):\n            price.full_clean()\n\n        # The form should not validate fields that it doesn't contain even if they are\n        # specified using 'fields', not 'exclude'.\n        class PriceFormWithoutQuantity(forms.ModelForm):\n            class Meta:\n                model = Price\n                fields = (\"price\",)\n\n        form = PriceFormWithoutQuantity({\"price\": \"6.00\"})\n        self.assertTrue(form.is_valid())\n\n        # The form should still have an instance of a model that is not complete and\n        # not saved into a DB yet.\n        self.assertEqual(form.instance.price, Decimal(\"6.00\"))\n        self.assertIsNone(form.instance.quantity)\n        self.assertIsNone(form.instance.pk)",
+    "token_count": 308,
+    "rank": 81,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.model_forms.tests.ModelFormBaseTest.test_exclude_and_validation"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "method",
+     "engine_token_count": 308
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/forms/models.py:505-524",
+    "content": "# django/forms/models.py:505-524  (django.forms.models.BaseModelForm._save_m2m)\nclass BaseModelForm(BaseForm, AltersData):\n    def _save_m2m(self):\n        \"\"\"\n        Save the many-to-many fields and generic relations for this form.\n        \"\"\"\n        cleaned_data = self.cleaned_data\n        exclude = self._meta.exclude\n        fields = self._meta.fields\n        opts = self.instance._meta\n        # Note that for historical reasons we want to include also\n        # private_fields here. (GenericRelation was previously a fake\n        # m2m field).\n        for f in chain(opts.many_to_many, opts.private_fields):\n            if not hasattr(f, \"save_form_data\"):\n                continue\n            if fields and f.name not in fields:\n                continue\n            if exclude and f.name in exclude:\n                continue\n            if f.name in cleaned_data:\n                f.save_form_data(self.instance, cleaned_data[f.name])",
+    "token_count": 205,
+    "rank": 82,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.forms.models.BaseModelForm._save_m2m"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "method",
+     "engine_token_count": 205
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/base.py:1457-1502",
+    "content": "# django/db/models/base.py:1457-1502  (django.db.models.base.Model.full_clean)\nclass Model(AltersData, metaclass=ModelBase):\n    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):\n        \"\"\"\n        Call clean_fields(), clean(), validate_unique(), and\n        validate_constraints() on the model. Raise a ValidationError for any\n        errors that occur.\n        \"\"\"\n        errors = {}\n        if exclude is None:\n            exclude = set()\n        else:\n            exclude = set(exclude)\n\n        try:\n            self.clean_fields(exclude=exclude)\n        except ValidationError as e:\n            errors = e.update_error_dict(errors)\n\n        # Form.clean() is run even if other validation fails, so do the\n        # same with Model.clean() for consistency.\n        try:\n            self.clean()\n        except ValidationError as e:\n            errors = e.update_error_dict(errors)\n\n        # Run unique checks, but only for fields that passed validation.\n        if validate_unique:\n            for name in errors:\n                if name != NON_FIELD_ERRORS and name not in exclude:\n                    exclude.add(name)\n            try:\n                self.validate_unique(exclude=exclude)\n            except ValidationError as e:\n                errors = e.update_error_dict(errors)\n\n        # Run constraints checks, but only for fields that passed validation.\n        if validate_constraints:\n            for name in errors:\n                if name != NON_FIELD_ERRORS and name not in exclude:\n                    exclude.add(name)\n            try:\n                self.validate_constraints(exclude=exclude)\n            except ValidationError as e:\n                errors = e.update_error_dict(errors)\n\n        if errors:\n            raise ValidationError(errors)",
+    "token_count": 341,
+    "rank": 83,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.base.Model.full_clean"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "method",
+     "engine_token_count": 341
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_formsets.py:960-984",
+    "content": "# tests/forms_tests/tests/test_formsets.py:960-984  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_clean_hook)\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_clean_hook(self):\n        \"\"\"\n        FormSets have a clean() hook for doing extra validation that isn't tied\n        to any form. It follows the same pattern as the clean() hook on Forms.\n        \"\"\"\n        # Start out with a some duplicate data.\n        data = {\n            \"drinks-TOTAL_FORMS\": \"2\",  # the number of forms rendered\n            \"drinks-INITIAL_FORMS\": \"0\",  # the number of forms with initial data\n            \"drinks-MIN_NUM_FORMS\": \"0\",  # min number of forms\n            \"drinks-MAX_NUM_FORMS\": \"0\",  # max number of forms\n            \"drinks-0-name\": \"Gin and Tonic\",\n            \"drinks-1-name\": \"Gin and Tonic\",\n        }\n        formset = FavoriteDrinksFormSet(data, prefix=\"drinks\")\n        self.assertFalse(formset.is_valid())\n        # Any errors raised by formset.clean() are available via the\n        # formset.non_form_errors() method.\n        for error in formset.non_form_errors():\n            self.assertEqual(str(error), \"You may only specify a drink once.\")\n        # The valid case still works.\n        data[\"drinks-1-name\"] = \"Bloody Mary\"\n        formset = FavoriteDrinksFormSet(data, prefix=\"drinks\")\n        self.assertTrue(formset.is_valid())\n        self.assertEqual(formset.non_form_errors(), [])",
+    "token_count": 349,
+    "rank": 84,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_clean_hook"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "method",
+     "engine_token_count": 349
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12963,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging Django form validation order in\ndjango/forms/forms.py. Starting from `BaseForm.full_clean`, trace the\ndirect method calls made by full_clean, in order, that populate\n`self.cleaned_data` and `self._errors`. Exclude no-op hooks and hooks\nthat are only overridden by subclasses.\n\nFirst give a short (2-4 sentence) explanation of the pipeline,\nnoting where per-field `clean_<fieldname>` hooks fit in even though\nthey aren't a fixed BaseForm symbol.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified BaseForm symbol names in that\ncausal order - only symbols actually present in the provided context\npackage may appear, e.g.:\n\n```json\n[\"django.forms.forms.BaseForm.full_clean\", \"django.forms.forms.BaseForm._clean_fields\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/forms/forms.py",
+   "cutoff": 310,
+   "n_components": 84,
+   "n_full": 53,
+   "n_stub": 31,
+   "n_dropped": 0,
+   "packed_tokens": 12963,
+   "latency_ms": {
+    "L_priority_sort": [
+     1266.922857
+    ],
+    "L_binary_search_tokenize": [
+     77.084089
+    ],
+    "L_retrieve": [
+     1348.822944
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12963,
+   "prompt_tokens": 13294,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13307,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/forms/forms.py:420-435  (django.forms.forms.BaseForm.full_clean)\nclass BaseForm(RenderableFormMixin):\n    def full_clean(self):\n        \"\"\"\n        Clean all of self.data and populate self._errors and self.cleaned_data.\n        \"\"\"\n        self._errors = ErrorDict()\n        if not self.is_bound:  # Stop further processing.\n            return\n        self.cleaned_data = {}\n        # If the form is permitted to be empty, and none of the form data has\n        # changed from the initial data, short circuit any validation.\n        if self.empty_permitted and not self.has_changed():\n            return\n\n        self._clean_fields()\n        self._clean_form()\n        self._post_clean()\n\n# django/forms/forms.py:414-418  (django.forms.forms.BaseForm.has_error)\nclass BaseForm(RenderableFormMixin):\n    def has_error(self, field, code=None):\n        return field in self.errors and (\n            code is None\n            or any(error.code == code for error in self.errors.as_data()[field])\n        )\n\n# django/forms/forms.py:437-451  (django.forms.forms.BaseForm._clean_fields)\nclass BaseForm(RenderableFormMixin):\n    def _clean_fields(self):\n        for name, bf in self._bound_items():\n            field = bf.field\n            value = bf.initial if field.disabled else bf.data\n            try:\n                if isinstance(field, FileField):\n                    value = field.clean(value, bf.initial)\n                else:\n                    value = field.clean(value)\n                self.cleaned_data[name] = value\n                if hasattr(self, \"clean_%s\" % name):\n                    value = getattr(self, \"clean_%s\" % name)()\n                    self.cleaned_data[name] = value\n            except ValidationError as e:\n                self.add_error(name, e)\n\n# django/forms/forms.py:363-412  (django.forms.forms.BaseForm.add_error)\nclass BaseForm(RenderableFormMixin):\n    def add_error(self, field, error):\n        \"\"\"\n        Update the content of `self._errors`.\n\n        The `field` argument is the name of the field to which the errors\n        should be added. If it's None, treat the errors as NON_FIELD_ERRORS.\n\n        The `error` argument can be a single error, a list of errors, or a\n        dictionary that maps field names to lists of errors. An \"error\" can be\n        either a simple string or an instance of ValidationError with its\n        message attribute set and a \"list or dictionary\" can be an actual\n        `list` or `dict` or an instance of ValidationError with its\n        `error_list` or `error_dict` attribute set.\n\n        If `error` is a dictionary, the `field` argument *must* be None and\n        errors will be added to the fields that correspond to the keys of the\n        dictionary.\n        \"\"\"\n        if not isinstance(error, ValidationError):\n            # Normalize to ValidationError and let its constructor\n            # do the hard work of making sense of the input.\n            error = ValidationError(error)\n\n        if hasattr(error, \"error_dict\"):\n            if field is not None:\n                raise TypeError(\n                    \"The argument `field` must be `None` when the `error` \"\n                    \"argument contains errors for multiple fields.\"\n                )\n            else:\n                error = error.error_dict\n        else:\n            error = {field or NON_FIELD_ERRORS: error.error_list}\n\n        for field, error_list in error.items():\n            if field not in self.errors:\n                if field != NON_FIELD_ERRORS and field not in self.fields:\n                    raise ValueError(\n                        \"'%s' has no field named '%s'.\"\n                        % (self.__class__.__name__, field)\n                    )\n                if field == NON_FIELD_ERRORS:\n                    self._errors[field] = self.error_class(\n                        error_class=\"nonfield\", renderer=self.renderer\n                    )\n                else:\n                    self._errors[field] = self.error_class(renderer=self.renderer)\n            self._errors[field].extend(error_list)\n            if field in self.cleaned_data:\n                del self.cleaned_data[field]\n\n# django/forms/forms.py:453-460  (django.forms.forms.BaseForm._clean_form)\nclass BaseForm(RenderableFormMixin):\n    def _clean_form(self):\n        try:\n            cleaned_data = self.clean()\n        except ValidationError as e:\n            self.add_error(None, e)\n        else:\n            if cleaned_data is not None:\n                self.cleaned_data = cleaned_data\n\n# django/forms/forms.py:352-361  (django.forms.forms.BaseForm.non_field_errors)\nclass BaseForm(RenderableFormMixin):\n    def non_field_errors(self):\n        \"\"\"\n        Return an ErrorList of errors that aren't associated with a particular\n        field -- i.e., from Form.clean(). Return an empty ErrorList if there\n        are none.\n        \"\"\"\n        return self.errors.get(\n            NON_FIELD_ERRORS,\n            self.error_class(error_class=\"nonfield\", renderer=self.renderer),\n        )\n\n# django/forms/forms.py:462-467  (django.forms.forms.BaseForm._post_clean)\nclass BaseForm(RenderableFormMixin):\n    def _post_clean(self):\n        \"\"\"\n        An internal hook for performing additional cleaning after form cleaning\n        is complete. Used for model validation in model forms.\n        \"\"\"\n        pass\n\n# django/forms/forms.py:319-350  (django.forms.forms.BaseForm.get_context)\nclass BaseForm(RenderableFormMixin):\n    def get_context(self):\n        fields = []\n        hidden_fields = []\n        top_errors = self.non_field_errors().copy()\n        for name, bf in self._bound_items():\n            bf_errors = self.error_class(bf.errors, renderer=self.renderer)\n            if bf.is_hidden:\n                if bf_errors:\n                    top_errors += [\n                        _(\"(Hidden field %(name)s) %(error)s\")\n                        % {\"name\": name, \"error\": str(e)}\n                        for e in bf_errors\n                    ]\n                hidden_fields.append(bf)\n            else:\n                errors_str = str(bf_errors)\n                # RemovedInDjango50Warning.\n                if not isinstance(errors_str, SafeString):\n                    warnings.warn(\n                        f\"Returning a plain string from \"\n                        f\"{self.error_class.__name__} is deprecated. Please \"\n                        f\"customize via the template system instead.\",\n                        RemovedInDjango50Warning,\n                    )\n                    errors_str = mark_safe(errors_str)\n                fields.append((bf, errors_str))\n        return {\n            \"form\": self,\n            \"fields\": fields,\n            \"hidden_fields\": hidden_fields,\n            \"errors\": top_errors,\n        }\n\n# django/forms/forms.py:469-476  (django.forms.forms.BaseForm.clean)\nclass BaseForm(RenderableFormMixin):\n    def clean(self):\n        \"\"\"\n        Hook for doing any extra form-wide cleaning after Field.clean() has been\n        called on every field. Any ValidationError raised by this method will\n        not be associated with a particular field; it will have a special-case\n        association with the field named '__all__'.\n        \"\"\"\n        return self.cleaned_data\n\n# django/forms/forms.py:315-317  (django.forms.forms.BaseForm.template_name)\nclass BaseForm(RenderableFormMixin):\n    @property\n    def template_name(self):\n        return self.renderer.form_template_name\n\n# django/forms/forms.py:478-480  (django.forms.forms.BaseForm.has_changed)\nclass BaseForm(RenderableFormMixin):\n    def has_changed(self):\n        \"\"\"Return True if data differs from initial.\"\"\"\n        return bool(self.changed_data)\n\n# django/forms/forms.py:222-313  (django.forms.forms.BaseForm._html_output)\nclass BaseForm(RenderableFormMixin):\n    def _html_output(\n        self, normal_row, error_row, row_ender, help_text_html, errors_on_separate_row\n    ):\n        \"Output HTML. Used by as_table(), as_ul(), as_p().\"\n        warnings.warn(\n            \"django.forms.BaseForm._html_output() is deprecated. \"\n            \"Please use .render() and .get_context() instead.\",\n            RemovedInDjango50Warning,\n            stacklevel=2,\n        )\n        # Errors that should be displayed above all fields.\n        top_errors = self.non_field_errors().copy()\n        output, hidden_fields = [], []\n\n        for name, bf in self._bound_items():\n            field = bf.field\n            html_class_attr = \"\"\n            bf_errors = self.error_class(bf.errors)\n            if bf.is_hidden:\n                if bf_errors:\n                    top_errors.extend(\n                        [\n                            _(\"(Hidden field %(name)s) %(error)s\")\n                            % {\"name\": name, \"error\": str(e)}\n                            for e in bf_errors\n                        ]\n                    )\n                hidden_fields.append(str(bf))\n            else:\n                # Create a 'class=\"...\"' attribute if the row should have any\n                # CSS classes applied.\n                css_classes = bf.css_classes()\n                if css_classes:\n                    html_class_attr = ' class=\"%s\"' % css_classes\n\n                if errors_on_separate_row and bf_errors:\n                    output.append(error_row % str(bf_errors))\n\n                if bf.label:\n                    label = conditional_escape(bf.label)\n                    label = bf.label_tag(label) or \"\"\n                else:\n                    label = \"\"\n\n                if field.help_text:\n                    help_text = help_text_html % field.help_text\n                else:\n                    help_text = \"\"\n\n                output.append(\n                    normal_row\n                    % {\n                        \"errors\": bf_errors,\n                        \"label\": label,\n                        \"field\": bf,\n                        \"help_text\": help_text,\n                        \"html_class_attr\": html_class_attr,\n                        \"css_classes\": css_classes,\n                        \"field_name\": bf.html_name,\n                    }\n                )\n\n        if top_errors:\n            output.insert(0, error_row % top_errors)\n\n        if hidden_fields:  # Insert any hidden fields in the last row.\n            str_hidden = \"\".join(hidden_fields)\n            if output:\n                last_row = output[-1]\n                # Chop off the trailing row_ender (e.g. '</td></tr>') and\n                # insert the hidden fields.\n                if not last_row.endswith(row_ender):\n                    # This can happen in the as_p() case (and possibly others\n                    # that users write): if there are only top errors, we may\n                    # not be able to conscript the last row for our purposes,\n                    # so insert a new, empty row.\n                    last_row = normal_row % {\n                        \"errors\": \"\",\n                        \"label\": \"\",\n                        \"field\": \"\",\n                        \"help_text\": \"\",\n                        \"html_class_attr\": html_class_attr,\n                        \"css_classes\": \"\",\n                        \"field_name\": \"\",\n                    }\n                    output.append(last_row)\n                output[-1] = last_row[: -len(row_ender)] + str_hidden + row_ender\n            else:\n                # If there aren't any rows in the output, just append the\n                # hidden fields.\n                output.append(str_hidden)\n        return mark_safe(\"\\n\".join(output))\n\n# django/forms/forms.py:482-484  (django.forms.forms.BaseForm.changed_data)\nclass BaseForm(RenderableFormMixin):\n    @cached_property\n    def changed_data(self):\n        return [name for name, bf in self._bound_items() if bf._has_changed()]\n\n# django/forms/forms.py:216-220  (django.forms.forms.BaseForm._widget_data_value)\nclass BaseForm(RenderableFormMixin):\n    def _widget_data_value(self, widget, html_name):\n        # value_from_datadict() gets the data from the data dictionaries.\n        # Each widget type knows how to retrieve its own data, because some\n        # widgets split data over several HTML fields.\n        return widget.value_from_datadict(self.data, self.files, html_name)\n\n# django/forms/forms.py:486-492  (django.forms.forms.BaseForm.media)\nclass BaseForm(RenderableFormMixin):\n    @property\n    def media(self):\n        \"\"\"Return all media required to render the widgets on this form.\"\"\"\n        media = Media()\n        for field in self.fields.values():\n            media += field.widget.media\n        return media\n\n# django/forms/forms.py:212-214  (django.forms.forms.BaseForm.add_initial_prefix)\nclass BaseForm(RenderableFormMixin):\n    def add_initial_prefix(self, field_name):\n        \"\"\"Add an 'initial' prefix for checking dynamic initial values.\"\"\"\n        return \"initial-%s\" % self.add_prefix(field_name)\n\n# django/forms/forms.py:494-499  (django.forms.forms.BaseForm.is_multipart)\nclass BaseForm(RenderableFormMixin):\n    def is_multipart(self):\n        \"\"\"\n        Return True if the form needs to be multipart-encoded, i.e. it has\n        FileInput, or False otherwise.\n        \"\"\"\n        return any(field.widget.needs_multipart_form for field in self.fields.values())\n\n# django/forms/forms.py:203-210  (django.forms.forms.BaseForm.add_prefix)\nclass BaseForm(RenderableFormMixin):\n    def add_prefix(self, field_name):\n        \"\"\"\n        Return the field name with a prefix appended, if this Form has a\n        prefix set.\n\n        Subclasses may wish to override.\n        \"\"\"\n        return \"%s-%s\" % (self.prefix, field_name) if self.prefix else field_name\n\n# django/forms/forms.py:501-506  (django.forms.forms.BaseForm.hidden_fields)\nclass BaseForm(RenderableFormMixin):\n    def hidden_fields(self):\n        \"\"\"\n        Return a list of all the BoundField objects that are hidden fields.\n        Useful for manual form layout in templates.\n        \"\"\"\n        return [field for field in self if field.is_hidden]\n\n# django/forms/forms.py:199-201  (django.forms.forms.BaseForm.is_valid)\nclass BaseForm(RenderableFormMixin):\n    def is_valid(self):\n        \"\"\"Return True if the form has no errors, or False otherwise.\"\"\"\n        return self.is_bound and not self.errors\n\n# django/forms/forms.py:508-513  (django.forms.forms.BaseForm.visible_fields)\nclass BaseForm(RenderableFormMixin):\n    def visible_fields(self):\n        \"\"\"\n        Return a list of BoundField objects that aren't hidden fields.\n        The opposite of the hidden_fields() method.\n        \"\"\"\n        return [field for field in self if not field.is_hidden]\n\n# django/forms/forms.py:192-197  (django.forms.forms.BaseForm.errors)\nclass BaseForm(RenderableFormMixin):\n    @property\n    def errors(self):\n        \"\"\"Return an ErrorDict for the data provided for the form.\"\"\"\n        if self._errors is None:\n            self.full_clean()\n        return self._errors\n\n# django/forms/forms.py:515-530  (django.forms.forms.BaseForm.get_initial_for_field)\nclass BaseForm(RenderableFormMixin):\n    def get_initial_for_field(self, field, field_name):\n        \"\"\"\n        Return initial data for field on form. Use initial data from the form\n        or the field, in that order. Evaluate callable values.\n        \"\"\"\n        value = self.initial.get(field_name, field.initial)\n        if callable(value):\n            value = value()\n        # If this is an auto-generated default date, nix the microseconds\n        # for standardized handling. See #22502.\n        if (\n            isinstance(value, (datetime.datetime, datetime.time))\n            and not field.widget.supports_microseconds\n        ):\n            value = value.replace(microsecond=0)\n        return value\n\n# django/forms/forms.py:175-190  (django.forms.forms.BaseForm.__getitem__)\nclass BaseForm(RenderableFormMixin):\n    def __getitem__(self, name):\n        \"\"\"Return a BoundField with the given name.\"\"\"\n        try:\n            field = self.fields[name]\n        except KeyError:\n            raise KeyError(\n                \"Key '%s' not found in '%s'. Choices are: %s.\"\n                % (\n                    name,\n                    self.__class__.__name__,\n                    \", \".join(sorted(self.fields)),\n                )\n            )\n        if name not in self._bound_fields_cache:\n            self._bound_fields_cache[name] = field.get_bound_field(self, name)\n        return self._bound_fields_cache[name]\n\n# django/forms/forms.py:534-539  (django.forms.forms.Form)\nclass Form(BaseForm, metaclass=DeclarativeFieldsMetaclass):\n    \"A collection of Fields, plus their associated data.\"\n    # This is a separate class from BaseForm in order to abstract the way\n    # self.fields is specified. This class (Form) is the one that does the\n    # fancy metaclass stuff purely for the semantic sugar -- it allows one\n    # to define a form using declarative syntax.\n    # BaseForm itself has no way of designating self.fields.\n\n# django/forms/forms.py:170-173  (django.forms.forms.BaseForm.__iter__)\nclass BaseForm(RenderableFormMixin):\n    def __iter__(self):\n        \"\"\"Yield the form's fields as BoundField objects.\"\"\"\n        for name in self.fields:\n            yield self[name]\n\n# django/forms/forms.py:165-168  (django.forms.forms.BaseForm._bound_items)\nclass BaseForm(RenderableFormMixin):\n    def _bound_items(self):\n        \"\"\"Yield (name, bf) pairs, where bf is a BoundField object.\"\"\"\n        for name in self.fields:\n            yield name, self[name]\n\n# django/forms/forms.py:153-163  (django.forms.forms.BaseForm.__repr__)\nclass BaseForm(RenderableFormMixin):\n    def __repr__(self):\n        if self._errors is None:\n            is_valid = \"Unknown\"\n        else:\n            is_valid = self.is_bound and not self._errors\n        return \"<%(cls)s bound=%(bound)s, valid=%(valid)s, fields=(%(fields)s)>\" % {\n            \"cls\": self.__class__.__name__,\n            \"bound\": self.is_bound,\n            \"valid\": is_valid,\n            \"fields\": \";\".join(self.fields),\n        }\n\n# django/forms/forms.py:131-151  (django.forms.forms.BaseForm.order_fields)\nclass BaseForm(RenderableFormMixin):\n    def order_fields(self, field_order):\n        \"\"\"\n        Rearrange the fields according to field_order.\n\n        field_order is a list of field names specifying the order. Append fields\n        not included in the list in the default order for backward compatibility\n        with subclasses not overriding field_order. If field_order is None,\n        keep all fields in the order defined in the class. Ignore unknown\n        fields in field_order to allow disabling fields in form subclasses\n        without redefining ordering.\n        \"\"\"\n        if field_order is None:\n            return\n        fields = {}\n        for key in field_order:\n            try:\n                fields[key] = self.fields.pop(key)\n            except KeyError:  # ignore unknown fields\n                pass\n        fields.update(self.fields)  # add remaining fields in original order\n        self.fields = fields\n\n# django/forms/forms.py:75-129  (django.forms.forms.BaseForm.__init__)\nclass BaseForm(RenderableFormMixin):\n    def __init__(\n        self,\n        data=None,\n        files=None,\n        auto_id=\"id_%s\",\n        prefix=None,\n        initial=None,\n        error_class=ErrorList,\n        label_suffix=None,\n        empty_permitted=False,\n        field_order=None,\n        use_required_attribute=None,\n        renderer=None,\n    ):\n        self.is_bound = data is not None or files is not None\n        self.data = MultiValueDict() if data is None else data\n        self.files = MultiValueDict() if files is None else files\n        self.auto_id = auto_id\n        if prefix is not None:\n            self.prefix = prefix\n        self.initial = initial or {}\n        self.error_class = error_class\n        # Translators: This is the default suffix added to form field labels\n        self.label_suffix = label_suffix if label_suffix is not None else _(\":\")\n        self.empty_permitted = empty_permitted\n        self._errors = None  # Stores the errors after clean() has been called.\n\n        # The base_fields class attribute is the *class-wide* definition of\n        # fields. Because a particular *instance* of the class might want to\n        # alter self.fields, we create self.fields here by copying base_fields.\n        # Instances should always modify self.fields; they should not modify\n        # self.base_fields.\n        self.fields = copy.deepcopy(self.base_fields)\n        self._bound_fields_cache = {}\n        self.order_fields(self.field_order if field_order is None else field_order)\n\n        if use_required_attribute is not None:\n            self.use_required_attribute = use_required_attribute\n\n        if self.empty_permitted and self.use_required_attribute:\n            raise ValueError(\n                \"The empty_permitted and use_required_attribute arguments may \"\n                \"not both be True.\"\n            )\n\n        # Initialize form renderer. Use a global default if not specified\n        # either as an argument or as self.default_renderer.\n        if renderer is None:\n            if self.default_renderer is None:\n                renderer = get_default_renderer()\n            else:\n                renderer = self.default_renderer\n                if isinstance(self.default_renderer, type):\n                    renderer = renderer()\n        self.renderer = renderer\n\n# django/forms/forms.py:57-73  (django.forms.forms.BaseForm)\nclass BaseForm(RenderableFormMixin):\n    \"\"\"\n    The main implementation of all the Form logic. Note that this class is\n    different than Form. See the comments by the Form class for more info. Any\n    improvements to the form API should be made to this class, not to the Form\n    class.\n    \"\"\"\n\n    default_renderer = None\n    field_order = None\n    prefix = None\n    use_required_attribute = True\n\n    template_name_div = \"django/forms/div.html\"\n    template_name_p = \"django/forms/p.html\"\n    template_name_table = \"django/forms/table.html\"\n    template_name_ul = \"django/forms/ul.html\"\n    template_name_label = \"django/forms/label.html\"\n\n# django/forms/forms.py:28-53  (django.forms.forms.DeclarativeFieldsMetaclass.__new__)\nclass DeclarativeFieldsMetaclass(MediaDefiningClass):\n    def __new__(mcs, name, bases, attrs):\n        # Collect fields from current class and remove them from attrs.\n        attrs[\"declared_fields\"] = {\n            key: attrs.pop(key)\n            for key, value in list(attrs.items())\n            if isinstance(value, Field)\n        }\n\n        new_class = super().__new__(mcs, name, bases, attrs)\n\n        # Walk through the MRO.\n        declared_fields = {}\n        for base in reversed(new_class.__mro__):\n            # Collect fields from base class.\n            if hasattr(base, \"declared_fields\"):\n                declared_fields.update(base.declared_fields)\n\n            # Field shadowing.\n            for attr, value in base.__dict__.items():\n                if value is None and attr in declared_fields:\n                    declared_fields.pop(attr)\n\n        new_class.base_fields = declared_fields\n        new_class.declared_fields = declared_fields\n\n        return new_class\n\n# django/forms/forms.py:26-26  (django.forms.forms.DeclarativeFieldsMetaclass)\nclass DeclarativeFieldsMetaclass(MediaDefiningClass):\n    \"\"\"Collect Fields declared on the base classes.\"\"\"\n\n# django/forms/forms.py:1-22  (django.forms.forms)\n\"\"\"\nForm classes\n\"\"\"\n\nimport copy\nimport datetime\nimport warnings\n\nfrom django.core.exceptions import NON_FIELD_ERRORS, ValidationError\nfrom django.forms.fields import Field, FileField\nfrom django.forms.utils import ErrorDict, ErrorList, RenderableFormMixin\nfrom django.forms.widgets import Media, MediaDefiningClass\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.deprecation import RemovedInDjango50Warning\nfrom django.utils.functional import cached_property\nfrom django.utils.html import conditional_escape\nfrom django.utils.safestring import SafeString, mark_safe\nfrom django.utils.translation import gettext as _\n\nfrom .renderers import get_default_renderer\n\n__all__ = (\"BaseForm\", \"Form\")\n\n# django/forms/formsets.py:300-338  (django.forms.formsets.BaseFormSet.ordered_forms [signature])\nclass BaseFormSet(RenderableFormMixin):\n    @property\n    def ordered_forms(self):\n        'Return a list of form in the order specified by the incoming data.'\n        ...\n\n# django/forms/models.py:494-503  (django.forms.models.BaseModelForm.validate_unique [signature])\nclass BaseModelForm(BaseForm, AltersData):\n    def validate_unique(self):\n        \"Call the instance's validate_unique() method and update the form's\"\n        ...\n\n# tests/generic_views/forms.py:23-26  (tests.generic_views.forms.ConfirmDeleteForm.clean [signature])\nclass ConfirmDeleteForm(forms.Form):\n    def clean(self):\n        ...\n\n# django/forms/formsets.py:379-394  (django.forms.formsets.BaseFormSet.is_valid [signature])\nclass BaseFormSet(RenderableFormMixin):\n    def is_valid(self):\n        'Return True if every form in self.forms is valid.'\n        ...\n\n# tests/forms_tests/tests/test_formsets.py:55-62  (tests.forms_tests.tests.test_formsets.BaseFavoriteDrinksFormSet.clean [signature])\nclass BaseFavoriteDrinksFormSet(BaseFormSet):\n    def clean(self):\n        ...\n\n# tests/model_forms/tests.py:980-994  (tests.model_forms.tests.TestFieldOverridesByFormMeta.test_error_messages_overrides [signature])\nclass TestFieldOverridesByFormMeta(SimpleTestCase):\n    def test_error_messages_overrides(self):\n        ...\n\n# tests/forms_tests/tests/test_formsets.py:1558-1605  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_repr [signature])\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_repr(self):\n        ...\n\n# tests/forms_tests/tests/test_forms.py:2890-2900  (tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_bound_field [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_datetime_clean_disabled_callable_initial_bound_field(self):\n        'The cleaned value for a form with a disabled DateTimeField and callable'\n        ...\n\n# tests/forms_tests/tests/test_forms.py:400-416  (tests.forms_tests.tests.test_forms.FormsTestCase.test_cleaned_data_only_fields [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_cleaned_data_only_fields(self):\n        # cleaned_data will always *only* contain a key for fields defined in the\n        # Form, even if you pass extra data when you define the Form. In this\n        # example, we pass a bunch of extra fields to the form constructor,\n        # but cleaned_data contains only the form's fields.\n        ...\n\n# tests/model_forms/tests.py:3512-3532  (tests.model_forms.tests.FormFieldCallbackTests.test_custom_callback_from_base_form_meta [signature])\nclass FormFieldCallbackTests(SimpleTestCase):\n    def test_custom_callback_from_base_form_meta(self):\n        ...\n\n# tests/model_forms/tests.py:1996-2011  (tests.model_forms.tests.ModelFormBasicTests.test_recleaning_model_form_instance [signature])\nclass ModelFormBasicTests(TestCase):\n    def test_recleaning_model_form_instance(self):\n        \"Re-cleaning an instance that was added via a ModelForm shouldn't raise\"\n        ...\n\n# tests/forms_tests/tests/test_forms.py:4273-4304  (tests.forms_tests.tests.test_forms.FormsTestCase.test_baseform_repr [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_baseform_repr(self):\n        'BaseForm.__repr__() should contain some basic information about the'\n        ...\n\n# tests/forms_tests/tests/test_forms.py:4349-4365  (tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_in_clean [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_changing_cleaned_data_in_clean(self):\n        ...\n\n# tests/forms_tests/tests/test_forms.py:3637-3673  (tests.forms_tests.tests.test_forms.FormsTestCase.test_multivalue_field_validation [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_multivalue_field_validation(self):\n        ...\n\n# django/contrib/auth/forms.py:138-147  (django.contrib.auth.forms.BaseUserCreationForm._post_clean [signature])\nclass BaseUserCreationForm(forms.ModelForm):\n    def _post_clean(self):\n        ...\n\n# tests/forms_tests/tests/test_forms.py:4319-4334  (tests.forms_tests.tests.test_forms.FormsTestCase.test_accessing_clean [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_accessing_clean(self):\n        ...\n\n# django/forms/models.py:791-882  (django.forms.models.BaseModelFormSet.validate_unique [signature])\nclass BaseModelFormSet(BaseFormSet, AltersData):\n    def validate_unique(self):\n        # Collect unique_checks and date_checks to run from all the forms.\n        ...\n\n# django/contrib/auth/forms.py:160-177  (django.contrib.auth.forms.UserCreationForm.clean_username [signature])\nclass UserCreationForm(BaseUserCreationForm):\n    def clean_username(self):\n        'Reject usernames that differ only in case.'\n        ...\n\n# tests/forms_tests/tests/test_forms.py:2873-2888  (tests.forms_tests.tests.test_forms.FormsTestCase.test_datetime_clean_disabled_callable_initial_microseconds [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_datetime_clean_disabled_callable_initial_microseconds(self):\n        'Cleaning a form with a disabled DateTimeField and callable initial'\n        ...\n\n# django/forms/formsets.py:45-51  (django.forms.formsets.ManagementForm.clean [signature])\nclass ManagementForm(Form):\n    def clean(self):\n        ...\n\n# django/forms/formsets.py:192-199  (django.forms.formsets.BaseFormSet.initial_form_count [signature])\nclass BaseFormSet(RenderableFormMixin):\n    def initial_form_count(self):\n        'Return the number of forms that are required in this FormSet.'\n        ...\n\n# tests/forms_tests/tests/test_formsets.py:730-785  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formsets_with_ordering [signature])\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_formsets_with_ordering(self):\n        \"formset_factory's can_order argument adds an integer field to each\"\n        ...\n\n# tests/model_forms/tests.py:3477-3497  (tests.model_forms.tests.FormFieldCallbackTests.test_inherit_after_custom_callback [signature])\nclass FormFieldCallbackTests(SimpleTestCase):\n    def test_inherit_after_custom_callback(self):\n        ...\n\n# tests/test_utils/tests.py:1753-1768  (tests.test_utils.tests.AssertFormSetErrorTests.test_form_index_too_big_plural [signature])\nclass AssertFormSetErrorTests(SimpleTestCase):\n    def test_form_index_too_big_plural(self):\n        ...\n\n# tests/forms_tests/field_tests/test_multivaluefield.py:85-98  (tests.forms_tests.field_tests.test_multivaluefield.MultiValueFieldTest.test_clean_disabled_multivalue [signature])\nclass MultiValueFieldTest(SimpleTestCase):\n    def test_clean_disabled_multivalue(self):\n        ...\n\n# django/contrib/auth/forms.py:128-136  (django.contrib.auth.forms.BaseUserCreationForm.clean_password2 [signature])\nclass BaseUserCreationForm(forms.ModelForm):\n    def clean_password2(self):\n        ...\n\n# django/forms/formsets.py:272-281  (django.forms.formsets.BaseFormSet.cleaned_data [signature])\nclass BaseFormSet(RenderableFormMixin):\n    @property\n    def cleaned_data(self):\n        'Return a list of form.cleaned_data dicts for every form in self.forms.'\n        ...\n\n# tests/forms_tests/tests/test_forms.py:1631-1679  (tests.forms_tests.tests.test_forms.FormsTestCase.test_update_error_dict [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_update_error_dict(self):\n        ...\n\n# tests/forms_tests/tests/test_forms.py:4336-4347  (tests.forms_tests.tests.test_forms.FormsTestCase.test_changing_cleaned_data_nothing_returned [signature])\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_changing_cleaned_data_nothing_returned(self):\n        ...\n\n# django/forms/models.py:550-550  (django.forms.models.BaseModelForm [signature])\nclass BaseModelForm(BaseForm, AltersData):\n    ...\n\n# tests/test_utils/tests.py:1579-1590  (tests.test_utils.tests.AssertFormSetErrorTests.test_multiple_forms [signature])\nclass AssertFormSetErrorTests(SimpleTestCase):\n    def test_multiple_forms(self):\n        ...\n\n# tests/forms_tests/tests/test_formsets.py:193-223  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_formset_validation_count)\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_formset_validation_count(self):\n        \"\"\"\n        A formset's ManagementForm is validated once per FormSet.is_valid()\n        call and each form of the formset is cleaned once.\n        \"\"\"\n\n        def make_method_counter(func):\n            \"\"\"Add a counter to func for the number of times it's called.\"\"\"\n            counter = Counter()\n            counter.call_count = 0\n\n            def mocked_func(*args, **kwargs):\n                counter.call_count += 1\n                return func(*args, **kwargs)\n\n            return mocked_func, counter\n\n        mocked_is_valid, is_valid_counter = make_method_counter(\n            formsets.ManagementForm.is_valid\n        )\n        mocked_full_clean, full_clean_counter = make_method_counter(BaseForm.full_clean)\n        formset = self.make_choiceformset(\n            [(\"Calexico\", \"100\"), (\"Any1\", \"42\"), (\"Any2\", \"101\")]\n        )\n\n        with mock.patch(\n            \"django.forms.formsets.ManagementForm.is_valid\", mocked_is_valid\n        ), mock.patch(\"django.forms.forms.BaseForm.full_clean\", mocked_full_clean):\n            self.assertTrue(formset.is_valid())\n        self.assertEqual(is_valid_counter.call_count, 1)\n        self.assertEqual(full_clean_counter.call_count, 4)\n\n# django/forms/formsets.py:396-462  (django.forms.formsets.BaseFormSet.full_clean)\nclass BaseFormSet(RenderableFormMixin):\n    def full_clean(self):\n        \"\"\"\n        Clean all of self.data and populate self._errors and\n        self._non_form_errors.\n        \"\"\"\n        self._errors = []\n        self._non_form_errors = self.error_class(\n            error_class=\"nonform\", renderer=self.renderer\n        )\n        empty_forms_count = 0\n\n        if not self.is_bound:  # Stop further processing.\n            return\n\n        if not self.management_form.is_valid():\n            error = ValidationError(\n                self.error_messages[\"missing_management_form\"],\n                params={\n                    \"field_names\": \", \".join(\n                        self.management_form.add_prefix(field_name)\n                        for field_name in self.management_form.errors\n                    ),\n                },\n                code=\"missing_management_form\",\n            )\n            self._non_form_errors.append(error)\n\n        for i, form in enumerate(self.forms):\n            # Empty forms are unchanged forms beyond those with initial data.\n            if not form.has_changed() and i >= self.initial_form_count():\n                empty_forms_count += 1\n            # Accessing errors calls full_clean() if necessary.\n            # _should_delete_form() requires cleaned_data.\n            form_errors = form.errors\n            if self.can_delete and self._should_delete_form(form):\n                continue\n            self._errors.append(form_errors)\n        try:\n            if (\n                self.validate_max\n                and self.total_form_count() - len(self.deleted_forms) > self.max_num\n            ) or self.management_form.cleaned_data[\n                TOTAL_FORM_COUNT\n            ] > self.absolute_max:\n                raise ValidationError(\n                    self.error_messages[\"too_many_forms\"] % {\"num\": self.max_num},\n                    code=\"too_many_forms\",\n                )\n            if (\n                self.validate_min\n                and self.total_form_count()\n                - len(self.deleted_forms)\n                - empty_forms_count\n                < self.min_num\n            ):\n                raise ValidationError(\n                    self.error_messages[\"too_few_forms\"] % {\"num\": self.min_num},\n                    code=\"too_few_forms\",\n                )\n            # Give self.clean() a chance to do cross-form validation.\n            self.clean()\n        except ValidationError as e:\n            self._non_form_errors = self.error_class(\n                e.error_list,\n                error_class=\"nonform\",\n                renderer=self.renderer,\n            )\n\n# django/forms/formsets.py:362-367  (django.forms.formsets.BaseFormSet.errors)\nclass BaseFormSet(RenderableFormMixin):\n    @property\n    def errors(self):\n        \"\"\"Return a list of form.errors for every form in self.forms.\"\"\"\n        if self._errors is None:\n            self.full_clean()\n        return self._errors\n\n# django/forms/models.py:425-427  (django.forms.models.BaseModelForm.clean)\nclass BaseModelForm(BaseForm, AltersData):\n    def clean(self):\n        self._validate_unique = True\n        return self.cleaned_data\n\n# django/forms/models.py:462-492  (django.forms.models.BaseModelForm._post_clean)\nclass BaseModelForm(BaseForm, AltersData):\n    def _post_clean(self):\n        opts = self._meta\n\n        exclude = self._get_validation_exclusions()\n\n        # Foreign Keys being used to represent inline relationships\n        # are excluded from basic field value validation. This is for two\n        # reasons: firstly, the value may not be supplied (#12507; the\n        # case of providing new values to the admin); secondly the\n        # object being referred to may not yet fully exist (#12749).\n        # However, these fields *must* be included in uniqueness checks,\n        # so this can't be part of _get_validation_exclusions().\n        for name, field in self.fields.items():\n            if isinstance(field, InlineForeignKeyField):\n                exclude.add(name)\n\n        try:\n            self.instance = construct_instance(\n                self, self.instance, opts.fields, opts.exclude\n            )\n        except ValidationError as e:\n            self._update_errors(e)\n\n        try:\n            self.instance.full_clean(exclude=exclude, validate_unique=False)\n        except ValidationError as e:\n            self._update_errors(e)\n\n        # Validate uniqueness if needed.\n        if self._validate_unique:\n            self.validate_unique()\n\n# tests/forms_tests/tests/test_forms.py:4306-4317  (tests.forms_tests.tests.test_forms.FormsTestCase.test_baseform_repr_dont_trigger_validation)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_baseform_repr_dont_trigger_validation(self):\n        \"\"\"\n        BaseForm.__repr__() shouldn't trigger the form validation.\n        \"\"\"\n        p = Person(\n            {\"first_name\": \"John\", \"last_name\": \"Lennon\", \"birthday\": \"fakedate\"}\n        )\n        repr(p)\n        with self.assertRaises(AttributeError):\n            p.cleaned_data\n        self.assertFalse(p.is_valid())\n        self.assertEqual(p.cleaned_data, {\"first_name\": \"John\", \"last_name\": \"Lennon\"})\n\n# django/forms/formsets.py:352-360  (django.forms.formsets.BaseFormSet.non_form_errors)\nclass BaseFormSet(RenderableFormMixin):\n    def non_form_errors(self):\n        \"\"\"\n        Return an ErrorList of errors that aren't associated with a particular\n        form -- i.e., from formset.clean(). Return an empty ErrorList if there\n        are none.\n        \"\"\"\n        if self._non_form_errors is None:\n            self.full_clean()\n        return self._non_form_errors\n\n# tests/forms_tests/tests/test_forms.py:1628-1629#part4of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        with self.assertRaisesMessage(ValueError, \"has no field named\"):\n            f.add_error(\"missing_field\", \"Some error.\")\n\n# django/forms/models.py:380-423  (django.forms.models.BaseModelForm._get_validation_exclusions)\nclass BaseModelForm(BaseForm, AltersData):\n    def _get_validation_exclusions(self):\n        \"\"\"\n        For backwards-compatibility, exclude several types of fields from model\n        validation. See tickets #12507, #12521, #12553.\n        \"\"\"\n        exclude = set()\n        # Build up a list of fields that should be excluded from model field\n        # validation and unique checks.\n        for f in self.instance._meta.fields:\n            field = f.name\n            # Exclude fields that aren't on the form. The developer may be\n            # adding these values to the model after form validation.\n            if field not in self.fields:\n                exclude.add(f.name)\n\n            # Don't perform model validation on fields that were defined\n            # manually on the form and excluded via the ModelForm's Meta\n            # class. See #12901.\n            elif self._meta.fields and field not in self._meta.fields:\n                exclude.add(f.name)\n            elif self._meta.exclude and field in self._meta.exclude:\n                exclude.add(f.name)\n\n            # Exclude fields that failed form validation. There's no need for\n            # the model fields to validate them as well.\n            elif field in self._errors:\n                exclude.add(f.name)\n\n            # Exclude empty fields that are not required by the form, if the\n            # underlying model field is required. This keeps the model field\n            # from raising a required error. Note: don't exclude the field from\n            # validation if the model field allows blanks. If it does, the blank\n            # value may be included in a unique check, so cannot be excluded\n            # from validation.\n            else:\n                form_field = self.fields[field]\n                field_value = self.cleaned_data.get(field)\n                if (\n                    not f.blank\n                    and not form_field.required\n                    and field_value in form_field.empty_values\n                ):\n                    exclude.add(f.name)\n        return exclude\n\n# tests/forms_tests/tests/test_forms.py:3857-3877  (tests.forms_tests.tests.test_forms.FormsTestCase.test_custom_empty_values)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_custom_empty_values(self):\n        \"\"\"\n        Form fields can customize what is considered as an empty value\n        for themselves (#19997).\n        \"\"\"\n\n        class CustomJSONField(CharField):\n            empty_values = [None, \"\"]\n\n            def to_python(self, value):\n                # Fake json.loads\n                if value == \"{}\":\n                    return {}\n                return super().to_python(value)\n\n        class JSONForm(forms.Form):\n            json = CustomJSONField()\n\n        form = JSONForm(data={\"json\": \"{}\"})\n        form.full_clean()\n        self.assertEqual(form.cleaned_data, {\"json\": {}})\n\n# tests/model_forms/tests.py:3136-3156  (tests.model_forms.tests.CustomCleanTests.test_override_clean)\nclass CustomCleanTests(TestCase):\n    def test_override_clean(self):\n        \"\"\"\n        Regression for #12596: Calling super from ModelForm.clean() should be\n        optional.\n        \"\"\"\n\n        class TripleFormWithCleanOverride(forms.ModelForm):\n            class Meta:\n                model = Triple\n                fields = \"__all__\"\n\n            def clean(self):\n                if not self.cleaned_data[\"left\"] == self.cleaned_data[\"right\"]:\n                    raise ValidationError(\"Left and right should be equal\")\n                return self.cleaned_data\n\n        form = TripleFormWithCleanOverride({\"left\": 1, \"middle\": 2, \"right\": 1})\n        self.assertTrue(form.is_valid())\n        # form.instance.left will be None if the instance was not constructed\n        # by form.full_clean().\n        self.assertEqual(form.instance.left, 1)\n\n# tests/forms_tests/tests/test_forms.py:1451-1499#part1of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        class UserRegistration(Form):\n            username = CharField(max_length=10)\n            password1 = CharField(widget=PasswordInput)\n            password2 = CharField(widget=PasswordInput)\n\n            def clean_password2(self):\n                if (\n                    self.cleaned_data.get(\"password1\")\n                    and self.cleaned_data.get(\"password2\")\n                    and self.cleaned_data[\"password1\"] != self.cleaned_data[\"password2\"]\n                ):\n                    raise ValidationError(\"Please make sure your passwords match.\")\n\n                return self.cleaned_data[\"password2\"]\n\n        f = UserRegistration(auto_id=False)\n        self.assertEqual(f.errors, {})\n        f = UserRegistration({}, auto_id=False)\n        self.assertEqual(f.errors[\"username\"], [\"This field is required.\"])\n        self.assertEqual(f.errors[\"password1\"], [\"This field is required.\"])\n        self.assertEqual(f.errors[\"password2\"], [\"This field is required.\"])\n        f = UserRegistration(\n            {\"username\": \"adrian\", \"password1\": \"foo\", \"password2\": \"bar\"},\n            auto_id=False,\n        )\n        self.assertEqual(\n            f.errors[\"password2\"], [\"Please make sure your passwords match.\"]\n        )\n        f = UserRegistration(\n            {\"username\": \"adrian\", \"password1\": \"foo\", \"password2\": \"foo\"},\n            auto_id=False,\n        )\n        self.assertEqual(f.errors, {})\n        self.assertEqual(f.cleaned_data[\"username\"], \"adrian\")\n        self.assertEqual(f.cleaned_data[\"password1\"], \"foo\")\n        self.assertEqual(f.cleaned_data[\"password2\"], \"foo\")\n\n        # Another way of doing multiple-field validation is by implementing the\n        # Form's clean() method. Usually ValidationError raised by that method\n        # will not be associated with a particular field and will have a\n        # special-case association with the field named '__all__'. It's\n        # possible to associate the errors to particular field with the\n        # Form.add_error() method or by passing a dictionary that maps each\n        # field to one or more errors.\n        #\n        # Note that in Form.clean(), you have access to self.cleaned_data, a\n        # dictionary of all the fields/values that have *not* raised a\n        # ValidationError. Also note Form.clean() is required to return a\n        # dictionary of all clean data.\n\n# tests/model_forms/tests.py:3402-3415  (tests.model_forms.tests.FormFieldCallbackTests.test_baseform_with_widgets_in_meta)\nclass FormFieldCallbackTests(SimpleTestCase):\n    def test_baseform_with_widgets_in_meta(self):\n        \"\"\"\n        Using base forms with widgets defined in Meta should not raise errors.\n        \"\"\"\n        widget = forms.Textarea()\n\n        class BaseForm(forms.ModelForm):\n            class Meta:\n                model = Person\n                widgets = {\"name\": widget}\n                fields = \"__all__\"\n\n        Form = modelform_factory(Person, form=BaseForm)\n        self.assertIsInstance(Form.base_fields[\"name\"].widget, forms.Textarea)\n\n# tests/forms_tests/tests/test_forms.py:1500-1531#part2of4  (tests.forms_tests.tests.test_forms.FormsTestCase.test_validating_multiple_fields)\nclass FormsTestCase(SimpleTestCase):\n    # A Form is a collection of Fields. It knows how to validate a set of data and it\n    # knows how to render itself in a couple of default ways (e.g., an HTML table).\n    # You can pass it data in __init__(), as a dictionary.\n\n    def test_validating_multiple_fields(self):\n        # There are a couple of ways to do multiple-field validation. If you\n        # want the validation message to be associated with a particular field,\n        # implement the clean_XXX() method on the Form, where XXX is the field\n        # name. As in Field.clean(), the clean_XXX() method should return the\n        # cleaned value. In the clean_XXX() method, you have access to\n        # self.cleaned_data, which is a dictionary of all the data that has\n        # been cleaned *so far*, in order by the fields, including the current\n        # field (e.g., the field XXX if you're in clean_XXX()).\n        class UserRegistration(Form):\n            username = CharField(max_length=10)\n            password1 = CharField(widget=PasswordInput)\n            password2 = CharField(widget=PasswordInput)\n\n            def clean(self):\n                # Test raising a ValidationError as NON_FIELD_ERRORS.\n                if (\n                    self.cleaned_data.get(\"password1\")\n                    and self.cleaned_data.get(\"password2\")\n                    and self.cleaned_data[\"password1\"] != self.cleaned_data[\"password2\"]\n                ):\n                    raise ValidationError(\"Please make sure your passwords match.\")\n\n                # Test raising ValidationError that targets multiple fields.\n                errors = {}\n                if self.cleaned_data.get(\"password1\") == \"FORBIDDEN_VALUE\":\n                    errors[\"password1\"] = \"Forbidden value.\"\n                if self.cleaned_data.get(\"password2\") == \"FORBIDDEN_VALUE\":\n                    errors[\"password2\"] = [\"Forbidden value.\"]\n                if errors:\n                    raise ValidationError(errors)\n\n                # Test Form.add_error()\n                if self.cleaned_data.get(\"password1\") == \"FORBIDDEN_VALUE2\":\n                    self.add_error(None, \"Non-field error 1.\")\n                    self.add_error(\"password1\", \"Forbidden value 2.\")\n                if self.cleaned_data.get(\"password2\") == \"FORBIDDEN_VALUE2\":\n                    self.add_error(\"password2\", \"Forbidden value 2.\")\n                    raise ValidationError(\"Non-field error 2.\")\n\n                return self.cleaned_data\n\n# tests/forms_tests/tests/test_formsets.py:1388-1405  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_non_form_errors_run_full_clean)\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_non_form_errors_run_full_clean(self):\n        \"\"\"\n        If non_form_errors() is called without calling is_valid() first,\n        it should ensure that full_clean() is called.\n        \"\"\"\n\n        class BaseCustomFormSet(BaseFormSet):\n            def clean(self):\n                raise ValidationError(\"This is a non-form error\")\n\n        ChoiceFormSet = formset_factory(Choice, formset=BaseCustomFormSet)\n        data = {\n            \"choices-TOTAL_FORMS\": \"1\",\n            \"choices-INITIAL_FORMS\": \"0\",\n        }\n        formset = ChoiceFormSet(data, auto_id=False, prefix=\"choices\")\n        self.assertIsInstance(formset.non_form_errors(), ErrorList)\n        self.assertEqual(list(formset.non_form_errors()), [\"This is a non-form error\"])\n\n# tests/model_forms/tests.py:541-571  (tests.model_forms.tests.ModelFormBaseTest.test_exclude_and_validation)\nclass ModelFormBaseTest(TestCase):\n    def test_exclude_and_validation(self):\n        # This Price instance generated by this form is not valid because the quantity\n        # field is required, but the form is valid because the field is excluded from\n        # the form. This is for backwards compatibility.\n        class PriceFormWithoutQuantity(forms.ModelForm):\n            class Meta:\n                model = Price\n                exclude = (\"quantity\",)\n\n        form = PriceFormWithoutQuantity({\"price\": \"6.00\"})\n        self.assertTrue(form.is_valid())\n        price = form.save(commit=False)\n        msg = \"{'quantity': ['This field cannot be null.']}\"\n        with self.assertRaisesMessage(ValidationError, msg):\n            price.full_clean()\n\n        # The form should not validate fields that it doesn't contain even if they are\n        # specified using 'fields', not 'exclude'.\n        class PriceFormWithoutQuantity(forms.ModelForm):\n            class Meta:\n                model = Price\n                fields = (\"price\",)\n\n        form = PriceFormWithoutQuantity({\"price\": \"6.00\"})\n        self.assertTrue(form.is_valid())\n\n        # The form should still have an instance of a model that is not complete and\n        # not saved into a DB yet.\n        self.assertEqual(form.instance.price, Decimal(\"6.00\"))\n        self.assertIsNone(form.instance.quantity)\n        self.assertIsNone(form.instance.pk)\n\n# django/forms/models.py:505-524  (django.forms.models.BaseModelForm._save_m2m)\nclass BaseModelForm(BaseForm, AltersData):\n    def _save_m2m(self):\n        \"\"\"\n        Save the many-to-many fields and generic relations for this form.\n        \"\"\"\n        cleaned_data = self.cleaned_data\n        exclude = self._meta.exclude\n        fields = self._meta.fields\n        opts = self.instance._meta\n        # Note that for historical reasons we want to include also\n        # private_fields here. (GenericRelation was previously a fake\n        # m2m field).\n        for f in chain(opts.many_to_many, opts.private_fields):\n            if not hasattr(f, \"save_form_data\"):\n                continue\n            if fields and f.name not in fields:\n                continue\n            if exclude and f.name in exclude:\n                continue\n            if f.name in cleaned_data:\n                f.save_form_data(self.instance, cleaned_data[f.name])\n\n# django/db/models/base.py:1457-1502  (django.db.models.base.Model.full_clean)\nclass Model(AltersData, metaclass=ModelBase):\n    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):\n        \"\"\"\n        Call clean_fields(), clean(), validate_unique(), and\n        validate_constraints() on the model. Raise a ValidationError for any\n        errors that occur.\n        \"\"\"\n        errors = {}\n        if exclude is None:\n            exclude = set()\n        else:\n            exclude = set(exclude)\n\n        try:\n            self.clean_fields(exclude=exclude)\n        except ValidationError as e:\n            errors = e.update_error_dict(errors)\n\n        # Form.clean() is run even if other validation fails, so do the\n        # same with Model.clean() for consistency.\n        try:\n            self.clean()\n        except ValidationError as e:\n            errors = e.update_error_dict(errors)\n\n        # Run unique checks, but only for fields that passed validation.\n        if validate_unique:\n            for name in errors:\n                if name != NON_FIELD_ERRORS and name not in exclude:\n                    exclude.add(name)\n            try:\n                self.validate_unique(exclude=exclude)\n            except ValidationError as e:\n                errors = e.update_error_dict(errors)\n\n        # Run constraints checks, but only for fields that passed validation.\n        if validate_constraints:\n            for name in errors:\n                if name != NON_FIELD_ERRORS and name not in exclude:\n                    exclude.add(name)\n            try:\n                self.validate_constraints(exclude=exclude)\n            except ValidationError as e:\n                errors = e.update_error_dict(errors)\n\n        if errors:\n            raise ValidationError(errors)\n\n# tests/forms_tests/tests/test_formsets.py:960-984  (tests.forms_tests.tests.test_formsets.FormsFormsetTestCase.test_clean_hook)\nclass FormsFormsetTestCase(SimpleTestCase):\n    def test_clean_hook(self):\n        \"\"\"\n        FormSets have a clean() hook for doing extra validation that isn't tied\n        to any form. It follows the same pattern as the clean() hook on Forms.\n        \"\"\"\n        # Start out with a some duplicate data.\n        data = {\n            \"drinks-TOTAL_FORMS\": \"2\",  # the number of forms rendered\n            \"drinks-INITIAL_FORMS\": \"0\",  # the number of forms with initial data\n            \"drinks-MIN_NUM_FORMS\": \"0\",  # min number of forms\n            \"drinks-MAX_NUM_FORMS\": \"0\",  # max number of forms\n            \"drinks-0-name\": \"Gin and Tonic\",\n            \"drinks-1-name\": \"Gin and Tonic\",\n        }\n        formset = FavoriteDrinksFormSet(data, prefix=\"drinks\")\n        self.assertFalse(formset.is_valid())\n        # Any errors raised by formset.clean() are available via the\n        # formset.non_form_errors() method.\n        for error in formset.non_form_errors():\n            self.assertEqual(str(error), \"You may only specify a drink once.\")\n        # The valid case still works.\n        data[\"drinks-1-name\"] = \"Bloody Mary\"\n        formset = FavoriteDrinksFormSet(data, prefix=\"drinks\")\n        self.assertTrue(formset.is_valid())\n        self.assertEqual(formset.non_form_errors(), [])\n\n## Task\n\nYou are debugging Django form validation order in\ndjango/forms/forms.py. Starting from `BaseForm.full_clean`, trace the\ndirect method calls made by full_clean, in order, that populate\n`self.cleaned_data` and `self._errors`. Exclude no-op hooks and hooks\nthat are only overridden by subclasses.\n\nFirst give a short (2-4 sentence) explanation of the pipeline,\nnoting where per-field `clean_<fieldname>` hooks fit in even though\nthey aren't a fixed BaseForm symbol.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified BaseForm symbol names in that\ncausal order - only symbols actually present in the provided context\npackage may appear, e.g.:\n\n```json\n[\"django.forms.forms.BaseForm.full_clean\", \"django.forms.forms.BaseForm._clean_fields\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

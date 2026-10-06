@@ -1,0 +1,121 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "django_t02_012_wsgi_entrypoint_dispatch",
+  "items": [
+   {
+    "source_id": "django/core/handlers/wsgi.py:120-144",
+    "content": "# django/core/handlers/wsgi.py:120-144  (django.core.handlers.wsgi.WSGIHandler.__call__)\n    def __call__(self, environ, start_response):\n        set_script_prefix(get_script_name(environ))\n        signals.request_started.send(sender=self.__class__, environ=environ)\n        request = self.request_class(environ)\n        response = self.get_response(request)\n\n        response._handler_class = self.__class__\n\n        status = \"%d %s\" % (response.status_code, response.reason_phrase)\n        response_headers = [\n            *response.items(),\n            *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n        ]\n        start_response(status, response_headers)\n        if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n            \"wsgi.file_wrapper\"\n        ):\n            # If `wsgi.file_wrapper` is used the WSGI server does not call\n            # .close on the response, but on the file wrapper. Patch it to use\n            # response.close instead which takes care of closing all files.\n            response.file_to_stream.close = response.close\n            response = environ[\"wsgi.file_wrapper\"](\n                response.file_to_stream, response.block_size\n            )\n        return response",
+    "token_count": 267,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIHandler.__call__"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 267
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:154-184",
+    "content": "# django/core/handlers/wsgi.py:154-184  (django.core.handlers.wsgi.get_script_name)\ndef get_script_name(environ):\n    \"\"\"\n    Return the equivalent of the HTTP request's SCRIPT_NAME environment\n    variable. If Apache mod_rewrite is used, return what would have been\n    the script name prior to any rewriting (so it's the script name as seen\n    from the client's perspective), unless the FORCE_SCRIPT_NAME setting is\n    set (to anything).\n    \"\"\"\n    if settings.FORCE_SCRIPT_NAME is not None:\n        return settings.FORCE_SCRIPT_NAME\n\n    # If Apache's mod_rewrite had a whack at the URL, Apache set either\n    # SCRIPT_URL or REDIRECT_URL to the full resource URL before applying any\n    # rewrites. Unfortunately not every web server (lighttpd!) passes this\n    # information through all the time, so FORCE_SCRIPT_NAME, above, is still\n    # needed.\n    script_url = get_bytes_from_wsgi(environ, \"SCRIPT_URL\", \"\") or get_bytes_from_wsgi(\n        environ, \"REDIRECT_URL\", \"\"\n    )\n\n    if script_url:\n        if b\"//\" in script_url:\n            # mod_wsgi squashes multiple successive slashes in PATH_INFO,\n            # do the same with script_url before manipulating paths (#17133).\n            script_url = _slashes_re.sub(b\"/\", script_url)\n        path_info = get_bytes_from_wsgi(environ, \"PATH_INFO\", \"\")\n        script_name = script_url[: -len(path_info)] if path_info else script_url\n    else:\n        script_name = get_bytes_from_wsgi(environ, \"SCRIPT_NAME\", \"\")\n\n    return script_name.decode()",
+    "token_count": 361,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.core.handlers.wsgi.get_script_name"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 361
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:100-106",
+    "content": "# django/urls/base.py:100-106  (django.urls.base.set_script_prefix)\ndef set_script_prefix(prefix):\n    \"\"\"\n    Set the script prefix for the current thread.\n    \"\"\"\n    if not prefix.endswith(\"/\"):\n        prefix += \"/\"\n    _prefixes.value = prefix",
+    "token_count": 61,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.urls.base.set_script_prefix"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:136-150",
+    "content": "# django/core/handlers/base.py:136-150  (django.core.handlers.base.BaseHandler.get_response)\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response",
+    "token_count": 130,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.get_response"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 130
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:26-102",
+    "content": "# django/core/handlers/base.py:26-102  (django.core.handlers.base.BaseHandler.load_middleware)\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler",
+    "token_count": 635,
+    "rank": 5,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.load_middleware"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 635
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:113-144",
+    "content": "# django/core/handlers/wsgi.py:113-144  (django.core.handlers.wsgi.WSGIHandler)\nclass WSGIHandler(base.BaseHandler):\n    request_class = WSGIRequest\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.load_middleware()\n\n    def __call__(self, environ, start_response):\n        set_script_prefix(get_script_name(environ))\n        signals.request_started.send(sender=self.__class__, environ=environ)\n        request = self.request_class(environ)\n        response = self.get_response(request)\n\n        response._handler_class = self.__class__\n\n        status = \"%d %s\" % (response.status_code, response.reason_phrase)\n        response_headers = [\n            *response.items(),\n            *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n        ]\n        start_response(status, response_headers)\n        if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n            \"wsgi.file_wrapper\"\n        ):\n            # If `wsgi.file_wrapper` is used the WSGI server does not call\n            # .close on the response, but on the file wrapper. Patch it to use\n            # response.close instead which takes care of closing all files.\n            response.file_to_stream.close = response.close\n            response = environ[\"wsgi.file_wrapper\"](\n                response.file_to_stream, response.block_size\n            )\n        return response",
+    "token_count": 312,
+    "rank": 6,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIHandler"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 312
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1766,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are debugging the very first steps of a Django request's\nlifecycle in django/core/handlers/wsgi.py. Starting from\n`WSGIHandler.__call__`, trace the real causal pipeline a request\ntravels through before Django's own request-handling machinery takes\nover, in the order each stage is actually reached, up to and\nincluding the call that hands off to the base handler's own response\npipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.handlers.wsgi.WSGIHandler.__call__\", \"django.core.handlers.wsgi.get_script_name\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 6,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1766,
+   "prompt_tokens": 2086,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2099,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/core/handlers/wsgi.py:120-144  (django.core.handlers.wsgi.WSGIHandler.__call__)\n    def __call__(self, environ, start_response):\n        set_script_prefix(get_script_name(environ))\n        signals.request_started.send(sender=self.__class__, environ=environ)\n        request = self.request_class(environ)\n        response = self.get_response(request)\n\n        response._handler_class = self.__class__\n\n        status = \"%d %s\" % (response.status_code, response.reason_phrase)\n        response_headers = [\n            *response.items(),\n            *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n        ]\n        start_response(status, response_headers)\n        if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n            \"wsgi.file_wrapper\"\n        ):\n            # If `wsgi.file_wrapper` is used the WSGI server does not call\n            # .close on the response, but on the file wrapper. Patch it to use\n            # response.close instead which takes care of closing all files.\n            response.file_to_stream.close = response.close\n            response = environ[\"wsgi.file_wrapper\"](\n                response.file_to_stream, response.block_size\n            )\n        return response\n\n# django/core/handlers/wsgi.py:154-184  (django.core.handlers.wsgi.get_script_name)\ndef get_script_name(environ):\n    \"\"\"\n    Return the equivalent of the HTTP request's SCRIPT_NAME environment\n    variable. If Apache mod_rewrite is used, return what would have been\n    the script name prior to any rewriting (so it's the script name as seen\n    from the client's perspective), unless the FORCE_SCRIPT_NAME setting is\n    set (to anything).\n    \"\"\"\n    if settings.FORCE_SCRIPT_NAME is not None:\n        return settings.FORCE_SCRIPT_NAME\n\n    # If Apache's mod_rewrite had a whack at the URL, Apache set either\n    # SCRIPT_URL or REDIRECT_URL to the full resource URL before applying any\n    # rewrites. Unfortunately not every web server (lighttpd!) passes this\n    # information through all the time, so FORCE_SCRIPT_NAME, above, is still\n    # needed.\n    script_url = get_bytes_from_wsgi(environ, \"SCRIPT_URL\", \"\") or get_bytes_from_wsgi(\n        environ, \"REDIRECT_URL\", \"\"\n    )\n\n    if script_url:\n        if b\"//\" in script_url:\n            # mod_wsgi squashes multiple successive slashes in PATH_INFO,\n            # do the same with script_url before manipulating paths (#17133).\n            script_url = _slashes_re.sub(b\"/\", script_url)\n        path_info = get_bytes_from_wsgi(environ, \"PATH_INFO\", \"\")\n        script_name = script_url[: -len(path_info)] if path_info else script_url\n    else:\n        script_name = get_bytes_from_wsgi(environ, \"SCRIPT_NAME\", \"\")\n\n    return script_name.decode()\n\n# django/urls/base.py:100-106  (django.urls.base.set_script_prefix)\ndef set_script_prefix(prefix):\n    \"\"\"\n    Set the script prefix for the current thread.\n    \"\"\"\n    if not prefix.endswith(\"/\"):\n        prefix += \"/\"\n    _prefixes.value = prefix\n\n# django/core/handlers/base.py:136-150  (django.core.handlers.base.BaseHandler.get_response)\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n# django/core/handlers/base.py:26-102  (django.core.handlers.base.BaseHandler.load_middleware)\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler\n\n# django/core/handlers/wsgi.py:113-144  (django.core.handlers.wsgi.WSGIHandler)\nclass WSGIHandler(base.BaseHandler):\n    request_class = WSGIRequest\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.load_middleware()\n\n    def __call__(self, environ, start_response):\n        set_script_prefix(get_script_name(environ))\n        signals.request_started.send(sender=self.__class__, environ=environ)\n        request = self.request_class(environ)\n        response = self.get_response(request)\n\n        response._handler_class = self.__class__\n\n        status = \"%d %s\" % (response.status_code, response.reason_phrase)\n        response_headers = [\n            *response.items(),\n            *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n        ]\n        start_response(status, response_headers)\n        if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n            \"wsgi.file_wrapper\"\n        ):\n            # If `wsgi.file_wrapper` is used the WSGI server does not call\n            # .close on the response, but on the file wrapper. Patch it to use\n            # response.close instead which takes care of closing all files.\n            response.file_to_stream.close = response.close\n            response = environ[\"wsgi.file_wrapper\"](\n                response.file_to_stream, response.block_size\n            )\n        return response\n\n## Task\n\nYou are debugging the very first steps of a Django request's\nlifecycle in django/core/handlers/wsgi.py. Starting from\n`WSGIHandler.__call__`, trace the real causal pipeline a request\ntravels through before Django's own request-handling machinery takes\nover, in the order each stage is actually reached, up to and\nincluding the call that hands off to the base handler's own response\npipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.handlers.wsgi.WSGIHandler.__call__\", \"django.core.handlers.wsgi.get_script_name\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

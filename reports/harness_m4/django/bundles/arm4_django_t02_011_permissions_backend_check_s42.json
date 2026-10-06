@@ -1,0 +1,256 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t02_011_permissions_backend_check",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"django/contrib/auth/models.py\", \"pattern\": \"def has_perm\"})\n298:    def has_perm(self, perm, obj=None):\n313:    def has_perms(self, perm_list, obj=None):\n479:    def has_perm(self, perm, obj=None):\n482:    def has_perms(self, perm_list, obj=None):",
+    "token_count": 89,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "def has_perm",
+      "path": "django/contrib/auth/models.py"
+     },
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (grep {\"path\": \"django/contrib/auth/models.py\", \"pattern\": \"_user_has_perm\"})\n212:def _user_has_perm(user, perm, obj):\n311:        return _user_has_perm(self, perm, obj):\n480:        return _user_has_perm(self, perm, obj=obj):",
+    "token_count": 74,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "_user_has_perm",
+      "path": "django/contrib/auth/models.py"
+     },
+     "engine_token_count": 74
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (read {\"end_line\": 500, \"path\": \"django/contrib/auth/models.py\", \"start_line\": 200})\n200: \n201: \n202: # A few helper functions for common logic between User and AnonymousUser.\n203: def _user_get_permissions(user, obj, from_name):\n204:     permissions = set()\n205:     name = \"get_%s_permissions\" % from_name\n206:     for backend in auth.get_backends():\n207:         if hasattr(backend, name):\n208:             permissions.update(getattr(backend, name)(user, obj))\n209:     return permissions\n210: \n211: \n212: def _user_has_perm(user, perm, obj):\n213:     \"\"\"\n214:     A backend can raise `PermissionDenied` to short-circuit permission checking.\n215:     \"\"\"\n216:     for backend in auth.get_backends():\n217:         if not hasattr(backend, \"has_perm\"):\n218:             continue\n219:         try:\n220:             if backend.has_perm(user, perm, obj):\n221:                 return True\n222:         except PermissionDenied:\n223:             return False\n224:     return False\n225: \n226: \n227: def _user_has_module_perms(user, app_label):\n228:     \"\"\"\n229:     A backend can raise `PermissionDenied` to short-circuit permission checking.\n230:     \"\"\"\n231:     for backend in auth.get_backends():\n232:         if not hasattr(backend, \"has_module_perms\"):\n233:             continue\n234:         try:\n235:             if backend.has_module_perms(user, app_label):\n236:                 return True\n237:         except PermissionDenied:\n238:             return False\n239:     return False\n240: \n241: \n242: class PermissionsMixin(models.Model):\n243:     \"\"\"\n244:     Add the fields and methods necessary to support the Group and Permission\n245:     models using the ModelBackend.\n246:     \"\"\"\n247: \n248:     is_superuser = models.BooleanField(\n249:         _(\"superuser status\"),\n250:         default=False,\n251:         help_text=_(\n252:             \"Designates that this user has all permissions without \"\n253:             \"explicitly assigning them.\"\n254:         ),\n255:     )\n256:     groups = models.ManyToManyField(\n257:         Group,\n258:         verbose_name=_(\"groups\"),\n259:         blank=True,\n260:         help_text=_(\n261:             \"The groups this user belongs to. A user will get all permissions \"\n262:             \"granted to each of their groups.\"\n263:         ),\n264:         related_name=\"user_set\",\n265:         related_query_name=\"user\",\n266:     )\n267:     user_permissions = models.ManyToManyField(\n268:         Permission,\n269:         verbose_name=_(\"user permissions\"),\n270:         blank=True,\n271:         help_text=_(\"Specific permissions for this user.\"),\n272:         related_name=\"user_set\",\n273:         related_query_name=\"user\",\n274:     )\n275: \n276:     class Meta:\n277:         abstract = True\n278: \n279:     def get_user_permissions(self, obj=None):\n280:         \"\"\"\n281:         Return a list of permission strings that this user has directly.\n282:         Query all available auth backends. If an object is passed in,\n283:         return only permissions matching this object.\n284:         \"\"\"\n285:         return _user_get_permissions(self, obj, \"user\")\n286: \n287:     def get_group_permissions(self, obj=None):\n288:         \"\"\"\n289:         Return a list of permission strings that this user has through their\n290:         groups. Query all available auth backends. If an object is passed in,\n291:         return only permissions matching this object.\n292:         \"\"\"\n293:         return _user_get_permissions(self, obj, \"group\")\n294: \n295:     def get_all_permissions(self, obj=None):\n296:         return _user_get_permissions(self, obj, \"all\")\n297: \n298:     def has_perm(self, perm, obj=None):\n299:         \"\"\"\n300:         Return True if the user has the specified permission. Query all\n301:         available auth backends, but return immediately if any backend returns\n302:         True. Thus, a user who has permission from a single auth backend is\n303:         assumed to have permission in general. If an object is provided, check\n304:         permissions for that object.\n305:         \"\"\"\n306:         # Active superusers have all permissions.\n307:         if self.is_active and self.is_superuser:\n308:             return True\n309: \n310:         # Otherwise we need to check the backends.\n311:         return _user_has_perm(self, perm, obj)\n312: \n313:     def has_perms(self, perm_list, obj=None):\n314:         \"\"\"\n315:         Return True if the user has each of the specified permissions. If\n316:         object is passed, check if the user has all required perms for it.\n317:         \"\"\"\n318:         if not is_iterable(perm_list) or isinstance(perm_list, str):\n319:             raise ValueError(\"perm_list must be an iterable of permissions.\")\n320:         return all(self.has_perm(perm, obj) for perm in perm_list)\n321: \n322:     def has_module_perms(self, app_label):\n323:         \"\"\"\n324:         Return True if the user has any permissions in the given app label.\n325:         Use similar logic as has_perm(), above.\n326:         \"\"\"\n327:         # Active superusers have all permissions.\n328:         if self.is_active and self.is_superuser:\n329:             return True\n330: \n331:         return _user_has_module_perms(self, app_label)\n332: \n333: \n334: class AbstractUser(AbstractBaseUser, PermissionsMixin):\n335:     \"\"\"\n336:     An abstract base class implementing a fully featured User model with\n337:     admin-compliant permissions.\n338: \n339:     Username and password are required. Other fields are optional.\n340:     \"\"\"\n341: \n342:     username_validator = UnicodeUsernameValidator()\n343: \n344:     username = models.CharField(\n345:         _(\"username\"),\n346:         max_length=150,\n347:         unique=True,\n348:         help_text=_(\n349:             \"Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.\"\n[lines 200-349 of 500]",
+    "token_count": 1679,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.contrib.auth.models._user_get_permissions",
+     "django.contrib.auth.models._user_has_perm",
+     "django.contrib.auth.models._user_has_module_perms",
+     "django.contrib.auth.models.PermissionsMixin",
+     "django.contrib.auth.models.PermissionsMixin.Meta",
+     "django.contrib.auth.models.PermissionsMixin.get_user_permissions",
+     "django.contrib.auth.models.PermissionsMixin.get_group_permissions",
+     "django.contrib.auth.models.PermissionsMixin.get_all_permissions",
+     "django.contrib.auth.models.PermissionsMixin.has_perm",
+     "django.contrib.auth.models.PermissionsMixin.has_perms",
+     "django.contrib.auth.models.PermissionsMixin.has_module_perms",
+     "django.contrib.auth.models.AbstractUser"
+    ],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "read",
+     "args": {
+      "path": "django/contrib/auth/models.py",
+      "start_line": 200,
+      "end_line": 500
+     },
+     "engine_token_count": 1679
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1842,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are debugging Django's permission-check dispatch in\ndjango/contrib/auth/models.py. Starting from\n`PermissionsMixin.has_perm`, trace the real causal pipeline that\ndetermines which authentication backends will be consulted for the\npermission check, in the order each stage is actually reached, up to\nand including the call that enumerates those backends. Assume the\nuser is not an active superuser, so the real backend-checking path is\nreached. Do not trace into any individual backend's own `has_perm`\ncall - which backend's implementation actually runs, and how many\nare consulted, is resolved dynamically at runtime, not statically in\nthis pipeline.\n\nYour symbols array should contain exactly 3 entries, no repeats.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.models.PermissionsMixin.has_perm\", \"django.contrib.auth.models._user_has_perm\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 4,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To trace the permission-check dispatch pipeline in Django's `django/contrib/auth/models.py`, we need to start from the `PermissionsMixin.has_perm` method and follow the call chain to determine which authentication backends will be consulted for the permission check. We will use the `grep` tool to find relevant method calls and the `read` tool to inspect the code.\n\nLet's start by searching for the `has_perm` method in the `models.py` file.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def has_perm\", \"path\": \"django/contrib/auth/models.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "def has_perm",
+        "path": "django/contrib/auth/models.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "def has_perm",
+        "path": "django/contrib/auth/models.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 128,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The `has_perm` method is defined in the `PermissionsMixin` class. We need to trace the call chain from this method to determine which authentication backends will be consulted.\n\nNext, we will search for calls to `_user_has_perm` within the `models.py` file, as this method is often involved in permission checks.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"_user_has_perm\", \"path\": \"django/contrib/auth/models.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "_user_has_perm",
+        "path": "django/contrib/auth/models.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "_user_has_perm",
+        "path": "django/contrib/auth/models.py"
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 101,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "The `_user_has_perm` method is called within the `has_perm` method. This method is responsible for checking user permissions. We need to trace further to determine how the authentication backends are consulted.\n\nNext, we will read the lines of the `models.py` file around the `has_perm` and `_user_has_perm` methods to understand the call chain.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/contrib/auth/models.py\", \"start_line\": 200, \"end_line\": 500}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/contrib/auth/models.py",
+        "start_line": 200,
+        "end_line": 500
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/contrib/auth/models.py",
+        "start_line": 200,
+        "end_line": 500
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 117,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "raw_text": "The permission-check dispatch pipeline starts from the `PermissionsMixin.has_perm` method. This method checks if the user is an active superuser. If not, it calls the `_user_has_perm` method. The `_user_has_perm` method iterates over the authentication backends and checks if any of them have the specified permission.\n\nThe relevant symbols in the causal order are:\n1. `django.contrib.auth.models.PermissionsMixin.has_perm`\n2. `django.contrib.auth.models._user_has_perm`\n3. `django.contrib.auth.get_backends`\n\n```json\n[\"django.contrib.auth.models.PermissionsMixin.has_perm\", \"django.contrib.auth.models._user_has_perm\", \"django.contrib.auth.get_backends\"]\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 144,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     8721.344769,
+     6459.920224,
+     7450.458264,
+     11478.416491
+    ],
+    "L_tool_exec": [
+     3.61604,
+     3.477379,
+     0.495285
+    ],
+    "L_retrieve": [
+     34174.154823
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 3048,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"\", \"symbols\": [\"django.contrib.auth.models.PermissionsMixin.has_perm\", \"django.contrib.auth.models._user_has_perm\", \"django.contrib.auth.get_backends\"]}\n```",
+    "generation_tokens": 144,
+    "latency_seconds": 11.478246659000433,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 3091,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1842,
+   "prompt_tokens": 3048,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3091,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

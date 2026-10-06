@@ -1,0 +1,1027 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t02_012_wsgi_entrypoint_dispatch",
+  "items": [
+   {
+    "source_id": "tests/handlers/test_exception.py:1-8",
+    "content": "# tests/handlers/test_exception.py:1-8  (tests.handlers.test_exception)\nfrom django.core.handlers.wsgi import WSGIHandler\nfrom django.test import SimpleTestCase, override_settings\nfrom django.test.client import (\n    BOUNDARY,\n    MULTIPART_CONTENT,\n    FakePayload,\n    encode_multipart,\n)",
+    "token_count": 68,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": 1.5444552898406982,
+     "bm25_rank": 20,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/wsgi.py:1-2",
+    "content": "# django/core/wsgi.py:1-2  (django.core.wsgi)\nimport django\nfrom django.core.handlers.wsgi import WSGIHandler",
+    "token_count": 31,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": 1.136832356452942,
+     "bm25_rank": 5,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 31
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context_processors.py:36-55",
+    "content": "# django/template/context_processors.py:36-55  (django.template.context_processors.debug)\ndef debug(request):\n    \"\"\"\n    Return context variables helpful for debugging.\n    \"\"\"\n    context_extras = {}\n    if settings.DEBUG and request.META.get(\"REMOTE_ADDR\") in settings.INTERNAL_IPS:\n        context_extras[\"debug\"] = True\n        from django.db import connections\n\n        # Return a lazy reference that computes connection.queries on access,\n        # to ensure it contains queries triggered after this function runs.\n        context_extras[\"sql_queries\"] = lazy(\n            lambda: list(\n                itertools.chain.from_iterable(\n                    connections[x].queries for x in connections\n                )\n            ),\n            list,\n        )\n    return context_extras",
+    "token_count": 152,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.context_processors.debug"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 23,
+     "rerank_score": 0.731056809425354,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:120-144",
+    "content": "# django/core/handlers/wsgi.py:120-144  (django.core.handlers.wsgi.WSGIHandler.__call__)\nclass WSGIHandler(base.BaseHandler):\n    def __call__(self, environ, start_response):\n        set_script_prefix(get_script_name(environ))\n        signals.request_started.send(sender=self.__class__, environ=environ)\n        request = self.request_class(environ)\n        response = self.get_response(request)\n\n        response._handler_class = self.__class__\n\n        status = \"%d %s\" % (response.status_code, response.reason_phrase)\n        response_headers = [\n            *response.items(),\n            *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n        ]\n        start_response(status, response_headers)\n        if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n            \"wsgi.file_wrapper\"\n        ):\n            # If `wsgi.file_wrapper` is used the WSGI server does not call\n            # .close on the response, but on the file wrapper. Patch it to use\n            # response.close instead which takes care of closing all files.\n            response.file_to_stream.close = response.close\n            response = environ[\"wsgi.file_wrapper\"](\n                response.file_to_stream, response.block_size\n            )\n        return response",
+    "token_count": 276,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIHandler.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": 0.5614545345306396,
+     "bm25_rank": 1,
+     "dense_rank": 51,
+     "oversized_chunk": false,
+     "engine_token_count": 276
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/wsgi.py:5-13",
+    "content": "# django/core/wsgi.py:5-13  (django.core.wsgi.get_wsgi_application)\ndef get_wsgi_application():\n    \"\"\"\n    The public interface to Django's WSGI support. Return a WSGI callable.\n\n    Avoids making django.core.handlers.WSGIHandler a public API, in case the\n    internal WSGI implementation changes or moves in the future.\n    \"\"\"\n    django.setup(set_prefix=False)\n    return WSGIHandler()",
+    "token_count": 97,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.wsgi.get_wsgi_application"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 6,
+     "rerank_score": 0.48137930035591125,
+     "bm25_rank": 2,
+     "dense_rank": 74,
+     "oversized_chunk": false,
+     "engine_token_count": 97
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:114-114",
+    "content": "# django/core/handlers/wsgi.py:114-114  (django.core.handlers.wsgi.WSGIHandler)\nclass WSGIHandler(base.BaseHandler):\n    request_class = WSGIRequest",
+    "token_count": 46,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIHandler"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 3,
+     "rerank_score": 0.46232903003692627,
+     "bm25_rank": 3,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/servers/basehttp.py:1-25",
+    "content": "# django/core/servers/basehttp.py:1-25  (django.core.servers.basehttp)\n\"\"\"\nHTTP server that implements the Python WSGI protocol (PEP 333, rev 1.21).\n\nBased on wsgiref.simple_server which is part of the standard library since 2.5.\n\nThis is a simple server for use in testing or debugging Django apps. It hasn't\nbeen reviewed for security issues. DON'T USE IT FOR PRODUCTION USE!\n\"\"\"\n\nimport logging\nimport socket\nimport socketserver\nimport sys\nfrom collections import deque\nfrom wsgiref import simple_server\n\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.core.handlers.wsgi import LimitedStream\nfrom django.core.wsgi import get_wsgi_application\nfrom django.db import connections\nfrom django.utils.module_loading import import_string\n\n__all__ = (\"WSGIServer\", \"WSGIRequestHandler\")\n\nlogger = logging.getLogger(\"django.server\")",
+    "token_count": 199,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 12,
+     "rerank_score": 0.37139520049095154,
+     "bm25_rank": 9,
+     "dense_rank": 91,
+     "oversized_chunk": false,
+     "engine_token_count": 199
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:116-118",
+    "content": "# django/core/handlers/wsgi.py:116-118  (django.core.handlers.wsgi.WSGIHandler.__init__)\nclass WSGIHandler(base.BaseHandler):\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.load_middleware()",
+    "token_count": 69,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIHandler.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": 0.22981882095336914,
+     "bm25_rank": 6,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/context_processors/urls.py:1-8",
+    "content": "# tests/context_processors/urls.py:1-8  (tests.context_processors.urls)\nfrom django.urls import path\n\nfrom . import views\n\nurlpatterns = [\n    path(\"request_attrs/\", views.request_processor),\n    path(\"debug/\", views.debug_processor),\n]",
+    "token_count": 52,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 26,
+     "rerank_score": 0.19553431868553162,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/asgi.py:1-2",
+    "content": "# django/core/asgi.py:1-2  (django.core.asgi)\nimport django\nfrom django.core.handlers.asgi import ASGIHandler",
+    "token_count": 30,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -0.17552980780601501,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/handlers/tests.py:1-10",
+    "content": "# tests/handlers/tests.py:1-10  (tests.handlers.tests)\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.core.handlers.wsgi import WSGIHandler, WSGIRequest, get_script_name\nfrom django.core.signals import request_finished, request_started\nfrom django.db import close_old_connections, connection\nfrom django.test import (\n    RequestFactory,\n    SimpleTestCase,\n    TransactionTestCase,\n    override_settings,\n)",
+    "token_count": 93,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 9,
+     "rerank_score": -0.20057624578475952,
+     "bm25_rank": 4,
+     "dense_rank": 97,
+     "oversized_chunk": false,
+     "engine_token_count": 93
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:1-46",
+    "content": "# django/test/client.py:1-46  (django.test.client)\nimport json\nimport mimetypes\nimport os\nimport sys\nfrom copy import copy\nfrom functools import partial\nfrom http import HTTPStatus\nfrom importlib import import_module\nfrom io import BytesIO, IOBase\nfrom urllib.parse import unquote_to_bytes, urljoin, urlparse, urlsplit\n\nfrom asgiref.sync import sync_to_async\n\nfrom django.conf import settings\nfrom django.core.handlers.asgi import ASGIRequest\nfrom django.core.handlers.base import BaseHandler\nfrom django.core.handlers.wsgi import LimitedStream, WSGIRequest\nfrom django.core.serializers.json import DjangoJSONEncoder\nfrom django.core.signals import got_request_exception, request_finished, request_started\nfrom django.db import close_old_connections\nfrom django.http import HttpHeaders, HttpRequest, QueryDict, SimpleCookie\nfrom django.test import signals\nfrom django.test.utils import ContextList\nfrom django.urls import resolve\nfrom django.utils.encoding import force_bytes\nfrom django.utils.functional import SimpleLazyObject\nfrom django.utils.http import urlencode\nfrom django.utils.itercompat import is_iterable\nfrom django.utils.regex_helper import _lazy_re_compile\n\n__all__ = (\n    \"AsyncClient\",\n    \"AsyncRequestFactory\",\n    \"Client\",\n    \"RedirectCycleError\",\n    \"RequestFactory\",\n    \"encode_file\",\n    \"encode_multipart\",\n)\n\n\nBOUNDARY = \"BoUnDaRyStRiNg\"\nMULTIPART_CONTENT = \"multipart/form-data; boundary=%s\" % BOUNDARY\nCONTENT_TYPE_RE = _lazy_re_compile(r\".*; charset=([\\w-]+);?\")\n# Structured suffix spec: https://tools.ietf.org/html/rfc6838#section-4.2.8\nJSON_CONTENT_TYPE_RE = _lazy_re_compile(r\"^application\\/(.+\\+)?json\")",
+    "token_count": 385,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 37,
+     "rerank_score": -0.4544696509838104,
+     "bm25_rank": 77,
+     "dense_rank": 93,
+     "oversized_chunk": false,
+     "engine_token_count": 385
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:234-244",
+    "content": "# django/core/handlers/asgi.py:234-244  (django.core.handlers.asgi.ASGIHandler.handle_uncaught_exception)\nclass ASGIHandler(base.BaseHandler):\n    def handle_uncaught_exception(self, request, resolver, exc_info):\n        \"\"\"Last-chance handler for exceptions.\"\"\"\n        # There's no WSGI server to catch the exception further up\n        # if this fails, so translate it into a plain text response.\n        try:\n            return super().handle_uncaught_exception(request, resolver, exc_info)\n        except Exception:\n            return HttpResponseServerError(\n                traceback.format_exc() if settings.DEBUG else \"Internal Server Error\",\n                content_type=\"text/plain\",\n            )",
+    "token_count": 146,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.handle_uncaught_exception"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 10,
+     "rerank_score": -1.0907938480377197,
+     "bm25_rank": 32,
+     "dense_rank": 32,
+     "oversized_chunk": false,
+     "engine_token_count": 146
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:159-200",
+    "content": "# django/test/client.py:159-200  (django.test.client.ClientHandler.__call__)\nclass ClientHandler(BaseHandler):\n    def __call__(self, environ):\n        # Set up middleware if needed. We couldn't do this earlier, because\n        # settings weren't available.\n        if self._middleware_chain is None:\n            self.load_middleware()\n\n        request_started.disconnect(close_old_connections)\n        request_started.send(sender=self.__class__, environ=environ)\n        request_started.connect(close_old_connections)\n        request = WSGIRequest(environ)\n        # sneaky little hack so that we can easily get round\n        # CsrfViewMiddleware.  This makes life easier, and is probably\n        # required for backwards compatibility with external tests against\n        # admin views.\n        request._dont_enforce_csrf_checks = not self.enforce_csrf_checks\n\n        # Request goes through middleware.\n        response = self.get_response(request)\n\n        # Simulate behaviors of most web servers.\n        conditional_content_removal(request, response)\n\n        # Attach the originating request to the response so that it could be\n        # later retrieved.\n        response.wsgi_request = request\n\n        # Emulate a WSGI server by calling the close method on completion.\n        if response.streaming:\n            if response.is_async:\n                response.streaming_content = aclosing_iterator_wrapper(\n                    response.streaming_content, response.close\n                )\n            else:\n                response.streaming_content = closing_iterator_wrapper(\n                    response.streaming_content, response.close\n                )\n        else:\n            request_finished.disconnect(close_old_connections)\n            response.close()  # will fire request_finished\n            request_finished.connect(close_old_connections)\n\n        return response",
+    "token_count": 347,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.ClientHandler.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 15,
+     "rerank_score": -1.252782940864563,
+     "bm25_rank": 35,
+     "dense_rank": 76,
+     "oversized_chunk": false,
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:152-164",
+    "content": "# django/core/handlers/asgi.py:152-164  (django.core.handlers.asgi.ASGIHandler.__call__)\nclass ASGIHandler(base.BaseHandler):\n    async def __call__(self, scope, receive, send):\n        \"\"\"\n        Async entrypoint - parses the request and hands off to get_response.\n        \"\"\"\n        # Serve only HTTP connections.\n        # FIXME: Allow to override this.\n        if scope[\"type\"] != \"http\":\n            raise ValueError(\n                \"Django can only handle ASGI/HTTP connections, not %s.\" % scope[\"type\"]\n            )\n\n        async with ThreadSensitiveContext():\n            await self.handle(scope, receive, send)",
+    "token_count": 143,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.asgi.ASGIHandler.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": -1.6384458541870117,
+     "bm25_rank": 13,
+     "dense_rank": 42,
+     "oversized_chunk": false,
+     "engine_token_count": 143
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/testcases.py:1678-1681",
+    "content": "# django/test/testcases.py:1678-1681  (django.test.testcases.FSFilesHandler)\nclass FSFilesHandler(WSGIHandler):\n    \"\"\"\n    WSGI middleware that intercepts calls to a directory, as defined by one of\n    the *_ROOT settings, and serves those files, publishing them under *_URL.\n    \"\"\"",
+    "token_count": 76,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.testcases.FSFilesHandler"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 41,
+     "rerank_score": -1.6900750398635864,
+     "bm25_rank": 15,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:152-172",
+    "content": "# django/core/handlers/base.py:152-172  (django.core.handlers.base.BaseHandler.get_response_async)\nclass BaseHandler:\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response",
+    "token_count": 185,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.get_response_async"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 43,
+     "rerank_score": -1.7051316499710083,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 185
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:136-150",
+    "content": "# django/core/handlers/base.py:136-150  (django.core.handlers.base.BaseHandler.get_response)\nclass BaseHandler:\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response",
+    "token_count": 134,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.get_response"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 31,
+     "rerank_score": -1.8795738220214844,
+     "bm25_rank": 89,
+     "dense_rank": 68,
+     "oversized_chunk": false,
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:21-343",
+    "content": "# django/core/handlers/base.py:21-343  (django.core.handlers.base.BaseHandler)\nclass BaseHandler:\n    _view_middleware = None\n    _template_response_middleware = None\n    _exception_middleware = None\n    _middleware_chain = None\n\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler\n\n    def adapt_method_mode(\n        self,\n        is_async,\n        method,\n        method_is_async=None,\n        debug=False,\n        name=None,\n    ):\n        \"\"\"\n        Adapt a method to be in the correct \"mode\":\n        - If is_async is False:\n          - Synchronous methods are left alone\n          - Asynchronous methods are wrapped with async_to_sync\n        - If is_async is True:\n          - Synchronous methods are wrapped with sync_to_async()\n          - Asynchronous methods are left alone\n        \"\"\"\n        if method_is_async is None:\n            method_is_async = iscoroutinefunction(method)\n        if debug and not name:\n            name = name or \"method %s()\" % method.__qualname__\n        if is_async:\n            if not method_is_async:\n                if debug:\n                    logger.debug(\"Synchronous handler adapted for %s.\", name)\n                return sync_to_async(method, thread_sensitive=True)\n        elif method_is_async:\n            if debug:\n                logger.debug(\"Asynchronous handler adapted for %s.\", name)\n            return async_to_sync(method)\n        return method\n\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response\n\n    async def _get_response_async(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware.\n        for middleware_method in self._view_middleware:\n            response = await middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is a synchronous view, run it in a subthread\n            if not iscoroutinefunction(wrapped_callback):\n                wrapped_callback = sync_to_async(\n                    wrapped_callback, thread_sensitive=True\n                )\n            try:\n                response = await wrapped_callback(\n                    request, *callback_args, **callback_kwargs\n                )\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None or an uncalled coroutine.\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = await middleware_method(request, response)\n                # Complain if the template response middleware returned None or\n                # an uncalled coroutine.\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                if iscoroutinefunction(response.render):\n                    response = await response.render()\n                else:\n                    response = await sync_to_async(\n                        response.render, thread_sensitive=True\n                    )()\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Make sure the response is not a coroutine\n        if asyncio.iscoroutine(response):\n            raise RuntimeError(\"Response is still a coroutine.\")\n        return response\n\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match\n\n    def check_response(self, response, callback, name=None):\n        \"\"\"\n        Raise an error if the view returned None or an uncalled coroutine.\n        \"\"\"\n        if not (response is None or asyncio.iscoroutine(response)):\n            return\n        if not name:\n            if isinstance(callback, types.FunctionType):  # FBV\n                name = \"The view %s.%s\" % (callback.__module__, callback.__name__)\n            else:  # CBV\n                name = \"The view %s.%s.__call__\" % (\n                    callback.__module__,\n                    callback.__class__.__name__,\n                )\n        if response is None:\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned None \"\n                \"instead.\" % name\n            )\n        elif asyncio.iscoroutine(response):\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned an \"\n                \"unawaited coroutine instead. You may need to add an 'await' \"\n                \"into your view.\" % name\n            )\n\n    # Other utility methods.",
+    "token_count": 2364,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 40,
+     "rerank_score": -2.017533302307129,
+     "bm25_rank": 84,
+     "dense_rank": 96,
+     "oversized_chunk": true,
+     "engine_token_count": 2364
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware_exceptions/middleware.py:89-92",
+    "content": "# tests/middleware_exceptions/middleware.py:89-92  (tests.middleware_exceptions.middleware.LogMiddleware.__call__)\nclass LogMiddleware(BaseMiddleware):\n    def __call__(self, request):\n        response = self.get_response(request)\n        log.append((response.status_code, response.content))\n        return response",
+    "token_count": 62,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware_exceptions.middleware.LogMiddleware.__call__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": -2.0599493980407715,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 62
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_decorators.py:39-40",
+    "content": "# tests/utils_tests/test_decorators.py:39-40  (tests.utils_tests.test_decorators.FullMiddleware.process_view)\nclass FullMiddleware:\n    def process_view(self, request, view_func, view_args, view_kwargs):\n        request.process_view_reached = True",
+    "token_count": 56,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_decorators.FullMiddleware.process_view"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 39,
+     "rerank_score": -2.301337718963623,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_decorators.py:36-37",
+    "content": "# tests/utils_tests/test_decorators.py:36-37  (tests.utils_tests.test_decorators.FullMiddleware.process_request)\nclass FullMiddleware:\n    def process_request(self, request):\n        request.process_request_reached = True",
+    "token_count": 47,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_decorators.FullMiddleware.process_request"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 25,
+     "rerank_score": -2.8371798992156982,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:57-80",
+    "content": "# django/core/handlers/wsgi.py:57-80  (django.core.handlers.wsgi.WSGIRequest.__init__)\nclass WSGIRequest(HttpRequest):\n    def __init__(self, environ):\n        script_name = get_script_name(environ)\n        # If PATH_INFO is empty (e.g. accessing the SCRIPT_NAME URL without a\n        # trailing slash), operate as if '/' was requested.\n        path_info = get_path_info(environ) or \"/\"\n        self.environ = environ\n        self.path_info = path_info\n        # be careful to only replace the first slash in the path because of\n        # http://test/something and http://test//something being different as\n        # stated in RFC 3986.\n        self.path = \"%s/%s\" % (script_name.rstrip(\"/\"), path_info.replace(\"/\", \"\", 1))\n        self.META = environ\n        self.META[\"PATH_INFO\"] = path_info\n        self.META[\"SCRIPT_NAME\"] = script_name\n        self.method = environ[\"REQUEST_METHOD\"].upper()\n        # Set content_type, content_params, and encoding.\n        self._set_content_type_params(environ)\n        try:\n            content_length = int(environ.get(\"CONTENT_LENGTH\"))\n        except (ValueError, TypeError):\n            content_length = 0\n        self._stream = LimitedStream(self.environ[\"wsgi.input\"], content_length)\n        self._read_started = False\n        self.resolver_match = None",
+    "token_count": 307,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIRequest.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 47,
+     "rerank_score": -2.8755805492401123,
+     "bm25_rank": 19,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 307
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/context_processors.py:1-14",
+    "content": "# django/template/context_processors.py:1-14  (django.template.context_processors)\n\"\"\"\nA set of request processors that return dictionaries to be merged into a\ntemplate context. Each function takes the request object as its only parameter\nand returns a dictionary to add to the context.\n\nThese are referenced from the 'context_processors' option of the configuration\nof a DjangoTemplates backend and used by RequestContext.\n\"\"\"\n\nimport itertools\n\nfrom django.conf import settings\nfrom django.middleware.csrf import get_token\nfrom django.utils.functional import SimpleLazyObject, lazy",
+    "token_count": 109,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 21,
+     "rerank_score": -2.9783551692962646,
+     "bm25_rank": 97,
+     "dense_rank": 45,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/handlers.py:16-22",
+    "content": "# django/contrib/staticfiles/handlers.py:16-22  (django.contrib.staticfiles.handlers.StaticFilesHandlerMixin)\nclass StaticFilesHandlerMixin:\n    \"\"\"\n    Common methods used by WSGI and ASGI handlers.\n    \"\"\"\n\n    # May be used to differentiate between handler types (e.g. in a\n    # request_finished signal)\n    handles_files = True",
+    "token_count": 79,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.handlers.StaticFilesHandlerMixin"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 44,
+     "rerank_score": -2.983816146850586,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware_exceptions/middleware.py:1-12",
+    "content": "# tests/middleware_exceptions/middleware.py:1-12  (tests.middleware_exceptions.middleware)\nfrom asgiref.sync import iscoroutinefunction, markcoroutinefunction\n\nfrom django.http import Http404, HttpResponse\nfrom django.template import engines\nfrom django.template.response import TemplateResponse\nfrom django.utils.decorators import (\n    async_only_middleware,\n    sync_and_async_middleware,\n    sync_only_middleware,\n)\n\nlog = []",
+    "token_count": 91,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -2.98871111869812,
+     "bm25_rank": null,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 91
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/handlers/tests.py:22-24",
+    "content": "# tests/handlers/tests.py:22-24  (tests.handlers.tests.HandlerTests.test_middleware_initialized)\nclass HandlerTests(SimpleTestCase):\n    def test_middleware_initialized(self):\n        handler = WSGIHandler()\n        self.assertIsNotNone(handler._middleware_chain)",
+    "token_count": 57,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.handlers.tests.HandlerTests.test_middleware_initialized"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 16,
+     "rerank_score": -3.0018694400787354,
+     "bm25_rank": 65,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:149-153",
+    "content": "# django/test/client.py:149-153  (django.test.client.ClientHandler)\nclass ClientHandler(BaseHandler):\n    \"\"\"\n    An HTTP Handler that can be used for testing purposes. Use the WSGI\n    interface to compose requests, but return the raw HttpResponse object with\n    the originating WSGIRequest attached to its ``wsgi_request`` attribute.\n    \"\"\"",
+    "token_count": 80,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.ClientHandler"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 11,
+     "rerank_score": -3.063809394836426,
+     "bm25_rank": 14,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/handlers.py:68-71",
+    "content": "# django/contrib/staticfiles/handlers.py:68-71  (django.contrib.staticfiles.handlers.StaticFilesHandler)\nclass StaticFilesHandler(StaticFilesHandlerMixin, WSGIHandler):\n    \"\"\"\n    WSGI middleware that intercepts calls to the static files directory, as\n    defined by the STATIC_URL setting, and serves those files.\n    \"\"\"",
+    "token_count": 76,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.staticfiles.handlers.StaticFilesHandler"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 27,
+     "rerank_score": -3.218280792236328,
+     "bm25_rank": 7,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:91-94",
+    "content": "# django/core/handlers/wsgi.py:91-94  (django.core.handlers.wsgi.WSGIRequest._get_post)\nclass WSGIRequest(HttpRequest):\n    def _get_post(self):\n        if not hasattr(self, \"_post\"):\n            self._load_post_and_files()\n        return self._post",
+    "token_count": 67,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIRequest._get_post"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": -3.2693419456481934,
+     "bm25_rank": 55,
+     "dense_rank": 62,
+     "oversized_chunk": false,
+     "engine_token_count": 67
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/utils_tests/test_decorators.py:9-10",
+    "content": "# tests/utils_tests/test_decorators.py:9-10  (tests.utils_tests.test_decorators.ProcessViewMiddleware.__init__)\nclass ProcessViewMiddleware:\n    def __init__(self, get_response):\n        self.get_response = get_response",
+    "token_count": 49,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.utils_tests.test_decorators.ProcessViewMiddleware.__init__"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 48,
+     "rerank_score": -3.3336451053619385,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/dispatch/dispatcher.py:1-7",
+    "content": "# django/dispatch/dispatcher.py:1-7  (django.dispatch.dispatcher)\nimport logging\nimport threading\nimport weakref\n\nfrom django.utils.inspect import func_accepts_kwargs\n\nlogger = logging.getLogger(\"django.dispatch\")",
+    "token_count": 46,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 34,
+     "rerank_score": -3.3980679512023926,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/staticfiles/handlers.py:1-12",
+    "content": "# django/contrib/staticfiles/handlers.py:1-12  (django.contrib.staticfiles.handlers)\nfrom urllib.parse import urlparse\nfrom urllib.request import url2pathname\n\nfrom asgiref.sync import sync_to_async\n\nfrom django.conf import settings\nfrom django.contrib.staticfiles import utils\nfrom django.contrib.staticfiles.views import serve\nfrom django.core.handlers.asgi import ASGIHandler\nfrom django.core.handlers.exception import response_for_exception\nfrom django.core.handlers.wsgi import WSGIHandler, get_path_info\nfrom django.http import Http404",
+    "token_count": 116,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -3.480970859527588,
+     "bm25_rank": 8,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 116
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/checks/security/csrf.py:1-22",
+    "content": "# django/core/checks/security/csrf.py:1-22  (django.core.checks.security.csrf)\nimport inspect\n\nfrom django.conf import settings\n\nfrom .. import Error, Tags, Warning, register\n\nW003 = Warning(\n    \"You don't appear to be using Django's built-in \"\n    \"cross-site request forgery protection via the middleware \"\n    \"('django.middleware.csrf.CsrfViewMiddleware' is not in your \"\n    \"MIDDLEWARE). Enabling the middleware is the safest approach \"\n    \"to ensure you don't leave any holes.\",\n    id=\"security.W003\",\n)\n\nW016 = Warning(\n    \"You have 'django.middleware.csrf.CsrfViewMiddleware' in your \"\n    \"MIDDLEWARE, but you have not set CSRF_COOKIE_SECURE to True. \"\n    \"Using a secure-only CSRF cookie makes it more difficult for network \"\n    \"traffic sniffers to steal the CSRF token.\",\n    id=\"security.W016\",\n)",
+    "token_count": 206,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -3.6511502265930176,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 206
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware_exceptions/tests.py:157-158",
+    "content": "# tests/middleware_exceptions/tests.py:157-158  (tests.middleware_exceptions.tests.MyMiddleware.process_request)\nclass MyMiddleware:\n    def process_request(self, request):\n        pass",
+    "token_count": 40,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware_exceptions.tests.MyMiddleware.process_request"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 22,
+     "rerank_score": -3.6958985328674316,
+     "bm25_rank": null,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware_exceptions/middleware.py:47-48",
+    "content": "# tests/middleware_exceptions/middleware.py:47-48  (tests.middleware_exceptions.middleware.ProcessViewMiddleware.process_view)\nclass ProcessViewMiddleware(BaseMiddleware):\n    def process_view(self, request, view_func, view_args, view_kwargs):\n        return HttpResponse(\"Processed view %s\" % view_func.__name__)",
+    "token_count": 65,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware_exceptions.middleware.ProcessViewMiddleware.process_view"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 30,
+     "rerank_score": -3.7911500930786133,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 65
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/servers/basehttp.py:214-223",
+    "content": "# django/core/servers/basehttp.py:214-223  (django.core.servers.basehttp.WSGIRequestHandler.get_environ)\nclass WSGIRequestHandler(simple_server.WSGIRequestHandler):\n    def get_environ(self):\n        # Strip all headers with underscores in the name before constructing\n        # the WSGI environ. This prevents header-spoofing based on ambiguity\n        # between underscores and dashes both normalized to underscores in WSGI\n        # env vars. Nginx and Apache 2.4+ both do this as well.\n        for k in self.headers:\n            if \"_\" in k:\n                del self.headers[k]\n\n        return super().get_environ()",
+    "token_count": 149,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.servers.basehttp.WSGIRequestHandler.get_environ"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 8,
+     "rerank_score": -3.908174991607666,
+     "bm25_rank": 11,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 149
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/servers/basehttp.py:183-212",
+    "content": "# django/core/servers/basehttp.py:183-212  (django.core.servers.basehttp.WSGIRequestHandler.log_message)\nclass WSGIRequestHandler(simple_server.WSGIRequestHandler):\n    def log_message(self, format, *args):\n        extra = {\n            \"request\": self.request,\n            \"server_time\": self.log_date_time_string(),\n        }\n        if args[1][0] == \"4\":\n            # 0x16 = Handshake, 0x03 = SSL 3.0 or TLS 1.x\n            if args[0].startswith(\"\\x16\\x03\"):\n                extra[\"status_code\"] = 500\n                logger.error(\n                    \"You're accessing the development server over HTTPS, but \"\n                    \"it only supports HTTP.\",\n                    extra=extra,\n                )\n                return\n\n        if args[1].isdigit() and len(args[1]) == 3:\n            status_code = int(args[1])\n            extra[\"status_code\"] = status_code\n\n            if status_code >= 500:\n                level = logger.error\n            elif status_code >= 400:\n                level = logger.warning\n            else:\n                level = logger.info\n        else:\n            level = logger.info\n\n        level(format, *args, extra=extra)",
+    "token_count": 280,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.servers.basehttp.WSGIRequestHandler.log_message"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 18,
+     "rerank_score": -3.9779748916625977,
+     "bm25_rank": 61,
+     "dense_rank": 57,
+     "oversized_chunk": false,
+     "engine_token_count": 280
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/handlers/tests.py:26-36",
+    "content": "# tests/handlers/tests.py:26-36  (tests.handlers.tests.HandlerTests.test_bad_path_info)\nclass HandlerTests(SimpleTestCase):\n    def test_bad_path_info(self):\n        \"\"\"\n        A non-UTF-8 path populates PATH_INFO with an URL-encoded path and\n        produces a 404.\n        \"\"\"\n        environ = self.request_factory.get(\"/\").environ\n        environ[\"PATH_INFO\"] = \"\\xed\"\n        handler = WSGIHandler()\n        response = handler(environ, lambda *a, **k: None)\n        # The path of the request will be encoded to '/%ED'.\n        self.assertEqual(response.status_code, 404)",
+    "token_count": 144,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.handlers.tests.HandlerTests.test_bad_path_info"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 35,
+     "rerank_score": -3.9863953590393066,
+     "bm25_rank": 12,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 144
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:104-108",
+    "content": "# django/core/handlers/wsgi.py:104-108  (django.core.handlers.wsgi.WSGIRequest.FILES)\nclass WSGIRequest(HttpRequest):\n    @property\n    def FILES(self):\n        if not hasattr(self, \"_files\"):\n            self._load_post_and_files()\n        return self._files",
+    "token_count": 69,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIRequest.FILES"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": -4.143970012664795,
+     "bm25_rank": 57,
+     "dense_rank": 85,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/asgi.py:1-26",
+    "content": "# django/core/handlers/asgi.py:1-26  (django.core.handlers.asgi)\nimport logging\nimport sys\nimport tempfile\nimport traceback\nfrom collections import defaultdict\n\nfrom asgiref.sync import ThreadSensitiveContext, sync_to_async\n\nfrom django.conf import settings\nfrom django.core import signals\nfrom django.core.exceptions import RequestAborted, RequestDataTooBig\nfrom django.core.handlers import base\nfrom django.http import (\n    FileResponse,\n    HttpRequest,\n    HttpResponse,\n    HttpResponseBadRequest,\n    HttpResponseServerError,\n    QueryDict,\n    parse_cookie,\n)\nfrom django.urls import set_script_prefix\nfrom django.utils.asyncio import aclosing\nfrom django.utils.functional import cached_property\n\nlogger = logging.getLogger(\"django.request\")",
+    "token_count": 152,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 32,
+     "rerank_score": -4.472047805786133,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/testcases.py:1673-1674",
+    "content": "# django/test/testcases.py:1673-1674  (django.test.testcases.QuietWSGIRequestHandler.log_message)\nclass QuietWSGIRequestHandler(WSGIRequestHandler):\n    def log_message(*args):\n        pass",
+    "token_count": 53,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.testcases.QuietWSGIRequestHandler.log_message"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 14,
+     "rerank_score": -4.50521183013916,
+     "bm25_rank": 87,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/servers/test_basehttp.py:1-8",
+    "content": "# tests/servers/test_basehttp.py:1-8  (tests.servers.test_basehttp)\nfrom io import BytesIO\nfrom socketserver import ThreadingMixIn\n\nfrom django.core.handlers.wsgi import WSGIRequest\nfrom django.core.servers.basehttp import WSGIRequestHandler, WSGIServer\nfrom django.test import SimpleTestCase\nfrom django.test.client import RequestFactory\nfrom django.test.utils import captured_stderr",
+    "token_count": 87,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 13,
+     "rerank_score": -4.685305595397949,
+     "bm25_rank": 24,
+     "dense_rank": 65,
+     "oversized_chunk": false,
+     "engine_token_count": 87
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/views.py:36-60",
+    "content": "# tests/test_client/views.py:36-60  (tests.test_client.views.trace_view)\ndef trace_view(request):\n    \"\"\"\n    A simple view that expects a TRACE request and echoes its status line.\n\n    TRACE requests should not have an entity; the view will return a 400 status\n    response if it is present.\n    \"\"\"\n    if request.method.upper() != \"TRACE\":\n        return HttpResponseNotAllowed(\"TRACE\")\n    elif request.body:\n        return HttpResponseBadRequest(\"TRACE requests MUST NOT include an entity\")\n    else:\n        protocol = request.META[\"SERVER_PROTOCOL\"]\n        t = Template(\n            \"{{ method }} {{ uri }} {{ version }}\",\n            name=\"TRACE Template\",\n        )\n        c = Context(\n            {\n                \"method\": request.method,\n                \"uri\": request.path,\n                \"version\": protocol,\n            }\n        )\n        return HttpResponse(t.render(c))",
+    "token_count": 182,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client.views.trace_view"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 50,
+     "rerank_score": -4.92298698425293,
+     "bm25_rank": null,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 182
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:96-97",
+    "content": "# django/core/handlers/wsgi.py:96-97  (django.core.handlers.wsgi.WSGIRequest._set_post)\nclass WSGIRequest(HttpRequest):\n    def _set_post(self, post):\n        self._post = post",
+    "token_count": 53,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.WSGIRequest._set_post"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 20,
+     "rerank_score": -5.1337432861328125,
+     "bm25_rank": 52,
+     "dense_rank": 79,
+     "oversized_chunk": false,
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/template_tests/test_context.py:252-258",
+    "content": "# tests/template_tests/test_context.py:252-258  (tests.template_tests.test_context.RequestContextTests.test_stack_size)\nclass RequestContextTests(SimpleTestCase):\n    def test_stack_size(self):\n        \"\"\"Optimized RequestContext construction (#7116).\"\"\"\n        request = self.request_factory.get(\"/\")\n        ctx = RequestContext(request, {})\n        # The stack contains 4 items:\n        # [builtins, supplied context, context processor, empty dict]\n        self.assertEqual(len(ctx.dicts), 4)",
+    "token_count": 106,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.template_tests.test_context.RequestContextTests.test_stack_size"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 36,
+     "rerank_score": -5.56497049331665,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 106
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/wsgi.py:154-184",
+    "content": "# django/core/handlers/wsgi.py:154-184  (django.core.handlers.wsgi.get_script_name)\ndef get_script_name(environ):\n    \"\"\"\n    Return the equivalent of the HTTP request's SCRIPT_NAME environment\n    variable. If Apache mod_rewrite is used, return what would have been\n    the script name prior to any rewriting (so it's the script name as seen\n    from the client's perspective), unless the FORCE_SCRIPT_NAME setting is\n    set (to anything).\n    \"\"\"\n    if settings.FORCE_SCRIPT_NAME is not None:\n        return settings.FORCE_SCRIPT_NAME\n\n    # If Apache's mod_rewrite had a whack at the URL, Apache set either\n    # SCRIPT_URL or REDIRECT_URL to the full resource URL before applying any\n    # rewrites. Unfortunately not every web server (lighttpd!) passes this\n    # information through all the time, so FORCE_SCRIPT_NAME, above, is still\n    # needed.\n    script_url = get_bytes_from_wsgi(environ, \"SCRIPT_URL\", \"\") or get_bytes_from_wsgi(\n        environ, \"REDIRECT_URL\", \"\"\n    )\n\n    if script_url:\n        if b\"//\" in script_url:\n            # mod_wsgi squashes multiple successive slashes in PATH_INFO,\n            # do the same with script_url before manipulating paths (#17133).\n            script_url = _slashes_re.sub(b\"/\", script_url)\n        path_info = get_bytes_from_wsgi(environ, \"PATH_INFO\", \"\")\n        script_name = script_url[: -len(path_info)] if path_info else script_url\n    else:\n        script_name = get_bytes_from_wsgi(environ, \"SCRIPT_NAME\", \"\")\n\n    return script_name.decode()",
+    "token_count": 361,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.wsgi.get_script_name"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 46,
+     "rerank_score": -5.738443374633789,
+     "bm25_rank": 18,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 361
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/generic/base.py:1-19",
+    "content": "# django/views/generic/base.py:1-19  (django.views.generic.base)\nimport logging\n\nfrom asgiref.sync import iscoroutinefunction, markcoroutinefunction\n\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.http import (\n    HttpResponse,\n    HttpResponseGone,\n    HttpResponseNotAllowed,\n    HttpResponsePermanentRedirect,\n    HttpResponseRedirect,\n)\nfrom django.template.response import TemplateResponse\nfrom django.urls import reverse\nfrom django.utils.decorators import classonlymethod\nfrom django.utils.functional import classproperty\nfrom django.utils.log import log_response\n\nlogger = logging.getLogger(\"django.request\")",
+    "token_count": 123,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 19,
+     "rerank_score": -5.7588396072387695,
+     "bm25_rank": null,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 123
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/testcases.py:1668-1671",
+    "content": "# django/test/testcases.py:1668-1671  (django.test.testcases.QuietWSGIRequestHandler)\nclass QuietWSGIRequestHandler(WSGIRequestHandler):\n    \"\"\"\n    A WSGIRequestHandler that doesn't log to standard output any of the\n    requests received, so as to not clutter the test result output.\n    \"\"\"",
+    "token_count": 78,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.testcases.QuietWSGIRequestHandler"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 5,
+     "rerank_score": -5.770897388458252,
+     "bm25_rank": 10,
+     "dense_rank": 38,
+     "oversized_chunk": false,
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:1-17",
+    "content": "# django/core/handlers/base.py:1-17  (django.core.handlers.base)\nimport asyncio\nimport logging\nimport types\n\nfrom asgiref.sync import async_to_sync, iscoroutinefunction, sync_to_async\n\nfrom django.conf import settings\nfrom django.core.exceptions import ImproperlyConfigured, MiddlewareNotUsed\nfrom django.core.signals import request_finished\nfrom django.db import connections, transaction\nfrom django.urls import get_resolver, set_urlconf\nfrom django.utils.log import log_response\nfrom django.utils.module_loading import import_string\n\nfrom .exception import convert_exception_to_response\n\nlogger = logging.getLogger(\"django.request\")",
+    "token_count": 131,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 45,
+     "rerank_score": -5.896622180938721,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 8414,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are debugging the very first steps of a Django request's\nlifecycle in django/core/handlers/wsgi.py. Starting from\n`WSGIHandler.__call__`, trace the real causal pipeline a request\ntravels through before Django's own request-handling machinery takes\nover, in the order each stage is actually reached, up to and\nincluding the call that hands off to the base handler's own response\npipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.handlers.wsgi.WSGIHandler.__call__\", \"django.core.handlers.wsgi.get_script_name\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1163.431789
+    ],
+    "L_embed_query": [
+     292.681481
+    ],
+    "L_dense": [
+     50.223968
+    ],
+    "L_rrf": [
+     0.176
+    ],
+    "L_rerank": [
+     23804.244296
+    ],
+    "L_retrieve": [
+     25348.066223
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 8414,
+   "prompt_tokens": 8751,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 8764,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# tests/handlers/test_exception.py:1-8  (tests.handlers.test_exception)\nfrom django.core.handlers.wsgi import WSGIHandler\nfrom django.test import SimpleTestCase, override_settings\nfrom django.test.client import (\n    BOUNDARY,\n    MULTIPART_CONTENT,\n    FakePayload,\n    encode_multipart,\n)\n\n# django/core/wsgi.py:1-2  (django.core.wsgi)\nimport django\nfrom django.core.handlers.wsgi import WSGIHandler\n\n# django/template/context_processors.py:36-55  (django.template.context_processors.debug)\ndef debug(request):\n    \"\"\"\n    Return context variables helpful for debugging.\n    \"\"\"\n    context_extras = {}\n    if settings.DEBUG and request.META.get(\"REMOTE_ADDR\") in settings.INTERNAL_IPS:\n        context_extras[\"debug\"] = True\n        from django.db import connections\n\n        # Return a lazy reference that computes connection.queries on access,\n        # to ensure it contains queries triggered after this function runs.\n        context_extras[\"sql_queries\"] = lazy(\n            lambda: list(\n                itertools.chain.from_iterable(\n                    connections[x].queries for x in connections\n                )\n            ),\n            list,\n        )\n    return context_extras\n\n# django/core/handlers/wsgi.py:120-144  (django.core.handlers.wsgi.WSGIHandler.__call__)\nclass WSGIHandler(base.BaseHandler):\n    def __call__(self, environ, start_response):\n        set_script_prefix(get_script_name(environ))\n        signals.request_started.send(sender=self.__class__, environ=environ)\n        request = self.request_class(environ)\n        response = self.get_response(request)\n\n        response._handler_class = self.__class__\n\n        status = \"%d %s\" % (response.status_code, response.reason_phrase)\n        response_headers = [\n            *response.items(),\n            *((\"Set-Cookie\", c.output(header=\"\")) for c in response.cookies.values()),\n        ]\n        start_response(status, response_headers)\n        if getattr(response, \"file_to_stream\", None) is not None and environ.get(\n            \"wsgi.file_wrapper\"\n        ):\n            # If `wsgi.file_wrapper` is used the WSGI server does not call\n            # .close on the response, but on the file wrapper. Patch it to use\n            # response.close instead which takes care of closing all files.\n            response.file_to_stream.close = response.close\n            response = environ[\"wsgi.file_wrapper\"](\n                response.file_to_stream, response.block_size\n            )\n        return response\n\n# django/core/wsgi.py:5-13  (django.core.wsgi.get_wsgi_application)\ndef get_wsgi_application():\n    \"\"\"\n    The public interface to Django's WSGI support. Return a WSGI callable.\n\n    Avoids making django.core.handlers.WSGIHandler a public API, in case the\n    internal WSGI implementation changes or moves in the future.\n    \"\"\"\n    django.setup(set_prefix=False)\n    return WSGIHandler()\n\n# django/core/handlers/wsgi.py:114-114  (django.core.handlers.wsgi.WSGIHandler)\nclass WSGIHandler(base.BaseHandler):\n    request_class = WSGIRequest\n\n# django/core/servers/basehttp.py:1-25  (django.core.servers.basehttp)\n\"\"\"\nHTTP server that implements the Python WSGI protocol (PEP 333, rev 1.21).\n\nBased on wsgiref.simple_server which is part of the standard library since 2.5.\n\nThis is a simple server for use in testing or debugging Django apps. It hasn't\nbeen reviewed for security issues. DON'T USE IT FOR PRODUCTION USE!\n\"\"\"\n\nimport logging\nimport socket\nimport socketserver\nimport sys\nfrom collections import deque\nfrom wsgiref import simple_server\n\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.core.handlers.wsgi import LimitedStream\nfrom django.core.wsgi import get_wsgi_application\nfrom django.db import connections\nfrom django.utils.module_loading import import_string\n\n__all__ = (\"WSGIServer\", \"WSGIRequestHandler\")\n\nlogger = logging.getLogger(\"django.server\")\n\n# django/core/handlers/wsgi.py:116-118  (django.core.handlers.wsgi.WSGIHandler.__init__)\nclass WSGIHandler(base.BaseHandler):\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.load_middleware()\n\n# tests/context_processors/urls.py:1-8  (tests.context_processors.urls)\nfrom django.urls import path\n\nfrom . import views\n\nurlpatterns = [\n    path(\"request_attrs/\", views.request_processor),\n    path(\"debug/\", views.debug_processor),\n]\n\n# django/core/asgi.py:1-2  (django.core.asgi)\nimport django\nfrom django.core.handlers.asgi import ASGIHandler\n\n# tests/handlers/tests.py:1-10  (tests.handlers.tests)\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.core.handlers.wsgi import WSGIHandler, WSGIRequest, get_script_name\nfrom django.core.signals import request_finished, request_started\nfrom django.db import close_old_connections, connection\nfrom django.test import (\n    RequestFactory,\n    SimpleTestCase,\n    TransactionTestCase,\n    override_settings,\n)\n\n# django/test/client.py:1-46  (django.test.client)\nimport json\nimport mimetypes\nimport os\nimport sys\nfrom copy import copy\nfrom functools import partial\nfrom http import HTTPStatus\nfrom importlib import import_module\nfrom io import BytesIO, IOBase\nfrom urllib.parse import unquote_to_bytes, urljoin, urlparse, urlsplit\n\nfrom asgiref.sync import sync_to_async\n\nfrom django.conf import settings\nfrom django.core.handlers.asgi import ASGIRequest\nfrom django.core.handlers.base import BaseHandler\nfrom django.core.handlers.wsgi import LimitedStream, WSGIRequest\nfrom django.core.serializers.json import DjangoJSONEncoder\nfrom django.core.signals import got_request_exception, request_finished, request_started\nfrom django.db import close_old_connections\nfrom django.http import HttpHeaders, HttpRequest, QueryDict, SimpleCookie\nfrom django.test import signals\nfrom django.test.utils import ContextList\nfrom django.urls import resolve\nfrom django.utils.encoding import force_bytes\nfrom django.utils.functional import SimpleLazyObject\nfrom django.utils.http import urlencode\nfrom django.utils.itercompat import is_iterable\nfrom django.utils.regex_helper import _lazy_re_compile\n\n__all__ = (\n    \"AsyncClient\",\n    \"AsyncRequestFactory\",\n    \"Client\",\n    \"RedirectCycleError\",\n    \"RequestFactory\",\n    \"encode_file\",\n    \"encode_multipart\",\n)\n\n\nBOUNDARY = \"BoUnDaRyStRiNg\"\nMULTIPART_CONTENT = \"multipart/form-data; boundary=%s\" % BOUNDARY\nCONTENT_TYPE_RE = _lazy_re_compile(r\".*; charset=([\\w-]+);?\")\n# Structured suffix spec: https://tools.ietf.org/html/rfc6838#section-4.2.8\nJSON_CONTENT_TYPE_RE = _lazy_re_compile(r\"^application\\/(.+\\+)?json\")\n\n# django/core/handlers/asgi.py:234-244  (django.core.handlers.asgi.ASGIHandler.handle_uncaught_exception)\nclass ASGIHandler(base.BaseHandler):\n    def handle_uncaught_exception(self, request, resolver, exc_info):\n        \"\"\"Last-chance handler for exceptions.\"\"\"\n        # There's no WSGI server to catch the exception further up\n        # if this fails, so translate it into a plain text response.\n        try:\n            return super().handle_uncaught_exception(request, resolver, exc_info)\n        except Exception:\n            return HttpResponseServerError(\n                traceback.format_exc() if settings.DEBUG else \"Internal Server Error\",\n                content_type=\"text/plain\",\n            )\n\n# django/test/client.py:159-200  (django.test.client.ClientHandler.__call__)\nclass ClientHandler(BaseHandler):\n    def __call__(self, environ):\n        # Set up middleware if needed. We couldn't do this earlier, because\n        # settings weren't available.\n        if self._middleware_chain is None:\n            self.load_middleware()\n\n        request_started.disconnect(close_old_connections)\n        request_started.send(sender=self.__class__, environ=environ)\n        request_started.connect(close_old_connections)\n        request = WSGIRequest(environ)\n        # sneaky little hack so that we can easily get round\n        # CsrfViewMiddleware.  This makes life easier, and is probably\n        # required for backwards compatibility with external tests against\n        # admin views.\n        request._dont_enforce_csrf_checks = not self.enforce_csrf_checks\n\n        # Request goes through middleware.\n        response = self.get_response(request)\n\n        # Simulate behaviors of most web servers.\n        conditional_content_removal(request, response)\n\n        # Attach the originating request to the response so that it could be\n        # later retrieved.\n        response.wsgi_request = request\n\n        # Emulate a WSGI server by calling the close method on completion.\n        if response.streaming:\n            if response.is_async:\n                response.streaming_content = aclosing_iterator_wrapper(\n                    response.streaming_content, response.close\n                )\n            else:\n                response.streaming_content = closing_iterator_wrapper(\n                    response.streaming_content, response.close\n                )\n        else:\n            request_finished.disconnect(close_old_connections)\n            response.close()  # will fire request_finished\n            request_finished.connect(close_old_connections)\n\n        return response\n\n# django/core/handlers/asgi.py:152-164  (django.core.handlers.asgi.ASGIHandler.__call__)\nclass ASGIHandler(base.BaseHandler):\n    async def __call__(self, scope, receive, send):\n        \"\"\"\n        Async entrypoint - parses the request and hands off to get_response.\n        \"\"\"\n        # Serve only HTTP connections.\n        # FIXME: Allow to override this.\n        if scope[\"type\"] != \"http\":\n            raise ValueError(\n                \"Django can only handle ASGI/HTTP connections, not %s.\" % scope[\"type\"]\n            )\n\n        async with ThreadSensitiveContext():\n            await self.handle(scope, receive, send)\n\n# django/test/testcases.py:1678-1681  (django.test.testcases.FSFilesHandler)\nclass FSFilesHandler(WSGIHandler):\n    \"\"\"\n    WSGI middleware that intercepts calls to a directory, as defined by one of\n    the *_ROOT settings, and serves those files, publishing them under *_URL.\n    \"\"\"\n\n# django/core/handlers/base.py:152-172  (django.core.handlers.base.BaseHandler.get_response_async)\nclass BaseHandler:\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n# django/core/handlers/base.py:136-150  (django.core.handlers.base.BaseHandler.get_response)\nclass BaseHandler:\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n# django/core/handlers/base.py:21-343  (django.core.handlers.base.BaseHandler)\nclass BaseHandler:\n    _view_middleware = None\n    _template_response_middleware = None\n    _exception_middleware = None\n    _middleware_chain = None\n\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler\n\n    def adapt_method_mode(\n        self,\n        is_async,\n        method,\n        method_is_async=None,\n        debug=False,\n        name=None,\n    ):\n        \"\"\"\n        Adapt a method to be in the correct \"mode\":\n        - If is_async is False:\n          - Synchronous methods are left alone\n          - Asynchronous methods are wrapped with async_to_sync\n        - If is_async is True:\n          - Synchronous methods are wrapped with sync_to_async()\n          - Asynchronous methods are left alone\n        \"\"\"\n        if method_is_async is None:\n            method_is_async = iscoroutinefunction(method)\n        if debug and not name:\n            name = name or \"method %s()\" % method.__qualname__\n        if is_async:\n            if not method_is_async:\n                if debug:\n                    logger.debug(\"Synchronous handler adapted for %s.\", name)\n                return sync_to_async(method, thread_sensitive=True)\n        elif method_is_async:\n            if debug:\n                logger.debug(\"Asynchronous handler adapted for %s.\", name)\n            return async_to_sync(method)\n        return method\n\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response\n\n    async def _get_response_async(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware.\n        for middleware_method in self._view_middleware:\n            response = await middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is a synchronous view, run it in a subthread\n            if not iscoroutinefunction(wrapped_callback):\n                wrapped_callback = sync_to_async(\n                    wrapped_callback, thread_sensitive=True\n                )\n            try:\n                response = await wrapped_callback(\n                    request, *callback_args, **callback_kwargs\n                )\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None or an uncalled coroutine.\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = await middleware_method(request, response)\n                # Complain if the template response middleware returned None or\n                # an uncalled coroutine.\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                if iscoroutinefunction(response.render):\n                    response = await response.render()\n                else:\n                    response = await sync_to_async(\n                        response.render, thread_sensitive=True\n                    )()\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Make sure the response is not a coroutine\n        if asyncio.iscoroutine(response):\n            raise RuntimeError(\"Response is still a coroutine.\")\n        return response\n\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match\n\n    def check_response(self, response, callback, name=None):\n        \"\"\"\n        Raise an error if the view returned None or an uncalled coroutine.\n        \"\"\"\n        if not (response is None or asyncio.iscoroutine(response)):\n            return\n        if not name:\n            if isinstance(callback, types.FunctionType):  # FBV\n                name = \"The view %s.%s\" % (callback.__module__, callback.__name__)\n            else:  # CBV\n                name = \"The view %s.%s.__call__\" % (\n                    callback.__module__,\n                    callback.__class__.__name__,\n                )\n        if response is None:\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned None \"\n                \"instead.\" % name\n            )\n        elif asyncio.iscoroutine(response):\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned an \"\n                \"unawaited coroutine instead. You may need to add an 'await' \"\n                \"into your view.\" % name\n            )\n\n    # Other utility methods.\n\n# tests/middleware_exceptions/middleware.py:89-92  (tests.middleware_exceptions.middleware.LogMiddleware.__call__)\nclass LogMiddleware(BaseMiddleware):\n    def __call__(self, request):\n        response = self.get_response(request)\n        log.append((response.status_code, response.content))\n        return response\n\n# tests/utils_tests/test_decorators.py:39-40  (tests.utils_tests.test_decorators.FullMiddleware.process_view)\nclass FullMiddleware:\n    def process_view(self, request, view_func, view_args, view_kwargs):\n        request.process_view_reached = True\n\n# tests/utils_tests/test_decorators.py:36-37  (tests.utils_tests.test_decorators.FullMiddleware.process_request)\nclass FullMiddleware:\n    def process_request(self, request):\n        request.process_request_reached = True\n\n# django/core/handlers/wsgi.py:57-80  (django.core.handlers.wsgi.WSGIRequest.__init__)\nclass WSGIRequest(HttpRequest):\n    def __init__(self, environ):\n        script_name = get_script_name(environ)\n        # If PATH_INFO is empty (e.g. accessing the SCRIPT_NAME URL without a\n        # trailing slash), operate as if '/' was requested.\n        path_info = get_path_info(environ) or \"/\"\n        self.environ = environ\n        self.path_info = path_info\n        # be careful to only replace the first slash in the path because of\n        # http://test/something and http://test//something being different as\n        # stated in RFC 3986.\n        self.path = \"%s/%s\" % (script_name.rstrip(\"/\"), path_info.replace(\"/\", \"\", 1))\n        self.META = environ\n        self.META[\"PATH_INFO\"] = path_info\n        self.META[\"SCRIPT_NAME\"] = script_name\n        self.method = environ[\"REQUEST_METHOD\"].upper()\n        # Set content_type, content_params, and encoding.\n        self._set_content_type_params(environ)\n        try:\n            content_length = int(environ.get(\"CONTENT_LENGTH\"))\n        except (ValueError, TypeError):\n            content_length = 0\n        self._stream = LimitedStream(self.environ[\"wsgi.input\"], content_length)\n        self._read_started = False\n        self.resolver_match = None\n\n# django/template/context_processors.py:1-14  (django.template.context_processors)\n\"\"\"\nA set of request processors that return dictionaries to be merged into a\ntemplate context. Each function takes the request object as its only parameter\nand returns a dictionary to add to the context.\n\nThese are referenced from the 'context_processors' option of the configuration\nof a DjangoTemplates backend and used by RequestContext.\n\"\"\"\n\nimport itertools\n\nfrom django.conf import settings\nfrom django.middleware.csrf import get_token\nfrom django.utils.functional import SimpleLazyObject, lazy\n\n# django/contrib/staticfiles/handlers.py:16-22  (django.contrib.staticfiles.handlers.StaticFilesHandlerMixin)\nclass StaticFilesHandlerMixin:\n    \"\"\"\n    Common methods used by WSGI and ASGI handlers.\n    \"\"\"\n\n    # May be used to differentiate between handler types (e.g. in a\n    # request_finished signal)\n    handles_files = True\n\n# tests/middleware_exceptions/middleware.py:1-12  (tests.middleware_exceptions.middleware)\nfrom asgiref.sync import iscoroutinefunction, markcoroutinefunction\n\nfrom django.http import Http404, HttpResponse\nfrom django.template import engines\nfrom django.template.response import TemplateResponse\nfrom django.utils.decorators import (\n    async_only_middleware,\n    sync_and_async_middleware,\n    sync_only_middleware,\n)\n\nlog = []\n\n# tests/handlers/tests.py:22-24  (tests.handlers.tests.HandlerTests.test_middleware_initialized)\nclass HandlerTests(SimpleTestCase):\n    def test_middleware_initialized(self):\n        handler = WSGIHandler()\n        self.assertIsNotNone(handler._middleware_chain)\n\n# django/test/client.py:149-153  (django.test.client.ClientHandler)\nclass ClientHandler(BaseHandler):\n    \"\"\"\n    An HTTP Handler that can be used for testing purposes. Use the WSGI\n    interface to compose requests, but return the raw HttpResponse object with\n    the originating WSGIRequest attached to its ``wsgi_request`` attribute.\n    \"\"\"\n\n# django/contrib/staticfiles/handlers.py:68-71  (django.contrib.staticfiles.handlers.StaticFilesHandler)\nclass StaticFilesHandler(StaticFilesHandlerMixin, WSGIHandler):\n    \"\"\"\n    WSGI middleware that intercepts calls to the static files directory, as\n    defined by the STATIC_URL setting, and serves those files.\n    \"\"\"\n\n# django/core/handlers/wsgi.py:91-94  (django.core.handlers.wsgi.WSGIRequest._get_post)\nclass WSGIRequest(HttpRequest):\n    def _get_post(self):\n        if not hasattr(self, \"_post\"):\n            self._load_post_and_files()\n        return self._post\n\n# tests/utils_tests/test_decorators.py:9-10  (tests.utils_tests.test_decorators.ProcessViewMiddleware.__init__)\nclass ProcessViewMiddleware:\n    def __init__(self, get_response):\n        self.get_response = get_response\n\n# django/dispatch/dispatcher.py:1-7  (django.dispatch.dispatcher)\nimport logging\nimport threading\nimport weakref\n\nfrom django.utils.inspect import func_accepts_kwargs\n\nlogger = logging.getLogger(\"django.dispatch\")\n\n# django/contrib/staticfiles/handlers.py:1-12  (django.contrib.staticfiles.handlers)\nfrom urllib.parse import urlparse\nfrom urllib.request import url2pathname\n\nfrom asgiref.sync import sync_to_async\n\nfrom django.conf import settings\nfrom django.contrib.staticfiles import utils\nfrom django.contrib.staticfiles.views import serve\nfrom django.core.handlers.asgi import ASGIHandler\nfrom django.core.handlers.exception import response_for_exception\nfrom django.core.handlers.wsgi import WSGIHandler, get_path_info\nfrom django.http import Http404\n\n# django/core/checks/security/csrf.py:1-22  (django.core.checks.security.csrf)\nimport inspect\n\nfrom django.conf import settings\n\nfrom .. import Error, Tags, Warning, register\n\nW003 = Warning(\n    \"You don't appear to be using Django's built-in \"\n    \"cross-site request forgery protection via the middleware \"\n    \"('django.middleware.csrf.CsrfViewMiddleware' is not in your \"\n    \"MIDDLEWARE). Enabling the middleware is the safest approach \"\n    \"to ensure you don't leave any holes.\",\n    id=\"security.W003\",\n)\n\nW016 = Warning(\n    \"You have 'django.middleware.csrf.CsrfViewMiddleware' in your \"\n    \"MIDDLEWARE, but you have not set CSRF_COOKIE_SECURE to True. \"\n    \"Using a secure-only CSRF cookie makes it more difficult for network \"\n    \"traffic sniffers to steal the CSRF token.\",\n    id=\"security.W016\",\n)\n\n# tests/middleware_exceptions/tests.py:157-158  (tests.middleware_exceptions.tests.MyMiddleware.process_request)\nclass MyMiddleware:\n    def process_request(self, request):\n        pass\n\n# tests/middleware_exceptions/middleware.py:47-48  (tests.middleware_exceptions.middleware.ProcessViewMiddleware.process_view)\nclass ProcessViewMiddleware(BaseMiddleware):\n    def process_view(self, request, view_func, view_args, view_kwargs):\n        return HttpResponse(\"Processed view %s\" % view_func.__name__)\n\n# django/core/servers/basehttp.py:214-223  (django.core.servers.basehttp.WSGIRequestHandler.get_environ)\nclass WSGIRequestHandler(simple_server.WSGIRequestHandler):\n    def get_environ(self):\n        # Strip all headers with underscores in the name before constructing\n        # the WSGI environ. This prevents header-spoofing based on ambiguity\n        # between underscores and dashes both normalized to underscores in WSGI\n        # env vars. Nginx and Apache 2.4+ both do this as well.\n        for k in self.headers:\n            if \"_\" in k:\n                del self.headers[k]\n\n        return super().get_environ()\n\n# django/core/servers/basehttp.py:183-212  (django.core.servers.basehttp.WSGIRequestHandler.log_message)\nclass WSGIRequestHandler(simple_server.WSGIRequestHandler):\n    def log_message(self, format, *args):\n        extra = {\n            \"request\": self.request,\n            \"server_time\": self.log_date_time_string(),\n        }\n        if args[1][0] == \"4\":\n            # 0x16 = Handshake, 0x03 = SSL 3.0 or TLS 1.x\n            if args[0].startswith(\"\\x16\\x03\"):\n                extra[\"status_code\"] = 500\n                logger.error(\n                    \"You're accessing the development server over HTTPS, but \"\n                    \"it only supports HTTP.\",\n                    extra=extra,\n                )\n                return\n\n        if args[1].isdigit() and len(args[1]) == 3:\n            status_code = int(args[1])\n            extra[\"status_code\"] = status_code\n\n            if status_code >= 500:\n                level = logger.error\n            elif status_code >= 400:\n                level = logger.warning\n            else:\n                level = logger.info\n        else:\n            level = logger.info\n\n        level(format, *args, extra=extra)\n\n# tests/handlers/tests.py:26-36  (tests.handlers.tests.HandlerTests.test_bad_path_info)\nclass HandlerTests(SimpleTestCase):\n    def test_bad_path_info(self):\n        \"\"\"\n        A non-UTF-8 path populates PATH_INFO with an URL-encoded path and\n        produces a 404.\n        \"\"\"\n        environ = self.request_factory.get(\"/\").environ\n        environ[\"PATH_INFO\"] = \"\\xed\"\n        handler = WSGIHandler()\n        response = handler(environ, lambda *a, **k: None)\n        # The path of the request will be encoded to '/%ED'.\n        self.assertEqual(response.status_code, 404)\n\n# django/core/handlers/wsgi.py:104-108  (django.core.handlers.wsgi.WSGIRequest.FILES)\nclass WSGIRequest(HttpRequest):\n    @property\n    def FILES(self):\n        if not hasattr(self, \"_files\"):\n            self._load_post_and_files()\n        return self._files\n\n# django/core/handlers/asgi.py:1-26  (django.core.handlers.asgi)\nimport logging\nimport sys\nimport tempfile\nimport traceback\nfrom collections import defaultdict\n\nfrom asgiref.sync import ThreadSensitiveContext, sync_to_async\n\nfrom django.conf import settings\nfrom django.core import signals\nfrom django.core.exceptions import RequestAborted, RequestDataTooBig\nfrom django.core.handlers import base\nfrom django.http import (\n    FileResponse,\n    HttpRequest,\n    HttpResponse,\n    HttpResponseBadRequest,\n    HttpResponseServerError,\n    QueryDict,\n    parse_cookie,\n)\nfrom django.urls import set_script_prefix\nfrom django.utils.asyncio import aclosing\nfrom django.utils.functional import cached_property\n\nlogger = logging.getLogger(\"django.request\")\n\n# django/test/testcases.py:1673-1674  (django.test.testcases.QuietWSGIRequestHandler.log_message)\nclass QuietWSGIRequestHandler(WSGIRequestHandler):\n    def log_message(*args):\n        pass\n\n# tests/servers/test_basehttp.py:1-8  (tests.servers.test_basehttp)\nfrom io import BytesIO\nfrom socketserver import ThreadingMixIn\n\nfrom django.core.handlers.wsgi import WSGIRequest\nfrom django.core.servers.basehttp import WSGIRequestHandler, WSGIServer\nfrom django.test import SimpleTestCase\nfrom django.test.client import RequestFactory\nfrom django.test.utils import captured_stderr\n\n# tests/test_client/views.py:36-60  (tests.test_client.views.trace_view)\ndef trace_view(request):\n    \"\"\"\n    A simple view that expects a TRACE request and echoes its status line.\n\n    TRACE requests should not have an entity; the view will return a 400 status\n    response if it is present.\n    \"\"\"\n    if request.method.upper() != \"TRACE\":\n        return HttpResponseNotAllowed(\"TRACE\")\n    elif request.body:\n        return HttpResponseBadRequest(\"TRACE requests MUST NOT include an entity\")\n    else:\n        protocol = request.META[\"SERVER_PROTOCOL\"]\n        t = Template(\n            \"{{ method }} {{ uri }} {{ version }}\",\n            name=\"TRACE Template\",\n        )\n        c = Context(\n            {\n                \"method\": request.method,\n                \"uri\": request.path,\n                \"version\": protocol,\n            }\n        )\n        return HttpResponse(t.render(c))\n\n# django/core/handlers/wsgi.py:96-97  (django.core.handlers.wsgi.WSGIRequest._set_post)\nclass WSGIRequest(HttpRequest):\n    def _set_post(self, post):\n        self._post = post\n\n# tests/template_tests/test_context.py:252-258  (tests.template_tests.test_context.RequestContextTests.test_stack_size)\nclass RequestContextTests(SimpleTestCase):\n    def test_stack_size(self):\n        \"\"\"Optimized RequestContext construction (#7116).\"\"\"\n        request = self.request_factory.get(\"/\")\n        ctx = RequestContext(request, {})\n        # The stack contains 4 items:\n        # [builtins, supplied context, context processor, empty dict]\n        self.assertEqual(len(ctx.dicts), 4)\n\n# django/core/handlers/wsgi.py:154-184  (django.core.handlers.wsgi.get_script_name)\ndef get_script_name(environ):\n    \"\"\"\n    Return the equivalent of the HTTP request's SCRIPT_NAME environment\n    variable. If Apache mod_rewrite is used, return what would have been\n    the script name prior to any rewriting (so it's the script name as seen\n    from the client's perspective), unless the FORCE_SCRIPT_NAME setting is\n    set (to anything).\n    \"\"\"\n    if settings.FORCE_SCRIPT_NAME is not None:\n        return settings.FORCE_SCRIPT_NAME\n\n    # If Apache's mod_rewrite had a whack at the URL, Apache set either\n    # SCRIPT_URL or REDIRECT_URL to the full resource URL before applying any\n    # rewrites. Unfortunately not every web server (lighttpd!) passes this\n    # information through all the time, so FORCE_SCRIPT_NAME, above, is still\n    # needed.\n    script_url = get_bytes_from_wsgi(environ, \"SCRIPT_URL\", \"\") or get_bytes_from_wsgi(\n        environ, \"REDIRECT_URL\", \"\"\n    )\n\n    if script_url:\n        if b\"//\" in script_url:\n            # mod_wsgi squashes multiple successive slashes in PATH_INFO,\n            # do the same with script_url before manipulating paths (#17133).\n            script_url = _slashes_re.sub(b\"/\", script_url)\n        path_info = get_bytes_from_wsgi(environ, \"PATH_INFO\", \"\")\n        script_name = script_url[: -len(path_info)] if path_info else script_url\n    else:\n        script_name = get_bytes_from_wsgi(environ, \"SCRIPT_NAME\", \"\")\n\n    return script_name.decode()\n\n# django/views/generic/base.py:1-19  (django.views.generic.base)\nimport logging\n\nfrom asgiref.sync import iscoroutinefunction, markcoroutinefunction\n\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.http import (\n    HttpResponse,\n    HttpResponseGone,\n    HttpResponseNotAllowed,\n    HttpResponsePermanentRedirect,\n    HttpResponseRedirect,\n)\nfrom django.template.response import TemplateResponse\nfrom django.urls import reverse\nfrom django.utils.decorators import classonlymethod\nfrom django.utils.functional import classproperty\nfrom django.utils.log import log_response\n\nlogger = logging.getLogger(\"django.request\")\n\n# django/test/testcases.py:1668-1671  (django.test.testcases.QuietWSGIRequestHandler)\nclass QuietWSGIRequestHandler(WSGIRequestHandler):\n    \"\"\"\n    A WSGIRequestHandler that doesn't log to standard output any of the\n    requests received, so as to not clutter the test result output.\n    \"\"\"\n\n# django/core/handlers/base.py:1-17  (django.core.handlers.base)\nimport asyncio\nimport logging\nimport types\n\nfrom asgiref.sync import async_to_sync, iscoroutinefunction, sync_to_async\n\nfrom django.conf import settings\nfrom django.core.exceptions import ImproperlyConfigured, MiddlewareNotUsed\nfrom django.core.signals import request_finished\nfrom django.db import connections, transaction\nfrom django.urls import get_resolver, set_urlconf\nfrom django.utils.log import log_response\nfrom django.utils.module_loading import import_string\n\nfrom .exception import convert_exception_to_response\n\nlogger = logging.getLogger(\"django.request\")\n\n## Task\n\nYou are debugging the very first steps of a Django request's\nlifecycle in django/core/handlers/wsgi.py. Starting from\n`WSGIHandler.__call__`, trace the real causal pipeline a request\ntravels through before Django's own request-handling machinery takes\nover, in the order each stage is actually reached, up to and\nincluding the call that hands off to the base handler's own response\npipeline.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.handlers.wsgi.WSGIHandler.__call__\", \"django.core.handlers.wsgi.get_script_name\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -1,0 +1,1241 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_004_url_resolve_traversal",
+  "items": [
+   {
+    "source_id": "django/urls/base.py:21-24",
+    "content": "# django/urls/base.py:21-24  (django.urls.base.resolve)\ndef resolve(path, urlconf=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    return get_resolver(urlconf).resolve(path)",
+    "token_count": 52,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.resolve"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:1-18",
+    "content": "# django/urls/base.py:1-18  (django.urls.base)\nfrom urllib.parse import unquote, urlsplit, urlunsplit\n\nfrom asgiref.local import Local\n\nfrom django.utils.functional import lazy\nfrom django.utils.translation import override\n\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import _get_cached_resolver, get_ns_resolver, get_resolver\nfrom .utils import get_callable\n\n# SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for\n# the current thread (which is the only one we ever access), it is assumed to\n# be empty.\n_prefixes = Local()\n\n# Overridden URLconfs for each thread are stored here.\n_urlconfs = Local()",
+    "token_count": 156,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:27-88",
+    "content": "# django/urls/base.py:27-88  (django.urls.base.reverse)\ndef reverse(viewname, urlconf=None, args=None, kwargs=None, current_app=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    resolver = get_resolver(urlconf)\n    args = args or []\n    kwargs = kwargs or {}\n\n    prefix = get_script_prefix()\n\n    if not isinstance(viewname, str):\n        view = viewname\n    else:\n        *path, view = viewname.split(\":\")\n\n        if current_app:\n            current_path = current_app.split(\":\")\n            current_path.reverse()\n        else:\n            current_path = None\n\n        resolved_path = []\n        ns_pattern = \"\"\n        ns_converters = {}\n        for ns in path:\n            current_ns = current_path.pop() if current_path else None\n            # Lookup the name to see if it could be an app identifier.\n            try:\n                app_list = resolver.app_dict[ns]\n                # Yes! Path part matches an app in the current Resolver.\n                if current_ns and current_ns in app_list:\n                    # If we are reversing for a particular app, use that\n                    # namespace.\n                    ns = current_ns\n                elif ns not in app_list:\n                    # The name isn't shared by one of the instances (i.e.,\n                    # the default) so pick the first instance as the default.\n                    ns = app_list[0]\n            except KeyError:\n                pass\n\n            if ns != current_ns:\n                current_path = None\n\n            try:\n                extra, resolver = resolver.namespace_dict[ns]\n                resolved_path.append(ns)\n                ns_pattern += extra\n                ns_converters.update(resolver.pattern.converters)\n            except KeyError as key:\n                if resolved_path:\n                    raise NoReverseMatch(\n                        \"%s is not a registered namespace inside '%s'\"\n                        % (key, \":\".join(resolved_path))\n                    )\n                else:\n                    raise NoReverseMatch(\"%s is not a registered namespace\" % key)\n        if ns_pattern:\n            resolver = get_ns_resolver(\n                ns_pattern, resolver, tuple(ns_converters.items())\n            )\n\n    return resolver._reverse_with_prefix(view, prefix, *args, **kwargs)",
+    "token_count": 459,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.reverse"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 459
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:91-91",
+    "content": "# django/urls/base.py:91-91  (django.urls.base)\nreverse_lazy = lazy(reverse, str)",
+    "token_count": 26,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 26
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:94-97",
+    "content": "# django/urls/base.py:94-97  (django.urls.base.clear_url_caches)\ndef clear_url_caches():\n    get_callable.cache_clear()\n    _get_cached_resolver.cache_clear()\n    get_ns_resolver.cache_clear()",
+    "token_count": 49,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.clear_url_caches"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:100-106",
+    "content": "# django/urls/base.py:100-106  (django.urls.base.set_script_prefix)\ndef set_script_prefix(prefix):\n    \"\"\"\n    Set the script prefix for the current thread.\n    \"\"\"\n    if not prefix.endswith(\"/\"):\n        prefix += \"/\"\n    _prefixes.value = prefix",
+    "token_count": 61,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.set_script_prefix"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:109-115",
+    "content": "# django/urls/base.py:109-115  (django.urls.base.get_script_prefix)\ndef get_script_prefix():\n    \"\"\"\n    Return the currently active script prefix. Useful for client code that\n    wishes to construct their own URLs manually (although accessing the request\n    instance is normally going to be a lot cleaner).\n    \"\"\"\n    return getattr(_prefixes, \"value\", \"/\")",
+    "token_count": 83,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.get_script_prefix"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:118-125",
+    "content": "# django/urls/base.py:118-125  (django.urls.base.clear_script_prefix)\ndef clear_script_prefix():\n    \"\"\"\n    Unset the script prefix for the current thread.\n    \"\"\"\n    try:\n        del _prefixes.value\n    except AttributeError:\n        pass",
+    "token_count": 59,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.clear_script_prefix"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 994,
+     "stub_priority": 1494,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 59
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:128-137",
+    "content": "# django/urls/base.py:128-137  (django.urls.base.set_urlconf)\ndef set_urlconf(urlconf_name):\n    \"\"\"\n    Set the URLconf for the current thread (overriding the default one in\n    settings). If urlconf_name is None, revert back to the default.\n    \"\"\"\n    if urlconf_name:\n        _urlconfs.value = urlconf_name\n    else:\n        if hasattr(_urlconfs, \"value\"):\n            del _urlconfs.value",
+    "token_count": 106,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.set_urlconf"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 993,
+     "stub_priority": 1493,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 106
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:140-145",
+    "content": "# django/urls/base.py:140-145  (django.urls.base.get_urlconf)\ndef get_urlconf(default=None):\n    \"\"\"\n    Return the root URLconf to use for the current thread if it has been\n    changed from the default one.\n    \"\"\"\n    return getattr(_urlconfs, \"value\", default)",
+    "token_count": 71,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.get_urlconf"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 992,
+     "stub_priority": 1492,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:148-157",
+    "content": "# django/urls/base.py:148-157  (django.urls.base.is_valid_path)\ndef is_valid_path(path, urlconf=None):\n    \"\"\"\n    Return the ResolverMatch if the given path resolves against the default URL\n    resolver, False otherwise. This is a convenience method to make working\n    with \"is this a match?\" cases easier, avoiding try...except blocks.\n    \"\"\"\n    try:\n        return resolve(path, urlconf)\n    except Resolver404:\n        return False",
+    "token_count": 105,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.is_valid_path"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 991,
+     "stub_priority": 1491,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 105
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/base.py:160-187",
+    "content": "# django/urls/base.py:160-187  (django.urls.base.translate_url)\ndef translate_url(url, lang_code):\n    \"\"\"\n    Given a URL (absolute or relative), try to get its translated version in\n    the `lang_code` language (either by i18n_patterns or by translated regex).\n    Return the original URL if no translated version is found.\n    \"\"\"\n    parsed = urlsplit(url)\n    try:\n        # URL may be encoded.\n        match = resolve(unquote(parsed.path))\n    except Resolver404:\n        pass\n    else:\n        to_be_reversed = (\n            \"%s:%s\" % (match.namespace, match.url_name)\n            if match.namespace\n            else match.url_name\n        )\n        with override(lang_code):\n            try:\n                url = reverse(to_be_reversed, args=match.args, kwargs=match.kwargs)\n            except NoReverseMatch:\n                pass\n            else:\n                url = urlunsplit(\n                    (parsed.scheme, parsed.netloc, url, parsed.query, parsed.fragment)\n                )\n    return url",
+    "token_count": 226,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.base.translate_url"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 990,
+     "stub_priority": 1490,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "function",
+     "engine_token_count": 226
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:558-579#signature",
+    "content": "# tests/urlpatterns_reverse/tests.py:558-579  (tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse_conflict [signature])\nclass ResolverTests(SimpleTestCase):\n    def test_resolver_reverse_conflict(self):\n        \"URL pattern name arguments don't need to be unique. The last registered\"\n        ...",
+    "token_count": 68,
+    "rank": 13,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse_conflict"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "stub",
+     "bm25_rank": 39,
+     "chunk_kind": "method",
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admindocs/views.py:167-182#signature",
+    "content": "# django/contrib/admindocs/views.py:167-182  (django.contrib.admindocs.views.ViewDetailView._get_view_func [signature])\nclass ViewDetailView(BaseAdminDocsView):\n    @staticmethod\n    def _get_view_func(view):\n        ...",
+    "token_count": 56,
+    "rank": 14,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admindocs.views.ViewDetailView._get_view_func"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "stub",
+     "bm25_rank": 41,
+     "chunk_kind": "method",
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/expressions.py:323-351#signature",
+    "content": "# django/db/models/expressions.py:323-351  (django.db.models.expressions.BaseExpression._resolve_output_field [signature])\nclass BaseExpression:\n    def _resolve_output_field(self):\n        'Attempt to infer the output type of the expression.'\n        ...",
+    "token_count": 58,
+    "rank": 15,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.expressions.BaseExpression._resolve_output_field"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "stub",
+     "bm25_rank": 42,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/check_framework/test_urls.py:24-30#signature",
+    "content": "# tests/check_framework/test_urls.py:24-30  (tests.check_framework.test_urls.CheckUrlConfigTests.test_check_resolver_recursive [signature])\nclass CheckUrlConfigTests(SimpleTestCase):\n    @override_settings(ROOT_URLCONF=\"check_framework.urls.warning_in_include\")\n    def test_check_resolver_recursive(self):\n        # The resolver is checked recursively (examining URL patterns in include()).\n        ...",
+    "token_count": 81,
+    "rank": 16,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.check_framework.test_urls.CheckUrlConfigTests.test_check_resolver_recursive"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "stub",
+     "bm25_rank": 43,
+     "chunk_kind": "method",
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:136-150#signature",
+    "content": "# django/core/handlers/base.py:136-150  (django.core.handlers.base.BaseHandler.get_response [signature])\nclass BaseHandler:\n    def get_response(self, request):\n        'Return an HttpResponse object for the given HttpRequest.'\n        ...",
+    "token_count": 54,
+    "rank": 17,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.get_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "stub",
+     "bm25_rank": 44,
+     "chunk_kind": "method",
+     "engine_token_count": 54
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:526-534#signature",
+    "content": "# tests/urlpatterns_reverse/tests.py:526-534  (tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_repr [signature])\nclass ResolverTests(SimpleTestCase):\n    def test_resolver_repr(self):\n        'Test repr of URLResolver, especially when urlconf_name is a list'\n        ...",
+    "token_count": 64,
+    "rank": 18,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_repr"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "stub",
+     "bm25_rank": 45,
+     "chunk_kind": "method",
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/base.py:867-942#signature",
+    "content": "# django/template/base.py:867-942  (django.template.base.Variable._resolve_lookup [signature])\nclass Variable:\n    def _resolve_lookup(self, context):\n        'Perform resolution of a real variable (i.e. not a literal) against the'\n        ...",
+    "token_count": 58,
+    "rank": 19,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.template.base.Variable._resolve_lookup"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "stub",
+     "bm25_rank": 46,
+     "chunk_kind": "method",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/sites.py:38-70#signature",
+    "content": "# django/contrib/admin/sites.py:38-70  (django.contrib.admin.sites.AdminSite [signature])\nclass AdminSite:\n    'An AdminSite object encapsulates an instance of the Django admin application, ready'\n    ...",
+    "token_count": 49,
+    "rank": 20,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.sites.AdminSite"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "stub",
+     "bm25_rank": 47,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/view_tests/tests/test_defaults.py:20-26#signature",
+    "content": "# tests/view_tests/tests/test_defaults.py:20-26  (tests.view_tests.tests.test_defaults.DefaultsTests [signature])\n@override_settings(ROOT_URLCONF=\"view_tests.urls\")\nclass DefaultsTests(TestCase):\n    'Test django views in django/views/defaults.py'\n    ...",
+    "token_count": 58,
+    "rank": 21,
+    "kind": "signature_stub",
+    "symbols": [
+     "tests.view_tests.tests.test_defaults.DefaultsTests"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "stub",
+     "bm25_rank": 48,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:152-172#signature",
+    "content": "# django/core/handlers/base.py:152-172  (django.core.handlers.base.BaseHandler.get_response_async [signature])\nclass BaseHandler:\n    async def get_response_async(self, request):\n        'Asynchronous version of get_response.'\n        ...",
+    "token_count": 55,
+    "rank": 22,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.get_response_async"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "stub",
+     "bm25_rank": 49,
+     "chunk_kind": "method",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:712-726",
+    "content": "# django/urls/resolvers.py:712-726  (django.urls.resolvers.URLResolver.url_patterns)\nclass URLResolver:\n    @cached_property\n    def url_patterns(self):\n        # urlconf_module might be a valid set of patterns, so we default to it\n        patterns = getattr(self.urlconf_module, \"urlpatterns\", self.urlconf_module)\n        try:\n            iter(patterns)\n        except TypeError as e:\n            msg = (\n                \"The included URLconf '{name}' does not appear to have \"\n                \"any patterns in it. If you see the 'urlpatterns' variable \"\n                \"with valid patterns in the file then the issue is probably \"\n                \"caused by a circular import.\"\n            )\n            raise ImproperlyConfigured(msg.format(name=self.urlconf_name)) from e\n        return patterns",
+    "token_count": 172,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLResolver.url_patterns"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "method",
+     "engine_token_count": 172
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:594-641",
+    "content": "# tests/urlpatterns_reverse/tests.py:594-641  (tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names)\nclass ResolverTests(SimpleTestCase):\n    def test_404_tried_urls_have_names(self):\n        \"\"\"\n        The list of URLs that come back from a Resolver404 exception contains\n        a list in the right format for printing out in the DEBUG 404 page with\n        both the patterns and URL names, if available.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        # this list matches the expected URL types and names returned when\n        # you try to resolve a nonexistent URL in the first level of included\n        # URLs in named_urls.py (e.g., '/included/nonexistent-url')\n        url_types_names = [\n            [{\"type\": URLPattern, \"name\": \"named-url1\"}],\n            [{\"type\": URLPattern, \"name\": \"named-url2\"}],\n            [{\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url3\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url4\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLResolver}],\n        ]\n        with self.assertRaisesMessage(Resolver404, \"tried\") as cm:\n            resolve(\"/included/nonexistent-url\", urlconf=urls)\n        e = cm.exception\n        # make sure we at least matched the root ('/') url resolver:\n        self.assertIn(\"tried\", e.args[0])\n        self.assertEqual(\n            len(e.args[0][\"tried\"]),\n            len(url_types_names),\n            \"Wrong number of tried URLs returned.  Expected %s, got %s.\"\n            % (len(url_types_names), len(e.args[0][\"tried\"])),\n        )\n        for tried, expected in zip(e.args[0][\"tried\"], url_types_names):\n            for t, e in zip(tried, expected):\n                with self.subTest(t):\n                    self.assertIsInstance(\n                        t, e[\"type\"]\n                    ), \"%s is not an instance of %s\" % (t, e[\"type\"])\n                    if \"name\" in e:\n                        if not e[\"name\"]:\n                            self.assertIsNone(\n                                t.name, \"Expected no URL name but found %s.\" % t.name\n                            )\n                        else:\n                            self.assertEqual(\n                                t.name,\n                                e[\"name\"],\n                                'Wrong URL name.  Expected \"%s\", got \"%s\".'\n                                % (e[\"name\"], t.name),\n                            )",
+    "token_count": 567,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 567
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns/test_resolvers.py:18-23",
+    "content": "# tests/urlpatterns/test_resolvers.py:18-23  (tests.urlpatterns.test_resolvers.ResolverCacheTests.test_resolver_cache_default__root_urlconf)\nclass ResolverCacheTests(SimpleTestCase):\n    @override_settings(ROOT_URLCONF=\"urlpatterns.path_urls\")\n    def test_resolver_cache_default__root_urlconf(self):\n        # resolver for a default URLconf (passing no argument) and for the\n        # settings.ROOT_URLCONF is the same cached object.\n        self.assertIs(get_resolver(), get_resolver(\"urlpatterns.path_urls\"))\n        self.assertIsNot(get_resolver(), get_resolver(\"urlpatterns.path_dynamic_urls\"))",
+    "token_count": 125,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns.test_resolvers.ResolverCacheTests.test_resolver_cache_default__root_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "method",
+     "engine_token_count": 125
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:300-315",
+    "content": "# django/core/handlers/base.py:300-315  (django.core.handlers.base.BaseHandler.resolve_request)\nclass BaseHandler:\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match",
+    "token_count": 152,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler.resolve_request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "method",
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/conf/urls/i18n.py:8-20",
+    "content": "# django/conf/urls/i18n.py:8-20  (django.conf.urls.i18n.i18n_patterns)\ndef i18n_patterns(*urls, prefix_default_language=True):\n    \"\"\"\n    Add the language code prefix to every URL pattern within this function.\n    This may only be used in the root URLconf, not in an included URLconf.\n    \"\"\"\n    if not settings.USE_I18N:\n        return list(urls)\n    return [\n        URLResolver(\n            LocalePrefixPattern(prefix_default_language=prefix_default_language),\n            list(urls),\n        )\n    ]",
+    "token_count": 124,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.conf.urls.i18n.i18n_patterns"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "function",
+     "engine_token_count": 124
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:457-476",
+    "content": "# django/urls/resolvers.py:457-476  (django.urls.resolvers.URLResolver.__init__)\nclass URLResolver:\n    def __init__(\n        self, pattern, urlconf_name, default_kwargs=None, app_name=None, namespace=None\n    ):\n        self.pattern = pattern\n        # urlconf_name is the dotted Python path to the module defining\n        # urlpatterns. It may also be an object with an urlpatterns attribute\n        # or urlpatterns itself.\n        self.urlconf_name = urlconf_name\n        self.callback = None\n        self.default_kwargs = default_kwargs or {}\n        self.namespace = namespace\n        self.app_name = app_name\n        self._reverse_dict = {}\n        self._namespace_dict = {}\n        self._app_dict = {}\n        # set of dotted paths to all functions and classes that are used in\n        # urlpatterns\n        self._callback_strs = set()\n        self._populated = False\n        self._local = Local()",
+    "token_count": 203,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLResolver.__init__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "method",
+     "engine_token_count": 203
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:413-426",
+    "content": "# tests/urlpatterns_reverse/tests.py:413-426  (tests.urlpatterns_reverse.tests.NoURLPatternsTests.test_no_urls_exception)\nclass NoURLPatternsTests(SimpleTestCase):\n    def test_no_urls_exception(self):\n        \"\"\"\n        URLResolver should raise an exception when no urlpatterns exist.\n        \"\"\"\n        resolver = URLResolver(RegexPattern(r\"^$\"), settings.ROOT_URLCONF)\n\n        with self.assertRaisesMessage(\n            ImproperlyConfigured,\n            \"The included URLconf 'urlpatterns_reverse.no_urls' does not \"\n            \"appear to have any patterns in it. If you see the 'urlpatterns' \"\n            \"variable with valid patterns in the file then the issue is \"\n            \"probably caused by a circular import.\",\n        ):\n            getattr(resolver, \"url_patterns\")",
+    "token_count": 162,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.NoURLPatternsTests.test_no_urls_exception"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 162
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:728-736",
+    "content": "# django/urls/resolvers.py:728-736  (django.urls.resolvers.URLResolver.resolve_error_handler)\nclass URLResolver:\n    def resolve_error_handler(self, view_type):\n        callback = getattr(self.urlconf_module, \"handler%s\" % view_type, None)\n        if not callback:\n            # No handler specified in file; use lazy import, since\n            # django.conf.urls imports this file.\n            from django.conf import urls\n\n            callback = getattr(urls, \"handler%s\" % view_type)\n        return get_callable(callback)",
+    "token_count": 115,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLResolver.resolve_error_handler"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "method",
+     "engine_token_count": 115
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:478-490",
+    "content": "# django/urls/resolvers.py:478-490  (django.urls.resolvers.URLResolver.__repr__)\nclass URLResolver:\n    def __repr__(self):\n        if isinstance(self.urlconf_name, list) and self.urlconf_name:\n            # Don't bother to output the whole list, it can be huge\n            urlconf_repr = \"<%s list>\" % self.urlconf_name[0].__class__.__name__\n        else:\n            urlconf_repr = repr(self.urlconf_name)\n        return \"<%s %s (%s:%s) %s>\" % (\n            self.__class__.__name__,\n            urlconf_repr,\n            self.app_name,\n            self.namespace,\n            self.pattern.describe(),\n        )",
+    "token_count": 151,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLResolver.__repr__"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 151
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/included_urls2.py:1-15",
+    "content": "# tests/urlpatterns_reverse/included_urls2.py:1-15  (tests.urlpatterns_reverse.included_urls2)\n\"\"\"\nThese URL patterns are included in two different ways in the main urls.py, with\nan extra argument present in one case. Thus, there are two different ways for\neach name to resolve and Django must distinguish the possibilities based on the\nargument list.\n\"\"\"\n\nfrom django.urls import re_path\n\nfrom .views import empty_view\n\nurlpatterns = [\n    re_path(r\"^part/(?P<value>\\w+)/$\", empty_view, name=\"part\"),\n    re_path(r\"^part2/(?:(?P<value>\\w+)/)?$\", empty_view, name=\"part2\"),\n]",
+    "token_count": 144,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "module_block",
+     "engine_token_count": 144
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:105-108",
+    "content": "# django/urls/resolvers.py:105-108  (django.urls.resolvers.get_resolver)\ndef get_resolver(urlconf=None):\n    if urlconf is None:\n        urlconf = settings.ROOT_URLCONF\n    return _get_cached_resolver(urlconf)",
+    "token_count": 57,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.get_resolver"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "function",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/autoreload.py:328-343",
+    "content": "# django/utils/autoreload.py:328-343  (django.utils.autoreload.BaseReloader.run)\nclass BaseReloader:\n    def run(self, django_main_thread):\n        logger.debug(\"Waiting for apps ready_event.\")\n        self.wait_for_apps_ready(apps, django_main_thread)\n        from django.urls import get_resolver\n\n        # Prevent a race condition where URL modules aren't loaded when the\n        # reloader starts by accessing the urlconf_module property.\n        try:\n            get_resolver().urlconf_module\n        except Exception:\n            # Loading the urlconf can result in errors during development.\n            # If this occurs then swallow the error and continue.\n            pass\n        logger.debug(\"Apps ready_event triggered. Sending autoreload_started signal.\")\n        autoreload_started.send(sender=self)\n        self.run_loop()",
+    "token_count": 174,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.autoreload.BaseReloader.run"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "method",
+     "engine_token_count": 174
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:116-124",
+    "content": "# django/urls/resolvers.py:116-124  (django.urls.resolvers.get_ns_resolver)\n@functools.lru_cache(maxsize=None)\ndef get_ns_resolver(ns_pattern, resolver, converters):\n    # Build a namespaced resolver for the given parent URLconf pattern.\n    # This makes it possible to have captured parameters in the parent\n    # URLconf pattern.\n    pattern = RegexPattern(ns_pattern)\n    pattern.converters = dict(converters)\n    ns_resolver = URLResolver(pattern, resolver.url_patterns)\n    return URLResolver(RegexPattern(r\"^/\"), [ns_resolver])",
+    "token_count": 126,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.get_ns_resolver"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "function",
+     "engine_token_count": 126
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:536-544",
+    "content": "# tests/urlpatterns_reverse/tests.py:536-544  (tests.urlpatterns_reverse.tests.ResolverTests.test_reverse_lazy_object_coercion_by_resolve)\nclass ResolverTests(SimpleTestCase):\n    def test_reverse_lazy_object_coercion_by_resolve(self):\n        \"\"\"\n        Verifies lazy object returned by reverse_lazy is coerced to\n        text by resolve(). Previous to #21043, this would raise a TypeError.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        proxy_url = reverse_lazy(\"named-url1\", urlconf=urls)\n        resolver = get_resolver(urls)\n        resolver.resolve(proxy_url)",
+    "token_count": 131,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_reverse_lazy_object_coercion_by_resolve"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "method",
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaulttags.py:1325-1391",
+    "content": "# django/template/defaulttags.py:1325-1391  (django.template.defaulttags.url)\n@register.tag\ndef url(parser, token):\n    r\"\"\"\n    Return an absolute URL matching the given view with its parameters.\n\n    This is a way to define links that aren't tied to a particular URL\n    configuration::\n\n        {% url \"url_name\" arg1 arg2 %}\n\n        or\n\n        {% url \"url_name\" name1=value1 name2=value2 %}\n\n    The first argument is a URL pattern name. Other arguments are\n    space-separated values that will be filled in place of positional and\n    keyword arguments in the URL. Don't mix positional and keyword arguments.\n    All arguments for the URL must be present.\n\n    For example, if you have a view ``app_name.views.client_details`` taking\n    the client's id and the corresponding line in a URLconf looks like this::\n\n        path('client/<int:id>/', views.client_details, name='client-detail-view')\n\n    and this app's URLconf is included into the project's URLconf under some\n    path::\n\n        path('clients/', include('app_name.urls'))\n\n    then in a template you can create a link for a certain client like this::\n\n        {% url \"client-detail-view\" client.id %}\n\n    The URL will look like ``/clients/client/123/``.\n\n    The first argument may also be the name of a template variable that will be\n    evaluated to obtain the view name or the URL name, e.g.::\n\n        {% with url_name=\"client-detail-view\" %}\n        {% url url_name client.id %}\n        {% endwith %}\n    \"\"\"\n    bits = token.split_contents()\n    if len(bits) < 2:\n        raise TemplateSyntaxError(\n            \"'%s' takes at least one argument, a URL pattern name.\" % bits[0]\n        )\n    viewname = parser.compile_filter(bits[1])\n    args = []\n    kwargs = {}\n    asvar = None\n    bits = bits[2:]\n    if len(bits) >= 2 and bits[-2] == \"as\":\n        asvar = bits[-1]\n        bits = bits[:-2]\n\n    for bit in bits:\n        match = kwarg_re.match(bit)\n        if not match:\n            raise TemplateSyntaxError(\"Malformed arguments to url tag\")\n        name, value = match.groups()\n        if name:\n            kwargs[name] = parser.compile_filter(value)\n        else:\n            args.append(parser.compile_filter(value))\n\n    return URLNode(viewname, args, kwargs, asvar)",
+    "token_count": 534,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.defaulttags.url"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "function",
+     "engine_token_count": 534
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:581-592",
+    "content": "# tests/urlpatterns_reverse/tests.py:581-592  (tests.urlpatterns_reverse.tests.ResolverTests.test_non_regex)\nclass ResolverTests(SimpleTestCase):\n    def test_non_regex(self):\n        \"\"\"\n        A Resolver404 is raised if resolving doesn't meet the basic\n        requirements of a path to match - i.e., at the very least, it matches\n        the root pattern '^/'. Never return None from resolve() to prevent a\n        TypeError from occurring later (#10834).\n        \"\"\"\n        test_urls = [\"\", \"a\", \"\\\\\", \".\"]\n        for path_ in test_urls:\n            with self.subTest(path=path_):\n                with self.assertRaises(Resolver404):\n                    resolve(path_)",
+    "token_count": 154,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ResolverTests.test_non_regex"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "method",
+     "engine_token_count": 154
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:111-113",
+    "content": "# django/urls/resolvers.py:111-113  (django.urls.resolvers._get_cached_resolver)\n@functools.lru_cache(maxsize=None)\ndef _get_cached_resolver(urlconf=None):\n    return URLResolver(RegexPattern(r\"^/\"), urlconf)",
+    "token_count": 60,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers._get_cached_resolver"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "function",
+     "engine_token_count": 60
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/__init__.py:1-53",
+    "content": "# django/urls/__init__.py:1-53  (django.urls)\nfrom .base import (\n    clear_script_prefix,\n    clear_url_caches,\n    get_script_prefix,\n    get_urlconf,\n    is_valid_path,\n    resolve,\n    reverse,\n    reverse_lazy,\n    set_script_prefix,\n    set_urlconf,\n    translate_url,\n)\nfrom .conf import include, path, re_path\nfrom .converters import register_converter\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import (\n    LocalePrefixPattern,\n    ResolverMatch,\n    URLPattern,\n    URLResolver,\n    get_ns_resolver,\n    get_resolver,\n)\nfrom .utils import get_callable, get_mod_func\n\n__all__ = [\n    \"LocalePrefixPattern\",\n    \"NoReverseMatch\",\n    \"URLPattern\",\n    \"URLResolver\",\n    \"Resolver404\",\n    \"ResolverMatch\",\n    \"clear_script_prefix\",\n    \"clear_url_caches\",\n    \"get_callable\",\n    \"get_mod_func\",\n    \"get_ns_resolver\",\n    \"get_resolver\",\n    \"get_script_prefix\",\n    \"get_urlconf\",\n    \"include\",\n    \"is_valid_path\",\n    \"path\",\n    \"re_path\",\n    \"register_converter\",\n    \"resolve\",\n    \"reverse\",\n    \"reverse_lazy\",\n    \"set_script_prefix\",\n    \"set_urlconf\",\n    \"translate_url\",\n]",
+    "token_count": 291,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "module_block",
+     "engine_token_count": 291
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/shortcuts.py:117-155",
+    "content": "# django/shortcuts.py:117-155  (django.shortcuts.resolve_url)\ndef resolve_url(to, *args, **kwargs):\n    \"\"\"\n    Return a URL appropriate for the arguments passed.\n\n    The arguments could be:\n\n        * A model: the model's `get_absolute_url()` function will be called.\n\n        * A view name, possibly with arguments: `urls.reverse()` will be used\n          to reverse-resolve the name.\n\n        * A URL, which will be returned as-is.\n    \"\"\"\n    # If it's a model, use get_absolute_url()\n    if hasattr(to, \"get_absolute_url\"):\n        return to.get_absolute_url()\n\n    if isinstance(to, Promise):\n        # Expand the lazy instance, as it can cause issues when it is passed\n        # further to some Python functions like urlparse.\n        to = str(to)\n\n    # Handle relative URLs\n    if isinstance(to, str) and to.startswith((\"./\", \"../\")):\n        return to\n\n    # Next try a reverse URL resolution.\n    try:\n        return reverse(to, args=args, kwargs=kwargs)\n    except NoReverseMatch:\n        # If this is a callable, re-raise.\n        if callable(to):\n            raise\n        # If this doesn't \"feel\" like a URL, re-raise.\n        if \"/\" not in to and \".\" not in to:\n            raise\n\n    # Finally, fall back and assume it's a URL\n    return to",
+    "token_count": 302,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.shortcuts.resolve_url"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "function",
+     "engine_token_count": 302
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urlpatterns_reverse/tests.py:1460-1464",
+    "content": "# tests/urlpatterns_reverse/tests.py:1460-1464  (tests.urlpatterns_reverse.tests.ErrorHandlerResolutionTests.setUp)\nclass ErrorHandlerResolutionTests(SimpleTestCase):\n    def setUp(self):\n        urlconf = \"urlpatterns_reverse.urls_error_handlers\"\n        urlconf_callables = \"urlpatterns_reverse.urls_error_handlers_callables\"\n        self.resolver = URLResolver(RegexPattern(r\"^$\"), urlconf)\n        self.callable_resolver = URLResolver(RegexPattern(r\"^$\"), urlconf_callables)",
+    "token_count": 106,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.urlpatterns_reverse.tests.ErrorHandlerResolutionTests.setUp"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 106
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:705-710",
+    "content": "# django/urls/resolvers.py:705-710  (django.urls.resolvers.URLResolver.urlconf_module)\nclass URLResolver:\n    @cached_property\n    def urlconf_module(self):\n        if isinstance(self.urlconf_name, str):\n            return import_module(self.urlconf_name)\n        else:\n            return self.urlconf_name",
+    "token_count": 71,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLResolver.urlconf_module"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "method",
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/conf/urls/i18n.py:23-34",
+    "content": "# django/conf/urls/i18n.py:23-34  (django.conf.urls.i18n.is_language_prefix_patterns_used)\n@functools.lru_cache(maxsize=None)\ndef is_language_prefix_patterns_used(urlconf):\n    \"\"\"\n    Return a tuple of two booleans: (\n        `True` if i18n_patterns() (LocalePrefixPattern) is used in the URLconf,\n        `True` if the default language should be prefixed\n    )\n    \"\"\"\n    for url_pattern in get_resolver(urlconf).url_patterns:\n        if isinstance(url_pattern.pattern, LocalePrefixPattern):\n            return True, url_pattern.pattern.prefix_default_language\n    return False, False",
+    "token_count": 142,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.conf.urls.i18n.is_language_prefix_patterns_used"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "function",
+     "engine_token_count": 142
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/conf.py:16-58",
+    "content": "# django/urls/conf.py:16-58  (django.urls.conf.include)\ndef include(arg, namespace=None):\n    app_name = None\n    if isinstance(arg, tuple):\n        # Callable returning a namespace hint.\n        try:\n            urlconf_module, app_name = arg\n        except ValueError:\n            if namespace:\n                raise ImproperlyConfigured(\n                    \"Cannot override the namespace for a dynamic module that \"\n                    \"provides a namespace.\"\n                )\n            raise ImproperlyConfigured(\n                \"Passing a %d-tuple to include() is not supported. Pass a \"\n                \"2-tuple containing the list of patterns and app_name, and \"\n                \"provide the namespace argument to include() instead.\" % len(arg)\n            )\n    else:\n        # No namespace hint - use manually provided namespace.\n        urlconf_module = arg\n\n    if isinstance(urlconf_module, str):\n        urlconf_module = import_module(urlconf_module)\n    patterns = getattr(urlconf_module, \"urlpatterns\", urlconf_module)\n    app_name = getattr(urlconf_module, \"app_name\", app_name)\n    if namespace and not app_name:\n        raise ImproperlyConfigured(\n            \"Specifying a namespace in include() without providing an app_name \"\n            \"is not supported. Set the app_name attribute in the included \"\n            \"module, or pass a 2-tuple containing the list of patterns and \"\n            \"app_name instead.\",\n        )\n    namespace = namespace or app_name\n    # Make sure the patterns can be iterated through (without this, some\n    # testcases will break).\n    if isinstance(patterns, (list, tuple)):\n        for url_pattern in patterns:\n            pattern = getattr(url_pattern, \"pattern\", None)\n            if isinstance(pattern, LocalePrefixPattern):\n                raise ImproperlyConfigured(\n                    \"Using i18n_patterns in an included URLconf is not allowed.\"\n                )\n    return (urlconf_module, app_name, namespace)",
+    "token_count": 411,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.conf.include"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "function",
+     "engine_token_count": 411
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/resolve_url/tests.py:11-13",
+    "content": "# tests/resolve_url/tests.py:11-13  (tests.resolve_url.tests.ResolveUrlTests)\n@override_settings(ROOT_URLCONF=\"resolve_url.urls\")\nclass ResolveUrlTests(SimpleTestCase):\n    \"\"\"\n    Tests for the resolve_url() function.\n    \"\"\"",
+    "token_count": 55,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.resolve_url.tests.ResolveUrlTests"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "full",
+     "bm25_rank": 24,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 55
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/template/defaulttags.py:454-482",
+    "content": "# django/template/defaulttags.py:454-482  (django.template.defaulttags.URLNode.render)\nclass URLNode(Node):\n    def render(self, context):\n        from django.urls import NoReverseMatch, reverse\n\n        args = [arg.resolve(context) for arg in self.args]\n        kwargs = {k: v.resolve(context) for k, v in self.kwargs.items()}\n        view_name = self.view_name.resolve(context)\n        try:\n            current_app = context.request.current_app\n        except AttributeError:\n            try:\n                current_app = context.request.resolver_match.namespace\n            except AttributeError:\n                current_app = None\n        # Try to look up the URL. If it fails, raise NoReverseMatch unless the\n        # {% url ... as var %} construct is used, in which case return nothing.\n        url = \"\"\n        try:\n            url = reverse(view_name, args=args, kwargs=kwargs, current_app=current_app)\n        except NoReverseMatch:\n            if self.asvar is None:\n                raise\n\n        if self.asvar:\n            context[self.asvar] = url\n            return \"\"\n        else:\n            if context.autoescape:\n                url = conditional_escape(url)\n            return url",
+    "token_count": 249,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.template.defaulttags.URLNode.render"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "full",
+     "bm25_rank": 25,
+     "chunk_kind": "method",
+     "engine_token_count": 249
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/urls/resolvers.py:499-528",
+    "content": "# django/urls/resolvers.py:499-528  (django.urls.resolvers.URLResolver._check_custom_error_handlers)\nclass URLResolver:\n    def _check_custom_error_handlers(self):\n        messages = []\n        # All handlers take (request, exception) arguments except handler500\n        # which takes (request).\n        for status_code, num_parameters in [(400, 2), (403, 2), (404, 2), (500, 1)]:\n            try:\n                handler = self.resolve_error_handler(status_code)\n            except (ImportError, ViewDoesNotExist) as e:\n                path = getattr(self.urlconf_module, \"handler%s\" % status_code)\n                msg = (\n                    \"The custom handler{status_code} view '{path}' could not be \"\n                    \"imported.\"\n                ).format(status_code=status_code, path=path)\n                messages.append(Error(msg, hint=str(e), id=\"urls.E008\"))\n                continue\n            signature = inspect.signature(handler)\n            args = [None] * num_parameters\n            try:\n                signature.bind(*args)\n            except TypeError:\n                msg = (\n                    \"The custom handler{status_code} view '{path}' does not \"\n                    \"take the correct number of arguments ({args}).\"\n                ).format(\n                    status_code=status_code,\n                    path=handler.__module__ + \".\" + handler.__qualname__,\n                    args=\"request, exception\" if num_parameters == 2 else \"request\",\n                )\n                messages.append(Error(msg, id=\"urls.E007\"))\n        return messages",
+    "token_count": 335,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.urls.resolvers.URLResolver._check_custom_error_handlers"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "full",
+     "bm25_rank": 26,
+     "chunk_kind": "method",
+     "engine_token_count": 335
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:870-915",
+    "content": "# django/test/client.py:870-915  (django.test.client.Client.request)\nclass Client(ClientMixin, RequestFactory):\n    def request(self, **request):\n        \"\"\"\n        Make a generic request. Compose the environment dictionary and pass\n        to the handler, return the result of the handler. Assume defaults for\n        the query environment, which can be overridden using the arguments to\n        the request.\n        \"\"\"\n        environ = self._base_environ(**request)\n\n        # Curry a data dictionary into an instance of the template renderer\n        # callback function.\n        data = {}\n        on_template_render = partial(store_rendered_templates, data)\n        signal_uid = \"template-render-%s\" % id(request)\n        signals.template_rendered.connect(on_template_render, dispatch_uid=signal_uid)\n        # Capture exceptions created by the handler.\n        exception_uid = \"request-exception-%s\" % id(request)\n        got_request_exception.connect(self.store_exc_info, dispatch_uid=exception_uid)\n        try:\n            response = self.handler(environ)\n        finally:\n            signals.template_rendered.disconnect(dispatch_uid=signal_uid)\n            got_request_exception.disconnect(dispatch_uid=exception_uid)\n        # Check for signaled exceptions.\n        self.check_exception(response)\n        # Save the client and request that stimulated the response.\n        response.client = self\n        response.request = request\n        # Add any rendered template detail to the response.\n        response.templates = data.get(\"templates\", [])\n        response.context = data.get(\"context\")\n        response.json = partial(self._parse_json, response)\n        # Attach the ResolverMatch instance to the response.\n        urlconf = getattr(response.wsgi_request, \"urlconf\", None)\n        response.resolver_match = SimpleLazyObject(\n            lambda: resolve(request[\"PATH_INFO\"], urlconf=urlconf),\n        )\n        # Flatten a single context. Not really necessary anymore thanks to the\n        # __getattr__ flattening in ContextList, but has some edge case\n        # backwards compatibility implications.\n        if response.context and len(response.context) == 1:\n            response.context = response.context[0]\n        # Update persistent cookie data.\n        if response.cookies:\n            self.cookies.update(response.cookies)\n        return response",
+    "token_count": 457,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.Client.request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "full",
+     "bm25_rank": 27,
+     "chunk_kind": "method",
+     "engine_token_count": 457
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/checks/urls.py:31-54",
+    "content": "# django/core/checks/urls.py:31-54  (django.core.checks.urls.check_url_namespaces_unique)\n@register(Tags.urls)\ndef check_url_namespaces_unique(app_configs, **kwargs):\n    \"\"\"\n    Warn if URL namespaces used in applications aren't unique.\n    \"\"\"\n    if not getattr(settings, \"ROOT_URLCONF\", None):\n        return []\n\n    from django.urls import get_resolver\n\n    resolver = get_resolver()\n    all_namespaces = _load_all_namespaces(resolver)\n    counter = Counter(all_namespaces)\n    non_unique_namespaces = [n for n, count in counter.items() if count > 1]\n    errors = []\n    for namespace in non_unique_namespaces:\n        errors.append(\n            Warning(\n                \"URL namespace '{}' isn't unique. You may not be able to reverse \"\n                \"all URLs in this namespace\".format(namespace),\n                id=\"urls.W005\",\n            )\n        )\n    return errors",
+    "token_count": 197,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.checks.urls.check_url_namespaces_unique"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "full",
+     "bm25_rank": 28,
+     "chunk_kind": "function",
+     "engine_token_count": 197
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/shortcuts.py:28-48",
+    "content": "# django/shortcuts.py:28-48  (django.shortcuts.redirect)\ndef redirect(to, *args, permanent=False, **kwargs):\n    \"\"\"\n    Return an HttpResponseRedirect to the appropriate URL for the arguments\n    passed.\n\n    The arguments could be:\n\n        * A model: the model's `get_absolute_url()` function will be called.\n\n        * A view name, possibly with arguments: `urls.reverse()` will be used\n          to reverse-resolve the name.\n\n        * A URL, which will be used as-is for the redirect location.\n\n    Issues a temporary redirect by default; pass permanent=True to issue a\n    permanent redirect.\n    \"\"\"\n    redirect_class = (\n        HttpResponsePermanentRedirect if permanent else HttpResponseRedirect\n    )\n    return redirect_class(resolve_url(to, *args, **kwargs))",
+    "token_count": 165,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.shortcuts.redirect"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "full",
+     "bm25_rank": 29,
+     "chunk_kind": "function",
+     "engine_token_count": 165
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/regex_helper.py:42-76#part1of3",
+    "content": "# django/utils/regex_helper.py:42-76#part1of3  (django.utils.regex_helper.normalize)\ndef normalize(pattern):\n    r\"\"\"\n    Given a reg-exp pattern, normalize it to an iterable of forms that\n    suffice for reverse matching. This does the following:\n\n    (1) For any repeating sections, keeps the minimum number of occurrences\n        permitted (this means zero for optional groups).\n    (2) If an optional group includes parameters, include one occurrence of\n        that group (along with the zero occurrence case from step (1)).\n    (3) Select the first (essentially an arbitrary) element from any character\n        class. Select an arbitrary character for any unordered class (e.g. '.'\n        or '\\w') in the pattern.\n    (4) Ignore look-ahead and look-behind assertions.\n    (5) Raise an error on any disjunctive ('|') constructs.\n\n    Django's URLs for forward resolving are either all positional arguments or\n    all keyword arguments. That is assumed here, as well. Although reverse\n    resolving can be done using positional args when keyword args are\n    specified, the two cannot be mixed in the same reverse() call.\n    \"\"\"\n    # Do a linear scan to work out the special features of this pattern. The\n    # idea is that we scan once here and collect all the information we need to\n    # make future decisions.\n    result = []\n    non_capturing_groups = []\n    consume_next = True\n    pattern_iter = next_char(iter(pattern))\n    num_args = 0\n\n    # A \"while\" loop is used here because later on we need to be able to peek\n    # at the next character and possibly go around without consuming another\n    # one at the top of the loop.\n    try:\n        ch, escaped = next(pattern_iter)\n    except StopIteration:\n        return [(\"\", [])]",
+    "token_count": 396,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.regex_helper.normalize"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "full",
+     "bm25_rank": 30,
+     "chunk_kind": "function_part",
+     "engine_token_count": 396
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/base.py:184-268",
+    "content": "# django/core/management/base.py:184-268  (django.core.management.base.BaseCommand)\nclass BaseCommand:\n    \"\"\"\n    The base class from which all management commands ultimately\n    derive.\n\n    Use this class if you want access to all of the mechanisms which\n    parse the command-line arguments and work out what code to call in\n    response; if you don't need to change any of that behavior,\n    consider using one of the subclasses defined in this file.\n\n    If you are interested in overriding/customizing various aspects of\n    the command-parsing and -execution behavior, the normal flow works\n    as follows:\n\n    1. ``django-admin`` or ``manage.py`` loads the command class\n       and calls its ``run_from_argv()`` method.\n\n    2. The ``run_from_argv()`` method calls ``create_parser()`` to get\n       an ``ArgumentParser`` for the arguments, parses them, performs\n       any environment changes requested by options like\n       ``pythonpath``, and then calls the ``execute()`` method,\n       passing the parsed arguments.\n\n    3. The ``execute()`` method attempts to carry out the command by\n       calling the ``handle()`` method with the parsed arguments; any\n       output produced by ``handle()`` will be printed to standard\n       output and, if the command is intended to produce a block of\n       SQL statements, will be wrapped in ``BEGIN`` and ``COMMIT``.\n\n    4. If ``handle()`` or ``execute()`` raised any exception (e.g.\n       ``CommandError``), ``run_from_argv()`` will  instead print an error\n       message to ``stderr``.\n\n    Thus, the ``handle()`` method is typically the starting point for\n    subclasses; many built-in commands and command types either place\n    all of their logic in ``handle()``, or perform some additional\n    parsing work in ``handle()`` and then delegate from it to more\n    specialized methods as needed.\n\n    Several attributes affect behavior at various steps along the way:\n\n    ``help``\n        A short description of the command, which will be printed in\n        help messages.\n\n    ``output_transaction``\n        A boolean indicating whether the command outputs SQL\n        statements; if ``True``, the output will automatically be\n        wrapped with ``BEGIN;`` and ``COMMIT;``. Default value is\n        ``False``.\n\n    ``requires_migrations_checks``\n        A boolean; if ``True``, the command prints a warning if the set of\n        migrations on disk don't match the migrations in the database.\n\n    ``requires_system_checks``\n        A list or tuple of tags, e.g. [Tags.staticfiles, Tags.models]. System\n        checks registered in the chosen tags will be checked for errors prior\n        to executing the command. The value '__all__' can be used to specify\n        that all system checks should be performed. Default value is '__all__'.\n\n        To validate an individual application's models\n        rather than all applications' models, call\n        ``self.check(app_configs)`` from ``handle()``, where ``app_configs``\n        is the list of application's configuration provided by the\n        app registry.\n\n    ``stealth_options``\n        A tuple of any options the command uses which aren't defined by the\n        argument parser.\n    \"\"\"\n\n    # Metadata about this command.\n    help = \"\"\n\n    # Configuration shortcuts that alter various logic.\n    _called_from_command_line = False\n    output_transaction = False  # Whether to wrap the output in a \"BEGIN; COMMIT;\"\n    requires_migrations_checks = False\n    requires_system_checks = \"__all__\"\n    # Arguments, common to all commands, which aren't defined by the argument\n    # parser.\n    base_stealth_options = (\"stderr\", \"stdout\")\n    # Command-specific options not defined by the argument parser.\n    stealth_options = ()\n    suppressed_base_arguments = set()",
+    "token_count": 822,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.management.base.BaseCommand"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "full",
+     "bm25_rank": 31,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 822
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/transaction.py:143-174",
+    "content": "# django/db/transaction.py:143-174  (django.db.transaction.Atomic)\nclass Atomic(ContextDecorator):\n    \"\"\"\n    Guarantee the atomic execution of a given block.\n\n    An instance can be used either as a decorator or as a context manager.\n\n    When it's used as a decorator, __call__ wraps the execution of the\n    decorated function in the instance itself, used as a context manager.\n\n    When it's used as a context manager, __enter__ creates a transaction or a\n    savepoint, depending on whether a transaction is already in progress, and\n    __exit__ commits the transaction or releases the savepoint on normal exit,\n    and rolls back the transaction or to the savepoint on exceptions.\n\n    It's possible to disable the creation of savepoints if the goal is to\n    ensure that some code runs within a transaction without creating overhead.\n\n    A stack of savepoints identifiers is maintained as an attribute of the\n    connection. None denotes the absence of a savepoint.\n\n    This allows reentrancy even if the same AtomicWrapper is reused. For\n    example, it's possible to define `oa = atomic('other')` and use `@oa` or\n    `with oa:` multiple times.\n\n    Since database connections are thread-local, this is thread-safe.\n\n    An atomic block can be tagged as durable. In this case, raise a\n    RuntimeError if it's nested within another atomic block. This guarantees\n    that database changes in a durable block are committed to the database when\n    the block exists without error.\n\n    This is a private API.\n    \"\"\"",
+    "token_count": 332,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.transaction.Atomic"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "full",
+     "bm25_rank": 32,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 332
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/checks/urls.py:8-15",
+    "content": "# django/core/checks/urls.py:8-15  (django.core.checks.urls.check_url_config)\n@register(Tags.urls)\ndef check_url_config(app_configs, **kwargs):\n    if getattr(settings, \"ROOT_URLCONF\", None):\n        from django.urls import get_resolver\n\n        resolver = get_resolver()\n        return check_resolver(resolver)\n    return []",
+    "token_count": 75,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.checks.urls.check_url_config"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "full",
+     "bm25_rank": 33,
+     "chunk_kind": "function",
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/test/client.py:1224-1272",
+    "content": "# django/test/client.py:1224-1272  (django.test.client.AsyncClient.request)\nclass AsyncClient(ClientMixin, AsyncRequestFactory):\n    async def request(self, **request):\n        \"\"\"\n        Make a generic request. Compose the scope dictionary and pass to the\n        handler, return the result of the handler. Assume defaults for the\n        query environment, which can be overridden using the arguments to the\n        request.\n        \"\"\"\n        if \"follow\" in request:\n            raise NotImplementedError(\n                \"AsyncClient request methods do not accept the follow parameter.\"\n            )\n        scope = self._base_scope(**request)\n        # Curry a data dictionary into an instance of the template renderer\n        # callback function.\n        data = {}\n        on_template_render = partial(store_rendered_templates, data)\n        signal_uid = \"template-render-%s\" % id(request)\n        signals.template_rendered.connect(on_template_render, dispatch_uid=signal_uid)\n        # Capture exceptions created by the handler.\n        exception_uid = \"request-exception-%s\" % id(request)\n        got_request_exception.connect(self.store_exc_info, dispatch_uid=exception_uid)\n        try:\n            response = await self.handler(scope)\n        finally:\n            signals.template_rendered.disconnect(dispatch_uid=signal_uid)\n            got_request_exception.disconnect(dispatch_uid=exception_uid)\n        # Check for signaled exceptions.\n        self.check_exception(response)\n        # Save the client and request that stimulated the response.\n        response.client = self\n        response.request = request\n        # Add any rendered template detail to the response.\n        response.templates = data.get(\"templates\", [])\n        response.context = data.get(\"context\")\n        response.json = partial(self._parse_json, response)\n        # Attach the ResolverMatch instance to the response.\n        urlconf = getattr(response.asgi_request, \"urlconf\", None)\n        response.resolver_match = SimpleLazyObject(\n            lambda: resolve(request[\"path\"], urlconf=urlconf),\n        )\n        # Flatten a single context. Not really necessary anymore thanks to the\n        # __getattr__ flattening in ContextList, but has some edge case\n        # backwards compatibility implications.\n        if response.context and len(response.context) == 1:\n            response.context = response.context[0]\n        # Update persistent cookie data.\n        if response.cookies:\n            self.cookies.update(response.cookies)\n        return response",
+    "token_count": 488,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.test.client.AsyncClient.request"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "full",
+     "bm25_rank": 34,
+     "chunk_kind": "method",
+     "engine_token_count": 488
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/admin_custom_urls/tests.py:15-20",
+    "content": "# tests/admin_custom_urls/tests.py:15-20  (tests.admin_custom_urls.tests.AdminCustomUrlsTest)\n@override_settings(\n    ROOT_URLCONF=\"admin_custom_urls.urls\",\n)\nclass AdminCustomUrlsTest(TestCase):\n    \"\"\"\n    Remember that:\n    * The Action model has a CharField PK.\n    * The ModelAdmin for Action customizes the add_view URL, it's\n      '<app name>/<model name>/!add/'\n    \"\"\"",
+    "token_count": 94,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.admin_custom_urls.tests.AdminCustomUrlsTest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "full",
+     "bm25_rank": 35,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/sessions/models.py:9-26",
+    "content": "# django/contrib/sessions/models.py:9-26  (django.contrib.sessions.models.Session)\nclass Session(AbstractBaseSession):\n    \"\"\"\n    Django provides full support for anonymous sessions. The session\n    framework lets you store and retrieve arbitrary data on a\n    per-site-visitor basis. It stores data on the server side and\n    abstracts the sending and receiving of cookies. Cookies contain a\n    session ID -- not the data itself.\n\n    The Django sessions framework is entirely cookie-based. It does\n    not fall back to putting session IDs in URLs. This is an intentional\n    design decision. Not only does that behavior make URLs ugly, it makes\n    your site vulnerable to session-ID theft via the \"Referer\" header.\n\n    For complete documentation on using Sessions in your code, consult\n    the sessions documentation that is shipped with Django (also available\n    on the Django web site).\n    \"\"\"\n\n    objects = SessionManager()",
+    "token_count": 194,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.sessions.models.Session"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "full",
+     "bm25_rank": 36,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 194
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/urls.py:1-7",
+    "content": "# tests/urls.py:1-7  (tests.urls)\n\"\"\"This URLconf exists because Django expects ROOT_URLCONF to exist. URLs\nshould be added within the test folders, and use TestCase.urls to set them.\nThis helps the tests remain isolated.\n\"\"\"\n\n\nurlpatterns = []",
+    "token_count": 57,
+    "rank": 59,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "full",
+     "bm25_rank": 37,
+     "chunk_kind": "module_block",
+     "engine_token_count": 57
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:21-343",
+    "content": "# django/core/handlers/base.py:21-343  (django.core.handlers.base.BaseHandler)\nclass BaseHandler:\n    _view_middleware = None\n    _template_response_middleware = None\n    _exception_middleware = None\n    _middleware_chain = None\n\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler\n\n    def adapt_method_mode(\n        self,\n        is_async,\n        method,\n        method_is_async=None,\n        debug=False,\n        name=None,\n    ):\n        \"\"\"\n        Adapt a method to be in the correct \"mode\":\n        - If is_async is False:\n          - Synchronous methods are left alone\n          - Asynchronous methods are wrapped with async_to_sync\n        - If is_async is True:\n          - Synchronous methods are wrapped with sync_to_async()\n          - Asynchronous methods are left alone\n        \"\"\"\n        if method_is_async is None:\n            method_is_async = iscoroutinefunction(method)\n        if debug and not name:\n            name = name or \"method %s()\" % method.__qualname__\n        if is_async:\n            if not method_is_async:\n                if debug:\n                    logger.debug(\"Synchronous handler adapted for %s.\", name)\n                return sync_to_async(method, thread_sensitive=True)\n        elif method_is_async:\n            if debug:\n                logger.debug(\"Asynchronous handler adapted for %s.\", name)\n            return async_to_sync(method)\n        return method\n\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response\n\n    async def _get_response_async(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware.\n        for middleware_method in self._view_middleware:\n            response = await middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is a synchronous view, run it in a subthread\n            if not iscoroutinefunction(wrapped_callback):\n                wrapped_callback = sync_to_async(\n                    wrapped_callback, thread_sensitive=True\n                )\n            try:\n                response = await wrapped_callback(\n                    request, *callback_args, **callback_kwargs\n                )\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None or an uncalled coroutine.\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = await middleware_method(request, response)\n                # Complain if the template response middleware returned None or\n                # an uncalled coroutine.\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                if iscoroutinefunction(response.render):\n                    response = await response.render()\n                else:\n                    response = await sync_to_async(\n                        response.render, thread_sensitive=True\n                    )()\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Make sure the response is not a coroutine\n        if asyncio.iscoroutine(response):\n            raise RuntimeError(\"Response is still a coroutine.\")\n        return response\n\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match\n\n    def check_response(self, response, callback, name=None):\n        \"\"\"\n        Raise an error if the view returned None or an uncalled coroutine.\n        \"\"\"\n        if not (response is None or asyncio.iscoroutine(response)):\n            return\n        if not name:\n            if isinstance(callback, types.FunctionType):  # FBV\n                name = \"The view %s.%s\" % (callback.__module__, callback.__name__)\n            else:  # CBV\n                name = \"The view %s.%s.__call__\" % (\n                    callback.__module__,\n                    callback.__class__.__name__,\n                )\n        if response is None:\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned None \"\n                \"instead.\" % name\n            )\n        elif asyncio.iscoroutine(response):\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned an \"\n                \"unawaited coroutine instead. You may need to add an 'await' \"\n                \"into your view.\" % name\n            )\n\n    # Other utility methods.",
+    "token_count": 2364,
+    "rank": 60,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "full",
+     "bm25_rank": 38,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 2364
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12808,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging Django's URL resolution entrypoint in\ndjango/urls/base.py and django/urls/resolvers.py. Starting from\n`django.urls.base.resolve`, trace the exact causal pipeline used to\nobtain the (possibly cached) resolver for the current urlconf. Assume\n`resolve` is called without an explicit `urlconf` argument (the\ndefault), so it must look up the current thread's urlconf itself\nrather than skip straight to resolving the resolver.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.urls.base.resolve\", \"django.urls.base.get_urlconf\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/urls/base.py",
+   "cutoff": 120,
+   "n_components": 62,
+   "n_full": 50,
+   "n_stub": 10,
+   "n_dropped": 2,
+   "packed_tokens": 12808,
+   "latency_ms": {
+    "L_priority_sort": [
+     1161.037591
+    ],
+    "L_binary_search_tokenize": [
+     0.283147
+    ],
+    "L_retrieve": [
+     1163.433192
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12808,
+   "prompt_tokens": 13137,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13150,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/urls/base.py:21-24  (django.urls.base.resolve)\ndef resolve(path, urlconf=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    return get_resolver(urlconf).resolve(path)\n\n# django/urls/base.py:1-18  (django.urls.base)\nfrom urllib.parse import unquote, urlsplit, urlunsplit\n\nfrom asgiref.local import Local\n\nfrom django.utils.functional import lazy\nfrom django.utils.translation import override\n\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import _get_cached_resolver, get_ns_resolver, get_resolver\nfrom .utils import get_callable\n\n# SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for\n# the current thread (which is the only one we ever access), it is assumed to\n# be empty.\n_prefixes = Local()\n\n# Overridden URLconfs for each thread are stored here.\n_urlconfs = Local()\n\n# django/urls/base.py:27-88  (django.urls.base.reverse)\ndef reverse(viewname, urlconf=None, args=None, kwargs=None, current_app=None):\n    if urlconf is None:\n        urlconf = get_urlconf()\n    resolver = get_resolver(urlconf)\n    args = args or []\n    kwargs = kwargs or {}\n\n    prefix = get_script_prefix()\n\n    if not isinstance(viewname, str):\n        view = viewname\n    else:\n        *path, view = viewname.split(\":\")\n\n        if current_app:\n            current_path = current_app.split(\":\")\n            current_path.reverse()\n        else:\n            current_path = None\n\n        resolved_path = []\n        ns_pattern = \"\"\n        ns_converters = {}\n        for ns in path:\n            current_ns = current_path.pop() if current_path else None\n            # Lookup the name to see if it could be an app identifier.\n            try:\n                app_list = resolver.app_dict[ns]\n                # Yes! Path part matches an app in the current Resolver.\n                if current_ns and current_ns in app_list:\n                    # If we are reversing for a particular app, use that\n                    # namespace.\n                    ns = current_ns\n                elif ns not in app_list:\n                    # The name isn't shared by one of the instances (i.e.,\n                    # the default) so pick the first instance as the default.\n                    ns = app_list[0]\n            except KeyError:\n                pass\n\n            if ns != current_ns:\n                current_path = None\n\n            try:\n                extra, resolver = resolver.namespace_dict[ns]\n                resolved_path.append(ns)\n                ns_pattern += extra\n                ns_converters.update(resolver.pattern.converters)\n            except KeyError as key:\n                if resolved_path:\n                    raise NoReverseMatch(\n                        \"%s is not a registered namespace inside '%s'\"\n                        % (key, \":\".join(resolved_path))\n                    )\n                else:\n                    raise NoReverseMatch(\"%s is not a registered namespace\" % key)\n        if ns_pattern:\n            resolver = get_ns_resolver(\n                ns_pattern, resolver, tuple(ns_converters.items())\n            )\n\n    return resolver._reverse_with_prefix(view, prefix, *args, **kwargs)\n\n# django/urls/base.py:91-91  (django.urls.base)\nreverse_lazy = lazy(reverse, str)\n\n# django/urls/base.py:94-97  (django.urls.base.clear_url_caches)\ndef clear_url_caches():\n    get_callable.cache_clear()\n    _get_cached_resolver.cache_clear()\n    get_ns_resolver.cache_clear()\n\n# django/urls/base.py:100-106  (django.urls.base.set_script_prefix)\ndef set_script_prefix(prefix):\n    \"\"\"\n    Set the script prefix for the current thread.\n    \"\"\"\n    if not prefix.endswith(\"/\"):\n        prefix += \"/\"\n    _prefixes.value = prefix\n\n# django/urls/base.py:109-115  (django.urls.base.get_script_prefix)\ndef get_script_prefix():\n    \"\"\"\n    Return the currently active script prefix. Useful for client code that\n    wishes to construct their own URLs manually (although accessing the request\n    instance is normally going to be a lot cleaner).\n    \"\"\"\n    return getattr(_prefixes, \"value\", \"/\")\n\n# django/urls/base.py:118-125  (django.urls.base.clear_script_prefix)\ndef clear_script_prefix():\n    \"\"\"\n    Unset the script prefix for the current thread.\n    \"\"\"\n    try:\n        del _prefixes.value\n    except AttributeError:\n        pass\n\n# django/urls/base.py:128-137  (django.urls.base.set_urlconf)\ndef set_urlconf(urlconf_name):\n    \"\"\"\n    Set the URLconf for the current thread (overriding the default one in\n    settings). If urlconf_name is None, revert back to the default.\n    \"\"\"\n    if urlconf_name:\n        _urlconfs.value = urlconf_name\n    else:\n        if hasattr(_urlconfs, \"value\"):\n            del _urlconfs.value\n\n# django/urls/base.py:140-145  (django.urls.base.get_urlconf)\ndef get_urlconf(default=None):\n    \"\"\"\n    Return the root URLconf to use for the current thread if it has been\n    changed from the default one.\n    \"\"\"\n    return getattr(_urlconfs, \"value\", default)\n\n# django/urls/base.py:148-157  (django.urls.base.is_valid_path)\ndef is_valid_path(path, urlconf=None):\n    \"\"\"\n    Return the ResolverMatch if the given path resolves against the default URL\n    resolver, False otherwise. This is a convenience method to make working\n    with \"is this a match?\" cases easier, avoiding try...except blocks.\n    \"\"\"\n    try:\n        return resolve(path, urlconf)\n    except Resolver404:\n        return False\n\n# django/urls/base.py:160-187  (django.urls.base.translate_url)\ndef translate_url(url, lang_code):\n    \"\"\"\n    Given a URL (absolute or relative), try to get its translated version in\n    the `lang_code` language (either by i18n_patterns or by translated regex).\n    Return the original URL if no translated version is found.\n    \"\"\"\n    parsed = urlsplit(url)\n    try:\n        # URL may be encoded.\n        match = resolve(unquote(parsed.path))\n    except Resolver404:\n        pass\n    else:\n        to_be_reversed = (\n            \"%s:%s\" % (match.namespace, match.url_name)\n            if match.namespace\n            else match.url_name\n        )\n        with override(lang_code):\n            try:\n                url = reverse(to_be_reversed, args=match.args, kwargs=match.kwargs)\n            except NoReverseMatch:\n                pass\n            else:\n                url = urlunsplit(\n                    (parsed.scheme, parsed.netloc, url, parsed.query, parsed.fragment)\n                )\n    return url\n\n# tests/urlpatterns_reverse/tests.py:558-579  (tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_reverse_conflict [signature])\nclass ResolverTests(SimpleTestCase):\n    def test_resolver_reverse_conflict(self):\n        \"URL pattern name arguments don't need to be unique. The last registered\"\n        ...\n\n# django/contrib/admindocs/views.py:167-182  (django.contrib.admindocs.views.ViewDetailView._get_view_func [signature])\nclass ViewDetailView(BaseAdminDocsView):\n    @staticmethod\n    def _get_view_func(view):\n        ...\n\n# django/db/models/expressions.py:323-351  (django.db.models.expressions.BaseExpression._resolve_output_field [signature])\nclass BaseExpression:\n    def _resolve_output_field(self):\n        'Attempt to infer the output type of the expression.'\n        ...\n\n# tests/check_framework/test_urls.py:24-30  (tests.check_framework.test_urls.CheckUrlConfigTests.test_check_resolver_recursive [signature])\nclass CheckUrlConfigTests(SimpleTestCase):\n    @override_settings(ROOT_URLCONF=\"check_framework.urls.warning_in_include\")\n    def test_check_resolver_recursive(self):\n        # The resolver is checked recursively (examining URL patterns in include()).\n        ...\n\n# django/core/handlers/base.py:136-150  (django.core.handlers.base.BaseHandler.get_response [signature])\nclass BaseHandler:\n    def get_response(self, request):\n        'Return an HttpResponse object for the given HttpRequest.'\n        ...\n\n# tests/urlpatterns_reverse/tests.py:526-534  (tests.urlpatterns_reverse.tests.ResolverTests.test_resolver_repr [signature])\nclass ResolverTests(SimpleTestCase):\n    def test_resolver_repr(self):\n        'Test repr of URLResolver, especially when urlconf_name is a list'\n        ...\n\n# django/template/base.py:867-942  (django.template.base.Variable._resolve_lookup [signature])\nclass Variable:\n    def _resolve_lookup(self, context):\n        'Perform resolution of a real variable (i.e. not a literal) against the'\n        ...\n\n# django/contrib/admin/sites.py:38-70  (django.contrib.admin.sites.AdminSite [signature])\nclass AdminSite:\n    'An AdminSite object encapsulates an instance of the Django admin application, ready'\n    ...\n\n# tests/view_tests/tests/test_defaults.py:20-26  (tests.view_tests.tests.test_defaults.DefaultsTests [signature])\n@override_settings(ROOT_URLCONF=\"view_tests.urls\")\nclass DefaultsTests(TestCase):\n    'Test django views in django/views/defaults.py'\n    ...\n\n# django/core/handlers/base.py:152-172  (django.core.handlers.base.BaseHandler.get_response_async [signature])\nclass BaseHandler:\n    async def get_response_async(self, request):\n        'Asynchronous version of get_response.'\n        ...\n\n# django/urls/resolvers.py:712-726  (django.urls.resolvers.URLResolver.url_patterns)\nclass URLResolver:\n    @cached_property\n    def url_patterns(self):\n        # urlconf_module might be a valid set of patterns, so we default to it\n        patterns = getattr(self.urlconf_module, \"urlpatterns\", self.urlconf_module)\n        try:\n            iter(patterns)\n        except TypeError as e:\n            msg = (\n                \"The included URLconf '{name}' does not appear to have \"\n                \"any patterns in it. If you see the 'urlpatterns' variable \"\n                \"with valid patterns in the file then the issue is probably \"\n                \"caused by a circular import.\"\n            )\n            raise ImproperlyConfigured(msg.format(name=self.urlconf_name)) from e\n        return patterns\n\n# tests/urlpatterns_reverse/tests.py:594-641  (tests.urlpatterns_reverse.tests.ResolverTests.test_404_tried_urls_have_names)\nclass ResolverTests(SimpleTestCase):\n    def test_404_tried_urls_have_names(self):\n        \"\"\"\n        The list of URLs that come back from a Resolver404 exception contains\n        a list in the right format for printing out in the DEBUG 404 page with\n        both the patterns and URL names, if available.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        # this list matches the expected URL types and names returned when\n        # you try to resolve a nonexistent URL in the first level of included\n        # URLs in named_urls.py (e.g., '/included/nonexistent-url')\n        url_types_names = [\n            [{\"type\": URLPattern, \"name\": \"named-url1\"}],\n            [{\"type\": URLPattern, \"name\": \"named-url2\"}],\n            [{\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url3\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": \"named-url4\"}],\n            [{\"type\": URLResolver}, {\"type\": URLPattern, \"name\": None}],\n            [{\"type\": URLResolver}, {\"type\": URLResolver}],\n        ]\n        with self.assertRaisesMessage(Resolver404, \"tried\") as cm:\n            resolve(\"/included/nonexistent-url\", urlconf=urls)\n        e = cm.exception\n        # make sure we at least matched the root ('/') url resolver:\n        self.assertIn(\"tried\", e.args[0])\n        self.assertEqual(\n            len(e.args[0][\"tried\"]),\n            len(url_types_names),\n            \"Wrong number of tried URLs returned.  Expected %s, got %s.\"\n            % (len(url_types_names), len(e.args[0][\"tried\"])),\n        )\n        for tried, expected in zip(e.args[0][\"tried\"], url_types_names):\n            for t, e in zip(tried, expected):\n                with self.subTest(t):\n                    self.assertIsInstance(\n                        t, e[\"type\"]\n                    ), \"%s is not an instance of %s\" % (t, e[\"type\"])\n                    if \"name\" in e:\n                        if not e[\"name\"]:\n                            self.assertIsNone(\n                                t.name, \"Expected no URL name but found %s.\" % t.name\n                            )\n                        else:\n                            self.assertEqual(\n                                t.name,\n                                e[\"name\"],\n                                'Wrong URL name.  Expected \"%s\", got \"%s\".'\n                                % (e[\"name\"], t.name),\n                            )\n\n# tests/urlpatterns/test_resolvers.py:18-23  (tests.urlpatterns.test_resolvers.ResolverCacheTests.test_resolver_cache_default__root_urlconf)\nclass ResolverCacheTests(SimpleTestCase):\n    @override_settings(ROOT_URLCONF=\"urlpatterns.path_urls\")\n    def test_resolver_cache_default__root_urlconf(self):\n        # resolver for a default URLconf (passing no argument) and for the\n        # settings.ROOT_URLCONF is the same cached object.\n        self.assertIs(get_resolver(), get_resolver(\"urlpatterns.path_urls\"))\n        self.assertIsNot(get_resolver(), get_resolver(\"urlpatterns.path_dynamic_urls\"))\n\n# django/core/handlers/base.py:300-315  (django.core.handlers.base.BaseHandler.resolve_request)\nclass BaseHandler:\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match\n\n# django/conf/urls/i18n.py:8-20  (django.conf.urls.i18n.i18n_patterns)\ndef i18n_patterns(*urls, prefix_default_language=True):\n    \"\"\"\n    Add the language code prefix to every URL pattern within this function.\n    This may only be used in the root URLconf, not in an included URLconf.\n    \"\"\"\n    if not settings.USE_I18N:\n        return list(urls)\n    return [\n        URLResolver(\n            LocalePrefixPattern(prefix_default_language=prefix_default_language),\n            list(urls),\n        )\n    ]\n\n# django/urls/resolvers.py:457-476  (django.urls.resolvers.URLResolver.__init__)\nclass URLResolver:\n    def __init__(\n        self, pattern, urlconf_name, default_kwargs=None, app_name=None, namespace=None\n    ):\n        self.pattern = pattern\n        # urlconf_name is the dotted Python path to the module defining\n        # urlpatterns. It may also be an object with an urlpatterns attribute\n        # or urlpatterns itself.\n        self.urlconf_name = urlconf_name\n        self.callback = None\n        self.default_kwargs = default_kwargs or {}\n        self.namespace = namespace\n        self.app_name = app_name\n        self._reverse_dict = {}\n        self._namespace_dict = {}\n        self._app_dict = {}\n        # set of dotted paths to all functions and classes that are used in\n        # urlpatterns\n        self._callback_strs = set()\n        self._populated = False\n        self._local = Local()\n\n# tests/urlpatterns_reverse/tests.py:413-426  (tests.urlpatterns_reverse.tests.NoURLPatternsTests.test_no_urls_exception)\nclass NoURLPatternsTests(SimpleTestCase):\n    def test_no_urls_exception(self):\n        \"\"\"\n        URLResolver should raise an exception when no urlpatterns exist.\n        \"\"\"\n        resolver = URLResolver(RegexPattern(r\"^$\"), settings.ROOT_URLCONF)\n\n        with self.assertRaisesMessage(\n            ImproperlyConfigured,\n            \"The included URLconf 'urlpatterns_reverse.no_urls' does not \"\n            \"appear to have any patterns in it. If you see the 'urlpatterns' \"\n            \"variable with valid patterns in the file then the issue is \"\n            \"probably caused by a circular import.\",\n        ):\n            getattr(resolver, \"url_patterns\")\n\n# django/urls/resolvers.py:728-736  (django.urls.resolvers.URLResolver.resolve_error_handler)\nclass URLResolver:\n    def resolve_error_handler(self, view_type):\n        callback = getattr(self.urlconf_module, \"handler%s\" % view_type, None)\n        if not callback:\n            # No handler specified in file; use lazy import, since\n            # django.conf.urls imports this file.\n            from django.conf import urls\n\n            callback = getattr(urls, \"handler%s\" % view_type)\n        return get_callable(callback)\n\n# django/urls/resolvers.py:478-490  (django.urls.resolvers.URLResolver.__repr__)\nclass URLResolver:\n    def __repr__(self):\n        if isinstance(self.urlconf_name, list) and self.urlconf_name:\n            # Don't bother to output the whole list, it can be huge\n            urlconf_repr = \"<%s list>\" % self.urlconf_name[0].__class__.__name__\n        else:\n            urlconf_repr = repr(self.urlconf_name)\n        return \"<%s %s (%s:%s) %s>\" % (\n            self.__class__.__name__,\n            urlconf_repr,\n            self.app_name,\n            self.namespace,\n            self.pattern.describe(),\n        )\n\n# tests/urlpatterns_reverse/included_urls2.py:1-15  (tests.urlpatterns_reverse.included_urls2)\n\"\"\"\nThese URL patterns are included in two different ways in the main urls.py, with\nan extra argument present in one case. Thus, there are two different ways for\neach name to resolve and Django must distinguish the possibilities based on the\nargument list.\n\"\"\"\n\nfrom django.urls import re_path\n\nfrom .views import empty_view\n\nurlpatterns = [\n    re_path(r\"^part/(?P<value>\\w+)/$\", empty_view, name=\"part\"),\n    re_path(r\"^part2/(?:(?P<value>\\w+)/)?$\", empty_view, name=\"part2\"),\n]\n\n# django/urls/resolvers.py:105-108  (django.urls.resolvers.get_resolver)\ndef get_resolver(urlconf=None):\n    if urlconf is None:\n        urlconf = settings.ROOT_URLCONF\n    return _get_cached_resolver(urlconf)\n\n# django/utils/autoreload.py:328-343  (django.utils.autoreload.BaseReloader.run)\nclass BaseReloader:\n    def run(self, django_main_thread):\n        logger.debug(\"Waiting for apps ready_event.\")\n        self.wait_for_apps_ready(apps, django_main_thread)\n        from django.urls import get_resolver\n\n        # Prevent a race condition where URL modules aren't loaded when the\n        # reloader starts by accessing the urlconf_module property.\n        try:\n            get_resolver().urlconf_module\n        except Exception:\n            # Loading the urlconf can result in errors during development.\n            # If this occurs then swallow the error and continue.\n            pass\n        logger.debug(\"Apps ready_event triggered. Sending autoreload_started signal.\")\n        autoreload_started.send(sender=self)\n        self.run_loop()\n\n# django/urls/resolvers.py:116-124  (django.urls.resolvers.get_ns_resolver)\n@functools.lru_cache(maxsize=None)\ndef get_ns_resolver(ns_pattern, resolver, converters):\n    # Build a namespaced resolver for the given parent URLconf pattern.\n    # This makes it possible to have captured parameters in the parent\n    # URLconf pattern.\n    pattern = RegexPattern(ns_pattern)\n    pattern.converters = dict(converters)\n    ns_resolver = URLResolver(pattern, resolver.url_patterns)\n    return URLResolver(RegexPattern(r\"^/\"), [ns_resolver])\n\n# tests/urlpatterns_reverse/tests.py:536-544  (tests.urlpatterns_reverse.tests.ResolverTests.test_reverse_lazy_object_coercion_by_resolve)\nclass ResolverTests(SimpleTestCase):\n    def test_reverse_lazy_object_coercion_by_resolve(self):\n        \"\"\"\n        Verifies lazy object returned by reverse_lazy is coerced to\n        text by resolve(). Previous to #21043, this would raise a TypeError.\n        \"\"\"\n        urls = \"urlpatterns_reverse.named_urls\"\n        proxy_url = reverse_lazy(\"named-url1\", urlconf=urls)\n        resolver = get_resolver(urls)\n        resolver.resolve(proxy_url)\n\n# django/template/defaulttags.py:1325-1391  (django.template.defaulttags.url)\n@register.tag\ndef url(parser, token):\n    r\"\"\"\n    Return an absolute URL matching the given view with its parameters.\n\n    This is a way to define links that aren't tied to a particular URL\n    configuration::\n\n        {% url \"url_name\" arg1 arg2 %}\n\n        or\n\n        {% url \"url_name\" name1=value1 name2=value2 %}\n\n    The first argument is a URL pattern name. Other arguments are\n    space-separated values that will be filled in place of positional and\n    keyword arguments in the URL. Don't mix positional and keyword arguments.\n    All arguments for the URL must be present.\n\n    For example, if you have a view ``app_name.views.client_details`` taking\n    the client's id and the corresponding line in a URLconf looks like this::\n\n        path('client/<int:id>/', views.client_details, name='client-detail-view')\n\n    and this app's URLconf is included into the project's URLconf under some\n    path::\n\n        path('clients/', include('app_name.urls'))\n\n    then in a template you can create a link for a certain client like this::\n\n        {% url \"client-detail-view\" client.id %}\n\n    The URL will look like ``/clients/client/123/``.\n\n    The first argument may also be the name of a template variable that will be\n    evaluated to obtain the view name or the URL name, e.g.::\n\n        {% with url_name=\"client-detail-view\" %}\n        {% url url_name client.id %}\n        {% endwith %}\n    \"\"\"\n    bits = token.split_contents()\n    if len(bits) < 2:\n        raise TemplateSyntaxError(\n            \"'%s' takes at least one argument, a URL pattern name.\" % bits[0]\n        )\n    viewname = parser.compile_filter(bits[1])\n    args = []\n    kwargs = {}\n    asvar = None\n    bits = bits[2:]\n    if len(bits) >= 2 and bits[-2] == \"as\":\n        asvar = bits[-1]\n        bits = bits[:-2]\n\n    for bit in bits:\n        match = kwarg_re.match(bit)\n        if not match:\n            raise TemplateSyntaxError(\"Malformed arguments to url tag\")\n        name, value = match.groups()\n        if name:\n            kwargs[name] = parser.compile_filter(value)\n        else:\n            args.append(parser.compile_filter(value))\n\n    return URLNode(viewname, args, kwargs, asvar)\n\n# tests/urlpatterns_reverse/tests.py:581-592  (tests.urlpatterns_reverse.tests.ResolverTests.test_non_regex)\nclass ResolverTests(SimpleTestCase):\n    def test_non_regex(self):\n        \"\"\"\n        A Resolver404 is raised if resolving doesn't meet the basic\n        requirements of a path to match - i.e., at the very least, it matches\n        the root pattern '^/'. Never return None from resolve() to prevent a\n        TypeError from occurring later (#10834).\n        \"\"\"\n        test_urls = [\"\", \"a\", \"\\\\\", \".\"]\n        for path_ in test_urls:\n            with self.subTest(path=path_):\n                with self.assertRaises(Resolver404):\n                    resolve(path_)\n\n# django/urls/resolvers.py:111-113  (django.urls.resolvers._get_cached_resolver)\n@functools.lru_cache(maxsize=None)\ndef _get_cached_resolver(urlconf=None):\n    return URLResolver(RegexPattern(r\"^/\"), urlconf)\n\n# django/urls/__init__.py:1-53  (django.urls)\nfrom .base import (\n    clear_script_prefix,\n    clear_url_caches,\n    get_script_prefix,\n    get_urlconf,\n    is_valid_path,\n    resolve,\n    reverse,\n    reverse_lazy,\n    set_script_prefix,\n    set_urlconf,\n    translate_url,\n)\nfrom .conf import include, path, re_path\nfrom .converters import register_converter\nfrom .exceptions import NoReverseMatch, Resolver404\nfrom .resolvers import (\n    LocalePrefixPattern,\n    ResolverMatch,\n    URLPattern,\n    URLResolver,\n    get_ns_resolver,\n    get_resolver,\n)\nfrom .utils import get_callable, get_mod_func\n\n__all__ = [\n    \"LocalePrefixPattern\",\n    \"NoReverseMatch\",\n    \"URLPattern\",\n    \"URLResolver\",\n    \"Resolver404\",\n    \"ResolverMatch\",\n    \"clear_script_prefix\",\n    \"clear_url_caches\",\n    \"get_callable\",\n    \"get_mod_func\",\n    \"get_ns_resolver\",\n    \"get_resolver\",\n    \"get_script_prefix\",\n    \"get_urlconf\",\n    \"include\",\n    \"is_valid_path\",\n    \"path\",\n    \"re_path\",\n    \"register_converter\",\n    \"resolve\",\n    \"reverse\",\n    \"reverse_lazy\",\n    \"set_script_prefix\",\n    \"set_urlconf\",\n    \"translate_url\",\n]\n\n# django/shortcuts.py:117-155  (django.shortcuts.resolve_url)\ndef resolve_url(to, *args, **kwargs):\n    \"\"\"\n    Return a URL appropriate for the arguments passed.\n\n    The arguments could be:\n\n        * A model: the model's `get_absolute_url()` function will be called.\n\n        * A view name, possibly with arguments: `urls.reverse()` will be used\n          to reverse-resolve the name.\n\n        * A URL, which will be returned as-is.\n    \"\"\"\n    # If it's a model, use get_absolute_url()\n    if hasattr(to, \"get_absolute_url\"):\n        return to.get_absolute_url()\n\n    if isinstance(to, Promise):\n        # Expand the lazy instance, as it can cause issues when it is passed\n        # further to some Python functions like urlparse.\n        to = str(to)\n\n    # Handle relative URLs\n    if isinstance(to, str) and to.startswith((\"./\", \"../\")):\n        return to\n\n    # Next try a reverse URL resolution.\n    try:\n        return reverse(to, args=args, kwargs=kwargs)\n    except NoReverseMatch:\n        # If this is a callable, re-raise.\n        if callable(to):\n            raise\n        # If this doesn't \"feel\" like a URL, re-raise.\n        if \"/\" not in to and \".\" not in to:\n            raise\n\n    # Finally, fall back and assume it's a URL\n    return to\n\n# tests/urlpatterns_reverse/tests.py:1460-1464  (tests.urlpatterns_reverse.tests.ErrorHandlerResolutionTests.setUp)\nclass ErrorHandlerResolutionTests(SimpleTestCase):\n    def setUp(self):\n        urlconf = \"urlpatterns_reverse.urls_error_handlers\"\n        urlconf_callables = \"urlpatterns_reverse.urls_error_handlers_callables\"\n        self.resolver = URLResolver(RegexPattern(r\"^$\"), urlconf)\n        self.callable_resolver = URLResolver(RegexPattern(r\"^$\"), urlconf_callables)\n\n# django/urls/resolvers.py:705-710  (django.urls.resolvers.URLResolver.urlconf_module)\nclass URLResolver:\n    @cached_property\n    def urlconf_module(self):\n        if isinstance(self.urlconf_name, str):\n            return import_module(self.urlconf_name)\n        else:\n            return self.urlconf_name\n\n# django/conf/urls/i18n.py:23-34  (django.conf.urls.i18n.is_language_prefix_patterns_used)\n@functools.lru_cache(maxsize=None)\ndef is_language_prefix_patterns_used(urlconf):\n    \"\"\"\n    Return a tuple of two booleans: (\n        `True` if i18n_patterns() (LocalePrefixPattern) is used in the URLconf,\n        `True` if the default language should be prefixed\n    )\n    \"\"\"\n    for url_pattern in get_resolver(urlconf).url_patterns:\n        if isinstance(url_pattern.pattern, LocalePrefixPattern):\n            return True, url_pattern.pattern.prefix_default_language\n    return False, False\n\n# django/urls/conf.py:16-58  (django.urls.conf.include)\ndef include(arg, namespace=None):\n    app_name = None\n    if isinstance(arg, tuple):\n        # Callable returning a namespace hint.\n        try:\n            urlconf_module, app_name = arg\n        except ValueError:\n            if namespace:\n                raise ImproperlyConfigured(\n                    \"Cannot override the namespace for a dynamic module that \"\n                    \"provides a namespace.\"\n                )\n            raise ImproperlyConfigured(\n                \"Passing a %d-tuple to include() is not supported. Pass a \"\n                \"2-tuple containing the list of patterns and app_name, and \"\n                \"provide the namespace argument to include() instead.\" % len(arg)\n            )\n    else:\n        # No namespace hint - use manually provided namespace.\n        urlconf_module = arg\n\n    if isinstance(urlconf_module, str):\n        urlconf_module = import_module(urlconf_module)\n    patterns = getattr(urlconf_module, \"urlpatterns\", urlconf_module)\n    app_name = getattr(urlconf_module, \"app_name\", app_name)\n    if namespace and not app_name:\n        raise ImproperlyConfigured(\n            \"Specifying a namespace in include() without providing an app_name \"\n            \"is not supported. Set the app_name attribute in the included \"\n            \"module, or pass a 2-tuple containing the list of patterns and \"\n            \"app_name instead.\",\n        )\n    namespace = namespace or app_name\n    # Make sure the patterns can be iterated through (without this, some\n    # testcases will break).\n    if isinstance(patterns, (list, tuple)):\n        for url_pattern in patterns:\n            pattern = getattr(url_pattern, \"pattern\", None)\n            if isinstance(pattern, LocalePrefixPattern):\n                raise ImproperlyConfigured(\n                    \"Using i18n_patterns in an included URLconf is not allowed.\"\n                )\n    return (urlconf_module, app_name, namespace)\n\n# tests/resolve_url/tests.py:11-13  (tests.resolve_url.tests.ResolveUrlTests)\n@override_settings(ROOT_URLCONF=\"resolve_url.urls\")\nclass ResolveUrlTests(SimpleTestCase):\n    \"\"\"\n    Tests for the resolve_url() function.\n    \"\"\"\n\n# django/template/defaulttags.py:454-482  (django.template.defaulttags.URLNode.render)\nclass URLNode(Node):\n    def render(self, context):\n        from django.urls import NoReverseMatch, reverse\n\n        args = [arg.resolve(context) for arg in self.args]\n        kwargs = {k: v.resolve(context) for k, v in self.kwargs.items()}\n        view_name = self.view_name.resolve(context)\n        try:\n            current_app = context.request.current_app\n        except AttributeError:\n            try:\n                current_app = context.request.resolver_match.namespace\n            except AttributeError:\n                current_app = None\n        # Try to look up the URL. If it fails, raise NoReverseMatch unless the\n        # {% url ... as var %} construct is used, in which case return nothing.\n        url = \"\"\n        try:\n            url = reverse(view_name, args=args, kwargs=kwargs, current_app=current_app)\n        except NoReverseMatch:\n            if self.asvar is None:\n                raise\n\n        if self.asvar:\n            context[self.asvar] = url\n            return \"\"\n        else:\n            if context.autoescape:\n                url = conditional_escape(url)\n            return url\n\n# django/urls/resolvers.py:499-528  (django.urls.resolvers.URLResolver._check_custom_error_handlers)\nclass URLResolver:\n    def _check_custom_error_handlers(self):\n        messages = []\n        # All handlers take (request, exception) arguments except handler500\n        # which takes (request).\n        for status_code, num_parameters in [(400, 2), (403, 2), (404, 2), (500, 1)]:\n            try:\n                handler = self.resolve_error_handler(status_code)\n            except (ImportError, ViewDoesNotExist) as e:\n                path = getattr(self.urlconf_module, \"handler%s\" % status_code)\n                msg = (\n                    \"The custom handler{status_code} view '{path}' could not be \"\n                    \"imported.\"\n                ).format(status_code=status_code, path=path)\n                messages.append(Error(msg, hint=str(e), id=\"urls.E008\"))\n                continue\n            signature = inspect.signature(handler)\n            args = [None] * num_parameters\n            try:\n                signature.bind(*args)\n            except TypeError:\n                msg = (\n                    \"The custom handler{status_code} view '{path}' does not \"\n                    \"take the correct number of arguments ({args}).\"\n                ).format(\n                    status_code=status_code,\n                    path=handler.__module__ + \".\" + handler.__qualname__,\n                    args=\"request, exception\" if num_parameters == 2 else \"request\",\n                )\n                messages.append(Error(msg, id=\"urls.E007\"))\n        return messages\n\n# django/test/client.py:870-915  (django.test.client.Client.request)\nclass Client(ClientMixin, RequestFactory):\n    def request(self, **request):\n        \"\"\"\n        Make a generic request. Compose the environment dictionary and pass\n        to the handler, return the result of the handler. Assume defaults for\n        the query environment, which can be overridden using the arguments to\n        the request.\n        \"\"\"\n        environ = self._base_environ(**request)\n\n        # Curry a data dictionary into an instance of the template renderer\n        # callback function.\n        data = {}\n        on_template_render = partial(store_rendered_templates, data)\n        signal_uid = \"template-render-%s\" % id(request)\n        signals.template_rendered.connect(on_template_render, dispatch_uid=signal_uid)\n        # Capture exceptions created by the handler.\n        exception_uid = \"request-exception-%s\" % id(request)\n        got_request_exception.connect(self.store_exc_info, dispatch_uid=exception_uid)\n        try:\n            response = self.handler(environ)\n        finally:\n            signals.template_rendered.disconnect(dispatch_uid=signal_uid)\n            got_request_exception.disconnect(dispatch_uid=exception_uid)\n        # Check for signaled exceptions.\n        self.check_exception(response)\n        # Save the client and request that stimulated the response.\n        response.client = self\n        response.request = request\n        # Add any rendered template detail to the response.\n        response.templates = data.get(\"templates\", [])\n        response.context = data.get(\"context\")\n        response.json = partial(self._parse_json, response)\n        # Attach the ResolverMatch instance to the response.\n        urlconf = getattr(response.wsgi_request, \"urlconf\", None)\n        response.resolver_match = SimpleLazyObject(\n            lambda: resolve(request[\"PATH_INFO\"], urlconf=urlconf),\n        )\n        # Flatten a single context. Not really necessary anymore thanks to the\n        # __getattr__ flattening in ContextList, but has some edge case\n        # backwards compatibility implications.\n        if response.context and len(response.context) == 1:\n            response.context = response.context[0]\n        # Update persistent cookie data.\n        if response.cookies:\n            self.cookies.update(response.cookies)\n        return response\n\n# django/core/checks/urls.py:31-54  (django.core.checks.urls.check_url_namespaces_unique)\n@register(Tags.urls)\ndef check_url_namespaces_unique(app_configs, **kwargs):\n    \"\"\"\n    Warn if URL namespaces used in applications aren't unique.\n    \"\"\"\n    if not getattr(settings, \"ROOT_URLCONF\", None):\n        return []\n\n    from django.urls import get_resolver\n\n    resolver = get_resolver()\n    all_namespaces = _load_all_namespaces(resolver)\n    counter = Counter(all_namespaces)\n    non_unique_namespaces = [n for n, count in counter.items() if count > 1]\n    errors = []\n    for namespace in non_unique_namespaces:\n        errors.append(\n            Warning(\n                \"URL namespace '{}' isn't unique. You may not be able to reverse \"\n                \"all URLs in this namespace\".format(namespace),\n                id=\"urls.W005\",\n            )\n        )\n    return errors\n\n# django/shortcuts.py:28-48  (django.shortcuts.redirect)\ndef redirect(to, *args, permanent=False, **kwargs):\n    \"\"\"\n    Return an HttpResponseRedirect to the appropriate URL for the arguments\n    passed.\n\n    The arguments could be:\n\n        * A model: the model's `get_absolute_url()` function will be called.\n\n        * A view name, possibly with arguments: `urls.reverse()` will be used\n          to reverse-resolve the name.\n\n        * A URL, which will be used as-is for the redirect location.\n\n    Issues a temporary redirect by default; pass permanent=True to issue a\n    permanent redirect.\n    \"\"\"\n    redirect_class = (\n        HttpResponsePermanentRedirect if permanent else HttpResponseRedirect\n    )\n    return redirect_class(resolve_url(to, *args, **kwargs))\n\n# django/utils/regex_helper.py:42-76#part1of3  (django.utils.regex_helper.normalize)\ndef normalize(pattern):\n    r\"\"\"\n    Given a reg-exp pattern, normalize it to an iterable of forms that\n    suffice for reverse matching. This does the following:\n\n    (1) For any repeating sections, keeps the minimum number of occurrences\n        permitted (this means zero for optional groups).\n    (2) If an optional group includes parameters, include one occurrence of\n        that group (along with the zero occurrence case from step (1)).\n    (3) Select the first (essentially an arbitrary) element from any character\n        class. Select an arbitrary character for any unordered class (e.g. '.'\n        or '\\w') in the pattern.\n    (4) Ignore look-ahead and look-behind assertions.\n    (5) Raise an error on any disjunctive ('|') constructs.\n\n    Django's URLs for forward resolving are either all positional arguments or\n    all keyword arguments. That is assumed here, as well. Although reverse\n    resolving can be done using positional args when keyword args are\n    specified, the two cannot be mixed in the same reverse() call.\n    \"\"\"\n    # Do a linear scan to work out the special features of this pattern. The\n    # idea is that we scan once here and collect all the information we need to\n    # make future decisions.\n    result = []\n    non_capturing_groups = []\n    consume_next = True\n    pattern_iter = next_char(iter(pattern))\n    num_args = 0\n\n    # A \"while\" loop is used here because later on we need to be able to peek\n    # at the next character and possibly go around without consuming another\n    # one at the top of the loop.\n    try:\n        ch, escaped = next(pattern_iter)\n    except StopIteration:\n        return [(\"\", [])]\n\n# django/core/management/base.py:184-268  (django.core.management.base.BaseCommand)\nclass BaseCommand:\n    \"\"\"\n    The base class from which all management commands ultimately\n    derive.\n\n    Use this class if you want access to all of the mechanisms which\n    parse the command-line arguments and work out what code to call in\n    response; if you don't need to change any of that behavior,\n    consider using one of the subclasses defined in this file.\n\n    If you are interested in overriding/customizing various aspects of\n    the command-parsing and -execution behavior, the normal flow works\n    as follows:\n\n    1. ``django-admin`` or ``manage.py`` loads the command class\n       and calls its ``run_from_argv()`` method.\n\n    2. The ``run_from_argv()`` method calls ``create_parser()`` to get\n       an ``ArgumentParser`` for the arguments, parses them, performs\n       any environment changes requested by options like\n       ``pythonpath``, and then calls the ``execute()`` method,\n       passing the parsed arguments.\n\n    3. The ``execute()`` method attempts to carry out the command by\n       calling the ``handle()`` method with the parsed arguments; any\n       output produced by ``handle()`` will be printed to standard\n       output and, if the command is intended to produce a block of\n       SQL statements, will be wrapped in ``BEGIN`` and ``COMMIT``.\n\n    4. If ``handle()`` or ``execute()`` raised any exception (e.g.\n       ``CommandError``), ``run_from_argv()`` will  instead print an error\n       message to ``stderr``.\n\n    Thus, the ``handle()`` method is typically the starting point for\n    subclasses; many built-in commands and command types either place\n    all of their logic in ``handle()``, or perform some additional\n    parsing work in ``handle()`` and then delegate from it to more\n    specialized methods as needed.\n\n    Several attributes affect behavior at various steps along the way:\n\n    ``help``\n        A short description of the command, which will be printed in\n        help messages.\n\n    ``output_transaction``\n        A boolean indicating whether the command outputs SQL\n        statements; if ``True``, the output will automatically be\n        wrapped with ``BEGIN;`` and ``COMMIT;``. Default value is\n        ``False``.\n\n    ``requires_migrations_checks``\n        A boolean; if ``True``, the command prints a warning if the set of\n        migrations on disk don't match the migrations in the database.\n\n    ``requires_system_checks``\n        A list or tuple of tags, e.g. [Tags.staticfiles, Tags.models]. System\n        checks registered in the chosen tags will be checked for errors prior\n        to executing the command. The value '__all__' can be used to specify\n        that all system checks should be performed. Default value is '__all__'.\n\n        To validate an individual application's models\n        rather than all applications' models, call\n        ``self.check(app_configs)`` from ``handle()``, where ``app_configs``\n        is the list of application's configuration provided by the\n        app registry.\n\n    ``stealth_options``\n        A tuple of any options the command uses which aren't defined by the\n        argument parser.\n    \"\"\"\n\n    # Metadata about this command.\n    help = \"\"\n\n    # Configuration shortcuts that alter various logic.\n    _called_from_command_line = False\n    output_transaction = False  # Whether to wrap the output in a \"BEGIN; COMMIT;\"\n    requires_migrations_checks = False\n    requires_system_checks = \"__all__\"\n    # Arguments, common to all commands, which aren't defined by the argument\n    # parser.\n    base_stealth_options = (\"stderr\", \"stdout\")\n    # Command-specific options not defined by the argument parser.\n    stealth_options = ()\n    suppressed_base_arguments = set()\n\n# django/db/transaction.py:143-174  (django.db.transaction.Atomic)\nclass Atomic(ContextDecorator):\n    \"\"\"\n    Guarantee the atomic execution of a given block.\n\n    An instance can be used either as a decorator or as a context manager.\n\n    When it's used as a decorator, __call__ wraps the execution of the\n    decorated function in the instance itself, used as a context manager.\n\n    When it's used as a context manager, __enter__ creates a transaction or a\n    savepoint, depending on whether a transaction is already in progress, and\n    __exit__ commits the transaction or releases the savepoint on normal exit,\n    and rolls back the transaction or to the savepoint on exceptions.\n\n    It's possible to disable the creation of savepoints if the goal is to\n    ensure that some code runs within a transaction without creating overhead.\n\n    A stack of savepoints identifiers is maintained as an attribute of the\n    connection. None denotes the absence of a savepoint.\n\n    This allows reentrancy even if the same AtomicWrapper is reused. For\n    example, it's possible to define `oa = atomic('other')` and use `@oa` or\n    `with oa:` multiple times.\n\n    Since database connections are thread-local, this is thread-safe.\n\n    An atomic block can be tagged as durable. In this case, raise a\n    RuntimeError if it's nested within another atomic block. This guarantees\n    that database changes in a durable block are committed to the database when\n    the block exists without error.\n\n    This is a private API.\n    \"\"\"\n\n# django/core/checks/urls.py:8-15  (django.core.checks.urls.check_url_config)\n@register(Tags.urls)\ndef check_url_config(app_configs, **kwargs):\n    if getattr(settings, \"ROOT_URLCONF\", None):\n        from django.urls import get_resolver\n\n        resolver = get_resolver()\n        return check_resolver(resolver)\n    return []\n\n# django/test/client.py:1224-1272  (django.test.client.AsyncClient.request)\nclass AsyncClient(ClientMixin, AsyncRequestFactory):\n    async def request(self, **request):\n        \"\"\"\n        Make a generic request. Compose the scope dictionary and pass to the\n        handler, return the result of the handler. Assume defaults for the\n        query environment, which can be overridden using the arguments to the\n        request.\n        \"\"\"\n        if \"follow\" in request:\n            raise NotImplementedError(\n                \"AsyncClient request methods do not accept the follow parameter.\"\n            )\n        scope = self._base_scope(**request)\n        # Curry a data dictionary into an instance of the template renderer\n        # callback function.\n        data = {}\n        on_template_render = partial(store_rendered_templates, data)\n        signal_uid = \"template-render-%s\" % id(request)\n        signals.template_rendered.connect(on_template_render, dispatch_uid=signal_uid)\n        # Capture exceptions created by the handler.\n        exception_uid = \"request-exception-%s\" % id(request)\n        got_request_exception.connect(self.store_exc_info, dispatch_uid=exception_uid)\n        try:\n            response = await self.handler(scope)\n        finally:\n            signals.template_rendered.disconnect(dispatch_uid=signal_uid)\n            got_request_exception.disconnect(dispatch_uid=exception_uid)\n        # Check for signaled exceptions.\n        self.check_exception(response)\n        # Save the client and request that stimulated the response.\n        response.client = self\n        response.request = request\n        # Add any rendered template detail to the response.\n        response.templates = data.get(\"templates\", [])\n        response.context = data.get(\"context\")\n        response.json = partial(self._parse_json, response)\n        # Attach the ResolverMatch instance to the response.\n        urlconf = getattr(response.asgi_request, \"urlconf\", None)\n        response.resolver_match = SimpleLazyObject(\n            lambda: resolve(request[\"path\"], urlconf=urlconf),\n        )\n        # Flatten a single context. Not really necessary anymore thanks to the\n        # __getattr__ flattening in ContextList, but has some edge case\n        # backwards compatibility implications.\n        if response.context and len(response.context) == 1:\n            response.context = response.context[0]\n        # Update persistent cookie data.\n        if response.cookies:\n            self.cookies.update(response.cookies)\n        return response\n\n# tests/admin_custom_urls/tests.py:15-20  (tests.admin_custom_urls.tests.AdminCustomUrlsTest)\n@override_settings(\n    ROOT_URLCONF=\"admin_custom_urls.urls\",\n)\nclass AdminCustomUrlsTest(TestCase):\n    \"\"\"\n    Remember that:\n    * The Action model has a CharField PK.\n    * The ModelAdmin for Action customizes the add_view URL, it's\n      '<app name>/<model name>/!add/'\n    \"\"\"\n\n# django/contrib/sessions/models.py:9-26  (django.contrib.sessions.models.Session)\nclass Session(AbstractBaseSession):\n    \"\"\"\n    Django provides full support for anonymous sessions. The session\n    framework lets you store and retrieve arbitrary data on a\n    per-site-visitor basis. It stores data on the server side and\n    abstracts the sending and receiving of cookies. Cookies contain a\n    session ID -- not the data itself.\n\n    The Django sessions framework is entirely cookie-based. It does\n    not fall back to putting session IDs in URLs. This is an intentional\n    design decision. Not only does that behavior make URLs ugly, it makes\n    your site vulnerable to session-ID theft via the \"Referer\" header.\n\n    For complete documentation on using Sessions in your code, consult\n    the sessions documentation that is shipped with Django (also available\n    on the Django web site).\n    \"\"\"\n\n    objects = SessionManager()\n\n# tests/urls.py:1-7  (tests.urls)\n\"\"\"This URLconf exists because Django expects ROOT_URLCONF to exist. URLs\nshould be added within the test folders, and use TestCase.urls to set them.\nThis helps the tests remain isolated.\n\"\"\"\n\n\nurlpatterns = []\n\n# django/core/handlers/base.py:21-343  (django.core.handlers.base.BaseHandler)\nclass BaseHandler:\n    _view_middleware = None\n    _template_response_middleware = None\n    _exception_middleware = None\n    _middleware_chain = None\n\n    def load_middleware(self, is_async=False):\n        \"\"\"\n        Populate middleware lists from settings.MIDDLEWARE.\n\n        Must be called after the environment is fixed (see __call__ in subclasses).\n        \"\"\"\n        self._view_middleware = []\n        self._template_response_middleware = []\n        self._exception_middleware = []\n\n        get_response = self._get_response_async if is_async else self._get_response\n        handler = convert_exception_to_response(get_response)\n        handler_is_async = is_async\n        for middleware_path in reversed(settings.MIDDLEWARE):\n            middleware = import_string(middleware_path)\n            middleware_can_sync = getattr(middleware, \"sync_capable\", True)\n            middleware_can_async = getattr(middleware, \"async_capable\", False)\n            if not middleware_can_sync and not middleware_can_async:\n                raise RuntimeError(\n                    \"Middleware %s must have at least one of \"\n                    \"sync_capable/async_capable set to True.\" % middleware_path\n                )\n            elif not handler_is_async and middleware_can_sync:\n                middleware_is_async = False\n            else:\n                middleware_is_async = middleware_can_async\n            try:\n                # Adapt handler, if needed.\n                adapted_handler = self.adapt_method_mode(\n                    middleware_is_async,\n                    handler,\n                    handler_is_async,\n                    debug=settings.DEBUG,\n                    name=\"middleware %s\" % middleware_path,\n                )\n                mw_instance = middleware(adapted_handler)\n            except MiddlewareNotUsed as exc:\n                if settings.DEBUG:\n                    if str(exc):\n                        logger.debug(\"MiddlewareNotUsed(%r): %s\", middleware_path, exc)\n                    else:\n                        logger.debug(\"MiddlewareNotUsed: %r\", middleware_path)\n                continue\n            else:\n                handler = adapted_handler\n\n            if mw_instance is None:\n                raise ImproperlyConfigured(\n                    \"Middleware factory %s returned None.\" % middleware_path\n                )\n\n            if hasattr(mw_instance, \"process_view\"):\n                self._view_middleware.insert(\n                    0,\n                    self.adapt_method_mode(is_async, mw_instance.process_view),\n                )\n            if hasattr(mw_instance, \"process_template_response\"):\n                self._template_response_middleware.append(\n                    self.adapt_method_mode(\n                        is_async, mw_instance.process_template_response\n                    ),\n                )\n            if hasattr(mw_instance, \"process_exception\"):\n                # The exception-handling stack is still always synchronous for\n                # now, so adapt that way.\n                self._exception_middleware.append(\n                    self.adapt_method_mode(False, mw_instance.process_exception),\n                )\n\n            handler = convert_exception_to_response(mw_instance)\n            handler_is_async = middleware_is_async\n\n        # Adapt the top of the stack, if needed.\n        handler = self.adapt_method_mode(is_async, handler, handler_is_async)\n        # We only assign to this when initialization is complete as it is used\n        # as a flag for initialization being complete.\n        self._middleware_chain = handler\n\n    def adapt_method_mode(\n        self,\n        is_async,\n        method,\n        method_is_async=None,\n        debug=False,\n        name=None,\n    ):\n        \"\"\"\n        Adapt a method to be in the correct \"mode\":\n        - If is_async is False:\n          - Synchronous methods are left alone\n          - Asynchronous methods are wrapped with async_to_sync\n        - If is_async is True:\n          - Synchronous methods are wrapped with sync_to_async()\n          - Asynchronous methods are left alone\n        \"\"\"\n        if method_is_async is None:\n            method_is_async = iscoroutinefunction(method)\n        if debug and not name:\n            name = name or \"method %s()\" % method.__qualname__\n        if is_async:\n            if not method_is_async:\n                if debug:\n                    logger.debug(\"Synchronous handler adapted for %s.\", name)\n                return sync_to_async(method, thread_sensitive=True)\n        elif method_is_async:\n            if debug:\n                logger.debug(\"Asynchronous handler adapted for %s.\", name)\n            return async_to_sync(method)\n        return method\n\n    def get_response(self, request):\n        \"\"\"Return an HttpResponse object for the given HttpRequest.\"\"\"\n        # Setup default url resolver for this thread\n        set_urlconf(settings.ROOT_URLCONF)\n        response = self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            log_response(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    async def get_response_async(self, request):\n        \"\"\"\n        Asynchronous version of get_response.\n\n        Funneling everything, including WSGI, into a single async\n        get_response() is too slow. Avoid the context switch by using\n        a separate async response path.\n        \"\"\"\n        # Setup default url resolver for this thread.\n        set_urlconf(settings.ROOT_URLCONF)\n        response = await self._middleware_chain(request)\n        response._resource_closers.append(request.close)\n        if response.status_code >= 400:\n            await sync_to_async(log_response, thread_sensitive=False)(\n                \"%s: %s\",\n                response.reason_phrase,\n                request.path,\n                response=response,\n                request=request,\n            )\n        return response\n\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response\n\n    async def _get_response_async(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware.\n        for middleware_method in self._view_middleware:\n            response = await middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is a synchronous view, run it in a subthread\n            if not iscoroutinefunction(wrapped_callback):\n                wrapped_callback = sync_to_async(\n                    wrapped_callback, thread_sensitive=True\n                )\n            try:\n                response = await wrapped_callback(\n                    request, *callback_args, **callback_kwargs\n                )\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None or an uncalled coroutine.\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = await middleware_method(request, response)\n                # Complain if the template response middleware returned None or\n                # an uncalled coroutine.\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                if iscoroutinefunction(response.render):\n                    response = await response.render()\n                else:\n                    response = await sync_to_async(\n                        response.render, thread_sensitive=True\n                    )()\n            except Exception as e:\n                response = await sync_to_async(\n                    self.process_exception_by_middleware,\n                    thread_sensitive=True,\n                )(e, request)\n                if response is None:\n                    raise\n\n        # Make sure the response is not a coroutine\n        if asyncio.iscoroutine(response):\n            raise RuntimeError(\"Response is still a coroutine.\")\n        return response\n\n    def resolve_request(self, request):\n        \"\"\"\n        Retrieve/set the urlconf for the request. Return the view resolved,\n        with its args and kwargs.\n        \"\"\"\n        # Work out the resolver.\n        if hasattr(request, \"urlconf\"):\n            urlconf = request.urlconf\n            set_urlconf(urlconf)\n            resolver = get_resolver(urlconf)\n        else:\n            resolver = get_resolver()\n        # Resolve the view, and assign the match object back to the request.\n        resolver_match = resolver.resolve(request.path_info)\n        request.resolver_match = resolver_match\n        return resolver_match\n\n    def check_response(self, response, callback, name=None):\n        \"\"\"\n        Raise an error if the view returned None or an uncalled coroutine.\n        \"\"\"\n        if not (response is None or asyncio.iscoroutine(response)):\n            return\n        if not name:\n            if isinstance(callback, types.FunctionType):  # FBV\n                name = \"The view %s.%s\" % (callback.__module__, callback.__name__)\n            else:  # CBV\n                name = \"The view %s.%s.__call__\" % (\n                    callback.__module__,\n                    callback.__class__.__name__,\n                )\n        if response is None:\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned None \"\n                \"instead.\" % name\n            )\n        elif asyncio.iscoroutine(response):\n            raise ValueError(\n                \"%s didn't return an HttpResponse object. It returned an \"\n                \"unawaited coroutine instead. You may need to add an 'await' \"\n                \"into your view.\" % name\n            )\n\n    # Other utility methods.\n\n## Task\n\nYou are debugging Django's URL resolution entrypoint in\ndjango/urls/base.py and django/urls/resolvers.py. Starting from\n`django.urls.base.resolve`, trace the exact causal pipeline used to\nobtain the (possibly cached) resolver for the current urlconf. Assume\n`resolve` is called without an explicit `urlconf` argument (the\ndefault), so it must look up the current thread's urlconf itself\nrather than skip straight to resolving the resolver.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.urls.base.resolve\", \"django.urls.base.get_urlconf\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

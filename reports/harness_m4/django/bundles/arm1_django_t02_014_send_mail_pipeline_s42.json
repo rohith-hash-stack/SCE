@@ -1,0 +1,1039 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "django_t02_014_send_mail_pipeline",
+  "items": [
+   {
+    "source_id": "django/core/mail/backends/__init__.py:1-1",
+    "content": "# django/core/mail/backends/__init__.py:1-1  (django.core.mail.backends)\n# Mail backends shipped with Django.",
+    "token_count": 29,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 40,
+     "rerank_score": 1.6393897533416748,
+     "bm25_rank": null,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 29
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/__init__.py:1-39",
+    "content": "# django/core/mail/__init__.py:1-39  (django.core.mail)\n\"\"\"\nTools for sending email.\n\"\"\"\nfrom django.conf import settings\n\n# Imported for backwards compatibility and for the sake\n# of a cleaner namespace. These symbols used to be in\n# django/core/mail.py before the introduction of email\n# backends and the subsequent reorganization (See #10355)\nfrom django.core.mail.message import (\n    DEFAULT_ATTACHMENT_MIME_TYPE,\n    BadHeaderError,\n    EmailMessage,\n    EmailMultiAlternatives,\n    SafeMIMEMultipart,\n    SafeMIMEText,\n    forbid_multi_line_headers,\n    make_msgid,\n)\nfrom django.core.mail.utils import DNS_NAME, CachedDnsName\nfrom django.utils.module_loading import import_string\n\n__all__ = [\n    \"CachedDnsName\",\n    \"DNS_NAME\",\n    \"EmailMessage\",\n    \"EmailMultiAlternatives\",\n    \"SafeMIMEText\",\n    \"SafeMIMEMultipart\",\n    \"DEFAULT_ATTACHMENT_MIME_TYPE\",\n    \"make_msgid\",\n    \"BadHeaderError\",\n    \"forbid_multi_line_headers\",\n    \"get_connection\",\n    \"send_mail\",\n    \"send_mass_mail\",\n    \"mail_admins\",\n    \"mail_managers\",\n]",
+    "token_count": 261,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": 0.9711278676986694,
+     "bm25_rank": 4,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 261
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1304-1322",
+    "content": "# tests/mail/tests.py:1304-1322  (tests.mail.tests.BaseEmailBackendTests.test_html_send_mail)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_html_send_mail(self):\n        \"\"\"Test html_message argument to send_mail\"\"\"\n        send_mail(\n            \"Subject\",\n            \"Content\",\n            \"sender@example.com\",\n            [\"nobody@example.com\"],\n            html_message=\"HTML Content\",\n        )\n        message = self.get_the_message()\n\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get_all(\"to\"), [\"nobody@example.com\"])\n        self.assertTrue(message.is_multipart())\n        self.assertEqual(len(message.get_payload()), 2)\n        self.assertEqual(message.get_payload(0).get_payload(), \"Content\")\n        self.assertEqual(message.get_payload(0).get_content_type(), \"text/plain\")\n        self.assertEqual(message.get_payload(1).get_payload(), \"HTML Content\")\n        self.assertEqual(message.get_payload(1).get_content_type(), \"text/html\")",
+    "token_count": 209,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_html_send_mail"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 4,
+     "rerank_score": 0.7520251274108887,
+     "bm25_rank": 8,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 209
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/__init__.py:54-87",
+    "content": "# django/core/mail/__init__.py:54-87  (django.core.mail.send_mail)\ndef send_mail(\n    subject,\n    message,\n    from_email,\n    recipient_list,\n    fail_silently=False,\n    auth_user=None,\n    auth_password=None,\n    connection=None,\n    html_message=None,\n):\n    \"\"\"\n    Easy wrapper for sending a single message to a recipient list. All members\n    of the recipient list will see the other recipients in the 'To' field.\n\n    If from_email is None, use the DEFAULT_FROM_EMAIL setting.\n    If auth_user is None, use the EMAIL_HOST_USER setting.\n    If auth_password is None, use the EMAIL_HOST_PASSWORD setting.\n\n    Note: The API for this method is frozen. New code wanting to extend the\n    functionality should use the EmailMessage class directly.\n    \"\"\"\n    connection = connection or get_connection(\n        username=auth_user,\n        password=auth_password,\n        fail_silently=fail_silently,\n    )\n    mail = EmailMultiAlternatives(\n        subject, message, from_email, recipient_list, connection=connection\n    )\n    if html_message:\n        mail.attach_alternative(html_message, \"text/html\")\n\n    return mail.send()",
+    "token_count": 254,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.send_mail"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 37,
+     "rerank_score": 0.667532205581665,
+     "bm25_rank": 1,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 254
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/forms.py:297-324",
+    "content": "# django/contrib/auth/forms.py:297-324  (django.contrib.auth.forms.PasswordResetForm.send_mail)\nclass PasswordResetForm(forms.Form):\n    def send_mail(\n        self,\n        subject_template_name,\n        email_template_name,\n        context,\n        from_email,\n        to_email,\n        html_email_template_name=None,\n    ):\n        \"\"\"\n        Send a django.core.mail.EmailMultiAlternatives to `to_email`.\n        \"\"\"\n        subject = loader.render_to_string(subject_template_name, context)\n        # Email subject *must not* contain newlines\n        subject = \"\".join(subject.splitlines())\n        body = loader.render_to_string(email_template_name, context)\n\n        email_message = EmailMultiAlternatives(subject, body, from_email, [to_email])\n        if html_email_template_name is not None:\n            html_email = loader.render_to_string(html_email_template_name, context)\n            email_message.attach_alternative(html_email, \"text/html\")\n\n        try:\n            email_message.send()\n        except Exception:\n            logger.exception(\n                \"Failed to send password reset email to %s\", context[\"user\"].pk\n            )",
+    "token_count": 231,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.forms.PasswordResetForm.send_mail"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 47,
+     "rerank_score": 0.4729956090450287,
+     "bm25_rank": 7,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 231
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/log.py:1-64",
+    "content": "# django/utils/log.py:1-64  (django.utils.log)\nimport logging\nimport logging.config  # needed when logging_config doesn't start with logging.config\nfrom copy import copy\n\nfrom django.conf import settings\nfrom django.core import mail\nfrom django.core.mail import get_connection\nfrom django.core.management.color import color_style\nfrom django.utils.module_loading import import_string\n\nrequest_logger = logging.getLogger(\"django.request\")\n\n# Default logging for Django. This sends an email to the site admins on every\n# HTTP 500 error. Depending on DEBUG, all other log records are either sent to\n# the console (DEBUG=True) or discarded (DEBUG=False) by means of the\n# require_debug_true filter. This configuration is quoted in\n# docs/ref/logging.txt; please amend it there if edited here.\nDEFAULT_LOGGING = {\n    \"version\": 1,\n    \"disable_existing_loggers\": False,\n    \"filters\": {\n        \"require_debug_false\": {\n            \"()\": \"django.utils.log.RequireDebugFalse\",\n        },\n        \"require_debug_true\": {\n            \"()\": \"django.utils.log.RequireDebugTrue\",\n        },\n    },\n    \"formatters\": {\n        \"django.server\": {\n            \"()\": \"django.utils.log.ServerFormatter\",\n            \"format\": \"[{server_time}] {message}\",\n            \"style\": \"{\",\n        }\n    },\n    \"handlers\": {\n        \"console\": {\n            \"level\": \"INFO\",\n            \"filters\": [\"require_debug_true\"],\n            \"class\": \"logging.StreamHandler\",\n        },\n        \"django.server\": {\n            \"level\": \"INFO\",\n            \"class\": \"logging.StreamHandler\",\n            \"formatter\": \"django.server\",\n        },\n        \"mail_admins\": {\n            \"level\": \"ERROR\",\n            \"filters\": [\"require_debug_false\"],\n            \"class\": \"django.utils.log.AdminEmailHandler\",\n        },\n    },\n    \"loggers\": {\n        \"django\": {\n            \"handlers\": [\"console\", \"mail_admins\"],\n            \"level\": \"INFO\",\n        },\n        \"django.server\": {\n            \"handlers\": [\"django.server\"],\n            \"level\": \"INFO\",\n            \"propagate\": False,\n        },\n    },\n}",
+    "token_count": 454,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": 0.08909955620765686,
+     "bm25_rank": 81,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 454
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/log.py:130-133",
+    "content": "# django/utils/log.py:130-133  (django.utils.log.AdminEmailHandler.send_mail)\nclass AdminEmailHandler(logging.Handler):\n    def send_mail(self, subject, message, *args, **kwargs):\n        mail.mail_admins(\n            subject, message, *args, connection=self.connection(), **kwargs\n        )",
+    "token_count": 70,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.log.AdminEmailHandler.send_mail"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": 0.08381849527359009,
+     "bm25_rank": 9,
+     "dense_rank": 45,
+     "oversized_chunk": false,
+     "engine_token_count": 70
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1650-1677",
+    "content": "# tests/mail/tests.py:1650-1677  (tests.mail.tests.ConsoleBackendTests.test_console_stream_kwarg)\nclass ConsoleBackendTests(BaseEmailBackendTests, SimpleTestCase):\n    def test_console_stream_kwarg(self):\n        \"\"\"\n        The console backend can be pointed at an arbitrary stream.\n        \"\"\"\n        s = StringIO()\n        connection = mail.get_connection(\n            \"django.core.mail.backends.console.EmailBackend\", stream=s\n        )\n        send_mail(\n            \"Subject\",\n            \"Content\",\n            \"from@example.com\",\n            [\"to@example.com\"],\n            connection=connection,\n        )\n        message = s.getvalue().split(\"\\n\" + (\"-\" * 79) + \"\\n\")[0].encode()\n        self.assertMessageHasHeaders(\n            message,\n            {\n                (\"MIME-Version\", \"1.0\"),\n                (\"Content-Type\", 'text/plain; charset=\"utf-8\"'),\n                (\"Content-Transfer-Encoding\", \"7bit\"),\n                (\"Subject\", \"Subject\"),\n                (\"From\", \"from@example.com\"),\n                (\"To\", \"to@example.com\"),\n            },\n        )\n        self.assertIn(b\"\\nDate: \", message)",
+    "token_count": 240,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.ConsoleBackendTests.test_console_stream_kwarg"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 3,
+     "rerank_score": -0.3141486644744873,
+     "bm25_rank": 14,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 240
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/commands/sendtestemail.py:32-46",
+    "content": "# django/core/management/commands/sendtestemail.py:32-46  (django.core.management.commands.sendtestemail.Command.handle)\nclass Command(BaseCommand):\n    def handle(self, *args, **kwargs):\n        subject = \"Test email from %s on %s\" % (socket.gethostname(), timezone.now())\n\n        send_mail(\n            subject=subject,\n            message=\"If you're reading this, it was successful.\",\n            from_email=None,\n            recipient_list=kwargs[\"email\"],\n        )\n\n        if kwargs[\"managers\"]:\n            mail_managers(subject, \"This email was sent to the site managers.\")\n\n        if kwargs[\"admins\"]:\n            mail_admins(subject, \"This email was sent to the site admins.\")",
+    "token_count": 149,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.management.commands.sendtestemail.Command.handle"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 17,
+     "rerank_score": -0.3511049449443817,
+     "bm25_rank": 11,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 149
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:807-852",
+    "content": "# tests/mail/tests.py:807-852  (tests.mail.tests.MailTests.test_connection_arg)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    @override_settings(\n        EMAIL_BACKEND=\"django.core.mail.backends.locmem.EmailBackend\",\n        ADMINS=[(\"nobody\", \"nobody@example.com\")],\n        MANAGERS=[(\"nobody\", \"nobody@example.com\")],\n    )\n    def test_connection_arg(self):\n        \"\"\"Test connection argument to send_mail(), et. al.\"\"\"\n        mail.outbox = []\n\n        # Send using non-default connection\n        connection = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        send_mail(\n            \"Subject\",\n            \"Content\",\n            \"from@example.com\",\n            [\"to@example.com\"],\n            connection=connection,\n        )\n        self.assertEqual(mail.outbox, [])\n        self.assertEqual(len(connection.test_outbox), 1)\n        self.assertEqual(connection.test_outbox[0].subject, \"Subject\")\n\n        connection = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        send_mass_mail(\n            [\n                (\"Subject1\", \"Content1\", \"from1@example.com\", [\"to1@example.com\"]),\n                (\"Subject2\", \"Content2\", \"from2@example.com\", [\"to2@example.com\"]),\n            ],\n            connection=connection,\n        )\n        self.assertEqual(mail.outbox, [])\n        self.assertEqual(len(connection.test_outbox), 2)\n        self.assertEqual(connection.test_outbox[0].subject, \"Subject1\")\n        self.assertEqual(connection.test_outbox[1].subject, \"Subject2\")\n\n        connection = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        mail_admins(\"Admin message\", \"Content\", connection=connection)\n        self.assertEqual(mail.outbox, [])\n        self.assertEqual(len(connection.test_outbox), 1)\n        self.assertEqual(connection.test_outbox[0].subject, \"[Django] Admin message\")\n\n        connection = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        mail_managers(\"Manager message\", \"Content\", connection=connection)\n        self.assertEqual(mail.outbox, [])\n        self.assertEqual(len(connection.test_outbox), 1)\n        self.assertEqual(connection.test_outbox[0].subject, \"[Django] Manager message\")",
+    "token_count": 456,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.MailTests.test_connection_arg"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 5,
+     "rerank_score": -0.45034530758857727,
+     "bm25_rank": 12,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 456
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/console.py:1-7",
+    "content": "# django/core/mail/backends/console.py:1-7  (django.core.mail.backends.console)\n\"\"\"\nEmail backend that writes messages to console instead of sending them.\n\"\"\"\nimport sys\nimport threading\n\nfrom django.core.mail.backends.base import BaseEmailBackend",
+    "token_count": 50,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": -0.7322599291801453,
+     "bm25_rank": 87,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1290-1302",
+    "content": "# tests/mail/tests.py:1290-1302  (tests.mail.tests.BaseEmailBackendTests.test_plaintext_send_mail)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_plaintext_send_mail(self):\n        \"\"\"\n        Test send_mail without the html_message\n        regression test for adding html_message parameter to send_mail()\n        \"\"\"\n        send_mail(\"Subject\", \"Content\", \"sender@example.com\", [\"nobody@example.com\"])\n        message = self.get_the_message()\n\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get_all(\"to\"), [\"nobody@example.com\"])\n        self.assertFalse(message.is_multipart())\n        self.assertEqual(message.get_payload(), \"Content\")\n        self.assertEqual(message.get_content_type(), \"text/plain\")",
+    "token_count": 160,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_plaintext_send_mail"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 2,
+     "rerank_score": -0.7558389902114868,
+     "bm25_rank": 5,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 160
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:66-83",
+    "content": "# tests/mail/tests.py:66-83  (tests.mail.tests.MailTests.get_decoded_attachments)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def get_decoded_attachments(self, django_message):\n        \"\"\"\n        Encode the specified django.core.mail.message.EmailMessage, then decode\n        it using Python's email.parser module and, for each attachment of the\n        message, return a list of tuples with (filename, content, mimetype).\n        \"\"\"\n        msg_bytes = django_message.message().as_bytes()\n        email_message = message_from_bytes(msg_bytes)\n\n        def iter_attachments():\n            for i in email_message.walk():\n                if i.get_content_disposition() == \"attachment\":\n                    filename = i.get_filename()\n                    content = i.get_payload(decode=True)\n                    mimetype = i.get_content_type()\n                    yield filename, content, mimetype\n\n        return list(iter_attachments())",
+    "token_count": 180,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.MailTests.get_decoded_attachments"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 31,
+     "rerank_score": -0.9847775101661682,
+     "bm25_rank": 44,
+     "dense_rank": 60,
+     "oversized_chunk": false,
+     "engine_token_count": 180
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/log.py:94-128",
+    "content": "# django/utils/log.py:94-128  (django.utils.log.AdminEmailHandler.emit)\nclass AdminEmailHandler(logging.Handler):\n    def emit(self, record):\n        try:\n            request = record.request\n            subject = \"%s (%s IP): %s\" % (\n                record.levelname,\n                (\n                    \"internal\"\n                    if request.META.get(\"REMOTE_ADDR\") in settings.INTERNAL_IPS\n                    else \"EXTERNAL\"\n                ),\n                record.getMessage(),\n            )\n        except Exception:\n            subject = \"%s: %s\" % (record.levelname, record.getMessage())\n            request = None\n        subject = self.format_subject(subject)\n\n        # Since we add a nicely formatted traceback on our own, create a copy\n        # of the log record without the exception data.\n        no_exc_record = copy(record)\n        no_exc_record.exc_info = None\n        no_exc_record.exc_text = None\n\n        if record.exc_info:\n            exc_info = record.exc_info\n        else:\n            exc_info = (None, record.getMessage(), None)\n\n        reporter = self.reporter_class(request, is_email=True, *exc_info)\n        message = \"%s\\n\\n%s\" % (\n            self.format(no_exc_record),\n            reporter.get_traceback_text(),\n        )\n        html_message = reporter.get_traceback_html() if self.include_html else None\n        self.send_mail(subject, message, fail_silently=True, html_message=html_message)",
+    "token_count": 298,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.log.AdminEmailHandler.emit"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 20,
+     "rerank_score": -1.1068615913391113,
+     "bm25_rank": 16,
+     "dense_rank": 81,
+     "oversized_chunk": false,
+     "engine_token_count": 298
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/utils.py:1-11",
+    "content": "# django/core/mail/utils.py:1-11  (django.core.mail.utils)\n\"\"\"\nEmail message and email sending related helper functions.\n\"\"\"\n\nimport socket\n\nfrom django.utils.encoding import punycode\n\n\n# Cache the hostname, but do it lazily: socket.getfqdn() can take a couple of\n# seconds, which slows down the restart of the server.",
+    "token_count": 75,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 21,
+     "rerank_score": -1.2542670965194702,
+     "bm25_rank": 90,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/views.py:352-359",
+    "content": "# tests/test_client/views.py:352-359  (tests.test_client.views.mail_sending_view)\ndef mail_sending_view(request):\n    mail.EmailMessage(\n        \"Test message\",\n        \"This is a test email\",\n        \"from@example.com\",\n        [\"first@example.com\", \"second@example.com\"],\n    ).send()\n    return HttpResponse(\"Mail sent\")",
+    "token_count": 78,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client.views.mail_sending_view"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 16,
+     "rerank_score": -1.5012683868408203,
+     "bm25_rank": 60,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/commands/sendtestemail.py:1-5",
+    "content": "# django/core/management/commands/sendtestemail.py:1-5  (django.core.management.commands.sendtestemail)\nimport socket\n\nfrom django.core.mail import mail_admins, mail_managers, send_mail\nfrom django.core.management.base import BaseCommand\nfrom django.utils import timezone",
+    "token_count": 58,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 6,
+     "rerank_score": -1.6412426233291626,
+     "bm25_rank": 13,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 58
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/__init__.py:90-114",
+    "content": "# django/core/mail/__init__.py:90-114  (django.core.mail.send_mass_mail)\ndef send_mass_mail(\n    datatuple, fail_silently=False, auth_user=None, auth_password=None, connection=None\n):\n    \"\"\"\n    Given a datatuple of (subject, message, from_email, recipient_list), send\n    each message to each recipient list. Return the number of emails sent.\n\n    If from_email is None, use the DEFAULT_FROM_EMAIL setting.\n    If auth_user and auth_password are set, use them to log in.\n    If auth_user is None, use the EMAIL_HOST_USER setting.\n    If auth_password is None, use the EMAIL_HOST_PASSWORD setting.\n\n    Note: The API for this method is frozen. New code wanting to extend the\n    functionality should use the EmailMessage class directly.\n    \"\"\"\n    connection = connection or get_connection(\n        username=auth_user,\n        password=auth_password,\n        fail_silently=fail_silently,\n    )\n    messages = [\n        EmailMessage(subject, message, sender, recipient, connection=connection)\n        for subject, message, sender, recipient in datatuple\n    ]\n    return connection.send_messages(messages)",
+    "token_count": 252,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.send_mass_mail"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 50,
+     "rerank_score": -1.6848684549331665,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 252
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/smtp.py:1-10",
+    "content": "# django/core/mail/backends/smtp.py:1-10  (django.core.mail.backends.smtp)\n\"\"\"SMTP email backend class.\"\"\"\nimport smtplib\nimport ssl\nimport threading\n\nfrom django.conf import settings\nfrom django.core.mail.backends.base import BaseEmailBackend\nfrom django.core.mail.message import sanitize_address\nfrom django.core.mail.utils import DNS_NAME\nfrom django.utils.functional import cached_property",
+    "token_count": 80,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -1.9464797973632812,
+     "bm25_rank": null,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 80
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/base.py:55-62",
+    "content": "# django/core/mail/backends/base.py:55-62  (django.core.mail.backends.base.BaseEmailBackend.send_messages)\nclass BaseEmailBackend:\n    def send_messages(self, email_messages):\n        \"\"\"\n        Send one or more EmailMessage objects and return the number of email\n        messages sent.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseEmailBackend must override send_messages() method\"\n        )",
+    "token_count": 85,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.backends.base.BaseEmailBackend.send_messages"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 33,
+     "rerank_score": -2.0135533809661865,
+     "bm25_rank": 49,
+     "dense_rank": 59,
+     "oversized_chunk": false,
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:252-257",
+    "content": "# django/core/mail/message.py:252-257  (django.core.mail.message.EmailMessage.get_connection)\nclass EmailMessage:\n    def get_connection(self, fail_silently=False):\n        from django.core.mail import get_connection\n\n        if not self.connection:\n            self.connection = get_connection(fail_silently=fail_silently)\n        return self.connection",
+    "token_count": 77,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMessage.get_connection"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 18,
+     "rerank_score": -2.1605303287506104,
+     "bm25_rank": 51,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 77
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/logging_tests/logconfig.py:1-5",
+    "content": "# tests/logging_tests/logconfig.py:1-5  (tests.logging_tests.logconfig)\nimport logging\n\nfrom django.conf import settings\nfrom django.core.mail.backends.base import BaseEmailBackend\nfrom django.views.debug import ExceptionReporter",
+    "token_count": 46,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 43,
+     "rerank_score": -2.1741936206817627,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/locmem.py:24-31",
+    "content": "# django/core/mail/backends/locmem.py:24-31  (django.core.mail.backends.locmem.EmailBackend.send_messages)\nclass EmailBackend(BaseEmailBackend):\n    def send_messages(self, messages):\n        \"\"\"Redirect messages to the dummy outbox\"\"\"\n        msg_count = 0\n        for message in messages:  # .message() triggers header validation\n            message.message()\n            mail.outbox.append(message)\n            msg_count += 1\n        return msg_count",
+    "token_count": 98,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.backends.locmem.EmailBackend.send_messages"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 27,
+     "rerank_score": -2.1975512504577637,
+     "bm25_rank": 30,
+     "dense_rank": 75,
+     "oversized_chunk": false,
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/test_client/views.py:362-379",
+    "content": "# tests/test_client/views.py:362-379  (tests.test_client.views.mass_mail_sending_view)\ndef mass_mail_sending_view(request):\n    m1 = mail.EmailMessage(\n        \"First Test message\",\n        \"This is the first test email\",\n        \"from@example.com\",\n        [\"first@example.com\", \"second@example.com\"],\n    )\n    m2 = mail.EmailMessage(\n        \"Second Test message\",\n        \"This is the second test email\",\n        \"from@example.com\",\n        [\"second@example.com\", \"third@example.com\"],\n    )\n\n    c = mail.get_connection()\n    c.send_messages([m1, m2])\n\n    return HttpResponse(\"Mail sent\")",
+    "token_count": 143,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.test_client.views.mass_mail_sending_view"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 10,
+     "rerank_score": -2.2276508808135986,
+     "bm25_rank": 19,
+     "dense_rank": 35,
+     "oversized_chunk": false,
+     "engine_token_count": 143
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1339-1352",
+    "content": "# tests/mail/tests.py:1339-1352  (tests.mail.tests.BaseEmailBackendTests.test_html_mail_admins)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    @override_settings(ADMINS=[(\"nobody\", \"nobody@example.com\")])\n    def test_html_mail_admins(self):\n        \"\"\"Test html_message argument to mail_admins\"\"\"\n        mail_admins(\"Subject\", \"Content\", html_message=\"HTML Content\")\n        message = self.get_the_message()\n\n        self.assertEqual(message.get(\"subject\"), \"[Django] Subject\")\n        self.assertEqual(message.get_all(\"to\"), [\"nobody@example.com\"])\n        self.assertTrue(message.is_multipart())\n        self.assertEqual(len(message.get_payload()), 2)\n        self.assertEqual(message.get_payload(0).get_payload(), \"Content\")\n        self.assertEqual(message.get_payload(0).get_content_type(), \"text/plain\")\n        self.assertEqual(message.get_payload(1).get_payload(), \"HTML Content\")\n        self.assertEqual(message.get_payload(1).get_content_type(), \"text/html\")",
+    "token_count": 216,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_html_mail_admins"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 24,
+     "rerank_score": -2.295628309249878,
+     "bm25_rank": 55,
+     "dense_rank": 36,
+     "oversized_chunk": false,
+     "engine_token_count": 216
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1324-1337",
+    "content": "# tests/mail/tests.py:1324-1337  (tests.mail.tests.BaseEmailBackendTests.test_html_mail_managers)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    @override_settings(MANAGERS=[(\"nobody\", \"nobody@example.com\")])\n    def test_html_mail_managers(self):\n        \"\"\"Test html_message argument to mail_managers\"\"\"\n        mail_managers(\"Subject\", \"Content\", html_message=\"HTML Content\")\n        message = self.get_the_message()\n\n        self.assertEqual(message.get(\"subject\"), \"[Django] Subject\")\n        self.assertEqual(message.get_all(\"to\"), [\"nobody@example.com\"])\n        self.assertTrue(message.is_multipart())\n        self.assertEqual(len(message.get_payload()), 2)\n        self.assertEqual(message.get_payload(0).get_payload(), \"Content\")\n        self.assertEqual(message.get_payload(0).get_content_type(), \"text/plain\")\n        self.assertEqual(message.get_payload(1).get_payload(), \"HTML Content\")\n        self.assertEqual(message.get_payload(1).get_content_type(), \"text/html\")",
+    "token_count": 217,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_html_mail_managers"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 35,
+     "rerank_score": -2.3459293842315674,
+     "bm25_rank": 54,
+     "dense_rank": 63,
+     "oversized_chunk": false,
+     "engine_token_count": 217
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/base.py:5-16",
+    "content": "# django/core/mail/backends/base.py:5-16  (django.core.mail.backends.base.BaseEmailBackend)\nclass BaseEmailBackend:\n    \"\"\"\n    Base class for email backend implementations.\n\n    Subclasses must at least overwrite send_messages().\n\n    open() and close() can be called indirectly by using a backend object as a\n    context manager:\n\n       with backend as connection:\n           # do something with connection\n           pass\n    \"\"\"",
+    "token_count": 90,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.backends.base.BaseEmailBackend"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 34,
+     "rerank_score": -2.3839941024780273,
+     "bm25_rank": 99,
+     "dense_rank": 32,
+     "oversized_chunk": false,
+     "engine_token_count": 90
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:767-805",
+    "content": "# tests/mail/tests.py:767-805  (tests.mail.tests.MailTests.test_backend_arg)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def test_backend_arg(self):\n        \"\"\"Test backend argument of mail.get_connection()\"\"\"\n        self.assertIsInstance(\n            mail.get_connection(\"django.core.mail.backends.smtp.EmailBackend\"),\n            smtp.EmailBackend,\n        )\n        self.assertIsInstance(\n            mail.get_connection(\"django.core.mail.backends.locmem.EmailBackend\"),\n            locmem.EmailBackend,\n        )\n        self.assertIsInstance(\n            mail.get_connection(\"django.core.mail.backends.dummy.EmailBackend\"),\n            dummy.EmailBackend,\n        )\n        self.assertIsInstance(\n            mail.get_connection(\"django.core.mail.backends.console.EmailBackend\"),\n            console.EmailBackend,\n        )\n        with tempfile.TemporaryDirectory() as tmp_dir:\n            self.assertIsInstance(\n                mail.get_connection(\n                    \"django.core.mail.backends.filebased.EmailBackend\",\n                    file_path=tmp_dir,\n                ),\n                filebased.EmailBackend,\n            )\n\n        if sys.platform == \"win32\" and not PY311:\n            msg = (\n                \"_getfullpathname: path should be string, bytes or os.PathLike, not \"\n                \"object\"\n            )\n        else:\n            msg = \"expected str, bytes or os.PathLike object, not object\"\n        with self.assertRaisesMessage(TypeError, msg):\n            mail.get_connection(\n                \"django.core.mail.backends.filebased.EmailBackend\", file_path=object()\n            )\n        self.assertIsInstance(mail.get_connection(), locmem.EmailBackend)",
+    "token_count": 309,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.MailTests.test_backend_arg"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 19,
+     "rerank_score": -2.4549176692962646,
+     "bm25_rank": 23,
+     "dense_rank": 53,
+     "oversized_chunk": false,
+     "engine_token_count": 309
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/logging_tests/logconfig.py:15-16",
+    "content": "# tests/logging_tests/logconfig.py:15-16  (tests.logging_tests.logconfig.MyEmailBackend.send_messages)\nclass MyEmailBackend(BaseEmailBackend):\n    def send_messages(self, email_messages):\n        pass",
+    "token_count": 45,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.logging_tests.logconfig.MyEmailBackend.send_messages"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 46,
+     "rerank_score": -2.4746973514556885,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1893-1896",
+    "content": "# tests/mail/tests.py:1893-1896  (tests.mail.tests.SMTPBackendTests.test_connection_timeout_default)\nclass SMTPBackendTests(BaseEmailBackendTests, SMTPBackendTestsBase):\n    def test_connection_timeout_default(self):\n        \"\"\"The connection's timeout value is None by default.\"\"\"\n        connection = mail.get_connection(\"django.core.mail.backends.smtp.EmailBackend\")\n        self.assertIsNone(connection.timeout)",
+    "token_count": 85,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.SMTPBackendTests.test_connection_timeout_default"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 32,
+     "rerank_score": -2.6361947059631348,
+     "bm25_rank": 35,
+     "dense_rank": 78,
+     "oversized_chunk": false,
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:293-299",
+    "content": "# django/core/mail/message.py:293-299  (django.core.mail.message.EmailMessage.send)\nclass EmailMessage:\n    def send(self, fail_silently=False):\n        \"\"\"Send the email message.\"\"\"\n        if not self.recipients():\n            # Don't bother creating the network connection if there's nobody to\n            # send to.\n            return 0\n        return self.get_connection(fail_silently).send_messages([self])",
+    "token_count": 94,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMessage.send"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 14,
+     "rerank_score": -2.701956272125244,
+     "bm25_rank": 15,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/__init__.py:137-154",
+    "content": "# django/core/mail/__init__.py:137-154  (django.core.mail.mail_managers)\ndef mail_managers(\n    subject, message, fail_silently=False, connection=None, html_message=None\n):\n    \"\"\"Send a message to the managers, as defined by the MANAGERS setting.\"\"\"\n    if not settings.MANAGERS:\n        return\n    if not all(isinstance(a, (list, tuple)) and len(a) == 2 for a in settings.MANAGERS):\n        raise ValueError(\"The MANAGERS setting must be a list of 2-tuples.\")\n    mail = EmailMultiAlternatives(\n        \"%s%s\" % (settings.EMAIL_SUBJECT_PREFIX, subject),\n        message,\n        settings.SERVER_EMAIL,\n        [a[1] for a in settings.MANAGERS],\n        connection=connection,\n    )\n    if html_message:\n        mail.attach_alternative(html_message, \"text/html\")\n    mail.send(fail_silently=fail_silently)",
+    "token_count": 209,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.mail_managers"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 15,
+     "rerank_score": -2.724081516265869,
+     "bm25_rank": 3,
+     "dense_rank": 96,
+     "oversized_chunk": false,
+     "engine_token_count": 209
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:259-284",
+    "content": "# django/core/mail/message.py:259-284  (django.core.mail.message.EmailMessage.message)\nclass EmailMessage:\n    def message(self):\n        encoding = self.encoding or settings.DEFAULT_CHARSET\n        msg = SafeMIMEText(self.body, self.content_subtype, encoding)\n        msg = self._create_message(msg)\n        msg[\"Subject\"] = self.subject\n        msg[\"From\"] = self.extra_headers.get(\"From\", self.from_email)\n        self._set_list_header_if_not_empty(msg, \"To\", self.to)\n        self._set_list_header_if_not_empty(msg, \"Cc\", self.cc)\n        self._set_list_header_if_not_empty(msg, \"Reply-To\", self.reply_to)\n\n        # Email header names are case-insensitive (RFC 2045), so we have to\n        # accommodate that when doing comparisons.\n        header_names = [key.lower() for key in self.extra_headers]\n        if \"date\" not in header_names:\n            # formatdate() uses stdlib methods to format the date, which use\n            # the stdlib/OS concept of a timezone, however, Django sets the\n            # TZ environment variable based on the TIME_ZONE setting which\n            # will get picked up by formatdate().\n            msg[\"Date\"] = formatdate(localtime=settings.EMAIL_USE_LOCALTIME)\n        if \"message-id\" not in header_names:\n            # Use cached DNS_NAME for performance\n            msg[\"Message-ID\"] = make_msgid(domain=DNS_NAME)\n        for name, value in self.extra_headers.items():\n            if name.lower() != \"from\":  # From is already handled\n                msg[name] = value\n        return msg",
+    "token_count": 348,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMessage.message"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 49,
+     "rerank_score": -2.830221652984619,
+     "bm25_rank": null,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 348
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/__init__.py:117-134",
+    "content": "# django/core/mail/__init__.py:117-134  (django.core.mail.mail_admins)\ndef mail_admins(\n    subject, message, fail_silently=False, connection=None, html_message=None\n):\n    \"\"\"Send a message to the admins, as defined by the ADMINS setting.\"\"\"\n    if not settings.ADMINS:\n        return\n    if not all(isinstance(a, (list, tuple)) and len(a) == 2 for a in settings.ADMINS):\n        raise ValueError(\"The ADMINS setting must be a list of 2-tuples.\")\n    mail = EmailMultiAlternatives(\n        \"%s%s\" % (settings.EMAIL_SUBJECT_PREFIX, subject),\n        message,\n        settings.SERVER_EMAIL,\n        [a[1] for a in settings.ADMINS],\n        connection=connection,\n    )\n    if html_message:\n        mail.attach_alternative(html_message, \"text/html\")\n    mail.send(fail_silently=fail_silently)",
+    "token_count": 204,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.mail_admins"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 39,
+     "rerank_score": -2.867767572402954,
+     "bm25_rank": 2,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 204
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1450-1458",
+    "content": "# tests/mail/tests.py:1450-1458  (tests.mail.tests.BaseEmailBackendTests.test_recipient_without_domain)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_recipient_without_domain(self):\n        \"\"\"\n        Regression test for #15042\n        \"\"\"\n        self.assertTrue(send_mail(\"Subject\", \"Content\", \"tester\", [\"django\"]))\n        message = self.get_the_message()\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get(\"from\"), \"tester\")\n        self.assertEqual(message.get(\"to\"), \"django\")",
+    "token_count": 122,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_recipient_without_domain"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 9,
+     "rerank_score": -2.899069309234619,
+     "bm25_rank": 32,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 122
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1211-1221",
+    "content": "# tests/mail/tests.py:1211-1221  (tests.mail.tests.BaseEmailBackendTests.test_send)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_send(self):\n        email = EmailMessage(\n            \"Subject\", \"Content\", \"from@example.com\", [\"to@example.com\"]\n        )\n        num_sent = mail.get_connection().send_messages([email])\n        self.assertEqual(num_sent, 1)\n        message = self.get_the_message()\n        self.assertEqual(message[\"subject\"], \"Subject\")\n        self.assertEqual(message.get_payload(), \"Content\")\n        self.assertEqual(message[\"from\"], \"from@example.com\")\n        self.assertEqual(message.get_all(\"to\"), [\"to@example.com\"])",
+    "token_count": 144,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_send"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 23,
+     "rerank_score": -2.963244915008545,
+     "bm25_rank": 63,
+     "dense_rank": 27,
+     "oversized_chunk": false,
+     "engine_token_count": 144
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1429-1448",
+    "content": "# tests/mail/tests.py:1429-1448  (tests.mail.tests.BaseEmailBackendTests.test_idn_send)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_idn_send(self):\n        \"\"\"\n        Regression test for #14301\n        \"\"\"\n        self.assertTrue(send_mail(\"Subject\", \"Content\", \"from@\u00f6\u00e4\u00fc.com\", [\"to@\u00f6\u00e4\u00fc.com\"]))\n        message = self.get_the_message()\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get(\"from\"), \"from@xn--4ca9at.com\")\n        self.assertEqual(message.get(\"to\"), \"to@xn--4ca9at.com\")\n\n        self.flush_mailbox()\n        m = EmailMessage(\n            \"Subject\", \"Content\", \"from@\u00f6\u00e4\u00fc.com\", [\"to@\u00f6\u00e4\u00fc.com\"], cc=[\"cc@\u00f6\u00e4\u00fc.com\"]\n        )\n        m.send()\n        message = self.get_the_message()\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get(\"from\"), \"from@xn--4ca9at.com\")\n        self.assertEqual(message.get(\"to\"), \"to@xn--4ca9at.com\")\n        self.assertEqual(message.get(\"cc\"), \"cc@xn--4ca9at.com\")",
+    "token_count": 272,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_idn_send"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 26,
+     "rerank_score": -2.963324546813965,
+     "bm25_rank": 50,
+     "dense_rank": 44,
+     "oversized_chunk": false,
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1223-1233",
+    "content": "# tests/mail/tests.py:1223-1233  (tests.mail.tests.BaseEmailBackendTests.test_send_unicode)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_send_unicode(self):\n        email = EmailMessage(\n            \"Ch\u00e8re maman\", \"Je t'aime tr\u00e8s fort\", \"from@example.com\", [\"to@example.com\"]\n        )\n        num_sent = mail.get_connection().send_messages([email])\n        self.assertEqual(num_sent, 1)\n        message = self.get_the_message()\n        self.assertEqual(message[\"subject\"], \"=?utf-8?q?Ch=C3=A8re_maman?=\")\n        self.assertEqual(\n            message.get_payload(decode=True).decode(), \"Je t'aime tr\u00e8s fort\"\n        )",
+    "token_count": 156,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_send_unicode"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 29,
+     "rerank_score": -2.9883809089660645,
+     "bm25_rank": 58,
+     "dense_rank": 42,
+     "oversized_chunk": false,
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/smtp.py:14-16",
+    "content": "# django/core/mail/backends/smtp.py:14-16  (django.core.mail.backends.smtp.EmailBackend)\nclass EmailBackend(BaseEmailBackend):\n    \"\"\"\n    A wrapper that manages the SMTP network connection.\n    \"\"\"",
+    "token_count": 46,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.backends.smtp.EmailBackend"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 8,
+     "rerank_score": -3.0523126125335693,
+     "bm25_rank": 38,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/base.py:21-38",
+    "content": "# django/core/mail/backends/base.py:21-38  (django.core.mail.backends.base.BaseEmailBackend.open)\nclass BaseEmailBackend:\n    def open(self):\n        \"\"\"\n        Open a network connection.\n\n        This method can be overwritten by backend implementations to\n        open a network connection.\n\n        It's up to the backend implementation to track the status of\n        a network connection if it's needed by the backend.\n\n        This method can be called by applications to force a single\n        network connection to be used when sending mails. See the\n        send_messages() method of the SMTP backend for a reference\n        implementation.\n\n        The default implementation does nothing.\n        \"\"\"\n        pass",
+    "token_count": 140,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.backends.base.BaseEmailBackend.open"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 30,
+     "rerank_score": -3.075455665588379,
+     "bm25_rank": 37,
+     "dense_rank": 70,
+     "oversized_chunk": false,
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:731-743",
+    "content": "# tests/mail/tests.py:731-743  (tests.mail.tests.MailTests.test_dummy_backend)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def test_dummy_backend(self):\n        \"\"\"\n        Make sure that dummy backends returns correct number of sent messages\n        \"\"\"\n        connection = dummy.EmailBackend()\n        email = EmailMessage(\n            \"Subject\",\n            \"Content\",\n            \"bounce@example.com\",\n            [\"to@example.com\"],\n            headers={\"From\": \"from@example.com\"},\n        )\n        self.assertEqual(connection.send_messages([email, email, email]), 3)",
+    "token_count": 121,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.MailTests.test_dummy_backend"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 36,
+     "rerank_score": -3.2169313430786133,
+     "bm25_rank": 74,
+     "dense_rank": 51,
+     "oversized_chunk": false,
+     "engine_token_count": 121
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/smtp.py:119-139",
+    "content": "# django/core/mail/backends/smtp.py:119-139  (django.core.mail.backends.smtp.EmailBackend.send_messages)\nclass EmailBackend(BaseEmailBackend):\n    def send_messages(self, email_messages):\n        \"\"\"\n        Send one or more EmailMessage objects and return the number of email\n        messages sent.\n        \"\"\"\n        if not email_messages:\n            return 0\n        with self._lock:\n            new_conn_created = self.open()\n            if not self.connection or new_conn_created is None:\n                # We failed silently on open().\n                # Trying to send would be pointless.\n                return 0\n            num_sent = 0\n            for message in email_messages:\n                sent = self._send(message)\n                if sent:\n                    num_sent += 1\n            if new_conn_created:\n                self.close()\n        return num_sent",
+    "token_count": 174,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.backends.smtp.EmailBackend.send_messages"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 41,
+     "rerank_score": -3.4748666286468506,
+     "bm25_rank": 68,
+     "dense_rank": 65,
+     "oversized_chunk": false,
+     "engine_token_count": 174
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:854-864",
+    "content": "# tests/mail/tests.py:854-864  (tests.mail.tests.MailTests.test_dont_mangle_from_in_body)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def test_dont_mangle_from_in_body(self):\n        # Regression for #13433 - Make sure that EmailMessage doesn't mangle\n        # 'From ' in message body.\n        email = EmailMessage(\n            \"Subject\",\n            \"From the future\",\n            \"bounce@example.com\",\n            [\"to@example.com\"],\n            headers={\"From\": \"from@example.com\"},\n        )\n        self.assertNotIn(b\">From the future\", email.message().as_bytes())",
+    "token_count": 138,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.MailTests.test_dont_mangle_from_in_body"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 28,
+     "rerank_score": -3.8010616302490234,
+     "bm25_rank": 31,
+     "dense_rank": 73,
+     "oversized_chunk": false,
+     "engine_token_count": 138
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:753-765",
+    "content": "# tests/mail/tests.py:753-765  (tests.mail.tests.MailTests.test_custom_backend)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def test_custom_backend(self):\n        \"\"\"Test custom backend defined in this suite.\"\"\"\n        conn = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        self.assertTrue(hasattr(conn, \"test_outbox\"))\n        email = EmailMessage(\n            \"Subject\",\n            \"Content\",\n            \"bounce@example.com\",\n            [\"to@example.com\"],\n            headers={\"From\": \"from@example.com\"},\n        )\n        conn.send_messages([email])\n        self.assertEqual(len(conn.test_outbox), 1)",
+    "token_count": 134,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.MailTests.test_custom_backend"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 25,
+     "rerank_score": -3.8251094818115234,
+     "bm25_rank": 65,
+     "dense_rank": 33,
+     "oversized_chunk": false,
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1917-1950",
+    "content": "# tests/mail/tests.py:1917-1950  (tests.mail.tests.SMTPBackendTests.test_email_msg_uses_crlf)\nclass SMTPBackendTests(BaseEmailBackendTests, SMTPBackendTestsBase):\n    def test_email_msg_uses_crlf(self):\n        \"\"\"#23063 -- RFC-compliant messages are sent over SMTP.\"\"\"\n        send = SMTP.send\n        try:\n            smtp_messages = []\n\n            def mock_send(self, s):\n                smtp_messages.append(s)\n                return send(self, s)\n\n            SMTP.send = mock_send\n\n            email = EmailMessage(\n                \"Subject\", \"Content\", \"from@example.com\", [\"to@example.com\"]\n            )\n            mail.get_connection().send_messages([email])\n\n            # Find the actual message\n            msg = None\n            for i, m in enumerate(smtp_messages):\n                if m[:4] == \"data\":\n                    msg = smtp_messages[i + 1]\n                    break\n\n            self.assertTrue(msg)\n\n            msg = msg.decode()\n            # The message only contains CRLF and not combinations of CRLF, LF, and CR.\n            msg = msg.replace(\"\\r\\n\", \"\")\n            self.assertNotIn(\"\\r\", msg)\n            self.assertNotIn(\"\\n\", msg)\n\n        finally:\n            SMTP.send = send",
+    "token_count": 267,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.SMTPBackendTests.test_email_msg_uses_crlf"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 12,
+     "rerank_score": -3.9777162075042725,
+     "bm25_rank": 25,
+     "dense_rank": 30,
+     "oversized_chunk": false,
+     "engine_token_count": 267
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/filebased.py:1-8",
+    "content": "# django/core/mail/backends/filebased.py:1-8  (django.core.mail.backends.filebased)\n\"\"\"Email backend that writes messages to a file.\"\"\"\n\nimport datetime\nimport os\n\nfrom django.conf import settings\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.core.mail.backends.console import EmailBackend as ConsoleEmailBackend",
+    "token_count": 68,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -4.418216705322266,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 68
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:434-440",
+    "content": "# django/core/mail/message.py:434-440  (django.core.mail.message.EmailMultiAlternatives)\nclass EmailMultiAlternatives(EmailMessage):\n    \"\"\"\n    A version of EmailMessage that makes it easy to send multipart/alternative\n    messages. For example, including text and HTML versions of the text is\n    made easier.\n    \"\"\"\n\n    alternative_subtype = \"alternative\"",
+    "token_count": 81,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMultiAlternatives"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 45,
+     "rerank_score": -4.963242530822754,
+     "bm25_rank": 6,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/backends/locmem.py:10-17",
+    "content": "# django/core/mail/backends/locmem.py:10-17  (django.core.mail.backends.locmem.EmailBackend)\nclass EmailBackend(BaseEmailBackend):\n    \"\"\"\n    An email backend for use during test sessions.\n\n    The test connection stores email messages in a dummy outbox,\n    rather than sending them out on the wire.\n\n    The dummy outbox is accessible through the outbox instance attribute.\n    \"\"\"",
+    "token_count": 85,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.backends.locmem.EmailBackend"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 38,
+     "rerank_score": -4.9806647300720215,
+     "bm25_rank": 48,
+     "dense_rank": 83,
+     "oversized_chunk": false,
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1235-1255",
+    "content": "# tests/mail/tests.py:1235-1255  (tests.mail.tests.BaseEmailBackendTests.test_send_long_lines)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_send_long_lines(self):\n        \"\"\"\n        Email line length is limited to 998 chars by the RFC 5322 Section\n        2.1.1.\n        Message body containing longer lines are converted to Quoted-Printable\n        to avoid having to insert newlines, which could be hairy to do properly.\n        \"\"\"\n        # Unencoded body length is < 998 (840) but > 998 when utf-8 encoded.\n        email = EmailMessage(\n            \"Subject\", \"\u0412 \u044e\u0436\u043d\u044b\u0445 \u043c\u043e\u0440\u044f\u0445 \" * 60, \"from@example.com\", [\"to@example.com\"]\n        )\n        email.send()\n        message = self.get_the_message()\n        self.assertMessageHasHeaders(\n            message,\n            {\n                (\"MIME-Version\", \"1.0\"),\n                (\"Content-Type\", 'text/plain; charset=\"utf-8\"'),\n                (\"Content-Transfer-Encoding\", \"quoted-printable\"),\n            },\n        )",
+    "token_count": 246,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.mail.tests.BaseEmailBackendTests.test_send_long_lines"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 44,
+     "rerank_score": -5.202663898468018,
+     "bm25_rank": 56,
+     "dense_rank": 88,
+     "oversized_chunk": false,
+     "engine_token_count": 246
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/mail/tests.py:1-39",
+    "content": "# tests/mail/tests.py:1-39  (tests.mail.tests)\nimport mimetypes\nimport os\nimport shutil\nimport socket\nimport sys\nimport tempfile\nfrom email import charset, message_from_binary_file, message_from_bytes\nfrom email.header import Header\nfrom email.mime.text import MIMEText\nfrom email.utils import parseaddr\nfrom io import StringIO\nfrom pathlib import Path\nfrom smtplib import SMTP, SMTPException\nfrom ssl import SSLError\nfrom unittest import mock, skipUnless\n\nfrom django.core import mail\nfrom django.core.mail import (\n    DNS_NAME,\n    EmailMessage,\n    EmailMultiAlternatives,\n    mail_admins,\n    mail_managers,\n    send_mail,\n    send_mass_mail,\n)\nfrom django.core.mail.backends import console, dummy, filebased, locmem, smtp\nfrom django.core.mail.message import BadHeaderError, sanitize_address\nfrom django.test import SimpleTestCase, override_settings\nfrom django.test.utils import requires_tz_support\nfrom django.utils.translation import gettext_lazy\nfrom django.utils.version import PY311\n\ntry:\n    from aiosmtpd.controller import Controller\n\n    HAS_AIOSMTPD = True\nexcept ImportError:\n    HAS_AIOSMTPD = False",
+    "token_count": 253,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 13,
+     "rerank_score": -6.330906867980957,
+     "bm25_rank": 26,
+     "dense_rank": 29,
+     "oversized_chunk": false,
+     "engine_token_count": 253
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 8297,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are debugging Django's `send_mail` convenience wrapper in\ndjango/core/mail/__init__.py. Starting from `send_mail`, trace the\nreal causal pipeline a call travels through, in the order each stage\nis actually reached, up to and including the call that attaches the\nHTML alternative body. Assume no explicit `connection` argument was\npassed in (the default), and that an HTML alternative body is\nprovided via `html_message`.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.mail.send_mail\", \"django.core.mail.get_connection\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 34870,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "python",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1134.124785
+    ],
+    "L_embed_query": [
+     285.399778
+    ],
+    "L_dense": [
+     55.586998
+    ],
+    "L_rrf": [
+     0.189302
+    ],
+    "L_rerank": [
+     25216.704049
+    ],
+    "L_retrieve": [
+     26729.264425
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 8297,
+   "prompt_tokens": 8617,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 8630,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/core/mail/backends/__init__.py:1-1  (django.core.mail.backends)\n# Mail backends shipped with Django.\n\n# django/core/mail/__init__.py:1-39  (django.core.mail)\n\"\"\"\nTools for sending email.\n\"\"\"\nfrom django.conf import settings\n\n# Imported for backwards compatibility and for the sake\n# of a cleaner namespace. These symbols used to be in\n# django/core/mail.py before the introduction of email\n# backends and the subsequent reorganization (See #10355)\nfrom django.core.mail.message import (\n    DEFAULT_ATTACHMENT_MIME_TYPE,\n    BadHeaderError,\n    EmailMessage,\n    EmailMultiAlternatives,\n    SafeMIMEMultipart,\n    SafeMIMEText,\n    forbid_multi_line_headers,\n    make_msgid,\n)\nfrom django.core.mail.utils import DNS_NAME, CachedDnsName\nfrom django.utils.module_loading import import_string\n\n__all__ = [\n    \"CachedDnsName\",\n    \"DNS_NAME\",\n    \"EmailMessage\",\n    \"EmailMultiAlternatives\",\n    \"SafeMIMEText\",\n    \"SafeMIMEMultipart\",\n    \"DEFAULT_ATTACHMENT_MIME_TYPE\",\n    \"make_msgid\",\n    \"BadHeaderError\",\n    \"forbid_multi_line_headers\",\n    \"get_connection\",\n    \"send_mail\",\n    \"send_mass_mail\",\n    \"mail_admins\",\n    \"mail_managers\",\n]\n\n# tests/mail/tests.py:1304-1322  (tests.mail.tests.BaseEmailBackendTests.test_html_send_mail)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_html_send_mail(self):\n        \"\"\"Test html_message argument to send_mail\"\"\"\n        send_mail(\n            \"Subject\",\n            \"Content\",\n            \"sender@example.com\",\n            [\"nobody@example.com\"],\n            html_message=\"HTML Content\",\n        )\n        message = self.get_the_message()\n\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get_all(\"to\"), [\"nobody@example.com\"])\n        self.assertTrue(message.is_multipart())\n        self.assertEqual(len(message.get_payload()), 2)\n        self.assertEqual(message.get_payload(0).get_payload(), \"Content\")\n        self.assertEqual(message.get_payload(0).get_content_type(), \"text/plain\")\n        self.assertEqual(message.get_payload(1).get_payload(), \"HTML Content\")\n        self.assertEqual(message.get_payload(1).get_content_type(), \"text/html\")\n\n# django/core/mail/__init__.py:54-87  (django.core.mail.send_mail)\ndef send_mail(\n    subject,\n    message,\n    from_email,\n    recipient_list,\n    fail_silently=False,\n    auth_user=None,\n    auth_password=None,\n    connection=None,\n    html_message=None,\n):\n    \"\"\"\n    Easy wrapper for sending a single message to a recipient list. All members\n    of the recipient list will see the other recipients in the 'To' field.\n\n    If from_email is None, use the DEFAULT_FROM_EMAIL setting.\n    If auth_user is None, use the EMAIL_HOST_USER setting.\n    If auth_password is None, use the EMAIL_HOST_PASSWORD setting.\n\n    Note: The API for this method is frozen. New code wanting to extend the\n    functionality should use the EmailMessage class directly.\n    \"\"\"\n    connection = connection or get_connection(\n        username=auth_user,\n        password=auth_password,\n        fail_silently=fail_silently,\n    )\n    mail = EmailMultiAlternatives(\n        subject, message, from_email, recipient_list, connection=connection\n    )\n    if html_message:\n        mail.attach_alternative(html_message, \"text/html\")\n\n    return mail.send()\n\n# django/contrib/auth/forms.py:297-324  (django.contrib.auth.forms.PasswordResetForm.send_mail)\nclass PasswordResetForm(forms.Form):\n    def send_mail(\n        self,\n        subject_template_name,\n        email_template_name,\n        context,\n        from_email,\n        to_email,\n        html_email_template_name=None,\n    ):\n        \"\"\"\n        Send a django.core.mail.EmailMultiAlternatives to `to_email`.\n        \"\"\"\n        subject = loader.render_to_string(subject_template_name, context)\n        # Email subject *must not* contain newlines\n        subject = \"\".join(subject.splitlines())\n        body = loader.render_to_string(email_template_name, context)\n\n        email_message = EmailMultiAlternatives(subject, body, from_email, [to_email])\n        if html_email_template_name is not None:\n            html_email = loader.render_to_string(html_email_template_name, context)\n            email_message.attach_alternative(html_email, \"text/html\")\n\n        try:\n            email_message.send()\n        except Exception:\n            logger.exception(\n                \"Failed to send password reset email to %s\", context[\"user\"].pk\n            )\n\n# django/utils/log.py:1-64  (django.utils.log)\nimport logging\nimport logging.config  # needed when logging_config doesn't start with logging.config\nfrom copy import copy\n\nfrom django.conf import settings\nfrom django.core import mail\nfrom django.core.mail import get_connection\nfrom django.core.management.color import color_style\nfrom django.utils.module_loading import import_string\n\nrequest_logger = logging.getLogger(\"django.request\")\n\n# Default logging for Django. This sends an email to the site admins on every\n# HTTP 500 error. Depending on DEBUG, all other log records are either sent to\n# the console (DEBUG=True) or discarded (DEBUG=False) by means of the\n# require_debug_true filter. This configuration is quoted in\n# docs/ref/logging.txt; please amend it there if edited here.\nDEFAULT_LOGGING = {\n    \"version\": 1,\n    \"disable_existing_loggers\": False,\n    \"filters\": {\n        \"require_debug_false\": {\n            \"()\": \"django.utils.log.RequireDebugFalse\",\n        },\n        \"require_debug_true\": {\n            \"()\": \"django.utils.log.RequireDebugTrue\",\n        },\n    },\n    \"formatters\": {\n        \"django.server\": {\n            \"()\": \"django.utils.log.ServerFormatter\",\n            \"format\": \"[{server_time}] {message}\",\n            \"style\": \"{\",\n        }\n    },\n    \"handlers\": {\n        \"console\": {\n            \"level\": \"INFO\",\n            \"filters\": [\"require_debug_true\"],\n            \"class\": \"logging.StreamHandler\",\n        },\n        \"django.server\": {\n            \"level\": \"INFO\",\n            \"class\": \"logging.StreamHandler\",\n            \"formatter\": \"django.server\",\n        },\n        \"mail_admins\": {\n            \"level\": \"ERROR\",\n            \"filters\": [\"require_debug_false\"],\n            \"class\": \"django.utils.log.AdminEmailHandler\",\n        },\n    },\n    \"loggers\": {\n        \"django\": {\n            \"handlers\": [\"console\", \"mail_admins\"],\n            \"level\": \"INFO\",\n        },\n        \"django.server\": {\n            \"handlers\": [\"django.server\"],\n            \"level\": \"INFO\",\n            \"propagate\": False,\n        },\n    },\n}\n\n# django/utils/log.py:130-133  (django.utils.log.AdminEmailHandler.send_mail)\nclass AdminEmailHandler(logging.Handler):\n    def send_mail(self, subject, message, *args, **kwargs):\n        mail.mail_admins(\n            subject, message, *args, connection=self.connection(), **kwargs\n        )\n\n# tests/mail/tests.py:1650-1677  (tests.mail.tests.ConsoleBackendTests.test_console_stream_kwarg)\nclass ConsoleBackendTests(BaseEmailBackendTests, SimpleTestCase):\n    def test_console_stream_kwarg(self):\n        \"\"\"\n        The console backend can be pointed at an arbitrary stream.\n        \"\"\"\n        s = StringIO()\n        connection = mail.get_connection(\n            \"django.core.mail.backends.console.EmailBackend\", stream=s\n        )\n        send_mail(\n            \"Subject\",\n            \"Content\",\n            \"from@example.com\",\n            [\"to@example.com\"],\n            connection=connection,\n        )\n        message = s.getvalue().split(\"\\n\" + (\"-\" * 79) + \"\\n\")[0].encode()\n        self.assertMessageHasHeaders(\n            message,\n            {\n                (\"MIME-Version\", \"1.0\"),\n                (\"Content-Type\", 'text/plain; charset=\"utf-8\"'),\n                (\"Content-Transfer-Encoding\", \"7bit\"),\n                (\"Subject\", \"Subject\"),\n                (\"From\", \"from@example.com\"),\n                (\"To\", \"to@example.com\"),\n            },\n        )\n        self.assertIn(b\"\\nDate: \", message)\n\n# django/core/management/commands/sendtestemail.py:32-46  (django.core.management.commands.sendtestemail.Command.handle)\nclass Command(BaseCommand):\n    def handle(self, *args, **kwargs):\n        subject = \"Test email from %s on %s\" % (socket.gethostname(), timezone.now())\n\n        send_mail(\n            subject=subject,\n            message=\"If you're reading this, it was successful.\",\n            from_email=None,\n            recipient_list=kwargs[\"email\"],\n        )\n\n        if kwargs[\"managers\"]:\n            mail_managers(subject, \"This email was sent to the site managers.\")\n\n        if kwargs[\"admins\"]:\n            mail_admins(subject, \"This email was sent to the site admins.\")\n\n# tests/mail/tests.py:807-852  (tests.mail.tests.MailTests.test_connection_arg)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    @override_settings(\n        EMAIL_BACKEND=\"django.core.mail.backends.locmem.EmailBackend\",\n        ADMINS=[(\"nobody\", \"nobody@example.com\")],\n        MANAGERS=[(\"nobody\", \"nobody@example.com\")],\n    )\n    def test_connection_arg(self):\n        \"\"\"Test connection argument to send_mail(), et. al.\"\"\"\n        mail.outbox = []\n\n        # Send using non-default connection\n        connection = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        send_mail(\n            \"Subject\",\n            \"Content\",\n            \"from@example.com\",\n            [\"to@example.com\"],\n            connection=connection,\n        )\n        self.assertEqual(mail.outbox, [])\n        self.assertEqual(len(connection.test_outbox), 1)\n        self.assertEqual(connection.test_outbox[0].subject, \"Subject\")\n\n        connection = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        send_mass_mail(\n            [\n                (\"Subject1\", \"Content1\", \"from1@example.com\", [\"to1@example.com\"]),\n                (\"Subject2\", \"Content2\", \"from2@example.com\", [\"to2@example.com\"]),\n            ],\n            connection=connection,\n        )\n        self.assertEqual(mail.outbox, [])\n        self.assertEqual(len(connection.test_outbox), 2)\n        self.assertEqual(connection.test_outbox[0].subject, \"Subject1\")\n        self.assertEqual(connection.test_outbox[1].subject, \"Subject2\")\n\n        connection = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        mail_admins(\"Admin message\", \"Content\", connection=connection)\n        self.assertEqual(mail.outbox, [])\n        self.assertEqual(len(connection.test_outbox), 1)\n        self.assertEqual(connection.test_outbox[0].subject, \"[Django] Admin message\")\n\n        connection = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        mail_managers(\"Manager message\", \"Content\", connection=connection)\n        self.assertEqual(mail.outbox, [])\n        self.assertEqual(len(connection.test_outbox), 1)\n        self.assertEqual(connection.test_outbox[0].subject, \"[Django] Manager message\")\n\n# django/core/mail/backends/console.py:1-7  (django.core.mail.backends.console)\n\"\"\"\nEmail backend that writes messages to console instead of sending them.\n\"\"\"\nimport sys\nimport threading\n\nfrom django.core.mail.backends.base import BaseEmailBackend\n\n# tests/mail/tests.py:1290-1302  (tests.mail.tests.BaseEmailBackendTests.test_plaintext_send_mail)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_plaintext_send_mail(self):\n        \"\"\"\n        Test send_mail without the html_message\n        regression test for adding html_message parameter to send_mail()\n        \"\"\"\n        send_mail(\"Subject\", \"Content\", \"sender@example.com\", [\"nobody@example.com\"])\n        message = self.get_the_message()\n\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get_all(\"to\"), [\"nobody@example.com\"])\n        self.assertFalse(message.is_multipart())\n        self.assertEqual(message.get_payload(), \"Content\")\n        self.assertEqual(message.get_content_type(), \"text/plain\")\n\n# tests/mail/tests.py:66-83  (tests.mail.tests.MailTests.get_decoded_attachments)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def get_decoded_attachments(self, django_message):\n        \"\"\"\n        Encode the specified django.core.mail.message.EmailMessage, then decode\n        it using Python's email.parser module and, for each attachment of the\n        message, return a list of tuples with (filename, content, mimetype).\n        \"\"\"\n        msg_bytes = django_message.message().as_bytes()\n        email_message = message_from_bytes(msg_bytes)\n\n        def iter_attachments():\n            for i in email_message.walk():\n                if i.get_content_disposition() == \"attachment\":\n                    filename = i.get_filename()\n                    content = i.get_payload(decode=True)\n                    mimetype = i.get_content_type()\n                    yield filename, content, mimetype\n\n        return list(iter_attachments())\n\n# django/utils/log.py:94-128  (django.utils.log.AdminEmailHandler.emit)\nclass AdminEmailHandler(logging.Handler):\n    def emit(self, record):\n        try:\n            request = record.request\n            subject = \"%s (%s IP): %s\" % (\n                record.levelname,\n                (\n                    \"internal\"\n                    if request.META.get(\"REMOTE_ADDR\") in settings.INTERNAL_IPS\n                    else \"EXTERNAL\"\n                ),\n                record.getMessage(),\n            )\n        except Exception:\n            subject = \"%s: %s\" % (record.levelname, record.getMessage())\n            request = None\n        subject = self.format_subject(subject)\n\n        # Since we add a nicely formatted traceback on our own, create a copy\n        # of the log record without the exception data.\n        no_exc_record = copy(record)\n        no_exc_record.exc_info = None\n        no_exc_record.exc_text = None\n\n        if record.exc_info:\n            exc_info = record.exc_info\n        else:\n            exc_info = (None, record.getMessage(), None)\n\n        reporter = self.reporter_class(request, is_email=True, *exc_info)\n        message = \"%s\\n\\n%s\" % (\n            self.format(no_exc_record),\n            reporter.get_traceback_text(),\n        )\n        html_message = reporter.get_traceback_html() if self.include_html else None\n        self.send_mail(subject, message, fail_silently=True, html_message=html_message)\n\n# django/core/mail/utils.py:1-11  (django.core.mail.utils)\n\"\"\"\nEmail message and email sending related helper functions.\n\"\"\"\n\nimport socket\n\nfrom django.utils.encoding import punycode\n\n\n# Cache the hostname, but do it lazily: socket.getfqdn() can take a couple of\n# seconds, which slows down the restart of the server.\n\n# tests/test_client/views.py:352-359  (tests.test_client.views.mail_sending_view)\ndef mail_sending_view(request):\n    mail.EmailMessage(\n        \"Test message\",\n        \"This is a test email\",\n        \"from@example.com\",\n        [\"first@example.com\", \"second@example.com\"],\n    ).send()\n    return HttpResponse(\"Mail sent\")\n\n# django/core/management/commands/sendtestemail.py:1-5  (django.core.management.commands.sendtestemail)\nimport socket\n\nfrom django.core.mail import mail_admins, mail_managers, send_mail\nfrom django.core.management.base import BaseCommand\nfrom django.utils import timezone\n\n# django/core/mail/__init__.py:90-114  (django.core.mail.send_mass_mail)\ndef send_mass_mail(\n    datatuple, fail_silently=False, auth_user=None, auth_password=None, connection=None\n):\n    \"\"\"\n    Given a datatuple of (subject, message, from_email, recipient_list), send\n    each message to each recipient list. Return the number of emails sent.\n\n    If from_email is None, use the DEFAULT_FROM_EMAIL setting.\n    If auth_user and auth_password are set, use them to log in.\n    If auth_user is None, use the EMAIL_HOST_USER setting.\n    If auth_password is None, use the EMAIL_HOST_PASSWORD setting.\n\n    Note: The API for this method is frozen. New code wanting to extend the\n    functionality should use the EmailMessage class directly.\n    \"\"\"\n    connection = connection or get_connection(\n        username=auth_user,\n        password=auth_password,\n        fail_silently=fail_silently,\n    )\n    messages = [\n        EmailMessage(subject, message, sender, recipient, connection=connection)\n        for subject, message, sender, recipient in datatuple\n    ]\n    return connection.send_messages(messages)\n\n# django/core/mail/backends/smtp.py:1-10  (django.core.mail.backends.smtp)\n\"\"\"SMTP email backend class.\"\"\"\nimport smtplib\nimport ssl\nimport threading\n\nfrom django.conf import settings\nfrom django.core.mail.backends.base import BaseEmailBackend\nfrom django.core.mail.message import sanitize_address\nfrom django.core.mail.utils import DNS_NAME\nfrom django.utils.functional import cached_property\n\n# django/core/mail/backends/base.py:55-62  (django.core.mail.backends.base.BaseEmailBackend.send_messages)\nclass BaseEmailBackend:\n    def send_messages(self, email_messages):\n        \"\"\"\n        Send one or more EmailMessage objects and return the number of email\n        messages sent.\n        \"\"\"\n        raise NotImplementedError(\n            \"subclasses of BaseEmailBackend must override send_messages() method\"\n        )\n\n# django/core/mail/message.py:252-257  (django.core.mail.message.EmailMessage.get_connection)\nclass EmailMessage:\n    def get_connection(self, fail_silently=False):\n        from django.core.mail import get_connection\n\n        if not self.connection:\n            self.connection = get_connection(fail_silently=fail_silently)\n        return self.connection\n\n# tests/logging_tests/logconfig.py:1-5  (tests.logging_tests.logconfig)\nimport logging\n\nfrom django.conf import settings\nfrom django.core.mail.backends.base import BaseEmailBackend\nfrom django.views.debug import ExceptionReporter\n\n# django/core/mail/backends/locmem.py:24-31  (django.core.mail.backends.locmem.EmailBackend.send_messages)\nclass EmailBackend(BaseEmailBackend):\n    def send_messages(self, messages):\n        \"\"\"Redirect messages to the dummy outbox\"\"\"\n        msg_count = 0\n        for message in messages:  # .message() triggers header validation\n            message.message()\n            mail.outbox.append(message)\n            msg_count += 1\n        return msg_count\n\n# tests/test_client/views.py:362-379  (tests.test_client.views.mass_mail_sending_view)\ndef mass_mail_sending_view(request):\n    m1 = mail.EmailMessage(\n        \"First Test message\",\n        \"This is the first test email\",\n        \"from@example.com\",\n        [\"first@example.com\", \"second@example.com\"],\n    )\n    m2 = mail.EmailMessage(\n        \"Second Test message\",\n        \"This is the second test email\",\n        \"from@example.com\",\n        [\"second@example.com\", \"third@example.com\"],\n    )\n\n    c = mail.get_connection()\n    c.send_messages([m1, m2])\n\n    return HttpResponse(\"Mail sent\")\n\n# tests/mail/tests.py:1339-1352  (tests.mail.tests.BaseEmailBackendTests.test_html_mail_admins)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    @override_settings(ADMINS=[(\"nobody\", \"nobody@example.com\")])\n    def test_html_mail_admins(self):\n        \"\"\"Test html_message argument to mail_admins\"\"\"\n        mail_admins(\"Subject\", \"Content\", html_message=\"HTML Content\")\n        message = self.get_the_message()\n\n        self.assertEqual(message.get(\"subject\"), \"[Django] Subject\")\n        self.assertEqual(message.get_all(\"to\"), [\"nobody@example.com\"])\n        self.assertTrue(message.is_multipart())\n        self.assertEqual(len(message.get_payload()), 2)\n        self.assertEqual(message.get_payload(0).get_payload(), \"Content\")\n        self.assertEqual(message.get_payload(0).get_content_type(), \"text/plain\")\n        self.assertEqual(message.get_payload(1).get_payload(), \"HTML Content\")\n        self.assertEqual(message.get_payload(1).get_content_type(), \"text/html\")\n\n# tests/mail/tests.py:1324-1337  (tests.mail.tests.BaseEmailBackendTests.test_html_mail_managers)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    @override_settings(MANAGERS=[(\"nobody\", \"nobody@example.com\")])\n    def test_html_mail_managers(self):\n        \"\"\"Test html_message argument to mail_managers\"\"\"\n        mail_managers(\"Subject\", \"Content\", html_message=\"HTML Content\")\n        message = self.get_the_message()\n\n        self.assertEqual(message.get(\"subject\"), \"[Django] Subject\")\n        self.assertEqual(message.get_all(\"to\"), [\"nobody@example.com\"])\n        self.assertTrue(message.is_multipart())\n        self.assertEqual(len(message.get_payload()), 2)\n        self.assertEqual(message.get_payload(0).get_payload(), \"Content\")\n        self.assertEqual(message.get_payload(0).get_content_type(), \"text/plain\")\n        self.assertEqual(message.get_payload(1).get_payload(), \"HTML Content\")\n        self.assertEqual(message.get_payload(1).get_content_type(), \"text/html\")\n\n# django/core/mail/backends/base.py:5-16  (django.core.mail.backends.base.BaseEmailBackend)\nclass BaseEmailBackend:\n    \"\"\"\n    Base class for email backend implementations.\n\n    Subclasses must at least overwrite send_messages().\n\n    open() and close() can be called indirectly by using a backend object as a\n    context manager:\n\n       with backend as connection:\n           # do something with connection\n           pass\n    \"\"\"\n\n# tests/mail/tests.py:767-805  (tests.mail.tests.MailTests.test_backend_arg)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def test_backend_arg(self):\n        \"\"\"Test backend argument of mail.get_connection()\"\"\"\n        self.assertIsInstance(\n            mail.get_connection(\"django.core.mail.backends.smtp.EmailBackend\"),\n            smtp.EmailBackend,\n        )\n        self.assertIsInstance(\n            mail.get_connection(\"django.core.mail.backends.locmem.EmailBackend\"),\n            locmem.EmailBackend,\n        )\n        self.assertIsInstance(\n            mail.get_connection(\"django.core.mail.backends.dummy.EmailBackend\"),\n            dummy.EmailBackend,\n        )\n        self.assertIsInstance(\n            mail.get_connection(\"django.core.mail.backends.console.EmailBackend\"),\n            console.EmailBackend,\n        )\n        with tempfile.TemporaryDirectory() as tmp_dir:\n            self.assertIsInstance(\n                mail.get_connection(\n                    \"django.core.mail.backends.filebased.EmailBackend\",\n                    file_path=tmp_dir,\n                ),\n                filebased.EmailBackend,\n            )\n\n        if sys.platform == \"win32\" and not PY311:\n            msg = (\n                \"_getfullpathname: path should be string, bytes or os.PathLike, not \"\n                \"object\"\n            )\n        else:\n            msg = \"expected str, bytes or os.PathLike object, not object\"\n        with self.assertRaisesMessage(TypeError, msg):\n            mail.get_connection(\n                \"django.core.mail.backends.filebased.EmailBackend\", file_path=object()\n            )\n        self.assertIsInstance(mail.get_connection(), locmem.EmailBackend)\n\n# tests/logging_tests/logconfig.py:15-16  (tests.logging_tests.logconfig.MyEmailBackend.send_messages)\nclass MyEmailBackend(BaseEmailBackend):\n    def send_messages(self, email_messages):\n        pass\n\n# tests/mail/tests.py:1893-1896  (tests.mail.tests.SMTPBackendTests.test_connection_timeout_default)\nclass SMTPBackendTests(BaseEmailBackendTests, SMTPBackendTestsBase):\n    def test_connection_timeout_default(self):\n        \"\"\"The connection's timeout value is None by default.\"\"\"\n        connection = mail.get_connection(\"django.core.mail.backends.smtp.EmailBackend\")\n        self.assertIsNone(connection.timeout)\n\n# django/core/mail/message.py:293-299  (django.core.mail.message.EmailMessage.send)\nclass EmailMessage:\n    def send(self, fail_silently=False):\n        \"\"\"Send the email message.\"\"\"\n        if not self.recipients():\n            # Don't bother creating the network connection if there's nobody to\n            # send to.\n            return 0\n        return self.get_connection(fail_silently).send_messages([self])\n\n# django/core/mail/__init__.py:137-154  (django.core.mail.mail_managers)\ndef mail_managers(\n    subject, message, fail_silently=False, connection=None, html_message=None\n):\n    \"\"\"Send a message to the managers, as defined by the MANAGERS setting.\"\"\"\n    if not settings.MANAGERS:\n        return\n    if not all(isinstance(a, (list, tuple)) and len(a) == 2 for a in settings.MANAGERS):\n        raise ValueError(\"The MANAGERS setting must be a list of 2-tuples.\")\n    mail = EmailMultiAlternatives(\n        \"%s%s\" % (settings.EMAIL_SUBJECT_PREFIX, subject),\n        message,\n        settings.SERVER_EMAIL,\n        [a[1] for a in settings.MANAGERS],\n        connection=connection,\n    )\n    if html_message:\n        mail.attach_alternative(html_message, \"text/html\")\n    mail.send(fail_silently=fail_silently)\n\n# django/core/mail/message.py:259-284  (django.core.mail.message.EmailMessage.message)\nclass EmailMessage:\n    def message(self):\n        encoding = self.encoding or settings.DEFAULT_CHARSET\n        msg = SafeMIMEText(self.body, self.content_subtype, encoding)\n        msg = self._create_message(msg)\n        msg[\"Subject\"] = self.subject\n        msg[\"From\"] = self.extra_headers.get(\"From\", self.from_email)\n        self._set_list_header_if_not_empty(msg, \"To\", self.to)\n        self._set_list_header_if_not_empty(msg, \"Cc\", self.cc)\n        self._set_list_header_if_not_empty(msg, \"Reply-To\", self.reply_to)\n\n        # Email header names are case-insensitive (RFC 2045), so we have to\n        # accommodate that when doing comparisons.\n        header_names = [key.lower() for key in self.extra_headers]\n        if \"date\" not in header_names:\n            # formatdate() uses stdlib methods to format the date, which use\n            # the stdlib/OS concept of a timezone, however, Django sets the\n            # TZ environment variable based on the TIME_ZONE setting which\n            # will get picked up by formatdate().\n            msg[\"Date\"] = formatdate(localtime=settings.EMAIL_USE_LOCALTIME)\n        if \"message-id\" not in header_names:\n            # Use cached DNS_NAME for performance\n            msg[\"Message-ID\"] = make_msgid(domain=DNS_NAME)\n        for name, value in self.extra_headers.items():\n            if name.lower() != \"from\":  # From is already handled\n                msg[name] = value\n        return msg\n\n# django/core/mail/__init__.py:117-134  (django.core.mail.mail_admins)\ndef mail_admins(\n    subject, message, fail_silently=False, connection=None, html_message=None\n):\n    \"\"\"Send a message to the admins, as defined by the ADMINS setting.\"\"\"\n    if not settings.ADMINS:\n        return\n    if not all(isinstance(a, (list, tuple)) and len(a) == 2 for a in settings.ADMINS):\n        raise ValueError(\"The ADMINS setting must be a list of 2-tuples.\")\n    mail = EmailMultiAlternatives(\n        \"%s%s\" % (settings.EMAIL_SUBJECT_PREFIX, subject),\n        message,\n        settings.SERVER_EMAIL,\n        [a[1] for a in settings.ADMINS],\n        connection=connection,\n    )\n    if html_message:\n        mail.attach_alternative(html_message, \"text/html\")\n    mail.send(fail_silently=fail_silently)\n\n# tests/mail/tests.py:1450-1458  (tests.mail.tests.BaseEmailBackendTests.test_recipient_without_domain)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_recipient_without_domain(self):\n        \"\"\"\n        Regression test for #15042\n        \"\"\"\n        self.assertTrue(send_mail(\"Subject\", \"Content\", \"tester\", [\"django\"]))\n        message = self.get_the_message()\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get(\"from\"), \"tester\")\n        self.assertEqual(message.get(\"to\"), \"django\")\n\n# tests/mail/tests.py:1211-1221  (tests.mail.tests.BaseEmailBackendTests.test_send)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_send(self):\n        email = EmailMessage(\n            \"Subject\", \"Content\", \"from@example.com\", [\"to@example.com\"]\n        )\n        num_sent = mail.get_connection().send_messages([email])\n        self.assertEqual(num_sent, 1)\n        message = self.get_the_message()\n        self.assertEqual(message[\"subject\"], \"Subject\")\n        self.assertEqual(message.get_payload(), \"Content\")\n        self.assertEqual(message[\"from\"], \"from@example.com\")\n        self.assertEqual(message.get_all(\"to\"), [\"to@example.com\"])\n\n# tests/mail/tests.py:1429-1448  (tests.mail.tests.BaseEmailBackendTests.test_idn_send)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_idn_send(self):\n        \"\"\"\n        Regression test for #14301\n        \"\"\"\n        self.assertTrue(send_mail(\"Subject\", \"Content\", \"from@\u00f6\u00e4\u00fc.com\", [\"to@\u00f6\u00e4\u00fc.com\"]))\n        message = self.get_the_message()\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get(\"from\"), \"from@xn--4ca9at.com\")\n        self.assertEqual(message.get(\"to\"), \"to@xn--4ca9at.com\")\n\n        self.flush_mailbox()\n        m = EmailMessage(\n            \"Subject\", \"Content\", \"from@\u00f6\u00e4\u00fc.com\", [\"to@\u00f6\u00e4\u00fc.com\"], cc=[\"cc@\u00f6\u00e4\u00fc.com\"]\n        )\n        m.send()\n        message = self.get_the_message()\n        self.assertEqual(message.get(\"subject\"), \"Subject\")\n        self.assertEqual(message.get(\"from\"), \"from@xn--4ca9at.com\")\n        self.assertEqual(message.get(\"to\"), \"to@xn--4ca9at.com\")\n        self.assertEqual(message.get(\"cc\"), \"cc@xn--4ca9at.com\")\n\n# tests/mail/tests.py:1223-1233  (tests.mail.tests.BaseEmailBackendTests.test_send_unicode)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_send_unicode(self):\n        email = EmailMessage(\n            \"Ch\u00e8re maman\", \"Je t'aime tr\u00e8s fort\", \"from@example.com\", [\"to@example.com\"]\n        )\n        num_sent = mail.get_connection().send_messages([email])\n        self.assertEqual(num_sent, 1)\n        message = self.get_the_message()\n        self.assertEqual(message[\"subject\"], \"=?utf-8?q?Ch=C3=A8re_maman?=\")\n        self.assertEqual(\n            message.get_payload(decode=True).decode(), \"Je t'aime tr\u00e8s fort\"\n        )\n\n# django/core/mail/backends/smtp.py:14-16  (django.core.mail.backends.smtp.EmailBackend)\nclass EmailBackend(BaseEmailBackend):\n    \"\"\"\n    A wrapper that manages the SMTP network connection.\n    \"\"\"\n\n# django/core/mail/backends/base.py:21-38  (django.core.mail.backends.base.BaseEmailBackend.open)\nclass BaseEmailBackend:\n    def open(self):\n        \"\"\"\n        Open a network connection.\n\n        This method can be overwritten by backend implementations to\n        open a network connection.\n\n        It's up to the backend implementation to track the status of\n        a network connection if it's needed by the backend.\n\n        This method can be called by applications to force a single\n        network connection to be used when sending mails. See the\n        send_messages() method of the SMTP backend for a reference\n        implementation.\n\n        The default implementation does nothing.\n        \"\"\"\n        pass\n\n# tests/mail/tests.py:731-743  (tests.mail.tests.MailTests.test_dummy_backend)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def test_dummy_backend(self):\n        \"\"\"\n        Make sure that dummy backends returns correct number of sent messages\n        \"\"\"\n        connection = dummy.EmailBackend()\n        email = EmailMessage(\n            \"Subject\",\n            \"Content\",\n            \"bounce@example.com\",\n            [\"to@example.com\"],\n            headers={\"From\": \"from@example.com\"},\n        )\n        self.assertEqual(connection.send_messages([email, email, email]), 3)\n\n# django/core/mail/backends/smtp.py:119-139  (django.core.mail.backends.smtp.EmailBackend.send_messages)\nclass EmailBackend(BaseEmailBackend):\n    def send_messages(self, email_messages):\n        \"\"\"\n        Send one or more EmailMessage objects and return the number of email\n        messages sent.\n        \"\"\"\n        if not email_messages:\n            return 0\n        with self._lock:\n            new_conn_created = self.open()\n            if not self.connection or new_conn_created is None:\n                # We failed silently on open().\n                # Trying to send would be pointless.\n                return 0\n            num_sent = 0\n            for message in email_messages:\n                sent = self._send(message)\n                if sent:\n                    num_sent += 1\n            if new_conn_created:\n                self.close()\n        return num_sent\n\n# tests/mail/tests.py:854-864  (tests.mail.tests.MailTests.test_dont_mangle_from_in_body)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def test_dont_mangle_from_in_body(self):\n        # Regression for #13433 - Make sure that EmailMessage doesn't mangle\n        # 'From ' in message body.\n        email = EmailMessage(\n            \"Subject\",\n            \"From the future\",\n            \"bounce@example.com\",\n            [\"to@example.com\"],\n            headers={\"From\": \"from@example.com\"},\n        )\n        self.assertNotIn(b\">From the future\", email.message().as_bytes())\n\n# tests/mail/tests.py:753-765  (tests.mail.tests.MailTests.test_custom_backend)\nclass MailTests(HeadersCheckMixin, SimpleTestCase):\n    def test_custom_backend(self):\n        \"\"\"Test custom backend defined in this suite.\"\"\"\n        conn = mail.get_connection(\"mail.custombackend.EmailBackend\")\n        self.assertTrue(hasattr(conn, \"test_outbox\"))\n        email = EmailMessage(\n            \"Subject\",\n            \"Content\",\n            \"bounce@example.com\",\n            [\"to@example.com\"],\n            headers={\"From\": \"from@example.com\"},\n        )\n        conn.send_messages([email])\n        self.assertEqual(len(conn.test_outbox), 1)\n\n# tests/mail/tests.py:1917-1950  (tests.mail.tests.SMTPBackendTests.test_email_msg_uses_crlf)\nclass SMTPBackendTests(BaseEmailBackendTests, SMTPBackendTestsBase):\n    def test_email_msg_uses_crlf(self):\n        \"\"\"#23063 -- RFC-compliant messages are sent over SMTP.\"\"\"\n        send = SMTP.send\n        try:\n            smtp_messages = []\n\n            def mock_send(self, s):\n                smtp_messages.append(s)\n                return send(self, s)\n\n            SMTP.send = mock_send\n\n            email = EmailMessage(\n                \"Subject\", \"Content\", \"from@example.com\", [\"to@example.com\"]\n            )\n            mail.get_connection().send_messages([email])\n\n            # Find the actual message\n            msg = None\n            for i, m in enumerate(smtp_messages):\n                if m[:4] == \"data\":\n                    msg = smtp_messages[i + 1]\n                    break\n\n            self.assertTrue(msg)\n\n            msg = msg.decode()\n            # The message only contains CRLF and not combinations of CRLF, LF, and CR.\n            msg = msg.replace(\"\\r\\n\", \"\")\n            self.assertNotIn(\"\\r\", msg)\n            self.assertNotIn(\"\\n\", msg)\n\n        finally:\n            SMTP.send = send\n\n# django/core/mail/backends/filebased.py:1-8  (django.core.mail.backends.filebased)\n\"\"\"Email backend that writes messages to a file.\"\"\"\n\nimport datetime\nimport os\n\nfrom django.conf import settings\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.core.mail.backends.console import EmailBackend as ConsoleEmailBackend\n\n# django/core/mail/message.py:434-440  (django.core.mail.message.EmailMultiAlternatives)\nclass EmailMultiAlternatives(EmailMessage):\n    \"\"\"\n    A version of EmailMessage that makes it easy to send multipart/alternative\n    messages. For example, including text and HTML versions of the text is\n    made easier.\n    \"\"\"\n\n    alternative_subtype = \"alternative\"\n\n# django/core/mail/backends/locmem.py:10-17  (django.core.mail.backends.locmem.EmailBackend)\nclass EmailBackend(BaseEmailBackend):\n    \"\"\"\n    An email backend for use during test sessions.\n\n    The test connection stores email messages in a dummy outbox,\n    rather than sending them out on the wire.\n\n    The dummy outbox is accessible through the outbox instance attribute.\n    \"\"\"\n\n# tests/mail/tests.py:1235-1255  (tests.mail.tests.BaseEmailBackendTests.test_send_long_lines)\nclass BaseEmailBackendTests(HeadersCheckMixin):\n    def test_send_long_lines(self):\n        \"\"\"\n        Email line length is limited to 998 chars by the RFC 5322 Section\n        2.1.1.\n        Message body containing longer lines are converted to Quoted-Printable\n        to avoid having to insert newlines, which could be hairy to do properly.\n        \"\"\"\n        # Unencoded body length is < 998 (840) but > 998 when utf-8 encoded.\n        email = EmailMessage(\n            \"Subject\", \"\u0412 \u044e\u0436\u043d\u044b\u0445 \u043c\u043e\u0440\u044f\u0445 \" * 60, \"from@example.com\", [\"to@example.com\"]\n        )\n        email.send()\n        message = self.get_the_message()\n        self.assertMessageHasHeaders(\n            message,\n            {\n                (\"MIME-Version\", \"1.0\"),\n                (\"Content-Type\", 'text/plain; charset=\"utf-8\"'),\n                (\"Content-Transfer-Encoding\", \"quoted-printable\"),\n            },\n        )\n\n# tests/mail/tests.py:1-39  (tests.mail.tests)\nimport mimetypes\nimport os\nimport shutil\nimport socket\nimport sys\nimport tempfile\nfrom email import charset, message_from_binary_file, message_from_bytes\nfrom email.header import Header\nfrom email.mime.text import MIMEText\nfrom email.utils import parseaddr\nfrom io import StringIO\nfrom pathlib import Path\nfrom smtplib import SMTP, SMTPException\nfrom ssl import SSLError\nfrom unittest import mock, skipUnless\n\nfrom django.core import mail\nfrom django.core.mail import (\n    DNS_NAME,\n    EmailMessage,\n    EmailMultiAlternatives,\n    mail_admins,\n    mail_managers,\n    send_mail,\n    send_mass_mail,\n)\nfrom django.core.mail.backends import console, dummy, filebased, locmem, smtp\nfrom django.core.mail.message import BadHeaderError, sanitize_address\nfrom django.test import SimpleTestCase, override_settings\nfrom django.test.utils import requires_tz_support\nfrom django.utils.translation import gettext_lazy\nfrom django.utils.version import PY311\n\ntry:\n    from aiosmtpd.controller import Controller\n\n    HAS_AIOSMTPD = True\nexcept ImportError:\n    HAS_AIOSMTPD = False\n\n## Task\n\nYou are debugging Django's `send_mail` convenience wrapper in\ndjango/core/mail/__init__.py. Starting from `send_mail`, trace the\nreal causal pipeline a call travels through, in the order each stage\nis actually reached, up to and including the call that attaches the\nHTML alternative body. Assume no explicit `connection` argument was\npassed in (the default), and that an HTML alternative body is\nprovided via `html_message`.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.core.mail.send_mail\", \"django.core.mail.get_connection\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -1,0 +1,1227 @@
+{
+ "bundle": {
+  "arm": "arm2",
+  "task_id": "django_t02_013_common_middleware_slash_redirect",
+  "items": [
+   {
+    "source_id": "django/middleware/common.py:100-115",
+    "content": "# django/middleware/common.py:100-115  (django.middleware.common.CommonMiddleware.process_response)\nclass CommonMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        \"\"\"\n        When the status code of the response is 404, it may redirect to a path\n        with an appended slash if should_redirect_with_slash() returns True.\n        \"\"\"\n        # If the given URL is \"Not Found\", then check if we should redirect to\n        # a path with a slash appended.\n        if response.status_code == 404 and self.should_redirect_with_slash(request):\n            return self.response_redirect_class(self.get_full_path_with_slash(request))\n\n        # Add the Content-Length header to non-streaming responses if not\n        # already set.\n        if not response.streaming and not response.has_header(\"Content-Length\"):\n            response.headers[\"Content-Length\"] = str(len(response.content))\n\n        return response",
+    "token_count": 193,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.process_response"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 1000,
+     "stub_priority": 1500,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 193
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:76-98",
+    "content": "# django/middleware/common.py:76-98  (django.middleware.common.CommonMiddleware.get_full_path_with_slash)\nclass CommonMiddleware(MiddlewareMixin):\n    def get_full_path_with_slash(self, request):\n        \"\"\"\n        Return the full path of the request with a trailing slash appended.\n\n        Raise a RuntimeError if settings.DEBUG is True and request.method is\n        POST, PUT, or PATCH.\n        \"\"\"\n        new_path = request.get_full_path(force_append_slash=True)\n        # Prevent construction of scheme relative urls.\n        new_path = escape_leading_slashes(new_path)\n        if settings.DEBUG and request.method in (\"POST\", \"PUT\", \"PATCH\"):\n            raise RuntimeError(\n                \"You called this URL via %(method)s, but the URL doesn't end \"\n                \"in a slash and you have APPEND_SLASH set. Django can't \"\n                \"redirect to the slash URL while maintaining %(method)s data. \"\n                \"Change your form to point to %(url)s (note the trailing \"\n                \"slash), or set APPEND_SLASH=False in your Django settings.\"\n                % {\n                    \"method\": request.method,\n                    \"url\": request.get_host() + new_path,\n                }\n            )\n        return new_path",
+    "token_count": 254,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.get_full_path_with_slash"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 254
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:119-143",
+    "content": "# django/middleware/common.py:119-143  (django.middleware.common.BrokenLinkEmailsMiddleware.process_response)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        \"\"\"Send broken link emails for relevant 404 NOT FOUND responses.\"\"\"\n        if response.status_code == 404 and not settings.DEBUG:\n            domain = request.get_host()\n            path = request.get_full_path()\n            referer = request.META.get(\"HTTP_REFERER\", \"\")\n\n            if not self.is_ignorable_request(request, path, domain, referer):\n                ua = request.META.get(\"HTTP_USER_AGENT\", \"<none>\")\n                ip = request.META.get(\"REMOTE_ADDR\", \"<none>\")\n                mail_managers(\n                    \"Broken %slink on %s\"\n                    % (\n                        (\n                            \"INTERNAL \"\n                            if self.is_internal_request(domain, referer)\n                            else \"\"\n                        ),\n                        domain,\n                    ),\n                    \"Referrer: %s\\nRequested URL: %s\\nUser agent: %s\\n\"\n                    \"IP address: %s\\n\" % (referer, path, ua, ip),\n                    fail_silently=True,\n                )\n        return response",
+    "token_count": 251,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.BrokenLinkEmailsMiddleware.process_response"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 999,
+     "stub_priority": 1499,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 251
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:62-74",
+    "content": "# django/middleware/common.py:62-74  (django.middleware.common.CommonMiddleware.should_redirect_with_slash)\nclass CommonMiddleware(MiddlewareMixin):\n    def should_redirect_with_slash(self, request):\n        \"\"\"\n        Return True if settings.APPEND_SLASH is True and appending a slash to\n        the request path turns an invalid path into a valid one.\n        \"\"\"\n        if settings.APPEND_SLASH and not request.path_info.endswith(\"/\"):\n            urlconf = getattr(request, \"urlconf\", None)\n            if not is_valid_path(request.path_info, urlconf):\n                match = is_valid_path(\"%s/\" % request.path_info, urlconf)\n                if match:\n                    view = match.func\n                    return getattr(view, \"should_append_slash\", True)\n        return False",
+    "token_count": 161,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.should_redirect_with_slash"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 161
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:145-151",
+    "content": "# django/middleware/common.py:145-151  (django.middleware.common.BrokenLinkEmailsMiddleware.is_internal_request)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def is_internal_request(self, domain, referer):\n        \"\"\"\n        Return True if the referring URL is the same domain as the current\n        request.\n        \"\"\"\n        # Different subdomains are treated as different domains.\n        return bool(re.match(\"^https?://%s/\" % re.escape(domain), referer))",
+    "token_count": 103,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.BrokenLinkEmailsMiddleware.is_internal_request"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 998,
+     "stub_priority": 1498,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 103
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:34-60",
+    "content": "# django/middleware/common.py:34-60  (django.middleware.common.CommonMiddleware.process_request)\nclass CommonMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        \"\"\"\n        Check for denied User-Agents and rewrite the URL based on\n        settings.APPEND_SLASH and settings.PREPEND_WWW\n        \"\"\"\n\n        # Check for denied User-Agents\n        user_agent = request.META.get(\"HTTP_USER_AGENT\")\n        if user_agent is not None:\n            for user_agent_regex in settings.DISALLOWED_USER_AGENTS:\n                if user_agent_regex.search(user_agent):\n                    raise PermissionDenied(\"Forbidden user agent\")\n\n        # Check for a redirect based on settings.PREPEND_WWW\n        host = request.get_host()\n\n        if settings.PREPEND_WWW and host and not host.startswith(\"www.\"):\n            # Check if we also need to append a slash so we can do it all\n            # with a single redirect. (This check may be somewhat expensive,\n            # so we only do it if we already know we're sending a redirect,\n            # or in process_response if we get a 404.)\n            if self.should_redirect_with_slash(request):\n                path = self.get_full_path_with_slash(request)\n            else:\n                path = request.get_full_path()\n\n            return self.response_redirect_class(f\"{request.scheme}://www.{host}{path}\")",
+    "token_count": 289,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware.process_request"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 289
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:153-178",
+    "content": "# django/middleware/common.py:153-178  (django.middleware.common.BrokenLinkEmailsMiddleware.is_ignorable_request)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def is_ignorable_request(self, request, uri, domain, referer):\n        \"\"\"\n        Return True if the given request *shouldn't* notify the site managers\n        according to project settings or in situations outlined by the inline\n        comments.\n        \"\"\"\n        # The referer is empty.\n        if not referer:\n            return True\n\n        # APPEND_SLASH is enabled and the referer is equal to the current URL\n        # without a trailing slash indicating an internal redirect.\n        if settings.APPEND_SLASH and uri.endswith(\"/\") and referer == uri[:-1]:\n            return True\n\n        # A '?' in referer is identified as a search engine source.\n        if not self.is_internal_request(domain, referer) and \"?\" in referer:\n            return True\n\n        # The referer is equal to the current URL, ignoring the scheme (assumed\n        # to be a poorly implemented bot).\n        parsed_referer = urlparse(referer)\n        if parsed_referer.netloc in [\"\", domain] and parsed_referer.path == uri:\n            return True\n\n        return any(pattern.search(uri) for pattern in settings.IGNORABLE_404_URLS)",
+    "token_count": 288,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.BrokenLinkEmailsMiddleware.is_ignorable_request"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 997,
+     "stub_priority": 1497,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "method",
+     "engine_token_count": 288
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:14-32",
+    "content": "# django/middleware/common.py:14-32  (django.middleware.common.CommonMiddleware)\nclass CommonMiddleware(MiddlewareMixin):\n    \"\"\"\n    \"Common\" middleware for taking care of some basic operations:\n\n        - Forbid access to User-Agents in settings.DISALLOWED_USER_AGENTS\n\n        - URL rewriting: Based on the APPEND_SLASH and PREPEND_WWW settings,\n          append missing slashes and/or prepends missing \"www.\"s.\n\n            - If APPEND_SLASH is set and the initial URL doesn't end with a\n              slash, and it is not found in urlpatterns, form a new URL by\n              appending a slash at the end. If this new URL is found in\n              urlpatterns, return an HTTP redirect to this new URL; otherwise\n              process the initial URL as usual.\n\n          This behavior can be customized by subclassing CommonMiddleware and\n          overriding the response_redirect_class attribute.\n    \"\"\"\n\n    response_redirect_class = HttpResponsePermanentRedirect",
+    "token_count": 199,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.common.CommonMiddleware"
+    ],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 996,
+     "stub_priority": 1496,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 199
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/common.py:1-10",
+    "content": "# django/middleware/common.py:1-10  (django.middleware.common)\nimport re\nfrom urllib.parse import urlparse\n\nfrom django.conf import settings\nfrom django.core.exceptions import PermissionDenied\nfrom django.core.mail import mail_managers\nfrom django.http import HttpResponsePermanentRedirect\nfrom django.urls import is_valid_path\nfrom django.utils.deprecation import MiddlewareMixin\nfrom django.utils.http import escape_leading_slashes",
+    "token_count": 84,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "seed_file",
+     "priority": 995,
+     "stub_priority": 1495,
+     "rendered": "full",
+     "bm25_rank": null,
+     "chunk_kind": "module_block",
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:76-87",
+    "content": "# tests/middleware/tests.py:76-87  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect(self):\n        \"\"\"\n        APPEND_SLASH should redirect slashless URLs to a valid pattern.\n        \"\"\"\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_empty).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/slash/\")",
+    "token_count": 142,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 490,
+     "stub_priority": 990,
+     "rendered": "full",
+     "bm25_rank": 1,
+     "chunk_kind": "method",
+     "engine_token_count": 142
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:159-178",
+    "content": "# tests/middleware/tests.py:159-178  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_leading_slashes)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_leading_slashes(self):\n        \"\"\"\n        Paths starting with two slashes are escaped to prevent open redirects.\n        If there's a URL pattern that allows paths to start with two slashes, a\n        request with path //evil.com must not redirect to //evil.com/ (appended\n        slash) which is a schemaless absolute URL. The browser would navigate\n        to evil.com/.\n        \"\"\"\n        # Use 4 slashes because of RequestFactory behavior.\n        request = self.rf.get(\"////evil.com/security\")\n        r = CommonMiddleware(get_response_404).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_404).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/%2Fevil.com/security/\")\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/%2Fevil.com/security/\")",
+    "token_count": 272,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_leading_slashes"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 480,
+     "stub_priority": 980,
+     "rendered": "full",
+     "bm25_rank": 2,
+     "chunk_kind": "method",
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:40-350",
+    "content": "# tests/middleware/tests.py:40-350  (tests.middleware.tests.CommonMiddlewareTest)\n@override_settings(ROOT_URLCONF=\"middleware.urls\")\nclass CommonMiddlewareTest(SimpleTestCase):\n    rf = RequestFactory()\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_have_slash(self):\n        \"\"\"\n        URLs with slashes should go unmolested.\n        \"\"\"\n        request = self.rf.get(\"/slash/\")\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_resource(self):\n        \"\"\"\n        Matches to explicit slashless URLs should go unmolested.\n        \"\"\"\n\n        def get_response(req):\n            return HttpResponse(\"Here's the text of the web page.\")\n\n        request = self.rf.get(\"/noslash\")\n        self.assertIsNone(CommonMiddleware(get_response).process_request(request))\n        self.assertEqual(\n            CommonMiddleware(get_response)(request).content,\n            b\"Here's the text of the web page.\",\n        )\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_unknown(self):\n        \"\"\"\n        APPEND_SLASH should not redirect to unknown resources.\n        \"\"\"\n        request = self.rf.get(\"/unknown\")\n        response = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(response.status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect(self):\n        \"\"\"\n        APPEND_SLASH should redirect slashless URLs to a valid pattern.\n        \"\"\"\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_empty).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/slash/\")\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_querystring(self):\n        \"\"\"\n        APPEND_SLASH should preserve querystrings when redirecting.\n        \"\"\"\n        request = self.rf.get(\"/slash?test=1\")\n        resp = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(resp.url, \"/slash/?test=1\")\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_querystring_have_slash(self):\n        \"\"\"\n        APPEND_SLASH should append slash to path when redirecting a request\n        with a querystring ending with slash.\n        \"\"\"\n        request = self.rf.get(\"/slash?test=slash/\")\n        resp = CommonMiddleware(get_response_404)(request)\n        self.assertIsInstance(resp, HttpResponsePermanentRedirect)\n        self.assertEqual(resp.url, \"/slash/?test=slash/\")\n\n    @override_settings(APPEND_SLASH=True, DEBUG=True)\n    def test_append_slash_no_redirect_on_POST_in_DEBUG(self):\n        \"\"\"\n        While in debug mode, an exception is raised with a warning\n        when a failed attempt is made to POST, PUT, or PATCH to an URL which\n        would normally be redirected to a slashed version.\n        \"\"\"\n        msg = \"maintaining %s data. Change your form to point to testserver/slash/\"\n        request = self.rf.get(\"/slash\")\n        request.method = \"POST\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n        request = self.rf.get(\"/slash\")\n        request.method = \"PUT\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n        request = self.rf.get(\"/slash\")\n        request.method = \"PATCH\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n\n    @override_settings(APPEND_SLASH=False)\n    def test_append_slash_disabled(self):\n        \"\"\"\n        Disabling append slash functionality should leave slashless URLs alone.\n        \"\"\"\n        request = self.rf.get(\"/slash\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_opt_out(self):\n        \"\"\"\n        Views marked with @no_append_slash should be left alone.\n        \"\"\"\n        request = self.rf.get(\"/sensitive_fbv\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n        request = self.rf.get(\"/sensitive_cbv\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_quoted(self):\n        \"\"\"\n        URLs which require quoting should be redirected to their slash version.\n        \"\"\"\n        request = self.rf.get(quote(\"/needsquoting#\"))\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/needsquoting%23/\")\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_leading_slashes(self):\n        \"\"\"\n        Paths starting with two slashes are escaped to prevent open redirects.\n        If there's a URL pattern that allows paths to start with two slashes, a\n        request with path //evil.com must not redirect to //evil.com/ (appended\n        slash) which is a schemaless absolute URL. The browser would navigate\n        to evil.com/.\n        \"\"\"\n        # Use 4 slashes because of RequestFactory behavior.\n        request = self.rf.get(\"////evil.com/security\")\n        r = CommonMiddleware(get_response_404).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_404).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/%2Fevil.com/security/\")\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/%2Fevil.com/security/\")\n\n    @override_settings(APPEND_SLASH=False, PREPEND_WWW=True)\n    def test_prepend_www(self):\n        request = self.rf.get(\"/path/\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/path/\")\n\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_have_slash(self):\n        request = self.rf.get(\"/slash/\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/slash/\")\n\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_slashless(self):\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/slash/\")\n\n    # The following tests examine expected behavior given a custom URLconf that\n    # overrides the default one through the request object.\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_have_slash_custom_urlconf(self):\n        \"\"\"\n        URLs with slashes should go unmolested.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash/\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_resource_custom_urlconf(self):\n        \"\"\"\n        Matches to explicit slashless URLs should go unmolested.\n        \"\"\"\n\n        def get_response(req):\n            return HttpResponse(\"web content\")\n\n        request = self.rf.get(\"/customurlconf/noslash\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response).process_request(request))\n        self.assertEqual(\n            CommonMiddleware(get_response)(request).content, b\"web content\"\n        )\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_unknown_custom_urlconf(self):\n        \"\"\"\n        APPEND_SLASH should not redirect to unknown resources.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/unknown\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_custom_urlconf(self):\n        \"\"\"\n        APPEND_SLASH should redirect slashless URLs to a valid pattern.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertIsNotNone(\n            r,\n            \"CommonMiddleware failed to return APPEND_SLASH redirect using \"\n            \"request.urlconf\",\n        )\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/customurlconf/slash/\")\n\n    @override_settings(APPEND_SLASH=True, DEBUG=True)\n    def test_append_slash_no_redirect_on_POST_in_DEBUG_custom_urlconf(self):\n        \"\"\"\n        While in debug mode, an exception is raised with a warning\n        when a failed attempt is made to POST to an URL which would normally be\n        redirected to a slashed version.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        request.method = \"POST\"\n        with self.assertRaisesMessage(RuntimeError, \"end in a slash\"):\n            CommonMiddleware(get_response_404)(request)\n\n    @override_settings(APPEND_SLASH=False)\n    def test_append_slash_disabled_custom_urlconf(self):\n        \"\"\"\n        Disabling append slash functionality should leave slashless URLs alone.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_quoted_custom_urlconf(self):\n        \"\"\"\n        URLs which require quoting should be redirected to their slash version.\n        \"\"\"\n        request = self.rf.get(quote(\"/customurlconf/needsquoting#\"))\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertIsNotNone(\n            r,\n            \"CommonMiddleware failed to return APPEND_SLASH redirect using \"\n            \"request.urlconf\",\n        )\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/customurlconf/needsquoting%23/\")\n\n    @override_settings(APPEND_SLASH=False, PREPEND_WWW=True)\n    def test_prepend_www_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/path/\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/path/\")\n\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_have_slash_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/slash/\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/slash/\")\n\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_slashless_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/slash/\")\n\n    # Tests for the Content-Length header\n\n    def test_content_length_header_added(self):\n        def get_response(req):\n            response = HttpResponse(\"content\")\n            self.assertNotIn(\"Content-Length\", response)\n            return response\n\n        response = CommonMiddleware(get_response)(self.rf.get(\"/\"))\n        self.assertEqual(int(response.headers[\"Content-Length\"]), len(response.content))\n\n    def test_content_length_header_not_added_for_streaming_response(self):\n        def get_response(req):\n            response = StreamingHttpResponse(\"content\")\n            self.assertNotIn(\"Content-Length\", response)\n            return response\n\n        response = CommonMiddleware(get_response)(self.rf.get(\"/\"))\n        self.assertNotIn(\"Content-Length\", response)\n\n    def test_content_length_header_not_changed(self):\n        bad_content_length = 500\n\n        def get_response(req):\n            response = HttpResponse()\n            response.headers[\"Content-Length\"] = bad_content_length\n            return response\n\n        response = CommonMiddleware(get_response)(self.rf.get(\"/\"))\n        self.assertEqual(int(response.headers[\"Content-Length\"]), bad_content_length)\n\n    # Other tests",
+    "token_count": 2912,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 470,
+     "stub_priority": 970,
+     "rendered": "full",
+     "bm25_rank": 3,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 2912
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:240-254",
+    "content": "# tests/middleware/tests.py:240-254  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_custom_urlconf(self):\n        \"\"\"\n        APPEND_SLASH should redirect slashless URLs to a valid pattern.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertIsNotNone(\n            r,\n            \"CommonMiddleware failed to return APPEND_SLASH redirect using \"\n            \"request.urlconf\",\n        )\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/customurlconf/slash/\")",
+    "token_count": 172,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 460,
+     "stub_priority": 960,
+     "rendered": "full",
+     "bm25_rank": 4,
+     "chunk_kind": "method",
+     "engine_token_count": 172
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:98-107",
+    "content": "# tests/middleware/tests.py:98-107  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_querystring_have_slash)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_querystring_have_slash(self):\n        \"\"\"\n        APPEND_SLASH should append slash to path when redirecting a request\n        with a querystring ending with slash.\n        \"\"\"\n        request = self.rf.get(\"/slash?test=slash/\")\n        resp = CommonMiddleware(get_response_404)(request)\n        self.assertIsInstance(resp, HttpResponsePermanentRedirect)\n        self.assertEqual(resp.url, \"/slash/?test=slash/\")",
+    "token_count": 142,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_querystring_have_slash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 450,
+     "stub_priority": 950,
+     "rendered": "full",
+     "bm25_rank": 5,
+     "chunk_kind": "method",
+     "engine_token_count": 142
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:230-238",
+    "content": "# tests/middleware/tests.py:230-238  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_unknown_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_unknown_custom_urlconf(self):\n        \"\"\"\n        APPEND_SLASH should not redirect to unknown resources.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/unknown\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)",
+    "token_count": 145,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_unknown_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 440,
+     "stub_priority": 940,
+     "rendered": "full",
+     "bm25_rank": 6,
+     "chunk_kind": "method",
+     "engine_token_count": 145
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:67-74",
+    "content": "# tests/middleware/tests.py:67-74  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_unknown)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_unknown(self):\n        \"\"\"\n        APPEND_SLASH should not redirect to unknown resources.\n        \"\"\"\n        request = self.rf.get(\"/unknown\")\n        response = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(response.status_code, 404)",
+    "token_count": 110,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_unknown"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 430,
+     "stub_priority": 930,
+     "rendered": "full",
+     "bm25_rank": 7,
+     "chunk_kind": "method",
+     "engine_token_count": 110
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:376-384",
+    "content": "# tests/middleware/tests.py:376-384  (tests.middleware.tests.CommonMiddlewareTest.test_response_redirect_class_subclass)\nclass CommonMiddlewareTest(SimpleTestCase):\n    def test_response_redirect_class_subclass(self):\n        class MyCommonMiddleware(CommonMiddleware):\n            response_redirect_class = HttpResponseRedirect\n\n        request = self.rf.get(\"/slash\")\n        r = MyCommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 302)\n        self.assertEqual(r.url, \"/slash/\")\n        self.assertIsInstance(r, HttpResponseRedirect)",
+    "token_count": 114,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_response_redirect_class_subclass"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 420,
+     "stub_priority": 920,
+     "rendered": "full",
+     "bm25_rank": 8,
+     "chunk_kind": "method",
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:109-128",
+    "content": "# tests/middleware/tests.py:109-128  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_no_redirect_on_POST_in_DEBUG)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, DEBUG=True)\n    def test_append_slash_no_redirect_on_POST_in_DEBUG(self):\n        \"\"\"\n        While in debug mode, an exception is raised with a warning\n        when a failed attempt is made to POST, PUT, or PATCH to an URL which\n        would normally be redirected to a slashed version.\n        \"\"\"\n        msg = \"maintaining %s data. Change your form to point to testserver/slash/\"\n        request = self.rf.get(\"/slash\")\n        request.method = \"POST\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n        request = self.rf.get(\"/slash\")\n        request.method = \"PUT\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n        request = self.rf.get(\"/slash\")\n        request.method = \"PATCH\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)",
+    "token_count": 259,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_no_redirect_on_POST_in_DEBUG"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 410,
+     "stub_priority": 910,
+     "rendered": "full",
+     "bm25_rank": 9,
+     "chunk_kind": "method",
+     "engine_token_count": 259
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:369-374",
+    "content": "# tests/middleware/tests.py:369-374  (tests.middleware.tests.CommonMiddlewareTest.test_response_redirect_class)\nclass CommonMiddlewareTest(SimpleTestCase):\n    def test_response_redirect_class(self):\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/slash/\")\n        self.assertIsInstance(r, HttpResponsePermanentRedirect)",
+    "token_count": 96,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_response_redirect_class"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 400,
+     "stub_priority": 900,
+     "rendered": "full",
+     "bm25_rank": 10,
+     "chunk_kind": "method",
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:42-49",
+    "content": "# tests/middleware/tests.py:42-49  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_have_slash)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_have_slash(self):\n        \"\"\"\n        URLs with slashes should go unmolested.\n        \"\"\"\n        request = self.rf.get(\"/slash/\")\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)",
+    "token_count": 119,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_have_slash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 390,
+     "stub_priority": 890,
+     "rendered": "full",
+     "bm25_rank": 11,
+     "chunk_kind": "method",
+     "engine_token_count": 119
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:89-96",
+    "content": "# tests/middleware/tests.py:89-96  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_querystring)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_querystring(self):\n        \"\"\"\n        APPEND_SLASH should preserve querystrings when redirecting.\n        \"\"\"\n        request = self.rf.get(\"/slash?test=1\")\n        resp = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(resp.url, \"/slash/?test=1\")",
+    "token_count": 114,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_querystring"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 380,
+     "stub_priority": 880,
+     "rendered": "full",
+     "bm25_rank": 12,
+     "chunk_kind": "method",
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:204-212",
+    "content": "# tests/middleware/tests.py:204-212  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_have_slash_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_have_slash_custom_urlconf(self):\n        \"\"\"\n        URLs with slashes should go unmolested.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash/\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)",
+    "token_count": 141,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_have_slash_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 370,
+     "stub_priority": 870,
+     "rendered": "full",
+     "bm25_rank": 13,
+     "chunk_kind": "method",
+     "engine_token_count": 141
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:256-267",
+    "content": "# tests/middleware/tests.py:256-267  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_no_redirect_on_POST_in_DEBUG_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, DEBUG=True)\n    def test_append_slash_no_redirect_on_POST_in_DEBUG_custom_urlconf(self):\n        \"\"\"\n        While in debug mode, an exception is raised with a warning\n        when a failed attempt is made to POST to an URL which would normally be\n        redirected to a slashed version.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        request.method = \"POST\"\n        with self.assertRaisesMessage(RuntimeError, \"end in a slash\"):\n            CommonMiddleware(get_response_404)(request)",
+    "token_count": 172,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_no_redirect_on_POST_in_DEBUG_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 360,
+     "stub_priority": 860,
+     "rendered": "full",
+     "bm25_rank": 14,
+     "chunk_kind": "method",
+     "engine_token_count": 172
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:269-277",
+    "content": "# tests/middleware/tests.py:269-277  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_disabled_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=False)\n    def test_append_slash_disabled_custom_urlconf(self):\n        \"\"\"\n        Disabling append slash functionality should leave slashless URLs alone.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)",
+    "token_count": 140,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_disabled_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 350,
+     "stub_priority": 850,
+     "rendered": "full",
+     "bm25_rank": 15,
+     "chunk_kind": "method",
+     "engine_token_count": 140
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:279-293",
+    "content": "# tests/middleware/tests.py:279-293  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_quoted_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_quoted_custom_urlconf(self):\n        \"\"\"\n        URLs which require quoting should be redirected to their slash version.\n        \"\"\"\n        request = self.rf.get(quote(\"/customurlconf/needsquoting#\"))\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertIsNotNone(\n            r,\n            \"CommonMiddleware failed to return APPEND_SLASH redirect using \"\n            \"request.urlconf\",\n        )\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/customurlconf/needsquoting%23/\")",
+    "token_count": 182,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_quoted_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 340,
+     "stub_priority": 840,
+     "rendered": "full",
+     "bm25_rank": 16,
+     "chunk_kind": "method",
+     "engine_token_count": 182
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:51-65",
+    "content": "# tests/middleware/tests.py:51-65  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_resource)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_resource(self):\n        \"\"\"\n        Matches to explicit slashless URLs should go unmolested.\n        \"\"\"\n\n        def get_response(req):\n            return HttpResponse(\"Here's the text of the web page.\")\n\n        request = self.rf.get(\"/noslash\")\n        self.assertIsNone(CommonMiddleware(get_response).process_request(request))\n        self.assertEqual(\n            CommonMiddleware(get_response)(request).content,\n            b\"Here's the text of the web page.\",\n        )",
+    "token_count": 146,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_resource"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 330,
+     "stub_priority": 830,
+     "rendered": "full",
+     "bm25_rank": 17,
+     "chunk_kind": "method",
+     "engine_token_count": 146
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:138-147",
+    "content": "# tests/middleware/tests.py:138-147  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_opt_out)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_opt_out(self):\n        \"\"\"\n        Views marked with @no_append_slash should be left alone.\n        \"\"\"\n        request = self.rf.get(\"/sensitive_fbv\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n        request = self.rf.get(\"/sensitive_cbv\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)",
+    "token_count": 143,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_opt_out"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 320,
+     "stub_priority": 820,
+     "rendered": "full",
+     "bm25_rank": 18,
+     "chunk_kind": "method",
+     "engine_token_count": 143
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:130-136",
+    "content": "# tests/middleware/tests.py:130-136  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_disabled)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=False)\n    def test_append_slash_disabled(self):\n        \"\"\"\n        Disabling append slash functionality should leave slashless URLs alone.\n        \"\"\"\n        request = self.rf.get(\"/slash\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)",
+    "token_count": 103,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_disabled"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 310,
+     "stub_priority": 810,
+     "rendered": "full",
+     "bm25_rank": 19,
+     "chunk_kind": "method",
+     "engine_token_count": 103
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:214-228",
+    "content": "# tests/middleware/tests.py:214-228  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_resource_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_resource_custom_urlconf(self):\n        \"\"\"\n        Matches to explicit slashless URLs should go unmolested.\n        \"\"\"\n\n        def get_response(req):\n            return HttpResponse(\"web content\")\n\n        request = self.rf.get(\"/customurlconf/noslash\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response).process_request(request))\n        self.assertEqual(\n            CommonMiddleware(get_response)(request).content, b\"web content\"\n        )",
+    "token_count": 155,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_resource_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 300,
+     "stub_priority": 800,
+     "rendered": "full",
+     "bm25_rank": 20,
+     "chunk_kind": "method",
+     "engine_token_count": 155
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:359-367",
+    "content": "# tests/middleware/tests.py:359-367  (tests.middleware.tests.CommonMiddlewareTest.test_non_ascii_query_string_does_not_crash)\nclass CommonMiddlewareTest(SimpleTestCase):\n    def test_non_ascii_query_string_does_not_crash(self):\n        \"\"\"Regression test for #15152\"\"\"\n        request = self.rf.get(\"/slash\")\n        request.META[\"QUERY_STRING\"] = \"drink=caf\u00e9\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_empty).process_response(request, response)\n        self.assertEqual(r.status_code, 301)",
+    "token_count": 141,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_non_ascii_query_string_does_not_crash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 290,
+     "stub_priority": 790,
+     "rendered": "full",
+     "bm25_rank": 21,
+     "chunk_kind": "method",
+     "engine_token_count": 141
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:187-192",
+    "content": "# tests/middleware/tests.py:187-192  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_have_slash)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_have_slash(self):\n        request = self.rf.get(\"/slash/\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/slash/\")",
+    "token_count": 122,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_have_slash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 280,
+     "stub_priority": 780,
+     "rendered": "full",
+     "bm25_rank": 22,
+     "chunk_kind": "method",
+     "engine_token_count": 122
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:194-199",
+    "content": "# tests/middleware/tests.py:194-199  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_slashless)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_slashless(self):\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/slash/\")",
+    "token_count": 122,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_slashless"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 270,
+     "stub_priority": 770,
+     "rendered": "full",
+     "bm25_rank": 23,
+     "chunk_kind": "method",
+     "engine_token_count": 122
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:149-157",
+    "content": "# tests/middleware/tests.py:149-157  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_quoted)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_quoted(self):\n        \"\"\"\n        URLs which require quoting should be redirected to their slash version.\n        \"\"\"\n        request = self.rf.get(quote(\"/needsquoting#\"))\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/needsquoting%23/\")",
+    "token_count": 128,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_append_slash_quoted"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 260,
+     "stub_priority": 760,
+     "rendered": "full",
+     "bm25_rank": 24,
+     "chunk_kind": "method",
+     "engine_token_count": 128
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:303-309",
+    "content": "# tests/middleware/tests.py:303-309  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_have_slash_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_have_slash_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/slash/\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/slash/\")",
+    "token_count": 145,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_have_slash_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 250,
+     "stub_priority": 750,
+     "rendered": "full",
+     "bm25_rank": 25,
+     "chunk_kind": "method",
+     "engine_token_count": 145
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/redirects/middleware.py:23-50",
+    "content": "# django/contrib/redirects/middleware.py:23-50  (django.contrib.redirects.middleware.RedirectFallbackMiddleware.process_response)\nclass RedirectFallbackMiddleware(MiddlewareMixin):\n    # Defined as class-level attributes to be subclassing-friendly.\n    def process_response(self, request, response):\n        # No need to check for a redirect for non-404 responses.\n        if response.status_code != 404:\n            return response\n\n        full_path = request.get_full_path()\n        current_site = get_current_site(request)\n\n        r = None\n        try:\n            r = Redirect.objects.get(site=current_site, old_path=full_path)\n        except Redirect.DoesNotExist:\n            pass\n        if r is None and settings.APPEND_SLASH and not request.path.endswith(\"/\"):\n            try:\n                r = Redirect.objects.get(\n                    site=current_site,\n                    old_path=request.get_full_path(force_append_slash=True),\n                )\n            except Redirect.DoesNotExist:\n                pass\n        if r is not None:\n            if r.new_path == \"\":\n                return self.response_gone_class()\n            return self.response_redirect_class(r.new_path)\n\n        # No redirect was found. Return the response.\n        return response",
+    "token_count": 244,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.redirects.middleware.RedirectFallbackMiddleware.process_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 240,
+     "stub_priority": 740,
+     "rendered": "full",
+     "bm25_rank": 26,
+     "chunk_kind": "method",
+     "engine_token_count": 244
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_middleware.py:168-174",
+    "content": "# tests/flatpages_tests/test_middleware.py:168-174  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_non_existent_flatpage)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_non_existent_flatpage(self):\n        \"\"\"\n        A nonexistent flatpage raises a 404 when served by the fallback\n        middleware and should not add a slash.\n        \"\"\"\n        response = self.client.get(\"/no_such_flatpage\")\n        self.assertEqual(response.status_code, 404)",
+    "token_count": 124,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_non_existent_flatpage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 230,
+     "stub_priority": 730,
+     "rendered": "full",
+     "bm25_rank": 27,
+     "chunk_kind": "method",
+     "engine_token_count": 124
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/locale.py:38-80",
+    "content": "# django/middleware/locale.py:38-80  (django.middleware.locale.LocaleMiddleware.process_response)\nclass LocaleMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        language = translation.get_language()\n        language_from_path = translation.get_language_from_path(request.path_info)\n        urlconf = getattr(request, \"urlconf\", settings.ROOT_URLCONF)\n        (\n            i18n_patterns_used,\n            prefixed_default_language,\n        ) = is_language_prefix_patterns_used(urlconf)\n\n        if (\n            response.status_code == 404\n            and not language_from_path\n            and i18n_patterns_used\n            and prefixed_default_language\n        ):\n            # Maybe the language code is missing in the URL? Try adding the\n            # language prefix and redirecting to that URL.\n            language_path = \"/%s%s\" % (language, request.path_info)\n            path_valid = is_valid_path(language_path, urlconf)\n            path_needs_slash = not path_valid and (\n                settings.APPEND_SLASH\n                and not language_path.endswith(\"/\")\n                and is_valid_path(\"%s/\" % language_path, urlconf)\n            )\n\n            if path_valid or path_needs_slash:\n                script_prefix = get_script_prefix()\n                # Insert language after the script prefix and before the\n                # rest of the URL\n                language_url = request.get_full_path(\n                    force_append_slash=path_needs_slash\n                ).replace(script_prefix, \"%s%s/\" % (script_prefix, language), 1)\n                # Redirect to the language-specific URL as detected by\n                # get_language_from_request(). HTTP caches may cache this\n                # redirect, so add the Vary header.\n                redirect = self.response_redirect_class(language_url)\n                patch_vary_headers(redirect, (\"Accept-Language\", \"Cookie\"))\n                return redirect\n\n        if not (i18n_patterns_used and language_from_path):\n            patch_vary_headers(response, (\"Accept-Language\",))\n        response.headers.setdefault(\"Content-Language\", language)\n        return response",
+    "token_count": 423,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.locale.LocaleMiddleware.process_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 220,
+     "stub_priority": 720,
+     "rendered": "full",
+     "bm25_rank": 28,
+     "chunk_kind": "method",
+     "engine_token_count": 423
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:311-317",
+    "content": "# tests/middleware/tests.py:311-317  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_slashless_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_slashless_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/slash/\")",
+    "token_count": 145,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_slashless_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 210,
+     "stub_priority": 710,
+     "rendered": "full",
+     "bm25_rank": 29,
+     "chunk_kind": "method",
+     "engine_token_count": 145
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_middleware.py:163-166",
+    "content": "# tests/flatpages_tests/test_middleware.py:163-166  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_flatpage(self):\n        \"A flatpage can be served by the fallback middleware and should add a slash\"\n        response = self.client.get(\"/flatpage\")\n        self.assertRedirects(response, \"/flatpage/\", status_code=301)",
+    "token_count": 109,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 200,
+     "stub_priority": 700,
+     "rendered": "full",
+     "bm25_rank": 30,
+     "chunk_kind": "method",
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/flatpages/forms.py:37-41",
+    "content": "# django/contrib/flatpages/forms.py:37-41  (django.contrib.flatpages.forms.FlatpageForm._trailing_slash_required)\nclass FlatpageForm(forms.ModelForm):\n    def _trailing_slash_required(self):\n        return (\n            settings.APPEND_SLASH\n            and \"django.middleware.common.CommonMiddleware\" in settings.MIDDLEWARE\n        )",
+    "token_count": 76,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.flatpages.forms.FlatpageForm._trailing_slash_required"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 190,
+     "stub_priority": 690,
+     "rendered": "full",
+     "bm25_rank": 31,
+     "chunk_kind": "method",
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/redirects_tests/tests.py:56-63",
+    "content": "# tests/redirects_tests/tests.py:56-63  (tests.redirects_tests.tests.RedirectTests.test_redirect_not_found_with_append_slash)\nclass RedirectTests(TestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_redirect_not_found_with_append_slash(self):\n        \"\"\"\n        Exercise the second Redirect.DoesNotExist branch in\n        RedirectFallbackMiddleware.\n        \"\"\"\n        response = self.client.get(\"/test\")\n        self.assertEqual(response.status_code, 404)",
+    "token_count": 98,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.redirects_tests.tests.RedirectTests.test_redirect_not_found_with_append_slash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 180,
+     "stub_priority": 680,
+     "rendered": "full",
+     "bm25_rank": 32,
+     "chunk_kind": "method",
+     "engine_token_count": 98
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_middleware.py:155-161",
+    "content": "# tests/flatpages_tests/test_middleware.py:155-161  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_view_non_existent_flatpage)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_view_non_existent_flatpage(self):\n        \"\"\"\n        A nonexistent flatpage raises 404 when served through a view and\n        should not add a slash.\n        \"\"\"\n        response = self.client.get(\"/flatpage_root/no_such_flatpage\")\n        self.assertEqual(response.status_code, 404)",
+    "token_count": 123,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_view_non_existent_flatpage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 170,
+     "stub_priority": 670,
+     "rendered": "full",
+     "bm25_rank": 33,
+     "chunk_kind": "method",
+     "engine_token_count": 123
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_views.py:148-154",
+    "content": "# tests/flatpages_tests/test_views.py:148-154  (tests.flatpages_tests.test_views.FlatpageViewAppendSlashTests.test_redirect_fallback_flatpage)\nclass FlatpageViewAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_flatpage(self):\n        \"\"\"\n        A fallback flatpage won't be served if the middleware is disabled and\n        should not add a slash.\n        \"\"\"\n        response = self.client.get(\"/flatpage\")\n        self.assertEqual(response.status_code, 404)",
+    "token_count": 110,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_views.FlatpageViewAppendSlashTests.test_redirect_fallback_flatpage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 160,
+     "stub_priority": 660,
+     "rendered": "full",
+     "bm25_rank": 34,
+     "chunk_kind": "method",
+     "engine_token_count": 110
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_middleware.py:150-153",
+    "content": "# tests/flatpages_tests/test_middleware.py:150-153  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_view_flatpage)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_view_flatpage(self):\n        \"A flatpage can be served through a view and should add a slash\"\n        response = self.client.get(\"/flatpage_root/flatpage\")\n        self.assertRedirects(response, \"/flatpage_root/flatpage/\", status_code=301)",
+    "token_count": 114,
+    "rank": 44,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_view_flatpage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 150,
+     "stub_priority": 650,
+     "rendered": "full",
+     "bm25_rank": 35,
+     "chunk_kind": "method",
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/i18n/patterns/tests.py:352-363",
+    "content": "# tests/i18n/patterns/tests.py:352-363  (tests.i18n.patterns.tests.URLRedirectWithoutTrailingSlashTests.test_en_redirect)\nclass URLRedirectWithoutTrailingSlashTests(URLTestCaseBase):\n    def test_en_redirect(self):\n        response = self.client.get(\n            \"/account/register\", headers={\"accept-language\": \"en\"}, follow=True\n        )\n        # We only want one redirect, bypassing CommonMiddleware\n        self.assertEqual(response.redirect_chain, [(\"/en/account/register/\", 302)])\n        self.assertRedirects(response, \"/en/account/register/\", 302)\n\n        response = self.client.get(\n            \"/prefixed.xml\", headers={\"accept-language\": \"en\"}, follow=True\n        )\n        self.assertRedirects(response, \"/en/prefixed.xml\", 302)",
+    "token_count": 177,
+    "rank": 45,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.i18n.patterns.tests.URLRedirectWithoutTrailingSlashTests.test_en_redirect"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 140,
+     "stub_priority": 640,
+     "rendered": "full",
+     "bm25_rank": 36,
+     "chunk_kind": "method",
+     "engine_token_count": 177
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:180-185",
+    "content": "# tests/middleware/tests.py:180-185  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=False, PREPEND_WWW=True)\n    def test_prepend_www(self):\n        request = self.rf.get(\"/path/\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/path/\")",
+    "token_count": 109,
+    "rank": 46,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_prepend_www"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 130,
+     "stub_priority": 630,
+     "rendered": "full",
+     "bm25_rank": 37,
+     "chunk_kind": "method",
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_views.py:156-162",
+    "content": "# tests/flatpages_tests/test_views.py:156-162  (tests.flatpages_tests.test_views.FlatpageViewAppendSlashTests.test_redirect_fallback_non_existent_flatpage)\nclass FlatpageViewAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_non_existent_flatpage(self):\n        \"\"\"\n        A nonexistent flatpage won't be served if the fallback middleware is\n        disabled and should not add a slash.\n        \"\"\"\n        response = self.client.get(\"/no_such_flatpage\")\n        self.assertEqual(response.status_code, 404)",
+    "token_count": 120,
+    "rank": 47,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_views.FlatpageViewAppendSlashTests.test_redirect_fallback_non_existent_flatpage"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 120,
+     "stub_priority": 620,
+     "rendered": "full",
+     "bm25_rank": 38,
+     "chunk_kind": "method",
+     "engine_token_count": 120
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:295-301",
+    "content": "# tests/middleware/tests.py:295-301  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=False, PREPEND_WWW=True)\n    def test_prepend_www_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/path/\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/path/\")",
+    "token_count": 131,
+    "rank": 48,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_custom_urlconf"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 110,
+     "stub_priority": 610,
+     "rendered": "full",
+     "bm25_rank": 39,
+     "chunk_kind": "method",
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_middleware.py:176-193",
+    "content": "# tests/flatpages_tests/test_middleware.py:176-193  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage_special_chars)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_flatpage_special_chars(self):\n        \"\"\"\n        A flatpage with special chars in the URL can be served by the fallback\n        middleware and should add a slash.\n        \"\"\"\n        fp = FlatPage.objects.create(\n            url=\"/some.very_special~chars-here/\",\n            title=\"A very special page\",\n            content=\"Isn't it special!\",\n            enable_comments=False,\n            registration_required=False,\n        )\n        fp.sites.add(settings.SITE_ID)\n\n        response = self.client.get(\"/some.very_special~chars-here\")\n        self.assertRedirects(\n            response, \"/some.very_special~chars-here/\", status_code=301\n        )",
+    "token_count": 198,
+    "rank": 49,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage_special_chars"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 100,
+     "stub_priority": 600,
+     "rendered": "full",
+     "bm25_rank": 40,
+     "chunk_kind": "method",
+     "engine_token_count": 198
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/i18n/patterns/tests.py:303-313",
+    "content": "# tests/i18n/patterns/tests.py:303-313  (tests.i18n.patterns.tests.URLRedirectTests.test_custom_redirect_class)\nclass URLRedirectTests(URLTestCaseBase):\n    @override_settings(\n        MIDDLEWARE=[\n            \"i18n.patterns.tests.PermanentRedirectLocaleMiddleWare\",\n            \"django.middleware.common.CommonMiddleware\",\n        ],\n    )\n    def test_custom_redirect_class(self):\n        response = self.client.get(\n            \"/account/register/\", headers={\"accept-language\": \"en\"}\n        )\n        self.assertRedirects(response, \"/en/account/register/\", 301)",
+    "token_count": 131,
+    "rank": 50,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.i18n.patterns.tests.URLRedirectTests.test_custom_redirect_class"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 90,
+     "stub_priority": 590,
+     "rendered": "full",
+     "bm25_rank": 41,
+     "chunk_kind": "method",
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:352-357",
+    "content": "# tests/middleware/tests.py:352-357  (tests.middleware.tests.CommonMiddlewareTest.test_disallowed_user_agents)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(DISALLOWED_USER_AGENTS=[re.compile(r\"foo\")])\n    def test_disallowed_user_agents(self):\n        request = self.rf.get(\"/slash\")\n        request.META[\"HTTP_USER_AGENT\"] = \"foo\"\n        with self.assertRaisesMessage(PermissionDenied, \"Forbidden user agent\"):\n            CommonMiddleware(get_response_empty).process_request(request)",
+    "token_count": 110,
+    "rank": 51,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.middleware.tests.CommonMiddlewareTest.test_disallowed_user_agents"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 80,
+     "stub_priority": 580,
+     "rendered": "full",
+     "bm25_rank": 42,
+     "chunk_kind": "method",
+     "engine_token_count": 110
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/decorators/common.py:4-17",
+    "content": "# django/views/decorators/common.py:4-17  (django.views.decorators.common.no_append_slash)\ndef no_append_slash(view_func):\n    \"\"\"\n    Mark a view function as excluded from CommonMiddleware's APPEND_SLASH\n    redirection.\n    \"\"\"\n\n    # view_func.should_append_slash = False would also work, but decorators are\n    # nicer if they don't have side effects, so return a new function.\n    @wraps(view_func)\n    def wrapper_view(*args, **kwargs):\n        return view_func(*args, **kwargs)\n\n    wrapper_view.should_append_slash = False\n    return wrapper_view",
+    "token_count": 131,
+    "rank": 52,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.decorators.common.no_append_slash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 70,
+     "stub_priority": 570,
+     "rendered": "full",
+     "bm25_rank": 43,
+     "chunk_kind": "function",
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_forms.py:67-79",
+    "content": "# tests/flatpages_tests/test_forms.py:67-79  (tests.flatpages_tests.test_forms.FlatpageAdminFormTests.test_flatpage_requires_trailing_slash_with_append_slash)\nclass FlatpageAdminFormTests(TestCase):\n    @override_settings(\n        APPEND_SLASH=True, MIDDLEWARE=[\"django.middleware.common.CommonMiddleware\"]\n    )\n    def test_flatpage_requires_trailing_slash_with_append_slash(self):\n        form = FlatpageForm(data=dict(url=\"/no_trailing_slash\", **self.form_data))\n        with translation.override(\"en\"):\n            self.assertEqual(\n                form.fields[\"url\"].help_text,\n                \"Example: \u201c/about/contact/\u201d. Make sure to have leading and \"\n                \"trailing slashes.\",\n            )\n            self.assertFalse(form.is_valid())\n            self.assertEqual(form.errors[\"url\"], [\"URL is missing a trailing slash.\"])",
+    "token_count": 179,
+    "rank": 53,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_forms.FlatpageAdminFormTests.test_flatpage_requires_trailing_slash_with_append_slash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 60,
+     "stub_priority": 560,
+     "rendered": "full",
+     "bm25_rank": 44,
+     "chunk_kind": "method",
+     "engine_token_count": 179
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_middleware.py:195-207",
+    "content": "# tests/flatpages_tests/test_middleware.py:195-207  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage_root)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_flatpage_root(self):\n        \"A flatpage at / should not cause a redirect loop when APPEND_SLASH is set\"\n        fp = FlatPage.objects.create(\n            url=\"/\",\n            title=\"Root\",\n            content=\"Root\",\n            enable_comments=False,\n            registration_required=False,\n        )\n        fp.sites.add(settings.SITE_ID)\n\n        response = self.client.get(\"/\")\n        self.assertContains(response, \"<p>Root</p>\")",
+    "token_count": 150,
+    "rank": 54,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage_root"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 50,
+     "stub_priority": 550,
+     "rendered": "full",
+     "bm25_rank": 45,
+     "chunk_kind": "method",
+     "engine_token_count": 150
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/flatpages_tests/test_forms.py:81-91",
+    "content": "# tests/flatpages_tests/test_forms.py:81-91  (tests.flatpages_tests.test_forms.FlatpageAdminFormTests.test_flatpage_doesnt_requires_trailing_slash_without_append_slash)\nclass FlatpageAdminFormTests(TestCase):\n    @override_settings(\n        APPEND_SLASH=False, MIDDLEWARE=[\"django.middleware.common.CommonMiddleware\"]\n    )\n    def test_flatpage_doesnt_requires_trailing_slash_without_append_slash(self):\n        form = FlatpageForm(data=dict(url=\"/no_trailing_slash\", **self.form_data))\n        self.assertTrue(form.is_valid())\n        with translation.override(\"en\"):\n            self.assertEqual(\n                form.fields[\"url\"].help_text,\n                \"Example: \u201c/about/contact\u201d. Make sure to have a leading slash.\",\n            )",
+    "token_count": 160,
+    "rank": 55,
+    "kind": "code_chunk",
+    "symbols": [
+     "tests.flatpages_tests.test_forms.FlatpageAdminFormTests.test_flatpage_doesnt_requires_trailing_slash_without_append_slash"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 40,
+     "stub_priority": 540,
+     "rendered": "full",
+     "bm25_rank": 46,
+     "chunk_kind": "method",
+     "engine_token_count": 160
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/middleware/tests.py:1-27",
+    "content": "# tests/middleware/tests.py:1-27  (tests.middleware.tests)\nimport gzip\nimport random\nimport re\nimport struct\nfrom io import BytesIO\nfrom unittest import mock\nfrom urllib.parse import quote\n\nfrom django.conf import settings\nfrom django.core import mail\nfrom django.core.exceptions import PermissionDenied\nfrom django.http import (\n    FileResponse,\n    HttpRequest,\n    HttpResponse,\n    HttpResponseNotFound,\n    HttpResponsePermanentRedirect,\n    HttpResponseRedirect,\n    StreamingHttpResponse,\n)\nfrom django.middleware.clickjacking import XFrameOptionsMiddleware\nfrom django.middleware.common import BrokenLinkEmailsMiddleware, CommonMiddleware\nfrom django.middleware.gzip import GZipMiddleware\nfrom django.middleware.http import ConditionalGetMiddleware\nfrom django.test import RequestFactory, SimpleTestCase, override_settings\n\nint2byte = struct.Struct(\">B\").pack",
+    "token_count": 166,
+    "rank": 56,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 30,
+     "stub_priority": 530,
+     "rendered": "full",
+     "bm25_rank": 47,
+     "chunk_kind": "module_block",
+     "engine_token_count": 166
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/handlers/base.py:174-226",
+    "content": "# django/core/handlers/base.py:174-226  (django.core.handlers.base.BaseHandler._get_response)\nclass BaseHandler:\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response",
+    "token_count": 412,
+    "rank": 57,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.handlers.base.BaseHandler._get_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 20,
+     "stub_priority": 520,
+     "rendered": "full",
+     "bm25_rank": 48,
+     "chunk_kind": "method",
+     "engine_token_count": 412
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/csrf.py:476-488",
+    "content": "# django/middleware/csrf.py:476-488  (django.middleware.csrf.CsrfViewMiddleware.process_response)\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        if request.META.get(\"CSRF_COOKIE_NEEDS_UPDATE\"):\n            self._set_csrf_cookie(request, response)\n            # Unset the flag to prevent _set_csrf_cookie() from being\n            # unnecessarily called again in process_response() by other\n            # instances of CsrfViewMiddleware. This can happen e.g. when both a\n            # decorator and middleware are used. However,\n            # CSRF_COOKIE_NEEDS_UPDATE is still respected in subsequent calls\n            # e.g. in case rotate_token() is called in process_response() later\n            # by custom middleware but before those subsequent calls.\n            request.META[\"CSRF_COOKIE_NEEDS_UPDATE\"] = False\n\n        return response",
+    "token_count": 191,
+    "rank": 58,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.csrf.CsrfViewMiddleware.process_response"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 10,
+     "stub_priority": 510,
+     "rendered": "full",
+     "bm25_rank": 49,
+     "chunk_kind": "method",
+     "engine_token_count": 191
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/middleware/locale.py:11-17",
+    "content": "# django/middleware/locale.py:11-17  (django.middleware.locale.LocaleMiddleware)\nclass LocaleMiddleware(MiddlewareMixin):\n    \"\"\"\n    Parse a request and decide what translation object to install in the\n    current thread context. This allows pages to be dynamically translated to\n    the language the user desires (if the language is available).\n    \"\"\"\n\n    response_redirect_class = HttpResponseRedirect",
+    "token_count": 78,
+    "rank": 59,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.middleware.locale.LocaleMiddleware"
+    ],
+    "provenance": {
+     "origin": "bm25",
+     "priority": 0,
+     "stub_priority": 500,
+     "rendered": "full",
+     "bm25_rank": 50,
+     "chunk_kind": "class_preamble",
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12268,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Cursor-style Priompt packing",
+   "fidelity": "MEDIUM",
+   "simplifications": [
+    "retrieval is BM25 over the AST chunks (a declared stand-in: Cursor's codebase retrieval is not public)",
+    "stub priority = body priority + 500 (inferred; the spec fixes only the body priorities 1000 and 500-10*rank)",
+    "seed-file priority 1000 minus chunk distance from the seed symbol, floor 501 (inferred; a flat 1000 is all-or-nothing)",
+    "indexes the corpus's own language only (as Arm 1); TypeScript stubs keep the header through the body's `{`, then `// ...` and the closing rows"
+   ],
+   "query": "You are debugging Django's automatic append-slash redirect in\ndjango/middleware/common.py. Starting from\n`CommonMiddleware.process_response`, trace the real causal pipeline\nthat produces a slash-appended redirect response, in the order each\nstage is actually reached, up to and including the call that\nconstructs the actual redirect response. Assume the response being\nprocessed has a 404 status code, and that `should_redirect_with_slash`\ndetermines a slash-appended redirect is warranted.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.middleware.common.CommonMiddleware.process_response\", \"django.middleware.common.CommonMiddleware.should_redirect_with_slash\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "priompt_priority",
+   "seed_file": "django/middleware/common.py",
+   "cutoff": 0,
+   "n_components": 59,
+   "n_full": 59,
+   "n_stub": 0,
+   "n_dropped": 0,
+   "packed_tokens": 12268,
+   "latency_ms": {
+    "L_priority_sort": [
+     1284.263146
+    ],
+    "L_binary_search_tokenize": [
+     0.248596
+    ],
+    "L_retrieve": [
+     1284.885245
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12268,
+   "prompt_tokens": 12620,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 12633,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/middleware/common.py:100-115  (django.middleware.common.CommonMiddleware.process_response)\nclass CommonMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        \"\"\"\n        When the status code of the response is 404, it may redirect to a path\n        with an appended slash if should_redirect_with_slash() returns True.\n        \"\"\"\n        # If the given URL is \"Not Found\", then check if we should redirect to\n        # a path with a slash appended.\n        if response.status_code == 404 and self.should_redirect_with_slash(request):\n            return self.response_redirect_class(self.get_full_path_with_slash(request))\n\n        # Add the Content-Length header to non-streaming responses if not\n        # already set.\n        if not response.streaming and not response.has_header(\"Content-Length\"):\n            response.headers[\"Content-Length\"] = str(len(response.content))\n\n        return response\n\n# django/middleware/common.py:76-98  (django.middleware.common.CommonMiddleware.get_full_path_with_slash)\nclass CommonMiddleware(MiddlewareMixin):\n    def get_full_path_with_slash(self, request):\n        \"\"\"\n        Return the full path of the request with a trailing slash appended.\n\n        Raise a RuntimeError if settings.DEBUG is True and request.method is\n        POST, PUT, or PATCH.\n        \"\"\"\n        new_path = request.get_full_path(force_append_slash=True)\n        # Prevent construction of scheme relative urls.\n        new_path = escape_leading_slashes(new_path)\n        if settings.DEBUG and request.method in (\"POST\", \"PUT\", \"PATCH\"):\n            raise RuntimeError(\n                \"You called this URL via %(method)s, but the URL doesn't end \"\n                \"in a slash and you have APPEND_SLASH set. Django can't \"\n                \"redirect to the slash URL while maintaining %(method)s data. \"\n                \"Change your form to point to %(url)s (note the trailing \"\n                \"slash), or set APPEND_SLASH=False in your Django settings.\"\n                % {\n                    \"method\": request.method,\n                    \"url\": request.get_host() + new_path,\n                }\n            )\n        return new_path\n\n# django/middleware/common.py:119-143  (django.middleware.common.BrokenLinkEmailsMiddleware.process_response)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        \"\"\"Send broken link emails for relevant 404 NOT FOUND responses.\"\"\"\n        if response.status_code == 404 and not settings.DEBUG:\n            domain = request.get_host()\n            path = request.get_full_path()\n            referer = request.META.get(\"HTTP_REFERER\", \"\")\n\n            if not self.is_ignorable_request(request, path, domain, referer):\n                ua = request.META.get(\"HTTP_USER_AGENT\", \"<none>\")\n                ip = request.META.get(\"REMOTE_ADDR\", \"<none>\")\n                mail_managers(\n                    \"Broken %slink on %s\"\n                    % (\n                        (\n                            \"INTERNAL \"\n                            if self.is_internal_request(domain, referer)\n                            else \"\"\n                        ),\n                        domain,\n                    ),\n                    \"Referrer: %s\\nRequested URL: %s\\nUser agent: %s\\n\"\n                    \"IP address: %s\\n\" % (referer, path, ua, ip),\n                    fail_silently=True,\n                )\n        return response\n\n# django/middleware/common.py:62-74  (django.middleware.common.CommonMiddleware.should_redirect_with_slash)\nclass CommonMiddleware(MiddlewareMixin):\n    def should_redirect_with_slash(self, request):\n        \"\"\"\n        Return True if settings.APPEND_SLASH is True and appending a slash to\n        the request path turns an invalid path into a valid one.\n        \"\"\"\n        if settings.APPEND_SLASH and not request.path_info.endswith(\"/\"):\n            urlconf = getattr(request, \"urlconf\", None)\n            if not is_valid_path(request.path_info, urlconf):\n                match = is_valid_path(\"%s/\" % request.path_info, urlconf)\n                if match:\n                    view = match.func\n                    return getattr(view, \"should_append_slash\", True)\n        return False\n\n# django/middleware/common.py:145-151  (django.middleware.common.BrokenLinkEmailsMiddleware.is_internal_request)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def is_internal_request(self, domain, referer):\n        \"\"\"\n        Return True if the referring URL is the same domain as the current\n        request.\n        \"\"\"\n        # Different subdomains are treated as different domains.\n        return bool(re.match(\"^https?://%s/\" % re.escape(domain), referer))\n\n# django/middleware/common.py:34-60  (django.middleware.common.CommonMiddleware.process_request)\nclass CommonMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        \"\"\"\n        Check for denied User-Agents and rewrite the URL based on\n        settings.APPEND_SLASH and settings.PREPEND_WWW\n        \"\"\"\n\n        # Check for denied User-Agents\n        user_agent = request.META.get(\"HTTP_USER_AGENT\")\n        if user_agent is not None:\n            for user_agent_regex in settings.DISALLOWED_USER_AGENTS:\n                if user_agent_regex.search(user_agent):\n                    raise PermissionDenied(\"Forbidden user agent\")\n\n        # Check for a redirect based on settings.PREPEND_WWW\n        host = request.get_host()\n\n        if settings.PREPEND_WWW and host and not host.startswith(\"www.\"):\n            # Check if we also need to append a slash so we can do it all\n            # with a single redirect. (This check may be somewhat expensive,\n            # so we only do it if we already know we're sending a redirect,\n            # or in process_response if we get a 404.)\n            if self.should_redirect_with_slash(request):\n                path = self.get_full_path_with_slash(request)\n            else:\n                path = request.get_full_path()\n\n            return self.response_redirect_class(f\"{request.scheme}://www.{host}{path}\")\n\n# django/middleware/common.py:153-178  (django.middleware.common.BrokenLinkEmailsMiddleware.is_ignorable_request)\nclass BrokenLinkEmailsMiddleware(MiddlewareMixin):\n    def is_ignorable_request(self, request, uri, domain, referer):\n        \"\"\"\n        Return True if the given request *shouldn't* notify the site managers\n        according to project settings or in situations outlined by the inline\n        comments.\n        \"\"\"\n        # The referer is empty.\n        if not referer:\n            return True\n\n        # APPEND_SLASH is enabled and the referer is equal to the current URL\n        # without a trailing slash indicating an internal redirect.\n        if settings.APPEND_SLASH and uri.endswith(\"/\") and referer == uri[:-1]:\n            return True\n\n        # A '?' in referer is identified as a search engine source.\n        if not self.is_internal_request(domain, referer) and \"?\" in referer:\n            return True\n\n        # The referer is equal to the current URL, ignoring the scheme (assumed\n        # to be a poorly implemented bot).\n        parsed_referer = urlparse(referer)\n        if parsed_referer.netloc in [\"\", domain] and parsed_referer.path == uri:\n            return True\n\n        return any(pattern.search(uri) for pattern in settings.IGNORABLE_404_URLS)\n\n# django/middleware/common.py:14-32  (django.middleware.common.CommonMiddleware)\nclass CommonMiddleware(MiddlewareMixin):\n    \"\"\"\n    \"Common\" middleware for taking care of some basic operations:\n\n        - Forbid access to User-Agents in settings.DISALLOWED_USER_AGENTS\n\n        - URL rewriting: Based on the APPEND_SLASH and PREPEND_WWW settings,\n          append missing slashes and/or prepends missing \"www.\"s.\n\n            - If APPEND_SLASH is set and the initial URL doesn't end with a\n              slash, and it is not found in urlpatterns, form a new URL by\n              appending a slash at the end. If this new URL is found in\n              urlpatterns, return an HTTP redirect to this new URL; otherwise\n              process the initial URL as usual.\n\n          This behavior can be customized by subclassing CommonMiddleware and\n          overriding the response_redirect_class attribute.\n    \"\"\"\n\n    response_redirect_class = HttpResponsePermanentRedirect\n\n# django/middleware/common.py:1-10  (django.middleware.common)\nimport re\nfrom urllib.parse import urlparse\n\nfrom django.conf import settings\nfrom django.core.exceptions import PermissionDenied\nfrom django.core.mail import mail_managers\nfrom django.http import HttpResponsePermanentRedirect\nfrom django.urls import is_valid_path\nfrom django.utils.deprecation import MiddlewareMixin\nfrom django.utils.http import escape_leading_slashes\n\n# tests/middleware/tests.py:76-87  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect(self):\n        \"\"\"\n        APPEND_SLASH should redirect slashless URLs to a valid pattern.\n        \"\"\"\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_empty).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/slash/\")\n\n# tests/middleware/tests.py:159-178  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_leading_slashes)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_leading_slashes(self):\n        \"\"\"\n        Paths starting with two slashes are escaped to prevent open redirects.\n        If there's a URL pattern that allows paths to start with two slashes, a\n        request with path //evil.com must not redirect to //evil.com/ (appended\n        slash) which is a schemaless absolute URL. The browser would navigate\n        to evil.com/.\n        \"\"\"\n        # Use 4 slashes because of RequestFactory behavior.\n        request = self.rf.get(\"////evil.com/security\")\n        r = CommonMiddleware(get_response_404).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_404).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/%2Fevil.com/security/\")\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/%2Fevil.com/security/\")\n\n# tests/middleware/tests.py:40-350  (tests.middleware.tests.CommonMiddlewareTest)\n@override_settings(ROOT_URLCONF=\"middleware.urls\")\nclass CommonMiddlewareTest(SimpleTestCase):\n    rf = RequestFactory()\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_have_slash(self):\n        \"\"\"\n        URLs with slashes should go unmolested.\n        \"\"\"\n        request = self.rf.get(\"/slash/\")\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_resource(self):\n        \"\"\"\n        Matches to explicit slashless URLs should go unmolested.\n        \"\"\"\n\n        def get_response(req):\n            return HttpResponse(\"Here's the text of the web page.\")\n\n        request = self.rf.get(\"/noslash\")\n        self.assertIsNone(CommonMiddleware(get_response).process_request(request))\n        self.assertEqual(\n            CommonMiddleware(get_response)(request).content,\n            b\"Here's the text of the web page.\",\n        )\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_unknown(self):\n        \"\"\"\n        APPEND_SLASH should not redirect to unknown resources.\n        \"\"\"\n        request = self.rf.get(\"/unknown\")\n        response = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(response.status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect(self):\n        \"\"\"\n        APPEND_SLASH should redirect slashless URLs to a valid pattern.\n        \"\"\"\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_empty).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/slash/\")\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_querystring(self):\n        \"\"\"\n        APPEND_SLASH should preserve querystrings when redirecting.\n        \"\"\"\n        request = self.rf.get(\"/slash?test=1\")\n        resp = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(resp.url, \"/slash/?test=1\")\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_querystring_have_slash(self):\n        \"\"\"\n        APPEND_SLASH should append slash to path when redirecting a request\n        with a querystring ending with slash.\n        \"\"\"\n        request = self.rf.get(\"/slash?test=slash/\")\n        resp = CommonMiddleware(get_response_404)(request)\n        self.assertIsInstance(resp, HttpResponsePermanentRedirect)\n        self.assertEqual(resp.url, \"/slash/?test=slash/\")\n\n    @override_settings(APPEND_SLASH=True, DEBUG=True)\n    def test_append_slash_no_redirect_on_POST_in_DEBUG(self):\n        \"\"\"\n        While in debug mode, an exception is raised with a warning\n        when a failed attempt is made to POST, PUT, or PATCH to an URL which\n        would normally be redirected to a slashed version.\n        \"\"\"\n        msg = \"maintaining %s data. Change your form to point to testserver/slash/\"\n        request = self.rf.get(\"/slash\")\n        request.method = \"POST\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n        request = self.rf.get(\"/slash\")\n        request.method = \"PUT\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n        request = self.rf.get(\"/slash\")\n        request.method = \"PATCH\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n\n    @override_settings(APPEND_SLASH=False)\n    def test_append_slash_disabled(self):\n        \"\"\"\n        Disabling append slash functionality should leave slashless URLs alone.\n        \"\"\"\n        request = self.rf.get(\"/slash\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_opt_out(self):\n        \"\"\"\n        Views marked with @no_append_slash should be left alone.\n        \"\"\"\n        request = self.rf.get(\"/sensitive_fbv\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n        request = self.rf.get(\"/sensitive_cbv\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_quoted(self):\n        \"\"\"\n        URLs which require quoting should be redirected to their slash version.\n        \"\"\"\n        request = self.rf.get(quote(\"/needsquoting#\"))\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/needsquoting%23/\")\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_leading_slashes(self):\n        \"\"\"\n        Paths starting with two slashes are escaped to prevent open redirects.\n        If there's a URL pattern that allows paths to start with two slashes, a\n        request with path //evil.com must not redirect to //evil.com/ (appended\n        slash) which is a schemaless absolute URL. The browser would navigate\n        to evil.com/.\n        \"\"\"\n        # Use 4 slashes because of RequestFactory behavior.\n        request = self.rf.get(\"////evil.com/security\")\n        r = CommonMiddleware(get_response_404).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_404).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/%2Fevil.com/security/\")\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/%2Fevil.com/security/\")\n\n    @override_settings(APPEND_SLASH=False, PREPEND_WWW=True)\n    def test_prepend_www(self):\n        request = self.rf.get(\"/path/\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/path/\")\n\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_have_slash(self):\n        request = self.rf.get(\"/slash/\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/slash/\")\n\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_slashless(self):\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/slash/\")\n\n    # The following tests examine expected behavior given a custom URLconf that\n    # overrides the default one through the request object.\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_have_slash_custom_urlconf(self):\n        \"\"\"\n        URLs with slashes should go unmolested.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash/\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_resource_custom_urlconf(self):\n        \"\"\"\n        Matches to explicit slashless URLs should go unmolested.\n        \"\"\"\n\n        def get_response(req):\n            return HttpResponse(\"web content\")\n\n        request = self.rf.get(\"/customurlconf/noslash\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response).process_request(request))\n        self.assertEqual(\n            CommonMiddleware(get_response)(request).content, b\"web content\"\n        )\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_unknown_custom_urlconf(self):\n        \"\"\"\n        APPEND_SLASH should not redirect to unknown resources.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/unknown\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_custom_urlconf(self):\n        \"\"\"\n        APPEND_SLASH should redirect slashless URLs to a valid pattern.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertIsNotNone(\n            r,\n            \"CommonMiddleware failed to return APPEND_SLASH redirect using \"\n            \"request.urlconf\",\n        )\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/customurlconf/slash/\")\n\n    @override_settings(APPEND_SLASH=True, DEBUG=True)\n    def test_append_slash_no_redirect_on_POST_in_DEBUG_custom_urlconf(self):\n        \"\"\"\n        While in debug mode, an exception is raised with a warning\n        when a failed attempt is made to POST to an URL which would normally be\n        redirected to a slashed version.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        request.method = \"POST\"\n        with self.assertRaisesMessage(RuntimeError, \"end in a slash\"):\n            CommonMiddleware(get_response_404)(request)\n\n    @override_settings(APPEND_SLASH=False)\n    def test_append_slash_disabled_custom_urlconf(self):\n        \"\"\"\n        Disabling append slash functionality should leave slashless URLs alone.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_quoted_custom_urlconf(self):\n        \"\"\"\n        URLs which require quoting should be redirected to their slash version.\n        \"\"\"\n        request = self.rf.get(quote(\"/customurlconf/needsquoting#\"))\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertIsNotNone(\n            r,\n            \"CommonMiddleware failed to return APPEND_SLASH redirect using \"\n            \"request.urlconf\",\n        )\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/customurlconf/needsquoting%23/\")\n\n    @override_settings(APPEND_SLASH=False, PREPEND_WWW=True)\n    def test_prepend_www_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/path/\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/path/\")\n\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_have_slash_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/slash/\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/slash/\")\n\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_slashless_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/slash/\")\n\n    # Tests for the Content-Length header\n\n    def test_content_length_header_added(self):\n        def get_response(req):\n            response = HttpResponse(\"content\")\n            self.assertNotIn(\"Content-Length\", response)\n            return response\n\n        response = CommonMiddleware(get_response)(self.rf.get(\"/\"))\n        self.assertEqual(int(response.headers[\"Content-Length\"]), len(response.content))\n\n    def test_content_length_header_not_added_for_streaming_response(self):\n        def get_response(req):\n            response = StreamingHttpResponse(\"content\")\n            self.assertNotIn(\"Content-Length\", response)\n            return response\n\n        response = CommonMiddleware(get_response)(self.rf.get(\"/\"))\n        self.assertNotIn(\"Content-Length\", response)\n\n    def test_content_length_header_not_changed(self):\n        bad_content_length = 500\n\n        def get_response(req):\n            response = HttpResponse()\n            response.headers[\"Content-Length\"] = bad_content_length\n            return response\n\n        response = CommonMiddleware(get_response)(self.rf.get(\"/\"))\n        self.assertEqual(int(response.headers[\"Content-Length\"]), bad_content_length)\n\n    # Other tests\n\n# tests/middleware/tests.py:240-254  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_custom_urlconf(self):\n        \"\"\"\n        APPEND_SLASH should redirect slashless URLs to a valid pattern.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertIsNotNone(\n            r,\n            \"CommonMiddleware failed to return APPEND_SLASH redirect using \"\n            \"request.urlconf\",\n        )\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/customurlconf/slash/\")\n\n# tests/middleware/tests.py:98-107  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_querystring_have_slash)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_querystring_have_slash(self):\n        \"\"\"\n        APPEND_SLASH should append slash to path when redirecting a request\n        with a querystring ending with slash.\n        \"\"\"\n        request = self.rf.get(\"/slash?test=slash/\")\n        resp = CommonMiddleware(get_response_404)(request)\n        self.assertIsInstance(resp, HttpResponsePermanentRedirect)\n        self.assertEqual(resp.url, \"/slash/?test=slash/\")\n\n# tests/middleware/tests.py:230-238  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_unknown_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_unknown_custom_urlconf(self):\n        \"\"\"\n        APPEND_SLASH should not redirect to unknown resources.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/unknown\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n# tests/middleware/tests.py:67-74  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_unknown)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_unknown(self):\n        \"\"\"\n        APPEND_SLASH should not redirect to unknown resources.\n        \"\"\"\n        request = self.rf.get(\"/unknown\")\n        response = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(response.status_code, 404)\n\n# tests/middleware/tests.py:376-384  (tests.middleware.tests.CommonMiddlewareTest.test_response_redirect_class_subclass)\nclass CommonMiddlewareTest(SimpleTestCase):\n    def test_response_redirect_class_subclass(self):\n        class MyCommonMiddleware(CommonMiddleware):\n            response_redirect_class = HttpResponseRedirect\n\n        request = self.rf.get(\"/slash\")\n        r = MyCommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 302)\n        self.assertEqual(r.url, \"/slash/\")\n        self.assertIsInstance(r, HttpResponseRedirect)\n\n# tests/middleware/tests.py:109-128  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_no_redirect_on_POST_in_DEBUG)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, DEBUG=True)\n    def test_append_slash_no_redirect_on_POST_in_DEBUG(self):\n        \"\"\"\n        While in debug mode, an exception is raised with a warning\n        when a failed attempt is made to POST, PUT, or PATCH to an URL which\n        would normally be redirected to a slashed version.\n        \"\"\"\n        msg = \"maintaining %s data. Change your form to point to testserver/slash/\"\n        request = self.rf.get(\"/slash\")\n        request.method = \"POST\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n        request = self.rf.get(\"/slash\")\n        request.method = \"PUT\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n        request = self.rf.get(\"/slash\")\n        request.method = \"PATCH\"\n        with self.assertRaisesMessage(RuntimeError, msg % request.method):\n            CommonMiddleware(get_response_404)(request)\n\n# tests/middleware/tests.py:369-374  (tests.middleware.tests.CommonMiddlewareTest.test_response_redirect_class)\nclass CommonMiddlewareTest(SimpleTestCase):\n    def test_response_redirect_class(self):\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/slash/\")\n        self.assertIsInstance(r, HttpResponsePermanentRedirect)\n\n# tests/middleware/tests.py:42-49  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_have_slash)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_have_slash(self):\n        \"\"\"\n        URLs with slashes should go unmolested.\n        \"\"\"\n        request = self.rf.get(\"/slash/\")\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n# tests/middleware/tests.py:89-96  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_redirect_querystring)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_redirect_querystring(self):\n        \"\"\"\n        APPEND_SLASH should preserve querystrings when redirecting.\n        \"\"\"\n        request = self.rf.get(\"/slash?test=1\")\n        resp = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(resp.url, \"/slash/?test=1\")\n\n# tests/middleware/tests.py:204-212  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_have_slash_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_have_slash_custom_urlconf(self):\n        \"\"\"\n        URLs with slashes should go unmolested.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash/\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n# tests/middleware/tests.py:256-267  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_no_redirect_on_POST_in_DEBUG_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, DEBUG=True)\n    def test_append_slash_no_redirect_on_POST_in_DEBUG_custom_urlconf(self):\n        \"\"\"\n        While in debug mode, an exception is raised with a warning\n        when a failed attempt is made to POST to an URL which would normally be\n        redirected to a slashed version.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        request.method = \"POST\"\n        with self.assertRaisesMessage(RuntimeError, \"end in a slash\"):\n            CommonMiddleware(get_response_404)(request)\n\n# tests/middleware/tests.py:269-277  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_disabled_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=False)\n    def test_append_slash_disabled_custom_urlconf(self):\n        \"\"\"\n        Disabling append slash functionality should leave slashless URLs alone.\n        \"\"\"\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response_404).process_request(request))\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n# tests/middleware/tests.py:279-293  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_quoted_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_quoted_custom_urlconf(self):\n        \"\"\"\n        URLs which require quoting should be redirected to their slash version.\n        \"\"\"\n        request = self.rf.get(quote(\"/customurlconf/needsquoting#\"))\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertIsNotNone(\n            r,\n            \"CommonMiddleware failed to return APPEND_SLASH redirect using \"\n            \"request.urlconf\",\n        )\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/customurlconf/needsquoting%23/\")\n\n# tests/middleware/tests.py:51-65  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_resource)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_resource(self):\n        \"\"\"\n        Matches to explicit slashless URLs should go unmolested.\n        \"\"\"\n\n        def get_response(req):\n            return HttpResponse(\"Here's the text of the web page.\")\n\n        request = self.rf.get(\"/noslash\")\n        self.assertIsNone(CommonMiddleware(get_response).process_request(request))\n        self.assertEqual(\n            CommonMiddleware(get_response)(request).content,\n            b\"Here's the text of the web page.\",\n        )\n\n# tests/middleware/tests.py:138-147  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_opt_out)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_opt_out(self):\n        \"\"\"\n        Views marked with @no_append_slash should be left alone.\n        \"\"\"\n        request = self.rf.get(\"/sensitive_fbv\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n        request = self.rf.get(\"/sensitive_cbv\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n# tests/middleware/tests.py:130-136  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_disabled)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=False)\n    def test_append_slash_disabled(self):\n        \"\"\"\n        Disabling append slash functionality should leave slashless URLs alone.\n        \"\"\"\n        request = self.rf.get(\"/slash\")\n        self.assertEqual(CommonMiddleware(get_response_404)(request).status_code, 404)\n\n# tests/middleware/tests.py:214-228  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_slashless_resource_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_slashless_resource_custom_urlconf(self):\n        \"\"\"\n        Matches to explicit slashless URLs should go unmolested.\n        \"\"\"\n\n        def get_response(req):\n            return HttpResponse(\"web content\")\n\n        request = self.rf.get(\"/customurlconf/noslash\")\n        request.urlconf = \"middleware.extra_urls\"\n        self.assertIsNone(CommonMiddleware(get_response).process_request(request))\n        self.assertEqual(\n            CommonMiddleware(get_response)(request).content, b\"web content\"\n        )\n\n# tests/middleware/tests.py:359-367  (tests.middleware.tests.CommonMiddlewareTest.test_non_ascii_query_string_does_not_crash)\nclass CommonMiddlewareTest(SimpleTestCase):\n    def test_non_ascii_query_string_does_not_crash(self):\n        \"\"\"Regression test for #15152\"\"\"\n        request = self.rf.get(\"/slash\")\n        request.META[\"QUERY_STRING\"] = \"drink=caf\u00e9\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertIsNone(r)\n        response = HttpResponseNotFound()\n        r = CommonMiddleware(get_response_empty).process_response(request, response)\n        self.assertEqual(r.status_code, 301)\n\n# tests/middleware/tests.py:187-192  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_have_slash)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_have_slash(self):\n        request = self.rf.get(\"/slash/\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/slash/\")\n\n# tests/middleware/tests.py:194-199  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_slashless)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_slashless(self):\n        request = self.rf.get(\"/slash\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/slash/\")\n\n# tests/middleware/tests.py:149-157  (tests.middleware.tests.CommonMiddlewareTest.test_append_slash_quoted)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_append_slash_quoted(self):\n        \"\"\"\n        URLs which require quoting should be redirected to their slash version.\n        \"\"\"\n        request = self.rf.get(quote(\"/needsquoting#\"))\n        r = CommonMiddleware(get_response_404)(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"/needsquoting%23/\")\n\n# tests/middleware/tests.py:303-309  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_have_slash_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_have_slash_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/slash/\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/slash/\")\n\n# django/contrib/redirects/middleware.py:23-50  (django.contrib.redirects.middleware.RedirectFallbackMiddleware.process_response)\nclass RedirectFallbackMiddleware(MiddlewareMixin):\n    # Defined as class-level attributes to be subclassing-friendly.\n    def process_response(self, request, response):\n        # No need to check for a redirect for non-404 responses.\n        if response.status_code != 404:\n            return response\n\n        full_path = request.get_full_path()\n        current_site = get_current_site(request)\n\n        r = None\n        try:\n            r = Redirect.objects.get(site=current_site, old_path=full_path)\n        except Redirect.DoesNotExist:\n            pass\n        if r is None and settings.APPEND_SLASH and not request.path.endswith(\"/\"):\n            try:\n                r = Redirect.objects.get(\n                    site=current_site,\n                    old_path=request.get_full_path(force_append_slash=True),\n                )\n            except Redirect.DoesNotExist:\n                pass\n        if r is not None:\n            if r.new_path == \"\":\n                return self.response_gone_class()\n            return self.response_redirect_class(r.new_path)\n\n        # No redirect was found. Return the response.\n        return response\n\n# tests/flatpages_tests/test_middleware.py:168-174  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_non_existent_flatpage)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_non_existent_flatpage(self):\n        \"\"\"\n        A nonexistent flatpage raises a 404 when served by the fallback\n        middleware and should not add a slash.\n        \"\"\"\n        response = self.client.get(\"/no_such_flatpage\")\n        self.assertEqual(response.status_code, 404)\n\n# django/middleware/locale.py:38-80  (django.middleware.locale.LocaleMiddleware.process_response)\nclass LocaleMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        language = translation.get_language()\n        language_from_path = translation.get_language_from_path(request.path_info)\n        urlconf = getattr(request, \"urlconf\", settings.ROOT_URLCONF)\n        (\n            i18n_patterns_used,\n            prefixed_default_language,\n        ) = is_language_prefix_patterns_used(urlconf)\n\n        if (\n            response.status_code == 404\n            and not language_from_path\n            and i18n_patterns_used\n            and prefixed_default_language\n        ):\n            # Maybe the language code is missing in the URL? Try adding the\n            # language prefix and redirecting to that URL.\n            language_path = \"/%s%s\" % (language, request.path_info)\n            path_valid = is_valid_path(language_path, urlconf)\n            path_needs_slash = not path_valid and (\n                settings.APPEND_SLASH\n                and not language_path.endswith(\"/\")\n                and is_valid_path(\"%s/\" % language_path, urlconf)\n            )\n\n            if path_valid or path_needs_slash:\n                script_prefix = get_script_prefix()\n                # Insert language after the script prefix and before the\n                # rest of the URL\n                language_url = request.get_full_path(\n                    force_append_slash=path_needs_slash\n                ).replace(script_prefix, \"%s%s/\" % (script_prefix, language), 1)\n                # Redirect to the language-specific URL as detected by\n                # get_language_from_request(). HTTP caches may cache this\n                # redirect, so add the Vary header.\n                redirect = self.response_redirect_class(language_url)\n                patch_vary_headers(redirect, (\"Accept-Language\", \"Cookie\"))\n                return redirect\n\n        if not (i18n_patterns_used and language_from_path):\n            patch_vary_headers(response, (\"Accept-Language\",))\n        response.headers.setdefault(\"Content-Language\", language)\n        return response\n\n# tests/middleware/tests.py:311-317  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_append_slash_slashless_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=True, PREPEND_WWW=True)\n    def test_prepend_www_append_slash_slashless_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/slash\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/slash/\")\n\n# tests/flatpages_tests/test_middleware.py:163-166  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_flatpage(self):\n        \"A flatpage can be served by the fallback middleware and should add a slash\"\n        response = self.client.get(\"/flatpage\")\n        self.assertRedirects(response, \"/flatpage/\", status_code=301)\n\n# django/contrib/flatpages/forms.py:37-41  (django.contrib.flatpages.forms.FlatpageForm._trailing_slash_required)\nclass FlatpageForm(forms.ModelForm):\n    def _trailing_slash_required(self):\n        return (\n            settings.APPEND_SLASH\n            and \"django.middleware.common.CommonMiddleware\" in settings.MIDDLEWARE\n        )\n\n# tests/redirects_tests/tests.py:56-63  (tests.redirects_tests.tests.RedirectTests.test_redirect_not_found_with_append_slash)\nclass RedirectTests(TestCase):\n    @override_settings(APPEND_SLASH=True)\n    def test_redirect_not_found_with_append_slash(self):\n        \"\"\"\n        Exercise the second Redirect.DoesNotExist branch in\n        RedirectFallbackMiddleware.\n        \"\"\"\n        response = self.client.get(\"/test\")\n        self.assertEqual(response.status_code, 404)\n\n# tests/flatpages_tests/test_middleware.py:155-161  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_view_non_existent_flatpage)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_view_non_existent_flatpage(self):\n        \"\"\"\n        A nonexistent flatpage raises 404 when served through a view and\n        should not add a slash.\n        \"\"\"\n        response = self.client.get(\"/flatpage_root/no_such_flatpage\")\n        self.assertEqual(response.status_code, 404)\n\n# tests/flatpages_tests/test_views.py:148-154  (tests.flatpages_tests.test_views.FlatpageViewAppendSlashTests.test_redirect_fallback_flatpage)\nclass FlatpageViewAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_flatpage(self):\n        \"\"\"\n        A fallback flatpage won't be served if the middleware is disabled and\n        should not add a slash.\n        \"\"\"\n        response = self.client.get(\"/flatpage\")\n        self.assertEqual(response.status_code, 404)\n\n# tests/flatpages_tests/test_middleware.py:150-153  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_view_flatpage)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_view_flatpage(self):\n        \"A flatpage can be served through a view and should add a slash\"\n        response = self.client.get(\"/flatpage_root/flatpage\")\n        self.assertRedirects(response, \"/flatpage_root/flatpage/\", status_code=301)\n\n# tests/i18n/patterns/tests.py:352-363  (tests.i18n.patterns.tests.URLRedirectWithoutTrailingSlashTests.test_en_redirect)\nclass URLRedirectWithoutTrailingSlashTests(URLTestCaseBase):\n    def test_en_redirect(self):\n        response = self.client.get(\n            \"/account/register\", headers={\"accept-language\": \"en\"}, follow=True\n        )\n        # We only want one redirect, bypassing CommonMiddleware\n        self.assertEqual(response.redirect_chain, [(\"/en/account/register/\", 302)])\n        self.assertRedirects(response, \"/en/account/register/\", 302)\n\n        response = self.client.get(\n            \"/prefixed.xml\", headers={\"accept-language\": \"en\"}, follow=True\n        )\n        self.assertRedirects(response, \"/en/prefixed.xml\", 302)\n\n# tests/middleware/tests.py:180-185  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=False, PREPEND_WWW=True)\n    def test_prepend_www(self):\n        request = self.rf.get(\"/path/\")\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/path/\")\n\n# tests/flatpages_tests/test_views.py:156-162  (tests.flatpages_tests.test_views.FlatpageViewAppendSlashTests.test_redirect_fallback_non_existent_flatpage)\nclass FlatpageViewAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_non_existent_flatpage(self):\n        \"\"\"\n        A nonexistent flatpage won't be served if the fallback middleware is\n        disabled and should not add a slash.\n        \"\"\"\n        response = self.client.get(\"/no_such_flatpage\")\n        self.assertEqual(response.status_code, 404)\n\n# tests/middleware/tests.py:295-301  (tests.middleware.tests.CommonMiddlewareTest.test_prepend_www_custom_urlconf)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(APPEND_SLASH=False, PREPEND_WWW=True)\n    def test_prepend_www_custom_urlconf(self):\n        request = self.rf.get(\"/customurlconf/path/\")\n        request.urlconf = \"middleware.extra_urls\"\n        r = CommonMiddleware(get_response_empty).process_request(request)\n        self.assertEqual(r.status_code, 301)\n        self.assertEqual(r.url, \"http://www.testserver/customurlconf/path/\")\n\n# tests/flatpages_tests/test_middleware.py:176-193  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage_special_chars)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_flatpage_special_chars(self):\n        \"\"\"\n        A flatpage with special chars in the URL can be served by the fallback\n        middleware and should add a slash.\n        \"\"\"\n        fp = FlatPage.objects.create(\n            url=\"/some.very_special~chars-here/\",\n            title=\"A very special page\",\n            content=\"Isn't it special!\",\n            enable_comments=False,\n            registration_required=False,\n        )\n        fp.sites.add(settings.SITE_ID)\n\n        response = self.client.get(\"/some.very_special~chars-here\")\n        self.assertRedirects(\n            response, \"/some.very_special~chars-here/\", status_code=301\n        )\n\n# tests/i18n/patterns/tests.py:303-313  (tests.i18n.patterns.tests.URLRedirectTests.test_custom_redirect_class)\nclass URLRedirectTests(URLTestCaseBase):\n    @override_settings(\n        MIDDLEWARE=[\n            \"i18n.patterns.tests.PermanentRedirectLocaleMiddleWare\",\n            \"django.middleware.common.CommonMiddleware\",\n        ],\n    )\n    def test_custom_redirect_class(self):\n        response = self.client.get(\n            \"/account/register/\", headers={\"accept-language\": \"en\"}\n        )\n        self.assertRedirects(response, \"/en/account/register/\", 301)\n\n# tests/middleware/tests.py:352-357  (tests.middleware.tests.CommonMiddlewareTest.test_disallowed_user_agents)\nclass CommonMiddlewareTest(SimpleTestCase):\n    @override_settings(DISALLOWED_USER_AGENTS=[re.compile(r\"foo\")])\n    def test_disallowed_user_agents(self):\n        request = self.rf.get(\"/slash\")\n        request.META[\"HTTP_USER_AGENT\"] = \"foo\"\n        with self.assertRaisesMessage(PermissionDenied, \"Forbidden user agent\"):\n            CommonMiddleware(get_response_empty).process_request(request)\n\n# django/views/decorators/common.py:4-17  (django.views.decorators.common.no_append_slash)\ndef no_append_slash(view_func):\n    \"\"\"\n    Mark a view function as excluded from CommonMiddleware's APPEND_SLASH\n    redirection.\n    \"\"\"\n\n    # view_func.should_append_slash = False would also work, but decorators are\n    # nicer if they don't have side effects, so return a new function.\n    @wraps(view_func)\n    def wrapper_view(*args, **kwargs):\n        return view_func(*args, **kwargs)\n\n    wrapper_view.should_append_slash = False\n    return wrapper_view\n\n# tests/flatpages_tests/test_forms.py:67-79  (tests.flatpages_tests.test_forms.FlatpageAdminFormTests.test_flatpage_requires_trailing_slash_with_append_slash)\nclass FlatpageAdminFormTests(TestCase):\n    @override_settings(\n        APPEND_SLASH=True, MIDDLEWARE=[\"django.middleware.common.CommonMiddleware\"]\n    )\n    def test_flatpage_requires_trailing_slash_with_append_slash(self):\n        form = FlatpageForm(data=dict(url=\"/no_trailing_slash\", **self.form_data))\n        with translation.override(\"en\"):\n            self.assertEqual(\n                form.fields[\"url\"].help_text,\n                \"Example: \u201c/about/contact/\u201d. Make sure to have leading and \"\n                \"trailing slashes.\",\n            )\n            self.assertFalse(form.is_valid())\n            self.assertEqual(form.errors[\"url\"], [\"URL is missing a trailing slash.\"])\n\n# tests/flatpages_tests/test_middleware.py:195-207  (tests.flatpages_tests.test_middleware.FlatpageMiddlewareAppendSlashTests.test_redirect_fallback_flatpage_root)\nclass FlatpageMiddlewareAppendSlashTests(TestDataMixin, TestCase):\n    def test_redirect_fallback_flatpage_root(self):\n        \"A flatpage at / should not cause a redirect loop when APPEND_SLASH is set\"\n        fp = FlatPage.objects.create(\n            url=\"/\",\n            title=\"Root\",\n            content=\"Root\",\n            enable_comments=False,\n            registration_required=False,\n        )\n        fp.sites.add(settings.SITE_ID)\n\n        response = self.client.get(\"/\")\n        self.assertContains(response, \"<p>Root</p>\")\n\n# tests/flatpages_tests/test_forms.py:81-91  (tests.flatpages_tests.test_forms.FlatpageAdminFormTests.test_flatpage_doesnt_requires_trailing_slash_without_append_slash)\nclass FlatpageAdminFormTests(TestCase):\n    @override_settings(\n        APPEND_SLASH=False, MIDDLEWARE=[\"django.middleware.common.CommonMiddleware\"]\n    )\n    def test_flatpage_doesnt_requires_trailing_slash_without_append_slash(self):\n        form = FlatpageForm(data=dict(url=\"/no_trailing_slash\", **self.form_data))\n        self.assertTrue(form.is_valid())\n        with translation.override(\"en\"):\n            self.assertEqual(\n                form.fields[\"url\"].help_text,\n                \"Example: \u201c/about/contact\u201d. Make sure to have a leading slash.\",\n            )\n\n# tests/middleware/tests.py:1-27  (tests.middleware.tests)\nimport gzip\nimport random\nimport re\nimport struct\nfrom io import BytesIO\nfrom unittest import mock\nfrom urllib.parse import quote\n\nfrom django.conf import settings\nfrom django.core import mail\nfrom django.core.exceptions import PermissionDenied\nfrom django.http import (\n    FileResponse,\n    HttpRequest,\n    HttpResponse,\n    HttpResponseNotFound,\n    HttpResponsePermanentRedirect,\n    HttpResponseRedirect,\n    StreamingHttpResponse,\n)\nfrom django.middleware.clickjacking import XFrameOptionsMiddleware\nfrom django.middleware.common import BrokenLinkEmailsMiddleware, CommonMiddleware\nfrom django.middleware.gzip import GZipMiddleware\nfrom django.middleware.http import ConditionalGetMiddleware\nfrom django.test import RequestFactory, SimpleTestCase, override_settings\n\nint2byte = struct.Struct(\">B\").pack\n\n# django/core/handlers/base.py:174-226  (django.core.handlers.base.BaseHandler._get_response)\nclass BaseHandler:\n    def _get_response(self, request):\n        \"\"\"\n        Resolve and call the view, then apply view, exception, and\n        template_response middleware. This method is everything that happens\n        inside the request/response middleware.\n        \"\"\"\n        response = None\n        callback, callback_args, callback_kwargs = self.resolve_request(request)\n\n        # Apply view middleware\n        for middleware_method in self._view_middleware:\n            response = middleware_method(\n                request, callback, callback_args, callback_kwargs\n            )\n            if response:\n                break\n\n        if response is None:\n            wrapped_callback = self.make_view_atomic(callback)\n            # If it is an asynchronous view, run it in a subthread.\n            if iscoroutinefunction(wrapped_callback):\n                wrapped_callback = async_to_sync(wrapped_callback)\n            try:\n                response = wrapped_callback(request, *callback_args, **callback_kwargs)\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        # Complain if the view returned None (a common error).\n        self.check_response(response, callback)\n\n        # If the response supports deferred rendering, apply template\n        # response middleware and then render the response\n        if hasattr(response, \"render\") and callable(response.render):\n            for middleware_method in self._template_response_middleware:\n                response = middleware_method(request, response)\n                # Complain if the template response middleware returned None\n                # (a common error).\n                self.check_response(\n                    response,\n                    middleware_method,\n                    name=\"%s.process_template_response\"\n                    % (middleware_method.__self__.__class__.__name__,),\n                )\n            try:\n                response = response.render()\n            except Exception as e:\n                response = self.process_exception_by_middleware(e, request)\n                if response is None:\n                    raise\n\n        return response\n\n# django/middleware/csrf.py:476-488  (django.middleware.csrf.CsrfViewMiddleware.process_response)\nclass CsrfViewMiddleware(MiddlewareMixin):\n    def process_response(self, request, response):\n        if request.META.get(\"CSRF_COOKIE_NEEDS_UPDATE\"):\n            self._set_csrf_cookie(request, response)\n            # Unset the flag to prevent _set_csrf_cookie() from being\n            # unnecessarily called again in process_response() by other\n            # instances of CsrfViewMiddleware. This can happen e.g. when both a\n            # decorator and middleware are used. However,\n            # CSRF_COOKIE_NEEDS_UPDATE is still respected in subsequent calls\n            # e.g. in case rotate_token() is called in process_response() later\n            # by custom middleware but before those subsequent calls.\n            request.META[\"CSRF_COOKIE_NEEDS_UPDATE\"] = False\n\n        return response\n\n# django/middleware/locale.py:11-17  (django.middleware.locale.LocaleMiddleware)\nclass LocaleMiddleware(MiddlewareMixin):\n    \"\"\"\n    Parse a request and decide what translation object to install in the\n    current thread context. This allows pages to be dynamically translated to\n    the language the user desires (if the language is available).\n    \"\"\"\n\n    response_redirect_class = HttpResponseRedirect\n\n## Task\n\nYou are debugging Django's automatic append-slash redirect in\ndjango/middleware/common.py. Starting from\n`CommonMiddleware.process_response`, trace the real causal pipeline\nthat produces a slash-appended redirect response, in the order each\nstage is actually reached, up to and including the call that\nconstructs the actual redirect response. Assume the response being\nprocessed has a 404 status code, and that `should_redirect_with_slash`\ndetermines a slash-appended redirect is warranted.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.middleware.common.CommonMiddleware.process_response\", \"django.middleware.common.CommonMiddleware.should_redirect_with_slash\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

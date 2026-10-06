@@ -1,0 +1,190 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t02_011_permissions_backend_check",
+  "items": [
+   {
+    "source_id": "django/contrib/auth/models.py:242-331",
+    "content": "# django/contrib/auth/models.py:242-331  (django.contrib.auth.models.PermissionsMixin)\nclass PermissionsMixin(models.Model):\n    \"\"\"\n    Add the fields and methods necessary to support the Group and Permission\n    models using the ModelBackend.\n    \"\"\"\n\n    is_superuser = models.BooleanField(\n        _(\"superuser status\"),\n        default=False,\n        help_text=_(\n            \"Designates that this user has all permissions without \"\n            \"explicitly assigning them.\"\n        ),\n    )\n    groups = models.ManyToManyField(\n        Group,\n        verbose_name=_(\"groups\"),\n        blank=True,\n        help_text=_(\n            \"The groups this user belongs to. A user will get all permissions \"\n            \"granted to each of their groups.\"\n        ),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n    user_permissions = models.ManyToManyField(\n        Permission,\n        verbose_name=_(\"user permissions\"),\n        blank=True,\n        help_text=_(\"Specific permissions for this user.\"),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n\n    class Meta:\n        abstract = True\n\n    def get_user_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has directly.\n        Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"user\")\n\n    def get_group_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has through their\n        groups. Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"group\")\n\n    def get_all_permissions(self, obj=None):\n        return _user_get_permissions(self, obj, \"all\")\n\n    def has_perm(self, perm, obj=None):\n        \"\"\"\n        Return True if the user has the specified permission. Query all\n        available auth backends, but return immediately if any backend returns\n        True. Thus, a user who has permission from a single auth backend is\n        assumed to have permission in general. If an object is provided, check\n        permissions for that object.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        # Otherwise we need to check the backends.\n        return _user_has_perm(self, perm, obj)\n\n    def has_perms(self, perm_list, obj=None):\n        \"\"\"\n        Return True if the user has each of the specified permissions. If\n        object is passed, check if the user has all required perms for it.\n        \"\"\"\n        if not is_iterable(perm_list) or isinstance(perm_list, str):\n            raise ValueError(\"perm_list must be an iterable of permissions.\")\n        return all(self.has_perm(perm, obj) for perm in perm_list)\n\n    def has_module_perms(self, app_label):\n        \"\"\"\n        Return True if the user has any permissions in the given app label.\n        Use similar logic as has_perm(), above.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        return _user_has_module_perms(self, app_label)",
+    "token_count": 674,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 649,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:298-311",
+    "content": "# django/contrib/auth/models.py:298-311  (django.contrib.auth.models.PermissionsMixin.has_perm)\n    def has_perm(self, perm, obj=None):\n        \"\"\"\n        Return True if the user has the specified permission. Query all\n        available auth backends, but return immediately if any backend returns\n        True. Thus, a user who has permission from a single auth backend is\n        assumed to have permission in general. If an object is provided, check\n        permissions for that object.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        # Otherwise we need to check the backends.\n        return _user_has_perm(self, perm, obj)",
+    "token_count": 155,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models.PermissionsMixin.has_perm"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 128,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/models.py:212-224",
+    "content": "# django/contrib/auth/models.py:212-224  (django.contrib.auth.models._user_has_perm)\ndef _user_has_perm(user, perm, obj):\n    \"\"\"\n    A backend can raise `PermissionDenied` to short-circuit permission checking.\n    \"\"\"\n    for backend in auth.get_backends():\n        if not hasattr(backend, \"has_perm\"):\n            continue\n        try:\n            if backend.has_perm(user, perm, obj):\n                return True\n        except PermissionDenied:\n            return False\n    return False",
+    "token_count": 110,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.models._user_has_perm"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 84,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:12-32",
+    "content": "# django/contrib/auth/backends.py:12-32  (django.contrib.auth.backends.BaseBackend)\nclass BaseBackend:\n    def authenticate(self, request, **kwargs):\n        return None\n\n    def get_user(self, user_id):\n        return None\n\n    def get_user_permissions(self, user_obj, obj=None):\n        return set()\n\n    def get_group_permissions(self, user_obj, obj=None):\n        return set()\n\n    def get_all_permissions(self, user_obj, obj=None):\n        return {\n            *self.get_user_permissions(user_obj, obj=obj),\n            *self.get_group_permissions(user_obj, obj=obj),\n        }\n\n    def has_perm(self, user_obj, perm, obj=None):\n        return perm in self.get_all_permissions(user_obj, obj=obj)",
+    "token_count": 158,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.BaseBackend"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 135,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/backends.py:31-32",
+    "content": "# django/contrib/auth/backends.py:31-32  (django.contrib.auth.backends.BaseBackend.has_perm)\n    def has_perm(self, user_obj, perm, obj=None):\n        return perm in self.get_all_permissions(user_obj, obj=obj)",
+    "token_count": 53,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.backends.BaseBackend.has_perm"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 28,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:37-38",
+    "content": "# django/contrib/auth/__init__.py:37-38  (django.contrib.auth.get_backends)\ndef get_backends():\n    return _get_backends(return_tuples=False)",
+    "token_count": 39,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.get_backends"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 15,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/__init__.py:24-34",
+    "content": "# django/contrib/auth/__init__.py:24-34  (django.contrib.auth._get_backends)\ndef _get_backends(return_tuples=False):\n    backends = []\n    for backend_path in settings.AUTHENTICATION_BACKENDS:\n        backend = load_backend(backend_path)\n        backends.append((backend, backend_path) if return_tuples else backend)\n    if not backends:\n        raise ImproperlyConfigured(\n            \"No authentication backends have been defined. Does \"\n            \"AUTHENTICATION_BACKENDS contain anything?\"\n        )\n    return backends",
+    "token_count": 116,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth._get_backends"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 91,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1305,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are debugging Django's permission-check dispatch in\ndjango/contrib/auth/models.py. Starting from\n`PermissionsMixin.has_perm`, trace the real causal pipeline that\ndetermines which authentication backends will be consulted for the\npermission check, in the order each stage is actually reached, up to\nand including the call that enumerates those backends. Assume the\nuser is not an active superuser, so the real backend-checking path is\nreached. Do not trace into any individual backend's own `has_perm`\ncall - which backend's implementation actually runs, and how many\nare consulted, is resolved dynamically at runtime, not statically in\nthis pipeline.\n\nYour symbols array should contain exactly 3 entries, no repeats.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.models.PermissionsMixin.has_perm\", \"django.contrib.auth.models._user_has_perm\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "django.contrib.auth.models.PermissionsMixin.has_perm",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 7,
+   "manifest_candidates_unfiltered": 7,
+   "requested_symbols": [
+    "django.contrib.auth.models.PermissionsMixin.has_perm",
+    "django.contrib.auth.models._user_has_perm",
+    "django.contrib.auth.backends.BaseBackend.has_perm",
+    "django.contrib.auth.get_backends",
+    "django.contrib.auth._get_backends"
+   ],
+   "turn1_requested_count": 5,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The permission check starts with `PermissionsMixin.has_perm`, which calls `_user_has_perm`. `_user_has_perm` then calls `BaseBackend.has_perm` on each backend obtained from `get_backends`. The backends are loaded by `_get_backends`, which calls `load_backend` and checks for configuration issues.\",\n  \"requested_symbols\": [\n    \"django.contrib.auth.models.PermissionsMixin.has_perm\",\n    \"django.contrib.auth.models._user_has_perm\",\n    \"django.contrib.auth.backends.BaseBackend.has_perm\",\n    \"django.contrib.auth.get_backends\",\n    \"django.contrib.auth._get_backends\"\n  ]\n}\n```",
+     "prompt_tokens": 785,
+     "completion_tokens": 138,
+     "latency_seconds": 10.005758406001405,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     194.343547
+    ],
+    "L_turn2_hydrate": [
+     645.365461
+    ],
+    "L_retrieve": [
+     10849.865695
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1305,
+   "prompt_tokens": 1680,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1693,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/contrib/auth/models.py:242-331  (django.contrib.auth.models.PermissionsMixin)\nclass PermissionsMixin(models.Model):\n    \"\"\"\n    Add the fields and methods necessary to support the Group and Permission\n    models using the ModelBackend.\n    \"\"\"\n\n    is_superuser = models.BooleanField(\n        _(\"superuser status\"),\n        default=False,\n        help_text=_(\n            \"Designates that this user has all permissions without \"\n            \"explicitly assigning them.\"\n        ),\n    )\n    groups = models.ManyToManyField(\n        Group,\n        verbose_name=_(\"groups\"),\n        blank=True,\n        help_text=_(\n            \"The groups this user belongs to. A user will get all permissions \"\n            \"granted to each of their groups.\"\n        ),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n    user_permissions = models.ManyToManyField(\n        Permission,\n        verbose_name=_(\"user permissions\"),\n        blank=True,\n        help_text=_(\"Specific permissions for this user.\"),\n        related_name=\"user_set\",\n        related_query_name=\"user\",\n    )\n\n    class Meta:\n        abstract = True\n\n    def get_user_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has directly.\n        Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"user\")\n\n    def get_group_permissions(self, obj=None):\n        \"\"\"\n        Return a list of permission strings that this user has through their\n        groups. Query all available auth backends. If an object is passed in,\n        return only permissions matching this object.\n        \"\"\"\n        return _user_get_permissions(self, obj, \"group\")\n\n    def get_all_permissions(self, obj=None):\n        return _user_get_permissions(self, obj, \"all\")\n\n    def has_perm(self, perm, obj=None):\n        \"\"\"\n        Return True if the user has the specified permission. Query all\n        available auth backends, but return immediately if any backend returns\n        True. Thus, a user who has permission from a single auth backend is\n        assumed to have permission in general. If an object is provided, check\n        permissions for that object.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        # Otherwise we need to check the backends.\n        return _user_has_perm(self, perm, obj)\n\n    def has_perms(self, perm_list, obj=None):\n        \"\"\"\n        Return True if the user has each of the specified permissions. If\n        object is passed, check if the user has all required perms for it.\n        \"\"\"\n        if not is_iterable(perm_list) or isinstance(perm_list, str):\n            raise ValueError(\"perm_list must be an iterable of permissions.\")\n        return all(self.has_perm(perm, obj) for perm in perm_list)\n\n    def has_module_perms(self, app_label):\n        \"\"\"\n        Return True if the user has any permissions in the given app label.\n        Use similar logic as has_perm(), above.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        return _user_has_module_perms(self, app_label)\n\n# django/contrib/auth/models.py:298-311  (django.contrib.auth.models.PermissionsMixin.has_perm)\n    def has_perm(self, perm, obj=None):\n        \"\"\"\n        Return True if the user has the specified permission. Query all\n        available auth backends, but return immediately if any backend returns\n        True. Thus, a user who has permission from a single auth backend is\n        assumed to have permission in general. If an object is provided, check\n        permissions for that object.\n        \"\"\"\n        # Active superusers have all permissions.\n        if self.is_active and self.is_superuser:\n            return True\n\n        # Otherwise we need to check the backends.\n        return _user_has_perm(self, perm, obj)\n\n# django/contrib/auth/models.py:212-224  (django.contrib.auth.models._user_has_perm)\ndef _user_has_perm(user, perm, obj):\n    \"\"\"\n    A backend can raise `PermissionDenied` to short-circuit permission checking.\n    \"\"\"\n    for backend in auth.get_backends():\n        if not hasattr(backend, \"has_perm\"):\n            continue\n        try:\n            if backend.has_perm(user, perm, obj):\n                return True\n        except PermissionDenied:\n            return False\n    return False\n\n# django/contrib/auth/backends.py:12-32  (django.contrib.auth.backends.BaseBackend)\nclass BaseBackend:\n    def authenticate(self, request, **kwargs):\n        return None\n\n    def get_user(self, user_id):\n        return None\n\n    def get_user_permissions(self, user_obj, obj=None):\n        return set()\n\n    def get_group_permissions(self, user_obj, obj=None):\n        return set()\n\n    def get_all_permissions(self, user_obj, obj=None):\n        return {\n            *self.get_user_permissions(user_obj, obj=obj),\n            *self.get_group_permissions(user_obj, obj=obj),\n        }\n\n    def has_perm(self, user_obj, perm, obj=None):\n        return perm in self.get_all_permissions(user_obj, obj=obj)\n\n# django/contrib/auth/backends.py:31-32  (django.contrib.auth.backends.BaseBackend.has_perm)\n    def has_perm(self, user_obj, perm, obj=None):\n        return perm in self.get_all_permissions(user_obj, obj=obj)\n\n# django/contrib/auth/__init__.py:37-38  (django.contrib.auth.get_backends)\ndef get_backends():\n    return _get_backends(return_tuples=False)\n\n# django/contrib/auth/__init__.py:24-34  (django.contrib.auth._get_backends)\ndef _get_backends(return_tuples=False):\n    backends = []\n    for backend_path in settings.AUTHENTICATION_BACKENDS:\n        backend = load_backend(backend_path)\n        backends.append((backend, backend_path) if return_tuples else backend)\n    if not backends:\n        raise ImproperlyConfigured(\n            \"No authentication backends have been defined. Does \"\n            \"AUTHENTICATION_BACKENDS contain anything?\"\n        )\n    return backends\n\n## Task\n\nYou are debugging Django's permission-check dispatch in\ndjango/contrib/auth/models.py. Starting from\n`PermissionsMixin.has_perm`, trace the real causal pipeline that\ndetermines which authentication backends will be consulted for the\npermission check, in the order each stage is actually reached, up to\nand including the call that enumerates those backends. Assume the\nuser is not an active superuser, so the real backend-checking path is\nreached. Do not trace into any individual backend's own `has_perm`\ncall - which backend's implementation actually runs, and how many\nare consulted, is resolved dynamically at runtime, not statically in\nthis pipeline.\n\nYour symbols array should contain exactly 3 entries, no repeats.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an\nordered array of the fully-qualified symbol names in that causal\norder - only symbols actually present in the provided context package\nmay appear, e.g.:\n\n```json\n[\"django.contrib.auth.models.PermissionsMixin.has_perm\", \"django.contrib.auth.models._user_has_perm\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

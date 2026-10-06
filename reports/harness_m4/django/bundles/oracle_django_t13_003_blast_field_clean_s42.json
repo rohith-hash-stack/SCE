@@ -1,0 +1,91 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "django_t13_003_blast_field_clean",
+  "items": [
+   {
+    "source_id": "django/forms/fields.py:1030-1038",
+    "content": "# django/forms/fields.py:1030-1038  (django.forms.fields.ComboField.clean)\n    def clean(self, value):\n        \"\"\"\n        Validate the given value against all of self.fields, which is a\n        list of Field instances.\n        \"\"\"\n        super().clean(value)\n        for field in self.fields:\n            value = field.clean(value)\n        return value",
+    "token_count": 81,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "django.forms.fields.ComboField.clean"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 81
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_input_formats.py:440-461",
+    "content": "# tests/forms_tests/tests/test_input_formats.py:440-461  (tests.forms_tests.tests.test_input_formats.CustomDateInputFormatsTests.test_dateField)\n    def test_dateField(self):\n        \"DateFields can parse dates in the default format\"\n        f = forms.DateField()\n        # Parse a date in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"2010-12-21\")\n\n        # Parse a date in a valid format, get a parsed result\n        result = f.clean(\"21.12.2010\")\n        self.assertEqual(result, date(2010, 12, 21))\n\n        # The parsed result does a round trip\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"21.12.2010\")\n\n        # Parse a date in a valid, but non-default format, get a parsed result\n        result = f.clean(\"21-12-2010\")\n        self.assertEqual(result, date(2010, 12, 21))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"21.12.2010\")",
+    "token_count": 280,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "tests.forms_tests.tests.test_input_formats.CustomDateInputFormatsTests.test_dateField"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 280
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_input_formats.py:46-67",
+    "content": "# tests/forms_tests/tests/test_input_formats.py:46-67  (tests.forms_tests.tests.test_input_formats.LocalizedTimeTests.test_localized_timeField)\n    def test_localized_timeField(self):\n        \"Localized TimeFields act as unlocalized widgets\"\n        f = forms.TimeField(localize=True)\n        # Parse a time in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"1:30:05 PM\")\n\n        # Parse a time in a valid format, get a parsed result\n        result = f.clean(\"13:30:05\")\n        self.assertEqual(result, time(13, 30, 5))\n\n        # The parsed result does a round trip to the same format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"13:30:05\")\n\n        # Parse a time in a valid format, get a parsed result\n        result = f.clean(\"13:30\")\n        self.assertEqual(result, time(13, 30, 0))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"13:30:00\")",
+    "token_count": 265,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "tests.forms_tests.tests.test_input_formats.LocalizedTimeTests.test_localized_timeField"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 265
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "tests/forms_tests/tests/test_input_formats.py:865-886",
+    "content": "# tests/forms_tests/tests/test_input_formats.py:865-886  (tests.forms_tests.tests.test_input_formats.SimpleDateTimeFormatTests.test_dateTimeField)\n    def test_dateTimeField(self):\n        \"DateTimeFields can parse dates in the default format\"\n        f = forms.DateTimeField()\n        # Parse a date in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"13:30:05 21.12.2010\")\n\n        # Parse a date in a valid format, get a parsed result\n        result = f.clean(\"2010-12-21 13:30:05\")\n        self.assertEqual(result, datetime(2010, 12, 21, 13, 30, 5))\n\n        # The parsed result does a round trip to the same format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"2010-12-21 13:30:05\")\n\n        # Parse a date in a valid, but non-default format, get a parsed result\n        result = f.clean(\"12/21/2010 13:30:05\")\n        self.assertEqual(result, datetime(2010, 12, 21, 13, 30, 5))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"2010-12-21 13:30:05\")",
+    "token_count": 352,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "tests.forms_tests.tests.test_input_formats.SimpleDateTimeFormatTests.test_dateTimeField"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 352
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 978,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are assessing the blast radius of changing what `Field.clean`\nreturns (e.g. wrapping the cleaned value in a result object instead\nof returning it directly) in django/forms/fields.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.clean(...)`'s return value - callers that only\ncall `.clean(...)` for validation side effects without binding the\nresult do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 4,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 978,
+   "prompt_tokens": 1212,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1225,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/forms/fields.py:1030-1038  (django.forms.fields.ComboField.clean)\n    def clean(self, value):\n        \"\"\"\n        Validate the given value against all of self.fields, which is a\n        list of Field instances.\n        \"\"\"\n        super().clean(value)\n        for field in self.fields:\n            value = field.clean(value)\n        return value\n\n# tests/forms_tests/tests/test_input_formats.py:440-461  (tests.forms_tests.tests.test_input_formats.CustomDateInputFormatsTests.test_dateField)\n    def test_dateField(self):\n        \"DateFields can parse dates in the default format\"\n        f = forms.DateField()\n        # Parse a date in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"2010-12-21\")\n\n        # Parse a date in a valid format, get a parsed result\n        result = f.clean(\"21.12.2010\")\n        self.assertEqual(result, date(2010, 12, 21))\n\n        # The parsed result does a round trip\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"21.12.2010\")\n\n        # Parse a date in a valid, but non-default format, get a parsed result\n        result = f.clean(\"21-12-2010\")\n        self.assertEqual(result, date(2010, 12, 21))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"21.12.2010\")\n\n# tests/forms_tests/tests/test_input_formats.py:46-67  (tests.forms_tests.tests.test_input_formats.LocalizedTimeTests.test_localized_timeField)\n    def test_localized_timeField(self):\n        \"Localized TimeFields act as unlocalized widgets\"\n        f = forms.TimeField(localize=True)\n        # Parse a time in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"1:30:05 PM\")\n\n        # Parse a time in a valid format, get a parsed result\n        result = f.clean(\"13:30:05\")\n        self.assertEqual(result, time(13, 30, 5))\n\n        # The parsed result does a round trip to the same format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"13:30:05\")\n\n        # Parse a time in a valid format, get a parsed result\n        result = f.clean(\"13:30\")\n        self.assertEqual(result, time(13, 30, 0))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"13:30:00\")\n\n# tests/forms_tests/tests/test_input_formats.py:865-886  (tests.forms_tests.tests.test_input_formats.SimpleDateTimeFormatTests.test_dateTimeField)\n    def test_dateTimeField(self):\n        \"DateTimeFields can parse dates in the default format\"\n        f = forms.DateTimeField()\n        # Parse a date in an unaccepted format; get an error\n        with self.assertRaises(ValidationError):\n            f.clean(\"13:30:05 21.12.2010\")\n\n        # Parse a date in a valid format, get a parsed result\n        result = f.clean(\"2010-12-21 13:30:05\")\n        self.assertEqual(result, datetime(2010, 12, 21, 13, 30, 5))\n\n        # The parsed result does a round trip to the same format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"2010-12-21 13:30:05\")\n\n        # Parse a date in a valid, but non-default format, get a parsed result\n        result = f.clean(\"12/21/2010 13:30:05\")\n        self.assertEqual(result, datetime(2010, 12, 21, 13, 30, 5))\n\n        # The parsed result does a round trip to default format\n        text = f.widget.format_value(result)\n        self.assertEqual(text, \"2010-12-21 13:30:05\")\n\n## Task\n\nYou are assessing the blast radius of changing what `Field.clean`\nreturns (e.g. wrapping the cleaned value in a result object instead\nof returning it directly) in django/forms/fields.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.clean(...)`'s return value - callers that only\ncall `.clean(...)` for validation side effects without binding the\nresult do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

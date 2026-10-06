@@ -1,0 +1,308 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t13_002_blast_queryset_get",
+  "items": [
+   {
+    "source_id": "django/db/models/query.py:293-1981",
+    "content": "# django/db/models/query.py:293-1981  (django.db.models.query.QuerySet)\nclass QuerySet(AltersData):\n    ...",
+    "token_count": 34,
+    "rank": 1,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.query.QuerySet"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 10,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:615-648",
+    "content": "# django/db/models/query.py:615-648  (django.db.models.query.QuerySet.get)\n    def get(self, *args, **kwargs):\n        \"\"\"\n        Perform the query and return a single object matching the given\n        keyword arguments.\n        \"\"\"\n        if self.query.combinator and (args or kwargs):\n            raise NotSupportedError(\n                \"Calling QuerySet.get(...) with filters after %s() is not \"\n                \"supported.\" % self.query.combinator\n            )\n        clone = self._chain() if self.query.combinator else self.filter(*args, **kwargs)\n        if self.query.can_filter() and not self.query.distinct_fields:\n            clone = clone.order_by()\n        limit = None\n        if (\n            not clone.query.select_for_update\n            or connections[clone.db].features.supports_select_for_update_with_limit\n        ):\n            limit = MAX_GET_RESULTS\n            clone.query.set_limits(high=limit)\n        num = len(clone)\n        if num == 1:\n            return clone._result_cache[0]\n        if not num:\n            raise self.model.DoesNotExist(\n                \"%s matching query does not exist.\" % self.model._meta.object_name\n            )\n        raise self.model.MultipleObjectsReturned(\n            \"get() returned more than one %s -- it returned %s!\"\n            % (\n                self.model._meta.object_name,\n                num if not limit or num < limit else \"more than %s\" % (limit - 1),\n            )\n        )\n\n# Referenced module constants:\nMAX_GET_RESULTS = 21",
+    "token_count": 326,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.get"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 295,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:118-612",
+    "content": "# django/contrib/admin/options.py:118-612  (django.contrib.admin.options.BaseModelAdmin)\nclass BaseModelAdmin(metaclass=forms.MediaDefiningClass):\n    ...",
+    "token_count": 39,
+    "rank": 3,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.BaseModelAdmin"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 14,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:252-282",
+    "content": "# django/contrib/admin/options.py:252-282  (django.contrib.admin.options.BaseModelAdmin.formfield_for_foreignkey)\n    def formfield_for_foreignkey(self, db_field, request, **kwargs):\n        \"\"\"\n        Get a form Field for a ForeignKey.\n        \"\"\"\n        db = kwargs.get(\"using\")\n\n        if \"widget\" not in kwargs:\n            if db_field.name in self.get_autocomplete_fields(request):\n                kwargs[\"widget\"] = AutocompleteSelect(\n                    db_field, self.admin_site, using=db\n                )\n            elif db_field.name in self.raw_id_fields:\n                kwargs[\"widget\"] = widgets.ForeignKeyRawIdWidget(\n                    db_field.remote_field, self.admin_site, using=db\n                )\n            elif db_field.name in self.radio_fields:\n                kwargs[\"widget\"] = widgets.AdminRadioSelect(\n                    attrs={\n                        \"class\": get_ul_class(self.radio_fields[db_field.name]),\n                    }\n                )\n                kwargs[\"empty_label\"] = (\n                    kwargs.get(\"empty_label\", _(\"None\")) if db_field.blank else None\n                )\n\n        if \"queryset\" not in kwargs:\n            queryset = self.get_field_queryset(db, db_field, request)\n            if queryset is not None:\n                kwargs[\"queryset\"] = queryset\n\n        return db_field.formfield(**kwargs)",
+    "token_count": 270,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.BaseModelAdmin.formfield_for_foreignkey"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 240,
+     "distance": 0.6666666666666666
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:615-2285",
+    "content": "# django/contrib/admin/options.py:615-2285  (django.contrib.admin.options.ModelAdmin)\nclass ModelAdmin(BaseModelAdmin):\n    ...",
+    "token_count": 33,
+    "rank": 5,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 9,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:1750-1884",
+    "content": "# django/contrib/admin/options.py:1750-1884  (django.contrib.admin.options.ModelAdmin._changeform_view)\n    def _changeform_view(self, request, object_id, form_url, extra_context):\n        to_field = request.POST.get(TO_FIELD_VAR, request.GET.get(TO_FIELD_VAR))\n        if to_field and not self.to_field_allowed(request, to_field):\n            raise DisallowedModelAdminToField(\n                \"The field %s cannot be referenced.\" % to_field\n            )\n\n        if request.method == \"POST\" and \"_saveasnew\" in request.POST:\n            object_id = None\n\n        add = object_id is None\n\n        if add:\n            if not self.has_add_permission(request):\n                raise PermissionDenied\n            obj = None\n\n        else:\n            obj = self.get_object(request, unquote(object_id), to_field)\n\n            if request.method == \"POST\":\n                if not self.has_change_permission(request, obj):\n                    raise PermissionDenied\n            else:\n                if not self.has_view_or_change_permission(request, obj):\n                    raise PermissionDenied\n\n            if obj is None:\n                return self._get_obj_does_not_exist_redirect(\n                    request, self.opts, object_id\n                )\n\n        fieldsets = self.get_fieldsets(request, obj)\n        ModelForm = self.get_form(\n            request, obj, change=not add, fields=flatten_fieldsets(fieldsets)\n        )\n        if request.method == \"POST\":\n            form = ModelForm(request.POST, request.FILES, instance=obj)\n            formsets, inline_instances = self._create_formsets(\n                request,\n                form.instance,\n                change=not add,\n            )\n            form_validated = form.is_valid()\n            if form_validated:\n                new_object = self.save_form(request, form, change=not add)\n            else:\n                new_object = form.instance\n            if all_valid(formsets) and form_validated:\n                self.save_model(request, new_object, form, not add)\n                self.save_related(request, form, formsets, not add)\n                change_message = self.construct_change_message(\n                    request, form, formsets, add\n                )\n                if add:\n                    self.log_addition(request, new_object, change_message)\n                    return self.response_add(request, new_object)\n                else:\n                    self.log_change(request, new_object, change_message)\n                    return self.response_change(request, new_object)\n            else:\n                form_validated = False\n        else:\n            if add:\n                initial = self.get_changeform_initial_data(request)\n                form = ModelForm(initial=initial)\n                formsets, inline_instances = self._create_formsets(\n                    request, form.instance, change=False\n                )\n            else:\n                form = ModelForm(instance=obj)\n                formsets, inline_instances = self._create_formsets(\n                    request, obj, change=True\n                )\n\n        if not add and not self.has_change_permission(request, obj):\n            readonly_fields = flatten_fieldsets(fieldsets)\n        else:\n            readonly_fields = self.get_readonly_fields(request, obj)\n        admin_form = helpers.AdminForm(\n            form,\n            list(fieldsets),\n            # Clear prepopulated fields on a view-only form to avoid a crash.\n            self.get_prepopulated_fields(request, obj)\n            if add or self.has_change_permission(request, obj)\n            else {},\n            readonly_fields,\n            model_admin=self,\n        )\n        media = self.media + admin_form.media\n\n        inline_formsets = self.get_inline_formsets(\n            request, formsets, inline_instances, obj\n        )\n        for inline_formset in inline_formsets:\n            media += inline_formset.media\n\n        if add:\n            title = _(\"Add %s\")\n        elif self.has_change_permission(request, obj):\n            title = _(\"Change %s\")\n        else:\n            title = _(\"View %s\")\n        context = {\n            **self.admin_site.each_context(request),\n            \"title\": title % self.opts.verbose_name,\n            \"subtitle\": str(obj) if obj else None,\n            \"adminform\": admin_form,\n            \"object_id\": object_id,\n            \"original\": obj,\n            \"is_popup\": IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,\n            \"to_field\": to_field,\n            \"media\": media,\n            \"inline_admin_formsets\": inline_formsets,\n            \"errors\": helpers.AdminErrorList(form, formsets),\n            \"preserved_filters\": self.get_preserved_filters(request),\n        }\n\n        # Hide the \"Save\" and \"Save and continue\" buttons if \"Save as New\" was\n        # previously chosen to prevent the interface from getting confusing.\n        if (\n            request.method == \"POST\"\n            and not form_validated\n            and \"_saveasnew\" in request.POST\n        ):\n            context[\"show_save\"] = False\n            context[\"show_save_and_continue\"] = False\n            # Use the change template instead of the add template.\n            add = False\n\n        context.update(extra_context or {})\n\n        return self.render_change_form(\n            request, context, add=add, change=not add, obj=obj, form_url=form_url\n        )\n\n# Referenced module constants:\nIS_POPUP_VAR = \"_popup\"\nTO_FIELD_VAR = \"_to_field\"",
+    "token_count": 1090,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin._changeform_view"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 1055,
+     "distance": 5.5137103299469565
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/admin/options.py:2111-2174",
+    "content": "# django/contrib/admin/options.py:2111-2174  (django.contrib.admin.options.ModelAdmin._delete_view)\n    def _delete_view(self, request, object_id, extra_context):\n        \"The 'delete' admin view for this model.\"\n        app_label = self.opts.app_label\n\n        to_field = request.POST.get(TO_FIELD_VAR, request.GET.get(TO_FIELD_VAR))\n        if to_field and not self.to_field_allowed(request, to_field):\n            raise DisallowedModelAdminToField(\n                \"The field %s cannot be referenced.\" % to_field\n            )\n\n        obj = self.get_object(request, unquote(object_id), to_field)\n\n        if not self.has_delete_permission(request, obj):\n            raise PermissionDenied\n\n        if obj is None:\n            return self._get_obj_does_not_exist_redirect(request, self.opts, object_id)\n\n        # Populate deleted_objects, a data structure of all related objects that\n        # will also be deleted.\n        (\n            deleted_objects,\n            model_count,\n            perms_needed,\n            protected,\n        ) = self.get_deleted_objects([obj], request)\n\n        if request.POST and not protected:  # The user has confirmed the deletion.\n            if perms_needed:\n                raise PermissionDenied\n            obj_display = str(obj)\n            attr = str(to_field) if to_field else self.opts.pk.attname\n            obj_id = obj.serializable_value(attr)\n            self.log_deletion(request, obj, obj_display)\n            self.delete_model(request, obj)\n\n            return self.response_delete(request, obj_display, obj_id)\n\n        object_name = str(self.opts.verbose_name)\n\n        if perms_needed or protected:\n            title = _(\"Cannot delete %(name)s\") % {\"name\": object_name}\n        else:\n            title = _(\"Are you sure?\")\n\n        context = {\n            **self.admin_site.each_context(request),\n            \"title\": title,\n            \"subtitle\": None,\n            \"object_name\": object_name,\n            \"object\": obj,\n            \"deleted_objects\": deleted_objects,\n            \"model_count\": dict(model_count).items(),\n            \"perms_lacking\": perms_needed,\n            \"protected\": protected,\n            \"opts\": self.opts,\n            \"app_label\": app_label,\n            \"preserved_filters\": self.get_preserved_filters(request),\n            \"is_popup\": IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,\n            \"to_field\": to_field,\n            **(extra_context or {}),\n        }\n\n        return self.render_delete_form(request, context)",
+    "token_count": 520,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.admin.options.ModelAdmin._delete_view"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 492,
+     "distance": 0.6666666666666666
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1854-1863",
+    "content": "# django/db/models/query.py:1854-1863  (django.db.models.query.QuerySet._chain)\n    def _chain(self):\n        \"\"\"\n        Return a copy of the current QuerySet that's ready for another\n        operation.\n        \"\"\"\n        obj = self._clone()\n        if obj._sticky_filter:\n            obj.query.filter_is_sticky = True\n            obj._sticky_filter = False\n        return obj",
+    "token_count": 90,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet._chain"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 63,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1432-1438",
+    "content": "# django/db/models/query.py:1432-1438  (django.db.models.query.QuerySet.filter)\n    def filter(self, *args, **kwargs):\n        \"\"\"\n        Return a new QuerySet instance with the args ANDed to the existing\n        set.\n        \"\"\"\n        self._not_support_combined_queries(\"filter\")\n        return self._filter_or_exclude(False, args, kwargs)",
+    "token_count": 83,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.filter"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 57,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/query.py:1658-1665",
+    "content": "# django/db/models/query.py:1658-1665  (django.db.models.query.QuerySet.order_by)\n    def order_by(self, *field_names):\n        \"\"\"Return a new QuerySet instance with the ordering changed.\"\"\"\n        if self.query.is_sliced:\n            raise TypeError(\"Cannot reorder a query once a slice has been taken.\")\n        obj = self._chain()\n        obj.query.clear_ordering(force=True, clear_default=False)\n        obj.query.add_ordering(*field_names)\n        return obj",
+    "token_count": 106,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.query.QuerySet.order_by"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 79,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:160-2600",
+    "content": "# django/db/models/sql/query.py:160-2600  (django.db.models.sql.query.Query)\nclass Query(BaseExpression):\n    ...",
+    "token_count": 32,
+    "rank": 11,
+    "kind": "signature_stub",
+    "symbols": [
+     "django.db.models.sql.query.Query"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L2_skeleton",
+     "engine_token_count": 7,
+     "distance": 4.873854387570006
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:2117-2123",
+    "content": "# django/db/models/sql/query.py:2117-2123  (django.db.models.sql.query.Query.can_filter)\n    def can_filter(self):\n        \"\"\"\n        Return True if adding filters to this instance is still possible.\n\n        Typically, this means no limits or offsets have been put on the results.\n        \"\"\"\n        return not self.is_sliced",
+    "token_count": 74,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.can_filter"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 46,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/models/sql/query.py:2083-2104",
+    "content": "# django/db/models/sql/query.py:2083-2104  (django.db.models.sql.query.Query.set_limits)\n    def set_limits(self, low=None, high=None):\n        \"\"\"\n        Adjust the limits on the rows retrieved. Use low/high to set these,\n        as it makes it more Pythonic to read and write. When the SQL query is\n        created, convert them to the appropriate offset and limit values.\n\n        Apply any limits passed in here to the existing constraints. Add low\n        to the current low value and clamp both to any existing high value.\n        \"\"\"\n        if high is not None:\n            if self.high_mark is not None:\n                self.high_mark = min(self.high_mark, self.low_mark + high)\n            else:\n                self.high_mark = self.low_mark + high\n        if low is not None:\n            if self.high_mark is not None:\n                self.low_mark = min(self.high_mark, self.low_mark + low)\n            else:\n                self.low_mark = self.low_mark + low\n\n        if self.low_mark == self.high_mark:\n            self.set_empty()",
+    "token_count": 229,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.models.sql.query.Query.set_limits"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 201,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/db/utils.py:49-50",
+    "content": "# django/db/utils.py:49-50  (django.db.utils.NotSupportedError)\nclass NotSupportedError(DatabaseError):\n    pass",
+    "token_count": 29,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.db.utils.NotSupportedError"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 9,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2955,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n",
+   "task_type": "T5_blast_radius",
+   "anchor": "django.db.models.query.QuerySet.get",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 57,
+   "manifest_candidates_unfiltered": 57,
+   "requested_symbols": [
+    "django.db.models.query.QuerySet.get",
+    "django.contrib.admin.options.BaseModelAdmin.formfield_for_foreignkey",
+    "django.contrib.admin.options.ModelAdmin._changeform_view",
+    "django.contrib.admin.options.ModelAdmin._delete_view"
+   ],
+   "turn1_requested_count": 4,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The task requires identifying all symbols that directly or indirectly bind or unpack the return value of `QuerySet.get`. We need to trace the call graph starting from `QuerySet.get` and identify symbols that store or use its return value.\",\n  \"requested_symbols\": [\n    \"django.db.models.query.QuerySet.get\",\n    \"django.contrib.admin.options.BaseModelAdmin.formfield_for_foreignkey\",\n    \"django.contrib.admin.options.ModelAdmin._changeform_view\",\n    \"django.contrib.admin.options.ModelAdmin._delete_view\"\n  ]\n}\n```",
+     "prompt_tokens": 3769,
+     "completion_tokens": 116,
+     "latency_seconds": 12.069635469000787,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     256.128641
+    ],
+    "L_turn2_hydrate": [
+     971.354263
+    ],
+    "L_retrieve": [
+     13307.07629
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2955,
+   "prompt_tokens": 3216,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3229,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/db/models/query.py:293-1981  (django.db.models.query.QuerySet)\nclass QuerySet(AltersData):\n    ...\n\n# django/db/models/query.py:615-648  (django.db.models.query.QuerySet.get)\n    def get(self, *args, **kwargs):\n        \"\"\"\n        Perform the query and return a single object matching the given\n        keyword arguments.\n        \"\"\"\n        if self.query.combinator and (args or kwargs):\n            raise NotSupportedError(\n                \"Calling QuerySet.get(...) with filters after %s() is not \"\n                \"supported.\" % self.query.combinator\n            )\n        clone = self._chain() if self.query.combinator else self.filter(*args, **kwargs)\n        if self.query.can_filter() and not self.query.distinct_fields:\n            clone = clone.order_by()\n        limit = None\n        if (\n            not clone.query.select_for_update\n            or connections[clone.db].features.supports_select_for_update_with_limit\n        ):\n            limit = MAX_GET_RESULTS\n            clone.query.set_limits(high=limit)\n        num = len(clone)\n        if num == 1:\n            return clone._result_cache[0]\n        if not num:\n            raise self.model.DoesNotExist(\n                \"%s matching query does not exist.\" % self.model._meta.object_name\n            )\n        raise self.model.MultipleObjectsReturned(\n            \"get() returned more than one %s -- it returned %s!\"\n            % (\n                self.model._meta.object_name,\n                num if not limit or num < limit else \"more than %s\" % (limit - 1),\n            )\n        )\n\n# Referenced module constants:\nMAX_GET_RESULTS = 21\n\n# django/contrib/admin/options.py:118-612  (django.contrib.admin.options.BaseModelAdmin)\nclass BaseModelAdmin(metaclass=forms.MediaDefiningClass):\n    ...\n\n# django/contrib/admin/options.py:252-282  (django.contrib.admin.options.BaseModelAdmin.formfield_for_foreignkey)\n    def formfield_for_foreignkey(self, db_field, request, **kwargs):\n        \"\"\"\n        Get a form Field for a ForeignKey.\n        \"\"\"\n        db = kwargs.get(\"using\")\n\n        if \"widget\" not in kwargs:\n            if db_field.name in self.get_autocomplete_fields(request):\n                kwargs[\"widget\"] = AutocompleteSelect(\n                    db_field, self.admin_site, using=db\n                )\n            elif db_field.name in self.raw_id_fields:\n                kwargs[\"widget\"] = widgets.ForeignKeyRawIdWidget(\n                    db_field.remote_field, self.admin_site, using=db\n                )\n            elif db_field.name in self.radio_fields:\n                kwargs[\"widget\"] = widgets.AdminRadioSelect(\n                    attrs={\n                        \"class\": get_ul_class(self.radio_fields[db_field.name]),\n                    }\n                )\n                kwargs[\"empty_label\"] = (\n                    kwargs.get(\"empty_label\", _(\"None\")) if db_field.blank else None\n                )\n\n        if \"queryset\" not in kwargs:\n            queryset = self.get_field_queryset(db, db_field, request)\n            if queryset is not None:\n                kwargs[\"queryset\"] = queryset\n\n        return db_field.formfield(**kwargs)\n\n# django/contrib/admin/options.py:615-2285  (django.contrib.admin.options.ModelAdmin)\nclass ModelAdmin(BaseModelAdmin):\n    ...\n\n# django/contrib/admin/options.py:1750-1884  (django.contrib.admin.options.ModelAdmin._changeform_view)\n    def _changeform_view(self, request, object_id, form_url, extra_context):\n        to_field = request.POST.get(TO_FIELD_VAR, request.GET.get(TO_FIELD_VAR))\n        if to_field and not self.to_field_allowed(request, to_field):\n            raise DisallowedModelAdminToField(\n                \"The field %s cannot be referenced.\" % to_field\n            )\n\n        if request.method == \"POST\" and \"_saveasnew\" in request.POST:\n            object_id = None\n\n        add = object_id is None\n\n        if add:\n            if not self.has_add_permission(request):\n                raise PermissionDenied\n            obj = None\n\n        else:\n            obj = self.get_object(request, unquote(object_id), to_field)\n\n            if request.method == \"POST\":\n                if not self.has_change_permission(request, obj):\n                    raise PermissionDenied\n            else:\n                if not self.has_view_or_change_permission(request, obj):\n                    raise PermissionDenied\n\n            if obj is None:\n                return self._get_obj_does_not_exist_redirect(\n                    request, self.opts, object_id\n                )\n\n        fieldsets = self.get_fieldsets(request, obj)\n        ModelForm = self.get_form(\n            request, obj, change=not add, fields=flatten_fieldsets(fieldsets)\n        )\n        if request.method == \"POST\":\n            form = ModelForm(request.POST, request.FILES, instance=obj)\n            formsets, inline_instances = self._create_formsets(\n                request,\n                form.instance,\n                change=not add,\n            )\n            form_validated = form.is_valid()\n            if form_validated:\n                new_object = self.save_form(request, form, change=not add)\n            else:\n                new_object = form.instance\n            if all_valid(formsets) and form_validated:\n                self.save_model(request, new_object, form, not add)\n                self.save_related(request, form, formsets, not add)\n                change_message = self.construct_change_message(\n                    request, form, formsets, add\n                )\n                if add:\n                    self.log_addition(request, new_object, change_message)\n                    return self.response_add(request, new_object)\n                else:\n                    self.log_change(request, new_object, change_message)\n                    return self.response_change(request, new_object)\n            else:\n                form_validated = False\n        else:\n            if add:\n                initial = self.get_changeform_initial_data(request)\n                form = ModelForm(initial=initial)\n                formsets, inline_instances = self._create_formsets(\n                    request, form.instance, change=False\n                )\n            else:\n                form = ModelForm(instance=obj)\n                formsets, inline_instances = self._create_formsets(\n                    request, obj, change=True\n                )\n\n        if not add and not self.has_change_permission(request, obj):\n            readonly_fields = flatten_fieldsets(fieldsets)\n        else:\n            readonly_fields = self.get_readonly_fields(request, obj)\n        admin_form = helpers.AdminForm(\n            form,\n            list(fieldsets),\n            # Clear prepopulated fields on a view-only form to avoid a crash.\n            self.get_prepopulated_fields(request, obj)\n            if add or self.has_change_permission(request, obj)\n            else {},\n            readonly_fields,\n            model_admin=self,\n        )\n        media = self.media + admin_form.media\n\n        inline_formsets = self.get_inline_formsets(\n            request, formsets, inline_instances, obj\n        )\n        for inline_formset in inline_formsets:\n            media += inline_formset.media\n\n        if add:\n            title = _(\"Add %s\")\n        elif self.has_change_permission(request, obj):\n            title = _(\"Change %s\")\n        else:\n            title = _(\"View %s\")\n        context = {\n            **self.admin_site.each_context(request),\n            \"title\": title % self.opts.verbose_name,\n            \"subtitle\": str(obj) if obj else None,\n            \"adminform\": admin_form,\n            \"object_id\": object_id,\n            \"original\": obj,\n            \"is_popup\": IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,\n            \"to_field\": to_field,\n            \"media\": media,\n            \"inline_admin_formsets\": inline_formsets,\n            \"errors\": helpers.AdminErrorList(form, formsets),\n            \"preserved_filters\": self.get_preserved_filters(request),\n        }\n\n        # Hide the \"Save\" and \"Save and continue\" buttons if \"Save as New\" was\n        # previously chosen to prevent the interface from getting confusing.\n        if (\n            request.method == \"POST\"\n            and not form_validated\n            and \"_saveasnew\" in request.POST\n        ):\n            context[\"show_save\"] = False\n            context[\"show_save_and_continue\"] = False\n            # Use the change template instead of the add template.\n            add = False\n\n        context.update(extra_context or {})\n\n        return self.render_change_form(\n            request, context, add=add, change=not add, obj=obj, form_url=form_url\n        )\n\n# Referenced module constants:\nIS_POPUP_VAR = \"_popup\"\nTO_FIELD_VAR = \"_to_field\"\n\n# django/contrib/admin/options.py:2111-2174  (django.contrib.admin.options.ModelAdmin._delete_view)\n    def _delete_view(self, request, object_id, extra_context):\n        \"The 'delete' admin view for this model.\"\n        app_label = self.opts.app_label\n\n        to_field = request.POST.get(TO_FIELD_VAR, request.GET.get(TO_FIELD_VAR))\n        if to_field and not self.to_field_allowed(request, to_field):\n            raise DisallowedModelAdminToField(\n                \"The field %s cannot be referenced.\" % to_field\n            )\n\n        obj = self.get_object(request, unquote(object_id), to_field)\n\n        if not self.has_delete_permission(request, obj):\n            raise PermissionDenied\n\n        if obj is None:\n            return self._get_obj_does_not_exist_redirect(request, self.opts, object_id)\n\n        # Populate deleted_objects, a data structure of all related objects that\n        # will also be deleted.\n        (\n            deleted_objects,\n            model_count,\n            perms_needed,\n            protected,\n        ) = self.get_deleted_objects([obj], request)\n\n        if request.POST and not protected:  # The user has confirmed the deletion.\n            if perms_needed:\n                raise PermissionDenied\n            obj_display = str(obj)\n            attr = str(to_field) if to_field else self.opts.pk.attname\n            obj_id = obj.serializable_value(attr)\n            self.log_deletion(request, obj, obj_display)\n            self.delete_model(request, obj)\n\n            return self.response_delete(request, obj_display, obj_id)\n\n        object_name = str(self.opts.verbose_name)\n\n        if perms_needed or protected:\n            title = _(\"Cannot delete %(name)s\") % {\"name\": object_name}\n        else:\n            title = _(\"Are you sure?\")\n\n        context = {\n            **self.admin_site.each_context(request),\n            \"title\": title,\n            \"subtitle\": None,\n            \"object_name\": object_name,\n            \"object\": obj,\n            \"deleted_objects\": deleted_objects,\n            \"model_count\": dict(model_count).items(),\n            \"perms_lacking\": perms_needed,\n            \"protected\": protected,\n            \"opts\": self.opts,\n            \"app_label\": app_label,\n            \"preserved_filters\": self.get_preserved_filters(request),\n            \"is_popup\": IS_POPUP_VAR in request.POST or IS_POPUP_VAR in request.GET,\n            \"to_field\": to_field,\n            **(extra_context or {}),\n        }\n\n        return self.render_delete_form(request, context)\n\n# django/db/models/query.py:1854-1863  (django.db.models.query.QuerySet._chain)\n    def _chain(self):\n        \"\"\"\n        Return a copy of the current QuerySet that's ready for another\n        operation.\n        \"\"\"\n        obj = self._clone()\n        if obj._sticky_filter:\n            obj.query.filter_is_sticky = True\n            obj._sticky_filter = False\n        return obj\n\n# django/db/models/query.py:1432-1438  (django.db.models.query.QuerySet.filter)\n    def filter(self, *args, **kwargs):\n        \"\"\"\n        Return a new QuerySet instance with the args ANDed to the existing\n        set.\n        \"\"\"\n        self._not_support_combined_queries(\"filter\")\n        return self._filter_or_exclude(False, args, kwargs)\n\n# django/db/models/query.py:1658-1665  (django.db.models.query.QuerySet.order_by)\n    def order_by(self, *field_names):\n        \"\"\"Return a new QuerySet instance with the ordering changed.\"\"\"\n        if self.query.is_sliced:\n            raise TypeError(\"Cannot reorder a query once a slice has been taken.\")\n        obj = self._chain()\n        obj.query.clear_ordering(force=True, clear_default=False)\n        obj.query.add_ordering(*field_names)\n        return obj\n\n# django/db/models/sql/query.py:160-2600  (django.db.models.sql.query.Query)\nclass Query(BaseExpression):\n    ...\n\n# django/db/models/sql/query.py:2117-2123  (django.db.models.sql.query.Query.can_filter)\n    def can_filter(self):\n        \"\"\"\n        Return True if adding filters to this instance is still possible.\n\n        Typically, this means no limits or offsets have been put on the results.\n        \"\"\"\n        return not self.is_sliced\n\n# django/db/models/sql/query.py:2083-2104  (django.db.models.sql.query.Query.set_limits)\n    def set_limits(self, low=None, high=None):\n        \"\"\"\n        Adjust the limits on the rows retrieved. Use low/high to set these,\n        as it makes it more Pythonic to read and write. When the SQL query is\n        created, convert them to the appropriate offset and limit values.\n\n        Apply any limits passed in here to the existing constraints. Add low\n        to the current low value and clamp both to any existing high value.\n        \"\"\"\n        if high is not None:\n            if self.high_mark is not None:\n                self.high_mark = min(self.high_mark, self.low_mark + high)\n            else:\n                self.high_mark = self.low_mark + high\n        if low is not None:\n            if self.high_mark is not None:\n                self.low_mark = min(self.high_mark, self.low_mark + low)\n            else:\n                self.low_mark = self.low_mark + low\n\n        if self.low_mark == self.high_mark:\n            self.set_empty()\n\n# django/db/utils.py:49-50  (django.db.utils.NotSupportedError)\nclass NotSupportedError(DatabaseError):\n    pass\n\n## Task\n\nYou are assessing the blast radius of changing what\n`QuerySet.get` returns (e.g. wrapping the model instance it returns\nin a lazy proxy) in django/db/models/query.py.\n\nIdentify every real caller in the provided context that actually\nbinds or unpacks `.get(...)`'s return value (a plain\n`x = qs.get(...)` assignment, or a caller of such a caller two hops\nout) - callers that only call `.get(...)` for a side effect without\nbinding the result do not count.\n\nName every affected symbol by its exact fully-qualified name as given\nin the context, in prose.\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

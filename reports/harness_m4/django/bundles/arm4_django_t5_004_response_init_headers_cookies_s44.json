@@ -1,0 +1,461 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "django_t5_004_response_init_headers_cookies",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"glob\": \"*.py\", \"pattern\": \"HttpResponse\\\\.__init__\"})\nno matches",
+    "token_count": 26,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "HttpResponse\\.__init__",
+      "glob": "*.py"
+     },
+     "engine_token_count": 26
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (glob {\"pattern\": \"**/views.py\"})\ndjango/contrib/admindocs/views.py\ndjango/contrib/auth/views.py\ndjango/contrib/contenttypes/views.py\ndjango/contrib/flatpages/views.py\ndjango/contrib/gis/sitemaps/views.py\ndjango/contrib/gis/views.py\ndjango/contrib/messages/views.py\ndjango/contrib/sitemaps/views.py\ndjango/contrib/staticfiles/views.py\ndjango/contrib/syndication/views.py\ntests/admin_docs/views.py\ntests/admin_views/views.py\ntests/builtin_server/views.py\ntests/conditional_processing/views.py\ntests/context_processors/views.py\ntests/csrf_tests/views.py\ntests/file_uploads/views.py\ntests/forms_tests/views.py\ntests/generic_views/views.py\ntests/gis_tests/geo3d/views.py\ntests/handlers/views.py\ntests/logging_tests/views.py\ntests/middleware/views.py\ntests/middleware_exceptions/views.py\ntests/project_template/views.py\ntests/servers/views.py\ntests/shortcuts/views.py\ntests/template_tests/views.py\ntests/test_client/views.py\ntests/test_client_regress/views.py\n[4 more files not shown]",
+    "token_count": 244,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "glob",
+     "args": {
+      "pattern": "**/views.py"
+     },
+     "engine_token_count": 244
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.2",
+    "content": "# r2.2  (glob {\"pattern\": \"**/middleware.py\"})\ndjango/contrib/admindocs/middleware.py\ndjango/contrib/auth/middleware.py\ndjango/contrib/flatpages/middleware.py\ndjango/contrib/messages/middleware.py\ndjango/contrib/redirects/middleware.py\ndjango/contrib/sessions/middleware.py\ndjango/contrib/sites/middleware.py\ntests/middleware_exceptions/middleware.py\ntests/urlpatterns_reverse/middleware.py",
+    "token_count": 94,
+    "rank": 3,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.2",
+     "tool": "glob",
+     "args": {
+      "pattern": "**/middleware.py"
+     },
+     "engine_token_count": 94
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.1",
+    "content": "# r3.1  (read {\"end_line\": 100, \"path\": \"django/contrib/admindocs/views.py\", \"start_line\": 1})\n1: import inspect\n2: from importlib import import_module\n3: from inspect import cleandoc\n4: from pathlib import Path\n5: \n6: from django.apps import apps\n7: from django.contrib import admin\n8: from django.contrib.admin.views.decorators import staff_member_required\n9: from django.contrib.admindocs import utils\n10: from django.contrib.admindocs.utils import (\n11:     remove_non_capturing_groups,\n12:     replace_metacharacters,\n13:     replace_named_groups,\n14:     replace_unnamed_groups,\n15: )\n16: from django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist\n17: from django.db import models\n18: from django.http import Http404\n19: from django.template.engine import Engine\n20: from django.urls import get_mod_func, get_resolver, get_urlconf\n21: from django.utils._os import safe_join\n22: from django.utils.decorators import method_decorator\n23: from django.utils.functional import cached_property\n24: from django.utils.inspect import (\n25:     func_accepts_kwargs,\n26:     func_accepts_var_args,\n27:     get_func_full_args,\n28:     method_has_no_args,\n29: )\n30: from django.utils.translation import gettext as _\n31: from django.views.generic import TemplateView\n32: \n33: from .utils import get_view_name\n34: \n35: # Exclude methods starting with these strings from documentation\n36: MODEL_METHODS_EXCLUDE = (\"_\", \"add_\", \"delete\", \"save\", \"set_\")\n37: \n38: \n39: class BaseAdminDocsView(TemplateView):\n40:     \"\"\"\n41:     Base view for admindocs views.\n42:     \"\"\"\n43: \n44:     @method_decorator(staff_member_required)\n45:     def dispatch(self, request, *args, **kwargs):\n46:         if not utils.docutils_is_available:\n47:             # Display an error message for people without docutils\n48:             self.template_name = \"admin_doc/missing_docutils.html\"\n49:             return self.render_to_response(admin.site.each_context(request))\n50:         return super().dispatch(request, *args, **kwargs)\n51: \n52:     def get_context_data(self, **kwargs):\n53:         return super().get_context_data(\n54:             **{\n55:                 **kwargs,\n56:                 **admin.site.each_context(self.request),\n57:             }\n58:         )\n59: \n60: \n61: class BookmarkletsView(BaseAdminDocsView):\n62:     template_name = \"admin_doc/bookmarklets.html\"\n63: \n64: \n65: class TemplateTagIndexView(BaseAdminDocsView):\n66:     template_name = \"admin_doc/template_tag_index.html\"\n67: \n68:     def get_context_data(self, **kwargs):\n69:         tags = []\n70:         try:\n71:             engine = Engine.get_default()\n72:         except ImproperlyConfigured:\n73:             # Non-trivial TEMPLATES settings aren't supported (#24125).\n74:             pass\n75:         else:\n76:             app_libs = sorted(engine.template_libraries.items())\n77:             builtin_libs = [(\"\", lib) for lib in engine.template_builtins]\n78:             for module_name, library in builtin_libs + app_libs:\n79:                 for tag_name, tag_func in library.tags.items():\n80:                     title, body, metadata = utils.parse_docstring(tag_func.__doc__)\n81:                     title = title and utils.parse_rst(\n82:                         title, \"tag\", _(\"tag:\") + tag_name\n83:                     )\n84:                     body = body and utils.parse_rst(body, \"tag\", _(\"tag:\") + tag_name)\n85:                     for key in metadata:\n86:                         metadata[key] = utils.parse_rst(\n87:                             metadata[key], \"tag\", _(\"tag:\") + tag_name\n88:                         )\n89:                     tag_library = module_name.split(\".\")[-1]\n90:                     tags.append(\n91:                         {\n92:                             \"name\": tag_name,\n93:                             \"title\": title,\n94:                             \"body\": body,\n95:                             \"meta\": metadata,\n96:                             \"library\": tag_library,\n97:                         }\n98:                     )\n99:         return super().get_context_data(**{**kwargs, \"tags\": tags})\n100: \n[lines 1-100 of 499]",
+    "token_count": 1073,
+    "rank": 4,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.contrib.admindocs.views.BaseAdminDocsView",
+     "django.contrib.admindocs.views.BaseAdminDocsView.dispatch",
+     "django.contrib.admindocs.views.BaseAdminDocsView.get_context_data",
+     "django.contrib.admindocs.views.BookmarkletsView",
+     "django.contrib.admindocs.views.TemplateTagIndexView",
+     "django.contrib.admindocs.views.TemplateTagIndexView.get_context_data"
+    ],
+    "provenance": {
+     "msg_id": "r3.1",
+     "tool": "read",
+     "args": {
+      "path": "django/contrib/admindocs/views.py",
+      "start_line": 1,
+      "end_line": 100
+     },
+     "engine_token_count": 1073
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.2",
+    "content": "# r3.2  (read {\"end_line\": 100, \"path\": \"django/contrib/auth/views.py\", \"start_line\": 1})\n1: import warnings\n2: from urllib.parse import urlparse, urlunparse\n3: \n4: from django.conf import settings\n5: \n6: # Avoid shadowing the login() and logout() views below.\n7: from django.contrib.auth import REDIRECT_FIELD_NAME, get_user_model\n8: from django.contrib.auth import login as auth_login\n9: from django.contrib.auth import logout as auth_logout\n10: from django.contrib.auth import update_session_auth_hash\n11: from django.contrib.auth.decorators import login_required\n12: from django.contrib.auth.forms import (\n13:     AuthenticationForm,\n14:     PasswordChangeForm,\n15:     PasswordResetForm,\n16:     SetPasswordForm,\n17: )\n18: from django.contrib.auth.tokens import default_token_generator\n19: from django.contrib.sites.shortcuts import get_current_site\n20: from django.core.exceptions import ImproperlyConfigured, ValidationError\n21: from django.http import HttpResponseRedirect, QueryDict\n22: from django.shortcuts import resolve_url\n23: from django.urls import reverse_lazy\n24: from django.utils.decorators import method_decorator\n25: from django.utils.deprecation import RemovedInDjango50Warning\n26: from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_decode\n27: from django.utils.translation import gettext_lazy as _\n28: from django.views.decorators.cache import never_cache\n29: from django.views.decorators.csrf import csrf_protect\n30: from django.views.decorators.debug import sensitive_post_parameters\n31: from django.views.generic.base import TemplateView\n32: from django.views.generic.edit import FormView\n33: \n34: UserModel = get_user_model()\n35: \n36: \n37: class RedirectURLMixin:\n38:     next_page = None\n39:     redirect_field_name = REDIRECT_FIELD_NAME\n40:     success_url_allowed_hosts = set()\n41: \n42:     def get_success_url(self):\n43:         return self.get_redirect_url() or self.get_default_redirect_url()\n44: \n45:     def get_redirect_url(self):\n46:         \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n47:         redirect_to = self.request.POST.get(\n48:             self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n49:         )\n50:         url_is_safe = url_has_allowed_host_and_scheme(\n51:             url=redirect_to,\n52:             allowed_hosts=self.get_success_url_allowed_hosts(),\n53:             require_https=self.request.is_secure(),\n54:         )\n55:         return redirect_to if url_is_safe else \"\"\n56: \n57:     def get_success_url_allowed_hosts(self):\n58:         return {self.request.get_host(), *self.success_url_allowed_hosts}\n59: \n60:     def get_default_redirect_url(self):\n61:         \"\"\"Return the default redirect URL.\"\"\"\n62:         if self.next_page:\n63:             return resolve_url(self.next_page)\n64:         raise ImproperlyConfigured(\"No URL to redirect to. Provide a next_page.\")\n65: \n66: \n67: class LoginView(RedirectURLMixin, FormView):\n68:     \"\"\"\n69:     Display the login form and handle the login action.\n70:     \"\"\"\n71: \n72:     form_class = AuthenticationForm\n73:     authentication_form = None\n74:     template_name = \"registration/login.html\"\n75:     redirect_authenticated_user = False\n76:     extra_context = None\n77: \n78:     @method_decorator(sensitive_post_parameters())\n79:     @method_decorator(csrf_protect)\n80:     @method_decorator(never_cache)\n81:     def dispatch(self, request, *args, **kwargs):\n82:         if self.redirect_authenticated_user and self.request.user.is_authenticated:\n83:             redirect_to = self.get_success_url()\n84:             if redirect_to == self.request.path:\n85:                 raise ValueError(\n86:                     \"Redirection loop for authenticated user detected. Check that \"\n87:                     \"your LOGIN_REDIRECT_URL doesn't point to a login page.\"\n88:                 )\n89:             return HttpResponseRedirect(redirect_to)\n90:         return super().dispatch(request, *args, **kwargs)\n91: \n92:     def get_default_redirect_url(self):\n93:         \"\"\"Return the default redirect URL.\"\"\"\n94:         if self.next_page:\n95:             return resolve_url(self.next_page)\n96:         else:\n97:             return resolve_url(settings.LOGIN_REDIRECT_URL)\n98: \n99:     def get_form_class(self):\n100:         return self.authentication_form or self.form_class\n[lines 1-100 of 395]",
+    "token_count": 1090,
+    "rank": 5,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin",
+     "django.contrib.auth.views.RedirectURLMixin.get_success_url",
+     "django.contrib.auth.views.RedirectURLMixin.get_redirect_url",
+     "django.contrib.auth.views.RedirectURLMixin.get_success_url_allowed_hosts",
+     "django.contrib.auth.views.RedirectURLMixin.get_default_redirect_url",
+     "django.contrib.auth.views.LoginView",
+     "django.contrib.auth.views.LoginView.dispatch",
+     "django.contrib.auth.views.LoginView.get_default_redirect_url",
+     "django.contrib.auth.views.LoginView.get_form_class"
+    ],
+    "provenance": {
+     "msg_id": "r3.2",
+     "tool": "read",
+     "args": {
+      "path": "django/contrib/auth/views.py",
+      "start_line": 1,
+      "end_line": 100
+     },
+     "engine_token_count": 1090
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.3",
+    "content": "# r3.3  (read {\"end_line\": 100, \"path\": \"django/contrib/contenttypes/views.py\", \"start_line\": 1})\n1: from django.apps import apps\n2: from django.contrib.contenttypes.models import ContentType\n3: from django.contrib.sites.shortcuts import get_current_site\n4: from django.core.exceptions import ObjectDoesNotExist\n5: from django.http import Http404, HttpResponseRedirect\n6: from django.utils.translation import gettext as _\n7: \n8: \n9: def shortcut(request, content_type_id, object_id):\n10:     \"\"\"\n11:     Redirect to an object's page based on a content-type ID and an object ID.\n12:     \"\"\"\n13:     # Look up the object, making sure it's got a get_absolute_url() function.\n14:     try:\n15:         content_type = ContentType.objects.get(pk=content_type_id)\n16:         if not content_type.model_class():\n17:             raise Http404(\n18:                 _(\"Content type %(ct_id)s object has no associated model\")\n19:                 % {\"ct_id\": content_type_id}\n20:             )\n21:         obj = content_type.get_object_for_this_type(pk=object_id)\n22:     except (ObjectDoesNotExist, ValueError):\n23:         raise Http404(\n24:             _(\"Content type %(ct_id)s object %(obj_id)s doesn\u2019t exist\")\n25:             % {\"ct_id\": content_type_id, \"obj_id\": object_id}\n26:         )\n27: \n28:     try:\n29:         get_absolute_url = obj.get_absolute_url\n30:     except AttributeError:\n31:         raise Http404(\n32:             _(\"%(ct_name)s objects don\u2019t have a get_absolute_url() method\")\n33:             % {\"ct_name\": content_type.name}\n34:         )\n35:     absurl = get_absolute_url()\n36: \n37:     # Try to figure out the object's domain, so we can do a cross-site redirect\n38:     # if necessary.\n39: \n40:     # If the object actually defines a domain, we're done.\n41:     if absurl.startswith((\"http://\", \"https://\", \"//\")):\n42:         return HttpResponseRedirect(absurl)\n43: \n44:     # Otherwise, we need to introspect the object's relationships for a\n45:     # relation to the Site object\n46:     try:\n47:         object_domain = get_current_site(request).domain\n48:     except ObjectDoesNotExist:\n49:         object_domain = None\n50: \n51:     if apps.is_installed(\"django.contrib.sites\"):\n52:         Site = apps.get_model(\"sites.Site\")\n53:         opts = obj._meta\n54: \n55:         for field in opts.many_to_many:\n56:             # Look for a many-to-many relationship to Site.\n57:             if field.remote_field.model is Site:\n58:                 site_qs = getattr(obj, field.name).all()\n59:                 if object_domain and site_qs.filter(domain=object_domain).exists():\n60:                     # The current site's domain matches a site attached to the\n61:                     # object.\n62:                     break\n63:                 # Caveat: In the case of multiple related Sites, this just\n64:                 # selects the *first* one, which is arbitrary.\n65:                 site = site_qs.first()\n66:                 if site:\n67:                     object_domain = site.domain\n68:                     break\n69:         else:\n70:             # No many-to-many relationship to Site found. Look for a\n71:             # many-to-one relationship to Site.\n72:             for field in obj._meta.fields:\n73:                 if field.remote_field and field.remote_field.model is Site:\n74:                     try:\n75:                         site = getattr(obj, field.name)\n76:                     except Site.DoesNotExist:\n77:                         continue\n78:                     if site is not None:\n79:                         object_domain = site.domain\n80:                         break\n81: \n82:     # If all that malarkey found an object domain, use it. Otherwise, fall back\n83:     # to whatever get_absolute_url() returned.\n84:     if object_domain is not None:\n85:         protocol = request.scheme\n86:         return HttpResponseRedirect(\"%s://%s%s\" % (protocol, object_domain, absurl))\n87:     else:\n88:         return HttpResponseRedirect(absurl)\n89: \n[lines 1-89 of 89]",
+    "token_count": 1035,
+    "rank": 6,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.contrib.contenttypes.views.shortcut"
+    ],
+    "provenance": {
+     "msg_id": "r3.3",
+     "tool": "read",
+     "args": {
+      "path": "django/contrib/contenttypes/views.py",
+      "start_line": 1,
+      "end_line": 100
+     },
+     "engine_token_count": 1035
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.4",
+    "content": "# r3.4  (read {\"end_line\": 100, \"path\": \"django/contrib/flatpages/views.py\", \"start_line\": 1})\n1: from django.conf import settings\n2: from django.contrib.flatpages.models import FlatPage\n3: from django.contrib.sites.shortcuts import get_current_site\n4: from django.http import Http404, HttpResponse, HttpResponsePermanentRedirect\n5: from django.shortcuts import get_object_or_404\n6: from django.template import loader\n7: from django.utils.safestring import mark_safe\n8: from django.views.decorators.csrf import csrf_protect\n9: \n10: DEFAULT_TEMPLATE = \"flatpages/default.html\"\n11: \n12: # This view is called from FlatpageFallbackMiddleware.process_response\n13: # when a 404 is raised, which often means CsrfViewMiddleware.process_view\n14: # has not been called even if CsrfViewMiddleware is installed. So we need\n15: # to use @csrf_protect, in case the template needs {% csrf_token %}.\n16: # However, we can't just wrap this view; if no matching flatpage exists,\n17: # or a redirect is required for authentication, the 404 needs to be returned\n18: # without any CSRF checks. Therefore, we only\n19: # CSRF protect the internal implementation.\n20: \n21: \n22: def flatpage(request, url):\n23:     \"\"\"\n24:     Public interface to the flat page view.\n25: \n26:     Models: `flatpages.flatpages`\n27:     Templates: Uses the template defined by the ``template_name`` field,\n28:         or :template:`flatpages/default.html` if template_name is not defined.\n29:     Context:\n30:         flatpage\n31:             `flatpages.flatpages` object\n32:     \"\"\"\n33:     if not url.startswith(\"/\"):\n34:         url = \"/\" + url\n35:     site_id = get_current_site(request).id\n36:     try:\n37:         f = get_object_or_404(FlatPage, url=url, sites=site_id)\n38:     except Http404:\n39:         if not url.endswith(\"/\") and settings.APPEND_SLASH:\n40:             url += \"/\"\n41:             f = get_object_or_404(FlatPage, url=url, sites=site_id)\n42:             return HttpResponsePermanentRedirect(\"%s/\" % request.path)\n43:         else:\n44:             raise\n45:     return render_flatpage(request, f)\n46: \n47: \n48: @csrf_protect\n49: def render_flatpage(request, f):\n50:     \"\"\"\n51:     Internal interface to the flat page view.\n52:     \"\"\"\n53:     # If registration is required for accessing this page, and the user isn't\n54:     # logged in, redirect to the login page.\n55:     if f.registration_required and not request.user.is_authenticated:\n56:         from django.contrib.auth.views import redirect_to_login\n57: \n58:         return redirect_to_login(request.path)\n59:     if f.template_name:\n60:         template = loader.select_template((f.template_name, DEFAULT_TEMPLATE))\n61:     else:\n62:         template = loader.get_template(DEFAULT_TEMPLATE)\n63: \n64:     # To avoid having to always use the \"|safe\" filter in flatpage templates,\n65:     # mark the title and content as already safe (since they are raw HTML\n66:     # content in the first place).\n67:     f.title = mark_safe(f.title)\n68:     f.content = mark_safe(f.content)\n69: \n70:     return HttpResponse(template.render({\"flatpage\": f}, request))\n71: \n[lines 1-71 of 71]",
+    "token_count": 868,
+    "rank": 7,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.contrib.flatpages.views.flatpage",
+     "django.contrib.flatpages.views.render_flatpage"
+    ],
+    "provenance": {
+     "msg_id": "r3.4",
+     "tool": "read",
+     "args": {
+      "path": "django/contrib/flatpages/views.py",
+      "start_line": 1,
+      "end_line": 100
+     },
+     "engine_token_count": 868
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r3.5",
+    "content": "# r3.5  (read {\"end_line\": 100, \"path\": \"django/contrib/gis/sitemaps/views.py\", \"start_line\": 1})\n1: from django.apps import apps\n2: from django.contrib.gis.db.models import GeometryField\n3: from django.contrib.gis.db.models.functions import AsKML, Transform\n4: from django.contrib.gis.shortcuts import render_to_kml, render_to_kmz\n5: from django.core.exceptions import FieldDoesNotExist\n6: from django.db import DEFAULT_DB_ALIAS, connections\n7: from django.http import Http404\n8: \n9: \n10: def kml(request, label, model, field_name=None, compress=False, using=DEFAULT_DB_ALIAS):\n11:     \"\"\"\n12:     This view generates KML for the given app label, model, and field name.\n13: \n14:     The field name must be that of a geographic field.\n15:     \"\"\"\n16:     placemarks = []\n17:     try:\n18:         klass = apps.get_model(label, model)\n19:     except LookupError:\n20:         raise Http404(\n21:             'You must supply a valid app label and module name.  Got \"%s.%s\"'\n22:             % (label, model)\n23:         )\n24: \n25:     if field_name:\n26:         try:\n27:             field = klass._meta.get_field(field_name)\n28:             if not isinstance(field, GeometryField):\n29:                 raise FieldDoesNotExist\n30:         except FieldDoesNotExist:\n31:             raise Http404(\"Invalid geometry field.\")\n32: \n33:     connection = connections[using]\n34: \n35:     if connection.features.has_AsKML_function:\n36:         # Database will take care of transformation.\n37:         placemarks = klass._default_manager.using(using).annotate(kml=AsKML(field_name))\n38:     else:\n39:         # If the database offers no KML method, we use the `kml`\n40:         # attribute of the lazy geometry instead.\n41:         placemarks = []\n42:         if connection.features.has_Transform_function:\n43:             qs = klass._default_manager.using(using).annotate(\n44:                 **{\"%s_4326\" % field_name: Transform(field_name, 4326)}\n45:             )\n46:             field_name += \"_4326\"\n47:         else:\n48:             qs = klass._default_manager.using(using).all()\n49:         for mod in qs:\n50:             mod.kml = getattr(mod, field_name).kml\n51:             placemarks.append(mod)\n52: \n53:     # Getting the render function and rendering to the correct.\n54:     if compress:\n55:         render = render_to_kmz\n56:     else:\n57:         render = render_to_kml\n58:     return render(\"gis/kml/placemarks.kml\", {\"places\": placemarks})\n59: \n60: \n61: def kmz(request, label, model, field_name=None, using=DEFAULT_DB_ALIAS):\n62:     \"\"\"\n63:     Return KMZ for the given app label, model, and field name.\n64:     \"\"\"\n65:     return kml(request, label, model, field_name, compress=True, using=using)\n66: \n[lines 1-66 of 66]",
+    "token_count": 790,
+    "rank": 8,
+    "kind": "tool_result_read",
+    "symbols": [
+     "django.contrib.gis.sitemaps.views.kml",
+     "django.contrib.gis.sitemaps.views.kmz"
+    ],
+    "provenance": {
+     "msg_id": "r3.5",
+     "tool": "read",
+     "args": {
+      "path": "django/contrib/gis/sitemaps/views.py",
+      "start_line": 1,
+      "end_line": 100
+     },
+     "engine_token_count": 790
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 5220,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "What breaks if `django.http.response.HttpResponse.__init__` changes?",
+   "task_type": "T5_blast_radius",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 4,
+   "tool_calls": 8,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 1,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 0,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"HttpResponse\\\\.__init__\", \"glob\": \"*.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "HttpResponse\\.__init__",
+        "glob": "*.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "HttpResponse\\.__init__",
+        "glob": "*.py"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "grep_empty"
+      }
+     ],
+     "completion_tokens": 31,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/views.py\"}}</tools>\n<tools>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/middleware.py\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "glob",
+       "arguments": {
+        "pattern": "**/views.py"
+       }
+      },
+      {
+       "name": "glob",
+       "arguments": {
+        "pattern": "**/middleware.py"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "glob",
+       "args": {
+        "pattern": "**/views.py"
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "glob",
+       "args": {
+        "pattern": "**/middleware.py"
+       },
+       "msg_id": "r2.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 45,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/contrib/admindocs/views.py\", \"start_line\": 1, \"end_line\": 100}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/contrib/auth/views.py\", \"start_line\": 1, \"end_line\": 100}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/contrib/contenttypes/views.py\", \"start_line\": 1, \"end_line\": 100}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/contrib/flatpages/views.py\", \"start_line\": 1, \"end_line\": 100}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"django/contrib/gis/sitemaps/views.py\", \"start_line\": 1, \"end_line\": 100}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/contrib/admindocs/views.py",
+        "start_line": 1,
+        "end_line": 100
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/contrib/auth/views.py",
+        "start_line": 1,
+        "end_line": 100
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/contrib/contenttypes/views.py",
+        "start_line": 1,
+        "end_line": 100
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/contrib/flatpages/views.py",
+        "start_line": 1,
+        "end_line": 100
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "django/contrib/gis/sitemaps/views.py",
+        "start_line": 1,
+        "end_line": 100
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 5,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/contrib/admindocs/views.py",
+        "start_line": 1,
+        "end_line": 100
+       },
+       "msg_id": "r3.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/contrib/auth/views.py",
+        "start_line": 1,
+        "end_line": 100
+       },
+       "msg_id": "r3.2",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/contrib/contenttypes/views.py",
+        "start_line": 1,
+        "end_line": 100
+       },
+       "msg_id": "r3.3",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/contrib/flatpages/views.py",
+        "start_line": 1,
+        "end_line": 100
+       },
+       "msg_id": "r3.4",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "django/contrib/gis/sitemaps/views.py",
+        "start_line": 1,
+        "end_line": 100
+       },
+       "msg_id": "r3.5",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 210,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 4,
+     "raw_text": "<tools>{\"name\": \"answer\", \"arguments\": {\"response\": \"```json\\n{\\\"reasoning\\\": \\\"No direct calls to django.http.response.HttpResponse.__init__ were found in the views and middleware files. However, changes to HttpResponse.__init__ could potentially break any custom subclasses or uses of HttpResponse in the repository that rely on the specific behavior of the constructor.\\\", \\\"symbols\\\": []}\\n```\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "answer",
+       "arguments": {
+        "response": "```json\n{\"reasoning\": \"No direct calls to django.http.response.HttpResponse.__init__ were found in the views and middleware files. However, changes to HttpResponse.__init__ could potentially break any custom subclasses or uses of HttpResponse in the repository that rely on the specific behavior of the constructor.\", \"symbols\": []}\n```"
+       }
+      }
+     ],
+     "is_final": true,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 88,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "answer_tool"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     2367.498607,
+     2879.399153,
+     13730.737653,
+     11931.831413
+    ],
+    "L_tool_exec": [
+     67.117062,
+     61.961587,
+     59.123186,
+     0.362229,
+     0.290652,
+     0.201061,
+     0.143047,
+     0.139426
+    ],
+    "L_retrieve": [
+     31172.703097
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 6189,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"No direct calls to django.http.response.HttpResponse.__init__ were found in the views and middleware files. However, changes to HttpResponse.__init__ could potentially break any custom subclasses or uses of HttpResponse in the repository that rely on the specific behavior of the constructor.\", \"symbols\": []}\n```",
+    "generation_tokens": 88,
+    "latency_seconds": 11.931575290000183,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 6232,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 5220,
+   "prompt_tokens": 6189,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 6232,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}
