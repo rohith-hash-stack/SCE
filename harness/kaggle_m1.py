@@ -11,6 +11,27 @@ Gate A (type coverage): the five synthetic tasks (T1..T5) x 4 arms, once.
   each arm's synthetic cells, within each type.
 Gate B (real tasks): 5 FastAPI T2 tasks x 4 arms, same validity criteria.
 
+M4 mode (`--corpus`, `--seeds`, `--task-types`; any one of them selects it):
+
+    python -m harness.kaggle_m1 --corpus django --seeds 42,43,44 --task-types T2,T5 --out /kaggle/working/m4_django
+
+One corpus per invocation; the run loops seed x task_type x task x arm over
+that corpus's real tasks (no synthetic Gate A). Per corpus:
+  1. `.prism/` under the corpus root is removed before indexing (derived
+     caches are never part of the pinned state; docs/m4_notes.md);
+  2. the corpus is resolved through `benchmarks.corpora.resolver.resolve()`;
+  3. every active arm indexes it (`repo_id` = the corpus, so Arms 1-3 pick
+     the corpus's language);
+  4. every cell runs and is checkpointed to `<out>/checkpoint.json`, keyed
+     (corpus, seed, task_id, arm). A restart with the same `--out` skips
+     every cell already checkpointed with a non-None tsr;
+  5. `cells.parquet` is written from all checkpointed cells;
+  6. for TypeScript corpora, `harness.reporting.t5_bias_control` runs on
+     the cells and writes `<out>/t5_bias_control.json`.
+Gate B's exclusion (config.GATE_B_EXCLUDED_TASKS) applies: those tasks are
+not run. The Kaggle cell pushes `<out>` to reports/harness_m4/<corpus>/.
+Without any of the three flags the M1-M3 gate below runs unchanged.
+
 Also at startup: tokenizer parity (harness HF tokenizer vs the serving
 model's own prompt counts) and the GPU memory watchdog before each batch.
 
@@ -136,7 +157,22 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--fake-encoders", action="store_true")
     ap.add_argument("--bootstrap-reps", type=int, default=1000)
+    # ---- M4 mode: any of these three selects it ----
+    ap.add_argument("--corpus", choices=C.CORPORA, default=None,
+                    help="M4: the corpus to run (fastapi when only --seeds/--task-types is given)")
+    ap.add_argument("--seeds", default=None, help="M4: comma-separated seeds, e.g. 42,43,44 (default: --seed)")
+    ap.add_argument("--task-types", default=None, help="M4: comma-separated, T2 and/or T5 (default: both)")
     args = ap.parse_args(argv)
+    m4 = args.corpus is not None or args.seeds is not None or args.task_types is not None
+    if m4:
+        args.corpus = args.corpus or "fastapi"
+        args.seed_list = [int(x) for x in (args.seeds or str(args.seed)).split(",") if x.strip()]
+        names = {"T2": "T2_localization", "T5": "T5_blast_radius"}
+        wanted = [x.strip() for x in (args.task_types or "T2,T5").split(",") if x.strip()]
+        bad = [x for x in wanted if x not in names]
+        if bad:
+            ap.error(f"--task-types: {bad} not in {sorted(names)} (T1/T3/T4 are deferred)")
+        args.task_type_list = [names[x] for x in wanted]
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -144,10 +180,12 @@ def main(argv=None) -> int:
                     "model": "SCRIPTED (dry run)" if args.dry_run else args.model, "seed": args.seed,
                     "fake_encoders": args.fake_encoders, "context_window": C.CONTEXT_WINDOW,
                     "generation_cap": C.GENERATION_RESERVE, "rows": []}
+    if m4:
+        report.update(mode="m4", corpus=args.corpus, seeds=args.seed_list, task_types=args.task_type_list)
     exit_code = 2   # overwritten below; 2 = the run itself crashed
     t_start = time.perf_counter()
     try:
-        exit_code = _run(args, out_dir, report)
+        exit_code = _run_m4(args, out_dir, report) if m4 else _run(args, out_dir, report)
     except Exception as exc:  # noqa: BLE001 - recorded, then reported via exit code 2
         report["fatal"] = failure_record(exc, step="harness", cmd=" ".join(report["argv"]))
         print(f"[m1] FATAL {report['fatal']['type']}: {report['fatal']['message']}", flush=True)
@@ -160,6 +198,218 @@ def main(argv=None) -> int:
         report["wall_seconds"] = round(time.perf_counter() - t_start, 1)
         (out_dir / "gate_report.json").write_text(json.dumps(report, indent=1, default=str))
     return exit_code
+
+
+# --------------------------------------------------------------------------
+# M4: one corpus, several seeds, T2 + T5, checkpointed
+# --------------------------------------------------------------------------
+def cell_key(corpus: str, seed: int, task_id: str, arm: str) -> str:
+    return f"{corpus}|{seed}|{task_id}|{arm}"
+
+
+def load_checkpoint(path: Path) -> dict:
+    """{key: {"row": ..., "result": ScoreResult dict | None}}; {} when absent."""
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text()).get("cells", {})
+
+
+def save_checkpoint(path: Path, corpus: str, cells: dict) -> None:
+    """Atomic write (temp file, then rename): a kill mid-write leaves the
+    previous checkpoint intact."""
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"corpus": corpus, "n_cells": len(cells), "cells": cells}, default=str))
+    tmp.replace(path)
+
+
+def done(entry: dict | None) -> bool:
+    """A checkpointed cell is complete when it has a non-None tsr."""
+    return bool(entry) and (entry.get("result") or {}).get("tsr") is not None
+
+
+def clear_prism_cache(root: str | Path) -> dict:
+    """Remove `<corpus root>/.prism/` (derived caches; docs/m4_notes.md)."""
+    import shutil
+    path = Path(root) / ".prism"
+    existed = path.exists()
+    if existed:
+        shutil.rmtree(path)
+    return {"path": str(path), "existed": existed, "removed": existed and not path.exists()}
+
+
+def parity_samples_files(root: str, corpus: str, n: int = 4) -> list[str]:
+    """Four largest source files of the corpus's language (deterministic),
+    as tokenizer-parity samples."""
+    import os
+    from harness.ast_splitter import iter_source_files
+    files = iter_source_files(root, C.CORPUS_LANGUAGE[corpus])
+    files = sorted(files, key=lambda f: (-os.path.getsize(f), f))[:n]
+    return [os.path.relpath(f, root) for f in files]
+
+
+def _run_m4(args, out_dir: Path, report: dict) -> int:
+    from benchmarks.corpora.resolver import resolve
+    from harness.arms import build_arm
+    from harness.llm import ChatLLM, OllamaChatLLM
+    from harness.pipeline import Pipeline, class_ancestors
+    from harness.reporting.output_schema import attach_latency_aggregates, to_frame, write_parquet
+    from harness.scoring.hallucination import build_symbol_cache
+    from harness.scoring.scorer import ScoreResult
+    from harness.tasks.loaders import load_tasks
+    from harness.tokenizer import get_tokenizer
+
+    corpus = args.corpus
+    root = str(resolve(corpus))                                     # step 2 (clones on first call)
+    report["prism_cache_clear"] = clear_prism_cache(root)           # step 1, before any indexing
+    print(f"[m4] corpus={corpus} root={root} seeds={args.seed_list} types={args.task_type_list} "
+          f".prism cleared={report['prism_cache_clear']}", flush=True)
+    tok = get_tokenizer()
+    report["tokenizer"] = tok.name
+    if args.dry_run:
+        llm, report["llm_api"] = _scripted_llm(), "scripted"
+    elif args.ollama_url:
+        llm, report["llm_api"] = OllamaChatLLM(base_url=args.ollama_url, model=args.model), f"ollama-native {args.ollama_url}/api/chat"
+    else:
+        llm, report["llm_api"] = ChatLLM(base_url=args.llm_url, model=args.model), f"openai-compatible {args.llm_url}"
+    if args.dry_run or not args.ollama_url:
+        report["tokenizer_parity"] = {"status": "skipped (dry run)" if args.dry_run else "skipped (no server)"}
+    else:
+        from harness.tokenizer import OllamaPromptCounter, verify_tokenizer_parity
+        stamp = str(time.time_ns())
+        samples = [f"# parity sample {stamp}-{i}\n" + open(f"{root}/{p}", encoding="utf-8").read()[:6000]
+                   for i, p in enumerate(parity_samples_files(root, corpus))]
+        rep = verify_tokenizer_parity(tok, OllamaPromptCounter(model=args.model, base_url=args.ollama_url), samples)
+        report["tokenizer_parity"] = {**rep.to_dict(), "status": "ok" if rep.within_tolerance else "DIVERGED"}
+    print(f"[m4] tokenizer parity: {report['tokenizer_parity'].get('status')}", flush=True)
+
+    # ---- step 3: index every active arm on this corpus ----
+    index_failures: dict[str, dict] = {}
+    index_ms: dict[tuple[str, str], float] = {}
+    arms: dict = {"arm0": build_arm("arm0")}
+
+    def _index(arm_id, factory):
+        t0 = time.perf_counter()
+        try:
+            arm = factory()
+            arm.index(root, {"repo_id": corpus})
+            arms[arm_id] = arm
+            lat = getattr(arm, "index_latency", {}).get("L_index")
+            if lat:
+                index_ms[(arm_id, corpus)] = lat[0]
+            print(f"[m4] indexed {arm_id} in {time.perf_counter() - t0:.0f}s", flush=True)
+        except Exception as exc:  # noqa: BLE001 - recorded; that arm's cells FAIL with this cause
+            index_failures[arm_id] = failure_record(exc, "index", f"{arm_id}.index({root!r})")
+            arms[arm_id] = None
+            print(f"[m4] INDEX FAIL {arm_id}: {type(exc).__name__}: {exc}", flush=True)
+
+    needs_prism = "arm5" in C.ACTIVE_ARMS or "oracle" in C.ACTIVE_ARMS
+    if needs_prism:
+        _index("arm5", lambda: build_arm("arm5", llm=llm, tokenizer=tok))
+    builder = arms["arm5"].engine.builder if arms.get("arm5") else None
+    if "oracle" in C.ACTIVE_ARMS:
+        _index("oracle", lambda: build_arm("oracle", tokenizer=tok, builder=builder))
+    emb, rr = _fake_encoders() if args.fake_encoders else (None, None)
+    if "arm1" in C.ACTIVE_ARMS:
+        _index("arm1", lambda: build_arm("arm1", tokenizer=tok, embedder=emb, reranker=rr))
+    if "arm2" in C.ACTIVE_ARMS:
+        _index("arm2", lambda: build_arm("arm2", tokenizer=tok))
+    if "arm3" in C.ACTIVE_ARMS:
+        _index("arm3", lambda: build_arm("arm3", tokenizer=tok))
+    if "arm4" in C.ACTIVE_ARMS:
+        _index("arm4", lambda: build_arm("arm4", llm=llm, tokenizer=tok))
+    report["index_failures"] = index_failures
+    report["index_ms"] = {f"{a}/{c}": ms for (a, c), ms in index_ms.items()}
+    arm_order = [a for a in C.ACTIVE_ARMS if a in arms]
+    builder = builder or (arms["oracle"].builder if arms.get("oracle") else None)
+    symbol_cache = build_symbol_cache(builder.symbol_table._symbols) if builder is not None else None
+    ancestors = class_ancestors(builder) if builder is not None else None
+    pipe = Pipeline({a: arms[a] for a in arm_order if arms.get(a)}, llm, tok, out_dir=out_dir,
+                    symbol_cache=symbol_cache, ancestors=ancestors)
+    if not args.dry_run:
+        try:
+            w = llm("You are a test.", "Reply with OK.", max_tokens=8, seed=args.seed_list[0], purpose="warmup")
+            report["warmup"] = {"ok": True, "latency_seconds": round(w.latency_seconds, 1)}
+        except Exception as exc:  # noqa: BLE001
+            report["warmup"] = {"ok": False, **failure_record(exc, "warmup", "llm(warmup)")}
+
+    # ---- step 4: tasks x seeds, checkpointed ----
+    tasks = [t for t in load_tasks(corpus, task_types=args.task_type_list, repo_root=root)
+             if t.task_id not in C.GATE_B_EXCLUDED_TASKS]
+    report["excluded_tasks"] = sorted(t for t in C.GATE_B_EXCLUDED_TASKS if t.startswith(f"{corpus}_"))
+    report["n_tasks"] = {tt: sum(t.task_type == tt for t in tasks) for tt in args.task_type_list}
+    ckpt_path = out_dir / "checkpoint.json"
+    cells = load_checkpoint(ckpt_path)
+    report["resumed_cells"] = sum(done(v) for v in cells.values())
+    n_total = len(args.seed_list) * len(tasks) * len(arm_order)
+    print(f"[m4] {len(tasks)} tasks {report['n_tasks']} x {len(args.seed_list)} seeds x {len(arm_order)} arms "
+          f"= {n_total} cells; {report['resumed_cells']} already checkpointed", flush=True)
+    for seed in args.seed_list:
+        if not args.dry_run:
+            reading = _gpu_reading()
+            report.setdefault("gpu_mb_per_seed", {})[str(seed)] = reading
+            if reading.get("over_limit"):
+                report["aborted"] = f"GPU watchdog: memory over limit before seed {seed}"
+                print(f"[m4] {report['aborted']}", flush=True)
+                break
+        for task in tasks:
+            for arm_id in arm_order:
+                key = cell_key(corpus, seed, task.task_id, arm_id)
+                if done(cells.get(key)):
+                    continue
+                t1 = time.perf_counter()
+                cmd = f"Pipeline.run_cell(arm={arm_id!r}, task={task.task_id!r}, seed={seed})"
+                row = {"corpus": corpus, "seed": seed, "arm": arm_id, "task_type": task.task_type,
+                       "task_id": task.task_id}
+                result = None
+                if arm_id in index_failures:
+                    fail = dict(index_failures[arm_id], cmd=cmd)
+                    row.update(status="FAIL", problems=[f"{fail['type']}: {fail['message']}"], failure=fail)
+                else:
+                    try:
+                        out = pipe.run_cell(arm_id, task, seed=seed)
+                        problems = _validity(out, task)
+                        result = out.result.to_dict()
+                        r = out.result
+                        row.update(status="PASS" if not problems else "FAIL", problems=problems, tsr=r.tsr,
+                                   total_tokens=out.ctx.total_tokens, prompt_tokens=out.prompt_tokens,
+                                   finish_reason=r.finish_reason, generation_capped=r.generation_capped)
+                    except Exception as exc:  # noqa: BLE001 - a failing cell is a FAIL row, not a crash
+                        fail = failure_record(exc, pipe.step, cmd)
+                        row.update(status="FAIL", problems=[f"{fail['type']}: {fail['message']}"[:400]], failure=fail)
+                row["seconds"] = round(time.perf_counter() - t1, 1)
+                cells[key] = {"row": row, "result": result}
+                save_checkpoint(ckpt_path, corpus, cells)
+                tsr = row.get("tsr")
+                print(f"{row['status']:5s} {corpus:8s} s{seed} {arm_id:7s} {task.task_type:16s} {task.task_id:52s} "
+                      f"tsr={'NaN' if tsr is None or tsr != tsr else f'{tsr:.2f}'} {row['seconds']}s "
+                      f"{'; '.join(row['problems']) if row['problems'] else ''}", flush=True)
+
+    # ---- step 5: parquet from every checkpointed cell (this run's and resumed ones) ----
+    report["rows"] = [v["row"] for v in cells.values()]
+    results = [ScoreResult(**v["result"]) for v in cells.values() if v.get("result")]
+    if results:
+        df = attach_latency_aggregates(to_frame(results), index_ms)
+        write_parquet(df, out_dir / "cells.parquet")
+        summary = gate_summary(results, [f"M4_{corpus}"] * len(results), n_reps=args.bootstrap_reps)
+        summary.to_parquet(out_dir / "summary.parquet", index=False)
+        report["summary_rows"] = len(summary)
+        # ---- step 6: TypeScript T5 bias control ----
+        if C.CORPUS_LANGUAGE[corpus] == "typescript":
+            from harness.reporting.t5_bias_control import bias_control
+            bias = bias_control(df)
+            (out_dir / "t5_bias_control.json").write_text(json.dumps(bias, indent=1))
+            report["t5_bias_control"] = {"arm3_ratio": bias["arm3_ratio"], "n_cells": bias["n_cells"]}
+            print(f"[m4] t5 bias control: arm3_ratio={bias['arm3_ratio']} over {bias['n_cells']} cells", flush=True)
+    rows = report["rows"]
+    report["totals"] = {"cells_expected": n_total, "cells_checkpointed": len(cells),
+                        "rows_pass": sum(r["status"] == "PASS" for r in rows),
+                        "rows_fail": sum(r["status"] == "FAIL" for r in rows),
+                        "resumed_cells": report["resumed_cells"]}
+    print(f"[m4] TOTAL {report['totals']} -> {out_dir}", flush=True)
+    if args.dry_run or args.fake_encoders:
+        print("NOTE: dry-run / fake encoders: this verifies the runner, not M4.")
+    incomplete = len(cells) < n_total or report.get("aborted")
+    return 1 if (report["totals"]["rows_fail"] or incomplete) else 0
 
 
 def gate_summary(results: list, gates: list[str], n_reps: int = C.BOOTSTRAP_REPS):

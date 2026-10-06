@@ -92,3 +92,44 @@ indexes FastAPI only; the multi-corpus run loop is not part of these items.
   provenance, gold or the reference answer.
 - Faithfulness counts claims supported by the context. With no context
   (Arm 0), nothing is supported.
+
+## 4. M4 gate runner (`harness/kaggle_m1.py`, M4 mode)
+
+Passing any of `--corpus`, `--seeds` or `--task-types` selects M4 mode.
+Without them, the M1–M3 gate runs unchanged.
+
+    python -m harness.kaggle_m1 --corpus trpc --seeds 42,43,44 --task-types T2,T5 --out /kaggle/working/m4_trpc
+
+One corpus per invocation. The run loops seed × task × arm over the corpus's
+real T2/T5 tasks; there is no synthetic Gate A, and
+`GATE_B_EXCLUDED_TASKS` still applies. Per corpus:
+1. `.prism/` is cleared before indexing.
+2. The corpus is resolved through the resolver.
+3. Every arm indexes it with `repo_id` set, so Arms 1–3 pick its language.
+4. Every cell is checkpointed to `<out>/checkpoint.json`, keyed
+   `corpus|seed|task_id|arm`, with atomic writes. A restart with the same
+   `--out` skips cells that have a non-None tsr; failed cells are re-run.
+5. `cells.parquet` and `summary.parquet` are built from all checkpointed cells.
+6. For Express and tRPC, `<out>/t5_bias_control.json` is written.
+
+Tokenizer parity uses the corpus's four largest source files.
+
+Kaggle: `kaggle/m4_corpus.py` is one cell per corpus (set `CORPUS`). It runs
+after the M3 setup cells and does not repeat them.
+- **Preflight:** checks the clone, Ollama and the model, the Python packages,
+  `rg`, `pyright-langserver` and `typescript-language-server`.
+- **M4 additions:** npm `pyright typescript typescript-language-server`,
+  ripgrep, and the corpus's editable install for FastAPI and Django.
+- **Run:** CPU smoke test, then the M4 run. `checkpoint.json` is pushed every
+  2 h, and a new session restores it and resumes.
+- **Push:** `reports/harness_m4/<corpus>/`, tar.gz first, then the raw
+  directory.
+
+Cells per corpus (× 3 seeds × 7 arms):
+
+| Corpus | Tasks | Cells |
+|---|---|---|
+| fastapi | 24 T2 + 8 T5 | 672 |
+| django | 20 + 8 | 588 |
+| express | 20 + 2 | 462 |
+| trpc | 25 + 14 | 819 |
