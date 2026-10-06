@@ -102,16 +102,46 @@ any kind, putting local variables into the gold (`lib.router.use.layer`).
 That was a bug in the gold and was fixed before any M4 session. Task counts
 did not change (Express 2, tRPC 14); 11 of the 16 TypeScript gold sets did.
 
-Oracle reachability (checked locally: the Oracle's retrieval needs no GPU):
-the Oracle delivers 98 of the 101 TypeScript gold names. The other 3 are
-real functions, present in tsserver's outline, that PRISM's symbol table,
-which the Oracle reads, names differently or lacks:
+Gold names follow PRISM's convention where PRISM has the same definition. A
+tsserver caller is renamed to PRISM's name when PRISM indexes the same
+definition: same file, same leaf name, and PRISM's range contains tsserver's
+name line. This is the flattened convention the T2 gold uses
+(`lib.router.next`). It renamed two Express names and nothing else:
 
-| Task | Gold name (tsserver) | In PRISM |
+| Task | Before | After |
 |---|---|---|
 | express_t5_001 | `lib.router.handle.trim_prefix` | `lib.router.trim_prefix` |
 | express_t5_002 | `lib.router.route.Route.all` | `lib.router.route.all` |
-| trpc_t5_002 | `core.initTRPC.createTRPCInner.initTRPCInner` | not indexed |
+
+### Oracle: decoupled from PRISM's symbol table (T5)
+
+The Oracle is the ceiling, so it must deliver the gold set whatever PRISM
+indexes. For T5 its item set is the gold affected set, exactly: no seed and
+no context symbols.
+
+- A name PRISM's symbol table has is read from there.
+- Any other name is read from its recorded definition location,
+  `benchmarks/ground_truth/tasks/<corpus>/gold_locations.json`, written by
+  the derivation script. TypeScript locations come from tsserver's outline.
+  The pipeline passes the locations to the Oracle only.
+- `adapt_oracle` raises `OracleCeilingError` when the delivered symbols
+  differ from the gold set, for example a missing location or a budget drop.
+- T2 is unchanged: it delivers the whole universe, external dependencies
+  included.
+
+Verified locally through the real cell path (retrieve, budget, adapter,
+score), with no GPU needed:
+
+| Corpus | Oracle delivered |
+|---|---|
+| Express | 5/5 |
+| tRPC | 96/96 |
+| FastAPI | 32/32 |
+| Django | 45/45 |
+
+One name comes from its recorded location:
+`core.initTRPC.createTRPCInner.initTRPCInner` (tRPC, not indexed by PRISM).
+The largest Oracle context is 7,059 tokens, under the 13,000 budget.
 
 ### TypeScript gold: bias disclosed
 

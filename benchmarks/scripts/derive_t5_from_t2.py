@@ -332,6 +332,8 @@ def typescript_run(root: str, corpus: str, seeds: list[str], reverse: bool = Fal
         return path, pos["line"], pos["character"]
 
     module_level = {"n": 0}
+    #: caller name -> (rel file, first line, last line, name line), 1-based, from tsserver's outline
+    locations: dict[str, tuple[str, int, int, int]] = {}
 
     def callers_of(fqn: str) -> set[tuple[str, str]]:
         loc = locate(fqn)
@@ -358,7 +360,10 @@ def typescript_run(root: str, corpus: str, seeds: list[str], reverse: bool = Fal
                 module_level["n"] += 1
                 continue
             if caller != fqn:
-                out.add((caller, os.path.relpath(p, root)))
+                rel = os.path.relpath(p, root)
+                out.add((caller, rel))
+                rng, sel = sym["range"], sym.get("selectionRange", sym["range"])
+                locations[caller] = (rel, rng["start"]["line"] + 1, rng["end"]["line"] + 1, sel["start"]["line"] + 1)
         return out
 
     result = {}
@@ -370,8 +375,9 @@ def typescript_run(root: str, corpus: str, seeds: list[str], reverse: bool = Fal
             # is `lib.router.handle.next` there, and its recursive calls must not make it its own caller
             alias = named_fqn(arm._module_of(loc[0]), arm._symbols(loc[0], {}), loc[1], loc[2],
                               arm._contains)[0] if loc else seed
-            result[seed] = {"seed_found": loc is not None, "callers": closure(callers_of, seed) if loc else {},
-                            "module_level": module_level["n"], "aliases": sorted({seed, alias})}
+            callers = closure(callers_of, seed) if loc else {}
+            result[seed] = {"seed_found": loc is not None, "callers": callers, "module_level": module_level["n"],
+                            "aliases": sorted({seed, alias}), "locations": {c: locations[c] for c in callers}}
     finally:
         arm.close()
     return result
@@ -397,11 +403,24 @@ def derive(corpus: str, verify_with_pyright: bool = False) -> dict:
             pyright = pyright_run(root, corpus, candidates)
     else:
         first, second = typescript_run(root, corpus, seeds), typescript_run(root, corpus, seeds, reverse=True)
+        # name each tsserver caller by PRISM's name for the same definition, when PRISM has it:
+        # the flattened convention the T2 gold uses (lib.router.trim_prefix, not lib.router.handle.trim_prefix)
+        from prism.cli import build_pipeline
+        builder, _ = build_pipeline(root, use_cache=False)
+        index = prism_definitions(builder, root)
+        for run in (first, second):
+            for res in run.values():
+                renamed = {prism_name(index, c, res["locations"][c]): v for c, v in res["callers"].items()}
+                res["locations"] = {prism_name(index, c, loc): loc for c, loc in res["locations"].items()}
+                res["callers"] = renamed
     rows = []
+    ts_locations: dict[str, tuple[str, int, int, int]] = {}
     for t in t2:
         a, b = first[t.seed_symbol], second[t.seed_symbol]
         seed_names = set(a.get("aliases") or [t.seed_symbol])
         prod_a, prod_b = gold_names(a["callers"], seed_names), gold_names(b["callers"], seed_names)
+        if a.get("locations"):
+            ts_locations.update(a["locations"])
         row = {"t2_task_id": t.task_id, "seed": t.seed_symbol, "seed_found": a["seed_found"],
                "all_callers": len(a["callers"]), "production_callers": prod_a,
                "module_level_call_sites": a["module_level"], "deterministic": a == b and prod_a == prod_b}
@@ -422,7 +441,69 @@ def derive(corpus: str, verify_with_pyright: bool = False) -> dict:
                 row["status"] = (f"excluded: Pyright disagrees (only PRISM {len(check['only_prism'])}, "
                                  f"only Pyright {len(check['only_pyright'])})")
         rows.append(row)
-    return {"corpus": corpus, "root": root, "rows": rows}
+    return {"corpus": corpus, "root": root, "rows": rows, "ts_locations": ts_locations}
+
+
+def prism_definitions(builder, root: str) -> dict[tuple[str, str], list[tuple[int, int, str]]]:
+    """{(rel file, leaf name): [(first line, last line, PRISM name)]} over
+    PRISM's symbol table, collision-suffixed names left out."""
+    index: dict[tuple[str, str], list[tuple[int, int, str]]] = {}
+    for name, sym in builder.symbol_table._symbols.items():
+        if _COLLISION_SUFFIX.search(name) or not getattr(sym, "file", None):
+            continue
+        rel = os.path.relpath(sym.file, root)
+        index.setdefault((rel, name.rsplit(".", 1)[-1]), []).append((sym.line_range[0], sym.line_range[1], name))
+    return index
+
+
+def prism_name(index: dict, name: str, location: tuple[str, int, int, int]) -> str:
+    """PRISM's name for the definition tsserver calls `name` at `location`
+    (same file, same leaf name, PRISM's range containing the name line; the
+    innermost such range), else `name` unchanged."""
+    rel, _, _, name_line = location
+    hits = [h for h in index.get((rel, name.rsplit(".", 1)[-1]), []) if h[0] <= name_line <= h[1]]
+    return min(hits, key=lambda h: (h[1] - h[0], h[2]))[2] if hits else name
+
+
+def gold_locations(corpus: str, root: str, builder, extra: dict | None = None) -> dict[str, dict]:
+    """{gold name: {"file", "start", "end"}} for every T5 task of the corpus
+    (derived and hand-annotated): PRISM's location when its symbol table has
+    the name, else `extra` (tsserver's outline, from the TypeScript run).
+    Read by the Oracle, which must deliver every gold name. Raises if a name
+    has no location."""
+    import yaml
+
+    out, missing = {}, []
+    for f in sorted((REPO_ROOT / f"benchmarks/ground_truth/tasks/{corpus}").glob("*.yaml")):
+        raw = yaml.safe_load(f.read_text())
+        if raw.get("task_type") != "blast":
+            continue
+        for name in sorted(raw["adjudicated"].get("critical_callers") or []):
+            sym = builder.symbol_table.get(name)
+            if sym is not None:
+                out[name] = {"file": os.path.relpath(sym.file, root), "start": sym.line_range[0],
+                             "end": sym.line_range[1], "source": "prism"}
+            elif extra and name in extra:
+                rel, start, end, _ = extra[name]
+                out[name] = {"file": rel, "start": start, "end": end, "source": "tsserver"}
+            else:
+                missing.append(f"{raw['task_id']}: {name}")
+    if missing:
+        raise ValueError(f"gold names without a location: {missing}")
+    return out
+
+
+def write_gold_locations(corpus: str, extra: dict | None = None) -> Path:
+    from benchmarks.corpora.resolver import resolve
+    from prism.cli import build_pipeline
+
+    root = str(resolve(corpus))
+    builder, _ = build_pipeline(root, use_cache=False)
+    locs = gold_locations(corpus, root, builder, extra)
+    path = REPO_ROOT / f"benchmarks/ground_truth/tasks/{corpus}/gold_locations.json"
+    path.write_text(json.dumps({"corpus": corpus, "root_relative": True, "locations": locs}, indent=1, sort_keys=True)
+                    + "\n")
+    return path
 
 
 def prism_production_identities(run: dict, seed: str) -> set[tuple[str, int]]:
@@ -491,10 +572,15 @@ def main(argv=None) -> int:
     ap.add_argument("--corpus", required=True)
     ap.add_argument("--write", action="store_true", help="write the derived tasks' YAML files")
     ap.add_argument("--report", default=None, help="write the per-task derivation report as JSON")
+    ap.add_argument("--locations-only", action="store_true",
+                    help="only (re)write gold_locations.json from the corpus's existing T5 task files")
     ap.add_argument("--verify-with-pyright", action="store_true",
                     help="Python corpora: keep a task only if Pyright's references give the same callers")
     a = ap.parse_args(argv)
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 10_000))
+    if a.locations_only:
+        print(f"wrote {write_gold_locations(a.corpus)}")
+        return 0
     out = derive(a.corpus, verify_with_pyright=a.verify_with_pyright)
     pins = json.loads((REPO_ROOT / "benchmarks/corpora/pinned_commits.json").read_text())
     pinned = pins[a.corpus]["pinned_commit"] if isinstance(pins.get(a.corpus), dict) else pins[a.corpus]
@@ -511,6 +597,8 @@ def main(argv=None) -> int:
         print(f"{row['t2_task_id']:55s} prod={len(row['production_callers']):3d} all={row['all_callers']:4d} "
               f"{row['status']}{'  -> ' + row['t5_task_id'] if 't5_task_id' in row else ''}")
     print(f"{a.corpus}: {n} derived T5 tasks{' written' if a.write else ''}")
+    if a.write:
+        print(f"wrote {write_gold_locations(a.corpus, out.get('ts_locations'))}")
     if a.report:
         Path(a.report).write_text(json.dumps(out, indent=1))
     return 0

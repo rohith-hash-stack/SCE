@@ -264,8 +264,20 @@ def adapt_arm5_prism(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswe
     return ctx, _answer("arm5", task, raw["completion"], method_override="prism_final")
 
 
+class OracleCeilingError(AssertionError):
+    """The Oracle did not deliver exactly the gold affected set on a T5 task."""
+
+
 def adapt_oracle(raw: dict, task) -> tuple[DeliveredContext, NormalizedAnswer]:
     ctx = _with_symbol_provenance(_context(raw, "oracle", task, {"oracle_truth"}), _by_kind)   # "oracle"
+    if task.task_type == "T5_blast_radius":
+        # the ceiling must be the gold: a name it cannot deliver (unindexed, or dropped
+        # by the budget) is a harness failure, never a silently lower ceiling
+        gold = set(task.ground_truth.pipeline_symbols)
+        delivered = ctx.delivered_symbols
+        if delivered != gold:
+            raise OracleCeilingError(f"{task.task_id}: Oracle delivered {len(delivered & gold)}/{len(gold)} gold names; "
+                                     f"missing {sorted(gold - delivered)}, extra {sorted(delivered - gold)}")
     return ctx, _answer("oracle", task, raw["completion"])
 
 

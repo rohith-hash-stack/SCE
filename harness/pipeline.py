@@ -96,6 +96,11 @@ class Pipeline:
             # the ground truth reaches the oracle only
             d["oracle_pipeline"] = list(task.ground_truth.pipeline_symbols)
             d["oracle_universe"] = sorted(task.ground_truth.universe_symbols())
+            if task.task_type == "T5_blast_radius":
+                # where each gold name is defined, for names PRISM's symbol table lacks
+                from harness.tasks.loaders import gold_locations
+                locs = gold_locations(task.repo_id)
+                d["oracle_locations"] = {g: locs[g] for g in task.ground_truth.pipeline_symbols if g in locs}
         return d
 
     def _write(self, kind: str, arm_id: str, task_id: str, seed, payload: dict) -> None:

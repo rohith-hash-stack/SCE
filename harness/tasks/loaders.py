@@ -57,3 +57,20 @@ def load_tasks(repo: str, task_types: list[str] | None = None, repo_root: str | 
         if task is not None and task.task_type in wanted:
             out.append(task)
     return out[:limit] if limit else out
+
+
+_GOLD_LOCATIONS: dict[str, dict] = {}
+
+
+def gold_locations(repo: str) -> dict[str, dict]:
+    """{gold name: {"file", "start", "end", "source"}} for the repo's T5 gold
+    (`benchmarks/ground_truth/tasks/<repo>/gold_locations.json`, written by
+    benchmarks/scripts/derive_t5_from_t2.py). For the Oracle only: it lets the
+    Oracle deliver a gold name that PRISM's symbol table does not index.
+    {} when the file is absent."""
+    if repo not in _GOLD_LOCATIONS:
+        import json
+        path = Path(C.TASKS_DIR_TEMPLATE.format(repo=repo)) / "gold_locations.json"
+        _GOLD_LOCATIONS[repo] = json.loads(path.read_text())["locations"] if path.exists() else {}
+    return _GOLD_LOCATIONS[repo]
+
