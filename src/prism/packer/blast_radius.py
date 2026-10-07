@@ -41,7 +41,7 @@ from tree_sitter import Node
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.traversal._data_flow_common import _bindings, _decl_node_types, _node_key, _resolve_call_sites
-from prism.traversal.causal_weights import BASE_RELATION_WEIGHT, edge_cost
+from prism.traversal.causal_weights import BASE_RELATION_WEIGHT, edge_cost, tentative_factor
 
 #: Caller actively unpacks/binds the return value of `s`
 #: (`total = calculate_tax(...)`, `val, err := f()`).
@@ -107,6 +107,9 @@ class UpstreamCaller:
     dist_w_upstream: float  # 1 / weight - the Dijkstra-style hop cost this caller is admitted at
     unpacks_return: bool
     supplies_nontrivial_args: bool
+    #: Linked by a best-effort (`TENTATIVE_*`) call edge; its weight
+    #: already carries that kind's discount.
+    tentative: bool = False
 
 
 def compute_upstream_callers(builder: ConcreteGraphBuilder, seed_id: str) -> dict[str, UpstreamCaller]:
@@ -165,7 +168,7 @@ def compute_upstream_callers(builder: ConcreteGraphBuilder, seed_id: str) -> dic
                 nontrivial_args = True
                 break
 
-        base = BASE_RELATION_WEIGHT.get(relation, 1.0)
+        base = BASE_RELATION_WEIGHT.get(relation, 1.0) * tentative_factor(data)
         weight = base * (
             1.0
             + MU_RETURN_UNPACK * (1.0 if unpacks_return else 0.0)
@@ -177,6 +180,7 @@ def compute_upstream_callers(builder: ConcreteGraphBuilder, seed_id: str) -> dic
             dist_w_upstream=edge_cost(weight),
             unpacks_return=unpacks_return,
             supplies_nontrivial_args=nontrivial_args,
+            tentative=tentative_factor(data) < 1.0,
         )
 
     return result

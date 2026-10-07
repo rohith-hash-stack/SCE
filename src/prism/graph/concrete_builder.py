@@ -1655,6 +1655,7 @@ class ConcreteGraphBuilder:
                 if not target_segments or len(target_segments) != 2 or target_segments[0] not in self_tokens:
                     continue
                 value = assign.child_by_field_name("right")
+                inferred_attr = False
                 if value is not None:
                     ctor_segments = _constructor_call_segments(value, parsed.language_id, parsed.source)
                     if ctor_segments is None:
@@ -1667,6 +1668,7 @@ class ConcreteGraphBuilder:
                     ):
                         # `self.queryset = self.get_queryset()`: a call whose
                         # return class is inferable.
+                        inferred_attr = True
                         resolved_class = self._expr_class(value, _ExprContext(
                             module, import_map, enclosing_class, parsed.language_id, parsed.source, method_node
                         ))
@@ -1700,7 +1702,7 @@ class ConcreteGraphBuilder:
                         [node_text(type_node, parsed.source)], module, import_map
                     )
                 if self._is_known_class(resolved_class):
-                    instance_map.bind(".".join(target_segments), resolved_class)
+                    instance_map.bind(".".join(target_segments), resolved_class, inferred=inferred_attr)
         return instance_map
 
     def _is_known_class(self, qualified_name: str | None) -> bool:
@@ -2074,7 +2076,7 @@ class ConcreteGraphBuilder:
                     if _is_builtin_container_expr(value, lang, parsed.source):
                         instance_map.bind_builtin(node_text(target, parsed.source))
                     elif (inferred := self._expr_class(value, ctx)) is not None:
-                        instance_map.bind(node_text(target, parsed.source), inferred)
+                        instance_map.bind(node_text(target, parsed.source), inferred, inferred=True)
                     continue
                 resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
                 if self._is_known_class(resolved_class):
@@ -2084,7 +2086,7 @@ class ConcreteGraphBuilder:
                 elif (inferred := self._expr_class(value, ctx)) is not None:
                     # `qs = self.get_queryset()` / `form = self.get_form()`:
                     # a call whose return class is inferable.
-                    instance_map.bind(node_text(target, parsed.source), inferred)
+                    instance_map.bind(node_text(target, parsed.source), inferred, inferred=True)
 
         # Java/C# construct almost exclusively through a *typed local
         # variable declaration* (`OrderValidator v = new OrderValidator();`),
@@ -2678,13 +2680,20 @@ class ConcreteGraphBuilder:
         """
         simple_name = segments[-1]
         candidates = self.symbol_table.candidates_for_simple_name(simple_name)
-        if len(segments) >= 2 and simple_name in _BUILTIN_METHOD_NAMES.get(parsed.language_id, ()):
-            # Receiver type unknown and the method name is one the
-            # language's own builtin types define (`kwargs.get(...)`,
-            # `options.items()`, `cache.pop(...)`): the call far more often
-            # targets that builtin than a same-named repo method, so no
-            # repo method is guessed. Calls whose receiver *is* typed are
-            # resolved before this fallback and are unaffected.
+        caller_info = self.symbol_table.get(caller_qname)
+        lang = getattr(parsed, "language_id", None) or (caller_info.language_id if caller_info else None)
+        builtin_named = len(segments) >= 2 and simple_name in _BUILTIN_METHOD_NAMES.get(lang, ())
+        if builtin_named and len(candidates) >= 2:
+            # Receiver type unknown, the method name is one the language's
+            # own builtin types define (`options.get(...)`, `x.items()`)
+            # AND several repo classes define it too: the receiver could be
+            # the builtin or any of them, so no repo method is guessed (no
+            # family root, no scored edge) - only the honest
+            # UnresolvedPolymorphic sentinel below. A unique repo
+            # definition still takes the G44 tentative link, and typed
+            # receivers (builtins included) are resolved before this
+            # fallback and are unaffected.
+            self._emit_polymorphic_sentinel(caller_qname, call_node, parsed, simple_name, candidates)
             return
         if len(segments) >= 2 and len(candidates) >= 2:
             family_root = self._single_family_root(candidates, simple_name)
@@ -2695,7 +2704,6 @@ class ConcreteGraphBuilder:
                 # member of that family: link the root as a best-effort
                 # call and let virtual-dispatch expansion add the
                 # overrides. Same scope guard as the unique-name fallback.
-                caller_info = self.symbol_table.get(caller_qname)
                 if caller_info is None or _shares_package_scope(caller_info.module, self.symbol_table.get(family_root).module):
                     if family_root not in self.graph:
                         self.graph.add_node(family_root, external=False)
@@ -2725,7 +2733,6 @@ class ConcreteGraphBuilder:
             # builds that same graph. A known, documented gap, not a
             # silently-skipped check.
             candidate = candidates[0]
-            caller_info = self.symbol_table.get(caller_qname)
             if caller_info is not None and not _shares_package_scope(caller_info.module, candidate.module):
                 return
             target = candidate.qualified_name
@@ -2770,7 +2777,6 @@ class ConcreteGraphBuilder:
                 best_score = score
                 best_candidate = candidate
 
-        line = call_node.start_point[0] + 1
         if best_candidate is not None and best_score >= POLYSEMY_THRESHOLD:
             target = best_candidate.qualified_name
             if target not in self.graph:
@@ -2778,6 +2784,15 @@ class ConcreteGraphBuilder:
             self.graph.add_edge(caller_qname, target, relation="CALLS")
             return
 
+        self._emit_polymorphic_sentinel(caller_qname, call_node, parsed, simple_name, candidates)
+
+    def _emit_polymorphic_sentinel(
+        self, caller_qname: str, call_node: Node, parsed: ParsedFile, simple_name: str, candidates: list[SymbolInfo]
+    ) -> None:
+        """Link a genuinely ambiguous call site to an UnresolvedPolymorphic
+        sentinel listing every repo candidate, rather than to any one guess."""
+        caller_file = parsed.path
+        line = call_node.start_point[0] + 1
         sentinel_id = unresolved_polymorphic_node_id(simple_name, caller_file, line)
         if sentinel_id not in self.graph:
             self.graph.add_node(
@@ -2903,6 +2918,8 @@ class ConcreteGraphBuilder:
                     # discount wired into that module, and adding one is
                     # out of Phase B's scope).
                     self._last_resolution_was_ambiguous = True
+                if func_instance_map.is_inferred(receiver_key) or class_instance_map.is_inferred(receiver_key):
+                    self._last_resolution_was_tentative = True
                 self._last_resolution_was_dispatch = True
                 return f"{candidate}.{method}"
             if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
@@ -2958,6 +2975,8 @@ class ConcreteGraphBuilder:
             return None
         if candidate:
             self._last_resolution_was_dispatch = True
+            if func_instance_map.is_inferred(receiver_key) or class_instance_map.is_inferred(receiver_key):
+                self._last_resolution_was_tentative = True
             direct_candidate = f"{candidate}.{method}"
             # Item 5/7 (second post-implementation audit): a Go struct's
             # own type is known here (Item 3 Stage 1's parameter/short-

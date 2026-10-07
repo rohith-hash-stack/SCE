@@ -460,11 +460,15 @@ class InstanceTypeMap:
     #: `ConcreteGraphBuilder._resolve_segments`/`_resolve_calls_in_function`).
     builtin_bindings: set[str] = field(default_factory=set)
 
-    def bind(self, var_name: str, qualified_class: str) -> None:
+    def bind(self, var_name: str, qualified_class: str, inferred: bool = False) -> None:
         existing = self.bindings.get(var_name)
         if existing is not None and existing != qualified_class:
             self.ambiguous.add(var_name)
         self.bindings[var_name] = qualified_class
+        if inferred:
+            self.inferred.add(var_name)
+        else:
+            self.inferred.discard(var_name)
         # A real class binding always supersedes a stale builtin marking
         # from an earlier assignment to the same name (most-recent-
         # assignment-wins, matching `ambiguous`'s own convention above).
@@ -477,6 +481,7 @@ class InstanceTypeMap:
         # the same name.
         self.bindings.pop(var_name, None)
         self.ambiguous.discard(var_name)
+        self.inferred.discard(var_name)
 
     def resolve(self, var_name: str) -> str | None:
         return self.bindings.get(var_name)
@@ -487,11 +492,18 @@ class InstanceTypeMap:
     def is_builtin(self, var_name: str) -> bool:
         return var_name in self.builtin_bindings
 
+    def is_inferred(self, var_name: str) -> bool:
+        return var_name in self.inferred
+
     #: Locals assigned from an attribute access (`opts = model._meta`):
     #: {local name: attribute name}, so a later `opts.get_field(...)` can be
     #: typed through the repo-wide attribute index
     #: (`ConcreteGraphBuilder._resolve_by_attribute`).
     attr_aliases: dict[str, str] = field(default_factory=dict)
+    #: Names whose class was *inferred* (from a call's inferred return
+    #: class) rather than read off a constructor call or an annotation -
+    #: calls through them link as best-effort (`TENTATIVE_CALL`) edges.
+    inferred: set[str] = field(default_factory=set)
 
 
 # --------------------------------------------------------------------- #

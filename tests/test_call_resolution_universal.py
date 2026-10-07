@@ -73,8 +73,22 @@ def test_unknown_receiver_with_two_unrelated_families_is_not_guessed_by_family(t
     assert not {"pkg.m.A.handle", "pkg.m.B.handle"} <= set(_calls(b, "use"))
 
 
-@pytest.mark.parametrize("call", ["kwargs.get('a')", "obj.get(2)", "obj.items()", "obj.update({})"])
-def test_builtin_method_names_on_unknown_receivers_are_not_guessed(tmp_path, call):
+@pytest.mark.parametrize("call", ["kwargs.get('a')", "args.count(1)"])
+def test_star_args_and_kwargs_are_builtin_receivers(tmp_path, call):
+    b = _build(tmp_path, f"""
+        class Repo:
+            def get(self, k):
+                return k
+            def count(self, x):
+                return x
+        def use(*args, **kwargs):
+            return {call}
+    """)
+    assert _calls(b, "use") == {}
+
+
+@pytest.mark.parametrize("call", ["obj.get(2)", "obj.items()", "obj.update({})"])
+def test_builtin_named_method_with_several_repo_definitions_gets_a_sentinel_not_a_guess(tmp_path, call):
     b = _build(tmp_path, f"""
         class Repo:
             def get(self, k):
@@ -83,10 +97,18 @@ def test_builtin_method_names_on_unknown_receivers_are_not_guessed(tmp_path, cal
                 return []
             def update(self, d):
                 return d
-        def use(obj, **kwargs):
+        class Cache:
+            def get(self, k):
+                return k
+            def items(self):
+                return []
+            def update(self, d):
+                return d
+        def use(obj):
             return {call}
     """)
-    assert _calls(b, "use") == {}
+    targets = list(_calls(b, "use"))
+    assert len(targets) == 1 and b.graph.nodes[targets[0]].get("sentinel_type") == "unresolved_polymorphic"
 
 
 def test_typed_receiver_still_reaches_a_builtin_named_method(tmp_path):
@@ -202,3 +224,48 @@ def test_blast_mode_skips_test_code_callers(tmp_path):
     _, universe = build_candidate_manifest(b, "pkg.m.seed", direction="both")
     assert "pkg.m.prod_caller" in universe
     assert not any(q.startswith("tests.") for q in universe)
+
+
+def test_calls_through_an_inferred_binding_are_tentative(tmp_path):
+    b = _build(tmp_path, """
+        class QS:
+            def filter(self):
+                return self
+        class Manager:
+            def all(self):
+                return QS()
+        def typed():
+            qs = QS()
+            return qs.filter()
+        def inferred(m):
+            qs = Manager().all()
+            return qs.filter()
+    """)
+    assert _calls(b, "typed")["pkg.m.QS.filter"] is None
+    assert _calls(b, "inferred")["pkg.m.QS.filter"] == "TENTATIVE_CALL"
+
+
+def test_causal_graph_discounts_tentative_edges_and_derives_no_coupling_from_them(tmp_path):
+    from prism.traversal.causal_weights import compute_causal_edges
+
+    b = _build(tmp_path, """
+        class QS:
+            def filter(self):
+                return self
+        class Manager:
+            def all(self):
+                return QS()
+        class Exists:
+            def __init__(self, q):
+                self.q = q
+        def confident():
+            qs = QS()
+            return qs.filter()
+        def guessed():
+            qs = Manager().all()
+            return Exists(qs.filter())
+    """)
+    weights, synthetic = compute_causal_edges(b)
+    assert weights[("pkg.m.guessed", "pkg.m.QS.filter")] < weights[("pkg.m.confident", "pkg.m.QS.filter")]
+    # `filter`'s result flows into `Exists` only at a guessed call site.
+    assert ("pkg.m.QS.filter", "pkg.m.Exists") not in synthetic

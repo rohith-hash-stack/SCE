@@ -33,7 +33,7 @@ import networkx as nx
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.traversal._cache_keys import GraphCacheKey, _LRUCache, engine_commit_hash, graph_cache_key
-from prism.traversal.causal_weights import LAMBDA_DATA_FLOW, LAMBDA_GUARD, compute_causal_edges, edge_cost
+from prism.traversal.causal_weights import LAMBDA_DATA_FLOW, LAMBDA_GUARD, compute_causal_edges, edge_cost, tentative_factor
 
 #: Backward-compatible aliases - this module's own cache-key logic
 #: moved to `prism.traversal._cache_keys` (Step 4) so `causal_weights.
@@ -199,7 +199,11 @@ def build_causal_graph(builder: ConcreteGraphBuilder) -> nx.DiGraph:
     for (u, v), w in weights.items():
         graph.add_node(u)
         graph.add_node(v)
-        graph.add_edge(u, v, weight=edge_cost(w), causal_weight=w, synthetic=(u, v) in synthetic_edges)
+        real = builder.graph.get_edge_data(u, v)
+        graph.add_edge(
+            u, v, weight=edge_cost(w), causal_weight=w, synthetic=(u, v) in synthetic_edges,
+            tentative=real is not None and tentative_factor(real) < 1.0,
+        )
     _GRAPH_CACHE[key] = graph
     return graph
 
