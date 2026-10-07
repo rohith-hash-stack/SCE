@@ -296,13 +296,21 @@ class PrismEngine:
         seed_id: str,
         max_hops: float = CANDIDATE_INDEX_MAX_HOPS,
         upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
+        direction: str = "downstream",
+        budget_tokens: int | None = None,
     ) -> tuple[str, set[str]]:
         """Turn 1: `(manifest_text, candidate_universe)` for `seed_id` -
         every symbol reachable within `max_hops` (default 3, the
         spike's own validated floor) and the scope rule, rendered as
-        one compact line each. No LLM call happens here or anywhere
+        one compact line each. `direction="both"` is blast-radius mode:
+        the seed's transitive callers too, under a shared
+        `budget_tokens` (see `prism.packer.candidate_index.
+        build_candidate_manifest`). No LLM call happens here or anywhere
         else in this class - see `retrieve_two_pass`'s own docstring."""
-        return build_candidate_manifest(self._builder, seed_id, max_hops=max_hops, upstream_max_hops=upstream_max_hops)
+        return build_candidate_manifest(
+            self._builder, seed_id, max_hops=max_hops, upstream_max_hops=upstream_max_hops,
+            direction=direction, budget_tokens=budget_tokens,
+        )
 
     def retrieve_requested(
         self,

@@ -40,11 +40,13 @@ from collections import deque
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.packer.blast_radius import compute_upstream_callers
+from prism.graph.symbol_table import SymbolRole
 from prism.packer.submodular_knapsack import (
     DEFAULT_UPSTREAM_MAX_HOPS,
     UPSTREAM_FRONTIER_CAP,
     SeedNotFoundError,
     _classify_role,
+    _default_costs,
     _module_prefix3,
     _signature_stub,
     suggest_similar_seeds,
@@ -55,6 +57,12 @@ from prism.traversal.continuous_dijkstra import build_causal_graph, compute_topo
 #: measured and rejected (drops a real pipeline symbol, `django_t02_009`'s
 #: `QuerySet._clone`); 3 is not a guess.
 CANDIDATE_INDEX_MAX_HOPS = 3.0
+
+#: Blast-radius mode (`direction="both"`): the furthest number of caller
+#: hops the upstream walk follows. A safety cap only - the shared token
+#: budget is what normally stops the walk (same value as the packer's own
+#: `DEFAULT_MAX_HOPS`).
+UPSTREAM_WALK_MAX_HOPS = 6
 
 #: The relations `ConcreteGraphBuilder.graph` (the real, directly
 #: AST-derived structural graph - not `build_causal_graph`'s own
@@ -158,11 +166,71 @@ def _combined_hop_scope_filtered(
     return kept
 
 
+def _upstream_walk(builder: ConcreteGraphBuilder, seed_id: str, max_hops: int = UPSTREAM_WALK_MAX_HOPS) -> dict[str, int]:
+    """`{caller: hop}` for every transitive caller of `seed_id` within
+    `max_hops`, breadth-first over `CALLS`/`INSTANTIATES` in-edges of the
+    structural graph (tentative dispatch edges included). Callers that are
+    test code (`SymbolRole.VERIFICATION`) are excluded and not walked
+    through, unless the seed itself is test code."""
+    seed_info = builder.symbol_table.get(seed_id)
+    allow_tests = seed_info is not None and seed_info.role == SymbolRole.VERIFICATION
+    hops = {seed_id: 0}
+    queue = deque([seed_id])
+    while queue:
+        node = queue.popleft()
+        depth = hops[node]
+        if depth >= max_hops or node not in builder.graph:
+            continue
+        for pred in sorted(builder.graph.predecessors(node)):
+            if pred in hops:
+                continue
+            edge = builder.graph.get_edge_data(pred, node) or {}
+            if edge.get("relation") not in _CALL_RELATIONS:
+                continue
+            info = builder.symbol_table.get(pred)
+            if info is None or info.kind not in ("function", "method"):
+                continue
+            if info.role == SymbolRole.VERIFICATION and not allow_tests:
+                continue
+            hops[pred] = depth + 1
+            queue.append(pred)
+    hops.pop(seed_id)
+    return hops
+
+
+def _interleave_within_budget(
+    builder: ConcreteGraphBuilder, seed_id: str, upstream: list[str], downstream: list[str], budget_tokens: int | None
+) -> set[str]:
+    """Admit candidates alternately from the two ordered lists (upstream
+    first) until the shared `budget_tokens` - priced with the packer's own
+    per-symbol costs, the same costs Turn 2 renders with - is spent. A
+    candidate that does not fit is skipped and the next one tried. `None`
+    admits everything."""
+    if budget_tokens is None:
+        return set(upstream) | set(downstream)
+    costs = _default_costs(builder, [seed_id, *upstream, *downstream])
+    spent = costs.get(seed_id, 0)
+    admitted: set[str] = set()
+    queues = [deque(upstream), deque(downstream)]
+    turn = 0
+    while queues[0] or queues[1]:
+        q = queues[turn % 2] if queues[turn % 2] else queues[(turn + 1) % 2]
+        turn += 1
+        symbol = q.popleft()
+        cost = costs.get(symbol, 0)
+        if spent + cost <= budget_tokens:
+            admitted.add(symbol)
+            spent += cost
+    return admitted
+
+
 def build_candidate_manifest(
     builder: ConcreteGraphBuilder,
     seed_id: str,
     max_hops: float = CANDIDATE_INDEX_MAX_HOPS,
     upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
+    direction: str = "downstream",
+    budget_tokens: int | None = None,
 ) -> tuple[str, set[str]]:
     """`(manifest_text, candidate_universe)`: one compact
     `qualified_name|role|kind|signature|calls=[...]` line per real
@@ -195,6 +263,13 @@ def build_candidate_manifest(
     own `dist_w_map` - what a downstream budget affects is Turn 2's own
     render cap, not which symbols are reachable in the first place.
 
+    `direction="both"` (blast-radius mode, Design C): upstream admission
+    is replaced by a hop-ordered walk over the seed's transitive callers
+    (`_upstream_walk`, test code excluded), interleaved with the
+    downstream candidates under a shared `budget_tokens` (no cap when
+    `None`). The default `"downstream"` leaves every existing caller's
+    manifest unchanged.
+
     Raises `SeedNotFoundError` if `seed_id` isn't in `builder.
     symbol_table`, carrying up to 5 fuzzy-matched suggestions - the same
     contract `pack_symbol_context` itself already gives every other
@@ -216,6 +291,26 @@ def build_candidate_manifest(
     upstream_candidates = {
         c.symbol for c in ranked_upstream[:UPSTREAM_FRONTIER_CAP] if dist_w_upstream_map[c.symbol] <= upstream_max_hops
     }
+
+    if direction == "both":
+        # Blast-radius mode (Design C): the seed's transitive callers, not
+        # only its strongest direct ones, walked upstream in hop order
+        # (direct callers ranked by W_upstream, then name) and interleaved
+        # with the downstream candidates in distance order until the shared
+        # token budget is spent. Every upstream candidate is labelled
+        # `caller` (hop distance recorded for _classify_role).
+        walked = _upstream_walk(builder, seed_id)
+        upstream_order = sorted(
+            walked,
+            key=lambda q: (walked[q], -(upstream_callers[q].weight if q in upstream_callers else 0.0), q),
+        )
+        downstream_order = sorted(downstream_candidates - {seed_id}, key=lambda q: (dist_w_map.get(q, 0.0), q))
+        admitted = _interleave_within_budget(builder, seed_id, upstream_order, downstream_order, budget_tokens)
+        upstream_candidates = {q for q in walked if q in admitted}
+        downstream_candidates = {seed_id} | {q for q in downstream_candidates if q in admitted}
+        dist_w_upstream_map = {**{q: float(h) for q, h in walked.items()}, **dist_w_upstream_map}
+    elif direction != "downstream":
+        raise ValueError(f"direction must be 'downstream' or 'both', got {direction!r}")
 
     candidates = downstream_candidates | upstream_candidates
 

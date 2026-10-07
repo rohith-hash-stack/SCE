@@ -34,6 +34,7 @@ from tree_sitter import Node
 from prism.parser.lang_config import (
     ASSIGNMENT_NODE_TYPE,
     ATTRIBUTE_NODE_TYPE,
+    ATTR_OBJECT_FIELD,
     ATTR_PROPERTY_FIELD,
     CALL_NODE_TYPE,
     CLASS_NODE_TYPES,
@@ -263,6 +264,23 @@ class ConcreteGraphBuilder:
         #: None but flag why" convention `_last_resolution_was_tentative`/
         #: `_last_resolution_was_ambiguous` above already establish.
         self._last_resolution_was_builtin_receiver = False
+        #: Virtual-dispatch expansion: set by `_resolve_segments` when the
+        #: target it returns was reached through a receiver that can hold
+        #: a subclass at run time (`self.<method>`, or an instance-typed
+        #: local/attribute) - same single-flag convention as the flags
+        #: above. `_dispatch_sites` collects those `(caller, target)`
+        #: pairs; `_expand_virtual_dispatch` links each caller to every
+        #: override of its target once the whole repo is resolved.
+        self._last_resolution_was_dispatch = False
+        self._dispatch_sites: list[tuple[str, str]] = []
+        #: `_resolve_by_receiver_name`'s lazily built
+        #: {normalized class simple name: [qualified class names]} index.
+        self._class_name_index: dict[str, list[str]] | None = None
+        #: `_resolve_by_attribute`'s lazily built {attribute name: {classes
+        #: ever assigned to it anywhere in the repo}}.
+        self._attr_type_index: dict[str, set[str]] | None = None
+        #: `_infer_return_class` memo: {function qname: class qname | None}.
+        self._return_class_cache: dict[str, str | None] = {}
         #: Item 3: `go_call_resolution_ratio` diagnostic numerator/
         #: denominator - see that property's own docstring.
         self._go_receiver_call_sites_total = 0
@@ -861,6 +879,51 @@ class ConcreteGraphBuilder:
             except (RecursionError, UnicodeDecodeError) as exc:
                 self._record_index_error(path, exc, stage="pass2b")
 
+        # Sub-pass 2c: virtual dispatch needs the whole repo's OVERRIDES
+        # edges and every call site resolved, so it runs last.
+        self._expand_virtual_dispatch()
+
+    def _expand_virtual_dispatch(self) -> None:
+        """Class-hierarchy analysis for dynamically dispatched calls: a
+        call resolved to `Base.m` through a receiver that can hold a
+        subclass at run time (`self.m()`, or an instance-typed variable or
+        attribute) may execute any override of `m` in a subclass of
+        `Base`. Each recorded `(caller, Base.m)` site is linked to every
+        transitive overrider (`OVERRIDES` edges, built in sub-pass 2a-ter)
+        as `kind="TENTATIVE_CALL"`, the existing reduced-confidence
+        marker: the call is possible, not certain. Language-agnostic; a
+        no-op where no `OVERRIDES` edges exist (e.g. Go).
+        """
+        overriders: dict[str, list[str]] = {}
+        for source, target, data in self.graph.edges(data=True):
+            if data.get("relation") == "OVERRIDES":
+                overriders.setdefault(target, []).append(source)
+        if not overriders:
+            self._dispatch_sites.clear()
+            return
+        closure: dict[str, list[str]] = {}
+
+        def all_overriders(method: str) -> list[str]:
+            if method not in closure:
+                found: list[str] = []
+                seen = {method}
+                stack = sorted(overriders.get(method, ()))
+                while stack:
+                    m = stack.pop()
+                    if m in seen:
+                        continue
+                    seen.add(m)
+                    found.append(m)
+                    stack.extend(sorted(overriders.get(m, ())))
+                closure[method] = sorted(found)
+            return closure[method]
+
+        for caller, target in self._dispatch_sites:
+            for override in all_overriders(target):
+                if override != caller and not self.graph.has_edge(caller, override):
+                    self.graph.add_edge(caller, override, relation="CALLS", kind="TENTATIVE_CALL")
+        self._dispatch_sites.clear()
+
     def _resolve_calls_for_file_symbols(
         self, file_symbols: list[str], parsed: ParsedFile, module: str, import_map: LocalImportMap
     ) -> None:
@@ -898,7 +961,9 @@ class ConcreteGraphBuilder:
                 )
             func_instance_map = InstanceTypeMap()
             if parsed.language_id in instance_binding_langs:
-                func_instance_map = self._build_function_instance_map(def_node, parsed, module, import_map)
+                func_instance_map = self._build_function_instance_map(
+                    def_node, parsed, module, import_map, symbol.enclosing_class
+                )
             self._resolve_calls_in_function(
                 qualified_name, def_node, parsed, module, symbol.enclosing_class,
                 import_map, class_instance_map, func_instance_map,
@@ -1597,6 +1662,14 @@ class ConcreteGraphBuilder:
                             instance_map.bind_builtin(".".join(target_segments))
                         continue
                     resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+                    if not self._is_known_class(resolved_class) and not _is_builtin_container_expr(
+                        value, parsed.language_id, parsed.source
+                    ):
+                        # `self.queryset = self.get_queryset()`: a call whose
+                        # return class is inferable.
+                        resolved_class = self._expr_class(value, _ExprContext(
+                            module, import_map, enclosing_class, parsed.language_id, parsed.source, method_node
+                        ))
                     if not self._is_known_class(resolved_class) and _is_builtin_container_expr(
                         value, parsed.language_id, parsed.source
                     ):
@@ -1971,10 +2044,20 @@ class ConcreteGraphBuilder:
                         break
 
     def _build_function_instance_map(
-        self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap
+        self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap,
+        enclosing_class: str | None = None,
     ) -> InstanceTypeMap:
         instance_map = InstanceTypeMap()
         lang = parsed.language_id
+        if lang == LanguageID.PYTHON:
+            # `*args` is always a tuple and `**kwargs` always a dict - the
+            # language guarantees it - so `kwargs.get(...)` is a builtin
+            # call, never a repo method.
+            params = def_node.child_by_field_name("parameters")
+            for param in params.named_children if params is not None else ():
+                if param.type in ("list_splat_pattern", "dictionary_splat_pattern") and param.named_children:
+                    instance_map.bind_builtin(node_text(param.named_children[0], parsed.source))
+        ctx = _ExprContext(module, import_map, enclosing_class, lang, parsed.source, def_node)
         assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
         if assign_type is not None:
             for assign in iter_scoped_nodes(def_node, {assign_type}, lang):
@@ -1982,16 +2065,26 @@ class ConcreteGraphBuilder:
                 value = assign.child_by_field_name("right")
                 if target is None or value is None or target.type != "identifier":
                     continue
+                if value.type == ATTRIBUTE_NODE_TYPE.get(lang):
+                    prop = value.child_by_field_name(ATTR_PROPERTY_FIELD[lang])
+                    if prop is not None:
+                        instance_map.attr_aliases[node_text(target, parsed.source)] = node_text(prop, parsed.source)
                 ctor_segments = _constructor_call_segments(value, lang, parsed.source)
                 if ctor_segments is None:
                     if _is_builtin_container_expr(value, lang, parsed.source):
                         instance_map.bind_builtin(node_text(target, parsed.source))
+                    elif (inferred := self._expr_class(value, ctx)) is not None:
+                        instance_map.bind(node_text(target, parsed.source), inferred)
                     continue
                 resolved_class = self._resolve_reference_chain(ctor_segments, module, import_map)
                 if self._is_known_class(resolved_class):
                     instance_map.bind(node_text(target, parsed.source), resolved_class)
                 elif _is_builtin_container_expr(value, lang, parsed.source):
                     instance_map.bind_builtin(node_text(target, parsed.source))
+                elif (inferred := self._expr_class(value, ctx)) is not None:
+                    # `qs = self.get_queryset()` / `form = self.get_form()`:
+                    # a call whose return class is inferable.
+                    instance_map.bind(node_text(target, parsed.source), inferred)
 
         # Java/C# construct almost exclusively through a *typed local
         # variable declaration* (`OrderValidator v = new OrderValidator();`),
@@ -2148,6 +2241,18 @@ class ConcreteGraphBuilder:
                 continue
             segments = call_callee_segments(call_node, parsed.source, lang)
             if not segments:
+                # `<call>(...).<method>(...)`: the receiver is itself a call
+                # (a dynamic root `call_callee_segments` cannot name), so
+                # its class comes from return-type inference.
+                chained = self._resolve_chained_call_target(
+                    call_node, _ExprContext(module, import_map, enclosing_class, lang, parsed.source, def_node)
+                )
+                if chained is not None:
+                    edge_kwargs = {"relation": "CALLS", "kind": "TENTATIVE_CALL"}
+                    edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())
+                    edge_kwargs["kind"] = "TENTATIVE_CALL"
+                    self.graph.add_edge(caller_qname, chained, **edge_kwargs)
+                    self._dispatch_sites.append((caller_qname, chained))
                 continue
             # Item 3: go_call_resolution_ratio's denominator - a Go call
             # is "receiver-shaped" (as opposed to a bare function call or
@@ -2208,6 +2313,8 @@ class ConcreteGraphBuilder:
                 elif self._last_resolution_was_ambiguous:
                     edge_kwargs["kind"] = "TENTATIVE_CALL"
             self.graph.add_edge(caller_qname, target, **edge_kwargs)
+            if relation == "CALLS" and self._last_resolution_was_dispatch:
+                self._dispatch_sites.append((caller_qname, target))
 
         self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
         if lang == LanguageID.PYTHON:
@@ -2289,6 +2396,253 @@ class ConcreteGraphBuilder:
             count -= 1
         return count
 
+    # -- Return-type inference ------------------------------------------ #
+    _RESOLUTION_FLAGS = (
+        "_last_resolution_was_tentative", "_last_resolution_was_ambiguous",
+        "_last_resolution_was_builtin_receiver", "_last_resolution_was_dispatch",
+    )
+    _NULL_LITERAL_TYPES = frozenset({"none", "null", "undefined", "nil", "null_literal"})
+
+    def _infer_return_class(self, qname: str, _depth: int = 0) -> str | None:
+        """The class `qname` returns, when its declared return annotation
+        names one known class, or when every value-returning `return`
+        statement yields an instance of the same class: `self`/`this`, a
+        constructor call (`Foo(...)`, `new Foo()`, `cls(...)`,
+        `self.__class__(...)`), a call to a function whose own return class
+        is inferable, or a local assigned from one of those (the fluent
+        `clone = self._chain(); return clone` shape). `None` when any
+        returned value's class is unknown or two returns disagree.
+        Memoized and depth-limited; resolution flags of an in-progress call
+        site are saved and restored around the work."""
+        if qname in self._return_class_cache:
+            return self._return_class_cache[qname]
+        if _depth > _RETURN_INFERENCE_MAX_DEPTH:
+            return None
+        self._return_class_cache[qname] = None          # cycle guard
+        info = self.symbol_table.get(qname)
+        node = self._def_nodes.get(qname)
+        if info is None or node is None or info.kind not in ("function", "method"):
+            return None
+        parsed = self._parsed_files.get(info.file)
+        import_map = self._import_maps.get(info.file)
+        if parsed is None or import_map is None:
+            return None
+        saved = [getattr(self, f) for f in self._RESOLUTION_FLAGS]
+        try:
+            ctx = _ExprContext(info.module, import_map, info.enclosing_class, parsed.language_id, parsed.source, node)
+            result = self._annotation_class(node.child_by_field_name("return_type"), ctx)
+            if result is None:
+                classes, unknown = set(), False
+                for ret in iter_scoped_nodes(node, {RETURN_STATEMENT_NODE_TYPE}, parsed.language_id):
+                    expr = ret.named_children[0] if ret.named_children else None
+                    if expr is None or expr.type in self._NULL_LITERAL_TYPES:
+                        continue
+                    cls = self._expr_class(expr, ctx, _depth + 1)
+                    if cls is None:
+                        unknown = True
+                        break
+                    classes.add(cls)
+                result = classes.pop() if len(classes) == 1 and not unknown else None
+        finally:
+            for f, v in zip(self._RESOLUTION_FLAGS, saved):
+                setattr(self, f, v)
+        self._return_class_cache[qname] = result
+        return result
+
+    def _annotation_class(self, type_node: Node | None, ctx: "_ExprContext") -> str | None:
+        """A return/variable annotation naming exactly one known class
+        (`-> QuerySet`, `: Promise<Foo>` is not attempted)."""
+        while type_node is not None and type_node.type not in ("identifier", "type_identifier", ATTRIBUTE_NODE_TYPE.get(ctx.lang)):
+            if len(type_node.named_children) != 1:
+                return None
+            type_node = type_node.named_children[0]
+        if type_node is None:
+            return None
+        segments = flatten_reference_chain(type_node, ctx.source, ctx.lang)
+        resolved = self._resolve_reference_chain(segments, ctx.module, ctx.import_map) if segments else None
+        return resolved if self._is_known_class(resolved) else None
+
+    def _expr_class(self, expr: Node, ctx: "_ExprContext", _depth: int = 0, _names: frozenset = frozenset()) -> str | None:
+        """The known class an expression evaluates to, or `None`."""
+        if _depth > _RETURN_INFERENCE_MAX_DEPTH:
+            return None
+        lang, src = ctx.lang, ctx.source
+        self_tokens = SELF_TOKEN_TEXT[lang]
+        if expr.type in ("parenthesized_expression", "await_expression", "as_expression", "non_null_expression") and expr.named_children:
+            return self._expr_class(expr.named_children[0], ctx, _depth + 1, _names)
+        text = node_text(expr, src) if expr.child_count == 0 or expr.type in ("identifier", "this") else None
+        if text is not None:
+            if text in self_tokens:
+                return ctx.enclosing_class
+            if expr.type != "identifier" or text in _names:
+                return None
+            values = ctx.assignments().get(text, [])
+            classes = {self._expr_class(v, ctx, _depth + 1, _names | {text}) for v in values}
+            return classes.pop() if len(classes) == 1 else None
+        call_type = CALL_NODE_TYPE.get(lang)
+        if expr.type not in (call_type, "new_expression"):
+            return None
+        ctor = _constructor_call_segments(expr, lang, src)
+        if ctor:
+            if ctx.enclosing_class and (ctor == ["cls"] or (len(ctor) == 2 and ctor[0] in self_tokens and ctor[1] == "__class__")):
+                return ctx.enclosing_class
+            resolved = self._resolve_reference_chain(ctor, ctx.module, ctx.import_map)
+            if self._is_known_class(resolved):
+                return resolved
+            if expr.type == "new_expression":
+                return None
+            target = self._resolve_segments(
+                ctor, ctx.module, ctx.enclosing_class, ctx.import_map, InstanceTypeMap(), InstanceTypeMap(), self_tokens, lang
+            )
+        else:
+            target = self._resolve_chained_call_target(expr, ctx, _depth + 1)
+        if target is not None and (sym := self.symbol_table.get(target)) is not None and sym.kind in ("function", "method"):
+            return self._infer_return_class(target, _depth + 1)
+        return None
+
+    def _resolve_chained_call_target(self, call_node: Node, ctx: "_ExprContext", _depth: int = 0) -> str | None:
+        """`<expr>(...).<method>(...)`'s method, when `<expr>`'s class is
+        inferable (`self.get_queryset().filter(...)`,
+        `Foo.objects.all().order_by(...)` once `all` returns a known class):
+        the method on that class or its nearest MRO ancestor."""
+        func = call_node.child_by_field_name("function")
+        if func is None or func.type != ATTRIBUTE_NODE_TYPE.get(ctx.lang):
+            return None
+        obj = func.child_by_field_name(ATTR_OBJECT_FIELD[ctx.lang])
+        prop = func.child_by_field_name(ATTR_PROPERTY_FIELD[ctx.lang])
+        if obj is None or prop is None or obj.type not in (CALL_NODE_TYPE.get(ctx.lang), "new_expression"):
+            return None
+        receiver_class = self._expr_class(obj, ctx, _depth + 1)
+        if receiver_class is None:
+            return None
+        method = node_text(prop, ctx.source)
+        for owner in [receiver_class, *self._mro_ancestors(receiver_class)]:
+            if f"{owner}.{method}" in self.symbol_table:
+                return f"{owner}.{method}"
+        return None
+
+    def _build_attr_type_index(self) -> dict[str, set[str]]:
+        """{attribute name: classes assigned to it}, from every assignment
+        in the repo whose target is an attribute (`obj.attr = Foo(...)`,
+        `cls._meta = self`) or a class-body name (`attr = Foo(...)`), and
+        whose value is a constructor of a known class or the enclosing
+        method's own `self`/`this`."""
+        index: dict[str, set[str]] = {}
+        # Keyed by (file, start byte): tree-sitter returns a fresh wrapper
+        # object per access, so node identity is not stable.
+        class_of_def = {}
+        for q, node in self._def_nodes.items():
+            info = self.symbol_table.get(q)
+            if info is not None and info.kind in ("function", "method"):
+                class_of_def[(info.file, node.start_byte)] = info
+        for path, parsed in self._parsed_files.items():
+            lang = parsed.language_id
+            assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+            import_map = self._import_maps.get(path)
+            if assign_type is None or import_map is None:
+                continue
+            module = self._module_for_file(parsed)
+            attr_type = ATTRIBUTE_NODE_TYPE.get(lang)
+            for assign in find_all(parsed.root_node, {assign_type}):
+                left, right = assign.child_by_field_name("left"), assign.child_by_field_name("right")
+                if left is None or right is None:
+                    continue
+                if left.type == attr_type:
+                    prop = left.child_by_field_name(ATTR_PROPERTY_FIELD[lang])
+                    attr = node_text(prop, parsed.source) if prop is not None else None
+                elif left.type == "identifier" and _in_class_body(assign):
+                    attr = node_text(left, parsed.source)
+                else:
+                    attr = None
+                if not attr:
+                    continue
+                cls = None
+                if node_text(right, parsed.source) in SELF_TOKEN_TEXT[lang]:
+                    holder = assign.parent
+                    while holder is not None and (path, holder.start_byte) not in class_of_def:
+                        holder = holder.parent
+                    info = class_of_def.get((path, holder.start_byte)) if holder is not None else None
+                    cls = info.enclosing_class if info is not None else None
+                else:
+                    ctor = _constructor_call_segments(right, lang, parsed.source)
+                    resolved = self._resolve_reference_chain(ctor, module, import_map) if ctor else None
+                    cls = resolved if self._is_known_class(resolved) else None
+                if cls:
+                    index.setdefault(attr, set()).add(cls)
+        return index
+
+    def _resolve_by_attribute(self, attr: str, method: str) -> str | None:
+        """A receiver ending in attribute `attr` (`model._meta`,
+        `self.remote_field.model._meta`), typed through the repo-wide
+        attribute index: among the classes ever assigned to `attr`, those
+        that define or inherit `method`; linked (tentatively, with dynamic
+        dispatch) only if exactly one remains."""
+        if self._attr_type_index is None:
+            self._attr_type_index = self._build_attr_type_index()
+        targets = set()
+        for cls in self._attr_type_index.get(attr, ()):
+            for owner in [cls, *self._mro_ancestors(cls)]:
+                if f"{owner}.{method}" in self.symbol_table:
+                    targets.add(f"{owner}.{method}")
+                    break
+        if len(targets) != 1:
+            return None
+        self._last_resolution_was_tentative = True
+        self._last_resolution_was_dispatch = True
+        return targets.pop()
+
+    def _resolve_by_receiver_name(self, receiver_name: str, method: str) -> str | None:
+        """Naming-convention typing for a receiver whose type is otherwise
+        unknown: a variable or attribute named after a class
+        (`app_config`, `queryset`, `formSet`, `_meta_options`) is taken to
+        hold an instance of it when exactly one repo class has that name
+        (case- and underscore-insensitive) and that class defines or
+        inherits `method`. Linked as a tentative, dynamically dispatched
+        call; never used when the name maps to zero or several classes or
+        the class lacks the method."""
+        key = receiver_name.replace("_", "").lower()
+        if len(key) < 3:
+            return None
+        if self._class_name_index is None:
+            index: dict[str, list[str]] = {}
+            for symbol in self.symbol_table:
+                if symbol.kind == "class":
+                    simple = symbol.qualified_name.rsplit(".", 1)[-1]
+                    index.setdefault(simple.replace("_", "").lower(), []).append(symbol.qualified_name)
+            self._class_name_index = index
+        classes = self._class_name_index.get(key, [])
+        if len(classes) != 1:
+            return None
+        cls = classes[0]
+        for owner in [cls, *self._mro_ancestors(cls)]:
+            target = f"{owner}.{method}"
+            if target in self.symbol_table:
+                self._last_resolution_was_tentative = True
+                self._last_resolution_was_dispatch = True
+                return target
+        return None
+
+    def _single_family_root(self, candidates: list[SymbolInfo], simple_name: str) -> str | None:
+        """The one root definition of `simple_name` when every candidate is
+        a method and all of them belong to a single class family: exactly
+        one candidate overrides nothing (its class has no ancestor defining
+        the name) and every other candidate's class descends from that
+        root's class. `None` otherwise (a free function among them, two
+        unrelated families, or several roots)."""
+        if any(c.kind != "method" or not c.enclosing_class for c in candidates):
+            return None
+        roots = []
+        for c in candidates:
+            if not any(f"{a}.{simple_name}" in self.symbol_table for a in self._mro_ancestors(c.enclosing_class)):
+                roots.append(c)
+        if len(roots) != 1:
+            return None
+        root = roots[0]
+        for c in candidates:
+            if c is not root and root.enclosing_class not in self._mro_ancestors(c.enclosing_class):
+                return None
+        return root.qualified_name
+
     def _resolve_ambiguous_call(
         self,
         caller_qname: str,
@@ -2324,6 +2678,30 @@ class ConcreteGraphBuilder:
         """
         simple_name = segments[-1]
         candidates = self.symbol_table.candidates_for_simple_name(simple_name)
+        if len(segments) >= 2 and simple_name in _BUILTIN_METHOD_NAMES.get(parsed.language_id, ()):
+            # Receiver type unknown and the method name is one the
+            # language's own builtin types define (`kwargs.get(...)`,
+            # `options.items()`, `cache.pop(...)`): the call far more often
+            # targets that builtin than a same-named repo method, so no
+            # repo method is guessed. Calls whose receiver *is* typed are
+            # resolved before this fallback and are unaffected.
+            return
+        if len(segments) >= 2 and len(candidates) >= 2:
+            family_root = self._single_family_root(candidates, simple_name)
+            if family_root is not None:
+                # Every repo definition of this method name lives in one
+                # class family (a root class and the subclasses that
+                # override it), so any receiver that has this method is a
+                # member of that family: link the root as a best-effort
+                # call and let virtual-dispatch expansion add the
+                # overrides. Same scope guard as the unique-name fallback.
+                caller_info = self.symbol_table.get(caller_qname)
+                if caller_info is None or _shares_package_scope(caller_info.module, self.symbol_table.get(family_root).module):
+                    if family_root not in self.graph:
+                        self.graph.add_node(family_root, external=False)
+                    self.graph.add_edge(caller_qname, family_root, relation="CALLS", kind="TENTATIVE_CALL")
+                    self._dispatch_sites.append((caller_qname, family_root))
+                return
         if len(candidates) == 1:
             # G44 Conservative Candidate Fallback: a repo-wide receiver-
             # type-unknown call whose method name is unique - link it,
@@ -2492,6 +2870,7 @@ class ConcreteGraphBuilder:
         self._last_resolution_was_tentative = False
         self._last_resolution_was_ambiguous = False
         self._last_resolution_was_builtin_receiver = False
+        self._last_resolution_was_dispatch = False
         if len(segments) == 1:
             return self._resolve_reference_chain(segments, module, import_map)
 
@@ -2524,6 +2903,7 @@ class ConcreteGraphBuilder:
                     # discount wired into that module, and adding one is
                     # out of Phase B's scope).
                     self._last_resolution_was_ambiguous = True
+                self._last_resolution_was_dispatch = True
                 return f"{candidate}.{method}"
             if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
                 # Builtin-Receiver Exclusion fix: `self.<attr>` is known
@@ -2537,6 +2917,9 @@ class ConcreteGraphBuilder:
                 self._last_resolution_was_builtin_receiver = True
                 return None
             if len(receiver_segments) == 1 and enclosing_class:
+                # `self.<method>()` dispatches on the run-time class, which
+                # may be any subclass of `enclosing_class`.
+                self._last_resolution_was_dispatch = True
                 direct = f"{enclosing_class}.{method}"
                 if direct in self.symbol_table:
                     return direct
@@ -2553,7 +2936,9 @@ class ConcreteGraphBuilder:
                     if inherited in self.symbol_table:
                         return inherited
                 return direct
-            return None
+            return self._resolve_by_attribute(receiver_segments[-1], method) or self._resolve_by_receiver_name(
+                receiver_segments[-1], method
+            )
 
         candidate = func_instance_map.resolve(receiver_key) or class_instance_map.resolve(receiver_key)
         if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
@@ -2572,6 +2957,7 @@ class ConcreteGraphBuilder:
             self._last_resolution_was_builtin_receiver = True
             return None
         if candidate:
+            self._last_resolution_was_dispatch = True
             direct_candidate = f"{candidate}.{method}"
             # Item 5/7 (second post-implementation audit): a Go struct's
             # own type is known here (Item 3 Stage 1's parameter/short-
@@ -2615,6 +3001,19 @@ class ConcreteGraphBuilder:
         resolved_receiver = self._resolve_reference_chain(receiver_segments, module, import_map)
         if resolved_receiver:
             return f"{resolved_receiver}.{method}"
+        if len(receiver_segments) >= 2:
+            by_attr = self._resolve_by_attribute(receiver_segments[-1], method)
+            if by_attr is not None:
+                return by_attr
+        else:
+            alias = func_instance_map.attr_aliases.get(receiver_key)
+            if alias is not None:
+                by_attr = self._resolve_by_attribute(alias, method)
+                if by_attr is not None:
+                    return by_attr
+        named = self._resolve_by_receiver_name(receiver_segments[-1], method)
+        if named is not None:
+            return named
 
         # Item 3 (second post-implementation audit) Stage 2: Go-only
         # Codebase-Unique Receiver Fallback. Reached only when Stage 1
@@ -3073,6 +3472,95 @@ _PYTHON_BUILTIN_LITERAL_NODE_TYPES = frozenset({
 #: `_is_builtin_container_expr`), so a local class that happens to share
 #: one of these names is never misclassified as the builtin.
 _BUILTIN_FACTORY_NAMES = frozenset({"set", "list", "dict", "tuple", "frozenset", "bytearray", "bytes", "str"})
+
+def _in_class_body(assign: Node) -> bool:
+    """Whether `assign` sits directly in a class body (a class
+    attribute), not inside a method."""
+    node = assign.parent
+    while node is not None:
+        if node.type in _CLASS_BODY_OWNER_TYPES:
+            return True
+        if node.type in _FUNCTION_SCOPE_TYPES:
+            return False
+        node = node.parent
+    return False
+
+
+_CLASS_BODY_OWNER_TYPES = frozenset({"class_definition", "class_declaration", "class", "class_body"})
+_FUNCTION_SCOPE_TYPES = frozenset({
+    "function_definition", "function_declaration", "method_definition", "arrow_function", "function_expression",
+    "lambda", "method_declaration",
+})
+
+
+#: How many nested calls/assignments `_infer_return_class`/`_expr_class`
+#: follow before giving up (each level is memoized per function).
+_RETURN_INFERENCE_MAX_DEPTH = 6
+
+
+class _ExprContext:
+    """The enclosing function's resolution context for `_expr_class`."""
+
+    __slots__ = ("module", "import_map", "enclosing_class", "lang", "source", "fn_node", "_assignments")
+
+    def __init__(self, module, import_map, enclosing_class, lang, source, fn_node):
+        self.module, self.import_map, self.enclosing_class = module, import_map, enclosing_class
+        self.lang, self.source, self.fn_node = lang, source, fn_node
+        self._assignments = None
+
+    def assignments(self) -> dict:
+        """{local name: [assigned value nodes]} for plain `name = value`
+        assignments and `const/let name = value` declarations in this
+        function."""
+        if self._assignments is None:
+            out: dict = {}
+            assign_type = ASSIGNMENT_NODE_TYPE.get(self.lang)
+            if assign_type is not None:
+                for assign in iter_scoped_nodes(self.fn_node, {assign_type}, self.lang):
+                    left, right = assign.child_by_field_name("left"), assign.child_by_field_name("right")
+                    if left is not None and right is not None and left.type == "identifier":
+                        out.setdefault(node_text(left, self.source), []).append(right)
+            declarator = _LOCAL_VAR_DECLARATOR_TYPE.get(self.lang)
+            if declarator is not None:
+                for decl in iter_scoped_nodes(self.fn_node, {declarator}, self.lang):
+                    name, value = decl.child_by_field_name("name"), _declarator_value_node(decl)
+                    if name is not None and value is not None and name.type == "identifier":
+                        out.setdefault(node_text(name, self.source), []).append(value)
+            self._assignments = out
+        return self._assignments
+
+
+#: Public method names of each language's own builtin container/string
+#: types. An attribute call on a receiver of unknown type whose method name
+#: is in this set is never guessed onto a same-named repo method (see
+#: `ConcreteGraphBuilder._resolve_ambiguous_call`).
+_PYTHON_BUILTIN_METHOD_NAMES = frozenset(
+    name
+    for builtin_type in (dict, list, set, frozenset, str, bytes, bytearray, tuple)
+    for name in dir(builtin_type)
+    if not name.startswith("_")
+)
+_JS_BUILTIN_METHOD_NAMES = frozenset({
+    # Array
+    "at", "concat", "copyWithin", "entries", "every", "fill", "filter", "find", "findIndex", "findLast",
+    "findLastIndex", "flat", "flatMap", "forEach", "includes", "indexOf", "join", "keys", "lastIndexOf", "map",
+    "pop", "push", "reduce", "reduceRight", "reverse", "shift", "slice", "some", "sort", "splice", "toReversed",
+    "toSorted", "toSpliced", "unshift", "values", "with",
+    # Map / Set / WeakMap / WeakSet
+    "add", "clear", "delete", "get", "has", "set",
+    # String
+    "charAt", "charCodeAt", "codePointAt", "endsWith", "localeCompare", "match", "matchAll", "normalize",
+    "padEnd", "padStart", "repeat", "replace", "replaceAll", "search", "split", "startsWith", "substring",
+    "toLowerCase", "toUpperCase", "trim", "trimEnd", "trimStart",
+    # Object.prototype / Promise
+    "hasOwnProperty", "toString", "valueOf", "then", "catch", "finally",
+})
+_BUILTIN_METHOD_NAMES: dict[str, frozenset[str]] = {
+    "python": _PYTHON_BUILTIN_METHOD_NAMES,
+    "javascript": _JS_BUILTIN_METHOD_NAMES,
+    "typescript": _JS_BUILTIN_METHOD_NAMES,
+    "tsx": _JS_BUILTIN_METHOD_NAMES,
+}
 
 #: `collections.<name>(...)`-qualified factories - restricted to this
 #: exact, literal module prefix (not resolved through import aliasing)

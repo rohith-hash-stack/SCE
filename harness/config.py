@@ -205,6 +205,10 @@ PRISM_MANIFEST_STRICT_MAX_HOPS = 2.0
 #: do not enable outside it.
 PRISM_TURN1_STRICT_PROMPT: bool = False
 PRISM_TURN1_TARGET_MAX: int = 20
+#: Blast-radius mode for T5 (Design C): PRISM's manifest walks the seed's
+#: transitive callers under the arm's token budget instead of admitting at
+#: most 3 direct callers. False reproduces the M4 Arm 5 behaviour exactly.
+PRISM_BLAST_MODE: bool = True
 
 
 # --------------------------------------------------------------------------

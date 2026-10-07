@@ -487,6 +487,12 @@ class InstanceTypeMap:
     def is_builtin(self, var_name: str) -> bool:
         return var_name in self.builtin_bindings
 
+    #: Locals assigned from an attribute access (`opts = model._meta`):
+    #: {local name: attribute name}, so a later `opts.get_field(...)` can be
+    #: typed through the repo-wide attribute index
+    #: (`ConcreteGraphBuilder._resolve_by_attribute`).
+    attr_aliases: dict[str, str] = field(default_factory=dict)
+
 
 # --------------------------------------------------------------------- #
 # Barrel-file / re-export resolution (Issues #6/#7).

@@ -122,7 +122,8 @@ class Arm5Prism(RetrievalArm):
         meta = {**self.fidelity_meta(), "query": query, "task_type": seed.get("task_type"), "anchor": anchor,
                 "turn2b_triggered": False, "turn_count": 1, "over_budget": False, "ranking_method": "prism_order",
                 "prism_manifest_strict": C.PRISM_MANIFEST_STRICT,
-                "prism_turn1_strict_prompt": C.PRISM_TURN1_STRICT_PROMPT}
+                "prism_turn1_strict_prompt": C.PRISM_TURN1_STRICT_PROMPT,
+                "prism_blast_mode": C.PRISM_BLAST_MODE and seed.get("task_type") == "T5_blast_radius"}
         if not anchor:
             meta.update({"no_seed": True, "latency_ms": lat})
             return DeliveredContext("arm5", seed["task_id"], [], 0, self.budget, meta)
@@ -132,7 +133,12 @@ class Arm5Prism(RetrievalArm):
 
         with timed(lat, "L_retrieve"):
             with timed(lat, "L_turn1_manifest"):
-                manifest, universe = self.engine.build_candidate_manifest(anchor)
+                blast = C.PRISM_BLAST_MODE and seed.get("task_type") == "T5_blast_radius"
+                if blast:
+                    manifest, universe = self.engine.build_candidate_manifest(
+                        anchor, direction="both", budget_tokens=self.budget)
+                else:
+                    manifest, universe = self.engine.build_candidate_manifest(anchor)
                 unfiltered = len(universe)
                 if C.PRISM_MANIFEST_STRICT:     # M3 ablation scaffold, off by default
                     manifest, universe = strict_manifest(manifest, universe, anchor,
