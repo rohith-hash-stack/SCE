@@ -921,7 +921,10 @@ class ConcreteGraphBuilder:
         for caller, target in self._dispatch_sites:
             for override in all_overriders(target):
                 if override != caller and not self.graph.has_edge(caller, override):
-                    self.graph.add_edge(caller, override, relation="CALLS", kind="TENTATIVE_CALL")
+                    # `dispatch_of` names the statically resolved target this
+                    # edge widens: the call site's own target stays that one
+                    # (see `prism.traversal._data_flow_common._resolve_call_sites`).
+                    self.graph.add_edge(caller, override, relation="CALLS", kind="TENTATIVE_CALL", dispatch_of=target)
         self._dispatch_sites.clear()
 
     def _resolve_calls_for_file_symbols(

@@ -269,3 +269,23 @@ def test_causal_graph_discounts_tentative_edges_and_derives_no_coupling_from_the
     assert weights[("pkg.m.guessed", "pkg.m.QS.filter")] < weights[("pkg.m.confident", "pkg.m.QS.filter")]
     # `filter`'s result flows into `Exists` only at a guessed call site.
     assert ("pkg.m.QS.filter", "pkg.m.Exists") not in synthetic
+
+
+def test_dispatch_widening_keeps_the_call_site_bound_to_its_static_target(tmp_path):
+    from prism.packer.blast_radius import compute_upstream_callers
+
+    b = _build(tmp_path, """
+        class Base:
+            def get(self):
+                return 1
+        class Child(Base):
+            def get(self):
+                return 2
+        def use():
+            obj = Base()
+            value = obj.get()
+            return value
+    """)
+    assert _calls(b, "use")["pkg.m.Child.get"] == "TENTATIVE_CALL"
+    callers = compute_upstream_callers(b, "pkg.m.Base.get")
+    assert callers["pkg.m.use"].unpacks_return

@@ -97,8 +97,10 @@ FASTAPI = "/home/user/SCE/.benchmarks/corpora/fastapi"
 
 @pytest.mark.skipif(not os.path.isdir(FASTAPI), reason="FastAPI checkout missing")
 def test_real_prism_manifest_t02_002():
-    """On the real graph: 52 candidates -> 27 (25 within distance 2, plus 2 upstream callers); every gold
-    symbol of t02_002 survives (gold read here, in the test, only)."""
+    """On the real graph: 51 candidates -> 27 (25 within distance 2, plus 2 upstream callers); every gold
+    symbol of t02_002 survives (gold read here, in the test, only). (52 before best-effort TENTATIVE_CALL
+    edges were priced at their documented discount in the causal graph: `UploadFile.read`, reached only
+    through such an edge, now falls outside the manifest's distance cutoff.)"""
     from harness.tasks.loaders import load_tasks
     task = [t for t in load_tasks("fastapi", repo_root=FASTAPI, limit=5) if "t02_002" in t.task_id][0]
     arm = Arm5Prism(tokenizer=Words())
@@ -106,7 +108,7 @@ def test_real_prism_manifest_t02_002():
     manifest, universe = arm.engine.build_candidate_manifest(task.seed_symbol)
     _text, keep = strict_manifest(manifest, universe, task.seed_symbol,
                                   arm5_prism._downstream_distances(arm.engine, task.seed_symbol), 2.0)
-    assert (len(universe), len(keep)) == (52, 27)
+    assert (len(universe), len(keep)) == (51, 27)
     assert set(task.ground_truth.pipeline_symbols) <= keep
 
 

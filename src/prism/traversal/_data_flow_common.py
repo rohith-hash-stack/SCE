@@ -128,6 +128,11 @@ def _resolve_call_sites(def_node: Node, parsed: ParsedFile, qualified_name: str,
     for _u, callee, data in builder.graph.out_edges(qualified_name, data=True):
         if data.get("relation", "CALLS") not in ("CALLS", "INSTANTIATES"):
             continue
+        if data.get("dispatch_of"):
+            # A virtual-dispatch widening of another out-edge's call site
+            # (an override the same call may reach) - the site itself
+            # resolves to the statically linked target, not to this.
+            continue
         simple = callee.rsplit(".", 1)[-1]
         by_simple_name.setdefault(simple, []).append(callee)
 
