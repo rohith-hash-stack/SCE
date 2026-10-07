@@ -220,7 +220,7 @@ class PyrightClient:
     # ------------------------------------------------------------ handshake
     def handshake(self, probes: list[str], ready_timeout: float = READY_TIMEOUT_S) -> ReadyReport:
         uri = path_to_uri(self.root)
-        self.request("initialize", {
+        params = {
             "processId": os.getpid(), "rootUri": uri, "rootPath": self.root,
             "workspaceFolders": [{"uri": uri, "name": Path(self.root).name}],
             "capabilities": {
@@ -230,7 +230,11 @@ class PyrightClient:
                                  "documentSymbol": {"hierarchicalDocumentSymbolSupport": True},
                                  "definition": {"linkSupport": False}},
             },
-        })
+        }
+        init_options = self.initialization_options()
+        if init_options is not None:          # Pyright sends none: its request is unchanged
+            params["initializationOptions"] = init_options
+        self.request("initialize", params)
         self.notify("initialized", {})
         self.notify("workspace/didChangeConfiguration", {"settings": self.settings})
         return self.wait_ready(probes, ready_timeout)
@@ -285,6 +289,10 @@ class PyrightClient:
     def language_id(self, path: str) -> str:
         """The LSP languageId sent with didOpen."""
         return "python"
+
+    def initialization_options(self) -> dict | None:
+        """`initializationOptions` for the initialize request; None sends none."""
+        return None
 
     def _require_open(self, path: str) -> str:
         path = str(Path(path).resolve())

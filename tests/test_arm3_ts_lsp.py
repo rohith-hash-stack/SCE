@@ -126,3 +126,66 @@ def test_nested_seed_and_hop2_on_real_tasks(ts_arm):
     assert any(i.provenance["origin"] == "seed" for i in ctx.items)   # nested function found in the outline
     assert ctx.build_meta["hop1_definitions"] > 0
     assert all(i.token_count > 0 for i in ctx.items) and ctx.total_tokens <= ctx.budget_tokens
+
+
+# ------------------------------------------------- tsserver location (M4 Kaggle fix)
+def test_ts_client_passes_tsserver_path_and_pyright_sends_no_init_options(tmp_path):
+    from harness.pyright_client import PyrightClient
+    ts = tmp_path / "typescript" / "lib" / "tsserver.js"
+    ts.parent.mkdir(parents=True)
+    ts.write_text("// stub")
+    c = TypeScriptLspClient(str(tmp_path), anchor=None, tsserver_path=str(ts))
+    assert c.initialization_options() == {"tsserver": {"path": str(ts)}}
+    assert TypeScriptLspClient(str(tmp_path), anchor=None, tsserver_path="").initialization_options() is None
+    assert PyrightClient(str(tmp_path)).initialization_options() is None
+
+
+def test_find_tsserver_env_override_and_tsc_resolution(tmp_path, monkeypatch):
+    import harness.ts_lsp_client as T
+    pkg = tmp_path / "lib" / "node_modules" / "typescript"
+    (pkg / "lib").mkdir(parents=True)
+    (pkg / "bin").mkdir()
+    (pkg / "lib" / "tsserver.js").write_text("// stub")
+    (pkg / "bin" / "tsc").write_text("#!/usr/bin/env node")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "tsc").symlink_to(pkg / "bin" / "tsc")             # npm's global bin is a symlink
+    monkeypatch.delenv("HARNESS_TSSERVER_PATH", raising=False)
+    monkeypatch.setattr(T.shutil, "which", lambda name: str(bindir / "tsc") if name == "tsc" else None)
+    assert T.find_tsserver() == str(pkg / "lib" / "tsserver.js")
+    monkeypatch.setenv("HARNESS_TSSERVER_PATH", str(pkg / "lib" / "tsserver.js"))
+    assert T.find_tsserver() == str(pkg / "lib" / "tsserver.js")
+    monkeypatch.setenv("HARNESS_TSSERVER_PATH", str(tmp_path / "missing.js"))
+    assert T.find_tsserver() is None
+
+
+@real
+def test_server_without_a_sibling_typescript_needs_tsserver_path(tmp_path):
+    """The Kaggle M4 failure, reproduced: a typescript-language-server whose
+    own location has no `typescript` beside it fails initialize unless the
+    client passes tsserver.path."""
+    import shutil as sh
+    from harness.ts_lsp_client import find_tsserver
+    from harness.pyright_client import LspError
+    if find_tsserver() is None or not os.path.isdir(EXPRESS):
+        pytest.skip("no global typescript / Express checkout")
+    src = os.path.realpath(sh.which("typescript-language-server"))
+    pkg = src[:src.index("typescript-language-server") + len("typescript-language-server")]
+    iso = tmp_path / "node_modules" / "typescript-language-server"
+    sh.copytree(pkg, iso)
+    cmd = ["node", str(iso / "lib" / "cli.mjs"), "--stdio"]
+    probes = ["init", "use", "handle", "route", "Router"]
+    bare = TypeScriptLspClient(EXPRESS, cmd=cmd, anchor=os.path.join(EXPRESS, "index.js"), tsserver_path="")
+    bare.start()
+    try:
+        with pytest.raises(LspError, match="Could not find a valid TypeScript installation"):
+            bare.handshake(probes, ready_timeout=60)
+    finally:
+        bare.shutdown()
+    fixed = TypeScriptLspClient(EXPRESS, cmd=cmd, anchor=os.path.join(EXPRESS, "index.js"))
+    fixed.start()
+    try:
+        assert fixed.handshake(probes, ready_timeout=60).total_probe_results > 0
+        assert any("user-setting" in str(n.get("params")) for n in fixed.notifications)
+    finally:
+        fixed.shutdown()

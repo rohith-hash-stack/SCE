@@ -104,6 +104,13 @@ for mod in ("transformers", "onnxruntime", "tree_sitter_typescript"):
 for tool in ("rg", "pyright-langserver", "typescript-language-server"):
     if shutil.which(tool) is None:
         problems.append(f"{tool} not on PATH")
+if CORPUS in ("express", "trpc"):
+    # Arm 3 passes this tsserver.js to typescript-language-server (harness/ts_lsp_client.py:find_tsserver)
+    tsserver = run([sys.executable, "-c", "from harness.ts_lsp_client import find_tsserver; print(find_tsserver())"],
+                   cwd=SCE_DIR, check=False, capture=True).stdout.strip()
+    print("tsserver.js:", tsserver)
+    if not tsserver or tsserver == "None":
+        problems.append("no global typescript/lib/tsserver.js found (npm install -g typescript)")
 if problems:
     raise SystemExit("preflight failed:\n  - " + "\n  - ".join(problems))
 print("preflight OK")

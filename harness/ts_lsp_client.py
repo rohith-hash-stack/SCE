@@ -7,6 +7,16 @@ Handshake (strict order, the same as Pyright's): initialize (rootUri and
 rootPath) -> initialized -> workspace/didChangeConfiguration -> readiness
 -> workspace/symbol probe verification.
 
+TypeScript location. typescript-language-server looks for TypeScript in its
+`initializationOptions.tsserver.path`, then the workspace's node_modules,
+then next to its own install ("bundled"). A corpus checkout has no
+node_modules, and a global `npm install -g` can leave the server unable to
+find the global `typescript` (Kaggle M4: "Could not find a valid TypeScript
+installation"). So the client passes `tsserver.path` explicitly
+(`find_tsserver`): `HARNESS_TSSERVER_PATH`, else the `typescript` package
+behind the installed `tsc`, else `npm root -g`. The corpus checkout is never
+modified.
+
 Readiness. tsserver loads projects lazily: until a file is open, every
 workspace/symbol request fails with "No Project", and it sends neither
 Pyright's "Found N source files" log nor `$/progress` for the load. So:
@@ -23,6 +33,9 @@ Pyright's "Found N source files" log nor `$/progress` for the load. So:
 """
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -35,15 +48,46 @@ PROBE_INTERVAL_S = 0.5
 LANGUAGE_IDS = {".ts": "typescript", ".tsx": "typescriptreact", ".js": "javascript", ".jsx": "javascriptreact"}
 
 
+def find_tsserver() -> str | None:
+    """Absolute path of a global TypeScript's `lib/tsserver.js`, or None:
+    `HARNESS_TSSERVER_PATH` if set, else the `typescript` package that the
+    installed `tsc` belongs to, else `<npm root -g>/typescript`."""
+    env = os.environ.get("HARNESS_TSSERVER_PATH")
+    if env:
+        return env if os.path.isfile(env) else None
+    candidates = []
+    tsc = shutil.which("tsc")
+    if tsc:                                   # <typescript>/bin/tsc -> <typescript>/lib/tsserver.js
+        candidates.append(Path(os.path.realpath(tsc)).parent.parent / "lib" / "tsserver.js")
+    npm = shutil.which("npm")
+    if npm:
+        try:
+            root = subprocess.run([npm, "root", "-g"], capture_output=True, text=True, timeout=30).stdout.strip()
+            if root:
+                candidates.append(Path(root) / "typescript" / "lib" / "tsserver.js")
+        except (OSError, subprocess.SubprocessError):
+            pass
+    for c in candidates:
+        if c.is_file():
+            return str(c)
+    return None
+
+
 class TypeScriptLspClient(PyrightClient):
     def __init__(self, root: str, cmd: list[str] | None = None, settings: dict | None = None,
-                 anchor: str | None = None, quiescence_s: float = QUIESCENCE_S, **kw) -> None:
+                 anchor: str | None = None, quiescence_s: float = QUIESCENCE_S, tsserver_path: str | None = None,
+                 **kw) -> None:
         super().__init__(root, cmd=list(cmd or DEFAULT_CMD), settings=settings or {}, **kw)
         #: the file opened to make tsserver load the project
         self.anchor = anchor
         self.quiescence_s = quiescence_s
         #: the anchor project's file count, from projectInfo (set by wait_ready)
         self.project_files: int | None = None
+        #: the tsserver.js passed to the server (None: the server searches itself)
+        self.tsserver_path = tsserver_path if tsserver_path is not None else find_tsserver()
+
+    def initialization_options(self) -> dict | None:
+        return {"tsserver": {"path": self.tsserver_path}} if self.tsserver_path else None
 
     def language_id(self, path: str) -> str:
         return LANGUAGE_IDS.get(Path(path).suffix, "typescript")
@@ -94,4 +138,4 @@ class TypeScriptLspClient(PyrightClient):
         return report
 
 
-__all__ = ["DEFAULT_CMD", "QUIESCENCE_S", "TypeScriptLspClient"]
+__all__ = ["DEFAULT_CMD", "QUIESCENCE_S", "TypeScriptLspClient", "find_tsserver"]

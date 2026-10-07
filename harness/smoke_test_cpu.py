@@ -247,6 +247,7 @@ def check_arm3_ts_lsp_ready(tok):
         try:
             arm.index(root, {"repo_id": corpus})
             ready = arm.ready
+            tsserver = getattr(arm.client, "tsserver_path", None)
             task = load_tasks(corpus, repo_root=root, limit=1)[0]
             ctx = arm.retrieve(task.query, task.seed_dict())
             verify_ranking(ctx.items)
@@ -255,7 +256,8 @@ def check_arm3_ts_lsp_ready(tok):
         seed_hover = any(i.provenance.get("origin") == "seed" for i in ctx.items)
         ok &= (ready.seconds < C.ARM3_READY_TIMEOUT_S and len(ready.probes) >= 5 and ready.total_probe_results >= 1
                and seed_hover and 0 < ctx.total_tokens <= C.RETRIEVAL_BUDGET)
-        notes.append(f"{corpus}: ready in {ready.seconds:.1f}s ({ready.source_files} project files), probes "
+        notes.append(f"{corpus}: tsserver {tsserver or '<server default>'}; "
+                     f"ready in {ready.seconds:.1f}s ({ready.source_files} project files), probes "
                      f"{ready.probes}; {task.task_id}: {len(ctx.items)} items, {ctx.total_tokens} tokens, "
                      f"seed hover {seed_hover}")
     return ok, "; ".join(notes)
