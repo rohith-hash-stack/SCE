@@ -1,0 +1,61 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "trpc_t5_013_deprecated_procedure_migration",
+  "items": [
+   {
+    "source_id": "deprecated/interop.ts:200-232",
+    "content": "# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}",
+    "token_count": 272,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "deprecated.interop.migrateRouter"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:915-926",
+    "content": "# deprecated/router.ts:915-926  (deprecated.router.Router.interop)\n  public interop(): MigrateRouter<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  > {\n    return migrateRouter(this);\n  }",
+    "token_count": 75,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "deprecated.router.Router.interop"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 347,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "What breaks if `deprecated.interop.migrateProcedure` changes?",
+   "task_type": "T5_blast_radius",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 2,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 347,
+   "prompt_tokens": 484,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 497,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}\n\n# deprecated/router.ts:915-926  (deprecated.router.Router.interop)\n  public interop(): MigrateRouter<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  > {\n    return migrateRouter(this);\n  }\n\n## Task\n\nWhat breaks if `deprecated.interop.migrateProcedure` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

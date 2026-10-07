@@ -1,0 +1,228 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "trpc_t02_025_client_message_validation",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"rpc/parseTRPCMessage.ts\", \"pattern\": \"function parseTRPCMessage\"})\n50:export function parseTRPCMessage(:",
+    "token_count": 40,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "function parseTRPCMessage",
+      "path": "rpc/parseTRPCMessage.ts"
+     },
+     "engine_token_count": 40
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"path\": \"rpc/parseTRPCMessage.ts\", \"pattern\": \"if \\\\(method !== 'subscription\\\\.stop'\"})\nno matches",
+    "token_count": 37,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "if \\(method !== 'subscription\\.stop'",
+      "path": "rpc/parseTRPCMessage.ts"
+     },
+     "engine_token_count": 37
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 100, \"path\": \"rpc/parseTRPCMessage.ts\", \"start_line\": 1})\n1: import type { ProcedureType } from '../core';\n2: import type { CombinedDataTransformer } from '../transformer';\n3: import type { TRPCClientOutgoingMessage } from './envelopes';\n4: \n5: /* istanbul ignore next -- @preserve */\n6: function assertIsObject(obj: unknown): asserts obj is Record<string, unknown> {\n7:   if (typeof obj !== 'object' || Array.isArray(obj) || !obj) {\n8:     throw new Error('Not an object');\n9:   }\n10: }\n11: \n12: /* istanbul ignore next -- @preserve */\n13: function assertIsProcedureType(obj: unknown): asserts obj is ProcedureType {\n14:   if (obj !== 'query' && obj !== 'subscription' && obj !== 'mutation') {\n15:     throw new Error('Invalid procedure type');\n16:   }\n17: }\n18: \n19: /* istanbul ignore next -- @preserve */\n20: function assertIsRequestId(\n21:   obj: unknown,\n22: ): asserts obj is number | string | null {\n23:   if (\n24:     obj !== null &&\n25:     typeof obj === 'number' &&\n26:     isNaN(obj) &&\n27:     typeof obj !== 'string'\n28:   ) {\n29:     throw new Error('Invalid request id');\n30:   }\n31: }\n32: \n33: /* istanbul ignore next -- @preserve */\n34: function assertIsString(obj: unknown): asserts obj is string {\n35:   if (typeof obj !== 'string') {\n36:     throw new Error('Invalid string');\n37:   }\n38: }\n39: \n40: /* istanbul ignore next -- @preserve */\n41: function assertIsJSONRPC2OrUndefined(\n42:   obj: unknown,\n43: ): asserts obj is '2.0' | undefined {\n44:   if (typeof obj !== 'undefined' && obj !== '2.0') {\n45:     throw new Error('Must be JSONRPC 2.0');\n46:   }\n47: }\n48: \n49: /** @public */\n50: export function parseTRPCMessage(\n51:   obj: unknown,\n52:   transformer: CombinedDataTransformer,\n53: ): TRPCClientOutgoingMessage {\n54:   assertIsObject(obj);\n55: \n56:   const { id, jsonrpc, method, params } = obj;\n57:   assertIsRequestId(id);\n58:   assertIsJSONRPC2OrUndefined(jsonrpc);\n59: \n60:   if (method === 'subscription.stop') {\n61:     return {\n62:       id,\n63:       jsonrpc,\n64:       method,\n65:     };\n66:   }\n67:   assertIsProcedureType(method);\n68:   assertIsObject(params);\n69:   const { input: rawInput, path } = params;\n70: \n71:   assertIsString(path);\n72: \n73:   const input = transformer.input.deserialize(rawInput);\n74: \n75:   return {\n76:     id,\n77:     jsonrpc,\n78:     method,\n79:     params: {\n80:       input,\n81:       path,\n82:     },\n83:   };\n84: }\n85: \n[lines 1-85 of 85]",
+    "token_count": 814,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "rpc/parseTRPCMessage.ts",
+      "start_line": 1,
+      "end_line": 100
+     },
+     "engine_token_count": 814
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 891,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating how tRPC validates a raw incoming client message before dispatching it, starting from `parseTRPCMessage` in rpc/parseTRPCMessage.ts. Trace the real causal pipeline of validation checks it runs through, for the case where `method` is not `'subscription.stop'`.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"rpc.parseTRPCMessage.parseTRPCMessage\", \"rpc.parseTRPCMessage.assertIsObject\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 1,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"function parseTRPCMessage\", \"path\": \"rpc/parseTRPCMessage.ts\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"if \\\\(method !== 'subscription\\\\.stop'\", \"path\": \"rpc/parseTRPCMessage.ts\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "function parseTRPCMessage",
+        "path": "rpc/parseTRPCMessage.ts"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "if \\(method !== 'subscription\\.stop'",
+        "path": "rpc/parseTRPCMessage.ts"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "function parseTRPCMessage",
+        "path": "rpc/parseTRPCMessage.ts"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "if \\(method !== 'subscription\\.stop'",
+        "path": "rpc/parseTRPCMessage.ts"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "grep_empty"
+      }
+     ],
+     "completion_tokens": 77,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "It seems there was an issue with the grep command to find the specific pattern. Let's try again with a more detailed approach to locate the relevant function and condition.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"rpc/parseTRPCMessage.ts\", \"start_line\": 1, \"end_line\": 100}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "rpc/parseTRPCMessage.ts",
+        "start_line": 1,
+        "end_line": 100
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "rpc/parseTRPCMessage.ts",
+        "start_line": 1,
+        "end_line": 100
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 75,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "The `parseTRPCMessage` function first checks if the input object is an object using `assertIsObject`. It then extracts and validates the `id`, `jsonrpc`, `method`, and `params` fields. If the `method` is `'subscription.stop'`, it returns a specific message. Otherwise, it validates the `method` as a procedure type and the `params` as an object. It further validates the `path` as a string and deserializes the `input` using the provided transformer.\n\n```json\n[\n  \"rpc.parseTRPCMessage.parseTRPCMessage\",\n  \"rpc.parseTRPCMessage.assertIsObject\",\n  \"rpc.parseTRPCMessage.assertIsRequestId\",\n  \"rpc.parseTRPCMessage.assertIsJSONRPC2OrUndefined\",\n  \"rpc.parseTRPCMessage.assertIsProcedureType\",\n  \"rpc.parseTRPCMessage.assertIsObject\",\n  \"rpc.parseTRPCMessage.assertIsString\",\n  \"rpc.parseTRPCMessage.input.deserialize\"\n]\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 200,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     5434.154073,
+     4880.164189,
+     14251.591944
+    ],
+    "L_tool_exec": [
+     3.769457,
+     2.922542,
+     0.345913
+    ],
+    "L_retrieve": [
+     24607.859884
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1804,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"\", \"symbols\": [\"rpc.parseTRPCMessage.parseTRPCMessage\", \"rpc.parseTRPCMessage.assertIsObject\", \"rpc.parseTRPCMessage.assertIsRequestId\", \"rpc.parseTRPCMessage.assertIsJSONRPC2OrUndefined\", \"rpc.parseTRPCMessage.assertIsProcedureType\", \"rpc.parseTRPCMessage.assertIsObject\", \"rpc.parseTRPCMessage.assertIsString\", \"rpc.parseTRPCMessage.input.deserialize\"]}\n```",
+    "generation_tokens": 200,
+    "latency_seconds": 14.251421991997631,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1837,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 891,
+   "prompt_tokens": 1804,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1837,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

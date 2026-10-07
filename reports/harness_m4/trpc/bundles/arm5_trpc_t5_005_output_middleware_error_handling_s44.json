@@ -1,0 +1,109 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t5_005_output_middleware_error_handling",
+  "items": [
+   {
+    "source_id": "core/middleware.ts:262-285",
+    "content": "# core/middleware.ts:262-285  (core.middleware.createOutputMiddleware)\nexport function createOutputMiddleware<TOutput>(parse: ParseFn<TOutput>) {\n  const outputMiddleware: ProcedureBuilderMiddleware = async ({ next }) => {\n    const result = await next();\n    if (!result.ok) {\n      // pass through failures without validating\n      return result;\n    }\n    try {\n      const data = await parse(result.data);\n      return {\n        ...result,\n        data,\n      };\n    } catch (cause) {\n      throw new TRPCError({\n        message: 'Output validation failed',\n        code: 'INTERNAL_SERVER_ERROR',\n        cause,\n      });\n    }\n  };\n  outputMiddleware._type = 'output';\n  return outputMiddleware;\n}",
+    "token_count": 158,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.middleware.createOutputMiddleware"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 137,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:26-52",
+    "content": "# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}",
+    "token_count": 244,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "error.TRPCError.TRPCError"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 218,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 402,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `core.middleware.createOutputMiddleware` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "core.middleware.createOutputMiddleware",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 4,
+   "manifest_candidates_unfiltered": 4,
+   "requested_symbols": [
+    "core.middleware.createOutputMiddleware",
+    "core.internals.procedureBuilder.createBuilder",
+    "core.internals.getParseFn.getParseFn",
+    "core.internals.procedureBuilder.createNewBuilder",
+    "error.TRPCError.TRPCError"
+   ],
+   "turn1_requested_count": 5,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "core.internals.procedureBuilder.createBuilder",
+    "core.internals.getParseFn.getParseFn",
+    "core.internals.procedureBuilder.createNewBuilder"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"If `core.middleware.createOutputMiddleware` changes, it may affect the error handling and output processing of procedures created by `core.internals.procedureBuilder.createBuilder`. This could lead to issues in how procedures handle errors and format their outputs.\",\n  \"requested_symbols\": [\n    \"core.middleware.createOutputMiddleware\",\n    \"core.internals.procedureBuilder.createBuilder\",\n    \"core.internals.getParseFn.getParseFn\",\n    \"core.internals.procedureBuilder.createNewBuilder\",\n    \"error.TRPCError.TRPCError\"\n  ]\n}\n```",
+     "prompt_tokens": 453,
+     "completion_tokens": 121,
+     "latency_seconds": 8.132244564996654,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     5.677865
+    ],
+    "L_turn2_hydrate": [
+     15.589939
+    ],
+    "L_retrieve": [
+     8155.259095
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 402,
+   "prompt_tokens": 538,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 551,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/middleware.ts:262-285  (core.middleware.createOutputMiddleware)\nexport function createOutputMiddleware<TOutput>(parse: ParseFn<TOutput>) {\n  const outputMiddleware: ProcedureBuilderMiddleware = async ({ next }) => {\n    const result = await next();\n    if (!result.ok) {\n      // pass through failures without validating\n      return result;\n    }\n    try {\n      const data = await parse(result.data);\n      return {\n        ...result,\n        data,\n      };\n    } catch (cause) {\n      throw new TRPCError({\n        message: 'Output validation failed',\n        code: 'INTERNAL_SERVER_ERROR',\n        cause,\n      });\n    }\n  };\n  outputMiddleware._type = 'output';\n  return outputMiddleware;\n}\n\n# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}\n\n## Task\n\nWhat breaks if `core.middleware.createOutputMiddleware` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

@@ -1,0 +1,76 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "trpc_t02_002_error_shape_http_status",
+  "items": [
+   {
+    "source_id": "core/router.ts:254-272",
+    "content": "# core/router.ts:254-272  (core.router.createRouterInner.getErrorShape)\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },",
+    "token_count": 159,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.router.createRouterInner.getErrorShape"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 159
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:60-62",
+    "content": "# http/getHTTPStatusCode.ts:60-62  (http.getHTTPStatusCode.getHTTPStatusCodeFromError)\nexport function getHTTPStatusCodeFromError(error: TRPCError) {\n  return getStatusCodeFromKey(error.code);\n}",
+    "token_count": 48,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "http.getHTTPStatusCode.getHTTPStatusCodeFromError"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 48
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:31-33",
+    "content": "# http/getHTTPStatusCode.ts:31-33  (http.getHTTPStatusCode.getStatusCodeFromKey)\nfunction getStatusCodeFromKey(code: keyof typeof TRPC_ERROR_CODES_BY_KEY) {\n  return JSONRPC2_TO_HTTP_CODE[code] ?? 500;\n}",
+    "token_count": 56,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "http.getHTTPStatusCode.getStatusCodeFromKey"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 56
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 263,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how tRPC's router shapes an error into its wire response, starting from `getErrorShape` on the router object built by `createRouterFactory` in core/router.ts. Trace the real causal pipeline it runs through to derive the HTTP status code for that error.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.router.createRouterInner.getErrorShape\", \"http.getHTTPStatusCode.getHTTPStatusCodeFromError\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 3,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 263,
+   "prompt_tokens": 538,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 551,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/router.ts:254-272  (core.router.createRouterInner.getErrorShape)\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n\n# http/getHTTPStatusCode.ts:60-62  (http.getHTTPStatusCode.getHTTPStatusCodeFromError)\nexport function getHTTPStatusCodeFromError(error: TRPCError) {\n  return getStatusCodeFromKey(error.code);\n}\n\n# http/getHTTPStatusCode.ts:31-33  (http.getHTTPStatusCode.getStatusCodeFromKey)\nfunction getStatusCodeFromKey(code: keyof typeof TRPC_ERROR_CODES_BY_KEY) {\n  return JSONRPC2_TO_HTTP_CODE[code] ?? 500;\n}\n\n## Task\n\nYou are investigating how tRPC's router shapes an error into its wire response, starting from `getErrorShape` on the router object built by `createRouterFactory` in core/router.ts. Trace the real causal pipeline it runs through to derive the HTTP status code for that error.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.router.createRouterInner.getErrorShape\", \"http.getHTTPStatusCode.getHTTPStatusCodeFromError\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

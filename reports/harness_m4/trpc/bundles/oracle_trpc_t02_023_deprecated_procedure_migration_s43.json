@@ -1,0 +1,106 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "trpc_t02_023_deprecated_procedure_migration",
+  "items": [
+   {
+    "source_id": "deprecated/interop.ts:171-199",
+    "content": "# deprecated/interop.ts:171-199  (deprecated.interop.migrateProcedure)\nfunction migrateProcedure<\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n>(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n  const def = oldProc._def();\n\n  const inputParser = getParseFnOrPassThrough(def.inputParser);\n  const outputParser = getParseFnOrPassThrough(def.outputParser);\n\n  const inputMiddleware = createInputMiddleware(inputParser);\n\n  const builder = createBuilder({\n    inputs: [def.inputParser],\n    middlewares: [\n      ...(def.middlewares as any),\n      inputMiddleware,\n      createOutputMiddleware(outputParser),\n    ],\n    meta: def.meta,\n    output: def.outputParser,\n    mutation: type === 'mutation',\n    query: type === 'query',\n    subscription: type === 'subscription',\n  });\n\n  const proc = builder[type]((opts) => def.resolver(opts as any));\n\n  return proc as any;\n}",
+    "token_count": 220,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "deprecated.interop.migrateProcedure"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 220
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/getParseFn.ts:49-56",
+    "content": "# core/internals/getParseFn.ts:49-56  (core.internals.getParseFn.getParseFnOrPassThrough)\nexport function getParseFnOrPassThrough<TType>(\n  procedureParser: Parser | undefined,\n): ParseFn<TType> {\n  if (!procedureParser) {\n    return (v) => v as TType;\n  }\n  return getParseFn(procedureParser);\n}",
+    "token_count": 85,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.internals.getParseFn.getParseFnOrPassThrough"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 85
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/middleware.ts:227-257",
+    "content": "# core/middleware.ts:227-257  (core.middleware.createInputMiddleware)\nexport function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n  const inputMiddleware: ProcedureBuilderMiddleware = async ({\n    next,\n    rawInput,\n    input,\n  }) => {\n    let parsedInput: ReturnType<typeof parse>;\n    try {\n      parsedInput = await parse(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n\n    // Multiple input parsers\n    const combinedInput =\n      isPlainObject(input) && isPlainObject(parsedInput)\n        ? {\n            ...input,\n            ...parsedInput,\n          }\n        : parsedInput;\n\n    // TODO fix this typing?\n    return next({ input: combinedInput } as any);\n  };\n  inputMiddleware._type = 'input';\n  return inputMiddleware;\n}",
+    "token_count": 190,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.middleware.createInputMiddleware"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 190
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/middleware.ts:262-285",
+    "content": "# core/middleware.ts:262-285  (core.middleware.createOutputMiddleware)\nexport function createOutputMiddleware<TOutput>(parse: ParseFn<TOutput>) {\n  const outputMiddleware: ProcedureBuilderMiddleware = async ({ next }) => {\n    const result = await next();\n    if (!result.ok) {\n      // pass through failures without validating\n      return result;\n    }\n    try {\n      const data = await parse(result.data);\n      return {\n        ...result,\n        data,\n      };\n    } catch (cause) {\n      throw new TRPCError({\n        message: 'Output validation failed',\n        code: 'INTERNAL_SERVER_ERROR',\n        cause,\n      });\n    }\n  };\n  outputMiddleware._type = 'output';\n  return outputMiddleware;\n}",
+    "token_count": 158,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.middleware.createOutputMiddleware"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 158
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:207-282",
+    "content": "# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}",
+    "token_count": 521,
+    "rank": 5,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 521
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1174,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how tRPC migrates a single legacy (v9-shaped) procedure into the modern procedure-builder shape, starting from `migrateProcedure` in deprecated/interop.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"deprecated.interop.migrateProcedure\", \"core.internals.getParseFn.getParseFnOrPassThrough\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 5,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1174,
+   "prompt_tokens": 1441,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1454,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# deprecated/interop.ts:171-199  (deprecated.interop.migrateProcedure)\nfunction migrateProcedure<\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n>(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n  const def = oldProc._def();\n\n  const inputParser = getParseFnOrPassThrough(def.inputParser);\n  const outputParser = getParseFnOrPassThrough(def.outputParser);\n\n  const inputMiddleware = createInputMiddleware(inputParser);\n\n  const builder = createBuilder({\n    inputs: [def.inputParser],\n    middlewares: [\n      ...(def.middlewares as any),\n      inputMiddleware,\n      createOutputMiddleware(outputParser),\n    ],\n    meta: def.meta,\n    output: def.outputParser,\n    mutation: type === 'mutation',\n    query: type === 'query',\n    subscription: type === 'subscription',\n  });\n\n  const proc = builder[type]((opts) => def.resolver(opts as any));\n\n  return proc as any;\n}\n\n# core/internals/getParseFn.ts:49-56  (core.internals.getParseFn.getParseFnOrPassThrough)\nexport function getParseFnOrPassThrough<TType>(\n  procedureParser: Parser | undefined,\n): ParseFn<TType> {\n  if (!procedureParser) {\n    return (v) => v as TType;\n  }\n  return getParseFn(procedureParser);\n}\n\n# core/middleware.ts:227-257  (core.middleware.createInputMiddleware)\nexport function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n  const inputMiddleware: ProcedureBuilderMiddleware = async ({\n    next,\n    rawInput,\n    input,\n  }) => {\n    let parsedInput: ReturnType<typeof parse>;\n    try {\n      parsedInput = await parse(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n\n    // Multiple input parsers\n    const combinedInput =\n      isPlainObject(input) && isPlainObject(parsedInput)\n        ? {\n            ...input,\n            ...parsedInput,\n          }\n        : parsedInput;\n\n    // TODO fix this typing?\n    return next({ input: combinedInput } as any);\n  };\n  inputMiddleware._type = 'input';\n  return inputMiddleware;\n}\n\n# core/middleware.ts:262-285  (core.middleware.createOutputMiddleware)\nexport function createOutputMiddleware<TOutput>(parse: ParseFn<TOutput>) {\n  const outputMiddleware: ProcedureBuilderMiddleware = async ({ next }) => {\n    const result = await next();\n    if (!result.ok) {\n      // pass through failures without validating\n      return result;\n    }\n    try {\n      const data = await parse(result.data);\n      return {\n        ...result,\n        data,\n      };\n    } catch (cause) {\n      throw new TRPCError({\n        message: 'Output validation failed',\n        code: 'INTERNAL_SERVER_ERROR',\n        cause,\n      });\n    }\n  };\n  outputMiddleware._type = 'output';\n  return outputMiddleware;\n}\n\n# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}\n\n## Task\n\nYou are investigating how tRPC migrates a single legacy (v9-shaped) procedure into the modern procedure-builder shape, starting from `migrateProcedure` in deprecated/interop.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"deprecated.interop.migrateProcedure\", \"core.internals.getParseFn.getParseFnOrPassThrough\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

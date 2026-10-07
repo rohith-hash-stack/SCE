@@ -1,0 +1,300 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "trpc_t02_007_procedure_builder_new_builder",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"core/internals/procedureBuilder.ts\", \"pattern\": \"createNewBuilder\"})\n192:function createNewBuilder(:\n228:      return createNewBuilder(_def, {:\n235:      return createNewBuilder(_def, {:\n241:      return createNewBuilder(_def, {:\n250:      return createNewBuilder(_def, builder._def) as any;:\n259:      return createNewBuilder(_def, {:\n288:  const finalBuilder = createNewBuilder(_def, {:",
+    "token_count": 129,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "createNewBuilder",
+      "path": "core/internals/procedureBuilder.ts"
+     },
+     "engine_token_count": 129
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"path\": \"core/internals/procedureBuilder.ts\", \"pattern\": \"input\\\\(\"})\n226:    input(input) {:",
+    "token_count": 37,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "input\\(",
+      "path": "core/internals/procedureBuilder.ts"
+     },
+     "engine_token_count": 37
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.3",
+    "content": "# r1.3  (grep {\"path\": \"core/internals/procedureBuilder.ts\", \"pattern\": \"output\\\\(\"})\n233:    output(output: Parser) {",
+    "token_count": 39,
+    "rank": 3,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.3",
+     "tool": "grep",
+     "args": {
+      "pattern": "output\\(",
+      "path": "core/internals/procedureBuilder.ts"
+     },
+     "engine_token_count": 39
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.4",
+    "content": "# r1.4  (grep {\"path\": \"core/internals/procedureBuilder.ts\", \"pattern\": \"use\\\\(\"})\n252:    use(middlewareBuilderOrFn) {:",
+    "token_count": 41,
+    "rank": 4,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.4",
+     "tool": "grep",
+     "args": {
+      "pattern": "use\\(",
+      "path": "core/internals/procedureBuilder.ts"
+     },
+     "engine_token_count": 41
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 290, \"path\": \"core/internals/procedureBuilder.ts\", \"start_line\": 192})\n192: function createNewBuilder(\n193:   def1: AnyProcedureBuilderDef,\n194:   def2: Partial<AnyProcedureBuilderDef>,\n195: ) {\n196:   const { middlewares = [], inputs, meta, ...rest } = def2;\n197: \n198:   // TODO: maybe have a fn here to warn about calls\n199:   return createBuilder({\n200:     ...mergeWithoutOverrides(def1, rest),\n201:     inputs: [...def1.inputs, ...(inputs ?? [])],\n202:     middlewares: [...def1.middlewares, ...middlewares],\n203:     meta: def1.meta && meta ? { ...def1.meta, ...meta } : meta ?? def1.meta,\n204:   });\n205: }\n206: \n207: export function createBuilder<TConfig extends AnyRootConfig>(\n208:   initDef: Partial<AnyProcedureBuilderDef> = {},\n209: ): ProcedureBuilder<{\n210:   _config: TConfig;\n211:   _ctx_out: TConfig['$types']['ctx'];\n212:   _input_in: UnsetMarker;\n213:   _input_out: UnsetMarker;\n214:   _output_in: UnsetMarker;\n215:   _output_out: UnsetMarker;\n216:   _meta: TConfig['$types']['meta'];\n217: }> {\n218:   const _def: AnyProcedureBuilderDef = {\n219:     inputs: [],\n220:     middlewares: [],\n221:     ...initDef,\n222:   };\n223: \n224:   return {\n225:     _def,\n226:     input(input) {\n227:       const parser = getParseFn(input);\n228:       return createNewBuilder(_def, {\n229:         inputs: [input],\n230:         middlewares: [createInputMiddleware(parser)],\n231:       }) as AnyProcedureBuilder;\n232:     },\n233:     output(output: Parser) {\n234:       const parseOutput = getParseFn(output);\n235:       return createNewBuilder(_def, {\n236:         output,\n237:         middlewares: [createOutputMiddleware(parseOutput)],\n238:       }) as AnyProcedureBuilder;\n239:     },\n240:     meta(meta) {\n241:       return createNewBuilder(_def, {\n242:         meta: meta as Record<string, unknown>,\n243:       }) as AnyProcedureBuilder;\n244:     },\n245:     /**\n246:      * @deprecated\n247:      * This functionality is deprecated and will be removed in the next major version.\n248:      */\n249:     unstable_concat(builder) {\n250:       return createNewBuilder(_def, builder._def) as any;\n251:     },\n252:     use(middlewareBuilderOrFn) {\n253:       // Distinguish between a middleware builder and a middleware function\n254:       const middlewares =\n255:         '_middlewares' in middlewareBuilderOrFn\n256:           ? middlewareBuilderOrFn._middlewares\n257:           : [middlewareBuilderOrFn];\n258: \n259:       return createNewBuilder(_def, {\n260:         middlewares: middlewares as ProcedureBuilderMiddleware[],\n261:       }) as AnyProcedureBuilder;\n262:     },\n263:     query(resolver) {\n264:       return createResolver(\n265:         { ..._def, query: true },\n266:         resolver,\n267:       ) as AnyQueryProcedure;\n268:     },\n269:     mutation(resolver) {\n270:       return createResolver(\n271:         { ..._def, mutation: true },\n272:         resolver,\n273:       ) as AnyMutationProcedure;\n274:     },\n275:     subscription(resolver) {\n276:       return createResolver(\n277:         { ..._def, subscription: true },\n278:         resolver,\n279:       ) as AnySubscriptionProcedure;\n280:     },\n281:   };\n282: }\n283: \n284: function createResolver(\n285:   _def: AnyProcedureBuilderDef,\n286:   resolver: (opts: ResolveOptions<any>) => MaybePromise<any>,\n287: ) {\n288:   const finalBuilder = createNewBuilder(_def, {\n289:     resolver,\n290:     middlewares: [\n[lines 192-290 of 408]",
+    "token_count": 1126,
+    "rank": 5,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "core/internals/procedureBuilder.ts",
+      "start_line": 192,
+      "end_line": 290
+     },
+     "engine_token_count": 1126
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1372,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating how tRPC's ProcedureBuilder produces a new builder for each chained method call (`.input()`, `.output()`, `.use()`), starting from `createNewBuilder` in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.internals.procedureBuilder.createNewBuilder\", \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 5,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"createNewBuilder\", \"path\": \"core/internals/procedureBuilder.ts\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"input\\\\(\", \"path\": \"core/internals/procedureBuilder.ts\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"output\\\\(\", \"path\": \"core/internals/procedureBuilder.ts\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"use\\\\(\", \"path\": \"core/internals/procedureBuilder.ts\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "createNewBuilder",
+        "path": "core/internals/procedureBuilder.ts"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "input\\(",
+        "path": "core/internals/procedureBuilder.ts"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "output\\(",
+        "path": "core/internals/procedureBuilder.ts"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "use\\(",
+        "path": "core/internals/procedureBuilder.ts"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 4,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "createNewBuilder",
+        "path": "core/internals/procedureBuilder.ts"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "input\\(",
+        "path": "core/internals/procedureBuilder.ts"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "output\\(",
+        "path": "core/internals/procedureBuilder.ts"
+       },
+       "msg_id": "r1.3",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "use\\(",
+        "path": "core/internals/procedureBuilder.ts"
+       },
+       "msg_id": "r1.4",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 134,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"core/internals/procedureBuilder.ts\", \"start_line\": 192, \"end_line\": 290}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "core/internals/procedureBuilder.ts",
+        "start_line": 192,
+        "end_line": 290
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "core/internals/procedureBuilder.ts",
+        "start_line": 192,
+        "end_line": 290
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 44,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "```json\n{\n  \"reasoning\": \"The pipeline starts with `createNewBuilder`, which initializes a new builder. The methods `input()`, `output()`, and `use()` are called on the builder, each of which calls `createNewBuilder` with updated definitions. This process creates a new builder for each chained method call.\",\n  \"symbols\": [\n    \"core.internals.procedureBuilder.createNewBuilder\",\n    \"core.internals.procedureBuilder.createBuilder\",\n    \"core.internals.procedureBuilder.input\",\n    \"core.internals.procedureBuilder.output\",\n    \"core.internals.procedureBuilder.use\"\n  ]\n}\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 132,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     8901.018773,
+     3306.837682,
+     10342.711244
+    ],
+    "L_tool_exec": [
+     3.646601,
+     3.177144,
+     2.899994,
+     2.72695,
+     0.342794
+    ],
+    "L_retrieve": [
+     22601.511166
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 2331,
+   "agent_answer": {
+    "text": "```json\n{\n  \"reasoning\": \"The pipeline starts with `createNewBuilder`, which initializes a new builder. The methods `input()`, `output()`, and `use()` are called on the builder, each of which calls `createNewBuilder` with updated definitions. This process creates a new builder for each chained method call.\",\n  \"symbols\": [\n    \"core.internals.procedureBuilder.createNewBuilder\",\n    \"core.internals.procedureBuilder.createBuilder\",\n    \"core.internals.procedureBuilder.input\",\n    \"core.internals.procedureBuilder.output\",\n    \"core.internals.procedureBuilder.use\"\n  ]\n}\n```",
+    "generation_tokens": 132,
+    "latency_seconds": 10.342543017000935,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2364,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1372,
+   "prompt_tokens": 2331,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2364,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

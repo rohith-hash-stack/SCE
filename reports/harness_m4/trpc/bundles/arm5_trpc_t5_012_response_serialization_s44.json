@@ -1,0 +1,122 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t5_012_response_serialization",
+  "items": [
+   {
+    "source_id": "shared/transformTRPCResponse.ts:30-40",
+    "content": "# shared/transformTRPCResponse.ts:30-40  (shared.transformTRPCResponse.transformTRPCResponse)\nexport function transformTRPCResponse<\n  TResponse extends\n    | TRPCResponse\n    | TRPCResponse[]\n    | TRPCResponseMessage\n    | TRPCResponseMessage[],\n>(config: AnyRootConfig, itemOrItems: TResponse) {\n  return Array.isArray(itemOrItems)\n    ? itemOrItems.map((item) => transformTRPCResponseItem(config, item))\n    : transformTRPCResponseItem(config, itemOrItems);\n}",
+    "token_count": 120,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.transformTRPCResponse.transformTRPCResponse"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 94,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/ws.ts:49-55",
+    "content": "# adapters/ws.ts:49-55  (adapters.ws.respond)\n    function respond(untransformedJSON: TRPCResponseMessage) {\n      client.send(\n        JSON.stringify(\n          transformTRPCResponse(router._def._config, untransformedJSON),\n        ),\n      );\n    }",
+    "token_count": 61,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "adapters.ws.respond"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 44,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/transformTRPCResponse.ts:4-25",
+    "content": "# shared/transformTRPCResponse.ts:4-25  (shared.transformTRPCResponse.transformTRPCResponseItem)\nfunction transformTRPCResponseItem<\n  TResponseItem extends TRPCResponse | TRPCResponseMessage,\n>(config: AnyRootConfig, item: TResponseItem): TResponseItem {\n  if ('error' in item) {\n    return {\n      ...item,\n      error: config.transformer.output.serialize(item.error),\n    };\n  }\n\n  if ('data' in item.result) {\n    return {\n      ...item,\n      result: {\n        ...item.result,\n        data: config.transformer.output.serialize(item.result.data),\n      },\n    };\n  }\n\n  return item;\n}",
+    "token_count": 144,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.transformTRPCResponse.transformTRPCResponseItem"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 118,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 325,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `shared.transformTRPCResponse.transformTRPCResponse` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "shared.transformTRPCResponse.transformTRPCResponse",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 5,
+   "manifest_candidates_unfiltered": 5,
+   "requested_symbols": [
+    "shared.transformTRPCResponse.transformTRPCResponse",
+    "adapters.ws.respond",
+    "http.resolveHTTPResponse"
+   ],
+   "turn1_requested_count": 3,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "http.resolveHTTPResponse"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"If `shared.transformTRPCResponse.transformTRPCResponse` changes, it may affect how TRPC responses are transformed, potentially breaking the data format expected by other parts of the system that rely on these transformed responses. This could impact the `adapters.ws.respond` and `http.resolveHTTPResponse` functions, as they both call this transformation function.\",\n  \"requested_symbols\": [\n    \"shared.transformTRPCResponse.transformTRPCResponse\",\n    \"adapters.ws.respond\",\n    \"http.resolveHTTPResponse\"\n  ]\n}\n```",
+     "prompt_tokens": 511,
+     "completion_tokens": 117,
+     "latency_seconds": 8.232042368999828,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     11.180205
+    ],
+    "L_turn2_hydrate": [
+     20.260329
+    ],
+    "L_retrieve": [
+     8264.87279
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 325,
+   "prompt_tokens": 465,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 478,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# shared/transformTRPCResponse.ts:30-40  (shared.transformTRPCResponse.transformTRPCResponse)\nexport function transformTRPCResponse<\n  TResponse extends\n    | TRPCResponse\n    | TRPCResponse[]\n    | TRPCResponseMessage\n    | TRPCResponseMessage[],\n>(config: AnyRootConfig, itemOrItems: TResponse) {\n  return Array.isArray(itemOrItems)\n    ? itemOrItems.map((item) => transformTRPCResponseItem(config, item))\n    : transformTRPCResponseItem(config, itemOrItems);\n}\n\n# adapters/ws.ts:49-55  (adapters.ws.respond)\n    function respond(untransformedJSON: TRPCResponseMessage) {\n      client.send(\n        JSON.stringify(\n          transformTRPCResponse(router._def._config, untransformedJSON),\n        ),\n      );\n    }\n\n# shared/transformTRPCResponse.ts:4-25  (shared.transformTRPCResponse.transformTRPCResponseItem)\nfunction transformTRPCResponseItem<\n  TResponseItem extends TRPCResponse | TRPCResponseMessage,\n>(config: AnyRootConfig, item: TResponseItem): TResponseItem {\n  if ('error' in item) {\n    return {\n      ...item,\n      error: config.transformer.output.serialize(item.error),\n    };\n  }\n\n  if ('data' in item.result) {\n    return {\n      ...item,\n      result: {\n        ...item.result,\n        data: config.transformer.output.serialize(item.result.data),\n      },\n    };\n  }\n\n  return item;\n}\n\n## Task\n\nWhat breaks if `shared.transformTRPCResponse.transformTRPCResponse` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

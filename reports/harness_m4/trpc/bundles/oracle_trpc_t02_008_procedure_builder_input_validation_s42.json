@@ -1,0 +1,91 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "trpc_t02_008_procedure_builder_input_validation",
+  "items": [
+   {
+    "source_id": "core/internals/procedureBuilder.ts:226-232",
+    "content": "# core/internals/procedureBuilder.ts:226-232  (core.internals.procedureBuilder.createBuilder.input)\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },",
+    "token_count": 76,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder.input"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 76
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/getParseFn.ts:5-43",
+    "content": "# core/internals/getParseFn.ts:5-43  (core.internals.getParseFn.getParseFn)\nexport function getParseFn<TType>(procedureParser: Parser): ParseFn<TType> {\n  const parser = procedureParser as any;\n\n  if (typeof parser === 'function') {\n    // ParserCustomValidatorEsque\n    return parser;\n  }\n\n  if (typeof parser.parseAsync === 'function') {\n    // ParserZodEsque\n    return parser.parseAsync.bind(parser);\n  }\n\n  if (typeof parser.parse === 'function') {\n    // ParserZodEsque\n    // ParserValibotEsque (<= v0.12.X)\n    return parser.parse.bind(parser);\n  }\n\n  if (typeof parser.validateSync === 'function') {\n    // ParserYupEsque\n    return parser.validateSync.bind(parser);\n  }\n\n  if (typeof parser.create === 'function') {\n    // ParserSuperstructEsque\n    return parser.create.bind(parser);\n  }\n\n  if (typeof parser.assert === 'function') {\n    // ParserScaleEsque\n    return (value) => {\n      parser.assert(value);\n      return value as TType;\n    };\n  }\n\n  throw new Error('Could not find a validator fn');\n}",
+    "token_count": 264,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.internals.getParseFn.getParseFn"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 264
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/middleware.ts:227-257",
+    "content": "# core/middleware.ts:227-257  (core.middleware.createInputMiddleware)\nexport function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n  const inputMiddleware: ProcedureBuilderMiddleware = async ({\n    next,\n    rawInput,\n    input,\n  }) => {\n    let parsedInput: ReturnType<typeof parse>;\n    try {\n      parsedInput = await parse(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n\n    // Multiple input parsers\n    const combinedInput =\n      isPlainObject(input) && isPlainObject(parsedInput)\n        ? {\n            ...input,\n            ...parsedInput,\n          }\n        : parsedInput;\n\n    // TODO fix this typing?\n    return next({ input: combinedInput } as any);\n  };\n  inputMiddleware._type = 'input';\n  return inputMiddleware;\n}",
+    "token_count": 190,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.middleware.createInputMiddleware"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 190
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:192-205",
+    "content": "# core/internals/procedureBuilder.ts:192-205  (core.internals.procedureBuilder.createNewBuilder)\nfunction createNewBuilder(\n  def1: AnyProcedureBuilderDef,\n  def2: Partial<AnyProcedureBuilderDef>,\n) {\n  const { middlewares = [], inputs, meta, ...rest } = def2;\n\n  // TODO: maybe have a fn here to warn about calls\n  return createBuilder({\n    ...mergeWithoutOverrides(def1, rest),\n    inputs: [...def1.inputs, ...(inputs ?? [])],\n    middlewares: [...def1.middlewares, ...middlewares],\n    meta: def1.meta && meta ? { ...def1.meta, ...meta } : meta ?? def1.meta,\n  });\n}",
+    "token_count": 154,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.internals.procedureBuilder.createNewBuilder"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 154
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 684,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how tRPC validates a procedure's input schema when `.input(schema)` is called during procedure definition, starting from the `input` method on the builder object `createBuilder` returns, in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.internals.procedureBuilder.createBuilder.input\", \"core.internals.getParseFn.getParseFn\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 4,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 684,
+   "prompt_tokens": 963,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 976,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/internals/procedureBuilder.ts:226-232  (core.internals.procedureBuilder.createBuilder.input)\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n\n# core/internals/getParseFn.ts:5-43  (core.internals.getParseFn.getParseFn)\nexport function getParseFn<TType>(procedureParser: Parser): ParseFn<TType> {\n  const parser = procedureParser as any;\n\n  if (typeof parser === 'function') {\n    // ParserCustomValidatorEsque\n    return parser;\n  }\n\n  if (typeof parser.parseAsync === 'function') {\n    // ParserZodEsque\n    return parser.parseAsync.bind(parser);\n  }\n\n  if (typeof parser.parse === 'function') {\n    // ParserZodEsque\n    // ParserValibotEsque (<= v0.12.X)\n    return parser.parse.bind(parser);\n  }\n\n  if (typeof parser.validateSync === 'function') {\n    // ParserYupEsque\n    return parser.validateSync.bind(parser);\n  }\n\n  if (typeof parser.create === 'function') {\n    // ParserSuperstructEsque\n    return parser.create.bind(parser);\n  }\n\n  if (typeof parser.assert === 'function') {\n    // ParserScaleEsque\n    return (value) => {\n      parser.assert(value);\n      return value as TType;\n    };\n  }\n\n  throw new Error('Could not find a validator fn');\n}\n\n# core/middleware.ts:227-257  (core.middleware.createInputMiddleware)\nexport function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n  const inputMiddleware: ProcedureBuilderMiddleware = async ({\n    next,\n    rawInput,\n    input,\n  }) => {\n    let parsedInput: ReturnType<typeof parse>;\n    try {\n      parsedInput = await parse(rawInput);\n    } catch (cause) {\n      throw new TRPCError({\n        code: 'BAD_REQUEST',\n        cause,\n      });\n    }\n\n    // Multiple input parsers\n    const combinedInput =\n      isPlainObject(input) && isPlainObject(parsedInput)\n        ? {\n            ...input,\n            ...parsedInput,\n          }\n        : parsedInput;\n\n    // TODO fix this typing?\n    return next({ input: combinedInput } as any);\n  };\n  inputMiddleware._type = 'input';\n  return inputMiddleware;\n}\n\n# core/internals/procedureBuilder.ts:192-205  (core.internals.procedureBuilder.createNewBuilder)\nfunction createNewBuilder(\n  def1: AnyProcedureBuilderDef,\n  def2: Partial<AnyProcedureBuilderDef>,\n) {\n  const { middlewares = [], inputs, meta, ...rest } = def2;\n\n  // TODO: maybe have a fn here to warn about calls\n  return createBuilder({\n    ...mergeWithoutOverrides(def1, rest),\n    inputs: [...def1.inputs, ...(inputs ?? [])],\n    middlewares: [...def1.middlewares, ...middlewares],\n    meta: def1.meta && meta ? { ...def1.meta, ...meta } : meta ?? def1.meta,\n  });\n}\n\n## Task\n\nYou are investigating how tRPC validates a procedure's input schema when `.input(schema)` is called during procedure definition, starting from the `input` method on the builder object `createBuilder` returns, in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.internals.procedureBuilder.createBuilder.input\", \"core.internals.getParseFn.getParseFn\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

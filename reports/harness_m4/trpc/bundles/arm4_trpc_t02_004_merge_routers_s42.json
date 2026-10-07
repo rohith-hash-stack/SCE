@@ -1,0 +1,135 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "trpc_t02_004_merge_routers",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (read {\"path\": \"core/internals/mergeRouters.ts\"})\n1: import { defaultFormatter } from '../../error/formatter';\n2: import type { CombinedDataTransformer } from '../../transformer';\n3: import { defaultTransformer } from '../../transformer';\n4: import type { AnyRouter, AnyRouterDef, Router, RouterDef } from '../router';\n5: import { createRouterFactory } from '../router';\n6: import { mergeWithoutOverrides } from './mergeWithoutOverrides';\n7: \n8: /**\n9:  * @internal\n10:  */\n11: export type MergeRouters<\n12:   TRouters extends AnyRouter[],\n13:   TRouterDef extends AnyRouterDef = RouterDef<\n14:     TRouters[0]['_def']['_config'],\n15:     // eslint-disable-next-line @typescript-eslint/ban-types\n16:     {}\n17:   >,\n18: > = TRouters extends [\n19:   infer Head extends AnyRouter,\n20:   ...infer Tail extends AnyRouter[],\n21: ]\n22:   ? MergeRouters<\n23:       Tail,\n24:       {\n25:         _config: TRouterDef['_config'];\n26:         router: true;\n27:         procedures: Head['_def']['procedures'] & TRouterDef['procedures'];\n28:         record: Head['_def']['record'] & TRouterDef['record'];\n29:         queries: Head['_def']['queries'] & TRouterDef['queries'];\n30:         mutations: Head['_def']['mutations'] & TRouterDef['mutations'];\n31:         subscriptions: Head['_def']['subscriptions'] &\n32:           TRouterDef['subscriptions'];\n33:       }\n34:     >\n35:   : Router<TRouterDef> & TRouterDef['record'];\n36: \n37: export function mergeRouters<TRouters extends AnyRouter[]>(\n38:   ...routerList: [...TRouters]\n39: ): MergeRouters<TRouters> {\n40:   const record = mergeWithoutOverrides(\n41:     {},\n42:     ...routerList.map((r) => r._def.record),\n43:   );\n44:   const errorFormatter = routerList.reduce(\n45:     (currentErrorFormatter, nextRouter) => {\n46:       if (\n47:         nextRouter._def._config.errorFormatter &&\n48:         nextRouter._def._config.errorFormatter !== defaultFormatter\n49:       ) {\n50:         if (\n51:           currentErrorFormatter !== defaultFormatter &&\n52:           currentErrorFormatter !== nextRouter._def._config.errorFormatter\n53:         ) {\n54:           throw new Error('You seem to have several error formatters');\n55:         }\n56:         return nextRouter._def._config.errorFormatter;\n57:       }\n58:       return currentErrorFormatter;\n59:     },\n60:     defaultFormatter,\n61:   );\n62: \n63:   const transformer = routerList.reduce((prev, current) => {\n64:     if (\n65:       current._def._config.transformer &&\n66:       current._def._config.transformer !== defaultTransformer\n67:     ) {\n68:       if (\n69:         prev !== defaultTransformer &&\n70:         prev !== current._def._config.transformer\n71:       ) {\n72:         throw new Error('You seem to have several transformers');\n73:       }\n74:       return current._def._config.transformer;\n75:     }\n76:     return prev;\n77:   }, defaultTransformer as CombinedDataTransformer);\n78: \n79:   const router = createRouterFactory({\n80:     errorFormatter,\n81:     transformer,\n82:     isDev: routerList.some((r) => r._def._config.isDev),\n83:     allowOutsideOfServer: routerList.some(\n84:       (r) => r._def._config.allowOutsideOfServer,\n85:     ),\n86:     isServer: routerList.some((r) => r._def._config.isServer),\n87:     $types: routerList[0]?._def._config.$types as any,\n88:   })(record);\n89:   return router as any;\n90: }\n91: \n[lines 1-91 of 91]",
+    "token_count": 978,
+    "rank": 1,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "read",
+     "args": {
+      "path": "core/internals/mergeRouters.ts"
+     },
+     "engine_token_count": 978
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 978,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating how tRPC combines multiple routers into one via `mergeRouters`, starting from `mergeRouters` in core/internals/mergeRouters.ts. Trace the real causal pipeline it runs through to produce the merged router.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.internals.mergeRouters.mergeRouters\", \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 2,
+   "tool_calls": 1,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To understand how tRPC combines multiple routers into one using `mergeRouters`, I'll start by searching for the definition of `mergeRouters` in the `core/internals/mergeRouters.ts` file. Then, I'll look for any helper functions or methods that `mergeRouters` might call to achieve this. Finally, I'll trace the causal pipeline to see the sequence of operations involved in merging the routers.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"core/internals/mergeRouters.ts\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "core/internals/mergeRouters.ts"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "core/internals/mergeRouters.ts"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 115,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The `mergeRouters` function in `core/internals/mergeRouters.ts` combines multiple routers into one by merging their definitions and configurations. It uses the `mergeWithoutOverrides` function to combine the records of the routers without overriding any existing properties. It also checks for consistency in error formatters and transformers across the routers, throwing an error if inconsistencies are found. Finally, it creates a new router using the `createRouterFactory` function with the merged configurations.\n\n```json\n[\"core.internals.mergeRouters.mergeRouters\", \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\", \"core.router.createRouterFactory\"]\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 129,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     8533.59146,
+     10021.69363
+    ],
+    "L_tool_exec": [
+     0.328591
+    ],
+    "L_retrieve": [
+     18580.67787
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1813,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"\", \"symbols\": [\"core.internals.mergeRouters.mergeRouters\", \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\", \"core.router.createRouterFactory\"]}\n```",
+    "generation_tokens": 129,
+    "latency_seconds": 10.021543561000044,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1836,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 978,
+   "prompt_tokens": 1813,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1836,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

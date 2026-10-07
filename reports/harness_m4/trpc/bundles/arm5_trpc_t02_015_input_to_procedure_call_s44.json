@@ -1,0 +1,138 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t02_015_input_to_procedure_call",
+  "items": [
+   {
+    "source_id": "http/resolveHTTPResponse.ts:132-175",
+    "content": "# http/resolveHTTPResponse.ts:132-175  (http.resolveHTTPResponse.inputToProcedureCall)\nasync function inputToProcedureCall<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(procedureOpts: {\n  opts: Pick<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'onError' | 'req' | 'router'\n  >;\n  ctx: inferRouterContext<TRouter> | undefined;\n  type: 'mutation' | 'query';\n  input: unknown;\n  path: string;\n}): Promise<TRPCResponse<unknown, inferRouterError<TRouter>>> {\n  const { opts, ctx, type, input, path } = procedureOpts;\n  try {\n    const data = await callProcedure({\n      procedures: opts.router._def.procedures,\n      path,\n      rawInput: input,\n      ctx,\n      type,\n    });\n    return {\n      result: {\n        data,\n      },\n    };\n  } catch (cause) {\n    const error = getTRPCErrorFromUnknown(cause);\n\n    opts.onError?.({ error, path, input, ctx, type: type, req: opts.req });\n\n    return {\n      error: getErrorShape({\n        config: opts.router._def._config,\n        error,\n        type,\n        path,\n        input,\n        ctx,\n      }),\n    };\n  }\n}",
+    "token_count": 287,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.inputToProcedureCall"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 261,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:282-297",
+    "content": "# core/router.ts:282-297  (core.router.callProcedure)\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}",
+    "token_count": 124,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.callProcedure"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 105,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:4-24",
+    "content": "# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}",
+    "token_count": 162,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "error.TRPCError.getTRPCErrorFromUnknown"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 136,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/getErrorShape.ts:10-35",
+    "content": "# shared/getErrorShape.ts:10-35  (shared.getErrorShape.getErrorShape)\nexport function getErrorShape<TConfig extends AnyRootConfig>(opts: {\n  config: TConfig;\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TConfig['$types']['ctx'] | undefined;\n}): TConfig['$types']['errorShape'] {\n  const { path, error, config } = opts;\n  const { code } = opts.error;\n  const shape: DefaultErrorShape = {\n    message: error.message,\n    code: TRPC_ERROR_CODES_BY_KEY[code],\n    data: {\n      code,\n      httpStatus: getHTTPStatusCodeFromError(error),\n    },\n  };\n  if (config.isDev && typeof opts.error.stack === 'string') {\n    shape.data.stack = opts.error.stack;\n  }\n  if (typeof path === 'string') {\n    shape.data.path = path;\n  }\n  return config.errorFormatter({ ...opts, shape });\n}",
+    "token_count": 221,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.getErrorShape.getErrorShape"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 201,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 794,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how tRPC dispatches a single HTTP-level query or mutation request, starting from `inputToProcedureCall` in http/resolveHTTPResponse.ts. Trace the real causal pipeline it runs through, including its own error path.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"http.resolveHTTPResponse.inputToProcedureCall\", \"core.router.callProcedure\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "anchor": "http.resolveHTTPResponse.inputToProcedureCall",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 10,
+   "manifest_candidates_unfiltered": 10,
+   "requested_symbols": [
+    "http.resolveHTTPResponse.inputToProcedureCall",
+    "core.router.callProcedure",
+    "error.TRPCError.getTRPCErrorFromUnknown",
+    "shared.getErrorShape.getErrorShape"
+   ],
+   "turn1_requested_count": 4,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The pipeline starts with `inputToProcedureCall`, which calls `core.router.callProcedure` to handle the procedure call. If an error occurs, it uses `error.TRPCError.getTRPCErrorFromUnknown` to convert the error and then `shared.getErrorShape.getErrorShape` to shape the error response.\",\n  \"requested_symbols\": [\n    \"http.resolveHTTPResponse.inputToProcedureCall\",\n    \"core.router.callProcedure\",\n    \"error.TRPCError.getTRPCErrorFromUnknown\",\n    \"shared.getErrorShape.getErrorShape\"\n  ]\n}\n```",
+     "prompt_tokens": 843,
+     "completion_tokens": 122,
+     "latency_seconds": 9.531995098997868,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     8.650426
+    ],
+    "L_turn2_hydrate": [
+     26.076943
+    ],
+    "L_retrieve": [
+     9569.561201
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 794,
+   "prompt_tokens": 1057,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1070,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# http/resolveHTTPResponse.ts:132-175  (http.resolveHTTPResponse.inputToProcedureCall)\nasync function inputToProcedureCall<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(procedureOpts: {\n  opts: Pick<\n    ResolveHTTPRequestOptions<TRouter, TRequest>,\n    'onError' | 'req' | 'router'\n  >;\n  ctx: inferRouterContext<TRouter> | undefined;\n  type: 'mutation' | 'query';\n  input: unknown;\n  path: string;\n}): Promise<TRPCResponse<unknown, inferRouterError<TRouter>>> {\n  const { opts, ctx, type, input, path } = procedureOpts;\n  try {\n    const data = await callProcedure({\n      procedures: opts.router._def.procedures,\n      path,\n      rawInput: input,\n      ctx,\n      type,\n    });\n    return {\n      result: {\n        data,\n      },\n    };\n  } catch (cause) {\n    const error = getTRPCErrorFromUnknown(cause);\n\n    opts.onError?.({ error, path, input, ctx, type: type, req: opts.req });\n\n    return {\n      error: getErrorShape({\n        config: opts.router._def._config,\n        error,\n        type,\n        path,\n        input,\n        ctx,\n      }),\n    };\n  }\n}\n\n# core/router.ts:282-297  (core.router.callProcedure)\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}\n\n# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}\n\n# shared/getErrorShape.ts:10-35  (shared.getErrorShape.getErrorShape)\nexport function getErrorShape<TConfig extends AnyRootConfig>(opts: {\n  config: TConfig;\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TConfig['$types']['ctx'] | undefined;\n}): TConfig['$types']['errorShape'] {\n  const { path, error, config } = opts;\n  const { code } = opts.error;\n  const shape: DefaultErrorShape = {\n    message: error.message,\n    code: TRPC_ERROR_CODES_BY_KEY[code],\n    data: {\n      code,\n      httpStatus: getHTTPStatusCodeFromError(error),\n    },\n  };\n  if (config.isDev && typeof opts.error.stack === 'string') {\n    shape.data.stack = opts.error.stack;\n  }\n  if (typeof path === 'string') {\n    shape.data.path = path;\n  }\n  return config.errorFormatter({ ...opts, shape });\n}\n\n## Task\n\nYou are investigating how tRPC dispatches a single HTTP-level query or mutation request, starting from `inputToProcedureCall` in http/resolveHTTPResponse.ts. Trace the real causal pipeline it runs through, including its own error path.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"http.resolveHTTPResponse.inputToProcedureCall\", \"core.router.callProcedure\"]\n\n```\n\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

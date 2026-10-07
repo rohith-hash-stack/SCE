@@ -1,0 +1,154 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t02_004_merge_routers",
+  "items": [
+   {
+    "source_id": "core/internals/mergeRouters.ts:37-90",
+    "content": "# core/internals/mergeRouters.ts:37-90  (core.internals.mergeRouters.mergeRouters)\nexport function mergeRouters<TRouters extends AnyRouter[]>(\n  ...routerList: [...TRouters]\n): MergeRouters<TRouters> {\n  const record = mergeWithoutOverrides(\n    {},\n    ...routerList.map((r) => r._def.record),\n  );\n  const errorFormatter = routerList.reduce(\n    (currentErrorFormatter, nextRouter) => {\n      if (\n        nextRouter._def._config.errorFormatter &&\n        nextRouter._def._config.errorFormatter !== defaultFormatter\n      ) {\n        if (\n          currentErrorFormatter !== defaultFormatter &&\n          currentErrorFormatter !== nextRouter._def._config.errorFormatter\n        ) {\n          throw new Error('You seem to have several error formatters');\n        }\n        return nextRouter._def._config.errorFormatter;\n      }\n      return currentErrorFormatter;\n    },\n    defaultFormatter,\n  );\n\n  const transformer = routerList.reduce((prev, current) => {\n    if (\n      current._def._config.transformer &&\n      current._def._config.transformer !== defaultTransformer\n    ) {\n      if (\n        prev !== defaultTransformer &&\n        prev !== current._def._config.transformer\n      ) {\n        throw new Error('You seem to have several transformers');\n      }\n      return current._def._config.transformer;\n    }\n    return prev;\n  }, defaultTransformer as CombinedDataTransformer);\n\n  const router = createRouterFactory({\n    errorFormatter,\n    transformer,\n    isDev: routerList.some((r) => r._def._config.isDev),\n    allowOutsideOfServer: routerList.some(\n      (r) => r._def._config.allowOutsideOfServer,\n    ),\n    isServer: routerList.some((r) => r._def._config.isServer),\n    $types: routerList[0]?._def._config.$types as any,\n  })(record);\n  return router as any;\n}",
+    "token_count": 416,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.mergeRouters.mergeRouters"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 389,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/mergeWithoutOverrides.ts:4-19",
+    "content": "# core/internals/mergeWithoutOverrides.ts:4-19  (core.internals.mergeWithoutOverrides.mergeWithoutOverrides)\nexport function mergeWithoutOverrides<TType extends Record<string, unknown>>(\n  obj1: TType,\n  ...objs: Partial<TType>[]\n): TType {\n  const newObj: TType = Object.assign(Object.create(null), obj1);\n\n  for (const overrides of objs) {\n    for (const key in overrides) {\n      if (key in newObj && newObj[key] !== overrides[key]) {\n        throw new Error(`Duplicate key ${key}`);\n      }\n      newObj[key as keyof TType] = overrides[key] as TType[keyof TType];\n    }\n  }\n  return newObj;\n}",
+    "token_count": 149,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.mergeWithoutOverrides.mergeWithoutOverrides"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 123,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/initTRPC.ts:51-87",
+    "content": "# core/initTRPC.ts:51-87  (core.initTRPC.TRPCBuilder)\nclass TRPCBuilder<TParams extends PartialRootConfigTypes = object> {\n  context<TNewContext extends object | ContextCallback>() {\n    type $Context = TNewContext extends ContextCallback\n      ? Unwrap<TNewContext>\n      : TNewContext;\n\n    type NextParams = Overwrite<\n      TParams,\n      {\n        ctx: $Context;\n      }\n    >;\n\n    return new TRPCBuilder<NextParams>();\n  }\n\n  meta<TNewMeta extends RootConfigTypes['meta']>() {\n    type NextParams = Overwrite<TParams, { meta: TNewMeta }>;\n\n    return new TRPCBuilder<NextParams>();\n  }\n\n  create<\n    TOptions extends Partial<\n      RuntimeConfig<CreateRootConfigTypesFromPartial<TParams>>\n    >,\n  >(\n    options?:\n      | ValidateShape<\n          TOptions,\n          Partial<RuntimeConfig<CreateRootConfigTypesFromPartial<TParams>>>\n        >\n      | undefined,\n  ) {\n    return createTRPCInner<TParams>()<TOptions>(options);\n  }\n}",
+    "token_count": 240,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.initTRPC.TRPCBuilder"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 218,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/initTRPC.ts:73-86",
+    "content": "# core/initTRPC.ts:73-86  (core.initTRPC.TRPCBuilder.create)\n  create<\n    TOptions extends Partial<\n      RuntimeConfig<CreateRootConfigTypesFromPartial<TParams>>\n    >,\n  >(\n    options?:\n      | ValidateShape<\n          TOptions,\n          Partial<RuntimeConfig<CreateRootConfigTypesFromPartial<TParams>>>\n        >\n      | undefined,\n  ) {\n    return createTRPCInner<TParams>()<TOptions>(options);\n  }",
+    "token_count": 106,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.initTRPC.TRPCBuilder.create"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 83,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:194-277",
+    "content": "# core/router.ts:194-277  (core.router.createRouterFactory)\nexport function createRouterFactory<TConfig extends AnyRootConfig>(\n  config: TConfig,\n) {\n  return function createRouterInner<\n    TProcRouterRecord extends ProcedureRouterRecord,\n  >(\n    procedures: TProcRouterRecord,\n  ): CreateRouterInner<TConfig, TProcRouterRecord> {\n    const reservedWordsUsed = new Set(\n      Object.keys(procedures).filter((v) => reservedWords.includes(v)),\n    );\n    if (reservedWordsUsed.size > 0) {\n      throw new Error(\n        'Reserved words used in `router({})` call: ' +\n          Array.from(reservedWordsUsed).join(', '),\n      );\n    }\n\n    const routerProcedures: ProcedureRecord = omitPrototype({});\n    function recursiveGetPaths(procedures: ProcedureRouterRecord, path = '') {\n      for (const [key, procedureOrRouter] of Object.entries(procedures ?? {})) {\n        const newPath = `${path}${key}`;\n\n        if (isRouter(procedureOrRouter)) {\n          recursiveGetPaths(procedureOrRouter._def.procedures, `${newPath}.`);\n          continue;\n        }\n\n        if (routerProcedures[newPath]) {\n          throw new Error(`Duplicate key: ${newPath}`);\n        }\n\n        routerProcedures[newPath] = procedureOrRouter;\n      }\n    }\n    recursiveGetPaths(procedures);\n\n    const _def: AnyRouterDef<TConfig> = {\n      _config: config,\n      router: true,\n      procedures: routerProcedures,\n      ...emptyRouter,\n      record: procedures,\n      queries: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.query)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      mutations: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.mutation)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      subscriptions: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.subscription)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n    };\n\n    const router: AnyRouter = {\n      ...procedures,\n      _def,\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n    };\n\n    return router as any;\n  };\n}\n\n# Referenced module constants:\nconst emptyRouter = {\n  _ctx: null as any,\n  _errorShape: null as any,\n  _meta: null as any,\n  queries: {},\n  mutations: {},\n  subscriptions: {},\n  errorFormatter: defaultFormatter,\n  transformer: defaultTransformer,\n};\nconst reservedWords = [\n  /**\n   * Then is a reserved word because otherwise we can't return a promise that returns a Proxy\n   * since JS will think that `.then` is something that exists\n   */\n  'then',\n];",
+    "token_count": 793,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.createRouterFactory"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 767,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1704,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how tRPC combines multiple routers into one via `mergeRouters`, starting from `mergeRouters` in core/internals/mergeRouters.ts. Trace the real causal pipeline it runs through to produce the merged router.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.internals.mergeRouters.mergeRouters\", \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "core.internals.mergeRouters.mergeRouters",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 8,
+   "manifest_candidates_unfiltered": 8,
+   "requested_symbols": [
+    "core.internals.mergeRouters.mergeRouters",
+    "core.internals.mergeWithoutOverrides.mergeWithoutOverrides",
+    "core.initTRPC.TRPCBuilder.create"
+   ],
+   "turn1_requested_count": 3,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `mergeRouters` function is the seed function that combines multiple routers into one. It calls `mergeWithoutOverrides` to merge the routers without overriding any properties.\",\n  \"requested_symbols\": [\n    \"core.internals.mergeRouters.mergeRouters\",\n    \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\",\n    \"core.initTRPC.TRPCBuilder.create\"\n  ]\n}\n```",
+     "prompt_tokens": 735,
+     "completion_tokens": 90,
+     "latency_seconds": 7.055316415999869,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     6.571421
+    ],
+    "L_turn2_hydrate": [
+     25.226534
+    ],
+    "L_retrieve": [
+     7092.632792
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1704,
+   "prompt_tokens": 1973,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1986,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/internals/mergeRouters.ts:37-90  (core.internals.mergeRouters.mergeRouters)\nexport function mergeRouters<TRouters extends AnyRouter[]>(\n  ...routerList: [...TRouters]\n): MergeRouters<TRouters> {\n  const record = mergeWithoutOverrides(\n    {},\n    ...routerList.map((r) => r._def.record),\n  );\n  const errorFormatter = routerList.reduce(\n    (currentErrorFormatter, nextRouter) => {\n      if (\n        nextRouter._def._config.errorFormatter &&\n        nextRouter._def._config.errorFormatter !== defaultFormatter\n      ) {\n        if (\n          currentErrorFormatter !== defaultFormatter &&\n          currentErrorFormatter !== nextRouter._def._config.errorFormatter\n        ) {\n          throw new Error('You seem to have several error formatters');\n        }\n        return nextRouter._def._config.errorFormatter;\n      }\n      return currentErrorFormatter;\n    },\n    defaultFormatter,\n  );\n\n  const transformer = routerList.reduce((prev, current) => {\n    if (\n      current._def._config.transformer &&\n      current._def._config.transformer !== defaultTransformer\n    ) {\n      if (\n        prev !== defaultTransformer &&\n        prev !== current._def._config.transformer\n      ) {\n        throw new Error('You seem to have several transformers');\n      }\n      return current._def._config.transformer;\n    }\n    return prev;\n  }, defaultTransformer as CombinedDataTransformer);\n\n  const router = createRouterFactory({\n    errorFormatter,\n    transformer,\n    isDev: routerList.some((r) => r._def._config.isDev),\n    allowOutsideOfServer: routerList.some(\n      (r) => r._def._config.allowOutsideOfServer,\n    ),\n    isServer: routerList.some((r) => r._def._config.isServer),\n    $types: routerList[0]?._def._config.$types as any,\n  })(record);\n  return router as any;\n}\n\n# core/internals/mergeWithoutOverrides.ts:4-19  (core.internals.mergeWithoutOverrides.mergeWithoutOverrides)\nexport function mergeWithoutOverrides<TType extends Record<string, unknown>>(\n  obj1: TType,\n  ...objs: Partial<TType>[]\n): TType {\n  const newObj: TType = Object.assign(Object.create(null), obj1);\n\n  for (const overrides of objs) {\n    for (const key in overrides) {\n      if (key in newObj && newObj[key] !== overrides[key]) {\n        throw new Error(`Duplicate key ${key}`);\n      }\n      newObj[key as keyof TType] = overrides[key] as TType[keyof TType];\n    }\n  }\n  return newObj;\n}\n\n# core/initTRPC.ts:51-87  (core.initTRPC.TRPCBuilder)\nclass TRPCBuilder<TParams extends PartialRootConfigTypes = object> {\n  context<TNewContext extends object | ContextCallback>() {\n    type $Context = TNewContext extends ContextCallback\n      ? Unwrap<TNewContext>\n      : TNewContext;\n\n    type NextParams = Overwrite<\n      TParams,\n      {\n        ctx: $Context;\n      }\n    >;\n\n    return new TRPCBuilder<NextParams>();\n  }\n\n  meta<TNewMeta extends RootConfigTypes['meta']>() {\n    type NextParams = Overwrite<TParams, { meta: TNewMeta }>;\n\n    return new TRPCBuilder<NextParams>();\n  }\n\n  create<\n    TOptions extends Partial<\n      RuntimeConfig<CreateRootConfigTypesFromPartial<TParams>>\n    >,\n  >(\n    options?:\n      | ValidateShape<\n          TOptions,\n          Partial<RuntimeConfig<CreateRootConfigTypesFromPartial<TParams>>>\n        >\n      | undefined,\n  ) {\n    return createTRPCInner<TParams>()<TOptions>(options);\n  }\n}\n\n# core/initTRPC.ts:73-86  (core.initTRPC.TRPCBuilder.create)\n  create<\n    TOptions extends Partial<\n      RuntimeConfig<CreateRootConfigTypesFromPartial<TParams>>\n    >,\n  >(\n    options?:\n      | ValidateShape<\n          TOptions,\n          Partial<RuntimeConfig<CreateRootConfigTypesFromPartial<TParams>>>\n        >\n      | undefined,\n  ) {\n    return createTRPCInner<TParams>()<TOptions>(options);\n  }\n\n# core/router.ts:194-277  (core.router.createRouterFactory)\nexport function createRouterFactory<TConfig extends AnyRootConfig>(\n  config: TConfig,\n) {\n  return function createRouterInner<\n    TProcRouterRecord extends ProcedureRouterRecord,\n  >(\n    procedures: TProcRouterRecord,\n  ): CreateRouterInner<TConfig, TProcRouterRecord> {\n    const reservedWordsUsed = new Set(\n      Object.keys(procedures).filter((v) => reservedWords.includes(v)),\n    );\n    if (reservedWordsUsed.size > 0) {\n      throw new Error(\n        'Reserved words used in `router({})` call: ' +\n          Array.from(reservedWordsUsed).join(', '),\n      );\n    }\n\n    const routerProcedures: ProcedureRecord = omitPrototype({});\n    function recursiveGetPaths(procedures: ProcedureRouterRecord, path = '') {\n      for (const [key, procedureOrRouter] of Object.entries(procedures ?? {})) {\n        const newPath = `${path}${key}`;\n\n        if (isRouter(procedureOrRouter)) {\n          recursiveGetPaths(procedureOrRouter._def.procedures, `${newPath}.`);\n          continue;\n        }\n\n        if (routerProcedures[newPath]) {\n          throw new Error(`Duplicate key: ${newPath}`);\n        }\n\n        routerProcedures[newPath] = procedureOrRouter;\n      }\n    }\n    recursiveGetPaths(procedures);\n\n    const _def: AnyRouterDef<TConfig> = {\n      _config: config,\n      router: true,\n      procedures: routerProcedures,\n      ...emptyRouter,\n      record: procedures,\n      queries: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.query)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      mutations: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.mutation)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      subscriptions: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.subscription)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n    };\n\n    const router: AnyRouter = {\n      ...procedures,\n      _def,\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n    };\n\n    return router as any;\n  };\n}\n\n# Referenced module constants:\nconst emptyRouter = {\n  _ctx: null as any,\n  _errorShape: null as any,\n  _meta: null as any,\n  queries: {},\n  mutations: {},\n  subscriptions: {},\n  errorFormatter: defaultFormatter,\n  transformer: defaultTransformer,\n};\nconst reservedWords = [\n  /**\n   * Then is a reserved word because otherwise we can't return a promise that returns a Proxy\n   * since JS will think that `.then` is something that exists\n   */\n  'then',\n];\n\n## Task\n\nYou are investigating how tRPC combines multiple routers into one via `mergeRouters`, starting from `mergeRouters` in core/internals/mergeRouters.ts. Trace the real causal pipeline it runs through to produce the merged router.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.internals.mergeRouters.mergeRouters\", \"core.internals.mergeWithoutOverrides.mergeWithoutOverrides\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -1,0 +1,267 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "trpc_t02_011_input_middleware_error_handling",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"core/middleware.ts\", \"pattern\": \"createInputMiddleware\"})\n227:export function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {",
+    "token_count": 45,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "createInputMiddleware",
+      "path": "core/middleware.ts"
+     },
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"path\": \"error/TRPCError.ts\", \"pattern\": \"TRPCError\"})\n4:export function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n5:  if (cause instanceof TRPCError) {:\n8:  if (cause instanceof Error && cause.name === 'TRPCError') {:\n10:    return cause as TRPCError;:\n13:  const trpcError = new TRPCError({:\n26:export class TRPCError extends Error {:\n45:    this.name = 'TRPCError';:",
+    "token_count": 129,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "TRPCError",
+      "path": "error/TRPCError.ts"
+     },
+     "engine_token_count": 129
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 240, \"path\": \"core/middleware.ts\", \"start_line\": 227})\n227: export function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n228:   const inputMiddleware: ProcedureBuilderMiddleware = async ({\n229:     next,\n230:     rawInput,\n231:     input,\n232:   }) => {\n233:     let parsedInput: ReturnType<typeof parse>;\n234:     try {\n235:       parsedInput = await parse(rawInput);\n236:     } catch (cause) {\n237:       throw new TRPCError({\n238:         code: 'BAD_REQUEST',\n239:         cause,\n240:       });\n[lines 227-240 of 286]",
+    "token_count": 195,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "core/middleware.ts",
+      "start_line": 227,
+      "end_line": 240
+     },
+     "engine_token_count": 195
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.2",
+    "content": "# r2.2  (read {\"end_line\": 45, \"path\": \"error/TRPCError.ts\", \"start_line\": 4})\n4: export function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n5:   if (cause instanceof TRPCError) {\n6:     return cause;\n7:   }\n8:   if (cause instanceof Error && cause.name === 'TRPCError') {\n9:     // https://github.com/trpc/trpc/pull/4848\n10:     return cause as TRPCError;\n11:   }\n12: \n13:   const trpcError = new TRPCError({\n14:     code: 'INTERNAL_SERVER_ERROR',\n15:     cause,\n16:   });\n17: \n18:   // Inherit stack from error\n19:   if (cause instanceof Error && cause.stack) {\n20:     trpcError.stack = cause.stack;\n21:   }\n22: \n23:   return trpcError;\n24: }\n25: \n26: export class TRPCError extends Error {\n27:   // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n28:   // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n29:   public override readonly cause?: Error;\n30:   public readonly code;\n31: \n32:   constructor(opts: {\n33:     message?: string;\n34:     code: TRPC_ERROR_CODE_KEY;\n35:     cause?: unknown;\n36:   }) {\n37:     const cause = getCauseFromUnknown(opts.cause);\n38:     const message = opts.message ?? cause?.message ?? opts.code;\n39: \n40:     // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n41:     // @ts-ignore https://github.com/tc39/proposal-error-cause\n42:     super(message, { cause });\n43: \n44:     this.code = opts.code;\n45:     this.name = 'TRPCError';\n[lines 4-45 of 53]",
+    "token_count": 490,
+    "rank": 4,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.2",
+     "tool": "read",
+     "args": {
+      "path": "error/TRPCError.ts",
+      "start_line": 4,
+      "end_line": 45
+     },
+     "engine_token_count": 490
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 859,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating how tRPC turns a raw input-parsing failure into a real TRPCError, starting from `createInputMiddleware` in core/middleware.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.middleware.createInputMiddleware\", \"error.TRPCError.TRPCError\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 4,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"createInputMiddleware\", \"path\": \"core/middleware.ts\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"TRPCError\", \"path\": \"error/TRPCError.ts\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "createInputMiddleware",
+        "path": "core/middleware.ts"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "TRPCError",
+        "path": "error/TRPCError.ts"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "createInputMiddleware",
+        "path": "core/middleware.ts"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "TRPCError",
+        "path": "error/TRPCError.ts"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 64,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"core/middleware.ts\", \"start_line\": 227, \"end_line\": 240}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"error/TRPCError.ts\", \"start_line\": 4, \"end_line\": 45}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "core/middleware.ts",
+        "start_line": 227,
+        "end_line": 240
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "error/TRPCError.ts",
+        "start_line": 4,
+        "end_line": 45
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "core/middleware.ts",
+        "start_line": 227,
+        "end_line": 240
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "error/TRPCError.ts",
+        "start_line": 4,
+        "end_line": 45
+       },
+       "msg_id": "r2.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 79,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "```json\n{\n  \"reasoning\": \"The `createInputMiddleware` function in `core/middleware.ts` catches any errors thrown during input parsing and converts them into a `TRPCError` with a 'BAD_REQUEST' code. The `TRPCError` class is defined in `error/TRPCError.ts` and extends the native JavaScript Error class.\",\n  \"symbols\": [\n    \"core.middleware.createInputMiddleware\",\n    \"error.TRPCError.TRPCError\"\n  ]\n}\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 102,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     4565.488861,
+     5285.720172,
+     7728.141402
+    ],
+    "L_tool_exec": [
+     3.622286,
+     2.9014,
+     0.363581,
+     0.150183
+    ],
+    "L_retrieve": [
+     17618.369506
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1750,
+   "agent_answer": {
+    "text": "```json\n{\n  \"reasoning\": \"The `createInputMiddleware` function in `core/middleware.ts` catches any errors thrown during input parsing and converts them into a `TRPCError` with a 'BAD_REQUEST' code. The `TRPCError` class is defined in `error/TRPCError.ts` and extends the native JavaScript Error class.\",\n  \"symbols\": [\n    \"core.middleware.createInputMiddleware\",\n    \"error.TRPCError.TRPCError\"\n  ]\n}\n```",
+    "generation_tokens": 102,
+    "latency_seconds": 7.727972050999597,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1783,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 859,
+   "prompt_tokens": 1750,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1783,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

@@ -1,0 +1,248 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "trpc_t02_003_procedure_caller_error_normalization",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"core/internals/procedureBuilder.ts\", \"pattern\": \"createProcedureCaller\"})\n303:  return createProcedureCaller(finalBuilder._def);:\n322:function createProcedureCaller(_def: AnyProcedureBuilderDef): AnyProcedure {",
+    "token_count": 61,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "createProcedureCaller",
+      "path": "core/internals/procedureBuilder.ts"
+     },
+     "engine_token_count": 61
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"path\": \"core/internals/procedureBuilder.ts\", \"pattern\": \"TRPCError\"})\n1:import { getTRPCErrorFromUnknown, TRPCError } from '../../error/TRPCError';:\n381:          error: getTRPCErrorFromUnknown(cause),\n391:      throw new TRPCError({:",
+    "token_count": 79,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "TRPCError",
+      "path": "core/internals/procedureBuilder.ts"
+     },
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 400, \"path\": \"core/internals/procedureBuilder.ts\", \"start_line\": 322})\n322: function createProcedureCaller(_def: AnyProcedureBuilderDef): AnyProcedure {\n323:   const procedure = async function resolve(opts: ProcedureCallOptions) {\n324:     // is direct server-side call\n325:     if (!opts || !('rawInput' in opts)) {\n326:       throw new Error(codeblock);\n327:     }\n328: \n329:     // run the middlewares recursively with the resolver as the last one\n330:     const callRecursive = async (\n331:       callOpts: {\n332:         ctx: any;\n333:         index: number;\n334:         input?: unknown;\n335:         rawInput?: unknown;\n336:       } = {\n337:         index: 0,\n338:         ctx: opts.ctx,\n339:       },\n340:     ): Promise<MiddlewareResult<any>> => {\n341:       try {\n342:         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n343:         const middleware = _def.middlewares[callOpts.index]!;\n344:         const result = await middleware({\n345:           ctx: callOpts.ctx,\n346:           type: opts.type,\n347:           path: opts.path,\n348:           rawInput: callOpts.rawInput ?? opts.rawInput,\n349:           meta: _def.meta,\n350:           input: callOpts.input,\n351:           next(_nextOpts?: any) {\n352:             const nextOpts = _nextOpts as\n353:               | {\n354:                   ctx?: Record<string, unknown>;\n355:                   input?: unknown;\n356:                   rawInput?: unknown;\n357:                 }\n358:               | undefined;\n359: \n360:             return callRecursive({\n361:               index: callOpts.index + 1,\n362:               ctx:\n363:                 nextOpts && 'ctx' in nextOpts\n364:                   ? { ...callOpts.ctx, ...nextOpts.ctx }\n365:                   : callOpts.ctx,\n366:               input:\n367:                 nextOpts && 'input' in nextOpts\n368:                   ? nextOpts.input\n369:                   : callOpts.input,\n370:               rawInput:\n371:                 nextOpts && 'rawInput' in nextOpts\n372:                   ? nextOpts.rawInput\n373:                   : callOpts.rawInput,\n374:             });\n375:           },\n376:         });\n377:         return result;\n378:       } catch (cause) {\n379:         return {\n380:           ok: false,\n381:           error: getTRPCErrorFromUnknown(cause),\n382:           marker: middlewareMarker,\n383:         };\n384:       }\n385:     };\n386: \n387:     // there's always at least one \"next\" since we wrap this.resolver in a middleware\n388:     const result = await callRecursive();\n389: \n390:     if (!result) {\n391:       throw new TRPCError({\n392:         code: 'INTERNAL_SERVER_ERROR',\n393:         message:\n394:           'No result from middlewares - did you forget to `return next()`?',\n395:       });\n396:     }\n397:     if (!result.ok) {\n398:       // re-throw original error\n399:       throw result.error;\n400:     }\n[lines 322-400 of 408]",
+    "token_count": 892,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "core/internals/procedureBuilder.ts",
+      "start_line": 322,
+      "end_line": 400
+     },
+     "engine_token_count": 892
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1032,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating how tRPC normalizes an error thrown while resolving a procedure, starting from `createProcedureCaller` in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through to turn an arbitrary thrown value into a real TRPCError.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.internals.procedureBuilder.createProcedureCaller\", \"error.TRPCError.getTRPCErrorFromUnknown\"]\n```\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 4,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 1,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "To understand how tRPC normalizes an error thrown while resolving a procedure, we need to trace the causal pipeline starting from `createProcedureCaller` in `core/internals/procedureBuilder.ts`. This function is responsible for creating a procedure caller, which in turn handles errors that occur during the resolution of a procedure. We need to identify how these errors are caught and transformed into a `TRPCError`.\n\nLet's start by searching for the `createProcedureCaller` function and understanding its role in error handling.\n\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"createProcedureCaller\", \"path\": \"core/internals/procedureBuilder.ts\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"TRPCError\", \"path\": \"core/internals/procedureBuilder.ts\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "createProcedureCaller",
+        "path": "core/internals/procedureBuilder.ts"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "TRPCError",
+        "path": "core/internals/procedureBuilder.ts"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "createProcedureCaller",
+        "path": "core/internals/procedureBuilder.ts"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "TRPCError",
+        "path": "core/internals/procedureBuilder.ts"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 171,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "The `createProcedureCaller` function in `core/internals/procedureBuilder.ts` is responsible for creating a procedure caller. When an error occurs during the resolution of a procedure, it is caught and transformed into a `TRPCError` using the `getTRPCErrorFromUnknown` function from the `../../error/TRPCError` module.\n\nTo trace the full causal pipeline, we need to identify how errors are caught and transformed into `TRPCError` instances.\n\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"core/internals/procedureBuilder.ts\", \"start_line\": 322, \"end_line\": 400}}</tools>\n<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"../../error/TRPCError.ts\", \"start_line\": 1, \"end_line\": 100}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "core/internals/procedureBuilder.ts",
+        "start_line": 322,
+        "end_line": 400
+       }
+      },
+      {
+       "name": "read",
+       "arguments": {
+        "path": "../../error/TRPCError.ts",
+        "start_line": 1,
+        "end_line": 100
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "core/internals/procedureBuilder.ts",
+        "start_line": 322,
+        "end_line": 400
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "read",
+       "args": {
+        "path": "../../error/TRPCError.ts",
+        "start_line": 1,
+        "end_line": 100
+       },
+       "msg_id": "r2.2",
+       "is_error": true,
+       "outcome": "path_rejected"
+      }
+     ],
+     "completion_tokens": 178,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "The `createProcedureCaller` function in `core/internals/procedureBuilder.ts` is responsible for creating a procedure caller. When an error occurs during the resolution of a procedure, it is caught and transformed into a `TRPCError` using the `getTRPCErrorFromUnknown` function from the `../../error/TRPCError` module.\n\nThe causal pipeline for error normalization is as follows:\n1. `createProcedureCaller` is called to create a procedure caller.\n2. Inside `createProcedureCaller`, the `callRecursive` function is used to run middlewares recursively.\n3. If an error occurs during the execution of a middleware, it is caught in the `catch` block.\n4. The `getTRPCErrorFromUnknown` function is called to transform the caught error into a `TRPCError`.\n5. The `TRPCError` is then returned as part of the middleware result.\n\n```json\n[\"core.internals.procedureBuilder.createProcedureCaller\", \"core.internals.procedureBuilder.callRecursive\", \"core.internals.procedureBuilder.getTRPCErrorFromUnknown\", \"core.internals.procedureBuilder.TRPCError\"]\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 235,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     11287.123254,
+     11459.95124,
+     16825.618096
+    ],
+    "L_tool_exec": [
+     3.627234,
+     2.899191,
+     0.420081,
+     0.10086
+    ],
+    "L_retrieve": [
+     39618.633284
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 2189,
+   "agent_answer": {
+    "text": "```json\n{\"reasoning\": \"\", \"symbols\": [\"core.internals.procedureBuilder.createProcedureCaller\", \"core.internals.procedureBuilder.callRecursive\", \"core.internals.procedureBuilder.getTRPCErrorFromUnknown\", \"core.internals.procedureBuilder.TRPCError\"]}\n```",
+    "generation_tokens": 235,
+    "latency_seconds": 16.82546900600005,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 2222,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1032,
+   "prompt_tokens": 2189,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2222,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

@@ -1,0 +1,228 @@
+{
+ "bundle": {
+  "arm": "arm4",
+  "task_id": "trpc_t02_011_input_middleware_error_handling",
+  "items": [
+   {
+    "source_id": "r1.1",
+    "content": "# r1.1  (grep {\"path\": \"core/middleware.ts\", \"pattern\": \"createInputMiddleware\"})\n227:export function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {",
+    "token_count": 45,
+    "rank": 1,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.1",
+     "tool": "grep",
+     "args": {
+      "pattern": "createInputMiddleware",
+      "path": "core/middleware.ts"
+     },
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r1.2",
+    "content": "# r1.2  (grep {\"path\": \"core/middleware.ts\", \"pattern\": \"TRPCError\"})\n1:import { TRPCError } from '../error/TRPCError';:\n42:  error: TRPCError;\n237:      throw new TRPCError({:\n276:      throw new TRPCError({:",
+    "token_count": 75,
+    "rank": 2,
+    "kind": "tool_result_grep",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r1.2",
+     "tool": "grep",
+     "args": {
+      "pattern": "TRPCError",
+      "path": "core/middleware.ts"
+     },
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "r2.1",
+    "content": "# r2.1  (read {\"end_line\": 280, \"path\": \"core/middleware.ts\", \"start_line\": 225})\n225:  * Please note, `trpc-openapi` uses this function.\n226:  */\n227: export function createInputMiddleware<TInput>(parse: ParseFn<TInput>) {\n228:   const inputMiddleware: ProcedureBuilderMiddleware = async ({\n229:     next,\n230:     rawInput,\n231:     input,\n232:   }) => {\n233:     let parsedInput: ReturnType<typeof parse>;\n234:     try {\n235:       parsedInput = await parse(rawInput);\n236:     } catch (cause) {\n237:       throw new TRPCError({\n238:         code: 'BAD_REQUEST',\n239:         cause,\n240:       });\n241:     }\n242: \n243:     // Multiple input parsers\n244:     const combinedInput =\n245:       isPlainObject(input) && isPlainObject(parsedInput)\n246:         ? {\n247:             ...input,\n248:             ...parsedInput,\n249:           }\n250:         : parsedInput;\n251: \n252:     // TODO fix this typing?\n253:     return next({ input: combinedInput } as any);\n254:   };\n255:   inputMiddleware._type = 'input';\n256:   return inputMiddleware;\n257: }\n258: \n259: /**\n260:  * @internal\n261:  */\n262: export function createOutputMiddleware<TOutput>(parse: ParseFn<TOutput>) {\n263:   const outputMiddleware: ProcedureBuilderMiddleware = async ({ next }) => {\n264:     const result = await next();\n265:     if (!result.ok) {\n266:       // pass through failures without validating\n267:       return result;\n268:     }\n269:     try {\n270:       const data = await parse(result.data);\n271:       return {\n272:         ...result,\n273:         data,\n274:       };\n275:     } catch (cause) {\n276:       throw new TRPCError({\n277:         message: 'Output validation failed',\n278:         code: 'INTERNAL_SERVER_ERROR',\n279:         cause,\n280:       });\n[lines 225-280 of 286]",
+    "token_count": 590,
+    "rank": 3,
+    "kind": "tool_result_read",
+    "symbols": [],
+    "provenance": {
+     "msg_id": "r2.1",
+     "tool": "read",
+     "args": {
+      "path": "core/middleware.ts",
+      "start_line": 225,
+      "end_line": 280
+     },
+     "engine_token_count": 590
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 710,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Claude-Code-style agent loop",
+   "fidelity": "MEDIUM_HIGH",
+   "simplifications": [
+    "tools are grep (ripgrep), glob, read and answer; read-only, no shell or edit tools",
+    "tool calls are parsed from the model's text (<tools> blocks), not through a server-side tool API",
+    "tool results return as a user message; older reads are digested to a one-line stub at compaction",
+    "if the model never calls answer within the turn cap, one call with the uniform answer prompt over the gathered context answers (forced_answer)"
+   ],
+   "query": "You are investigating how tRPC turns a raw input-parsing failure into a real TRPCError, starting from `createInputMiddleware` in core/middleware.ts. Trace the real causal pipeline it runs through.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n\n[\"core.middleware.createInputMiddleware\", \"error.TRPCError.TRPCError\"]\n\n```\n\n",
+   "task_type": "T2_localization",
+   "over_budget": false,
+   "ranking_method": "agent_trajectory",
+   "turn_count": 3,
+   "tool_calls": 3,
+   "duplicates": 0,
+   "timeouts": 0,
+   "parse_error_turns": 0,
+   "calls_over_cap": 0,
+   "path_rejected": 0,
+   "grep_empty": 0,
+   "read_empty": 0,
+   "read_nonexistent": 0,
+   "read_out_of_bounds": 0,
+   "unknown_tool": 0,
+   "hermes_blocks": 0,
+   "compactions": 0,
+   "digested": 0,
+   "no_tool_turns": 0,
+   "executed_after_answer": 0,
+   "direct_answers": 1,
+   "forced_answer": false,
+   "trajectory": [
+    {
+     "turn": 1,
+     "raw_text": "<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"createInputMiddleware\", \"path\": \"core/middleware.ts\"}}</tools>\n<tools>{\"name\": \"grep\", \"arguments\": {\"pattern\": \"TRPCError\", \"path\": \"core/middleware.ts\"}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "createInputMiddleware",
+        "path": "core/middleware.ts"
+       }
+      },
+      {
+       "name": "grep",
+       "arguments": {
+        "pattern": "TRPCError",
+        "path": "core/middleware.ts"
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 2,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "createInputMiddleware",
+        "path": "core/middleware.ts"
+       },
+       "msg_id": "r1.1",
+       "is_error": false,
+       "outcome": "ok"
+      },
+      {
+       "tool": "grep",
+       "args": {
+        "pattern": "TRPCError",
+        "path": "core/middleware.ts"
+       },
+       "msg_id": "r1.2",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 63,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 2,
+     "raw_text": "<tools>{\"name\": \"read\", \"arguments\": {\"path\": \"core/middleware.ts\", \"start_line\": 225, \"end_line\": 280}}</tools>",
+     "parsed_calls": [
+      {
+       "name": "read",
+       "arguments": {
+        "path": "core/middleware.ts",
+        "start_line": 225,
+        "end_line": 280
+       }
+      }
+     ],
+     "is_final": false,
+     "blocks": 1,
+     "unparseable_blocks": 0,
+     "calls": [
+      {
+       "tool": "read",
+       "args": {
+        "path": "core/middleware.ts",
+        "start_line": 225,
+        "end_line": 280
+       },
+       "msg_id": "r2.1",
+       "is_error": false,
+       "outcome": "ok"
+      }
+     ],
+     "completion_tokens": 41,
+     "finish_reason": "stop",
+     "is_error": false
+    },
+    {
+     "turn": 3,
+     "raw_text": "```json\n{\n  \"reasoning\": \"The pipeline starts with `createInputMiddleware` which attempts to parse the input. If parsing fails, it throws a `TRPCError` with a 'BAD_REQUEST' code. If parsing succeeds, it combines the parsed input with the existing input and proceeds to the next middleware.\",\n  \"symbols\": [\n    \"core.middleware.createInputMiddleware\",\n    \"error.TRPCError.TRPCError\"\n  ]\n}\n```",
+     "parsed_calls": [],
+     "is_final": true,
+     "blocks": 0,
+     "unparseable_blocks": 0,
+     "calls": [],
+     "completion_tokens": 94,
+     "finish_reason": "stop",
+     "is_error": false,
+     "answered": true,
+     "answer_source": "direct"
+    }
+   ],
+   "latency_ms": {
+    "L_generate_turn": [
+     4524.354833,
+     2830.738817,
+     6962.565498
+    ],
+    "L_tool_exec": [
+     3.968217,
+     3.249738,
+     0.311901
+    ],
+    "L_retrieve": [
+     14354.663878
+    ]
+   },
+   "arm4_max_turns": 10,
+   "agent_prompt_tokens": 1551,
+   "agent_answer": {
+    "text": "```json\n{\n  \"reasoning\": \"The pipeline starts with `createInputMiddleware` which attempts to parse the input. If parsing fails, it throws a `TRPCError` with a 'BAD_REQUEST' code. If parsing succeeds, it combines the parsed input with the existing input and proceeds to the next middleware.\",\n  \"symbols\": [\n    \"core.middleware.createInputMiddleware\",\n    \"error.TRPCError.TRPCError\"\n  ]\n}\n```",
+    "generation_tokens": 94,
+    "latency_seconds": 6.9624071510006615,
+    "finish_reason": "stop",
+    "prompt_tokens_server": 1584,
+    "model": "qwen2.5-coder:14b-instruct-q8_0"
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 710,
+   "prompt_tokens": 1551,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1584,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": ""
+}

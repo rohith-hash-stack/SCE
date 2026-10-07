@@ -1,0 +1,177 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t02_001_init_bootstrap",
+  "items": [
+   {
+    "source_id": "core/initTRPC.ts:94-187",
+    "content": "# core/initTRPC.ts:94-187  (core.initTRPC.createTRPCInner)\nfunction createTRPCInner<TParams extends PartialRootConfigTypes>() {\n  type $Generics = CreateRootConfigTypesFromPartial<TParams>;\n\n  type $Context = $Generics['ctx'];\n  type $Meta = $Generics['meta'];\n  type $Runtime = Partial<RuntimeConfig<$Generics>>;\n\n  return function initTRPCInner<TOptions extends $Runtime>(\n    runtime?: ValidateShape<TOptions, $Runtime>,\n  ) {\n    type $Formatter = PickFirstDefined<\n      TOptions['errorFormatter'],\n      ErrorFormatter<$Context, DefaultErrorShape>\n    >;\n    type $Transformer = TOptions['transformer'] extends DataTransformerOptions\n      ? TOptions['transformer']\n      : DefaultDataTransformer;\n    type $ErrorShape = ErrorFormatterShape<$Formatter>;\n\n    type $Config = RootConfig<{\n      ctx: $Context;\n      meta: $Meta;\n      errorShape: $ErrorShape;\n      transformer: $Transformer;\n    }>;\n\n    const errorFormatter = runtime?.errorFormatter ?? defaultFormatter;\n    const transformer = getDataTransformer(\n      runtime?.transformer ?? defaultTransformer,\n    ) as $Transformer;\n\n    const config: $Config = {\n      transformer,\n      isDev:\n        runtime?.isDev ?? globalThis.process?.env?.NODE_ENV !== 'production',\n      allowOutsideOfServer: runtime?.allowOutsideOfServer ?? false,\n      errorFormatter,\n      isServer: runtime?.isServer ?? isServerDefault,\n      /**\n       * @internal\n       */\n      $types: createFlatProxy((key) => {\n        throw new Error(\n          `Tried to access \"$types.${key}\" which is not available at runtime`,\n        );\n      }),\n    };\n\n    {\n      // Server check\n      const isServer: boolean = runtime?.isServer ?? isServerDefault;\n\n      if (!isServer && runtime?.allowOutsideOfServer !== true) {\n        throw new Error(\n          `You're trying to use @trpc/server in a non-server environment. This is not supported by default.`,\n        );\n      }\n    }\n    return {\n      /**\n       * These are just types, they can't be used\n       * @internal\n       */\n      _config: config,\n      /**\n       * Builder object for creating procedures\n       * @see https://trpc.io/docs/server/procedures\n       */\n      procedure: createBuilder<$Config>({\n        meta: runtime?.defaultMeta,\n      }),\n      /**\n       * Create reusable middlewares\n       * @see https://trpc.io/docs/server/middlewares\n       */\n      middleware: createMiddlewareFactory<$Config>(),\n      /**\n       * Create a router\n       * @see https://trpc.io/docs/server/routers\n       */\n      router: createRouterFactory<$Config>(config),\n      /**\n       * Merge Routers\n       * @see https://trpc.io/docs/server/merging-routers\n       */\n      mergeRouters,\n      /**\n       * Create a server-side caller for a router\n       * @see https://trpc.io/docs/server/server-side-calls\n       */\n      createCallerFactory: createCallerFactory<$Config>(),\n    };\n  };\n}",
+    "token_count": 672,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.initTRPC.createTRPCInner"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 648,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:207-282",
+    "content": "# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}",
+    "token_count": 521,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 494,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/middleware.ts:166-199",
+    "content": "# core/middleware.ts:166-199  (core.middleware.createMiddlewareFactory)\nexport function createMiddlewareFactory<\n  TConfig extends AnyRootConfig,\n  TInputIn = unknown,\n>() {\n  function createMiddlewareInner<TNewParams extends ProcedureParams>(\n    middlewares: MiddlewareFunction<any, any>[],\n  ): MiddlewareBuilder<deriveParamsFromConfig<TConfig, TInputIn>, TNewParams> {\n    return {\n      _middlewares: middlewares,\n      unstable_pipe(middlewareBuilderOrFn) {\n        const pipedMiddleware =\n          '_middlewares' in middlewareBuilderOrFn\n            ? middlewareBuilderOrFn._middlewares\n            : [middlewareBuilderOrFn];\n\n        return createMiddlewareInner([\n          ...(middlewares as any),\n          ...pipedMiddleware,\n        ]);\n      },\n    };\n  }\n\n  function createMiddleware<TNewParams extends ProcedureParams>(\n    fn: MiddlewareFunction<\n      deriveParamsFromConfig<TConfig, TInputIn>,\n      TNewParams\n    >,\n  ): MiddlewareBuilder<deriveParamsFromConfig<TConfig, TInputIn>, TNewParams> {\n    return createMiddlewareInner([fn]);\n  }\n\n  return createMiddleware;\n}",
+    "token_count": 241,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.middleware.createMiddlewareFactory"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 220,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:299-342",
+    "content": "# core/router.ts:299-342  (core.router.createCallerFactory)\nexport function createCallerFactory<TConfig extends AnyRootConfig>() {\n  return function createCallerInner<\n    TRouter extends Router<AnyRouterDef<TConfig>>,\n  >(router: TRouter): RouterCaller<TRouter['_def']> {\n    const def = router._def;\n\n    return function createCaller(ctx) {\n      const proxy = createRecursiveProxy(({ path, args }) => {\n        // interop mode\n        if (\n          path.length === 1 &&\n          procedureTypes.includes(path[0] as ProcedureType)\n        ) {\n          return callProcedure({\n            procedures: def.procedures,\n            path: args[0] as string,\n            rawInput: args[1],\n            ctx,\n            type: path[0] as ProcedureType,\n          });\n        }\n\n        const fullPath = path.join('.');\n        const procedure = def.procedures[fullPath] as AnyProcedure;\n\n        let type: ProcedureType = 'query';\n        if (procedure._def.mutation) {\n          type = 'mutation';\n        } else if (procedure._def.subscription) {\n          type = 'subscription';\n        }\n\n        return procedure({\n          path: fullPath,\n          rawInput: args[0],\n          ctx,\n          type,\n        });\n      });\n\n      return proxy as ReturnType<RouterCaller<any>>;\n    };\n  };\n}",
+    "token_count": 285,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.createCallerFactory"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 265,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:194-277",
+    "content": "# core/router.ts:194-277  (core.router.createRouterFactory)\nexport function createRouterFactory<TConfig extends AnyRootConfig>(\n  config: TConfig,\n) {\n  return function createRouterInner<\n    TProcRouterRecord extends ProcedureRouterRecord,\n  >(\n    procedures: TProcRouterRecord,\n  ): CreateRouterInner<TConfig, TProcRouterRecord> {\n    const reservedWordsUsed = new Set(\n      Object.keys(procedures).filter((v) => reservedWords.includes(v)),\n    );\n    if (reservedWordsUsed.size > 0) {\n      throw new Error(\n        'Reserved words used in `router({})` call: ' +\n          Array.from(reservedWordsUsed).join(', '),\n      );\n    }\n\n    const routerProcedures: ProcedureRecord = omitPrototype({});\n    function recursiveGetPaths(procedures: ProcedureRouterRecord, path = '') {\n      for (const [key, procedureOrRouter] of Object.entries(procedures ?? {})) {\n        const newPath = `${path}${key}`;\n\n        if (isRouter(procedureOrRouter)) {\n          recursiveGetPaths(procedureOrRouter._def.procedures, `${newPath}.`);\n          continue;\n        }\n\n        if (routerProcedures[newPath]) {\n          throw new Error(`Duplicate key: ${newPath}`);\n        }\n\n        routerProcedures[newPath] = procedureOrRouter;\n      }\n    }\n    recursiveGetPaths(procedures);\n\n    const _def: AnyRouterDef<TConfig> = {\n      _config: config,\n      router: true,\n      procedures: routerProcedures,\n      ...emptyRouter,\n      record: procedures,\n      queries: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.query)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      mutations: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.mutation)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      subscriptions: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.subscription)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n    };\n\n    const router: AnyRouter = {\n      ...procedures,\n      _def,\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n    };\n\n    return router as any;\n  };\n}\n\n# Referenced module constants:\nconst emptyRouter = {\n  _ctx: null as any,\n  _errorShape: null as any,\n  _meta: null as any,\n  queries: {},\n  mutations: {},\n  subscriptions: {},\n  errorFormatter: defaultFormatter,\n  transformer: defaultTransformer,\n};\nconst reservedWords = [\n  /**\n   * Then is a reserved word because otherwise we can't return a promise that returns a Proxy\n   * since JS will think that `.then` is something that exists\n   */\n  'then',\n];",
+    "token_count": 793,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.createRouterFactory"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 767,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "transformer.ts:71-78",
+    "content": "# transformer.ts:71-78  (transformer.getDataTransformer)\nexport function getDataTransformer(\n  transformer: DataTransformerOptions,\n): CombinedDataTransformer {\n  if ('input' in transformer) {\n    return transformer;\n  }\n  return { input: transformer, output: transformer };\n}",
+    "token_count": 60,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "transformer.getDataTransformer"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 44,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2572,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how tRPC's `initTRPC.create()` entry point bootstraps a server instance, starting from `createTRPCInner` in core/initTRPC.ts. Trace the real causal pipeline it runs through to build the object a tRPC app actually uses.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.initTRPC.createTRPCInner\", \"transformer.getDataTransformer\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "core.initTRPC.createTRPCInner",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 12,
+   "manifest_candidates_unfiltered": 12,
+   "requested_symbols": [
+    "core.initTRPC.createTRPCInner",
+    "core.internals.procedureBuilder.createBuilder",
+    "core.middleware.createMiddlewareFactory",
+    "core.router.createCallerFactory",
+    "core.router.createRouterFactory",
+    "shared.createProxy.createFlatProxy",
+    "transformer.getDataTransformer"
+   ],
+   "turn1_requested_count": 7,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [
+    "shared.createProxy.createFlatProxy"
+   ],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The tRPC initialization pipeline starts with `createTRPCInner`, which sets up core components like procedure builders, middleware factories, and router factories. It then uses these components to create a flat proxy and get data transformers, ultimately building the tRPC app instance.\",\n  \"requested_symbols\": [\n    \"core.initTRPC.createTRPCInner\",\n    \"core.internals.procedureBuilder.createBuilder\",\n    \"core.middleware.createMiddlewareFactory\",\n    \"core.router.createCallerFactory\",\n    \"core.router.createRouterFactory\",\n    \"shared.createProxy.createFlatProxy\",\n    \"transformer.getDataTransformer\"\n  ]\n}\n```",
+     "prompt_tokens": 816,
+     "completion_tokens": 135,
+     "latency_seconds": 10.165567579000708,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     6.12822
+    ],
+    "L_turn2_hydrate": [
+     31.559815
+    ],
+    "L_retrieve": [
+     10211.393733
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2572,
+   "prompt_tokens": 2843,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2856,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/initTRPC.ts:94-187  (core.initTRPC.createTRPCInner)\nfunction createTRPCInner<TParams extends PartialRootConfigTypes>() {\n  type $Generics = CreateRootConfigTypesFromPartial<TParams>;\n\n  type $Context = $Generics['ctx'];\n  type $Meta = $Generics['meta'];\n  type $Runtime = Partial<RuntimeConfig<$Generics>>;\n\n  return function initTRPCInner<TOptions extends $Runtime>(\n    runtime?: ValidateShape<TOptions, $Runtime>,\n  ) {\n    type $Formatter = PickFirstDefined<\n      TOptions['errorFormatter'],\n      ErrorFormatter<$Context, DefaultErrorShape>\n    >;\n    type $Transformer = TOptions['transformer'] extends DataTransformerOptions\n      ? TOptions['transformer']\n      : DefaultDataTransformer;\n    type $ErrorShape = ErrorFormatterShape<$Formatter>;\n\n    type $Config = RootConfig<{\n      ctx: $Context;\n      meta: $Meta;\n      errorShape: $ErrorShape;\n      transformer: $Transformer;\n    }>;\n\n    const errorFormatter = runtime?.errorFormatter ?? defaultFormatter;\n    const transformer = getDataTransformer(\n      runtime?.transformer ?? defaultTransformer,\n    ) as $Transformer;\n\n    const config: $Config = {\n      transformer,\n      isDev:\n        runtime?.isDev ?? globalThis.process?.env?.NODE_ENV !== 'production',\n      allowOutsideOfServer: runtime?.allowOutsideOfServer ?? false,\n      errorFormatter,\n      isServer: runtime?.isServer ?? isServerDefault,\n      /**\n       * @internal\n       */\n      $types: createFlatProxy((key) => {\n        throw new Error(\n          `Tried to access \"$types.${key}\" which is not available at runtime`,\n        );\n      }),\n    };\n\n    {\n      // Server check\n      const isServer: boolean = runtime?.isServer ?? isServerDefault;\n\n      if (!isServer && runtime?.allowOutsideOfServer !== true) {\n        throw new Error(\n          `You're trying to use @trpc/server in a non-server environment. This is not supported by default.`,\n        );\n      }\n    }\n    return {\n      /**\n       * These are just types, they can't be used\n       * @internal\n       */\n      _config: config,\n      /**\n       * Builder object for creating procedures\n       * @see https://trpc.io/docs/server/procedures\n       */\n      procedure: createBuilder<$Config>({\n        meta: runtime?.defaultMeta,\n      }),\n      /**\n       * Create reusable middlewares\n       * @see https://trpc.io/docs/server/middlewares\n       */\n      middleware: createMiddlewareFactory<$Config>(),\n      /**\n       * Create a router\n       * @see https://trpc.io/docs/server/routers\n       */\n      router: createRouterFactory<$Config>(config),\n      /**\n       * Merge Routers\n       * @see https://trpc.io/docs/server/merging-routers\n       */\n      mergeRouters,\n      /**\n       * Create a server-side caller for a router\n       * @see https://trpc.io/docs/server/server-side-calls\n       */\n      createCallerFactory: createCallerFactory<$Config>(),\n    };\n  };\n}\n\n# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}\n\n# core/middleware.ts:166-199  (core.middleware.createMiddlewareFactory)\nexport function createMiddlewareFactory<\n  TConfig extends AnyRootConfig,\n  TInputIn = unknown,\n>() {\n  function createMiddlewareInner<TNewParams extends ProcedureParams>(\n    middlewares: MiddlewareFunction<any, any>[],\n  ): MiddlewareBuilder<deriveParamsFromConfig<TConfig, TInputIn>, TNewParams> {\n    return {\n      _middlewares: middlewares,\n      unstable_pipe(middlewareBuilderOrFn) {\n        const pipedMiddleware =\n          '_middlewares' in middlewareBuilderOrFn\n            ? middlewareBuilderOrFn._middlewares\n            : [middlewareBuilderOrFn];\n\n        return createMiddlewareInner([\n          ...(middlewares as any),\n          ...pipedMiddleware,\n        ]);\n      },\n    };\n  }\n\n  function createMiddleware<TNewParams extends ProcedureParams>(\n    fn: MiddlewareFunction<\n      deriveParamsFromConfig<TConfig, TInputIn>,\n      TNewParams\n    >,\n  ): MiddlewareBuilder<deriveParamsFromConfig<TConfig, TInputIn>, TNewParams> {\n    return createMiddlewareInner([fn]);\n  }\n\n  return createMiddleware;\n}\n\n# core/router.ts:299-342  (core.router.createCallerFactory)\nexport function createCallerFactory<TConfig extends AnyRootConfig>() {\n  return function createCallerInner<\n    TRouter extends Router<AnyRouterDef<TConfig>>,\n  >(router: TRouter): RouterCaller<TRouter['_def']> {\n    const def = router._def;\n\n    return function createCaller(ctx) {\n      const proxy = createRecursiveProxy(({ path, args }) => {\n        // interop mode\n        if (\n          path.length === 1 &&\n          procedureTypes.includes(path[0] as ProcedureType)\n        ) {\n          return callProcedure({\n            procedures: def.procedures,\n            path: args[0] as string,\n            rawInput: args[1],\n            ctx,\n            type: path[0] as ProcedureType,\n          });\n        }\n\n        const fullPath = path.join('.');\n        const procedure = def.procedures[fullPath] as AnyProcedure;\n\n        let type: ProcedureType = 'query';\n        if (procedure._def.mutation) {\n          type = 'mutation';\n        } else if (procedure._def.subscription) {\n          type = 'subscription';\n        }\n\n        return procedure({\n          path: fullPath,\n          rawInput: args[0],\n          ctx,\n          type,\n        });\n      });\n\n      return proxy as ReturnType<RouterCaller<any>>;\n    };\n  };\n}\n\n# core/router.ts:194-277  (core.router.createRouterFactory)\nexport function createRouterFactory<TConfig extends AnyRootConfig>(\n  config: TConfig,\n) {\n  return function createRouterInner<\n    TProcRouterRecord extends ProcedureRouterRecord,\n  >(\n    procedures: TProcRouterRecord,\n  ): CreateRouterInner<TConfig, TProcRouterRecord> {\n    const reservedWordsUsed = new Set(\n      Object.keys(procedures).filter((v) => reservedWords.includes(v)),\n    );\n    if (reservedWordsUsed.size > 0) {\n      throw new Error(\n        'Reserved words used in `router({})` call: ' +\n          Array.from(reservedWordsUsed).join(', '),\n      );\n    }\n\n    const routerProcedures: ProcedureRecord = omitPrototype({});\n    function recursiveGetPaths(procedures: ProcedureRouterRecord, path = '') {\n      for (const [key, procedureOrRouter] of Object.entries(procedures ?? {})) {\n        const newPath = `${path}${key}`;\n\n        if (isRouter(procedureOrRouter)) {\n          recursiveGetPaths(procedureOrRouter._def.procedures, `${newPath}.`);\n          continue;\n        }\n\n        if (routerProcedures[newPath]) {\n          throw new Error(`Duplicate key: ${newPath}`);\n        }\n\n        routerProcedures[newPath] = procedureOrRouter;\n      }\n    }\n    recursiveGetPaths(procedures);\n\n    const _def: AnyRouterDef<TConfig> = {\n      _config: config,\n      router: true,\n      procedures: routerProcedures,\n      ...emptyRouter,\n      record: procedures,\n      queries: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.query)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      mutations: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.mutation)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n      subscriptions: Object.entries(routerProcedures)\n        .filter((pair) => (pair[1] as any)._def.subscription)\n        .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),\n    };\n\n    const router: AnyRouter = {\n      ...procedures,\n      _def,\n      createCaller(ctx: TConfig['$types']['ctx']) {\n        return createCallerFactory<TConfig>()(router as any)(ctx);\n      },\n      getErrorShape(opts) {\n        const { path, error } = opts;\n        const { code } = opts.error;\n        const shape: DefaultErrorShape = {\n          message: error.message,\n          code: TRPC_ERROR_CODES_BY_KEY[code],\n          data: {\n            code,\n            httpStatus: getHTTPStatusCodeFromError(error),\n          },\n        };\n        if (config.isDev && typeof opts.error.stack === 'string') {\n          shape.data.stack = opts.error.stack;\n        }\n        if (typeof path === 'string') {\n          shape.data.path = path;\n        }\n        return this._def._config.errorFormatter({ ...opts, shape });\n      },\n    };\n\n    return router as any;\n  };\n}\n\n# Referenced module constants:\nconst emptyRouter = {\n  _ctx: null as any,\n  _errorShape: null as any,\n  _meta: null as any,\n  queries: {},\n  mutations: {},\n  subscriptions: {},\n  errorFormatter: defaultFormatter,\n  transformer: defaultTransformer,\n};\nconst reservedWords = [\n  /**\n   * Then is a reserved word because otherwise we can't return a promise that returns a Proxy\n   * since JS will think that `.then` is something that exists\n   */\n  'then',\n];\n\n# transformer.ts:71-78  (transformer.getDataTransformer)\nexport function getDataTransformer(\n  transformer: DataTransformerOptions,\n): CombinedDataTransformer {\n  if ('input' in transformer) {\n    return transformer;\n  }\n  return { input: transformer, output: transformer };\n}\n\n## Task\n\nYou are investigating how tRPC's `initTRPC.create()` entry point bootstraps a server instance, starting from `createTRPCInner` in core/initTRPC.ts. Trace the real causal pipeline it runs through to build the object a tRPC app actually uses.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.initTRPC.createTRPCInner\", \"transformer.getDataTransformer\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

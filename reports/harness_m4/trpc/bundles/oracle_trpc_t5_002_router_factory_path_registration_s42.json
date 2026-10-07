@@ -1,0 +1,93 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "trpc_t5_002_router_factory_path_registration",
+  "items": [
+   {
+    "source_id": "core/initTRPC.ts:101-186",
+    "content": "# core/initTRPC.ts:101-186  (core.initTRPC.createTRPCInner.initTRPCInner)\n  return function initTRPCInner<TOptions extends $Runtime>(\n    runtime?: ValidateShape<TOptions, $Runtime>,\n  ) {\n    type $Formatter = PickFirstDefined<\n      TOptions['errorFormatter'],\n      ErrorFormatter<$Context, DefaultErrorShape>\n    >;\n    type $Transformer = TOptions['transformer'] extends DataTransformerOptions\n      ? TOptions['transformer']\n      : DefaultDataTransformer;\n    type $ErrorShape = ErrorFormatterShape<$Formatter>;\n\n    type $Config = RootConfig<{\n      ctx: $Context;\n      meta: $Meta;\n      errorShape: $ErrorShape;\n      transformer: $Transformer;\n    }>;\n\n    const errorFormatter = runtime?.errorFormatter ?? defaultFormatter;\n    const transformer = getDataTransformer(\n      runtime?.transformer ?? defaultTransformer,\n    ) as $Transformer;\n\n    const config: $Config = {\n      transformer,\n      isDev:\n        runtime?.isDev ?? globalThis.process?.env?.NODE_ENV !== 'production',\n      allowOutsideOfServer: runtime?.allowOutsideOfServer ?? false,\n      errorFormatter,\n      isServer: runtime?.isServer ?? isServerDefault,\n      /**\n       * @internal\n       */\n      $types: createFlatProxy((key) => {\n        throw new Error(\n          `Tried to access \"$types.${key}\" which is not available at runtime`,\n        );\n      }),\n    };\n\n    {\n      // Server check\n      const isServer: boolean = runtime?.isServer ?? isServerDefault;\n\n      if (!isServer && runtime?.allowOutsideOfServer !== true) {\n        throw new Error(\n          `You're trying to use @trpc/server in a non-server environment. This is not supported by default.`,\n        );\n      }\n    }\n    return {\n      /**\n       * These are just types, they can't be used\n       * @internal\n       */\n      _config: config,\n      /**\n       * Builder object for creating procedures\n       * @see https://trpc.io/docs/server/procedures\n       */\n      procedure: createBuilder<$Config>({\n        meta: runtime?.defaultMeta,\n      }),\n      /**\n       * Create reusable middlewares\n       * @see https://trpc.io/docs/server/middlewares\n       */\n      middleware: createMiddlewareFactory<$Config>(),\n      /**\n       * Create a router\n       * @see https://trpc.io/docs/server/routers\n       */\n      router: createRouterFactory<$Config>(config),\n      /**\n       * Merge Routers\n       * @see https://trpc.io/docs/server/merging-routers\n       */\n      mergeRouters,\n      /**\n       * Create a server-side caller for a router\n       * @see https://trpc.io/docs/server/server-side-calls\n       */\n      createCallerFactory: createCallerFactory<$Config>(),\n    };\n  };",
+    "token_count": 611,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.initTRPC.createTRPCInner.initTRPCInner"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 611
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/mergeRouters.ts:37-90",
+    "content": "# core/internals/mergeRouters.ts:37-90  (core.internals.mergeRouters.mergeRouters)\nexport function mergeRouters<TRouters extends AnyRouter[]>(\n  ...routerList: [...TRouters]\n): MergeRouters<TRouters> {\n  const record = mergeWithoutOverrides(\n    {},\n    ...routerList.map((r) => r._def.record),\n  );\n  const errorFormatter = routerList.reduce(\n    (currentErrorFormatter, nextRouter) => {\n      if (\n        nextRouter._def._config.errorFormatter &&\n        nextRouter._def._config.errorFormatter !== defaultFormatter\n      ) {\n        if (\n          currentErrorFormatter !== defaultFormatter &&\n          currentErrorFormatter !== nextRouter._def._config.errorFormatter\n        ) {\n          throw new Error('You seem to have several error formatters');\n        }\n        return nextRouter._def._config.errorFormatter;\n      }\n      return currentErrorFormatter;\n    },\n    defaultFormatter,\n  );\n\n  const transformer = routerList.reduce((prev, current) => {\n    if (\n      current._def._config.transformer &&\n      current._def._config.transformer !== defaultTransformer\n    ) {\n      if (\n        prev !== defaultTransformer &&\n        prev !== current._def._config.transformer\n      ) {\n        throw new Error('You seem to have several transformers');\n      }\n      return current._def._config.transformer;\n    }\n    return prev;\n  }, defaultTransformer as CombinedDataTransformer);\n\n  const router = createRouterFactory({\n    errorFormatter,\n    transformer,\n    isDev: routerList.some((r) => r._def._config.isDev),\n    allowOutsideOfServer: routerList.some(\n      (r) => r._def._config.allowOutsideOfServer,\n    ),\n    isServer: routerList.some((r) => r._def._config.isServer),\n    $types: routerList[0]?._def._config.$types as any,\n  })(record);\n  return router as any;\n}",
+    "token_count": 416,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.internals.mergeRouters.mergeRouters"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 416
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/interop.ts:200-232",
+    "content": "# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}",
+    "token_count": 272,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "deprecated.interop.migrateRouter"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:915-926",
+    "content": "# deprecated/router.ts:915-926  (deprecated.router.Router.interop)\n  public interop(): MigrateRouter<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  > {\n    return migrateRouter(this);\n  }",
+    "token_count": 75,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "deprecated.router.Router.interop"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 75
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1374,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "What breaks if `core.router.createRouterFactory` changes?",
+   "task_type": "T5_blast_radius",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 4,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [
+    "core.initTRPC.createTRPCInner.initTRPCInner"
+   ],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1374,
+   "prompt_tokens": 1510,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1523,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/initTRPC.ts:101-186  (core.initTRPC.createTRPCInner.initTRPCInner)\n  return function initTRPCInner<TOptions extends $Runtime>(\n    runtime?: ValidateShape<TOptions, $Runtime>,\n  ) {\n    type $Formatter = PickFirstDefined<\n      TOptions['errorFormatter'],\n      ErrorFormatter<$Context, DefaultErrorShape>\n    >;\n    type $Transformer = TOptions['transformer'] extends DataTransformerOptions\n      ? TOptions['transformer']\n      : DefaultDataTransformer;\n    type $ErrorShape = ErrorFormatterShape<$Formatter>;\n\n    type $Config = RootConfig<{\n      ctx: $Context;\n      meta: $Meta;\n      errorShape: $ErrorShape;\n      transformer: $Transformer;\n    }>;\n\n    const errorFormatter = runtime?.errorFormatter ?? defaultFormatter;\n    const transformer = getDataTransformer(\n      runtime?.transformer ?? defaultTransformer,\n    ) as $Transformer;\n\n    const config: $Config = {\n      transformer,\n      isDev:\n        runtime?.isDev ?? globalThis.process?.env?.NODE_ENV !== 'production',\n      allowOutsideOfServer: runtime?.allowOutsideOfServer ?? false,\n      errorFormatter,\n      isServer: runtime?.isServer ?? isServerDefault,\n      /**\n       * @internal\n       */\n      $types: createFlatProxy((key) => {\n        throw new Error(\n          `Tried to access \"$types.${key}\" which is not available at runtime`,\n        );\n      }),\n    };\n\n    {\n      // Server check\n      const isServer: boolean = runtime?.isServer ?? isServerDefault;\n\n      if (!isServer && runtime?.allowOutsideOfServer !== true) {\n        throw new Error(\n          `You're trying to use @trpc/server in a non-server environment. This is not supported by default.`,\n        );\n      }\n    }\n    return {\n      /**\n       * These are just types, they can't be used\n       * @internal\n       */\n      _config: config,\n      /**\n       * Builder object for creating procedures\n       * @see https://trpc.io/docs/server/procedures\n       */\n      procedure: createBuilder<$Config>({\n        meta: runtime?.defaultMeta,\n      }),\n      /**\n       * Create reusable middlewares\n       * @see https://trpc.io/docs/server/middlewares\n       */\n      middleware: createMiddlewareFactory<$Config>(),\n      /**\n       * Create a router\n       * @see https://trpc.io/docs/server/routers\n       */\n      router: createRouterFactory<$Config>(config),\n      /**\n       * Merge Routers\n       * @see https://trpc.io/docs/server/merging-routers\n       */\n      mergeRouters,\n      /**\n       * Create a server-side caller for a router\n       * @see https://trpc.io/docs/server/server-side-calls\n       */\n      createCallerFactory: createCallerFactory<$Config>(),\n    };\n  };\n\n# core/internals/mergeRouters.ts:37-90  (core.internals.mergeRouters.mergeRouters)\nexport function mergeRouters<TRouters extends AnyRouter[]>(\n  ...routerList: [...TRouters]\n): MergeRouters<TRouters> {\n  const record = mergeWithoutOverrides(\n    {},\n    ...routerList.map((r) => r._def.record),\n  );\n  const errorFormatter = routerList.reduce(\n    (currentErrorFormatter, nextRouter) => {\n      if (\n        nextRouter._def._config.errorFormatter &&\n        nextRouter._def._config.errorFormatter !== defaultFormatter\n      ) {\n        if (\n          currentErrorFormatter !== defaultFormatter &&\n          currentErrorFormatter !== nextRouter._def._config.errorFormatter\n        ) {\n          throw new Error('You seem to have several error formatters');\n        }\n        return nextRouter._def._config.errorFormatter;\n      }\n      return currentErrorFormatter;\n    },\n    defaultFormatter,\n  );\n\n  const transformer = routerList.reduce((prev, current) => {\n    if (\n      current._def._config.transformer &&\n      current._def._config.transformer !== defaultTransformer\n    ) {\n      if (\n        prev !== defaultTransformer &&\n        prev !== current._def._config.transformer\n      ) {\n        throw new Error('You seem to have several transformers');\n      }\n      return current._def._config.transformer;\n    }\n    return prev;\n  }, defaultTransformer as CombinedDataTransformer);\n\n  const router = createRouterFactory({\n    errorFormatter,\n    transformer,\n    isDev: routerList.some((r) => r._def._config.isDev),\n    allowOutsideOfServer: routerList.some(\n      (r) => r._def._config.allowOutsideOfServer,\n    ),\n    isServer: routerList.some((r) => r._def._config.isServer),\n    $types: routerList[0]?._def._config.$types as any,\n  })(record);\n  return router as any;\n}\n\n# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}\n\n# deprecated/router.ts:915-926  (deprecated.router.Router.interop)\n  public interop(): MigrateRouter<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  > {\n    return migrateRouter(this);\n  }\n\n## Task\n\nWhat breaks if `core.router.createRouterFactory` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

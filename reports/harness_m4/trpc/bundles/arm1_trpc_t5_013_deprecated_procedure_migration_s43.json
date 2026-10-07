@@ -1,0 +1,733 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "trpc_t5_013_deprecated_procedure_migration",
+  "items": [
+   {
+    "source_id": "core/internals/procedureBuilder.ts:207-282",
+    "content": "# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}",
+    "token_count": 521,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.procedureBuilder.createBuilder",
+     "core.internals.procedureBuilder.createBuilder.input",
+     "core.internals.procedureBuilder.createBuilder.output",
+     "core.internals.procedureBuilder.createBuilder.meta",
+     "core.internals.procedureBuilder.createBuilder.unstable_concat",
+     "core.internals.procedureBuilder.createBuilder.use",
+     "core.internals.procedureBuilder.createBuilder.query",
+     "core.internals.procedureBuilder.createBuilder.mutation",
+     "core.internals.procedureBuilder.createBuilder.subscription"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 36,
+     "rerank_score": -0.46296724677085876,
+     "bm25_rank": 27,
+     "dense_rank": 46,
+     "oversized_chunk": false,
+     "engine_token_count": 521
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:407-503#part2of4",
+    "content": "# deprecated/router.ts:407-503#part2of4  (deprecated.router.Router)\n/**\n * @internal The type signature of this class may change without warning.\n * @deprecated\n */\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public query<TPath extends string, TOutput, TParsedOutput>(\n    path: TPath,\n    procedure: CreateProcedureWithoutInput<\n      TContext,\n      TMeta,\n      TOutput,\n      TParsedOutput\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  query(\n    path: string,\n    procedure: CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, any, {}, {}, any, any>(\n      {\n        queries: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router);\n  }\n\n  public mutation<\n    TPath extends string,\n    TInput,\n    TParsedInput,\n    TOutput,\n    TParsedOutput,\n  >(\n    path: TPath,\n    procedure: CreateProcedureWithInputOutputParser<\n      TContext,\n      TMeta,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TParsedOutput\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  public mutation<TPath extends string, TInput, TOutput>(\n    path: TPath,\n    procedure: CreateProcedureWithInput<TContext, TMeta, TInput, TOutput>,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  public mutation<TPath extends string, TOutput, TParsedOutput>(\n    path: TPath,\n    procedure: CreateProcedureWithoutInput<\n      TContext,\n      TMeta,\n      TOutput,\n      TParsedOutput\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n}",
+    "token_count": 742,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.Router"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 17,
+     "rerank_score": -1.0266345739364624,
+     "bm25_rank": 39,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 742
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:1-126#part1of2",
+    "content": "# core/router.ts:1-126#part1of2  (core.router)\nimport type { DefaultErrorShape } from '../error/formatter';\nimport { defaultFormatter } from '../error/formatter';\nimport { TRPCError } from '../error/TRPCError';\nimport { getHTTPStatusCodeFromError } from '../http/getHTTPStatusCode';\nimport { TRPC_ERROR_CODES_BY_KEY } from '../rpc';\nimport { createRecursiveProxy } from '../shared/createProxy';\nimport { defaultTransformer } from '../transformer';\nimport type { AnyRootConfig } from './internals/config';\nimport { omitPrototype } from './internals/omitPrototype';\nimport type { ProcedureCallOptions } from './internals/procedureBuilder';\nimport type {\n  AnyMutationProcedure,\n  AnyProcedure,\n  AnyQueryProcedure,\n  AnySubscriptionProcedure,\n  ProcedureArgs,\n} from './procedure';\nimport type {\n  inferHandlerInput,\n  inferProcedureOutput,\n  ProcedureType,\n} from './types';\nimport { procedureTypes } from './types';\n\n/** @internal **/\nexport type ProcedureRecord = Record<string, AnyProcedure>;\n\nexport interface ProcedureRouterRecord {\n  [key: string]: AnyProcedure | AnyRouter;\n}\n\n/**\n * @deprecated\n */\ninterface DeprecatedProcedureRouterRecord {\n  queries: Record<string, AnyQueryProcedure>;\n  mutations: Record<string, AnyMutationProcedure>;\n  subscriptions: Record<string, AnySubscriptionProcedure>;\n}\n\nexport interface RouterDef<\n  TConfig extends AnyRootConfig,\n  TRecord extends ProcedureRouterRecord,\n  /**\n   * @deprecated\n   */\n  TOld extends DeprecatedProcedureRouterRecord = {\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    queries: {};\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    mutations: {};\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    subscriptions: {};\n  },\n> {\n  _config: TConfig;\n  router: true;\n  procedures: TRecord;\n  record: TRecord;\n  /**\n   * V9 queries\n   * @deprecated\n   */\n  queries: TOld['queries'];\n  /**\n   * V9 mutations\n   * @deprecated\n   */\n  mutations: TOld['mutations'];\n  /**\n   * V9 subscriptions\n   * @deprecated\n   */\n  subscriptions: TOld['subscriptions'];\n}\n\nexport type AnyRouterDef<\n  TConfig extends AnyRootConfig = AnyRootConfig,\n  TOld extends DeprecatedProcedureRouterRecord = any,\n> = RouterDef<TConfig, any, TOld>;\n\n/**\n * @internal\n */\ntype inferHandlerFn<TProcedures extends ProcedureRecord> = <\n  TProcedure extends TProcedures[TPath],\n  TPath extends string & keyof TProcedures,\n>(\n  path: TPath,\n  ...args: inferHandlerInput<TProcedure>\n) => Promise<inferProcedureOutput<TProcedure>>;\n\ntype DecorateProcedure<TProcedure extends AnyProcedure> = (\n  input: ProcedureArgs<TProcedure['_def']>[0],\n) => Promise<TProcedure['_def']['_output_out']>;\n\n/**\n * @internal\n */\ntype DecoratedProcedureRecord<TProcedures extends ProcedureRouterRecord> = {\n  [TKey in keyof TProcedures]: TProcedures[TKey] extends AnyRouter\n    ? DecoratedProcedureRecord<TProcedures[TKey]['_def']['record']>\n    : TProcedures[TKey] extends AnyProcedure\n    ? DecorateProcedure<TProcedures[TKey]>\n    : never;\n};\n\n/**\n * @internal\n */\nexport type RouterCaller<TDef extends AnyRouterDef> = (\n  ctx: TDef['_config']['$types']['ctx'],\n) => DecoratedProcedureRecord<TDef['record']> & {\n  /**\n   * @deprecated\n   */\n  query: inferHandlerFn<TDef['queries']>;\n  /**\n   * @deprecated\n   */\n  mutation: inferHandlerFn<TDef['mutations']>;\n  /**\n   * @deprecated\n   */\n  subscription: inferHandlerFn<TDef['subscriptions']>;\n};",
+    "token_count": 816,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": -1.1097923517227173,
+     "bm25_rank": 10,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 816
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:520-623#part3of4",
+    "content": "# deprecated/router.ts:520-623#part3of4  (deprecated.router.Router)\n/**\n * @internal The type signature of this class may change without warning.\n * @deprecated\n */\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  /**\n   * @beta Might change without a major version bump\n   */\n  public subscription<\n    TPath extends string,\n    TInput,\n    TParsedInput,\n    TOutput extends Observable<unknown, unknown>,\n  >(\n    path: TPath,\n    procedure: Omit<\n      CreateProcedureWithInputOutputParser<\n        TContext,\n        TMeta,\n        TInput,\n        TParsedInput,\n        TOutput,\n        unknown\n      >,\n      'output'\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  /**\n   * @beta Might change without a major version bump\n   */\n  public subscription<\n    TPath extends string,\n    TInput,\n    TOutput extends Observable<unknown, unknown>,\n  >(\n    path: TPath,\n    procedure: Omit<\n      CreateProcedureWithInput<TContext, TMeta, TInput, TOutput>,\n      'output'\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  /**\n   * @beta Might change without a major version bump\n   */\n  public subscription<\n    TPath extends string,\n    TOutput extends Observable<unknown, unknown>,\n  >(\n    path: TPath,\n    procedure: Omit<\n      CreateProcedureWithoutInput<TContext, TMeta, TOutput, unknown>,\n      'output'\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  public subscription(\n    path: string,\n    procedure: Omit<\n      CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n      'output'\n    >,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, {}, {}, any, any, any>(\n      {\n        subscriptions: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router) as any;\n  }\n\n  /**\n   * Merge router with other router\n   * @param router\n   */\n}",
+    "token_count": 758,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.Router"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 23,
+     "rerank_score": -1.192361831665039,
+     "bm25_rank": 38,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 758
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:624-660#part4of4",
+    "content": "# deprecated/router.ts:624-660#part4of4  (deprecated.router.Router)\n/**\n * @internal The type signature of this class may change without warning.\n * @deprecated\n */\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public merge<\n    TChildRouter extends Router<TContext, any, TMeta, any, any, any, any, any>,\n  >(\n    router: TChildRouter,\n  ): Router<\n    TInputContext,\n    inferRouterContext<TChildRouter>,\n    TMeta,\n    TChildRouter['_def']['queries'] & TQueries,\n    TChildRouter['_def']['mutations'] & TMutations,\n    TChildRouter['_def']['subscriptions'] & TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  /**\n   * Merge router with other router\n   * @param prefix Prefix that this router should live under\n   * @param router\n   */\n  public merge<\n    TPath extends string,\n    TChildRouter extends Router<TContext, any, TMeta, any, any, any, any, any>,\n  >(\n    prefix: TPath,\n    router: TChildRouter,\n  ): Router<\n    TInputContext,\n    inferRouterContext<TChildRouter>,\n    TMeta,\n    Prefixer<TChildRouter['_def']['queries'], `${TPath}`> & TQueries,\n    Prefixer<TChildRouter['_def']['mutations'], `${TPath}`> & TMutations,\n    Prefixer<TChildRouter['_def']['subscriptions'], `${TPath}`> &\n      TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n}",
+    "token_count": 495,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.Router"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 45,
+     "rerank_score": -1.6931045055389404,
+     "bm25_rank": 48,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 495
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:130-254",
+    "content": "# deprecated/router.ts:130-254  (deprecated.router)\n/**\n * @internal\n * @deprecated\n */\nexport type inferHandlerInput<\n  TProcedure extends Procedure<any, any, any, any, any, any, any>,\n> = TProcedure extends Procedure<any, any, any, infer TInput, any, any, any>\n  ? undefined extends TInput // ? is input optional\n    ? unknown extends TInput // ? is input unset\n      ? [(null | undefined)?] // -> there is no input\n      : [(TInput | null | undefined)?] // -> there is optional input\n    : [TInput] // -> input is required\n  : [(null | undefined)?]; // -> there is no input\n\ntype inferHandlerFn<TProcedures extends ProcedureRecord> = <\n  TProcedure extends TProcedures[TPath],\n  TPath extends string & keyof TProcedures,\n>(\n  path: TPath,\n  ...args: inferHandlerInput<TProcedure>\n) => Promise<inferProcedureOutput<TProcedures[TPath]>>;\n\n/**\n * @internal\n * @deprecated\n */\nexport type inferRouterContext<TRouter extends AnyRouter> = Parameters<\n  TRouter['createCaller']\n>[0];\n\n/**\n * @internal\n */\n// ts-prune-ignore-next\nexport type inferRouterMeta<TRouter extends AnyRouter> = TRouter extends Router<\n  any,\n  any,\n  infer TMeta,\n  any,\n  any,\n  any,\n  any,\n  any\n>\n  ? TMeta\n  : {};\n\n/**\n * @public\n * @deprecated\n */\nexport type AnyRouter<TContext extends Record<string, any> = any> = Router<\n  any,\n  TContext,\n  any,\n  any,\n  any,\n  any,\n  any,\n  any\n>;\n\n/**\n * @internal\n * @deprecated\n */\n// ts-prune-ignore-next\nexport type inferRouterError<TRouter extends AnyRouter> = ReturnType<\n  TRouter['getErrorShape']\n>;\nconst PROCEDURE_DEFINITION_MAP: Record<\n  ProcedureType,\n  'mutations' | 'queries' | 'subscriptions'\n> = {\n  query: 'queries',\n  mutation: 'mutations',\n  subscription: 'subscriptions',\n};\n\n/**\n * @internal\n * @deprecated\n */\nexport type ErrorFormatter<TContext, TShape extends TRPCErrorShape<number>> = ({\n  error,\n}: {\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TContext | undefined;\n  shape: DefaultErrorShape;\n}) => TShape;\n\ntype DefaultErrorData = {\n  code: TRPC_ERROR_CODE_KEY;\n  httpStatus: number;\n  path?: string;\n  stack?: string;\n};\n\n/**\n * @internal\n * @deprecated\n */\nexport interface DefaultErrorShape\n  extends TRPCErrorShape<TRPC_ERROR_CODE_NUMBER, DefaultErrorData> {\n  message: string;\n  code: TRPC_ERROR_CODE_NUMBER;\n}\n\n/**\n * Create an empty object with `Object.create(null)`.\n * Objects made from `Object.create(null)` are totally empty -- they do not inherit anything from Object.prototype.\n */\nfunction safeObject(): {};\n\n/**\n * Create an object without inheriting anything from `Object.prototype`\n */\nfunction safeObject<TObj>(obj: TObj): TObj;\n/**\n * Merge two objects without inheritance from `Object.prototype`\n */\nfunction safeObject<TObj1, TObj2>(obj1: TObj1, obj2: TObj2): TObj1 & TObj2;",
+    "token_count": 743,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 10,
+     "rerank_score": -1.7718069553375244,
+     "bm25_rank": 11,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 743
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:326-405#part1of4",
+    "content": "# deprecated/router.ts:326-405#part1of4  (deprecated.router.Router)\n/**\n * @internal The type signature of this class may change without warning.\n * @deprecated\n */\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  readonly _def: {\n    queries: TQueries;\n    mutations: TMutations;\n    subscriptions: TSubscriptions;\n    middlewares: MiddlewareFunction<TInputContext, TContext, TMeta>[];\n    errorFormatter: ErrorFormatter<TContext, TErrorShape>;\n    transformer: CombinedDataTransformer;\n  };\n\n  constructor(def?: {\n    queries?: TQueries;\n    mutations?: TMutations;\n    subscriptions?: TSubscriptions;\n    middlewares?: MiddlewareFunction<TInputContext, TContext, TMeta>[];\n    errorFormatter?: ErrorFormatter<TContext, TErrorShape>;\n    transformer?: CombinedDataTransformer;\n  }) {\n    this._def = {\n      queries: (def?.queries ?? safeObject()) as TQueries,\n      mutations: (def?.mutations ?? safeObject()) as TMutations,\n      subscriptions: (def?.subscriptions ?? safeObject()) as TSubscriptions,\n      middlewares: def?.middlewares ?? [],\n      errorFormatter: def?.errorFormatter ?? defaultFormatter,\n      transformer: def?.transformer ?? defaultTransformer,\n    };\n  }\n\n  private static prefixProcedures<\n    TProcedures extends ProcedureRecord,\n    TPrefix extends string,\n  >(procedures: TProcedures, prefix: TPrefix): Prefixer<TProcedures, TPrefix> {\n    const eps: ProcedureRecord = safeObject();\n    for (const [key, procedure] of Object.entries(procedures)) {\n      eps[prefix + key] = procedure;\n    }\n    return eps as any;\n  }\n\n  public query<\n    TPath extends string,\n    TInput,\n    TParsedInput,\n    TOutput,\n    TParsedOutput,\n  >(\n    path: TPath,\n    procedure: CreateProcedureWithInputOutputParser<\n      TContext,\n      TMeta,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TParsedOutput\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  public query<TPath extends string, TInput, TOutput>(\n    path: TPath,\n    procedure: CreateProcedureWithInput<TContext, TMeta, TInput, TOutput>,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n}",
+    "token_count": 748,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.Router"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 29,
+     "rerank_score": -1.897205114364624,
+     "bm25_rank": 41,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 748
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "subscription.ts:5-44",
+    "content": "# subscription.ts:5-44  (subscription.subscriptionPullFactory)\n/**\n * @deprecated\n * This functionality is deprecated and will be removed in the next major version.\n */\nexport function subscriptionPullFactory<TOutput>(opts: {\n  /**\n   * The interval of how often the function should run\n   */\n  intervalMs: number;\n  pull(emit: Observer<TOutput, unknown>): Promise<void> | void;\n}): Observable<TOutput, unknown> {\n  let timer: any;\n  let stopped = false;\n  async function _pull(emit: Observer<TOutput, unknown>) {\n    /* istanbul ignore next -- @preserve */\n    if (stopped) {\n      return;\n    }\n    try {\n      await opts.pull(emit);\n    } catch (err /* istanbul ignore next -- @preserve */) {\n      emit.error(getTRPCErrorFromUnknown(err));\n    }\n\n    /* istanbul ignore else -- @preserve */\n    if (!stopped) {\n      timer = setTimeout(() => _pull(emit), opts.intervalMs);\n    }\n  }\n\n  return observable<TOutput>((emit) => {\n    _pull(emit).catch((err) => {\n      emit.error(getTRPCErrorFromUnknown(err));\n    });\n    return () => {\n      clearTimeout(timer);\n      stopped = true;\n    };\n  });\n}",
+    "token_count": 272,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "subscription.subscriptionPullFactory",
+     "subscription.subscriptionPullFactory._pull"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 40,
+     "rerank_score": -1.9518778324127197,
+     "bm25_rank": 18,
+     "dense_rank": 79,
+     "oversized_chunk": false,
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:1-120",
+    "content": "# deprecated/router.ts:1-120  (deprecated.router)\n/* eslint-disable @typescript-eslint/ban-types */\nimport { defaultFormatter } from '../error/formatter';\nimport { TRPCError } from '../error/TRPCError';\nimport { getHTTPStatusCodeFromError } from '../http/getHTTPStatusCode';\nimport type { inferObservableValue, Observable } from '../observable';\nimport type {\n  TRPC_ERROR_CODE_KEY,\n  TRPC_ERROR_CODE_NUMBER,\n  TRPCErrorShape,\n} from '../rpc';\nimport { TRPC_ERROR_CODES_BY_KEY } from '../rpc';\nimport type {\n  CombinedDataTransformer,\n  DataTransformerOptions,\n  DefaultDataTransformer,\n} from '../transformer';\nimport { defaultTransformer } from '../transformer';\nimport type { FlatOverwrite, ThenArg } from '../types';\nimport type { MiddlewareFunction } from './internals/middlewares';\nimport type {\n  CreateProcedureOptions,\n  CreateProcedureWithInput,\n  CreateProcedureWithInputOutputParser,\n  CreateProcedureWithoutInput,\n  inferProcedureFromOptions,\n  Procedure,\n  ProcedureCallOptions,\n} from './internals/procedure';\nimport { createProcedure } from './internals/procedure';\nimport type { MigrateRouter } from './interop';\nimport { migrateRouter } from './interop';\n\nexport type { Procedure } from './internals/procedure';\n\n/**\n * @internal\n */\ntype Prefix<\n  TPrefix extends string,\n  TSuffix extends string,\n> = `${TPrefix}${TSuffix}`;\n\n/**\n * @internal\n */\ntype Prefixer<TObj extends Record<string, any>, TPrefix extends string> = {\n  [P in keyof TObj as Prefix<TPrefix, P & string>]: TObj[P];\n};\n\n/**\n * @public\n * @deprecated\n */\nexport type ProcedureType = 'mutation' | 'query' | 'subscription';\n\n/**\n * @internal\n * @deprecated\n */\nexport type ProcedureRecord<\n  TInputContext = any,\n  TContext = any,\n  TMeta = any,\n  TInput = any,\n  TParsedInput = any,\n  TOutput = any,\n  TParsedOutput = any,\n> = Record<\n  string,\n  Procedure<\n    TInputContext,\n    TContext,\n    TMeta,\n    TInput,\n    TParsedInput,\n    TOutput,\n    TParsedOutput\n  >\n>;\n\n/**\n * @public\n * @deprecated\n */\n// ts-prune-ignore-next\nexport type inferProcedureInput<\n  TProcedure extends Procedure<any, any, any, any, any, any, any>,\n> = TProcedure extends Procedure<any, any, any, infer Input, any, any, any>\n  ? undefined extends Input\n    ? Input | null | void // void is necessary to allow procedures with nullish input to be called without an input\n    : Input\n  : undefined;\n\n/**\n * @public\n * @deprecated\n */\nexport type inferAsyncReturnType<TFunction extends (...args: any) => any> =\n  ThenArg<ReturnType<TFunction>>;\n\n/**\n * @public\n * @deprecated\n */\nexport type inferProcedureOutput<\n  TProcedure extends Procedure<any, any, any, any, any, any, any>,\n> = inferAsyncReturnType<TProcedure['call']>;\n\n/**\n * @public\n * @beta\n * @deprecated\n */\n// ts-prune-ignore-next\nexport type inferSubscriptionOutput<\n  TRouter extends AnyRouter,\n  TPath extends keyof TRouter['_def']['subscriptions'],\n> = inferObservableValue<\n  inferAsyncReturnType<TRouter['_def']['subscriptions'][TPath]['call']>\n>;",
+    "token_count": 735,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 3,
+     "rerank_score": -2.3197872638702393,
+     "bm25_rank": 6,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 735
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/internals/middlewares.ts:1-61",
+    "content": "# deprecated/internals/middlewares.ts:1-61  (deprecated.internals.middlewares)\nimport type { TRPCError } from '../../error/TRPCError';\nimport type { ProcedureType } from '../router';\n\n/**\n * @deprecated\n */\nexport const middlewareMarker = 'middlewareMarker' as 'middlewareMarker' & {\n  __brand: 'middlewareMarker';\n};\n\ninterface MiddlewareResultBase<TContext> {\n  /**\n   * All middlewares should pass through their `next()`'s output.\n   * Requiring this marker makes sure that can't be forgotten at compile-time.\n   */\n  readonly marker: typeof middlewareMarker;\n  ctx: TContext;\n}\n\n/**\n * @deprecated\n */\ninterface MiddlewareOKResult<TContext> extends MiddlewareResultBase<TContext> {\n  ok: true;\n  data: unknown;\n  // this could be extended with `input`/`rawInput` later\n}\n\n/**\n * @deprecated\n */\ninterface MiddlewareErrorResult<TContext>\n  extends MiddlewareResultBase<TContext> {\n  ok: false;\n  error: TRPCError;\n  // we could guarantee it's always of this type\n}\n\n/**\n * @deprecated\n */\nexport type MiddlewareResult<TContext> =\n  | MiddlewareErrorResult<TContext>\n  | MiddlewareOKResult<TContext>;\n\n/**\n * @deprecated\n */\nexport type MiddlewareFunction<TInputContext, TContext, TMeta> = (opts: {\n  ctx: TInputContext;\n  type: ProcedureType;\n  path: string;\n  rawInput: unknown;\n  meta?: TMeta;\n  next: {\n    (): Promise<MiddlewareResult<TInputContext>>;\n    <TNewContext>(opts: { ctx: TNewContext }): Promise<\n      MiddlewareResult<TNewContext>\n    >;\n  };\n}) => Promise<MiddlewareResult<TContext>>;",
+    "token_count": 370,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": -2.3222496509552,
+     "bm25_rank": 13,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 370
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/interop.ts:1-69#part1of2",
+    "content": "# deprecated/interop.ts:1-69#part1of2  (deprecated.interop)\n/* eslint-disable @typescript-eslint/ban-types */\nimport type { ProcedureParams, ProcedureType } from '..';\nimport type { AnyRootConfig, RootConfig } from '../core/internals/config';\nimport { getParseFnOrPassThrough } from '../core/internals/getParseFn';\nimport { mergeWithoutOverrides } from '../core/internals/mergeWithoutOverrides';\nimport { createBuilder } from '../core/internals/procedureBuilder';\nimport {\n  createInputMiddleware,\n  createOutputMiddleware,\n} from '../core/middleware';\nimport type { Procedure } from '../core/procedure';\nimport type {\n  ProcedureRecord as NewProcedureRecord,\n  Router as NewRouter,\n  RouterDef,\n} from '../core/router';\nimport { createRouterFactory } from '../core/router';\nimport type {\n  AnyRouter as AnyOldRouter,\n  Router as OldRouter,\n} from '../deprecated/router';\nimport type { TRPCErrorShape } from '../rpc';\nimport type { CombinedDataTransformer } from '../transformer';\nimport type { Procedure as OldProcedure } from './internals/procedure';\nimport type { ProcedureRecord } from './router';\n\ntype AnyOldProcedure = OldProcedure<any, any, any, any, any, any, any, any>;\n\ntype convertProcedureParams<\n  TConfig extends AnyRootConfig,\n  TProcedure extends AnyOldProcedure,\n> = TProcedure extends OldProcedure<\n  infer _TInputContext,\n  infer TContext,\n  infer TMeta,\n  infer TInput,\n  infer TParsedInput,\n  infer TOutput,\n  infer _TParsedOutput,\n  infer TFinalInput\n>\n  ? ProcedureParams<\n      TConfig,\n      TContext,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TFinalInput,\n      TMeta\n    >\n  : never;\n\ntype MigrateProcedure<\n  TConfig extends AnyRootConfig,\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n> = Procedure<TType, convertProcedureParams<TConfig, TProcedure>>;\n\nexport type MigrateProcedureRecord<\n  TConfig extends AnyRootConfig,\n  TProcedureRecord extends ProcedureRecord<any>,\n  TType extends ProcedureType,\n> = {\n  [K in keyof TProcedureRecord]: MigrateProcedure<\n    TConfig,\n    TProcedureRecord[K],\n    TType\n  >;\n};",
+    "token_count": 497,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 2,
+     "rerank_score": -2.3498692512512207,
+     "bm25_rank": 3,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 497
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/types.ts:1-76",
+    "content": "# core/types.ts:1-76  (core.types)\nimport type { inferObservableValue } from '../observable';\nimport type { inferTransformedProcedureOutput } from '../shared/jsonify';\nimport type { AnyProcedure, ProcedureArgs } from './procedure';\nimport type { AnyRouter, AnyRouterDef, Router } from './router';\n\nexport type inferRouterDef<TRouter extends AnyRouter> = TRouter extends Router<\n  infer TParams\n>\n  ? TParams extends AnyRouterDef<any>\n    ? TParams\n    : never\n  : never;\n\nexport type inferRouterContext<TRouter extends AnyRouter> =\n  inferRouterDef<TRouter>['_config']['$types']['ctx'];\nexport type inferRouterError<TRouter extends AnyRouter> =\n  inferRouterDef<TRouter>['_config']['$types']['errorShape'];\nexport type inferRouterMeta<TRouter extends AnyRouter> =\n  inferRouterDef<TRouter>['_config']['$types']['meta'];\n\nexport const procedureTypes = ['query', 'mutation', 'subscription'] as const;\n/**\n * @public\n */\nexport type ProcedureType = (typeof procedureTypes)[number];\n\nexport type inferHandlerInput<TProcedure extends AnyProcedure> = ProcedureArgs<\n  inferProcedureParams<TProcedure>\n>;\n\nexport type inferProcedureInput<TProcedure extends AnyProcedure> =\n  inferHandlerInput<TProcedure>[0];\n\nexport type inferProcedureParams<TProcedure> = TProcedure extends AnyProcedure\n  ? TProcedure['_def']\n  : never;\nexport type inferProcedureOutput<TProcedure> =\n  inferProcedureParams<TProcedure>['_output_out'];\n\n/**\n * @deprecated will be removed in next major as it's v9 stuff\n */\nexport type inferSubscriptionOutput<\n  TRouter extends AnyRouter,\n  TPath extends string & keyof TRouter['_def']['subscriptions'],\n> = inferObservableValue<\n  inferProcedureOutput<TRouter['_def']['subscriptions'][TPath]>\n>;\n\nexport type inferProcedureClientError<TProcedure extends AnyProcedure> =\n  inferProcedureParams<TProcedure>['_config']['errorShape'];\n\ntype GetInferenceHelpers<\n  TType extends 'input' | 'output',\n  TRouter extends AnyRouter,\n> = {\n  [TKey in keyof TRouter['_def']['record']]: TRouter['_def']['record'][TKey] extends infer TRouterOrProcedure\n    ? TRouterOrProcedure extends AnyRouter\n      ? GetInferenceHelpers<TType, TRouterOrProcedure>\n      : TRouterOrProcedure extends AnyProcedure\n      ? TType extends 'input'\n        ? inferProcedureInput<TRouterOrProcedure>\n        : inferTransformedProcedureOutput<TRouterOrProcedure>\n      : never\n    : never;\n};\n\nexport type inferRouterInputs<TRouter extends AnyRouter> = GetInferenceHelpers<\n  'input',\n  TRouter\n>;\n\nexport type inferRouterOutputs<TRouter extends AnyRouter> = GetInferenceHelpers<\n  'output',\n  TRouter\n>;",
+    "token_count": 609,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 39,
+     "rerank_score": -2.966944694519043,
+     "bm25_rank": 59,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 609
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:128-149#part2of2",
+    "content": "# core/router.ts:128-149#part2of2  (core.router)\nexport interface Router<TDef extends AnyRouterDef> {\n  _def: TDef;\n  /**\n   * @deprecated use `t.createCallerFactory(router)` instead\n   * @see https://trpc.io/docs/server/server-side-calls\n   */\n  createCaller: RouterCaller<TDef>;\n\n  /**\n   * @deprecated\n   * FIXME: use the new standalone `getErrorShape` instead\n   */\n  getErrorShape(opts: {\n    error: TRPCError;\n    type: ProcedureType | 'unknown';\n    path: string | undefined;\n    input: unknown;\n    ctx: TDef['_config']['$types']['ctx'] | undefined;\n  }): TDef['_config']['$types']['errorShape'];\n}\n\nexport type AnyRouter = Router<AnyRouterDef>;",
+    "token_count": 181,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 27,
+     "rerank_score": -3.489535331726074,
+     "bm25_rank": 20,
+     "dense_rank": 49,
+     "oversized_chunk": false,
+     "engine_token_count": 181
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/interop.ts:171-199",
+    "content": "# deprecated/interop.ts:171-199  (deprecated.interop.migrateProcedure)\nfunction migrateProcedure<\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n>(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n  const def = oldProc._def();\n\n  const inputParser = getParseFnOrPassThrough(def.inputParser);\n  const outputParser = getParseFnOrPassThrough(def.outputParser);\n\n  const inputMiddleware = createInputMiddleware(inputParser);\n\n  const builder = createBuilder({\n    inputs: [def.inputParser],\n    middlewares: [\n      ...(def.middlewares as any),\n      inputMiddleware,\n      createOutputMiddleware(outputParser),\n    ],\n    meta: def.meta,\n    output: def.outputParser,\n    mutation: type === 'mutation',\n    query: type === 'query',\n    subscription: type === 'subscription',\n  });\n\n  const proc = builder[type]((opts) => def.resolver(opts as any));\n\n  return proc as any;\n}",
+    "token_count": 220,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.interop.migrateProcedure"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 1,
+     "rerank_score": -3.86622953414917,
+     "bm25_rank": 2,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 220
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:157-189",
+    "content": "# core/router.ts:157-189  (core.router)\nconst emptyRouter = {\n  _ctx: null as any,\n  _errorShape: null as any,\n  _meta: null as any,\n  queries: {},\n  mutations: {},\n  subscriptions: {},\n  errorFormatter: defaultFormatter,\n  transformer: defaultTransformer,\n};\n\n/**\n * Reserved words that can't be used as router or procedure names\n */\nconst reservedWords = [\n  /**\n   * Then is a reserved word because otherwise we can't return a promise that returns a Proxy\n   * since JS will think that `.then` is something that exists\n   */\n  'then',\n];\n\n/**\n * @internal\n */\nexport type CreateRouterInner<\n  TConfig extends AnyRootConfig,\n  TProcRouterRecord extends ProcedureRouterRecord,\n> = Router<RouterDef<TConfig, TProcRouterRecord>> &\n  /**\n   * This should be deleted in v11\n   * @deprecated\n   */ TProcRouterRecord;",
+    "token_count": 208,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 30,
+     "rerank_score": -4.045853614807129,
+     "bm25_rank": 40,
+     "dense_rank": 27,
+     "oversized_chunk": false,
+     "engine_token_count": 208
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/internals/procedure.ts:111-117",
+    "content": "# deprecated/internals/procedure.ts:111-117  (deprecated.internals.procedure.Procedure)\n/**\n * @internal\n * @deprecated\n */\nexport class Procedure<\n  TInputContext,\n  TContext,\n  TMeta,\n  TInput,\n  TParsedInput,\n  TOutput,\n  TParsedOutput,\n  TFinalOutput = unknown extends TParsedOutput ? TOutput : TParsedOutput,\n> {\n  private middlewares: Readonly<MiddlewareFunction<any, any, any>[]>;\n  private resolver: ProcedureResolver<TContext, TParsedInput, TOutput>;\n  private readonly inputParser: ProcedureParser<TParsedInput>;\n  private parseInputFn: ParseFn<TParsedInput>;\n  private readonly outputParser: ProcedureParser<TFinalOutput>;\n  private parseOutputFn: ParseFn<TFinalOutput>;\n  public readonly meta: TMeta;\n}",
+    "token_count": 179,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.internals.procedure.Procedure"
+    ],
+    "provenance": {
+     "chunk_kind": "class_preamble",
+     "fused_rank": 8,
+     "rerank_score": -4.150935173034668,
+     "bm25_rank": 12,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 179
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/interop.ts:71-169#part2of2",
+    "content": "# deprecated/interop.ts:71-169#part2of2  (deprecated.interop)\nexport type MigrateRouter<\n  TInputContext extends Record<string, any>,\n  TContext,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    any,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<any>,\n  TTransformer extends CombinedDataTransformer,\n> = NewRouter<\n  RouterDef<\n    RootConfig<{\n      ctx: TInputContext;\n      errorShape: TErrorShape;\n      meta: TMeta;\n      transformer: TTransformer;\n    }>,\n    {},\n    {\n      queries: MigrateProcedureRecord<\n        RootConfig<{\n          ctx: TInputContext;\n          errorShape: TErrorShape;\n          meta: TMeta;\n          transformer: TTransformer;\n        }>,\n        TQueries,\n        'query'\n      >;\n      mutations: MigrateProcedureRecord<\n        RootConfig<{\n          ctx: TInputContext;\n          errorShape: TErrorShape;\n          meta: TMeta;\n          transformer: TTransformer;\n        }>,\n        TMutations,\n        'mutation'\n      >;\n      subscriptions: MigrateProcedureRecord<\n        RootConfig<{\n          ctx: TInputContext;\n          errorShape: TErrorShape;\n          meta: TMeta;\n          transformer: TTransformer;\n        }>,\n        TSubscriptions,\n        'subscription'\n      >;\n    }\n  >\n>;\n\nexport type MigrateOldRouter<TRouter extends AnyOldRouter> =\n  TRouter extends OldRouter<\n    infer TInputContext,\n    infer TContext,\n    infer TMeta,\n    infer TQueries,\n    infer TMutations,\n    infer TSubscriptions,\n    infer TErrorShape,\n    infer Transformer\n  >\n    ? MigrateRouter<\n        TInputContext,\n        TContext,\n        TMeta,\n        TQueries,\n        TMutations,\n        TSubscriptions,\n        TErrorShape,\n        Transformer\n      >\n    : never;",
+    "token_count": 498,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 9,
+     "rerank_score": -4.156085968017578,
+     "bm25_rank": 5,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 498
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/getParseFn.ts:45-56",
+    "content": "# core/internals/getParseFn.ts:45-56  (core.internals.getParseFn.getParseFnOrPassThrough)\n/**\n * @deprecated only for backwards compat\n * @internal\n */\nexport function getParseFnOrPassThrough<TType>(\n  procedureParser: Parser | undefined,\n): ParseFn<TType> {\n  if (!procedureParser) {\n    return (v) => v as TType;\n  }\n  return getParseFn(procedureParser);\n}",
+    "token_count": 99,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.internals.getParseFn.getParseFnOrPassThrough"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 6,
+     "rerank_score": -4.405281066894531,
+     "bm25_rank": 9,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 99
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:929-946",
+    "content": "# deprecated/router.ts:929-946  (deprecated.router.router)\n/**\n * @deprecated\n */\nexport function router<\n  TContext extends Record<string, any> = {},\n  TMeta extends Record<string, any> = {},\n>() {\n  return new Router<\n    TContext,\n    TContext,\n    TMeta,\n    {},\n    {},\n    {},\n    DefaultErrorShape,\n    DefaultDataTransformer\n  >();\n}",
+    "token_count": 89,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.router"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 44,
+     "rerank_score": -4.589084625244141,
+     "bm25_rank": 34,
+     "dense_rank": 52,
+     "oversized_chunk": false,
+     "engine_token_count": 89
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/interop.ts:200-232",
+    "content": "# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}",
+    "token_count": 272,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.interop.migrateRouter"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 4,
+     "rerank_score": -4.8490447998046875,
+     "bm25_rank": 1,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 272
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:912-926",
+    "content": "# deprecated/router.ts:912-926  (deprecated.router.Router.interop)\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  /**\n   * Interop mode for v9.x -> v10.x\n   */\n  public interop(): MigrateRouter<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  > {\n    return migrateRouter(this);\n  }\n}",
+    "token_count": 259,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.Router.interop"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 7,
+     "rerank_score": -5.419825077056885,
+     "bm25_rank": 4,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 259
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "adapters/lambda/index.ts:1-16",
+    "content": "# adapters/lambda/index.ts:1-16  (adapters.lambda)\nimport type { CreateAWSLambdaContextOptions } from '../aws-lambda';\nimport { awsLambdaRequestHandler } from '../aws-lambda';\nimport type { APIGatewayEvent } from '../aws-lambda/utils';\n\nexport * from '../aws-lambda';\n\n/**\n * @deprecated use `aws-lambda` instead\n */\nexport type CreateLambdaContextOptions<TEvent extends APIGatewayEvent> =\n  CreateAWSLambdaContextOptions<TEvent>;\n\n/**\n * @deprecated use `aws-lambda` instead\n */\nexport const lambdaRequestHandler = awsLambdaRequestHandler;",
+    "token_count": 127,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -6.168691635131836,
+     "bm25_rank": 45,
+     "dense_rank": 36,
+     "oversized_chunk": false,
+     "engine_token_count": 127
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/internals/procedure.ts:1-62",
+    "content": "# deprecated/internals/procedure.ts:1-62  (deprecated.internals.procedure)\nimport { getTRPCErrorFromUnknown, TRPCError } from '../../error/TRPCError';\nimport type { InferLast } from '../../types';\nimport type { ProcedureType } from '../router';\nimport type { MiddlewareFunction, MiddlewareResult } from './middlewares';\nimport { middlewareMarker } from './middlewares';\n\nexport type ProcedureParserZodEsque<TInput, TOutput> = {\n  _input: TInput;\n  _output: TOutput;\n};\n\nexport type ProcedureParserMyZodEsque<TType> = {\n  parse: (input: any) => TType;\n};\n\nexport type ProcedureParserSuperstructEsque<TType> = {\n  create: (input: unknown) => TType;\n};\n\nexport type ProcedureParserCustomValidatorEsque<TType> = (\n  input: unknown,\n) => Promise<TType> | TType;\n\nexport type ProcedureParserYupEsque<TType> = {\n  validateSync: (input: unknown) => TType;\n};\n\nexport type ProcedureParserWithInputOutput<TInput, TOutput> =\n  ProcedureParserZodEsque<TInput, TOutput>;\n\nexport type ProcedureParser<TType> =\n  | ProcedureParserCustomValidatorEsque<TType>\n  | ProcedureParserMyZodEsque<TType>\n  | ProcedureParserSuperstructEsque<TType>\n  | ProcedureParserYupEsque<TType>;\n\nexport type ProcedureResolver<TContext, TInput, TOutput> = (opts: {\n  ctx: TContext;\n  input: TInput;\n  type: ProcedureType;\n}) => Promise<TOutput> | TOutput;\n\ninterface ProcedureOptions<TContext, TMeta, TInput, TOutput, TParsedOutput> {\n  middlewares: MiddlewareFunction<any, any, any>[];\n  resolver: ProcedureResolver<TContext, TInput, TOutput>;\n  inputParser: ProcedureParser<TInput>;\n  outputParser: ProcedureParser<TParsedOutput>;\n  meta: TMeta;\n}\n\n/**\n * @internal\n * @deprecated\n */\nexport interface ProcedureCallOptions<TContext> {\n  ctx: TContext;\n  rawInput: unknown;\n  path: string;\n  type: ProcedureType;\n}\n\ntype ParseFn<TType> = (value: unknown) => Promise<TType> | TType;",
+    "token_count": 484,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 19,
+     "rerank_score": -6.203922271728516,
+     "bm25_rank": 28,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 484
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:299-342",
+    "content": "# core/router.ts:299-342  (core.router.createCallerFactory)\nexport function createCallerFactory<TConfig extends AnyRootConfig>() {\n  return function createCallerInner<\n    TRouter extends Router<AnyRouterDef<TConfig>>,\n  >(router: TRouter): RouterCaller<TRouter['_def']> {\n    const def = router._def;\n\n    return function createCaller(ctx) {\n      const proxy = createRecursiveProxy(({ path, args }) => {\n        // interop mode\n        if (\n          path.length === 1 &&\n          procedureTypes.includes(path[0] as ProcedureType)\n        ) {\n          return callProcedure({\n            procedures: def.procedures,\n            path: args[0] as string,\n            rawInput: args[1],\n            ctx,\n            type: path[0] as ProcedureType,\n          });\n        }\n\n        const fullPath = path.join('.');\n        const procedure = def.procedures[fullPath] as AnyProcedure;\n\n        let type: ProcedureType = 'query';\n        if (procedure._def.mutation) {\n          type = 'mutation';\n        } else if (procedure._def.subscription) {\n          type = 'subscription';\n        }\n\n        return procedure({\n          path: fullPath,\n          rawInput: args[0],\n          ctx,\n          type,\n        });\n      });\n\n      return proxy as ReturnType<RouterCaller<any>>;\n    };\n  };\n}",
+    "token_count": 285,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.createCallerFactory"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 32,
+     "rerank_score": -6.530240058898926,
+     "bm25_rank": 7,
+     "dense_rank": 99,
+     "oversized_chunk": false,
+     "engine_token_count": 285
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:505-518",
+    "content": "# deprecated/router.ts:505-518  (deprecated.router.Router.mutation)\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public mutation(\n    path: string,\n    procedure: CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, {}, any, {}, any, any>(\n      {\n        mutations: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router);\n  }\n}",
+    "token_count": 271,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.Router.mutation"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 41,
+     "rerank_score": -6.801178932189941,
+     "bm25_rank": 32,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 271
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/router.ts:279-297",
+    "content": "# core/router.ts:279-297  (core.router.callProcedure)\n/**\n * @internal\n */\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}",
+    "token_count": 130,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [
+     "core.router.callProcedure"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 15,
+     "rerank_score": -6.879929542541504,
+     "bm25_rank": 43,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 130
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/internals/procedure.ts:283-334",
+    "content": "# deprecated/internals/procedure.ts:283-334  (deprecated.internals.procedure)\nexport type CreateProcedureWithInput<TContext, TMeta, TInput, TOutput> = {\n  input: ProcedureParser<TInput>;\n  output?: ProcedureParser<TOutput>;\n  meta?: TMeta;\n  resolve: ProcedureResolver<TContext, TInput, InferLast<TOutput>>;\n};\n\nexport type CreateProcedureWithInputOutputParser<\n  TContext,\n  TMeta,\n  TInput,\n  TParsedInput,\n  TOutput,\n  TParsedOutput,\n> = {\n  input: ProcedureParserWithInputOutput<TInput, TParsedInput>;\n  output?: ProcedureParserWithInputOutput<TOutput, TParsedOutput>;\n  meta?: TMeta;\n  resolve: ProcedureResolver<TContext, TParsedInput, InferLast<TOutput>>;\n};\n\nexport type CreateProcedureWithoutInput<\n  TContext,\n  TMeta,\n  TOutput,\n  TParsedOutput,\n> = {\n  output?:\n    | ProcedureParser<TOutput>\n    | ProcedureParserWithInputOutput<TOutput, TParsedOutput>;\n  meta?: TMeta;\n  resolve: ProcedureResolver<TContext, undefined, InferLast<TOutput>>;\n};\n\nexport type CreateProcedureOptions<\n  TContext,\n  TMeta = undefined,\n  TInput = undefined,\n  TParsedInput = undefined,\n  TOutput = undefined,\n  TParsedOutput = undefined,\n> =\n  | CreateProcedureWithInput<TContext, TMeta, TInput, TOutput>\n  | CreateProcedureWithInputOutputParser<\n      TContext,\n      TMeta,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TParsedOutput\n    >\n  | CreateProcedureWithoutInput<TContext, TMeta, TOutput, TParsedOutput>;",
+    "token_count": 366,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 37,
+     "rerank_score": -6.945682525634766,
+     "bm25_rank": 44,
+     "dense_rank": 29,
+     "oversized_chunk": false,
+     "engine_token_count": 366
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:602-618",
+    "content": "# deprecated/router.ts:602-618  (deprecated.router.Router.subscription)\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public subscription(\n    path: string,\n    procedure: Omit<\n      CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n      'output'\n    >,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, {}, {}, any, any, any>(\n      {\n        subscriptions: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router) as any;\n  }\n}",
+    "token_count": 284,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.Router.subscription"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 49,
+     "rerank_score": -7.057561874389648,
+     "bm25_rank": 33,
+     "dense_rank": 60,
+     "oversized_chunk": false,
+     "engine_token_count": 284
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "rpc/parseTRPCMessage.ts:12-17",
+    "content": "# rpc/parseTRPCMessage.ts:12-17  (rpc.parseTRPCMessage.assertIsProcedureType)\n/* istanbul ignore next -- @preserve */\nfunction assertIsProcedureType(obj: unknown): asserts obj is ProcedureType {\n  if (obj !== 'query' && obj !== 'subscription' && obj !== 'mutation') {\n    throw new Error('Invalid procedure type');\n  }\n}",
+    "token_count": 83,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "rpc.parseTRPCMessage.assertIsProcedureType"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 25,
+     "rerank_score": -7.221004486083984,
+     "bm25_rank": 42,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 83
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/router.ts:427-440",
+    "content": "# deprecated/router.ts:427-440  (deprecated.router.Router.query)\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  query(\n    path: string,\n    procedure: CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, any, {}, {}, any, any>(\n      {\n        queries: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router);\n  }\n}",
+    "token_count": 269,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [
+     "deprecated.router.Router.query"
+    ],
+    "provenance": {
+     "chunk_kind": "method",
+     "fused_rank": 43,
+     "rerank_score": -7.229534149169922,
+     "bm25_rank": 31,
+     "dense_rank": 54,
+     "oversized_chunk": false,
+     "engine_token_count": 269
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/procedure.ts:1-96",
+    "content": "# core/procedure.ts:1-96  (core.procedure)\nimport type { AnyRootConfig } from './internals/config';\nimport type {\n  ProcedureBuilderDef,\n  ProcedureCallOptions,\n} from './internals/procedureBuilder';\nimport type { UnsetMarker } from './internals/utils';\nimport type { ProcedureType } from './types';\n\ntype ClientContext = Record<string, unknown>;\n\n/**\n * @internal\n */\nexport interface ProcedureOptions {\n  /**\n   * Client-side context\n   */\n  context?: ClientContext;\n  signal?: AbortSignal;\n}\n\n/**\n * FIXME: this should only take 1 generic argument instead of a list\n * @internal\n */\nexport interface ProcedureParams<\n  TConfig extends AnyRootConfig = AnyRootConfig,\n  TContextOut = unknown,\n  TInputIn = unknown,\n  TInputOut = unknown,\n  TOutputIn = unknown,\n  TOutputOut = unknown,\n  TMeta = unknown,\n> {\n  _config: TConfig;\n  /**\n   * @internal\n   */\n  _meta: TMeta;\n  /**\n   * @internal\n   */\n  _ctx_out: TContextOut;\n  /**\n   * @internal\n   */\n  _input_in: TInputIn;\n  /**\n   * @internal\n   */\n  _input_out: TInputOut;\n  /**\n   * @internal\n   */\n  _output_in: TOutputIn;\n  /**\n   * @internal\n   */\n  _output_out: TOutputOut;\n}\n\n/**\n * @internal\n */\nexport type ProcedureArgs<TParams extends ProcedureParams> =\n  TParams['_input_in'] extends UnsetMarker\n    ? [input?: undefined | void, opts?: ProcedureOptions]\n    : undefined extends TParams['_input_in']\n    ? [input?: TParams['_input_in'] | void, opts?: ProcedureOptions]\n    : [input: TParams['_input_in'], opts?: ProcedureOptions];\n\n/**\n *\n * @internal\n */\nexport interface Procedure<\n  TType extends ProcedureType,\n  TParams extends ProcedureParams,\n> {\n  _type: TType;\n  _def: ProcedureBuilderDef<TParams> & TParams;\n  /**\n   * @deprecated use `._def.meta` instead\n   */\n  meta?: TParams['_meta'];\n  _procedure: true;\n  /**\n   * @internal\n   */\n  (opts: ProcedureCallOptions): Promise<unknown>;\n}\n\nexport type AnyQueryProcedure = Procedure<'query', any>;\nexport type AnyMutationProcedure = Procedure<'mutation', any>;\nexport type AnySubscriptionProcedure = Procedure<'subscription', any>;\nexport type AnyProcedure = Procedure<ProcedureType, any>;",
+    "token_count": 549,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -7.272356033325195,
+     "bm25_rank": 47,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 549
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:1-83#part1of2",
+    "content": "# core/internals/procedureBuilder.ts:1-83#part1of2  (core.internals.procedureBuilder)\nimport { getTRPCErrorFromUnknown, TRPCError } from '../../error/TRPCError';\nimport type { MaybePromise, Simplify } from '../../types';\nimport type {\n  MiddlewareBuilder,\n  MiddlewareFunction,\n  MiddlewareResult,\n} from '../middleware';\nimport { createInputMiddleware, createOutputMiddleware } from '../middleware';\nimport type { inferParser, Parser } from '../parser';\nimport type {\n  AnyMutationProcedure,\n  AnyProcedure,\n  AnyQueryProcedure,\n  AnySubscriptionProcedure,\n  Procedure,\n  ProcedureParams,\n} from '../procedure';\nimport type { ProcedureType } from '../types';\nimport type { AnyRootConfig } from './config';\nimport { getParseFn } from './getParseFn';\nimport { mergeWithoutOverrides } from './mergeWithoutOverrides';\nimport type {\n  DefaultValue,\n  Overwrite,\n  OverwriteKnown,\n  ResolveOptions,\n  UnsetMarker,\n} from './utils';\nimport { middlewareMarker } from './utils';\n\ntype CreateProcedureReturnInput<\n  TPrev extends ProcedureParams,\n  TNext extends ProcedureParams,\n> = ProcedureBuilder<{\n  _config: TPrev['_config'];\n  _meta: TPrev['_meta'];\n  _ctx_out: Overwrite<TPrev['_ctx_out'], TNext['_ctx_out']>;\n  _input_in: TPrev['_input_in'];\n  _input_out: UnsetMarker extends TNext['_input_out']\n    ? TPrev['_input_out']\n    : Overwrite<TPrev['_input_out'], TNext['_input_out']>;\n  _output_in: DefaultValue<TNext['_output_in'], TPrev['_output_in']>;\n  _output_out: DefaultValue<TNext['_output_out'], TPrev['_output_out']>;\n}>;\n\n/**\n * @internal\n */\nexport interface BuildProcedure<\n  TType extends ProcedureType,\n  TParams extends ProcedureParams,\n  TOutput,\n> extends Procedure<\n    TType,\n    UnsetMarker extends TParams['_output_out']\n      ? OverwriteKnown<\n          TParams,\n          {\n            _output_in: TOutput;\n            _output_out: TOutput;\n          }\n        >\n      : TParams\n  > {}\n\ntype OverwriteIfDefined<TType, TWith> = UnsetMarker extends TType\n  ? TWith\n  : Simplify<TType & TWith>;\n\ntype ErrorMessage<TMessage extends string> = TMessage;\n\nexport type ProcedureBuilderDef<TParams extends ProcedureParams> = {\n  inputs: Parser[];\n  output?: Parser;\n  meta?: TParams['_meta'];\n  resolver?: ProcedureBuilderResolver;\n  middlewares: ProcedureBuilderMiddleware[];\n  mutation?: boolean;\n  query?: boolean;\n  subscription?: boolean;\n};\n\nexport type AnyProcedureBuilderDef = ProcedureBuilderDef<any>;",
+    "token_count": 580,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -7.359245777130127,
+     "bm25_rank": 63,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 580
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "deprecated/internals/procedure.ts:388-408",
+    "content": "# deprecated/internals/procedure.ts:388-408  (deprecated.internals.procedure)\nexport type inferProcedureFromOptions<\n  TInputContext,\n  TOptions extends CreateProcedureOptions<any, any, any, any, any, any>,\n> = TOptions extends CreateProcedureOptions<\n  infer TContext,\n  infer TMeta,\n  infer TInput,\n  infer TParsedInput,\n  infer TOutput,\n  infer TParsedOutput\n>\n  ? Procedure<\n      TInputContext,\n      TContext,\n      TMeta,\n      unknown extends TInput ? undefined : TInput,\n      unknown extends TParsedInput ? undefined : TParsedInput,\n      TOutput,\n      TParsedOutput\n    >\n  : never;",
+    "token_count": 152,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 13,
+     "rerank_score": -8.24479866027832,
+     "bm25_rank": 21,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 152
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "core/internals/procedureBuilder.ts:306-320",
+    "content": "# core/internals/procedureBuilder.ts:306-320  (core.internals.procedureBuilder)\n/**\n * @internal\n */\nexport interface ProcedureCallOptions {\n  ctx: unknown;\n  rawInput: unknown;\n  input?: unknown;\n  path: string;\n  type: ProcedureType;\n}\n\nconst codeblock = `\nThis is a client-only function.\nIf you want to call this function on the server, see https://trpc.io/docs/server/server-side-calls\n`.trim();",
+    "token_count": 104,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -8.559131622314453,
+     "bm25_rank": 55,
+     "dense_rank": 35,
+     "oversized_chunk": false,
+     "engine_token_count": 104
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12995,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "What breaks if `deprecated.interop.migrateProcedure` changes?",
+   "task_type": "T5_blast_radius",
+   "n_chunks_indexed": 250,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "deprecated/internals/procedure.ts:336-386",
+    "core/internals/procedureBuilder.ts:85-190#part2of2",
+    "core/internals/procedureBuilder.ts:322-407",
+    "deprecated/router.ts:837-864",
+    "deprecated/router.ts:353-362",
+    "deprecated/router.ts:732-753",
+    "shared/jsonify.ts:1-18",
+    "deprecated/internals/procedure.ts:170-244",
+    "deprecated/router.ts:662-730",
+    "deprecated/internals/procedure.ts:64-95",
+    "deprecated/internals/procedure.ts:147-156",
+    "deprecated/router.ts:258-286",
+    "deprecated/internals/procedure.ts:158-168",
+    "deprecated/internals/procedure.ts:246-280",
+    "deprecated/internals/procedure.ts:119-135",
+    "deprecated/internals/procedure.ts:137-145"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "typescript",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     1.340784
+    ],
+    "L_embed_query": [
+     110.971078
+    ],
+    "L_dense": [
+     0.295371
+    ],
+    "L_rrf": [
+     0.091192
+    ],
+    "L_rerank": [
+     28180.155826
+    ],
+    "L_retrieve": [
+     28359.443097
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12995,
+   "prompt_tokens": 13132,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13145,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/internals/procedureBuilder.ts:207-282  (core.internals.procedureBuilder.createBuilder)\nexport function createBuilder<TConfig extends AnyRootConfig>(\n  initDef: Partial<AnyProcedureBuilderDef> = {},\n): ProcedureBuilder<{\n  _config: TConfig;\n  _ctx_out: TConfig['$types']['ctx'];\n  _input_in: UnsetMarker;\n  _input_out: UnsetMarker;\n  _output_in: UnsetMarker;\n  _output_out: UnsetMarker;\n  _meta: TConfig['$types']['meta'];\n}> {\n  const _def: AnyProcedureBuilderDef = {\n    inputs: [],\n    middlewares: [],\n    ...initDef,\n  };\n\n  return {\n    _def,\n    input(input) {\n      const parser = getParseFn(input);\n      return createNewBuilder(_def, {\n        inputs: [input],\n        middlewares: [createInputMiddleware(parser)],\n      }) as AnyProcedureBuilder;\n    },\n    output(output: Parser) {\n      const parseOutput = getParseFn(output);\n      return createNewBuilder(_def, {\n        output,\n        middlewares: [createOutputMiddleware(parseOutput)],\n      }) as AnyProcedureBuilder;\n    },\n    meta(meta) {\n      return createNewBuilder(_def, {\n        meta: meta as Record<string, unknown>,\n      }) as AnyProcedureBuilder;\n    },\n    /**\n     * @deprecated\n     * This functionality is deprecated and will be removed in the next major version.\n     */\n    unstable_concat(builder) {\n      return createNewBuilder(_def, builder._def) as any;\n    },\n    use(middlewareBuilderOrFn) {\n      // Distinguish between a middleware builder and a middleware function\n      const middlewares =\n        '_middlewares' in middlewareBuilderOrFn\n          ? middlewareBuilderOrFn._middlewares\n          : [middlewareBuilderOrFn];\n\n      return createNewBuilder(_def, {\n        middlewares: middlewares as ProcedureBuilderMiddleware[],\n      }) as AnyProcedureBuilder;\n    },\n    query(resolver) {\n      return createResolver(\n        { ..._def, query: true },\n        resolver,\n      ) as AnyQueryProcedure;\n    },\n    mutation(resolver) {\n      return createResolver(\n        { ..._def, mutation: true },\n        resolver,\n      ) as AnyMutationProcedure;\n    },\n    subscription(resolver) {\n      return createResolver(\n        { ..._def, subscription: true },\n        resolver,\n      ) as AnySubscriptionProcedure;\n    },\n  };\n}\n\n# deprecated/router.ts:407-503#part2of4  (deprecated.router.Router)\n/**\n * @internal The type signature of this class may change without warning.\n * @deprecated\n */\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public query<TPath extends string, TOutput, TParsedOutput>(\n    path: TPath,\n    procedure: CreateProcedureWithoutInput<\n      TContext,\n      TMeta,\n      TOutput,\n      TParsedOutput\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  query(\n    path: string,\n    procedure: CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, any, {}, {}, any, any>(\n      {\n        queries: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router);\n  }\n\n  public mutation<\n    TPath extends string,\n    TInput,\n    TParsedInput,\n    TOutput,\n    TParsedOutput,\n  >(\n    path: TPath,\n    procedure: CreateProcedureWithInputOutputParser<\n      TContext,\n      TMeta,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TParsedOutput\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  public mutation<TPath extends string, TInput, TOutput>(\n    path: TPath,\n    procedure: CreateProcedureWithInput<TContext, TMeta, TInput, TOutput>,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  public mutation<TPath extends string, TOutput, TParsedOutput>(\n    path: TPath,\n    procedure: CreateProcedureWithoutInput<\n      TContext,\n      TMeta,\n      TOutput,\n      TParsedOutput\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n}\n\n# core/router.ts:1-126#part1of2  (core.router)\nimport type { DefaultErrorShape } from '../error/formatter';\nimport { defaultFormatter } from '../error/formatter';\nimport { TRPCError } from '../error/TRPCError';\nimport { getHTTPStatusCodeFromError } from '../http/getHTTPStatusCode';\nimport { TRPC_ERROR_CODES_BY_KEY } from '../rpc';\nimport { createRecursiveProxy } from '../shared/createProxy';\nimport { defaultTransformer } from '../transformer';\nimport type { AnyRootConfig } from './internals/config';\nimport { omitPrototype } from './internals/omitPrototype';\nimport type { ProcedureCallOptions } from './internals/procedureBuilder';\nimport type {\n  AnyMutationProcedure,\n  AnyProcedure,\n  AnyQueryProcedure,\n  AnySubscriptionProcedure,\n  ProcedureArgs,\n} from './procedure';\nimport type {\n  inferHandlerInput,\n  inferProcedureOutput,\n  ProcedureType,\n} from './types';\nimport { procedureTypes } from './types';\n\n/** @internal **/\nexport type ProcedureRecord = Record<string, AnyProcedure>;\n\nexport interface ProcedureRouterRecord {\n  [key: string]: AnyProcedure | AnyRouter;\n}\n\n/**\n * @deprecated\n */\ninterface DeprecatedProcedureRouterRecord {\n  queries: Record<string, AnyQueryProcedure>;\n  mutations: Record<string, AnyMutationProcedure>;\n  subscriptions: Record<string, AnySubscriptionProcedure>;\n}\n\nexport interface RouterDef<\n  TConfig extends AnyRootConfig,\n  TRecord extends ProcedureRouterRecord,\n  /**\n   * @deprecated\n   */\n  TOld extends DeprecatedProcedureRouterRecord = {\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    queries: {};\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    mutations: {};\n    // eslint-disable-next-line @typescript-eslint/ban-types\n    subscriptions: {};\n  },\n> {\n  _config: TConfig;\n  router: true;\n  procedures: TRecord;\n  record: TRecord;\n  /**\n   * V9 queries\n   * @deprecated\n   */\n  queries: TOld['queries'];\n  /**\n   * V9 mutations\n   * @deprecated\n   */\n  mutations: TOld['mutations'];\n  /**\n   * V9 subscriptions\n   * @deprecated\n   */\n  subscriptions: TOld['subscriptions'];\n}\n\nexport type AnyRouterDef<\n  TConfig extends AnyRootConfig = AnyRootConfig,\n  TOld extends DeprecatedProcedureRouterRecord = any,\n> = RouterDef<TConfig, any, TOld>;\n\n/**\n * @internal\n */\ntype inferHandlerFn<TProcedures extends ProcedureRecord> = <\n  TProcedure extends TProcedures[TPath],\n  TPath extends string & keyof TProcedures,\n>(\n  path: TPath,\n  ...args: inferHandlerInput<TProcedure>\n) => Promise<inferProcedureOutput<TProcedure>>;\n\ntype DecorateProcedure<TProcedure extends AnyProcedure> = (\n  input: ProcedureArgs<TProcedure['_def']>[0],\n) => Promise<TProcedure['_def']['_output_out']>;\n\n/**\n * @internal\n */\ntype DecoratedProcedureRecord<TProcedures extends ProcedureRouterRecord> = {\n  [TKey in keyof TProcedures]: TProcedures[TKey] extends AnyRouter\n    ? DecoratedProcedureRecord<TProcedures[TKey]['_def']['record']>\n    : TProcedures[TKey] extends AnyProcedure\n    ? DecorateProcedure<TProcedures[TKey]>\n    : never;\n};\n\n/**\n * @internal\n */\nexport type RouterCaller<TDef extends AnyRouterDef> = (\n  ctx: TDef['_config']['$types']['ctx'],\n) => DecoratedProcedureRecord<TDef['record']> & {\n  /**\n   * @deprecated\n   */\n  query: inferHandlerFn<TDef['queries']>;\n  /**\n   * @deprecated\n   */\n  mutation: inferHandlerFn<TDef['mutations']>;\n  /**\n   * @deprecated\n   */\n  subscription: inferHandlerFn<TDef['subscriptions']>;\n};\n\n# deprecated/router.ts:520-623#part3of4  (deprecated.router.Router)\n/**\n * @internal The type signature of this class may change without warning.\n * @deprecated\n */\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  /**\n   * @beta Might change without a major version bump\n   */\n  public subscription<\n    TPath extends string,\n    TInput,\n    TParsedInput,\n    TOutput extends Observable<unknown, unknown>,\n  >(\n    path: TPath,\n    procedure: Omit<\n      CreateProcedureWithInputOutputParser<\n        TContext,\n        TMeta,\n        TInput,\n        TParsedInput,\n        TOutput,\n        unknown\n      >,\n      'output'\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  /**\n   * @beta Might change without a major version bump\n   */\n  public subscription<\n    TPath extends string,\n    TInput,\n    TOutput extends Observable<unknown, unknown>,\n  >(\n    path: TPath,\n    procedure: Omit<\n      CreateProcedureWithInput<TContext, TMeta, TInput, TOutput>,\n      'output'\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  /**\n   * @beta Might change without a major version bump\n   */\n  public subscription<\n    TPath extends string,\n    TOutput extends Observable<unknown, unknown>,\n  >(\n    path: TPath,\n    procedure: Omit<\n      CreateProcedureWithoutInput<TContext, TMeta, TOutput, unknown>,\n      'output'\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  public subscription(\n    path: string,\n    procedure: Omit<\n      CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n      'output'\n    >,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, {}, {}, any, any, any>(\n      {\n        subscriptions: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router) as any;\n  }\n\n  /**\n   * Merge router with other router\n   * @param router\n   */\n}\n\n# deprecated/router.ts:624-660#part4of4  (deprecated.router.Router)\n/**\n * @internal The type signature of this class may change without warning.\n * @deprecated\n */\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public merge<\n    TChildRouter extends Router<TContext, any, TMeta, any, any, any, any, any>,\n  >(\n    router: TChildRouter,\n  ): Router<\n    TInputContext,\n    inferRouterContext<TChildRouter>,\n    TMeta,\n    TChildRouter['_def']['queries'] & TQueries,\n    TChildRouter['_def']['mutations'] & TMutations,\n    TChildRouter['_def']['subscriptions'] & TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  /**\n   * Merge router with other router\n   * @param prefix Prefix that this router should live under\n   * @param router\n   */\n  public merge<\n    TPath extends string,\n    TChildRouter extends Router<TContext, any, TMeta, any, any, any, any, any>,\n  >(\n    prefix: TPath,\n    router: TChildRouter,\n  ): Router<\n    TInputContext,\n    inferRouterContext<TChildRouter>,\n    TMeta,\n    Prefixer<TChildRouter['_def']['queries'], `${TPath}`> & TQueries,\n    Prefixer<TChildRouter['_def']['mutations'], `${TPath}`> & TMutations,\n    Prefixer<TChildRouter['_def']['subscriptions'], `${TPath}`> &\n      TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n}\n\n# deprecated/router.ts:130-254  (deprecated.router)\n/**\n * @internal\n * @deprecated\n */\nexport type inferHandlerInput<\n  TProcedure extends Procedure<any, any, any, any, any, any, any>,\n> = TProcedure extends Procedure<any, any, any, infer TInput, any, any, any>\n  ? undefined extends TInput // ? is input optional\n    ? unknown extends TInput // ? is input unset\n      ? [(null | undefined)?] // -> there is no input\n      : [(TInput | null | undefined)?] // -> there is optional input\n    : [TInput] // -> input is required\n  : [(null | undefined)?]; // -> there is no input\n\ntype inferHandlerFn<TProcedures extends ProcedureRecord> = <\n  TProcedure extends TProcedures[TPath],\n  TPath extends string & keyof TProcedures,\n>(\n  path: TPath,\n  ...args: inferHandlerInput<TProcedure>\n) => Promise<inferProcedureOutput<TProcedures[TPath]>>;\n\n/**\n * @internal\n * @deprecated\n */\nexport type inferRouterContext<TRouter extends AnyRouter> = Parameters<\n  TRouter['createCaller']\n>[0];\n\n/**\n * @internal\n */\n// ts-prune-ignore-next\nexport type inferRouterMeta<TRouter extends AnyRouter> = TRouter extends Router<\n  any,\n  any,\n  infer TMeta,\n  any,\n  any,\n  any,\n  any,\n  any\n>\n  ? TMeta\n  : {};\n\n/**\n * @public\n * @deprecated\n */\nexport type AnyRouter<TContext extends Record<string, any> = any> = Router<\n  any,\n  TContext,\n  any,\n  any,\n  any,\n  any,\n  any,\n  any\n>;\n\n/**\n * @internal\n * @deprecated\n */\n// ts-prune-ignore-next\nexport type inferRouterError<TRouter extends AnyRouter> = ReturnType<\n  TRouter['getErrorShape']\n>;\nconst PROCEDURE_DEFINITION_MAP: Record<\n  ProcedureType,\n  'mutations' | 'queries' | 'subscriptions'\n> = {\n  query: 'queries',\n  mutation: 'mutations',\n  subscription: 'subscriptions',\n};\n\n/**\n * @internal\n * @deprecated\n */\nexport type ErrorFormatter<TContext, TShape extends TRPCErrorShape<number>> = ({\n  error,\n}: {\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TContext | undefined;\n  shape: DefaultErrorShape;\n}) => TShape;\n\ntype DefaultErrorData = {\n  code: TRPC_ERROR_CODE_KEY;\n  httpStatus: number;\n  path?: string;\n  stack?: string;\n};\n\n/**\n * @internal\n * @deprecated\n */\nexport interface DefaultErrorShape\n  extends TRPCErrorShape<TRPC_ERROR_CODE_NUMBER, DefaultErrorData> {\n  message: string;\n  code: TRPC_ERROR_CODE_NUMBER;\n}\n\n/**\n * Create an empty object with `Object.create(null)`.\n * Objects made from `Object.create(null)` are totally empty -- they do not inherit anything from Object.prototype.\n */\nfunction safeObject(): {};\n\n/**\n * Create an object without inheriting anything from `Object.prototype`\n */\nfunction safeObject<TObj>(obj: TObj): TObj;\n/**\n * Merge two objects without inheritance from `Object.prototype`\n */\nfunction safeObject<TObj1, TObj2>(obj1: TObj1, obj2: TObj2): TObj1 & TObj2;\n\n# deprecated/router.ts:326-405#part1of4  (deprecated.router.Router)\n/**\n * @internal The type signature of this class may change without warning.\n * @deprecated\n */\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  readonly _def: {\n    queries: TQueries;\n    mutations: TMutations;\n    subscriptions: TSubscriptions;\n    middlewares: MiddlewareFunction<TInputContext, TContext, TMeta>[];\n    errorFormatter: ErrorFormatter<TContext, TErrorShape>;\n    transformer: CombinedDataTransformer;\n  };\n\n  constructor(def?: {\n    queries?: TQueries;\n    mutations?: TMutations;\n    subscriptions?: TSubscriptions;\n    middlewares?: MiddlewareFunction<TInputContext, TContext, TMeta>[];\n    errorFormatter?: ErrorFormatter<TContext, TErrorShape>;\n    transformer?: CombinedDataTransformer;\n  }) {\n    this._def = {\n      queries: (def?.queries ?? safeObject()) as TQueries,\n      mutations: (def?.mutations ?? safeObject()) as TMutations,\n      subscriptions: (def?.subscriptions ?? safeObject()) as TSubscriptions,\n      middlewares: def?.middlewares ?? [],\n      errorFormatter: def?.errorFormatter ?? defaultFormatter,\n      transformer: def?.transformer ?? defaultTransformer,\n    };\n  }\n\n  private static prefixProcedures<\n    TProcedures extends ProcedureRecord,\n    TPrefix extends string,\n  >(procedures: TProcedures, prefix: TPrefix): Prefixer<TProcedures, TPrefix> {\n    const eps: ProcedureRecord = safeObject();\n    for (const [key, procedure] of Object.entries(procedures)) {\n      eps[prefix + key] = procedure;\n    }\n    return eps as any;\n  }\n\n  public query<\n    TPath extends string,\n    TInput,\n    TParsedInput,\n    TOutput,\n    TParsedOutput,\n  >(\n    path: TPath,\n    procedure: CreateProcedureWithInputOutputParser<\n      TContext,\n      TMeta,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TParsedOutput\n    >,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n\n  public query<TPath extends string, TInput, TOutput>(\n    path: TPath,\n    procedure: CreateProcedureWithInput<TContext, TMeta, TInput, TOutput>,\n  ): Router<\n    TInputContext,\n    TContext,\n    TMeta,\n    Record<TPath, inferProcedureFromOptions<TInputContext, typeof procedure>> &\n      TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  >;\n}\n\n# subscription.ts:5-44  (subscription.subscriptionPullFactory)\n/**\n * @deprecated\n * This functionality is deprecated and will be removed in the next major version.\n */\nexport function subscriptionPullFactory<TOutput>(opts: {\n  /**\n   * The interval of how often the function should run\n   */\n  intervalMs: number;\n  pull(emit: Observer<TOutput, unknown>): Promise<void> | void;\n}): Observable<TOutput, unknown> {\n  let timer: any;\n  let stopped = false;\n  async function _pull(emit: Observer<TOutput, unknown>) {\n    /* istanbul ignore next -- @preserve */\n    if (stopped) {\n      return;\n    }\n    try {\n      await opts.pull(emit);\n    } catch (err /* istanbul ignore next -- @preserve */) {\n      emit.error(getTRPCErrorFromUnknown(err));\n    }\n\n    /* istanbul ignore else -- @preserve */\n    if (!stopped) {\n      timer = setTimeout(() => _pull(emit), opts.intervalMs);\n    }\n  }\n\n  return observable<TOutput>((emit) => {\n    _pull(emit).catch((err) => {\n      emit.error(getTRPCErrorFromUnknown(err));\n    });\n    return () => {\n      clearTimeout(timer);\n      stopped = true;\n    };\n  });\n}\n\n# deprecated/router.ts:1-120  (deprecated.router)\n/* eslint-disable @typescript-eslint/ban-types */\nimport { defaultFormatter } from '../error/formatter';\nimport { TRPCError } from '../error/TRPCError';\nimport { getHTTPStatusCodeFromError } from '../http/getHTTPStatusCode';\nimport type { inferObservableValue, Observable } from '../observable';\nimport type {\n  TRPC_ERROR_CODE_KEY,\n  TRPC_ERROR_CODE_NUMBER,\n  TRPCErrorShape,\n} from '../rpc';\nimport { TRPC_ERROR_CODES_BY_KEY } from '../rpc';\nimport type {\n  CombinedDataTransformer,\n  DataTransformerOptions,\n  DefaultDataTransformer,\n} from '../transformer';\nimport { defaultTransformer } from '../transformer';\nimport type { FlatOverwrite, ThenArg } from '../types';\nimport type { MiddlewareFunction } from './internals/middlewares';\nimport type {\n  CreateProcedureOptions,\n  CreateProcedureWithInput,\n  CreateProcedureWithInputOutputParser,\n  CreateProcedureWithoutInput,\n  inferProcedureFromOptions,\n  Procedure,\n  ProcedureCallOptions,\n} from './internals/procedure';\nimport { createProcedure } from './internals/procedure';\nimport type { MigrateRouter } from './interop';\nimport { migrateRouter } from './interop';\n\nexport type { Procedure } from './internals/procedure';\n\n/**\n * @internal\n */\ntype Prefix<\n  TPrefix extends string,\n  TSuffix extends string,\n> = `${TPrefix}${TSuffix}`;\n\n/**\n * @internal\n */\ntype Prefixer<TObj extends Record<string, any>, TPrefix extends string> = {\n  [P in keyof TObj as Prefix<TPrefix, P & string>]: TObj[P];\n};\n\n/**\n * @public\n * @deprecated\n */\nexport type ProcedureType = 'mutation' | 'query' | 'subscription';\n\n/**\n * @internal\n * @deprecated\n */\nexport type ProcedureRecord<\n  TInputContext = any,\n  TContext = any,\n  TMeta = any,\n  TInput = any,\n  TParsedInput = any,\n  TOutput = any,\n  TParsedOutput = any,\n> = Record<\n  string,\n  Procedure<\n    TInputContext,\n    TContext,\n    TMeta,\n    TInput,\n    TParsedInput,\n    TOutput,\n    TParsedOutput\n  >\n>;\n\n/**\n * @public\n * @deprecated\n */\n// ts-prune-ignore-next\nexport type inferProcedureInput<\n  TProcedure extends Procedure<any, any, any, any, any, any, any>,\n> = TProcedure extends Procedure<any, any, any, infer Input, any, any, any>\n  ? undefined extends Input\n    ? Input | null | void // void is necessary to allow procedures with nullish input to be called without an input\n    : Input\n  : undefined;\n\n/**\n * @public\n * @deprecated\n */\nexport type inferAsyncReturnType<TFunction extends (...args: any) => any> =\n  ThenArg<ReturnType<TFunction>>;\n\n/**\n * @public\n * @deprecated\n */\nexport type inferProcedureOutput<\n  TProcedure extends Procedure<any, any, any, any, any, any, any>,\n> = inferAsyncReturnType<TProcedure['call']>;\n\n/**\n * @public\n * @beta\n * @deprecated\n */\n// ts-prune-ignore-next\nexport type inferSubscriptionOutput<\n  TRouter extends AnyRouter,\n  TPath extends keyof TRouter['_def']['subscriptions'],\n> = inferObservableValue<\n  inferAsyncReturnType<TRouter['_def']['subscriptions'][TPath]['call']>\n>;\n\n# deprecated/internals/middlewares.ts:1-61  (deprecated.internals.middlewares)\nimport type { TRPCError } from '../../error/TRPCError';\nimport type { ProcedureType } from '../router';\n\n/**\n * @deprecated\n */\nexport const middlewareMarker = 'middlewareMarker' as 'middlewareMarker' & {\n  __brand: 'middlewareMarker';\n};\n\ninterface MiddlewareResultBase<TContext> {\n  /**\n   * All middlewares should pass through their `next()`'s output.\n   * Requiring this marker makes sure that can't be forgotten at compile-time.\n   */\n  readonly marker: typeof middlewareMarker;\n  ctx: TContext;\n}\n\n/**\n * @deprecated\n */\ninterface MiddlewareOKResult<TContext> extends MiddlewareResultBase<TContext> {\n  ok: true;\n  data: unknown;\n  // this could be extended with `input`/`rawInput` later\n}\n\n/**\n * @deprecated\n */\ninterface MiddlewareErrorResult<TContext>\n  extends MiddlewareResultBase<TContext> {\n  ok: false;\n  error: TRPCError;\n  // we could guarantee it's always of this type\n}\n\n/**\n * @deprecated\n */\nexport type MiddlewareResult<TContext> =\n  | MiddlewareErrorResult<TContext>\n  | MiddlewareOKResult<TContext>;\n\n/**\n * @deprecated\n */\nexport type MiddlewareFunction<TInputContext, TContext, TMeta> = (opts: {\n  ctx: TInputContext;\n  type: ProcedureType;\n  path: string;\n  rawInput: unknown;\n  meta?: TMeta;\n  next: {\n    (): Promise<MiddlewareResult<TInputContext>>;\n    <TNewContext>(opts: { ctx: TNewContext }): Promise<\n      MiddlewareResult<TNewContext>\n    >;\n  };\n}) => Promise<MiddlewareResult<TContext>>;\n\n# deprecated/interop.ts:1-69#part1of2  (deprecated.interop)\n/* eslint-disable @typescript-eslint/ban-types */\nimport type { ProcedureParams, ProcedureType } from '..';\nimport type { AnyRootConfig, RootConfig } from '../core/internals/config';\nimport { getParseFnOrPassThrough } from '../core/internals/getParseFn';\nimport { mergeWithoutOverrides } from '../core/internals/mergeWithoutOverrides';\nimport { createBuilder } from '../core/internals/procedureBuilder';\nimport {\n  createInputMiddleware,\n  createOutputMiddleware,\n} from '../core/middleware';\nimport type { Procedure } from '../core/procedure';\nimport type {\n  ProcedureRecord as NewProcedureRecord,\n  Router as NewRouter,\n  RouterDef,\n} from '../core/router';\nimport { createRouterFactory } from '../core/router';\nimport type {\n  AnyRouter as AnyOldRouter,\n  Router as OldRouter,\n} from '../deprecated/router';\nimport type { TRPCErrorShape } from '../rpc';\nimport type { CombinedDataTransformer } from '../transformer';\nimport type { Procedure as OldProcedure } from './internals/procedure';\nimport type { ProcedureRecord } from './router';\n\ntype AnyOldProcedure = OldProcedure<any, any, any, any, any, any, any, any>;\n\ntype convertProcedureParams<\n  TConfig extends AnyRootConfig,\n  TProcedure extends AnyOldProcedure,\n> = TProcedure extends OldProcedure<\n  infer _TInputContext,\n  infer TContext,\n  infer TMeta,\n  infer TInput,\n  infer TParsedInput,\n  infer TOutput,\n  infer _TParsedOutput,\n  infer TFinalInput\n>\n  ? ProcedureParams<\n      TConfig,\n      TContext,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TFinalInput,\n      TMeta\n    >\n  : never;\n\ntype MigrateProcedure<\n  TConfig extends AnyRootConfig,\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n> = Procedure<TType, convertProcedureParams<TConfig, TProcedure>>;\n\nexport type MigrateProcedureRecord<\n  TConfig extends AnyRootConfig,\n  TProcedureRecord extends ProcedureRecord<any>,\n  TType extends ProcedureType,\n> = {\n  [K in keyof TProcedureRecord]: MigrateProcedure<\n    TConfig,\n    TProcedureRecord[K],\n    TType\n  >;\n};\n\n# core/types.ts:1-76  (core.types)\nimport type { inferObservableValue } from '../observable';\nimport type { inferTransformedProcedureOutput } from '../shared/jsonify';\nimport type { AnyProcedure, ProcedureArgs } from './procedure';\nimport type { AnyRouter, AnyRouterDef, Router } from './router';\n\nexport type inferRouterDef<TRouter extends AnyRouter> = TRouter extends Router<\n  infer TParams\n>\n  ? TParams extends AnyRouterDef<any>\n    ? TParams\n    : never\n  : never;\n\nexport type inferRouterContext<TRouter extends AnyRouter> =\n  inferRouterDef<TRouter>['_config']['$types']['ctx'];\nexport type inferRouterError<TRouter extends AnyRouter> =\n  inferRouterDef<TRouter>['_config']['$types']['errorShape'];\nexport type inferRouterMeta<TRouter extends AnyRouter> =\n  inferRouterDef<TRouter>['_config']['$types']['meta'];\n\nexport const procedureTypes = ['query', 'mutation', 'subscription'] as const;\n/**\n * @public\n */\nexport type ProcedureType = (typeof procedureTypes)[number];\n\nexport type inferHandlerInput<TProcedure extends AnyProcedure> = ProcedureArgs<\n  inferProcedureParams<TProcedure>\n>;\n\nexport type inferProcedureInput<TProcedure extends AnyProcedure> =\n  inferHandlerInput<TProcedure>[0];\n\nexport type inferProcedureParams<TProcedure> = TProcedure extends AnyProcedure\n  ? TProcedure['_def']\n  : never;\nexport type inferProcedureOutput<TProcedure> =\n  inferProcedureParams<TProcedure>['_output_out'];\n\n/**\n * @deprecated will be removed in next major as it's v9 stuff\n */\nexport type inferSubscriptionOutput<\n  TRouter extends AnyRouter,\n  TPath extends string & keyof TRouter['_def']['subscriptions'],\n> = inferObservableValue<\n  inferProcedureOutput<TRouter['_def']['subscriptions'][TPath]>\n>;\n\nexport type inferProcedureClientError<TProcedure extends AnyProcedure> =\n  inferProcedureParams<TProcedure>['_config']['errorShape'];\n\ntype GetInferenceHelpers<\n  TType extends 'input' | 'output',\n  TRouter extends AnyRouter,\n> = {\n  [TKey in keyof TRouter['_def']['record']]: TRouter['_def']['record'][TKey] extends infer TRouterOrProcedure\n    ? TRouterOrProcedure extends AnyRouter\n      ? GetInferenceHelpers<TType, TRouterOrProcedure>\n      : TRouterOrProcedure extends AnyProcedure\n      ? TType extends 'input'\n        ? inferProcedureInput<TRouterOrProcedure>\n        : inferTransformedProcedureOutput<TRouterOrProcedure>\n      : never\n    : never;\n};\n\nexport type inferRouterInputs<TRouter extends AnyRouter> = GetInferenceHelpers<\n  'input',\n  TRouter\n>;\n\nexport type inferRouterOutputs<TRouter extends AnyRouter> = GetInferenceHelpers<\n  'output',\n  TRouter\n>;\n\n# core/router.ts:128-149#part2of2  (core.router)\nexport interface Router<TDef extends AnyRouterDef> {\n  _def: TDef;\n  /**\n   * @deprecated use `t.createCallerFactory(router)` instead\n   * @see https://trpc.io/docs/server/server-side-calls\n   */\n  createCaller: RouterCaller<TDef>;\n\n  /**\n   * @deprecated\n   * FIXME: use the new standalone `getErrorShape` instead\n   */\n  getErrorShape(opts: {\n    error: TRPCError;\n    type: ProcedureType | 'unknown';\n    path: string | undefined;\n    input: unknown;\n    ctx: TDef['_config']['$types']['ctx'] | undefined;\n  }): TDef['_config']['$types']['errorShape'];\n}\n\nexport type AnyRouter = Router<AnyRouterDef>;\n\n# deprecated/interop.ts:171-199  (deprecated.interop.migrateProcedure)\nfunction migrateProcedure<\n  TProcedure extends AnyOldProcedure,\n  TType extends ProcedureType,\n>(oldProc: TProcedure, type: TType): MigrateProcedure<any, TProcedure, TType> {\n  const def = oldProc._def();\n\n  const inputParser = getParseFnOrPassThrough(def.inputParser);\n  const outputParser = getParseFnOrPassThrough(def.outputParser);\n\n  const inputMiddleware = createInputMiddleware(inputParser);\n\n  const builder = createBuilder({\n    inputs: [def.inputParser],\n    middlewares: [\n      ...(def.middlewares as any),\n      inputMiddleware,\n      createOutputMiddleware(outputParser),\n    ],\n    meta: def.meta,\n    output: def.outputParser,\n    mutation: type === 'mutation',\n    query: type === 'query',\n    subscription: type === 'subscription',\n  });\n\n  const proc = builder[type]((opts) => def.resolver(opts as any));\n\n  return proc as any;\n}\n\n# core/router.ts:157-189  (core.router)\nconst emptyRouter = {\n  _ctx: null as any,\n  _errorShape: null as any,\n  _meta: null as any,\n  queries: {},\n  mutations: {},\n  subscriptions: {},\n  errorFormatter: defaultFormatter,\n  transformer: defaultTransformer,\n};\n\n/**\n * Reserved words that can't be used as router or procedure names\n */\nconst reservedWords = [\n  /**\n   * Then is a reserved word because otherwise we can't return a promise that returns a Proxy\n   * since JS will think that `.then` is something that exists\n   */\n  'then',\n];\n\n/**\n * @internal\n */\nexport type CreateRouterInner<\n  TConfig extends AnyRootConfig,\n  TProcRouterRecord extends ProcedureRouterRecord,\n> = Router<RouterDef<TConfig, TProcRouterRecord>> &\n  /**\n   * This should be deleted in v11\n   * @deprecated\n   */ TProcRouterRecord;\n\n# deprecated/internals/procedure.ts:111-117  (deprecated.internals.procedure.Procedure)\n/**\n * @internal\n * @deprecated\n */\nexport class Procedure<\n  TInputContext,\n  TContext,\n  TMeta,\n  TInput,\n  TParsedInput,\n  TOutput,\n  TParsedOutput,\n  TFinalOutput = unknown extends TParsedOutput ? TOutput : TParsedOutput,\n> {\n  private middlewares: Readonly<MiddlewareFunction<any, any, any>[]>;\n  private resolver: ProcedureResolver<TContext, TParsedInput, TOutput>;\n  private readonly inputParser: ProcedureParser<TParsedInput>;\n  private parseInputFn: ParseFn<TParsedInput>;\n  private readonly outputParser: ProcedureParser<TFinalOutput>;\n  private parseOutputFn: ParseFn<TFinalOutput>;\n  public readonly meta: TMeta;\n}\n\n# deprecated/interop.ts:71-169#part2of2  (deprecated.interop)\nexport type MigrateRouter<\n  TInputContext extends Record<string, any>,\n  TContext,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    any,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<any>,\n  TTransformer extends CombinedDataTransformer,\n> = NewRouter<\n  RouterDef<\n    RootConfig<{\n      ctx: TInputContext;\n      errorShape: TErrorShape;\n      meta: TMeta;\n      transformer: TTransformer;\n    }>,\n    {},\n    {\n      queries: MigrateProcedureRecord<\n        RootConfig<{\n          ctx: TInputContext;\n          errorShape: TErrorShape;\n          meta: TMeta;\n          transformer: TTransformer;\n        }>,\n        TQueries,\n        'query'\n      >;\n      mutations: MigrateProcedureRecord<\n        RootConfig<{\n          ctx: TInputContext;\n          errorShape: TErrorShape;\n          meta: TMeta;\n          transformer: TTransformer;\n        }>,\n        TMutations,\n        'mutation'\n      >;\n      subscriptions: MigrateProcedureRecord<\n        RootConfig<{\n          ctx: TInputContext;\n          errorShape: TErrorShape;\n          meta: TMeta;\n          transformer: TTransformer;\n        }>,\n        TSubscriptions,\n        'subscription'\n      >;\n    }\n  >\n>;\n\nexport type MigrateOldRouter<TRouter extends AnyOldRouter> =\n  TRouter extends OldRouter<\n    infer TInputContext,\n    infer TContext,\n    infer TMeta,\n    infer TQueries,\n    infer TMutations,\n    infer TSubscriptions,\n    infer TErrorShape,\n    infer Transformer\n  >\n    ? MigrateRouter<\n        TInputContext,\n        TContext,\n        TMeta,\n        TQueries,\n        TMutations,\n        TSubscriptions,\n        TErrorShape,\n        Transformer\n      >\n    : never;\n\n# core/internals/getParseFn.ts:45-56  (core.internals.getParseFn.getParseFnOrPassThrough)\n/**\n * @deprecated only for backwards compat\n * @internal\n */\nexport function getParseFnOrPassThrough<TType>(\n  procedureParser: Parser | undefined,\n): ParseFn<TType> {\n  if (!procedureParser) {\n    return (v) => v as TType;\n  }\n  return getParseFn(procedureParser);\n}\n\n# deprecated/router.ts:929-946  (deprecated.router.router)\n/**\n * @deprecated\n */\nexport function router<\n  TContext extends Record<string, any> = {},\n  TMeta extends Record<string, any> = {},\n>() {\n  return new Router<\n    TContext,\n    TContext,\n    TMeta,\n    {},\n    {},\n    {},\n    DefaultErrorShape,\n    DefaultDataTransformer\n  >();\n}\n\n# deprecated/interop.ts:200-232  (deprecated.interop.migrateRouter)\nexport function migrateRouter<TOldRouter extends AnyOldRouter>(\n  oldRouter: TOldRouter,\n): MigrateOldRouter<TOldRouter> {\n  const errorFormatter = oldRouter._def.errorFormatter;\n  const transformer = oldRouter._def.transformer;\n\n  const queries: NewProcedureRecord = {};\n  const mutations: NewProcedureRecord = {};\n  const subscriptions: NewProcedureRecord = {};\n  for (const [name, procedure] of Object.entries(oldRouter._def.queries)) {\n    queries[name] = migrateProcedure(procedure as any, 'query');\n  }\n\n  for (const [name, procedure] of Object.entries(oldRouter._def.mutations)) {\n    mutations[name] = migrateProcedure(procedure as any, 'mutation');\n  }\n\n  for (const [name, procedure] of Object.entries(\n    oldRouter._def.subscriptions,\n  )) {\n    subscriptions[name] = migrateProcedure(procedure as any, 'subscription');\n  }\n\n  const procedures = mergeWithoutOverrides(queries, mutations, subscriptions);\n\n  const newRouter = createRouterFactory<any>({\n    transformer,\n    errorFormatter,\n    isDev: process.env.NODE_ENV !== 'production',\n  })(procedures);\n\n  return newRouter as any;\n}\n\n# deprecated/router.ts:912-926  (deprecated.router.Router.interop)\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  /**\n   * Interop mode for v9.x -> v10.x\n   */\n  public interop(): MigrateRouter<\n    TInputContext,\n    TContext,\n    TMeta,\n    TQueries,\n    TMutations,\n    TSubscriptions,\n    TErrorShape,\n    TTransformer\n  > {\n    return migrateRouter(this);\n  }\n}\n\n# adapters/lambda/index.ts:1-16  (adapters.lambda)\nimport type { CreateAWSLambdaContextOptions } from '../aws-lambda';\nimport { awsLambdaRequestHandler } from '../aws-lambda';\nimport type { APIGatewayEvent } from '../aws-lambda/utils';\n\nexport * from '../aws-lambda';\n\n/**\n * @deprecated use `aws-lambda` instead\n */\nexport type CreateLambdaContextOptions<TEvent extends APIGatewayEvent> =\n  CreateAWSLambdaContextOptions<TEvent>;\n\n/**\n * @deprecated use `aws-lambda` instead\n */\nexport const lambdaRequestHandler = awsLambdaRequestHandler;\n\n# deprecated/internals/procedure.ts:1-62  (deprecated.internals.procedure)\nimport { getTRPCErrorFromUnknown, TRPCError } from '../../error/TRPCError';\nimport type { InferLast } from '../../types';\nimport type { ProcedureType } from '../router';\nimport type { MiddlewareFunction, MiddlewareResult } from './middlewares';\nimport { middlewareMarker } from './middlewares';\n\nexport type ProcedureParserZodEsque<TInput, TOutput> = {\n  _input: TInput;\n  _output: TOutput;\n};\n\nexport type ProcedureParserMyZodEsque<TType> = {\n  parse: (input: any) => TType;\n};\n\nexport type ProcedureParserSuperstructEsque<TType> = {\n  create: (input: unknown) => TType;\n};\n\nexport type ProcedureParserCustomValidatorEsque<TType> = (\n  input: unknown,\n) => Promise<TType> | TType;\n\nexport type ProcedureParserYupEsque<TType> = {\n  validateSync: (input: unknown) => TType;\n};\n\nexport type ProcedureParserWithInputOutput<TInput, TOutput> =\n  ProcedureParserZodEsque<TInput, TOutput>;\n\nexport type ProcedureParser<TType> =\n  | ProcedureParserCustomValidatorEsque<TType>\n  | ProcedureParserMyZodEsque<TType>\n  | ProcedureParserSuperstructEsque<TType>\n  | ProcedureParserYupEsque<TType>;\n\nexport type ProcedureResolver<TContext, TInput, TOutput> = (opts: {\n  ctx: TContext;\n  input: TInput;\n  type: ProcedureType;\n}) => Promise<TOutput> | TOutput;\n\ninterface ProcedureOptions<TContext, TMeta, TInput, TOutput, TParsedOutput> {\n  middlewares: MiddlewareFunction<any, any, any>[];\n  resolver: ProcedureResolver<TContext, TInput, TOutput>;\n  inputParser: ProcedureParser<TInput>;\n  outputParser: ProcedureParser<TParsedOutput>;\n  meta: TMeta;\n}\n\n/**\n * @internal\n * @deprecated\n */\nexport interface ProcedureCallOptions<TContext> {\n  ctx: TContext;\n  rawInput: unknown;\n  path: string;\n  type: ProcedureType;\n}\n\ntype ParseFn<TType> = (value: unknown) => Promise<TType> | TType;\n\n# core/router.ts:299-342  (core.router.createCallerFactory)\nexport function createCallerFactory<TConfig extends AnyRootConfig>() {\n  return function createCallerInner<\n    TRouter extends Router<AnyRouterDef<TConfig>>,\n  >(router: TRouter): RouterCaller<TRouter['_def']> {\n    const def = router._def;\n\n    return function createCaller(ctx) {\n      const proxy = createRecursiveProxy(({ path, args }) => {\n        // interop mode\n        if (\n          path.length === 1 &&\n          procedureTypes.includes(path[0] as ProcedureType)\n        ) {\n          return callProcedure({\n            procedures: def.procedures,\n            path: args[0] as string,\n            rawInput: args[1],\n            ctx,\n            type: path[0] as ProcedureType,\n          });\n        }\n\n        const fullPath = path.join('.');\n        const procedure = def.procedures[fullPath] as AnyProcedure;\n\n        let type: ProcedureType = 'query';\n        if (procedure._def.mutation) {\n          type = 'mutation';\n        } else if (procedure._def.subscription) {\n          type = 'subscription';\n        }\n\n        return procedure({\n          path: fullPath,\n          rawInput: args[0],\n          ctx,\n          type,\n        });\n      });\n\n      return proxy as ReturnType<RouterCaller<any>>;\n    };\n  };\n}\n\n# deprecated/router.ts:505-518  (deprecated.router.Router.mutation)\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public mutation(\n    path: string,\n    procedure: CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, {}, any, {}, any, any>(\n      {\n        mutations: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router);\n  }\n}\n\n# core/router.ts:279-297  (core.router.callProcedure)\n/**\n * @internal\n */\nexport function callProcedure(\n  opts: ProcedureCallOptions & { procedures: ProcedureRouterRecord },\n) {\n  const { type, path } = opts;\n\n  if (!(path in opts.procedures) || !opts.procedures[path]?._def[type]) {\n    throw new TRPCError({\n      code: 'NOT_FOUND',\n      message: `No \"${type}\"-procedure on path \"${path}\"`,\n    });\n  }\n\n  const procedure = opts.procedures[path] as AnyProcedure;\n\n  return procedure(opts);\n}\n\n# deprecated/internals/procedure.ts:283-334  (deprecated.internals.procedure)\nexport type CreateProcedureWithInput<TContext, TMeta, TInput, TOutput> = {\n  input: ProcedureParser<TInput>;\n  output?: ProcedureParser<TOutput>;\n  meta?: TMeta;\n  resolve: ProcedureResolver<TContext, TInput, InferLast<TOutput>>;\n};\n\nexport type CreateProcedureWithInputOutputParser<\n  TContext,\n  TMeta,\n  TInput,\n  TParsedInput,\n  TOutput,\n  TParsedOutput,\n> = {\n  input: ProcedureParserWithInputOutput<TInput, TParsedInput>;\n  output?: ProcedureParserWithInputOutput<TOutput, TParsedOutput>;\n  meta?: TMeta;\n  resolve: ProcedureResolver<TContext, TParsedInput, InferLast<TOutput>>;\n};\n\nexport type CreateProcedureWithoutInput<\n  TContext,\n  TMeta,\n  TOutput,\n  TParsedOutput,\n> = {\n  output?:\n    | ProcedureParser<TOutput>\n    | ProcedureParserWithInputOutput<TOutput, TParsedOutput>;\n  meta?: TMeta;\n  resolve: ProcedureResolver<TContext, undefined, InferLast<TOutput>>;\n};\n\nexport type CreateProcedureOptions<\n  TContext,\n  TMeta = undefined,\n  TInput = undefined,\n  TParsedInput = undefined,\n  TOutput = undefined,\n  TParsedOutput = undefined,\n> =\n  | CreateProcedureWithInput<TContext, TMeta, TInput, TOutput>\n  | CreateProcedureWithInputOutputParser<\n      TContext,\n      TMeta,\n      TInput,\n      TParsedInput,\n      TOutput,\n      TParsedOutput\n    >\n  | CreateProcedureWithoutInput<TContext, TMeta, TOutput, TParsedOutput>;\n\n# deprecated/router.ts:602-618  (deprecated.router.Router.subscription)\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  public subscription(\n    path: string,\n    procedure: Omit<\n      CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n      'output'\n    >,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, {}, {}, any, any, any>(\n      {\n        subscriptions: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router) as any;\n  }\n}\n\n# rpc/parseTRPCMessage.ts:12-17  (rpc.parseTRPCMessage.assertIsProcedureType)\n/* istanbul ignore next -- @preserve */\nfunction assertIsProcedureType(obj: unknown): asserts obj is ProcedureType {\n  if (obj !== 'query' && obj !== 'subscription' && obj !== 'mutation') {\n    throw new Error('Invalid procedure type');\n  }\n}\n\n# deprecated/router.ts:427-440  (deprecated.router.Router.query)\nexport class Router<\n  TInputContext extends Record<string, any>,\n  TContext extends Record<string, any>,\n  TMeta extends Record<string, any>,\n  TQueries extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TMutations extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    any,\n    any,\n    any,\n    any,\n    any\n  >,\n  TSubscriptions extends ProcedureRecord<\n    TInputContext,\n    TContext,\n    unknown,\n    unknown,\n    Observable<unknown, unknown>,\n    unknown,\n    unknown\n  >,\n  TErrorShape extends TRPCErrorShape<number>,\n  TTransformer extends CombinedDataTransformer = DefaultDataTransformer,\n> {\n  query(\n    path: string,\n    procedure: CreateProcedureOptions<TContext, TMeta, any, any, any, any>,\n  ) {\n    const router = new Router<TContext, TContext, TMeta, any, {}, {}, any, any>(\n      {\n        queries: safeObject({\n          [path]: createProcedure(procedure),\n        }),\n      },\n    );\n\n    return this.merge(router);\n  }\n}\n\n# core/procedure.ts:1-96  (core.procedure)\nimport type { AnyRootConfig } from './internals/config';\nimport type {\n  ProcedureBuilderDef,\n  ProcedureCallOptions,\n} from './internals/procedureBuilder';\nimport type { UnsetMarker } from './internals/utils';\nimport type { ProcedureType } from './types';\n\ntype ClientContext = Record<string, unknown>;\n\n/**\n * @internal\n */\nexport interface ProcedureOptions {\n  /**\n   * Client-side context\n   */\n  context?: ClientContext;\n  signal?: AbortSignal;\n}\n\n/**\n * FIXME: this should only take 1 generic argument instead of a list\n * @internal\n */\nexport interface ProcedureParams<\n  TConfig extends AnyRootConfig = AnyRootConfig,\n  TContextOut = unknown,\n  TInputIn = unknown,\n  TInputOut = unknown,\n  TOutputIn = unknown,\n  TOutputOut = unknown,\n  TMeta = unknown,\n> {\n  _config: TConfig;\n  /**\n   * @internal\n   */\n  _meta: TMeta;\n  /**\n   * @internal\n   */\n  _ctx_out: TContextOut;\n  /**\n   * @internal\n   */\n  _input_in: TInputIn;\n  /**\n   * @internal\n   */\n  _input_out: TInputOut;\n  /**\n   * @internal\n   */\n  _output_in: TOutputIn;\n  /**\n   * @internal\n   */\n  _output_out: TOutputOut;\n}\n\n/**\n * @internal\n */\nexport type ProcedureArgs<TParams extends ProcedureParams> =\n  TParams['_input_in'] extends UnsetMarker\n    ? [input?: undefined | void, opts?: ProcedureOptions]\n    : undefined extends TParams['_input_in']\n    ? [input?: TParams['_input_in'] | void, opts?: ProcedureOptions]\n    : [input: TParams['_input_in'], opts?: ProcedureOptions];\n\n/**\n *\n * @internal\n */\nexport interface Procedure<\n  TType extends ProcedureType,\n  TParams extends ProcedureParams,\n> {\n  _type: TType;\n  _def: ProcedureBuilderDef<TParams> & TParams;\n  /**\n   * @deprecated use `._def.meta` instead\n   */\n  meta?: TParams['_meta'];\n  _procedure: true;\n  /**\n   * @internal\n   */\n  (opts: ProcedureCallOptions): Promise<unknown>;\n}\n\nexport type AnyQueryProcedure = Procedure<'query', any>;\nexport type AnyMutationProcedure = Procedure<'mutation', any>;\nexport type AnySubscriptionProcedure = Procedure<'subscription', any>;\nexport type AnyProcedure = Procedure<ProcedureType, any>;\n\n# core/internals/procedureBuilder.ts:1-83#part1of2  (core.internals.procedureBuilder)\nimport { getTRPCErrorFromUnknown, TRPCError } from '../../error/TRPCError';\nimport type { MaybePromise, Simplify } from '../../types';\nimport type {\n  MiddlewareBuilder,\n  MiddlewareFunction,\n  MiddlewareResult,\n} from '../middleware';\nimport { createInputMiddleware, createOutputMiddleware } from '../middleware';\nimport type { inferParser, Parser } from '../parser';\nimport type {\n  AnyMutationProcedure,\n  AnyProcedure,\n  AnyQueryProcedure,\n  AnySubscriptionProcedure,\n  Procedure,\n  ProcedureParams,\n} from '../procedure';\nimport type { ProcedureType } from '../types';\nimport type { AnyRootConfig } from './config';\nimport { getParseFn } from './getParseFn';\nimport { mergeWithoutOverrides } from './mergeWithoutOverrides';\nimport type {\n  DefaultValue,\n  Overwrite,\n  OverwriteKnown,\n  ResolveOptions,\n  UnsetMarker,\n} from './utils';\nimport { middlewareMarker } from './utils';\n\ntype CreateProcedureReturnInput<\n  TPrev extends ProcedureParams,\n  TNext extends ProcedureParams,\n> = ProcedureBuilder<{\n  _config: TPrev['_config'];\n  _meta: TPrev['_meta'];\n  _ctx_out: Overwrite<TPrev['_ctx_out'], TNext['_ctx_out']>;\n  _input_in: TPrev['_input_in'];\n  _input_out: UnsetMarker extends TNext['_input_out']\n    ? TPrev['_input_out']\n    : Overwrite<TPrev['_input_out'], TNext['_input_out']>;\n  _output_in: DefaultValue<TNext['_output_in'], TPrev['_output_in']>;\n  _output_out: DefaultValue<TNext['_output_out'], TPrev['_output_out']>;\n}>;\n\n/**\n * @internal\n */\nexport interface BuildProcedure<\n  TType extends ProcedureType,\n  TParams extends ProcedureParams,\n  TOutput,\n> extends Procedure<\n    TType,\n    UnsetMarker extends TParams['_output_out']\n      ? OverwriteKnown<\n          TParams,\n          {\n            _output_in: TOutput;\n            _output_out: TOutput;\n          }\n        >\n      : TParams\n  > {}\n\ntype OverwriteIfDefined<TType, TWith> = UnsetMarker extends TType\n  ? TWith\n  : Simplify<TType & TWith>;\n\ntype ErrorMessage<TMessage extends string> = TMessage;\n\nexport type ProcedureBuilderDef<TParams extends ProcedureParams> = {\n  inputs: Parser[];\n  output?: Parser;\n  meta?: TParams['_meta'];\n  resolver?: ProcedureBuilderResolver;\n  middlewares: ProcedureBuilderMiddleware[];\n  mutation?: boolean;\n  query?: boolean;\n  subscription?: boolean;\n};\n\nexport type AnyProcedureBuilderDef = ProcedureBuilderDef<any>;\n\n# deprecated/internals/procedure.ts:388-408  (deprecated.internals.procedure)\nexport type inferProcedureFromOptions<\n  TInputContext,\n  TOptions extends CreateProcedureOptions<any, any, any, any, any, any>,\n> = TOptions extends CreateProcedureOptions<\n  infer TContext,\n  infer TMeta,\n  infer TInput,\n  infer TParsedInput,\n  infer TOutput,\n  infer TParsedOutput\n>\n  ? Procedure<\n      TInputContext,\n      TContext,\n      TMeta,\n      unknown extends TInput ? undefined : TInput,\n      unknown extends TParsedInput ? undefined : TParsedInput,\n      TOutput,\n      TParsedOutput\n    >\n  : never;\n\n# core/internals/procedureBuilder.ts:306-320  (core.internals.procedureBuilder)\n/**\n * @internal\n */\nexport interface ProcedureCallOptions {\n  ctx: unknown;\n  rawInput: unknown;\n  input?: unknown;\n  path: string;\n  type: ProcedureType;\n}\n\nconst codeblock = `\nThis is a client-only function.\nIf you want to call this function on the server, see https://trpc.io/docs/server/server-side-calls\n`.trim();\n\n## Task\n\nWhat breaks if `deprecated.interop.migrateProcedure` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

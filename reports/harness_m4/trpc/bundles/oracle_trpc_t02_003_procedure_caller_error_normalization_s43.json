@@ -1,0 +1,76 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "trpc_t02_003_procedure_caller_error_normalization",
+  "items": [
+   {
+    "source_id": "core/internals/procedureBuilder.ts:322-407",
+    "content": "# core/internals/procedureBuilder.ts:322-407  (core.internals.procedureBuilder.createProcedureCaller)\nfunction createProcedureCaller(_def: AnyProcedureBuilderDef): AnyProcedure {\n  const procedure = async function resolve(opts: ProcedureCallOptions) {\n    // is direct server-side call\n    if (!opts || !('rawInput' in opts)) {\n      throw new Error(codeblock);\n    }\n\n    // run the middlewares recursively with the resolver as the last one\n    const callRecursive = async (\n      callOpts: {\n        ctx: any;\n        index: number;\n        input?: unknown;\n        rawInput?: unknown;\n      } = {\n        index: 0,\n        ctx: opts.ctx,\n      },\n    ): Promise<MiddlewareResult<any>> => {\n      try {\n        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n        const middleware = _def.middlewares[callOpts.index]!;\n        const result = await middleware({\n          ctx: callOpts.ctx,\n          type: opts.type,\n          path: opts.path,\n          rawInput: callOpts.rawInput ?? opts.rawInput,\n          meta: _def.meta,\n          input: callOpts.input,\n          next(_nextOpts?: any) {\n            const nextOpts = _nextOpts as\n              | {\n                  ctx?: Record<string, unknown>;\n                  input?: unknown;\n                  rawInput?: unknown;\n                }\n              | undefined;\n\n            return callRecursive({\n              index: callOpts.index + 1,\n              ctx:\n                nextOpts && 'ctx' in nextOpts\n                  ? { ...callOpts.ctx, ...nextOpts.ctx }\n                  : callOpts.ctx,\n              input:\n                nextOpts && 'input' in nextOpts\n                  ? nextOpts.input\n                  : callOpts.input,\n              rawInput:\n                nextOpts && 'rawInput' in nextOpts\n                  ? nextOpts.rawInput\n                  : callOpts.rawInput,\n            });\n          },\n        });\n        return result;\n      } catch (cause) {\n        return {\n          ok: false,\n          error: getTRPCErrorFromUnknown(cause),\n          marker: middlewareMarker,\n        };\n      }\n    };\n\n    // there's always at least one \"next\" since we wrap this.resolver in a middleware\n    const result = await callRecursive();\n\n    if (!result) {\n      throw new TRPCError({\n        code: 'INTERNAL_SERVER_ERROR',\n        message:\n          'No result from middlewares - did you forget to `return next()`?',\n      });\n    }\n    if (!result.ok) {\n      // re-throw original error\n      throw result.error;\n    }\n    return result.data;\n  };\n  procedure._def = _def;\n  procedure.meta = _def.meta;\n\n  return procedure as AnyProcedure;\n}",
+    "token_count": 577,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "core.internals.procedureBuilder.createProcedureCaller"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 577
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:4-24",
+    "content": "# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}",
+    "token_count": 162,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "error.TRPCError.getTRPCErrorFromUnknown"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 162
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:26-52",
+    "content": "# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}",
+    "token_count": 244,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "error.TRPCError.TRPCError"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 244
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 983,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how tRPC normalizes an error thrown while resolving a procedure, starting from `createProcedureCaller` in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through to turn an arbitrary thrown value into a real TRPCError.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.internals.procedureBuilder.createProcedureCaller\", \"error.TRPCError.getTRPCErrorFromUnknown\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 3,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 983,
+   "prompt_tokens": 1258,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1271,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# core/internals/procedureBuilder.ts:322-407  (core.internals.procedureBuilder.createProcedureCaller)\nfunction createProcedureCaller(_def: AnyProcedureBuilderDef): AnyProcedure {\n  const procedure = async function resolve(opts: ProcedureCallOptions) {\n    // is direct server-side call\n    if (!opts || !('rawInput' in opts)) {\n      throw new Error(codeblock);\n    }\n\n    // run the middlewares recursively with the resolver as the last one\n    const callRecursive = async (\n      callOpts: {\n        ctx: any;\n        index: number;\n        input?: unknown;\n        rawInput?: unknown;\n      } = {\n        index: 0,\n        ctx: opts.ctx,\n      },\n    ): Promise<MiddlewareResult<any>> => {\n      try {\n        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion\n        const middleware = _def.middlewares[callOpts.index]!;\n        const result = await middleware({\n          ctx: callOpts.ctx,\n          type: opts.type,\n          path: opts.path,\n          rawInput: callOpts.rawInput ?? opts.rawInput,\n          meta: _def.meta,\n          input: callOpts.input,\n          next(_nextOpts?: any) {\n            const nextOpts = _nextOpts as\n              | {\n                  ctx?: Record<string, unknown>;\n                  input?: unknown;\n                  rawInput?: unknown;\n                }\n              | undefined;\n\n            return callRecursive({\n              index: callOpts.index + 1,\n              ctx:\n                nextOpts && 'ctx' in nextOpts\n                  ? { ...callOpts.ctx, ...nextOpts.ctx }\n                  : callOpts.ctx,\n              input:\n                nextOpts && 'input' in nextOpts\n                  ? nextOpts.input\n                  : callOpts.input,\n              rawInput:\n                nextOpts && 'rawInput' in nextOpts\n                  ? nextOpts.rawInput\n                  : callOpts.rawInput,\n            });\n          },\n        });\n        return result;\n      } catch (cause) {\n        return {\n          ok: false,\n          error: getTRPCErrorFromUnknown(cause),\n          marker: middlewareMarker,\n        };\n      }\n    };\n\n    // there's always at least one \"next\" since we wrap this.resolver in a middleware\n    const result = await callRecursive();\n\n    if (!result) {\n      throw new TRPCError({\n        code: 'INTERNAL_SERVER_ERROR',\n        message:\n          'No result from middlewares - did you forget to `return next()`?',\n      });\n    }\n    if (!result.ok) {\n      // re-throw original error\n      throw result.error;\n    }\n    return result.data;\n  };\n  procedure._def = _def;\n  procedure.meta = _def.meta;\n\n  return procedure as AnyProcedure;\n}\n\n# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}\n\n# error/TRPCError.ts:26-52  (error.TRPCError.TRPCError)\nexport class TRPCError extends Error {\n  // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n  // @ts-ignore override doesn't work in all environments due to \"This member cannot have an 'override' modifier because it is not declared in the base class 'Error'\"\n  public override readonly cause?: Error;\n  public readonly code;\n\n  constructor(opts: {\n    message?: string;\n    code: TRPC_ERROR_CODE_KEY;\n    cause?: unknown;\n  }) {\n    const cause = getCauseFromUnknown(opts.cause);\n    const message = opts.message ?? cause?.message ?? opts.code;\n\n    // eslint-disable-next-line @typescript-eslint/ban-ts-comment\n    // @ts-ignore https://github.com/tc39/proposal-error-cause\n    super(message, { cause });\n\n    this.code = opts.code;\n    this.name = 'TRPCError';\n\n    if (!this.cause) {\n      // < ES2022 / < Node 16.9.0 compatability\n      this.cause = cause;\n    }\n  }\n}\n\n## Task\n\nYou are investigating how tRPC normalizes an error thrown while resolving a procedure, starting from `createProcedureCaller` in core/internals/procedureBuilder.ts. Trace the real causal pipeline it runs through to turn an arbitrary thrown value into a real TRPCError.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"core.internals.procedureBuilder.createProcedureCaller\", \"error.TRPCError.getTRPCErrorFromUnknown\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}
