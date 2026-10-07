@@ -1,0 +1,91 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "express_t02_010_redirection",
+  "items": [
+   {
+    "source_id": "lib/response.js:946-990",
+    "content": "# lib/response.js:946-990  (lib.response.redirect)\nres.redirect = function redirect(url) {\n  var address = url;\n  var body;\n  var status = 302;\n\n  // allow status / url\n  if (arguments.length === 2) {\n    if (typeof arguments[0] === 'number') {\n      status = arguments[0];\n      address = arguments[1];\n    } else {\n      deprecate('res.redirect(url, status): Use res.redirect(status, url) instead');\n      status = arguments[1];\n    }\n  }\n\n  // Set location header\n  address = this.location(address).get('Location');\n\n  // Support text/{plain,html} by default\n  this.format({\n    text: function(){\n      body = statuses.message[status] + '. Redirecting to ' + address\n    },\n\n    html: function(){\n      var u = escapeHtml(address);\n      body = '<p>' + statuses.message[status] + '. Redirecting to ' + u + '</p>'\n    },\n\n    default: function(){\n      body = '';\n    }\n  });\n\n  // Respond\n  this.statusCode = status;\n  this.set('Content-Length', Buffer.byteLength(body));\n\n  if (this.req.method === 'HEAD') {\n    this.end();\n  } else {\n    this.end(body);\n  }\n};",
+    "token_count": 282,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.response.redirect"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 282
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:914-926",
+    "content": "# lib/response.js:914-926  (lib.response.location)\nres.location = function location(url) {\n  var loc;\n\n  // \"back\" is an alias for the referrer\n  if (url === 'back') {\n    deprecate('res.location(\"back\"): use res.location(req.get(\"Referrer\") || \"/\") and refer to https://dub.sh/security-redirect for best practices');\n    loc = this.req.get('Referrer') || '/';\n  } else {\n    loc = String(url);\n  }\n\n  return this.set('Location', encodeUrl(loc));\n};",
+    "token_count": 125,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.response.location"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 125
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:811-813",
+    "content": "# lib/response.js:811-813  (lib.response.get)\nres.get = function(field){\n  return this.getHeader(field);\n};",
+    "token_count": 31,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.response.get"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 31
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:684-709",
+    "content": "# lib/response.js:684-709  (lib.response.format)\nres.format = function(obj){\n  var req = this.req;\n  var next = req.next;\n\n  var keys = Object.keys(obj)\n    .filter(function (v) { return v !== 'default' })\n\n  var key = keys.length > 0\n    ? req.accepts(keys)\n    : false;\n\n  this.vary(\"Accept\");\n\n  if (key) {\n    this.set('Content-Type', normalizeType(key).value);\n    obj[key](req, this, next);\n  } else if (obj.default) {\n    obj.default(req, this, next)\n  } else {\n    next(createError(406, {\n      types: normalizeTypes(keys).map(function (o) { return o.value })\n    }))\n  }\n\n  return this;\n};",
+    "token_count": 176,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.response.format"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 176
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 614,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating Express's redirect handling, starting from `res.redirect` in lib/response.js. Trace the real causal pipeline it runs through to determine the target Location header and build the fallback response body.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.redirect\", \"lib.response.location\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 4,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 614,
+   "prompt_tokens": 863,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 876,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/response.js:946-990  (lib.response.redirect)\nres.redirect = function redirect(url) {\n  var address = url;\n  var body;\n  var status = 302;\n\n  // allow status / url\n  if (arguments.length === 2) {\n    if (typeof arguments[0] === 'number') {\n      status = arguments[0];\n      address = arguments[1];\n    } else {\n      deprecate('res.redirect(url, status): Use res.redirect(status, url) instead');\n      status = arguments[1];\n    }\n  }\n\n  // Set location header\n  address = this.location(address).get('Location');\n\n  // Support text/{plain,html} by default\n  this.format({\n    text: function(){\n      body = statuses.message[status] + '. Redirecting to ' + address\n    },\n\n    html: function(){\n      var u = escapeHtml(address);\n      body = '<p>' + statuses.message[status] + '. Redirecting to ' + u + '</p>'\n    },\n\n    default: function(){\n      body = '';\n    }\n  });\n\n  // Respond\n  this.statusCode = status;\n  this.set('Content-Length', Buffer.byteLength(body));\n\n  if (this.req.method === 'HEAD') {\n    this.end();\n  } else {\n    this.end(body);\n  }\n};\n\n# lib/response.js:914-926  (lib.response.location)\nres.location = function location(url) {\n  var loc;\n\n  // \"back\" is an alias for the referrer\n  if (url === 'back') {\n    deprecate('res.location(\"back\"): use res.location(req.get(\"Referrer\") || \"/\") and refer to https://dub.sh/security-redirect for best practices');\n    loc = this.req.get('Referrer') || '/';\n  } else {\n    loc = String(url);\n  }\n\n  return this.set('Location', encodeUrl(loc));\n};\n\n# lib/response.js:811-813  (lib.response.get)\nres.get = function(field){\n  return this.getHeader(field);\n};\n\n# lib/response.js:684-709  (lib.response.format)\nres.format = function(obj){\n  var req = this.req;\n  var next = req.next;\n\n  var keys = Object.keys(obj)\n    .filter(function (v) { return v !== 'default' })\n\n  var key = keys.length > 0\n    ? req.accepts(keys)\n    : false;\n\n  this.vary(\"Accept\");\n\n  if (key) {\n    this.set('Content-Type', normalizeType(key).value);\n    obj[key](req, this, next);\n  } else if (obj.default) {\n    obj.default(req, this, next)\n  } else {\n    next(createError(406, {\n      types: normalizeTypes(keys).map(function (o) { return o.value })\n    }))\n  }\n\n  return this;\n};\n\n## Task\n\nYou are investigating Express's redirect handling, starting from `res.redirect` in lib/response.js. Trace the real causal pipeline it runs through to determine the target Location header and build the fallback response body.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.redirect\", \"lib.response.location\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

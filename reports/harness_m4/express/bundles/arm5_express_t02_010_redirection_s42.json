@@ -1,0 +1,172 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_010_redirection",
+  "items": [
+   {
+    "source_id": "lib/response.js:946-990",
+    "content": "# lib/response.js:946-990  (lib.response.redirect)\nres.redirect = function redirect(url) {\n  var address = url;\n  var body;\n  var status = 302;\n\n  // allow status / url\n  if (arguments.length === 2) {\n    if (typeof arguments[0] === 'number') {\n      status = arguments[0];\n      address = arguments[1];\n    } else {\n      deprecate('res.redirect(url, status): Use res.redirect(status, url) instead');\n      status = arguments[1];\n    }\n  }\n\n  // Set location header\n  address = this.location(address).get('Location');\n\n  // Support text/{plain,html} by default\n  this.format({\n    text: function(){\n      body = statuses.message[status] + '. Redirecting to ' + address\n    },\n\n    html: function(){\n      var u = escapeHtml(address);\n      body = '<p>' + statuses.message[status] + '. Redirecting to ' + u + '</p>'\n    },\n\n    default: function(){\n      body = '';\n    }\n  });\n\n  // Respond\n  this.statusCode = status;\n  this.set('Content-Length', Buffer.byteLength(body));\n\n  if (this.req.method === 'HEAD') {\n    this.end();\n  } else {\n    this.end(body);\n  }\n};\n\n# Referenced module constants:\nvar Buffer = require('safe-buffer').Buffer\nvar escapeHtml = require('escape-html');\nvar statuses = require('statuses')",
+    "token_count": 314,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.redirect"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 287,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:914-926",
+    "content": "# lib/response.js:914-926  (lib.response.location)\nres.location = function location(url) {\n  var loc;\n\n  // \"back\" is an alias for the referrer\n  if (url === 'back') {\n    deprecate('res.location(\"back\"): use res.location(req.get(\"Referrer\") || \"/\") and refer to https://dub.sh/security-redirect for best practices');\n    loc = this.req.get('Referrer') || '/';\n  } else {\n    loc = String(url);\n  }\n\n  return this.set('Location', encodeUrl(loc));\n};\n\n# Referenced module constants:\nvar encodeUrl = require('encodeurl');",
+    "token_count": 140,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.location"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 116,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:684-709",
+    "content": "# lib/response.js:684-709  (lib.response.format)\nres.format = function(obj){\n  var req = this.req;\n  var next = req.next;\n\n  var keys = Object.keys(obj)\n    .filter(function (v) { return v !== 'default' })\n\n  var key = keys.length > 0\n    ? req.accepts(keys)\n    : false;\n\n  this.vary(\"Accept\");\n\n  if (key) {\n    this.set('Content-Type', normalizeType(key).value);\n    obj[key](req, this, next);\n  } else if (obj.default) {\n    obj.default(req, this, next)\n  } else {\n    next(createError(406, {\n      types: normalizeTypes(keys).map(function (o) { return o.value })\n    }))\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar createError = require('http-errors')\nvar normalizeType = require('./utils').normalizeType;\nvar normalizeTypes = require('./utils').normalizeTypes;",
+    "token_count": 213,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.format"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 187,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:111-236",
+    "content": "# lib/response.js:111-236  (lib.response.send)\nres.send = function send(body) {\n  var chunk = body;\n  var encoding;\n  var req = this.req;\n  var type;\n\n  // settings\n  var app = this.app;\n\n  // allow status / body\n  if (arguments.length === 2) {\n    // res.send(body, status) backwards compat\n    if (typeof arguments[0] !== 'number' && typeof arguments[1] === 'number') {\n      deprecate('res.send(body, status): Use res.status(status).send(body) instead');\n      this.statusCode = arguments[1];\n    } else {\n      deprecate('res.send(status, body): Use res.status(status).send(body) instead');\n      this.statusCode = arguments[0];\n      chunk = arguments[1];\n    }\n  }\n\n  // disambiguate res.send(status) and res.send(status, num)\n  if (typeof chunk === 'number' && arguments.length === 1) {\n    // res.send(status) will set status message as text string\n    if (!this.get('Content-Type')) {\n      this.type('txt');\n    }\n\n    deprecate('res.send(status): Use res.sendStatus(status) instead');\n    this.statusCode = chunk;\n    chunk = statuses.message[chunk]\n  }\n\n  switch (typeof chunk) {\n    // string defaulting to html\n    case 'string':\n      if (!this.get('Content-Type')) {\n        this.type('html');\n      }\n      break;\n    case 'boolean':\n    case 'number':\n    case 'object':\n      if (chunk === null) {\n        chunk = '';\n      } else if (Buffer.isBuffer(chunk)) {\n        if (!this.get('Content-Type')) {\n          this.type('bin');\n        }\n      } else {\n        return this.json(chunk);\n      }\n      break;\n  }\n\n  // write strings in utf-8\n  if (typeof chunk === 'string') {\n    encoding = 'utf8';\n    type = this.get('Content-Type');\n\n    // reflect this in content-type\n    if (typeof type === 'string') {\n      this.set('Content-Type', setCharset(type, 'utf-8'));\n    }\n  }\n\n  // determine if ETag should be generated\n  var etagFn = app.get('etag fn')\n  var generateETag = !this.get('ETag') && typeof etagFn === 'function'\n\n  // populate Content-Length\n  var len\n  if (chunk !== undefined) {\n    if (Buffer.isBuffer(chunk)) {\n      // get length of Buffer\n      len = chunk.length\n    } else if (!generateETag && chunk.length < 1000) {\n      // just calculate length when no ETag + small chunk\n      len = Buffer.byteLength(chunk, encoding)\n    } else {\n      // convert chunk to Buffer and calculate\n      chunk = Buffer.from(chunk, encoding)\n      encoding = undefined;\n      len = chunk.length\n    }\n\n    this.set('Content-Length', len);\n  }\n\n  // populate ETag\n  var etag;\n  if (generateETag && len !== undefined) {\n    if ((etag = etagFn(chunk, encoding))) {\n      this.set('ETag', etag);\n    }\n  }\n\n  // freshness\n  if (req.fresh) this.statusCode = 304;\n\n  // strip irrelevant headers\n  if (204 === this.statusCode || 304 === this.statusCode) {\n    this.removeHeader('Content-Type');\n    this.removeHeader('Content-Length');\n    this.removeHeader('Transfer-Encoding');\n    chunk = '';\n  }\n\n  // alter headers for 205\n  if (this.statusCode === 205) {\n    this.set('Content-Length', '0')\n    this.removeHeader('Transfer-Encoding')\n    chunk = ''\n  }\n\n  if (req.method === 'HEAD') {\n    // skip body for HEAD\n    this.end();\n  } else {\n    // respond\n    this.end(chunk, encoding);\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar setCharset = require('./utils').setCharset;",
+    "token_count": 869,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.send"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 833,
+     "distance": 1.881057268722467
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:359-401",
+    "content": "# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar debug = require('debug')('express:application');\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';",
+    "token_count": 318,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.set"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 293,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:18-18",
+    "content": "# lib/response.js:18-18  (lib.response.deprecate)\nvar deprecate = require('depd')('express');",
+    "token_count": 31,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.deprecate"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 13,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1885,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating Express's redirect handling, starting from `res.redirect` in lib/response.js. Trace the real causal pipeline it runs through to determine the target Location header and build the fallback response body.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.redirect\", \"lib.response.location\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.response.redirect",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 18,
+   "manifest_candidates_unfiltered": 18,
+   "requested_symbols": [
+    "lib.response.redirect",
+    "lib.response.location",
+    "lib.response.format",
+    "lib.response.send"
+   ],
+   "turn1_requested_count": 4,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `res.redirect` function in Express handles redirection by setting the Location header and optionally building a fallback response body. It first calls `lib.response.location` to determine the target URL, then uses `lib.response.format` to build the response body if necessary.\",\n  \"requested_symbols\": [\n    \"lib.response.redirect\",\n    \"lib.response.location\",\n    \"lib.response.format\",\n    \"lib.response.send\"\n  ]\n}\n```",
+     "prompt_tokens": 987,
+     "completion_tokens": 97,
+     "latency_seconds": 7.808618793000278,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     17.475874
+    ],
+    "L_turn2_hydrate": [
+     48.126819
+    ],
+    "L_retrieve": [
+     7880.332305
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1885,
+   "prompt_tokens": 2134,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2147,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/response.js:946-990  (lib.response.redirect)\nres.redirect = function redirect(url) {\n  var address = url;\n  var body;\n  var status = 302;\n\n  // allow status / url\n  if (arguments.length === 2) {\n    if (typeof arguments[0] === 'number') {\n      status = arguments[0];\n      address = arguments[1];\n    } else {\n      deprecate('res.redirect(url, status): Use res.redirect(status, url) instead');\n      status = arguments[1];\n    }\n  }\n\n  // Set location header\n  address = this.location(address).get('Location');\n\n  // Support text/{plain,html} by default\n  this.format({\n    text: function(){\n      body = statuses.message[status] + '. Redirecting to ' + address\n    },\n\n    html: function(){\n      var u = escapeHtml(address);\n      body = '<p>' + statuses.message[status] + '. Redirecting to ' + u + '</p>'\n    },\n\n    default: function(){\n      body = '';\n    }\n  });\n\n  // Respond\n  this.statusCode = status;\n  this.set('Content-Length', Buffer.byteLength(body));\n\n  if (this.req.method === 'HEAD') {\n    this.end();\n  } else {\n    this.end(body);\n  }\n};\n\n# Referenced module constants:\nvar Buffer = require('safe-buffer').Buffer\nvar escapeHtml = require('escape-html');\nvar statuses = require('statuses')\n\n# lib/response.js:914-926  (lib.response.location)\nres.location = function location(url) {\n  var loc;\n\n  // \"back\" is an alias for the referrer\n  if (url === 'back') {\n    deprecate('res.location(\"back\"): use res.location(req.get(\"Referrer\") || \"/\") and refer to https://dub.sh/security-redirect for best practices');\n    loc = this.req.get('Referrer') || '/';\n  } else {\n    loc = String(url);\n  }\n\n  return this.set('Location', encodeUrl(loc));\n};\n\n# Referenced module constants:\nvar encodeUrl = require('encodeurl');\n\n# lib/response.js:684-709  (lib.response.format)\nres.format = function(obj){\n  var req = this.req;\n  var next = req.next;\n\n  var keys = Object.keys(obj)\n    .filter(function (v) { return v !== 'default' })\n\n  var key = keys.length > 0\n    ? req.accepts(keys)\n    : false;\n\n  this.vary(\"Accept\");\n\n  if (key) {\n    this.set('Content-Type', normalizeType(key).value);\n    obj[key](req, this, next);\n  } else if (obj.default) {\n    obj.default(req, this, next)\n  } else {\n    next(createError(406, {\n      types: normalizeTypes(keys).map(function (o) { return o.value })\n    }))\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar createError = require('http-errors')\nvar normalizeType = require('./utils').normalizeType;\nvar normalizeTypes = require('./utils').normalizeTypes;\n\n# lib/response.js:111-236  (lib.response.send)\nres.send = function send(body) {\n  var chunk = body;\n  var encoding;\n  var req = this.req;\n  var type;\n\n  // settings\n  var app = this.app;\n\n  // allow status / body\n  if (arguments.length === 2) {\n    // res.send(body, status) backwards compat\n    if (typeof arguments[0] !== 'number' && typeof arguments[1] === 'number') {\n      deprecate('res.send(body, status): Use res.status(status).send(body) instead');\n      this.statusCode = arguments[1];\n    } else {\n      deprecate('res.send(status, body): Use res.status(status).send(body) instead');\n      this.statusCode = arguments[0];\n      chunk = arguments[1];\n    }\n  }\n\n  // disambiguate res.send(status) and res.send(status, num)\n  if (typeof chunk === 'number' && arguments.length === 1) {\n    // res.send(status) will set status message as text string\n    if (!this.get('Content-Type')) {\n      this.type('txt');\n    }\n\n    deprecate('res.send(status): Use res.sendStatus(status) instead');\n    this.statusCode = chunk;\n    chunk = statuses.message[chunk]\n  }\n\n  switch (typeof chunk) {\n    // string defaulting to html\n    case 'string':\n      if (!this.get('Content-Type')) {\n        this.type('html');\n      }\n      break;\n    case 'boolean':\n    case 'number':\n    case 'object':\n      if (chunk === null) {\n        chunk = '';\n      } else if (Buffer.isBuffer(chunk)) {\n        if (!this.get('Content-Type')) {\n          this.type('bin');\n        }\n      } else {\n        return this.json(chunk);\n      }\n      break;\n  }\n\n  // write strings in utf-8\n  if (typeof chunk === 'string') {\n    encoding = 'utf8';\n    type = this.get('Content-Type');\n\n    // reflect this in content-type\n    if (typeof type === 'string') {\n      this.set('Content-Type', setCharset(type, 'utf-8'));\n    }\n  }\n\n  // determine if ETag should be generated\n  var etagFn = app.get('etag fn')\n  var generateETag = !this.get('ETag') && typeof etagFn === 'function'\n\n  // populate Content-Length\n  var len\n  if (chunk !== undefined) {\n    if (Buffer.isBuffer(chunk)) {\n      // get length of Buffer\n      len = chunk.length\n    } else if (!generateETag && chunk.length < 1000) {\n      // just calculate length when no ETag + small chunk\n      len = Buffer.byteLength(chunk, encoding)\n    } else {\n      // convert chunk to Buffer and calculate\n      chunk = Buffer.from(chunk, encoding)\n      encoding = undefined;\n      len = chunk.length\n    }\n\n    this.set('Content-Length', len);\n  }\n\n  // populate ETag\n  var etag;\n  if (generateETag && len !== undefined) {\n    if ((etag = etagFn(chunk, encoding))) {\n      this.set('ETag', etag);\n    }\n  }\n\n  // freshness\n  if (req.fresh) this.statusCode = 304;\n\n  // strip irrelevant headers\n  if (204 === this.statusCode || 304 === this.statusCode) {\n    this.removeHeader('Content-Type');\n    this.removeHeader('Content-Length');\n    this.removeHeader('Transfer-Encoding');\n    chunk = '';\n  }\n\n  // alter headers for 205\n  if (this.statusCode === 205) {\n    this.set('Content-Length', '0')\n    this.removeHeader('Transfer-Encoding')\n    chunk = ''\n  }\n\n  if (req.method === 'HEAD') {\n    // skip body for HEAD\n    this.end();\n  } else {\n    // respond\n    this.end(chunk, encoding);\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar setCharset = require('./utils').setCharset;\n\n# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar debug = require('debug')('express:application');\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n# lib/response.js:18-18  (lib.response.deprecate)\nvar deprecate = require('depd')('express');\n\n## Task\n\nYou are investigating Express's redirect handling, starting from `res.redirect` in lib/response.js. Trace the real causal pipeline it runs through to determine the target Location header and build the fallback response body.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.redirect\", \"lib.response.location\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

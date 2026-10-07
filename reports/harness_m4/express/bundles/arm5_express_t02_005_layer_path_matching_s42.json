@@ -1,0 +1,102 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_005_layer_path_matching",
+  "items": [
+   {
+    "source_id": "lib/router/layer.js:110-156",
+    "content": "# lib/router/layer.js:110-156  (lib.router.layer.match)\nLayer.prototype.match = function match(path) {\n  var match\n\n  if (path != null) {\n    // fast path non-ending match for / (any path matches)\n    if (this.regexp.fast_slash) {\n      this.params = {}\n      this.path = ''\n      return true\n    }\n\n    // fast path for * (everything matched in a param)\n    if (this.regexp.fast_star) {\n      this.params = {'0': decode_param(path)}\n      this.path = path\n      return true\n    }\n\n    // match the path\n    match = this.regexp.exec(path)\n  }\n\n  if (!match) {\n    this.params = undefined;\n    this.path = undefined;\n    return false;\n  }\n\n  // store values\n  this.params = {};\n  this.path = match[0]\n\n  var keys = this.keys;\n  var params = this.params;\n\n  for (var i = 1; i < match.length; i++) {\n    var key = keys[i - 1];\n    var prop = key.name;\n    var val = decode_param(match[i])\n\n    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {\n      params[prop] = val;\n    }\n  }\n\n  return true;\n};\n\n# Referenced module constants:\nvar hasOwnProperty = Object.prototype.hasOwnProperty;",
+    "token_count": 291,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.match"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 264,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:166-181",
+    "content": "# lib/router/layer.js:166-181  (lib.router.layer.decode_param)\nfunction decode_param(val) {\n  if (typeof val !== 'string' || val.length === 0) {\n    return val;\n  }\n\n  try {\n    return decodeURIComponent(val);\n  } catch (err) {\n    if (err instanceof URIError) {\n      err.message = 'Failed to decode param \\'' + val + '\\'';\n      err.status = err.statusCode = 400;\n    }\n\n    throw err;\n  }\n}",
+    "token_count": 112,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.decode_param"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 88,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 403,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how an Express route Layer decides whether it matches an incoming request path, in lib/router/layer.js. Starting from `match`, trace the exact causal pipeline for a successful match with captured path parameters: what happens to each raw captured value before it is stored on `this.params`.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.layer.match\", \"lib.router.layer.decode_param\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.router.layer.match",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 3,
+   "manifest_candidates_unfiltered": 3,
+   "requested_symbols": [
+    "lib.router.layer.match",
+    "lib.router.layer.decode_param"
+   ],
+   "turn1_requested_count": 2,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `match` function in `lib.router.layer` is responsible for determining if a given path matches the layer's route. It calls `decode_param` to process any captured path parameters before storing them on `this.params`.\",\n  \"requested_symbols\": [\"lib.router.layer.match\", \"lib.router.layer.decode_param\"]\n}\n```",
+     "prompt_tokens": 474,
+     "completion_tokens": 77,
+     "latency_seconds": 5.500787733999914,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     16.897968
+    ],
+    "L_turn2_hydrate": [
+     37.380563
+    ],
+    "L_retrieve": [
+     5556.814107
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 403,
+   "prompt_tokens": 674,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 687,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/router/layer.js:110-156  (lib.router.layer.match)\nLayer.prototype.match = function match(path) {\n  var match\n\n  if (path != null) {\n    // fast path non-ending match for / (any path matches)\n    if (this.regexp.fast_slash) {\n      this.params = {}\n      this.path = ''\n      return true\n    }\n\n    // fast path for * (everything matched in a param)\n    if (this.regexp.fast_star) {\n      this.params = {'0': decode_param(path)}\n      this.path = path\n      return true\n    }\n\n    // match the path\n    match = this.regexp.exec(path)\n  }\n\n  if (!match) {\n    this.params = undefined;\n    this.path = undefined;\n    return false;\n  }\n\n  // store values\n  this.params = {};\n  this.path = match[0]\n\n  var keys = this.keys;\n  var params = this.params;\n\n  for (var i = 1; i < match.length; i++) {\n    var key = keys[i - 1];\n    var prop = key.name;\n    var val = decode_param(match[i])\n\n    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {\n      params[prop] = val;\n    }\n  }\n\n  return true;\n};\n\n# Referenced module constants:\nvar hasOwnProperty = Object.prototype.hasOwnProperty;\n\n# lib/router/layer.js:166-181  (lib.router.layer.decode_param)\nfunction decode_param(val) {\n  if (typeof val !== 'string' || val.length === 0) {\n    return val;\n  }\n\n  try {\n    return decodeURIComponent(val);\n  } catch (err) {\n    if (err instanceof URIError) {\n      err.message = 'Failed to decode param \\'' + val + '\\'';\n      err.status = err.statusCode = 400;\n    }\n\n    throw err;\n  }\n}\n\n## Task\n\nYou are investigating how an Express route Layer decides whether it matches an incoming request path, in lib/router/layer.js. Starting from `match`, trace the exact causal pipeline for a successful match with captured path parameters: what happens to each raw captured value before it is stored on `this.params`.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.layer.match\", \"lib.router.layer.decode_param\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

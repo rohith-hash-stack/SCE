@@ -1,0 +1,171 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_006_response_json_send",
+  "items": [
+   {
+    "source_id": "lib/response.js:250-279",
+    "content": "# lib/response.js:250-279  (lib.response.json)\nres.json = function json(obj) {\n  var val = obj;\n\n  // allow status / body\n  if (arguments.length === 2) {\n    // res.json(body, status) backwards compat\n    if (typeof arguments[1] === 'number') {\n      deprecate('res.json(obj, status): Use res.status(status).json(obj) instead');\n      this.statusCode = arguments[1];\n    } else {\n      deprecate('res.json(status, obj): Use res.status(status).json(obj) instead');\n      this.statusCode = arguments[0];\n      val = arguments[1];\n    }\n  }\n\n  // settings\n  var app = this.app;\n  var escape = app.get('json escape')\n  var replacer = app.get('json replacer');\n  var spaces = app.get('json spaces');\n  var body = stringify(val, replacer, spaces, escape)\n\n  // content-type\n  if (!this.get('Content-Type')) {\n    this.set('Content-Type', 'application/json');\n  }\n\n  return this.send(body);\n};",
+    "token_count": 238,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.json"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 220,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:1155-1179",
+    "content": "# lib/response.js:1155-1179  (lib.response.stringify)\nfunction stringify (value, replacer, spaces, escape) {\n  // v8 checks arguments.length for optimizing simple call\n  // https://bugs.chromium.org/p/v8/issues/detail?id=4730\n  var json = replacer || spaces\n    ? JSON.stringify(value, replacer, spaces)\n    : JSON.stringify(value);\n\n  if (escape && typeof json === 'string') {\n    json = json.replace(/[<>&]/g, function (c) {\n      switch (c.charCodeAt(0)) {\n        case 0x3c:\n          return '\\\\u003c'\n        case 0x3e:\n          return '\\\\u003e'\n        case 0x26:\n          return '\\\\u0026'\n        /* istanbul ignore next: unreachable default */\n        default:\n          return c\n      }\n    })\n  }\n\n  return json\n}",
+    "token_count": 208,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.stringify"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 179,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:111-236",
+    "content": "# lib/response.js:111-236  (lib.response.send)\nres.send = function send(body) {\n  var chunk = body;\n  var encoding;\n  var req = this.req;\n  var type;\n\n  // settings\n  var app = this.app;\n\n  // allow status / body\n  if (arguments.length === 2) {\n    // res.send(body, status) backwards compat\n    if (typeof arguments[0] !== 'number' && typeof arguments[1] === 'number') {\n      deprecate('res.send(body, status): Use res.status(status).send(body) instead');\n      this.statusCode = arguments[1];\n    } else {\n      deprecate('res.send(status, body): Use res.status(status).send(body) instead');\n      this.statusCode = arguments[0];\n      chunk = arguments[1];\n    }\n  }\n\n  // disambiguate res.send(status) and res.send(status, num)\n  if (typeof chunk === 'number' && arguments.length === 1) {\n    // res.send(status) will set status message as text string\n    if (!this.get('Content-Type')) {\n      this.type('txt');\n    }\n\n    deprecate('res.send(status): Use res.sendStatus(status) instead');\n    this.statusCode = chunk;\n    chunk = statuses.message[chunk]\n  }\n\n  switch (typeof chunk) {\n    // string defaulting to html\n    case 'string':\n      if (!this.get('Content-Type')) {\n        this.type('html');\n      }\n      break;\n    case 'boolean':\n    case 'number':\n    case 'object':\n      if (chunk === null) {\n        chunk = '';\n      } else if (Buffer.isBuffer(chunk)) {\n        if (!this.get('Content-Type')) {\n          this.type('bin');\n        }\n      } else {\n        return this.json(chunk);\n      }\n      break;\n  }\n\n  // write strings in utf-8\n  if (typeof chunk === 'string') {\n    encoding = 'utf8';\n    type = this.get('Content-Type');\n\n    // reflect this in content-type\n    if (typeof type === 'string') {\n      this.set('Content-Type', setCharset(type, 'utf-8'));\n    }\n  }\n\n  // determine if ETag should be generated\n  var etagFn = app.get('etag fn')\n  var generateETag = !this.get('ETag') && typeof etagFn === 'function'\n\n  // populate Content-Length\n  var len\n  if (chunk !== undefined) {\n    if (Buffer.isBuffer(chunk)) {\n      // get length of Buffer\n      len = chunk.length\n    } else if (!generateETag && chunk.length < 1000) {\n      // just calculate length when no ETag + small chunk\n      len = Buffer.byteLength(chunk, encoding)\n    } else {\n      // convert chunk to Buffer and calculate\n      chunk = Buffer.from(chunk, encoding)\n      encoding = undefined;\n      len = chunk.length\n    }\n\n    this.set('Content-Length', len);\n  }\n\n  // populate ETag\n  var etag;\n  if (generateETag && len !== undefined) {\n    if ((etag = etagFn(chunk, encoding))) {\n      this.set('ETag', etag);\n    }\n  }\n\n  // freshness\n  if (req.fresh) this.statusCode = 304;\n\n  // strip irrelevant headers\n  if (204 === this.statusCode || 304 === this.statusCode) {\n    this.removeHeader('Content-Type');\n    this.removeHeader('Content-Length');\n    this.removeHeader('Transfer-Encoding');\n    chunk = '';\n  }\n\n  // alter headers for 205\n  if (this.statusCode === 205) {\n    this.set('Content-Length', '0')\n    this.removeHeader('Transfer-Encoding')\n    chunk = ''\n  }\n\n  if (req.method === 'HEAD') {\n    // skip body for HEAD\n    this.end();\n  } else {\n    // respond\n    this.end(chunk, encoding);\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar Buffer = require('safe-buffer').Buffer\nvar setCharset = require('./utils').setCharset;\nvar statuses = require('statuses')",
+    "token_count": 886,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.send"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 849,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:359-401",
+    "content": "# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar debug = require('debug')('express:application');\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';",
+    "token_count": 318,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.set"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 293,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:18-18",
+    "content": "# lib/response.js:18-18  (lib.response.deprecate)\nvar deprecate = require('depd')('express');",
+    "token_count": 31,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.deprecate"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 13,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:811-813",
+    "content": "# lib/response.js:811-813  (lib.response.get)\nres.get = function(field){\n  return this.getHeader(field);\n};",
+    "token_count": 31,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.get"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 13,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1712,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how Express serializes and writes a JSON response, in lib/response.js. Starting from `json`, trace the exact causal pipeline for `res.json(obj)`: how the body is actually serialized to a string, and what real method finally writes it to the response.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.json\", \"lib.response.stringify\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.response.json",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 11,
+   "manifest_candidates_unfiltered": 11,
+   "requested_symbols": [
+    "lib.response.json",
+    "lib.response.stringify",
+    "lib.response.send"
+   ],
+   "turn1_requested_count": 3,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `res.json(obj)` method in Express serializes the provided object to a JSON string using the `lib.response.stringify` function. After serialization, the JSON string is sent as the response body using the `lib.response.send` method.\",\n  \"requested_symbols\": [\n    \"lib.response.json\",\n    \"lib.response.stringify\",\n    \"lib.response.send\"\n  ]\n}\n```",
+     "prompt_tokens": 794,
+     "completion_tokens": 87,
+     "latency_seconds": 7.091460300000108,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     15.318965
+    ],
+    "L_turn2_hydrate": [
+     54.797898
+    ],
+    "L_retrieve": [
+     7167.271129
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1712,
+   "prompt_tokens": 1977,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1990,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/response.js:250-279  (lib.response.json)\nres.json = function json(obj) {\n  var val = obj;\n\n  // allow status / body\n  if (arguments.length === 2) {\n    // res.json(body, status) backwards compat\n    if (typeof arguments[1] === 'number') {\n      deprecate('res.json(obj, status): Use res.status(status).json(obj) instead');\n      this.statusCode = arguments[1];\n    } else {\n      deprecate('res.json(status, obj): Use res.status(status).json(obj) instead');\n      this.statusCode = arguments[0];\n      val = arguments[1];\n    }\n  }\n\n  // settings\n  var app = this.app;\n  var escape = app.get('json escape')\n  var replacer = app.get('json replacer');\n  var spaces = app.get('json spaces');\n  var body = stringify(val, replacer, spaces, escape)\n\n  // content-type\n  if (!this.get('Content-Type')) {\n    this.set('Content-Type', 'application/json');\n  }\n\n  return this.send(body);\n};\n\n# lib/response.js:1155-1179  (lib.response.stringify)\nfunction stringify (value, replacer, spaces, escape) {\n  // v8 checks arguments.length for optimizing simple call\n  // https://bugs.chromium.org/p/v8/issues/detail?id=4730\n  var json = replacer || spaces\n    ? JSON.stringify(value, replacer, spaces)\n    : JSON.stringify(value);\n\n  if (escape && typeof json === 'string') {\n    json = json.replace(/[<>&]/g, function (c) {\n      switch (c.charCodeAt(0)) {\n        case 0x3c:\n          return '\\\\u003c'\n        case 0x3e:\n          return '\\\\u003e'\n        case 0x26:\n          return '\\\\u0026'\n        /* istanbul ignore next: unreachable default */\n        default:\n          return c\n      }\n    })\n  }\n\n  return json\n}\n\n# lib/response.js:111-236  (lib.response.send)\nres.send = function send(body) {\n  var chunk = body;\n  var encoding;\n  var req = this.req;\n  var type;\n\n  // settings\n  var app = this.app;\n\n  // allow status / body\n  if (arguments.length === 2) {\n    // res.send(body, status) backwards compat\n    if (typeof arguments[0] !== 'number' && typeof arguments[1] === 'number') {\n      deprecate('res.send(body, status): Use res.status(status).send(body) instead');\n      this.statusCode = arguments[1];\n    } else {\n      deprecate('res.send(status, body): Use res.status(status).send(body) instead');\n      this.statusCode = arguments[0];\n      chunk = arguments[1];\n    }\n  }\n\n  // disambiguate res.send(status) and res.send(status, num)\n  if (typeof chunk === 'number' && arguments.length === 1) {\n    // res.send(status) will set status message as text string\n    if (!this.get('Content-Type')) {\n      this.type('txt');\n    }\n\n    deprecate('res.send(status): Use res.sendStatus(status) instead');\n    this.statusCode = chunk;\n    chunk = statuses.message[chunk]\n  }\n\n  switch (typeof chunk) {\n    // string defaulting to html\n    case 'string':\n      if (!this.get('Content-Type')) {\n        this.type('html');\n      }\n      break;\n    case 'boolean':\n    case 'number':\n    case 'object':\n      if (chunk === null) {\n        chunk = '';\n      } else if (Buffer.isBuffer(chunk)) {\n        if (!this.get('Content-Type')) {\n          this.type('bin');\n        }\n      } else {\n        return this.json(chunk);\n      }\n      break;\n  }\n\n  // write strings in utf-8\n  if (typeof chunk === 'string') {\n    encoding = 'utf8';\n    type = this.get('Content-Type');\n\n    // reflect this in content-type\n    if (typeof type === 'string') {\n      this.set('Content-Type', setCharset(type, 'utf-8'));\n    }\n  }\n\n  // determine if ETag should be generated\n  var etagFn = app.get('etag fn')\n  var generateETag = !this.get('ETag') && typeof etagFn === 'function'\n\n  // populate Content-Length\n  var len\n  if (chunk !== undefined) {\n    if (Buffer.isBuffer(chunk)) {\n      // get length of Buffer\n      len = chunk.length\n    } else if (!generateETag && chunk.length < 1000) {\n      // just calculate length when no ETag + small chunk\n      len = Buffer.byteLength(chunk, encoding)\n    } else {\n      // convert chunk to Buffer and calculate\n      chunk = Buffer.from(chunk, encoding)\n      encoding = undefined;\n      len = chunk.length\n    }\n\n    this.set('Content-Length', len);\n  }\n\n  // populate ETag\n  var etag;\n  if (generateETag && len !== undefined) {\n    if ((etag = etagFn(chunk, encoding))) {\n      this.set('ETag', etag);\n    }\n  }\n\n  // freshness\n  if (req.fresh) this.statusCode = 304;\n\n  // strip irrelevant headers\n  if (204 === this.statusCode || 304 === this.statusCode) {\n    this.removeHeader('Content-Type');\n    this.removeHeader('Content-Length');\n    this.removeHeader('Transfer-Encoding');\n    chunk = '';\n  }\n\n  // alter headers for 205\n  if (this.statusCode === 205) {\n    this.set('Content-Length', '0')\n    this.removeHeader('Transfer-Encoding')\n    chunk = ''\n  }\n\n  if (req.method === 'HEAD') {\n    // skip body for HEAD\n    this.end();\n  } else {\n    // respond\n    this.end(chunk, encoding);\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar Buffer = require('safe-buffer').Buffer\nvar setCharset = require('./utils').setCharset;\nvar statuses = require('statuses')\n\n# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar debug = require('debug')('express:application');\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n# lib/response.js:18-18  (lib.response.deprecate)\nvar deprecate = require('depd')('express');\n\n# lib/response.js:811-813  (lib.response.get)\nres.get = function(field){\n  return this.getHeader(field);\n};\n\n## Task\n\nYou are investigating how Express serializes and writes a JSON response, in lib/response.js. Starting from `json`, trace the exact causal pipeline for `res.json(obj)`: how the body is actually serialized to a string, and what real method finally writes it to the response.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.json\", \"lib.response.stringify\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

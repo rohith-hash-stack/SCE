@@ -1,0 +1,798 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "express_t02_020_query_string_parsing",
+  "items": [
+   {
+    "source_id": "test/app.router.js:1010-1132#part3of3",
+    "content": "# test/app.router.js:1010-1132#part3of3  (test.app.router)\ndescribe('app.router', function(){\n  describe('when next(err) is called', function(){\n    it('should break out of app.router', function(done){\n      var app = express()\n        , calls = [];\n\n      app.get('/foo/:bar?', function(req, res, next){\n        calls.push('/foo/:bar?');\n        next();\n      });\n\n      app.get('/bar', function () {\n        assert(0);\n      });\n\n      app.get('/foo', function(req, res, next){\n        calls.push('/foo');\n        next(new Error('fail'));\n      });\n\n      app.get('/foo', function () {\n        assert(0);\n      });\n\n      app.use(function(err, req, res, next){\n        res.json({\n          calls: calls,\n          error: err.message\n        })\n      })\n\n      request(app)\n      .get('/foo')\n      .expect(200, { calls: ['/foo/:bar?', '/foo'], error: 'fail' }, done)\n    })\n\n    it('should call handler in same route, if exists', function(done){\n      var app = express();\n\n      function fn1(req, res, next) {\n        next(new Error('boom!'));\n      }\n\n      function fn2(req, res, next) {\n        res.send('foo here');\n      }\n\n      function fn3(err, req, res, next) {\n        res.send('route go ' + err.message);\n      }\n\n      app.get('/foo', fn1, fn2, fn3);\n\n      app.use(function (err, req, res, next) {\n        res.end('error!');\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('route go boom!', done)\n    })\n  })\n\n  it('should allow rewriting of the url', function(done){\n    var app = express();\n\n    app.get('/account/edit', function(req, res, next){\n      req.user = { id: 12 }; // faux authenticated user\n      req.url = '/user/' + req.user.id + '/edit';\n      next();\n    });\n\n    app.get('/user/:id/edit', function(req, res){\n      res.send('editing user ' + req.params.id);\n    });\n\n    request(app)\n    .get('/account/edit')\n    .expect('editing user 12', done);\n  })\n\n  it('should run in order added', function(done){\n    var app = express();\n    var path = [];\n\n    app.get('*', function(req, res, next){\n      path.push(0);\n      next();\n    });\n\n    app.get('/user/:id', function(req, res, next){\n      path.push(1);\n      next();\n    });\n\n    app.use(function(req, res, next){\n      path.push(2);\n      next();\n    });\n\n    app.all('/user/:id', function(req, res, next){\n      path.push(3);\n      next();\n    });\n\n    app.get('*', function(req, res, next){\n      path.push(4);\n      next();\n    });\n\n    app.use(function(req, res, next){\n      path.push(5);\n      res.end(path.join(','))\n    });\n\n    request(app)\n    .get('/user/1')\n    .expect(200, '0,1,2,3,4,5', done);\n  })\n\n  it('should be chainable', function(){\n    var app = express();\n    assert.strictEqual(app.get('/', function () {}), app)\n  })\n})",
+    "token_count": 733,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 24,
+     "rerank_score": 0.3664856553077698,
+     "bm25_rank": 69,
+     "dense_rank": 67,
+     "oversized_chunk": false,
+     "engine_token_count": 733
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/exports.js:1-87",
+    "content": "# test/exports.js:1-87  (test.exports)\n'use strict'\n\nvar assert = require('assert')\nvar express = require('../');\nvar request = require('supertest');\n\ndescribe('exports', function(){\n  it('should expose Router', function(){\n    assert.strictEqual(typeof express.Router, 'function')\n  })\n\n  it('should expose json middleware', function () {\n    assert.equal(typeof express.json, 'function')\n    assert.equal(express.json.length, 1)\n  })\n\n  it('should expose raw middleware', function () {\n    assert.equal(typeof express.raw, 'function')\n    assert.equal(express.raw.length, 1)\n  })\n\n  it('should expose static middleware', function () {\n    assert.equal(typeof express.static, 'function')\n    assert.equal(express.static.length, 2)\n  })\n\n  it('should expose text middleware', function () {\n    assert.equal(typeof express.text, 'function')\n    assert.equal(express.text.length, 1)\n  })\n\n  it('should expose urlencoded middleware', function () {\n    assert.equal(typeof express.urlencoded, 'function')\n    assert.equal(express.urlencoded.length, 1)\n  })\n\n  it('should expose the application prototype', function(){\n    assert.strictEqual(typeof express.application, 'object')\n    assert.strictEqual(typeof express.application.set, 'function')\n  })\n\n  it('should expose the request prototype', function(){\n    assert.strictEqual(typeof express.request, 'object')\n    assert.strictEqual(typeof express.request.accepts, 'function')\n  })\n\n  it('should expose the response prototype', function(){\n    assert.strictEqual(typeof express.response, 'object')\n    assert.strictEqual(typeof express.response.send, 'function')\n  })\n\n  it('should permit modifying the .application prototype', function(){\n    express.application.foo = function(){ return 'bar'; };\n    assert.strictEqual(express().foo(), 'bar')\n  })\n\n  it('should permit modifying the .request prototype', function(done){\n    express.request.foo = function(){ return 'bar'; };\n    var app = express();\n\n    app.use(function(req, res, next){\n      res.end(req.foo());\n    });\n\n    request(app)\n    .get('/')\n    .expect('bar', done);\n  })\n\n  it('should permit modifying the .response prototype', function(done){\n    express.response.foo = function(){ this.send('bar'); };\n    var app = express();\n\n    app.use(function(req, res, next){\n      res.foo();\n    });\n\n    request(app)\n    .get('/')\n    .expect('bar', done);\n  })\n\n  it('should throw on old middlewares', function(){\n    assert.throws(function () { express.bodyParser() }, /Error:.*middleware.*bodyParser/)\n    assert.throws(function () { express.limit() }, /Error:.*middleware.*limit/)\n  })\n})",
+    "token_count": 562,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": 0.004892528057098389,
+     "bm25_rank": 53,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 562
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/resource/index.js:1-11",
+    "content": "# examples/resource/index.js:1-11  (examples.resource)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\n\nvar app = module.exports = express();\n\n// Ad-hoc example resource method",
+    "token_count": 45,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 44,
+     "rerank_score": 0.0005098208785057068,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 45
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/content-negotiation/index.js:1-31",
+    "content": "# examples/content-negotiation/index.js:1-31  (examples.content-negotiation)\n'use strict'\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar users = require('./db');\n\n// so either you can deal with different types of formatting\n// for expected response in index.js\napp.get('/', function(req, res){\n  res.format({\n    html: function(){\n      res.send('<ul>' + users.map(function(user){\n        return '<li>' + user.name + '</li>';\n      }).join('') + '</ul>');\n    },\n\n    text: function(){\n      res.send(users.map(function(user){\n        return ' - ' + user.name + '\\n';\n      }).join(''));\n    },\n\n    json: function(){\n      res.json(users);\n    }\n  });\n});\n\n// or you could write a tiny middleware like\n// this to add a layer of abstraction\n// and make things a bit more declarative:",
+    "token_count": 193,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -0.13315027952194214,
+     "bm25_rank": 19,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 193
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.use.js:259-362#part1of3",
+    "content": "# test/app.use.js:259-362#part1of3  (test.app.use)\ndescribe('app', function(){\n  describe('.use(path, middleware)', function(){\n    it('should require middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/') }, /requires a middleware function/)\n    })\n\n    it('should reject string as middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/', 'foo') }, /requires a middleware function but got a string/)\n    })\n\n    it('should reject number as middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/', 42) }, /requires a middleware function but got a number/)\n    })\n\n    it('should reject null as middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/', null) }, /requires a middleware function but got a Null/)\n    })\n\n    it('should reject Date as middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/', new Date()) }, /requires a middleware function but got a Date/)\n    })\n\n    it('should strip path from req.url', function (done) {\n      var app = express();\n\n      app.use('/foo', function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url);\n      });\n\n      request(app)\n      .get('/foo/bar')\n      .expect(200, 'saw GET /bar', done);\n    })\n\n    it('should accept multiple arguments', function (done) {\n      var app = express();\n\n      function fn1(req, res, next) {\n        res.setHeader('x-fn-1', 'hit');\n        next();\n      }\n\n      function fn2(req, res, next) {\n        res.setHeader('x-fn-2', 'hit');\n        next();\n      }\n\n      app.use('/foo', fn1, fn2, function fn3(req, res) {\n        res.setHeader('x-fn-3', 'hit');\n        res.end();\n      });\n\n      request(app)\n      .get('/foo')\n      .expect('x-fn-1', 'hit')\n      .expect('x-fn-2', 'hit')\n      .expect('x-fn-3', 'hit')\n      .expect(200, done);\n    })\n\n    it('should invoke middleware for all requests starting with path', function (done) {\n      var app = express();\n      var cb = after(3, done);\n\n      app.use('/foo', function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url);\n      });\n\n      request(app)\n      .get('/')\n      .expect(404, cb);\n\n      request(app)\n      .post('/foo')\n      .expect(200, 'saw POST /', cb);\n\n      request(app)\n      .post('/foo/bar')\n      .expect(200, 'saw POST /bar', cb);\n    })\n\n    it('should work if path has trailing slash', function (done) {\n      var app = express();\n      var cb = after(3, done);\n\n      app.use('/foo/', function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url);\n      });\n\n      request(app)\n      .get('/')\n      .expect(404, cb);\n\n      request(app)\n      .post('/foo')\n      .expect(200, 'saw POST /', cb);\n\n      request(app)\n      .post('/foo/bar')\n      .expect(200, 'saw POST /bar', cb);\n    })\n  })\n})",
+    "token_count": 792,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 15,
+     "rerank_score": -0.2384854406118393,
+     "bm25_rank": 52,
+     "dense_rank": 37,
+     "oversized_chunk": false,
+     "engine_token_count": 792
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/web-service/index.js:21-117",
+    "content": "# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 774,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": -0.2887043356895447,
+     "bm25_rank": 1,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 774
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:1-18",
+    "content": "# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.",
+    "token_count": 114,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": -0.4236711263656616,
+     "bm25_rank": 35,
+     "dense_rank": 32,
+     "oversized_chunk": false,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error-pages/index.js:1-103",
+    "content": "# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 721,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 27,
+     "rerank_score": -0.43923860788345337,
+     "bm25_rank": 6,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 721
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.use.js:469-540#part3of3",
+    "content": "# test/app.use.js:469-540#part3of3  (test.app.use)\ndescribe('app', function(){\n  describe('.use(path, middleware)', function(){\n    it('should support array of paths with middleware array', function (done) {\n      var app = express();\n      var cb = after(2, done);\n\n      function fn1(req, res, next) {\n        res.setHeader('x-fn-1', 'hit');\n        next();\n      }\n\n      function fn2(req, res, next) {\n        res.setHeader('x-fn-2', 'hit');\n        next();\n      }\n\n      function fn3(req, res, next) {\n        res.setHeader('x-fn-3', 'hit');\n        res.send('saw ' + req.method + ' ' + req.url + ' through ' + req.originalUrl);\n      }\n\n      app.use(['/foo/', '/bar'], [[fn1], fn2], [fn3]);\n\n      request(app)\n      .get('/foo')\n      .expect('x-fn-1', 'hit')\n      .expect('x-fn-2', 'hit')\n      .expect('x-fn-3', 'hit')\n      .expect(200, 'saw GET / through /foo', cb);\n\n      request(app)\n      .get('/bar')\n      .expect('x-fn-1', 'hit')\n      .expect('x-fn-2', 'hit')\n      .expect('x-fn-3', 'hit')\n      .expect(200, 'saw GET / through /bar', cb);\n    })\n\n    it('should support regexp path', function (done) {\n      var app = express();\n      var cb = after(4, done);\n\n      app.use(/^\\/[a-z]oo/, function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url + ' through ' + req.originalUrl);\n      });\n\n      request(app)\n      .get('/')\n      .expect(404, cb);\n\n      request(app)\n      .get('/foo')\n      .expect(200, 'saw GET / through /foo', cb);\n\n      request(app)\n      .get('/zoo/bear')\n      .expect(200, 'saw GET /bear through /zoo/bear', cb);\n\n      request(app)\n      .get('/get/zoo')\n      .expect(404, cb);\n    })\n\n    it('should support empty string path', function (done) {\n      var app = express();\n\n      app.use('', function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url + ' through ' + req.originalUrl);\n      });\n\n      request(app)\n      .get('/')\n      .expect(200, 'saw GET / through /', done);\n    })\n  })\n})",
+    "token_count": 610,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 21,
+     "rerank_score": -0.4536161720752716,
+     "bm25_rank": 97,
+     "dense_rank": 42,
+     "oversized_chunk": false,
+     "engine_token_count": 610
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/express.js:59-116",
+    "content": "# lib/express.js:59-116  (lib.express)\n/**\n * Expose the prototypes.\n */\n\nexports.application = proto;\nexports.request = req;\nexports.response = res;\n\n/**\n * Expose constructors.\n */\n\nexports.Route = Route;\nexports.Router = Router;\n\n/**\n * Expose middleware\n */\n\nexports.json = bodyParser.json\nexports.query = require('./middleware/query');\nexports.raw = bodyParser.raw\nexports.static = require('serve-static');\nexports.text = bodyParser.text\nexports.urlencoded = bodyParser.urlencoded\n\n/**\n * Replace removed middleware with an appropriate error message.\n */\n\nvar removedMiddlewares = [\n  'bodyParser',\n  'compress',\n  'cookieSession',\n  'session',\n  'logger',\n  'cookieParser',\n  'favicon',\n  'responseTime',\n  'errorHandler',\n  'timeout',\n  'methodOverride',\n  'vhost',\n  'csrf',\n  'directory',\n  'limit',\n  'multipart',\n  'staticCache'\n]\n\nremovedMiddlewares.forEach(function (name) {\n  Object.defineProperty(exports, name, {\n    get: function () {\n      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');\n    },\n    configurable: true\n  });\n});",
+    "token_count": 273,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 4,
+     "rerank_score": -0.712425172328949,
+     "bm25_rank": 21,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 273
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/route-middleware/index.js:60-90",
+    "content": "# examples/route-middleware/index.js:60-90  (examples.route-middleware)\n// Middleware for faux authentication\n// you would of course implement something real,\n// but this illustrates how an authenticated user\n// may interact with middleware\n\napp.use(function(req, res, next){\n  req.authenticatedUser = users[0];\n  next();\n});\n\napp.get('/', function(req, res){\n  res.redirect('/user/0');\n});\n\napp.get('/user/:id', loadUser, function(req, res){\n  res.send('Viewing user ' + req.user.name);\n});\n\napp.get('/user/:id/edit', loadUser, andRestrictToSelf, function(req, res){\n  res.send('Editing user ' + req.user.name);\n});\n\napp.delete('/user/:id', loadUser, andRestrictTo('admin'), function(req, res){\n  res.send('Deleted user ' + req.user.name);\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 227,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 46,
+     "rerank_score": -0.7907403707504272,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 227
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/static-files/index.js:1-43",
+    "content": "# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');",
+    "token_count": 348,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": -1.20945143699646,
+     "bm25_rank": 4,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 348
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:144-241#part2of3",
+    "content": "# test/app.router.js:144-241#part2of3  (test.app.router)\ndescribe('app.router', function(){\n  it('should be .use()able', function(done){\n    var app = express();\n\n    var calls = [];\n\n    app.use(function(req, res, next){\n      calls.push('before');\n      next();\n    });\n\n    app.get('/', function(req, res, next){\n      calls.push('GET /')\n      next();\n    });\n\n    app.use(function(req, res, next){\n      calls.push('after');\n      res.json(calls)\n    });\n\n    request(app)\n    .get('/')\n    .expect(200, ['before', 'GET /', 'after'], done)\n  })\n\n  describe('when given a regexp', function(){\n    it('should match the pathname only', function(done){\n      var app = express();\n\n      app.get(/^\\/user\\/[0-9]+$/, function(req, res){\n        res.end('user');\n      });\n\n      request(app)\n      .get('/user/12?foo=bar')\n      .expect('user', done);\n    })\n\n    it('should populate req.params with the captures', function(done){\n      var app = express();\n\n      app.get(/^\\/user\\/([0-9]+)\\/(view|edit)?$/, function(req, res){\n        var id = req.params[0]\n          , op = req.params[1];\n        res.end(op + 'ing user ' + id);\n      });\n\n      request(app)\n      .get('/user/10/edit')\n      .expect('editing user 10', done);\n    })\n\n    if (supportsRegexp('(?<foo>.*)')) {\n      it('should populate req.params with named captures', function(done){\n        var app = express();\n        var re = new RegExp('^/user/(?<userId>[0-9]+)/(view|edit)?$');\n\n        app.get(re, function(req, res){\n          var id = req.params.userId\n            , op = req.params[0];\n          res.end(op + 'ing user ' + id);\n        });\n\n        request(app)\n        .get('/user/10/edit')\n        .expect('editing user 10', done);\n      })\n    }\n\n    it('should ensure regexp matches path prefix', function (done) {\n      var app = express()\n      var p = []\n\n      app.use(/\\/api.*/, function (req, res, next) {\n        p.push('a')\n        next()\n      })\n      app.use(/api/, function (req, res, next) {\n        p.push('b')\n        next()\n      })\n      app.use(/\\/test/, function (req, res, next) {\n        p.push('c')\n        next()\n      })\n      app.use(function (req, res) {\n        res.end()\n      })\n\n      request(app)\n        .get('/test/api/1234')\n        .expect(200, function (err) {\n          if (err) return done(err)\n          assert.deepEqual(p, ['c'])\n          done()\n        })\n    })\n  })\n})",
+    "token_count": 646,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 40,
+     "rerank_score": -1.220130205154419,
+     "bm25_rank": null,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 646
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:1-62",
+    "content": "# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */",
+    "token_count": 347,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": -1.3105483055114746,
+     "bm25_rank": 8,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/query.js:1-23",
+    "content": "# lib/middleware/query.js:1-23  (lib.middleware.query)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n */\n\nvar merge = require('utils-merge')\nvar parseUrl = require('parseurl');\nvar qs = require('qs');\n\n/**\n * @param {Object} options\n * @return {Function}\n * @api public\n */",
+    "token_count": 135,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 3,
+     "rerank_score": -1.380638599395752,
+     "bm25_rank": 18,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 135
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.param.js:8-79",
+    "content": "# test/app.param.js:8-79  (test.app.param)\ndescribe('app', function(){\n  describe('.param(fn)', function(){\n    it('should map app.param(name, ...) logic', function(done){\n      var app = express();\n\n      app.param(function(name, regexp){\n        if (Object.prototype.toString.call(regexp) === '[object RegExp]') { // See #1557\n          return function(req, res, next, val){\n            var captures;\n            if (captures = regexp.exec(String(val))) {\n              req.params[name] = captures[1];\n              next();\n            } else {\n              next('route');\n            }\n          }\n        }\n      })\n\n      app.param(':name', /^([a-zA-Z]+)$/);\n\n      app.get('/user/:name', function(req, res){\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/user/tj')\n      .expect(200, 'tj', function (err) {\n        if (err) return done(err)\n        request(app)\n        .get('/user/123')\n        .expect(404, done);\n      });\n\n    })\n\n    it('should fail if not given fn', function(){\n      var app = express();\n      assert.throws(app.param.bind(app, ':name', 'bob'))\n    })\n  })\n\n  describe('.param(names, fn)', function(){\n    it('should map the array', function(done){\n      var app = express();\n\n      app.param(['id', 'uid'], function(req, res, next, id){\n        id = Number(id);\n        if (isNaN(id)) return next('route');\n        req.params.id = id;\n        next();\n      });\n\n      app.get('/post/:id', function(req, res){\n        var id = req.params.id;\n        res.send((typeof id) + ':' + id)\n      });\n\n      app.get('/user/:uid', function(req, res){\n        var id = req.params.id;\n        res.send((typeof id) + ':' + id)\n      });\n\n      request(app)\n        .get('/user/123')\n        .expect(200, 'number:123', function (err) {\n          if (err) return done(err)\n          request(app)\n            .get('/post/123')\n            .expect('number:123', done)\n        })\n    })\n  })\n})",
+    "token_count": 499,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 48,
+     "rerank_score": -1.6419295072555542,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 499
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.location.js:1-6",
+    "content": "# test/res.location.js:1-6  (test.res.location)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest')\n  , assert = require('assert')\n  , url = require('url');",
+    "token_count": 49,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -1.6669021844863892,
+     "bm25_rank": null,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 49
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:12-142#part1of3",
+    "content": "# test/app.router.js:12-142#part1of3  (test.app.router)\ndescribe('app.router', function(){\n  it('should restore req.params after leaving router', function(done){\n    var app = express();\n    var router = new express.Router();\n\n    function handler1(req, res, next){\n      res.setHeader('x-user-id', String(req.params.id));\n      next()\n    }\n\n    function handler2(req, res){\n      res.send(req.params.id);\n    }\n\n    router.use(function(req, res, next){\n      res.setHeader('x-router', String(req.params.id));\n      next();\n    });\n\n    app.get('/user/:id', handler1, router, handler2);\n\n    request(app)\n    .get('/user/1')\n    .expect('x-router', 'undefined')\n    .expect('x-user-id', '1')\n    .expect(200, '1', done);\n  })\n\n  describe('methods', function(){\n    methods.concat('del').forEach(function(method){\n      if (method === 'connect') return;\n\n      it('should include ' + method.toUpperCase(), function(done){\n        if (method === 'query' && shouldSkipQuery(process.versions.node)) {\n          this.skip()\n        }\n        var app = express();\n\n        app[method]('/foo', function(req, res){\n          res.send(method)\n        });\n\n        request(app)\n        [method]('/foo')\n        .expect(200, done)\n      })\n\n      it('should reject numbers for app.' + method, function(){\n        var app = express();\n        assert.throws(app[method].bind(app, '/', 3), /Number/)\n      })\n    });\n\n    it('should re-route when method is altered', function (done) {\n      var app = express();\n      var cb = after(3, done);\n\n      app.use(function (req, res, next) {\n        if (req.method !== 'POST') return next();\n        req.method = 'DELETE';\n        res.setHeader('X-Method-Altered', '1');\n        next();\n      });\n\n      app.delete('/', function (req, res) {\n        res.end('deleted everything');\n      });\n\n      request(app)\n      .get('/')\n      .expect(404, cb)\n\n      request(app)\n      .delete('/')\n      .expect(200, 'deleted everything', cb);\n\n      request(app)\n      .post('/')\n      .expect('X-Method-Altered', '1')\n      .expect(200, 'deleted everything', cb);\n    });\n  })\n\n  describe('decode params', function () {\n    it('should decode correct params', function(done){\n      var app = express();\n\n      app.get('/:name', function (req, res) {\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/foo%2Fbar')\n      .expect('foo/bar', done);\n    })\n\n    it('should not accept params in malformed paths', function(done) {\n      var app = express();\n\n      app.get('/:name', function (req, res) {\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/%foobar')\n      .expect(400, done);\n    })\n\n    it('should not decode spaces', function(done) {\n      var app = express();\n\n      app.get('/:name', function (req, res) {\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/foo+bar')\n      .expect('foo+bar', done);\n    })\n\n    it('should work with unicode', function(done) {\n      var app = express();\n\n      app.get('/:name', function (req, res) {\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/%ce%b1')\n      .expect('\\u03b1', done);\n    })\n  })\n})",
+    "token_count": 801,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 50,
+     "rerank_score": -1.6937121152877808,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 801
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-constructor/index.js:1-48",
+    "content": "# examples/view-constructor/index.js:1-48  (examples.view-constructor)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar GithubView = require('./github-view');\nvar md = require('marked').parse;\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\napp.engine('md', function(str, options, fn){\n  try {\n    var html = md(str);\n    html = html.replace(/\\{([^}]+)\\}/g, function(_, name){\n      return options[name] || '';\n    });\n    fn(null, html);\n  } catch(err) {\n    fn(err);\n  }\n});\n\n// pointing to a particular github repo to load files from it\napp.set('views', 'expressjs/express');\n\n// register a new view constructor\napp.set('view', GithubView);\n\napp.get('/', function(req, res){\n  // rendering a view relative to the repo.\n  // app.locals, res.locals, and locals passed\n  // work like they normally would\n  res.render('examples/markdown/views/index.md', { title: 'Example' });\n});\n\napp.get('/Readme.md', function(req, res){\n  // rendering a view from https://github.com/expressjs/express/blob/master/Readme.md\n  res.render('Readme.md');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 316,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 16,
+     "rerank_score": -1.733931064605713,
+     "bm25_rank": 31,
+     "dense_rank": 63,
+     "oversized_chunk": false,
+     "engine_token_count": 316
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:1-31",
+    "content": "# lib/router/layer.js:1-31  (lib.router.layer)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar pathRegexp = require('path-to-regexp');\nvar debug = require('debug')('express:router:layer');\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = Layer;",
+    "token_count": 151,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 31,
+     "rerank_score": -1.7504889965057373,
+     "bm25_rank": null,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 151
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/search/index.js:1-61",
+    "content": "# examples/search/index.js:1-61  (examples.search)\n'use strict'\n\n// install redis first:\n// https://redis.io/\n\n// then:\n// $ npm install redis\n// $ redis-server\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar path = require('path');\nvar redis = require('redis');\n\nvar db = redis.createClient();\n\n// npm install redis\n\nvar app = express();\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// populate search\n\ndb.sadd('ferret', 'tobi');\ndb.sadd('ferret', 'loki');\ndb.sadd('ferret', 'jane');\ndb.sadd('cat', 'manny');\ndb.sadd('cat', 'luna');\n\n/**\n * GET search for :query.\n */\n\napp.get('/search/:query?', function(req, res){\n  var query = req.params.query;\n  db.smembers(query, function(err, vals){\n    if (err) return res.send(500);\n    res.send(vals);\n  });\n});\n\n/**\n * GET client javascript. Here we use sendFile()\n * because serving __dirname with the static() middleware\n * would also mean serving our server \"index.js\" and the \"search.jade\"\n * template.\n */\n\napp.get('/client.js', function(req, res){\n  res.sendFile(path.join(__dirname, 'client.js'));\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 323,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": -1.9277873039245605,
+     "bm25_rank": 3,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 323
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:1-41",
+    "content": "# lib/router/route.js:1-41  (lib.router.route)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar debug = require('debug')('express:router:route');\nvar flatten = require('array-flatten');\nvar Layer = require('./layer');\nvar methods = require('methods');\n\n/**\n * Module variables.\n * @private\n */\n\nvar slice = Array.prototype.slice;\nvar toString = Object.prototype.toString;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = Route;\n\n/**\n * Initialize `Route` with the given `path`,\n *\n * @param {String} path\n * @public\n */",
+    "token_count": 195,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -2.045978546142578,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 195
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/init.js:1-26",
+    "content": "# lib/middleware/init.js:1-26  (lib.middleware.init)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Initialization middleware, exposing the\n * request and response to each other, as well\n * as defaulting the X-Powered-By header field.\n *\n * @param {Function} app\n * @return {Function}\n * @api private\n */",
+    "token_count": 156,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 10,
+     "rerank_score": -2.085071563720703,
+     "bm25_rank": 42,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:1-41",
+    "content": "# lib/router/index.js:1-41  (lib.router)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar Route = require('./route');\nvar Layer = require('./layer');\nvar methods = require('methods');\nvar mixin = require('utils-merge');\nvar debug = require('debug')('express:router');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar parseUrl = require('parseurl');\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar objectRegExp = /^\\[object (\\S+)\\]$/;\nvar slice = Array.prototype.slice;\nvar toString = Object.prototype.toString;\n\n/**\n * Initialize a new `Router` with the given `options`.\n *\n * @param {Object} [options]\n * @return {Router} which is a callable function\n * @public\n */",
+    "token_count": 252,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 6,
+     "rerank_score": -2.1896238327026367,
+     "bm25_rank": 33,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 252
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "index.js:1-11",
+    "content": "# index.js:1-11\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\nmodule.exports = require('./lib/express');",
+    "token_count": 84,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -2.215579032897949,
+     "bm25_rank": null,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 84
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:1-54",
+    "content": "# lib/utils.js:1-54  (lib.utils)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @api private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar contentType = require('content-type');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar mime = require('send').mime;\nvar etag = require('etag');\nvar proxyaddr = require('proxy-addr');\nvar qs = require('qs');\nvar querystring = require('querystring');\n\n/**\n * Return strong ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.etag = createETagGenerator({ weak: false })\n\n/**\n * Return weak ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.wetag = createETagGenerator({ weak: true })\n\n/**\n * Check if `path` looks absolute.\n *\n * @param {String} path\n * @return {Boolean}\n * @api private\n */",
+    "token_count": 310,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -2.2904953956604004,
+     "bm25_rank": null,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 310
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:1-62",
+    "content": "# lib/request.js:1-62  (lib.request)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar accepts = require('accepts');\nvar deprecate = require('depd')('express');\nvar isIP = require('net').isIP;\nvar typeis = require('type-is');\nvar http = require('http');\nvar fresh = require('fresh');\nvar parseRange = require('range-parser');\nvar parse = require('parseurl');\nvar proxyaddr = require('proxy-addr');\n\n/**\n * Request prototype.\n * @public\n */\n\nvar req = Object.create(http.IncomingMessage.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = req\n\n/**\n * Return request header.\n *\n * The `Referrer` header field is special-cased,\n * both `Referrer` and `Referer` are interchangeable.\n *\n * Examples:\n *\n *     req.get('Content-Type');\n *     // => \"text/plain\"\n *\n *     req.get('content-type');\n *     // => \"text/plain\"\n *\n *     req.get('Something');\n *     // => undefined\n *\n * Aliased as `req.header()`.\n *\n * @param {String} name\n * @return {String}\n * @public\n */",
+    "token_count": 324,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 34,
+     "rerank_score": -2.5102760791778564,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 324
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/req.query.js:1-109",
+    "content": "# test/req.query.js:1-109  (test.req.query)\n'use strict'\n\nvar assert = require('assert')\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('req', function(){\n  describe('.query', function(){\n    it('should default to {}', function(done){\n      var app = createApp();\n\n      request(app)\n      .get('/')\n      .expect(200, '{}', done);\n    });\n\n    it('should default to parse complex keys', function (done) {\n      var app = createApp();\n\n      request(app)\n      .get('/?user[name]=tj')\n      .expect(200, '{\"user\":{\"name\":\"tj\"}}', done);\n    });\n\n    describe('when \"query parser\" is extended', function () {\n      it('should parse complex keys', function (done) {\n        var app = createApp('extended');\n\n        request(app)\n        .get('/?foo[0][bar]=baz&foo[0][fizz]=buzz&foo[]=done!')\n        .expect(200, '{\"foo\":[{\"bar\":\"baz\",\"fizz\":\"buzz\"},\"done!\"]}', done);\n      });\n\n      it('should parse parameters with dots', function (done) {\n        var app = createApp('extended');\n\n        request(app)\n        .get('/?user.name=tj')\n        .expect(200, '{\"user.name\":\"tj\"}', done);\n      });\n    });\n\n    describe('when \"query parser\" is simple', function () {\n      it('should not parse complex keys', function (done) {\n        var app = createApp('simple');\n\n        request(app)\n        .get('/?user%5Bname%5D=tj')\n        .expect(200, '{\"user[name]\":\"tj\"}', done);\n      });\n    });\n\n    describe('when \"query parser\" is a function', function () {\n      it('should parse using function', function (done) {\n        var app = createApp(function (str) {\n          return {'length': (str || '').length};\n        });\n\n        request(app)\n        .get('/?user%5Bname%5D=tj')\n        .expect(200, '{\"length\":17}', done);\n      });\n    });\n\n    describe('when \"query parser\" disabled', function () {\n      it('should not parse query', function (done) {\n        var app = createApp(false);\n\n        request(app)\n        .get('/?user%5Bname%5D=tj')\n        .expect(200, '{}', done);\n      });\n    });\n\n    describe('when \"query parser\" enabled', function () {\n      it('should not parse complex keys', function (done) {\n        var app = createApp(true);\n\n        request(app)\n        .get('/?user%5Bname%5D=tj')\n        .expect(200, '{\"user[name]\":\"tj\"}', done);\n      });\n    });\n\n    describe('when \"query parser fn\" is missing', function () {\n      it('should act like \"extended\"', function (done) {\n        var app = express();\n\n        delete app.settings['query parser'];\n        delete app.settings['query parser fn'];\n\n        app.use(function (req, res) {\n          res.send(req.query);\n        });\n\n        request(app)\n        .get('/?user[name]=tj&user.name=tj')\n        .expect(200, '{\"user\":{\"name\":\"tj\"},\"user.name\":\"tj\"}', done);\n      });\n    });\n\n    describe('when \"query parser\" an unknown value', function () {\n      it('should throw', function () {\n        assert.throws(createApp.bind(null, 'bogus'),\n          /unknown value.*query parser/)\n      });\n    });\n  })\n})",
+    "token_count": 799,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 8,
+     "rerank_score": -2.5470335483551025,
+     "bm25_rank": 70,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 799
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.send.js:1-10",
+    "content": "# test/res.send.js:1-10  (test.res.send)\n'use strict'\n\nvar assert = require('assert')\nvar Buffer = require('safe-buffer').Buffer\nvar express = require('..');\nvar methods = require('methods');\nvar request = require('supertest');\nvar utils = require('./support/utils');\n\nvar shouldSkipQuery = require('./support/utils').shouldSkipQuery",
+    "token_count": 79,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 43,
+     "rerank_score": -3.0161290168762207,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 79
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:174-180",
+    "content": "# lib/utils.js:174-180  (lib.utils)\n/**\n * Compile \"query parser\" value to function.\n *\n * @param  {String|Function} val\n * @return {Function}\n * @api private\n */",
+    "token_count": 52,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 32,
+     "rerank_score": -3.214453935623169,
+     "bm25_rank": 91,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 52
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-locals/index.js:102-155",
+    "content": "# examples/view-locals/index.js:102-155  (examples.view-locals)\napp.get('/middleware-locals', count2, users2, function (req, res) {\n  // you can see now how we have much less\n  // to pass to res.render(). If we have\n  // several routes related to users this\n  // can be a great productivity booster\n  res.render('index', { title: 'Users' });\n});\n\n// keep in mind that middleware may be placed anywhere\n// and in various combinations, so if you have locals\n// that you wish to make available to all subsequent\n// middleware/routes you can do something like this:\n\n/*\n\napp.use(function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// or suppose you have some /admin\n// \"global\" local variables:\n\n/*\n\napp.use('/api', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// the following is effectively the same,\n// but uses a route instead:\n\n/*\n\napp.all('/api/*', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 310,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 45,
+     "rerank_score": -3.665830612182617,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 310
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.router.js:1-9",
+    "content": "# test/app.router.js:1-9  (test.app.router)\n'use strict'\n\nvar after = require('after');\nvar express = require('../')\n  , request = require('supertest')\n  , assert = require('assert')\n  , methods = require('methods');\n\nvar shouldSkipQuery = require('./support/utils').shouldSkipQuery",
+    "token_count": 69,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 47,
+     "rerank_score": -3.831162929534912,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 69
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:266-298",
+    "content": "# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 321,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 35,
+     "rerank_score": -3.9224982261657715,
+     "bm25_rank": 11,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 321
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/query.js:25-47",
+    "content": "# lib/middleware/query.js:25-47  (lib.middleware.query.query)\nmodule.exports = function query(options) {\n  var opts = merge({}, options)\n  var queryparse = qs.parse;\n\n  if (typeof options === 'function') {\n    queryparse = options;\n    opts = undefined;\n  }\n\n  if (opts !== undefined && opts.allowPrototypes === undefined) {\n    // back-compat for qs module\n    opts.allowPrototypes = true;\n  }\n\n  return function query(req, res, next){\n    if (!req.query) {\n      var val = parseUrl(req).query;\n      req.query = queryparse(val, opts);\n    }\n\n    next();\n  };\n};",
+    "token_count": 145,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.middleware.query.query"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 2,
+     "rerank_score": -4.217989444732666,
+     "bm25_rank": 15,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 145
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:627-682",
+    "content": "# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 384,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 26,
+     "rerank_score": -4.440014839172363,
+     "bm25_rank": 5,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 384
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:63-95",
+    "content": "# lib/router/index.js:63-95  (lib.router)\n/**\n * Map the given param placeholder `name`(s) to the given callback.\n *\n * Parameter mapping is used to provide pre-conditions to routes\n * which use normalized placeholders. For example a _:user_id_ parameter\n * could automatically load a user's information from the database without\n * any additional code,\n *\n * The callback uses the same signature as middleware, the only difference\n * being that the value of the placeholder is passed, in this case the _id_\n * of the user. Once the `next()` function is invoked, just like middleware\n * it will continue on to execute the route, or subsequent parameter functions.\n *\n * Just like in middleware, you must either respond to the request or call next\n * to avoid stalling the request.\n *\n *  app.param('user_id', function(req, res, next, id){\n *    User.find(id, function(err, user){\n *      if (err) {\n *        return next(err);\n *      } else if (!user) {\n *        return next(new Error('failed to load user'));\n *      }\n *      req.user = user;\n *      next();\n *    });\n *  });\n *\n * @param {String} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 286,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 7,
+     "rerank_score": -4.749514579772949,
+     "bm25_rank": 2,
+     "dense_rank": 70,
+     "oversized_chunk": false,
+     "engine_token_count": 286
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:280-286",
+    "content": "# lib/utils.js:280-286  (lib.utils)\n/**\n * Parse an extended query string with qs.\n *\n * @param {String} str\n * @return {Object}\n * @private\n */",
+    "token_count": 47,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 36,
+     "rerank_score": -4.87600564956665,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-locals/user.js:13-20",
+    "content": "# examples/view-locals/user.js:13-20  (examples.view-locals.user.all)\nUser.all = function(fn){\n  // process.nextTick makes sure this function API\n  // behaves in an asynchronous manner, like if it\n  // was a real DB query to read all users.\n  process.nextTick(function(){\n    fn(null, users);\n  });\n};",
+    "token_count": 78,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.view-locals.user.all"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 33,
+     "rerank_score": -5.185595512390137,
+     "bm25_rank": 9,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 78
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:182-205",
+    "content": "# lib/utils.js:182-205  (lib.utils.compileQueryParser)\nexports.compileQueryParser = function compileQueryParser(val) {\n  var fn;\n\n  if (typeof val === 'function') {\n    return val;\n  }\n\n  switch (val) {\n    case true:\n    case 'simple':\n      fn = querystring.parse;\n      break;\n    case false:\n      fn = newObject;\n      break;\n    case 'extended':\n      fn = parseExtendedQueryString;\n      break;\n    default:\n      throw new TypeError('unknown value for query parser function: ' + val);\n  }\n\n  return fn;\n}",
+    "token_count": 131,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.utils.compileQueryParser"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 23,
+     "rerank_score": -5.47799015045166,
+     "bm25_rank": 76,
+     "dense_rank": 60,
+     "oversized_chunk": false,
+     "engine_token_count": 131
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:439-487",
+    "content": "# lib/router/index.js:439-487  (lib.router.use)\nproto.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate router.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var callbacks = flatten(slice.call(arguments, offset));\n\n  if (callbacks.length === 0) {\n    throw new TypeError('Router.use() requires a middleware function')\n  }\n\n  for (var i = 0; i < callbacks.length; i++) {\n    var fn = callbacks[i];\n\n    if (typeof fn !== 'function') {\n      throw new TypeError('Router.use() requires a middleware function but got a ' + gettype(fn))\n    }\n\n    // add the middleware\n    debug('use %o %s', path, fn.name || '<anonymous>')\n\n    var layer = new Layer(path, {\n      sensitive: this.caseSensitive,\n      strict: false,\n      end: false\n    }, fn);\n\n    layer.route = undefined;\n\n    this.stack.push(layer);\n  }\n\n  return this;\n};",
+    "token_count": 296,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.use"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 17,
+     "rerank_score": -5.851593017578125,
+     "bm25_rank": 43,
+     "dense_rank": 57,
+     "oversized_chunk": false,
+     "engine_token_count": 296
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12977,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are investigating Express's built-in query-string-parsing middleware, starting from the factory function exported by lib/middleware/query.js. Identify the real third-party npm package function it delegates URL parsing to, and that function's own real signature.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.middleware.query.query\", \"parseurl.index.parseurl\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 586,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "lib/router/index.js:489-500",
+    "examples/error/index.js:29-53",
+    "lib/router/index.js:293-330#part3of3",
+    "lib/response.js:378-417",
+    "lib/response.js:460-499",
+    "lib/application.js:316-326",
+    "examples/route-middleware/index.js:36-48",
+    "lib/request.js:292-414#part1of2",
+    "lib/application.js:194-249",
+    "lib/application.js:136-154"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "typescript",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     14.592324
+    ],
+    "L_embed_query": [
+     231.137532
+    ],
+    "L_dense": [
+     0.580993
+    ],
+    "L_rrf": [
+     0.105109
+    ],
+    "L_rerank": [
+     26113.962925
+    ],
+    "L_retrieve": [
+     26420.586262
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12977,
+   "prompt_tokens": 13248,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13261,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# test/app.router.js:1010-1132#part3of3  (test.app.router)\ndescribe('app.router', function(){\n  describe('when next(err) is called', function(){\n    it('should break out of app.router', function(done){\n      var app = express()\n        , calls = [];\n\n      app.get('/foo/:bar?', function(req, res, next){\n        calls.push('/foo/:bar?');\n        next();\n      });\n\n      app.get('/bar', function () {\n        assert(0);\n      });\n\n      app.get('/foo', function(req, res, next){\n        calls.push('/foo');\n        next(new Error('fail'));\n      });\n\n      app.get('/foo', function () {\n        assert(0);\n      });\n\n      app.use(function(err, req, res, next){\n        res.json({\n          calls: calls,\n          error: err.message\n        })\n      })\n\n      request(app)\n      .get('/foo')\n      .expect(200, { calls: ['/foo/:bar?', '/foo'], error: 'fail' }, done)\n    })\n\n    it('should call handler in same route, if exists', function(done){\n      var app = express();\n\n      function fn1(req, res, next) {\n        next(new Error('boom!'));\n      }\n\n      function fn2(req, res, next) {\n        res.send('foo here');\n      }\n\n      function fn3(err, req, res, next) {\n        res.send('route go ' + err.message);\n      }\n\n      app.get('/foo', fn1, fn2, fn3);\n\n      app.use(function (err, req, res, next) {\n        res.end('error!');\n      })\n\n      request(app)\n      .get('/foo')\n      .expect('route go boom!', done)\n    })\n  })\n\n  it('should allow rewriting of the url', function(done){\n    var app = express();\n\n    app.get('/account/edit', function(req, res, next){\n      req.user = { id: 12 }; // faux authenticated user\n      req.url = '/user/' + req.user.id + '/edit';\n      next();\n    });\n\n    app.get('/user/:id/edit', function(req, res){\n      res.send('editing user ' + req.params.id);\n    });\n\n    request(app)\n    .get('/account/edit')\n    .expect('editing user 12', done);\n  })\n\n  it('should run in order added', function(done){\n    var app = express();\n    var path = [];\n\n    app.get('*', function(req, res, next){\n      path.push(0);\n      next();\n    });\n\n    app.get('/user/:id', function(req, res, next){\n      path.push(1);\n      next();\n    });\n\n    app.use(function(req, res, next){\n      path.push(2);\n      next();\n    });\n\n    app.all('/user/:id', function(req, res, next){\n      path.push(3);\n      next();\n    });\n\n    app.get('*', function(req, res, next){\n      path.push(4);\n      next();\n    });\n\n    app.use(function(req, res, next){\n      path.push(5);\n      res.end(path.join(','))\n    });\n\n    request(app)\n    .get('/user/1')\n    .expect(200, '0,1,2,3,4,5', done);\n  })\n\n  it('should be chainable', function(){\n    var app = express();\n    assert.strictEqual(app.get('/', function () {}), app)\n  })\n})\n\n# test/exports.js:1-87  (test.exports)\n'use strict'\n\nvar assert = require('assert')\nvar express = require('../');\nvar request = require('supertest');\n\ndescribe('exports', function(){\n  it('should expose Router', function(){\n    assert.strictEqual(typeof express.Router, 'function')\n  })\n\n  it('should expose json middleware', function () {\n    assert.equal(typeof express.json, 'function')\n    assert.equal(express.json.length, 1)\n  })\n\n  it('should expose raw middleware', function () {\n    assert.equal(typeof express.raw, 'function')\n    assert.equal(express.raw.length, 1)\n  })\n\n  it('should expose static middleware', function () {\n    assert.equal(typeof express.static, 'function')\n    assert.equal(express.static.length, 2)\n  })\n\n  it('should expose text middleware', function () {\n    assert.equal(typeof express.text, 'function')\n    assert.equal(express.text.length, 1)\n  })\n\n  it('should expose urlencoded middleware', function () {\n    assert.equal(typeof express.urlencoded, 'function')\n    assert.equal(express.urlencoded.length, 1)\n  })\n\n  it('should expose the application prototype', function(){\n    assert.strictEqual(typeof express.application, 'object')\n    assert.strictEqual(typeof express.application.set, 'function')\n  })\n\n  it('should expose the request prototype', function(){\n    assert.strictEqual(typeof express.request, 'object')\n    assert.strictEqual(typeof express.request.accepts, 'function')\n  })\n\n  it('should expose the response prototype', function(){\n    assert.strictEqual(typeof express.response, 'object')\n    assert.strictEqual(typeof express.response.send, 'function')\n  })\n\n  it('should permit modifying the .application prototype', function(){\n    express.application.foo = function(){ return 'bar'; };\n    assert.strictEqual(express().foo(), 'bar')\n  })\n\n  it('should permit modifying the .request prototype', function(done){\n    express.request.foo = function(){ return 'bar'; };\n    var app = express();\n\n    app.use(function(req, res, next){\n      res.end(req.foo());\n    });\n\n    request(app)\n    .get('/')\n    .expect('bar', done);\n  })\n\n  it('should permit modifying the .response prototype', function(done){\n    express.response.foo = function(){ this.send('bar'); };\n    var app = express();\n\n    app.use(function(req, res, next){\n      res.foo();\n    });\n\n    request(app)\n    .get('/')\n    .expect('bar', done);\n  })\n\n  it('should throw on old middlewares', function(){\n    assert.throws(function () { express.bodyParser() }, /Error:.*middleware.*bodyParser/)\n    assert.throws(function () { express.limit() }, /Error:.*middleware.*limit/)\n  })\n})\n\n# examples/resource/index.js:1-11  (examples.resource)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\n\nvar app = module.exports = express();\n\n// Ad-hoc example resource method\n\n# examples/content-negotiation/index.js:1-31  (examples.content-negotiation)\n'use strict'\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar users = require('./db');\n\n// so either you can deal with different types of formatting\n// for expected response in index.js\napp.get('/', function(req, res){\n  res.format({\n    html: function(){\n      res.send('<ul>' + users.map(function(user){\n        return '<li>' + user.name + '</li>';\n      }).join('') + '</ul>');\n    },\n\n    text: function(){\n      res.send(users.map(function(user){\n        return ' - ' + user.name + '\\n';\n      }).join(''));\n    },\n\n    json: function(){\n      res.json(users);\n    }\n  });\n});\n\n// or you could write a tiny middleware like\n// this to add a layer of abstraction\n// and make things a bit more declarative:\n\n# test/app.use.js:259-362#part1of3  (test.app.use)\ndescribe('app', function(){\n  describe('.use(path, middleware)', function(){\n    it('should require middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/') }, /requires a middleware function/)\n    })\n\n    it('should reject string as middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/', 'foo') }, /requires a middleware function but got a string/)\n    })\n\n    it('should reject number as middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/', 42) }, /requires a middleware function but got a number/)\n    })\n\n    it('should reject null as middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/', null) }, /requires a middleware function but got a Null/)\n    })\n\n    it('should reject Date as middleware', function () {\n      var app = express()\n      assert.throws(function () { app.use('/', new Date()) }, /requires a middleware function but got a Date/)\n    })\n\n    it('should strip path from req.url', function (done) {\n      var app = express();\n\n      app.use('/foo', function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url);\n      });\n\n      request(app)\n      .get('/foo/bar')\n      .expect(200, 'saw GET /bar', done);\n    })\n\n    it('should accept multiple arguments', function (done) {\n      var app = express();\n\n      function fn1(req, res, next) {\n        res.setHeader('x-fn-1', 'hit');\n        next();\n      }\n\n      function fn2(req, res, next) {\n        res.setHeader('x-fn-2', 'hit');\n        next();\n      }\n\n      app.use('/foo', fn1, fn2, function fn3(req, res) {\n        res.setHeader('x-fn-3', 'hit');\n        res.end();\n      });\n\n      request(app)\n      .get('/foo')\n      .expect('x-fn-1', 'hit')\n      .expect('x-fn-2', 'hit')\n      .expect('x-fn-3', 'hit')\n      .expect(200, done);\n    })\n\n    it('should invoke middleware for all requests starting with path', function (done) {\n      var app = express();\n      var cb = after(3, done);\n\n      app.use('/foo', function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url);\n      });\n\n      request(app)\n      .get('/')\n      .expect(404, cb);\n\n      request(app)\n      .post('/foo')\n      .expect(200, 'saw POST /', cb);\n\n      request(app)\n      .post('/foo/bar')\n      .expect(200, 'saw POST /bar', cb);\n    })\n\n    it('should work if path has trailing slash', function (done) {\n      var app = express();\n      var cb = after(3, done);\n\n      app.use('/foo/', function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url);\n      });\n\n      request(app)\n      .get('/')\n      .expect(404, cb);\n\n      request(app)\n      .post('/foo')\n      .expect(200, 'saw POST /', cb);\n\n      request(app)\n      .post('/foo/bar')\n      .expect(200, 'saw POST /bar', cb);\n    })\n  })\n})\n\n# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.\n\n# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# test/app.use.js:469-540#part3of3  (test.app.use)\ndescribe('app', function(){\n  describe('.use(path, middleware)', function(){\n    it('should support array of paths with middleware array', function (done) {\n      var app = express();\n      var cb = after(2, done);\n\n      function fn1(req, res, next) {\n        res.setHeader('x-fn-1', 'hit');\n        next();\n      }\n\n      function fn2(req, res, next) {\n        res.setHeader('x-fn-2', 'hit');\n        next();\n      }\n\n      function fn3(req, res, next) {\n        res.setHeader('x-fn-3', 'hit');\n        res.send('saw ' + req.method + ' ' + req.url + ' through ' + req.originalUrl);\n      }\n\n      app.use(['/foo/', '/bar'], [[fn1], fn2], [fn3]);\n\n      request(app)\n      .get('/foo')\n      .expect('x-fn-1', 'hit')\n      .expect('x-fn-2', 'hit')\n      .expect('x-fn-3', 'hit')\n      .expect(200, 'saw GET / through /foo', cb);\n\n      request(app)\n      .get('/bar')\n      .expect('x-fn-1', 'hit')\n      .expect('x-fn-2', 'hit')\n      .expect('x-fn-3', 'hit')\n      .expect(200, 'saw GET / through /bar', cb);\n    })\n\n    it('should support regexp path', function (done) {\n      var app = express();\n      var cb = after(4, done);\n\n      app.use(/^\\/[a-z]oo/, function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url + ' through ' + req.originalUrl);\n      });\n\n      request(app)\n      .get('/')\n      .expect(404, cb);\n\n      request(app)\n      .get('/foo')\n      .expect(200, 'saw GET / through /foo', cb);\n\n      request(app)\n      .get('/zoo/bear')\n      .expect(200, 'saw GET /bear through /zoo/bear', cb);\n\n      request(app)\n      .get('/get/zoo')\n      .expect(404, cb);\n    })\n\n    it('should support empty string path', function (done) {\n      var app = express();\n\n      app.use('', function (req, res) {\n        res.send('saw ' + req.method + ' ' + req.url + ' through ' + req.originalUrl);\n      });\n\n      request(app)\n      .get('/')\n      .expect(200, 'saw GET / through /', done);\n    })\n  })\n})\n\n# lib/express.js:59-116  (lib.express)\n/**\n * Expose the prototypes.\n */\n\nexports.application = proto;\nexports.request = req;\nexports.response = res;\n\n/**\n * Expose constructors.\n */\n\nexports.Route = Route;\nexports.Router = Router;\n\n/**\n * Expose middleware\n */\n\nexports.json = bodyParser.json\nexports.query = require('./middleware/query');\nexports.raw = bodyParser.raw\nexports.static = require('serve-static');\nexports.text = bodyParser.text\nexports.urlencoded = bodyParser.urlencoded\n\n/**\n * Replace removed middleware with an appropriate error message.\n */\n\nvar removedMiddlewares = [\n  'bodyParser',\n  'compress',\n  'cookieSession',\n  'session',\n  'logger',\n  'cookieParser',\n  'favicon',\n  'responseTime',\n  'errorHandler',\n  'timeout',\n  'methodOverride',\n  'vhost',\n  'csrf',\n  'directory',\n  'limit',\n  'multipart',\n  'staticCache'\n]\n\nremovedMiddlewares.forEach(function (name) {\n  Object.defineProperty(exports, name, {\n    get: function () {\n      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');\n    },\n    configurable: true\n  });\n});\n\n# examples/route-middleware/index.js:60-90  (examples.route-middleware)\n// Middleware for faux authentication\n// you would of course implement something real,\n// but this illustrates how an authenticated user\n// may interact with middleware\n\napp.use(function(req, res, next){\n  req.authenticatedUser = users[0];\n  next();\n});\n\napp.get('/', function(req, res){\n  res.redirect('/user/0');\n});\n\napp.get('/user/:id', loadUser, function(req, res){\n  res.send('Viewing user ' + req.user.name);\n});\n\napp.get('/user/:id/edit', loadUser, andRestrictToSelf, function(req, res){\n  res.send('Editing user ' + req.user.name);\n});\n\napp.delete('/user/:id', loadUser, andRestrictTo('admin'), function(req, res){\n  res.send('Deleted user ' + req.user.name);\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');\n\n# test/app.router.js:144-241#part2of3  (test.app.router)\ndescribe('app.router', function(){\n  it('should be .use()able', function(done){\n    var app = express();\n\n    var calls = [];\n\n    app.use(function(req, res, next){\n      calls.push('before');\n      next();\n    });\n\n    app.get('/', function(req, res, next){\n      calls.push('GET /')\n      next();\n    });\n\n    app.use(function(req, res, next){\n      calls.push('after');\n      res.json(calls)\n    });\n\n    request(app)\n    .get('/')\n    .expect(200, ['before', 'GET /', 'after'], done)\n  })\n\n  describe('when given a regexp', function(){\n    it('should match the pathname only', function(done){\n      var app = express();\n\n      app.get(/^\\/user\\/[0-9]+$/, function(req, res){\n        res.end('user');\n      });\n\n      request(app)\n      .get('/user/12?foo=bar')\n      .expect('user', done);\n    })\n\n    it('should populate req.params with the captures', function(done){\n      var app = express();\n\n      app.get(/^\\/user\\/([0-9]+)\\/(view|edit)?$/, function(req, res){\n        var id = req.params[0]\n          , op = req.params[1];\n        res.end(op + 'ing user ' + id);\n      });\n\n      request(app)\n      .get('/user/10/edit')\n      .expect('editing user 10', done);\n    })\n\n    if (supportsRegexp('(?<foo>.*)')) {\n      it('should populate req.params with named captures', function(done){\n        var app = express();\n        var re = new RegExp('^/user/(?<userId>[0-9]+)/(view|edit)?$');\n\n        app.get(re, function(req, res){\n          var id = req.params.userId\n            , op = req.params[0];\n          res.end(op + 'ing user ' + id);\n        });\n\n        request(app)\n        .get('/user/10/edit')\n        .expect('editing user 10', done);\n      })\n    }\n\n    it('should ensure regexp matches path prefix', function (done) {\n      var app = express()\n      var p = []\n\n      app.use(/\\/api.*/, function (req, res, next) {\n        p.push('a')\n        next()\n      })\n      app.use(/api/, function (req, res, next) {\n        p.push('b')\n        next()\n      })\n      app.use(/\\/test/, function (req, res, next) {\n        p.push('c')\n        next()\n      })\n      app.use(function (req, res) {\n        res.end()\n      })\n\n      request(app)\n        .get('/test/api/1234')\n        .expect(200, function (err) {\n          if (err) return done(err)\n          assert.deepEqual(p, ['c'])\n          done()\n        })\n    })\n  })\n})\n\n# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */\n\n# lib/middleware/query.js:1-23  (lib.middleware.query)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n */\n\nvar merge = require('utils-merge')\nvar parseUrl = require('parseurl');\nvar qs = require('qs');\n\n/**\n * @param {Object} options\n * @return {Function}\n * @api public\n */\n\n# test/app.param.js:8-79  (test.app.param)\ndescribe('app', function(){\n  describe('.param(fn)', function(){\n    it('should map app.param(name, ...) logic', function(done){\n      var app = express();\n\n      app.param(function(name, regexp){\n        if (Object.prototype.toString.call(regexp) === '[object RegExp]') { // See #1557\n          return function(req, res, next, val){\n            var captures;\n            if (captures = regexp.exec(String(val))) {\n              req.params[name] = captures[1];\n              next();\n            } else {\n              next('route');\n            }\n          }\n        }\n      })\n\n      app.param(':name', /^([a-zA-Z]+)$/);\n\n      app.get('/user/:name', function(req, res){\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/user/tj')\n      .expect(200, 'tj', function (err) {\n        if (err) return done(err)\n        request(app)\n        .get('/user/123')\n        .expect(404, done);\n      });\n\n    })\n\n    it('should fail if not given fn', function(){\n      var app = express();\n      assert.throws(app.param.bind(app, ':name', 'bob'))\n    })\n  })\n\n  describe('.param(names, fn)', function(){\n    it('should map the array', function(done){\n      var app = express();\n\n      app.param(['id', 'uid'], function(req, res, next, id){\n        id = Number(id);\n        if (isNaN(id)) return next('route');\n        req.params.id = id;\n        next();\n      });\n\n      app.get('/post/:id', function(req, res){\n        var id = req.params.id;\n        res.send((typeof id) + ':' + id)\n      });\n\n      app.get('/user/:uid', function(req, res){\n        var id = req.params.id;\n        res.send((typeof id) + ':' + id)\n      });\n\n      request(app)\n        .get('/user/123')\n        .expect(200, 'number:123', function (err) {\n          if (err) return done(err)\n          request(app)\n            .get('/post/123')\n            .expect('number:123', done)\n        })\n    })\n  })\n})\n\n# test/res.location.js:1-6  (test.res.location)\n'use strict'\n\nvar express = require('../')\n  , request = require('supertest')\n  , assert = require('assert')\n  , url = require('url');\n\n# test/app.router.js:12-142#part1of3  (test.app.router)\ndescribe('app.router', function(){\n  it('should restore req.params after leaving router', function(done){\n    var app = express();\n    var router = new express.Router();\n\n    function handler1(req, res, next){\n      res.setHeader('x-user-id', String(req.params.id));\n      next()\n    }\n\n    function handler2(req, res){\n      res.send(req.params.id);\n    }\n\n    router.use(function(req, res, next){\n      res.setHeader('x-router', String(req.params.id));\n      next();\n    });\n\n    app.get('/user/:id', handler1, router, handler2);\n\n    request(app)\n    .get('/user/1')\n    .expect('x-router', 'undefined')\n    .expect('x-user-id', '1')\n    .expect(200, '1', done);\n  })\n\n  describe('methods', function(){\n    methods.concat('del').forEach(function(method){\n      if (method === 'connect') return;\n\n      it('should include ' + method.toUpperCase(), function(done){\n        if (method === 'query' && shouldSkipQuery(process.versions.node)) {\n          this.skip()\n        }\n        var app = express();\n\n        app[method]('/foo', function(req, res){\n          res.send(method)\n        });\n\n        request(app)\n        [method]('/foo')\n        .expect(200, done)\n      })\n\n      it('should reject numbers for app.' + method, function(){\n        var app = express();\n        assert.throws(app[method].bind(app, '/', 3), /Number/)\n      })\n    });\n\n    it('should re-route when method is altered', function (done) {\n      var app = express();\n      var cb = after(3, done);\n\n      app.use(function (req, res, next) {\n        if (req.method !== 'POST') return next();\n        req.method = 'DELETE';\n        res.setHeader('X-Method-Altered', '1');\n        next();\n      });\n\n      app.delete('/', function (req, res) {\n        res.end('deleted everything');\n      });\n\n      request(app)\n      .get('/')\n      .expect(404, cb)\n\n      request(app)\n      .delete('/')\n      .expect(200, 'deleted everything', cb);\n\n      request(app)\n      .post('/')\n      .expect('X-Method-Altered', '1')\n      .expect(200, 'deleted everything', cb);\n    });\n  })\n\n  describe('decode params', function () {\n    it('should decode correct params', function(done){\n      var app = express();\n\n      app.get('/:name', function (req, res) {\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/foo%2Fbar')\n      .expect('foo/bar', done);\n    })\n\n    it('should not accept params in malformed paths', function(done) {\n      var app = express();\n\n      app.get('/:name', function (req, res) {\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/%foobar')\n      .expect(400, done);\n    })\n\n    it('should not decode spaces', function(done) {\n      var app = express();\n\n      app.get('/:name', function (req, res) {\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/foo+bar')\n      .expect('foo+bar', done);\n    })\n\n    it('should work with unicode', function(done) {\n      var app = express();\n\n      app.get('/:name', function (req, res) {\n        res.send(req.params.name);\n      });\n\n      request(app)\n      .get('/%ce%b1')\n      .expect('\\u03b1', done);\n    })\n  })\n})\n\n# examples/view-constructor/index.js:1-48  (examples.view-constructor)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar GithubView = require('./github-view');\nvar md = require('marked').parse;\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\napp.engine('md', function(str, options, fn){\n  try {\n    var html = md(str);\n    html = html.replace(/\\{([^}]+)\\}/g, function(_, name){\n      return options[name] || '';\n    });\n    fn(null, html);\n  } catch(err) {\n    fn(err);\n  }\n});\n\n// pointing to a particular github repo to load files from it\napp.set('views', 'expressjs/express');\n\n// register a new view constructor\napp.set('view', GithubView);\n\napp.get('/', function(req, res){\n  // rendering a view relative to the repo.\n  // app.locals, res.locals, and locals passed\n  // work like they normally would\n  res.render('examples/markdown/views/index.md', { title: 'Example' });\n});\n\napp.get('/Readme.md', function(req, res){\n  // rendering a view from https://github.com/expressjs/express/blob/master/Readme.md\n  res.render('Readme.md');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/router/layer.js:1-31  (lib.router.layer)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar pathRegexp = require('path-to-regexp');\nvar debug = require('debug')('express:router:layer');\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = Layer;\n\n# examples/search/index.js:1-61  (examples.search)\n'use strict'\n\n// install redis first:\n// https://redis.io/\n\n// then:\n// $ npm install redis\n// $ redis-server\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar path = require('path');\nvar redis = require('redis');\n\nvar db = redis.createClient();\n\n// npm install redis\n\nvar app = express();\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// populate search\n\ndb.sadd('ferret', 'tobi');\ndb.sadd('ferret', 'loki');\ndb.sadd('ferret', 'jane');\ndb.sadd('cat', 'manny');\ndb.sadd('cat', 'luna');\n\n/**\n * GET search for :query.\n */\n\napp.get('/search/:query?', function(req, res){\n  var query = req.params.query;\n  db.smembers(query, function(err, vals){\n    if (err) return res.send(500);\n    res.send(vals);\n  });\n});\n\n/**\n * GET client javascript. Here we use sendFile()\n * because serving __dirname with the static() middleware\n * would also mean serving our server \"index.js\" and the \"search.jade\"\n * template.\n */\n\napp.get('/client.js', function(req, res){\n  res.sendFile(path.join(__dirname, 'client.js'));\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/router/route.js:1-41  (lib.router.route)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar debug = require('debug')('express:router:route');\nvar flatten = require('array-flatten');\nvar Layer = require('./layer');\nvar methods = require('methods');\n\n/**\n * Module variables.\n * @private\n */\n\nvar slice = Array.prototype.slice;\nvar toString = Object.prototype.toString;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = Route;\n\n/**\n * Initialize `Route` with the given `path`,\n *\n * @param {String} path\n * @public\n */\n\n# lib/middleware/init.js:1-26  (lib.middleware.init)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Initialization middleware, exposing the\n * request and response to each other, as well\n * as defaulting the X-Powered-By header field.\n *\n * @param {Function} app\n * @return {Function}\n * @api private\n */\n\n# lib/router/index.js:1-41  (lib.router)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar Route = require('./route');\nvar Layer = require('./layer');\nvar methods = require('methods');\nvar mixin = require('utils-merge');\nvar debug = require('debug')('express:router');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar parseUrl = require('parseurl');\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar objectRegExp = /^\\[object (\\S+)\\]$/;\nvar slice = Array.prototype.slice;\nvar toString = Object.prototype.toString;\n\n/**\n * Initialize a new `Router` with the given `options`.\n *\n * @param {Object} [options]\n * @return {Router} which is a callable function\n * @public\n */\n\n# index.js:1-11\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\nmodule.exports = require('./lib/express');\n\n# lib/utils.js:1-54  (lib.utils)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @api private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar contentType = require('content-type');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar mime = require('send').mime;\nvar etag = require('etag');\nvar proxyaddr = require('proxy-addr');\nvar qs = require('qs');\nvar querystring = require('querystring');\n\n/**\n * Return strong ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.etag = createETagGenerator({ weak: false })\n\n/**\n * Return weak ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.wetag = createETagGenerator({ weak: true })\n\n/**\n * Check if `path` looks absolute.\n *\n * @param {String} path\n * @return {Boolean}\n * @api private\n */\n\n# lib/request.js:1-62  (lib.request)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar accepts = require('accepts');\nvar deprecate = require('depd')('express');\nvar isIP = require('net').isIP;\nvar typeis = require('type-is');\nvar http = require('http');\nvar fresh = require('fresh');\nvar parseRange = require('range-parser');\nvar parse = require('parseurl');\nvar proxyaddr = require('proxy-addr');\n\n/**\n * Request prototype.\n * @public\n */\n\nvar req = Object.create(http.IncomingMessage.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = req\n\n/**\n * Return request header.\n *\n * The `Referrer` header field is special-cased,\n * both `Referrer` and `Referer` are interchangeable.\n *\n * Examples:\n *\n *     req.get('Content-Type');\n *     // => \"text/plain\"\n *\n *     req.get('content-type');\n *     // => \"text/plain\"\n *\n *     req.get('Something');\n *     // => undefined\n *\n * Aliased as `req.header()`.\n *\n * @param {String} name\n * @return {String}\n * @public\n */\n\n# test/req.query.js:1-109  (test.req.query)\n'use strict'\n\nvar assert = require('assert')\nvar express = require('../')\n  , request = require('supertest');\n\ndescribe('req', function(){\n  describe('.query', function(){\n    it('should default to {}', function(done){\n      var app = createApp();\n\n      request(app)\n      .get('/')\n      .expect(200, '{}', done);\n    });\n\n    it('should default to parse complex keys', function (done) {\n      var app = createApp();\n\n      request(app)\n      .get('/?user[name]=tj')\n      .expect(200, '{\"user\":{\"name\":\"tj\"}}', done);\n    });\n\n    describe('when \"query parser\" is extended', function () {\n      it('should parse complex keys', function (done) {\n        var app = createApp('extended');\n\n        request(app)\n        .get('/?foo[0][bar]=baz&foo[0][fizz]=buzz&foo[]=done!')\n        .expect(200, '{\"foo\":[{\"bar\":\"baz\",\"fizz\":\"buzz\"},\"done!\"]}', done);\n      });\n\n      it('should parse parameters with dots', function (done) {\n        var app = createApp('extended');\n\n        request(app)\n        .get('/?user.name=tj')\n        .expect(200, '{\"user.name\":\"tj\"}', done);\n      });\n    });\n\n    describe('when \"query parser\" is simple', function () {\n      it('should not parse complex keys', function (done) {\n        var app = createApp('simple');\n\n        request(app)\n        .get('/?user%5Bname%5D=tj')\n        .expect(200, '{\"user[name]\":\"tj\"}', done);\n      });\n    });\n\n    describe('when \"query parser\" is a function', function () {\n      it('should parse using function', function (done) {\n        var app = createApp(function (str) {\n          return {'length': (str || '').length};\n        });\n\n        request(app)\n        .get('/?user%5Bname%5D=tj')\n        .expect(200, '{\"length\":17}', done);\n      });\n    });\n\n    describe('when \"query parser\" disabled', function () {\n      it('should not parse query', function (done) {\n        var app = createApp(false);\n\n        request(app)\n        .get('/?user%5Bname%5D=tj')\n        .expect(200, '{}', done);\n      });\n    });\n\n    describe('when \"query parser\" enabled', function () {\n      it('should not parse complex keys', function (done) {\n        var app = createApp(true);\n\n        request(app)\n        .get('/?user%5Bname%5D=tj')\n        .expect(200, '{\"user[name]\":\"tj\"}', done);\n      });\n    });\n\n    describe('when \"query parser fn\" is missing', function () {\n      it('should act like \"extended\"', function (done) {\n        var app = express();\n\n        delete app.settings['query parser'];\n        delete app.settings['query parser fn'];\n\n        app.use(function (req, res) {\n          res.send(req.query);\n        });\n\n        request(app)\n        .get('/?user[name]=tj&user.name=tj')\n        .expect(200, '{\"user\":{\"name\":\"tj\"},\"user.name\":\"tj\"}', done);\n      });\n    });\n\n    describe('when \"query parser\" an unknown value', function () {\n      it('should throw', function () {\n        assert.throws(createApp.bind(null, 'bogus'),\n          /unknown value.*query parser/)\n      });\n    });\n  })\n})\n\n# test/res.send.js:1-10  (test.res.send)\n'use strict'\n\nvar assert = require('assert')\nvar Buffer = require('safe-buffer').Buffer\nvar express = require('..');\nvar methods = require('methods');\nvar request = require('supertest');\nvar utils = require('./support/utils');\n\nvar shouldSkipQuery = require('./support/utils').shouldSkipQuery\n\n# lib/utils.js:174-180  (lib.utils)\n/**\n * Compile \"query parser\" value to function.\n *\n * @param  {String|Function} val\n * @return {Function}\n * @api private\n */\n\n# examples/view-locals/index.js:102-155  (examples.view-locals)\napp.get('/middleware-locals', count2, users2, function (req, res) {\n  // you can see now how we have much less\n  // to pass to res.render(). If we have\n  // several routes related to users this\n  // can be a great productivity booster\n  res.render('index', { title: 'Users' });\n});\n\n// keep in mind that middleware may be placed anywhere\n// and in various combinations, so if you have locals\n// that you wish to make available to all subsequent\n// middleware/routes you can do something like this:\n\n/*\n\napp.use(function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// or suppose you have some /admin\n// \"global\" local variables:\n\n/*\n\napp.use('/api', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// the following is effectively the same,\n// but uses a route instead:\n\n/*\n\napp.all('/api/*', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# test/app.router.js:1-9  (test.app.router)\n'use strict'\n\nvar after = require('after');\nvar express = require('../')\n  , request = require('supertest')\n  , assert = require('assert')\n  , methods = require('methods');\n\nvar shouldSkipQuery = require('./support/utils').shouldSkipQuery\n\n# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# lib/middleware/query.js:25-47  (lib.middleware.query.query)\nmodule.exports = function query(options) {\n  var opts = merge({}, options)\n  var queryparse = qs.parse;\n\n  if (typeof options === 'function') {\n    queryparse = options;\n    opts = undefined;\n  }\n\n  if (opts !== undefined && opts.allowPrototypes === undefined) {\n    // back-compat for qs module\n    opts.allowPrototypes = true;\n  }\n\n  return function query(req, res, next){\n    if (!req.query) {\n      var val = parseUrl(req).query;\n      req.query = queryparse(val, opts);\n    }\n\n    next();\n  };\n};\n\n# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# lib/router/index.js:63-95  (lib.router)\n/**\n * Map the given param placeholder `name`(s) to the given callback.\n *\n * Parameter mapping is used to provide pre-conditions to routes\n * which use normalized placeholders. For example a _:user_id_ parameter\n * could automatically load a user's information from the database without\n * any additional code,\n *\n * The callback uses the same signature as middleware, the only difference\n * being that the value of the placeholder is passed, in this case the _id_\n * of the user. Once the `next()` function is invoked, just like middleware\n * it will continue on to execute the route, or subsequent parameter functions.\n *\n * Just like in middleware, you must either respond to the request or call next\n * to avoid stalling the request.\n *\n *  app.param('user_id', function(req, res, next, id){\n *    User.find(id, function(err, user){\n *      if (err) {\n *        return next(err);\n *      } else if (!user) {\n *        return next(new Error('failed to load user'));\n *      }\n *      req.user = user;\n *      next();\n *    });\n *  });\n *\n * @param {String} name\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# lib/utils.js:280-286  (lib.utils)\n/**\n * Parse an extended query string with qs.\n *\n * @param {String} str\n * @return {Object}\n * @private\n */\n\n# examples/view-locals/user.js:13-20  (examples.view-locals.user.all)\nUser.all = function(fn){\n  // process.nextTick makes sure this function API\n  // behaves in an asynchronous manner, like if it\n  // was a real DB query to read all users.\n  process.nextTick(function(){\n    fn(null, users);\n  });\n};\n\n# lib/utils.js:182-205  (lib.utils.compileQueryParser)\nexports.compileQueryParser = function compileQueryParser(val) {\n  var fn;\n\n  if (typeof val === 'function') {\n    return val;\n  }\n\n  switch (val) {\n    case true:\n    case 'simple':\n      fn = querystring.parse;\n      break;\n    case false:\n      fn = newObject;\n      break;\n    case 'extended':\n      fn = parseExtendedQueryString;\n      break;\n    default:\n      throw new TypeError('unknown value for query parser function: ' + val);\n  }\n\n  return fn;\n}\n\n# lib/router/index.js:439-487  (lib.router.use)\nproto.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate router.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var callbacks = flatten(slice.call(arguments, offset));\n\n  if (callbacks.length === 0) {\n    throw new TypeError('Router.use() requires a middleware function')\n  }\n\n  for (var i = 0; i < callbacks.length; i++) {\n    var fn = callbacks[i];\n\n    if (typeof fn !== 'function') {\n      throw new TypeError('Router.use() requires a middleware function but got a ' + gettype(fn))\n    }\n\n    // add the middleware\n    debug('use %o %s', path, fn.name || '<anonymous>')\n\n    var layer = new Layer(path, {\n      sensitive: this.caseSensitive,\n      strict: false,\n      end: false\n    }, fn);\n\n    layer.route = undefined;\n\n    this.stack.push(layer);\n  }\n\n  return this;\n};\n\n## Task\n\nYou are investigating Express's built-in query-string-parsing middleware, starting from the factory function exported by lib/middleware/query.js. Identify the real third-party npm package function it delegates URL parsing to, and that function's own real signature.\n\nFirst give a short (2-4 sentence) explanation.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved (the in-repo seed and the real external dependency it calls) - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.middleware.query.query\", \"parseurl.index.parseurl\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

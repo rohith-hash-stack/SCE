@@ -1,0 +1,120 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_004_error_middleware_propagation",
+  "items": [
+   {
+    "source_id": "lib/router/route.js:101-154",
+    "content": "# lib/router/route.js:101-154  (lib.router.route.dispatch)\nRoute.prototype.dispatch = function dispatch(req, res, done) {\n  var idx = 0;\n  var stack = this.stack;\n  var sync = 0\n\n  if (stack.length === 0) {\n    return done();\n  }\n  var method = typeof req.method === 'string'\n    ? req.method.toLowerCase()\n    : req.method\n\n  if (method === 'head' && !this.methods['head']) {\n    method = 'get';\n  }\n\n  req.route = this;\n\n  next();\n\n  function next(err) {\n    // signal to exit route\n    if (err && err === 'route') {\n      return done();\n    }\n\n    // signal to exit router\n    if (err && err === 'router') {\n      return done(err)\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    var layer = stack[idx++]\n\n    // end of layers\n    if (!layer) {\n      return done(err)\n    }\n\n    if (layer.method && layer.method !== method) {\n      next(err)\n    } else if (err) {\n      layer.handle_error(err, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n\n    sync = 0\n  }\n};",
+    "token_count": 296,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.route.dispatch"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 273,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:121-153",
+    "content": "# lib/router/route.js:121-153  (lib.router.route.next)\n  function next(err) {\n    // signal to exit route\n    if (err && err === 'route') {\n      return done();\n    }\n\n    // signal to exit router\n    if (err && err === 'router') {\n      return done(err)\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    var layer = stack[idx++]\n\n    // end of layers\n    if (!layer) {\n      return done(err)\n    }\n\n    if (layer.method && layer.method !== method) {\n      next(err)\n    } else if (err) {\n      layer.handle_error(err, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n\n    sync = 0\n  }",
+    "token_count": 190,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.route.next"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 167,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/layer.js:62-75",
+    "content": "# lib/router/layer.js:62-75  (lib.router.layer.handle_error)\nLayer.prototype.handle_error = function handle_error(error, req, res, next) {\n  var fn = this.handle;\n\n  if (fn.length !== 4) {\n    // not a standard error handler\n    return next(error);\n  }\n\n  try {\n    fn(error, req, res, next);\n  } catch (err) {\n    next(err);\n  }\n};",
+    "token_count": 96,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.layer.handle_error"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 76,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 582,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how a matched Express Route propagates an error through its own middleware stack, in lib/router/route.js. Starting from `dispatch`, trace the exact causal pipeline that runs when one of the route's own handlers calls `next(err)` with a real error: which internal function actually decides whether to invoke a layer's 4-arity error handler versus its ordinary request handler, and what real symbol that decision calls into.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.route.dispatch\", \"lib.router.route.next\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.router.route.dispatch",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 3,
+   "manifest_candidates_unfiltered": 3,
+   "requested_symbols": [
+    "lib.router.route.dispatch",
+    "lib.router.route.next",
+    "lib.router.layer.handle_error"
+   ],
+   "turn1_requested_count": 3,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The pipeline starts with `dispatch` which is the seed function. When an error occurs, `next(err)` is called, which is a callee function. This `next` function then decides whether to invoke a layer's 4-arity error handler or its ordinary request handler. In this case, since `next` is called with an error, it will invoke `lib.router.layer.handle_error`.\",\n  \"requested_symbols\": [\"lib.router.route.dispatch\", \"lib.router.route.next\", \"lib.router.layer.handle_error\"]\n}\n```",
+     "prompt_tokens": 502,
+     "completion_tokens": 118,
+     "latency_seconds": 8.467074330999822,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     12.530416
+    ],
+    "L_turn2_hydrate": [
+     51.63299
+    ],
+    "L_retrieve": [
+     8535.372051
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 582,
+   "prompt_tokens": 880,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 893,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/router/route.js:101-154  (lib.router.route.dispatch)\nRoute.prototype.dispatch = function dispatch(req, res, done) {\n  var idx = 0;\n  var stack = this.stack;\n  var sync = 0\n\n  if (stack.length === 0) {\n    return done();\n  }\n  var method = typeof req.method === 'string'\n    ? req.method.toLowerCase()\n    : req.method\n\n  if (method === 'head' && !this.methods['head']) {\n    method = 'get';\n  }\n\n  req.route = this;\n\n  next();\n\n  function next(err) {\n    // signal to exit route\n    if (err && err === 'route') {\n      return done();\n    }\n\n    // signal to exit router\n    if (err && err === 'router') {\n      return done(err)\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    var layer = stack[idx++]\n\n    // end of layers\n    if (!layer) {\n      return done(err)\n    }\n\n    if (layer.method && layer.method !== method) {\n      next(err)\n    } else if (err) {\n      layer.handle_error(err, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n\n    sync = 0\n  }\n};\n\n# lib/router/route.js:121-153  (lib.router.route.next)\n  function next(err) {\n    // signal to exit route\n    if (err && err === 'route') {\n      return done();\n    }\n\n    // signal to exit router\n    if (err && err === 'router') {\n      return done(err)\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    var layer = stack[idx++]\n\n    // end of layers\n    if (!layer) {\n      return done(err)\n    }\n\n    if (layer.method && layer.method !== method) {\n      next(err)\n    } else if (err) {\n      layer.handle_error(err, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n\n    sync = 0\n  }\n\n# lib/router/layer.js:62-75  (lib.router.layer.handle_error)\nLayer.prototype.handle_error = function handle_error(error, req, res, next) {\n  var fn = this.handle;\n\n  if (fn.length !== 4) {\n    // not a standard error handler\n    return next(error);\n  }\n\n  try {\n    fn(error, req, res, next);\n  } catch (err) {\n    next(err);\n  }\n};\n\n## Task\n\nYou are investigating how a matched Express Route propagates an error through its own middleware stack, in lib/router/route.js. Starting from `dispatch`, trace the exact causal pipeline that runs when one of the route's own handlers calls `next(err)` with a real error: which internal function actually decides whether to invoke a layer's 4-arity error handler versus its ordinary request handler, and what real symbol that decision calls into.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.route.dispatch\", \"lib.router.route.next\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

@@ -1,0 +1,106 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "express_t02_003_routing_dispatch_loop",
+  "items": [
+   {
+    "source_id": "lib/router/index.js:177-291",
+    "content": "# lib/router/index.js:177-291  (lib.router.next)\n  function next(err) {\n    var layerError = err === 'route'\n      ? null\n      : err;\n\n    // remove added slash\n    if (slashAdded) {\n      req.url = req.url.slice(1)\n      slashAdded = false;\n    }\n\n    // restore altered req.url\n    if (removed.length !== 0) {\n      req.baseUrl = parentUrl;\n      req.url = protohost + removed + req.url.slice(protohost.length)\n      removed = '';\n    }\n\n    // signal to exit router\n    if (layerError === 'router') {\n      setImmediate(done, null)\n      return\n    }\n\n    // no more matching layers\n    if (idx >= stack.length) {\n      setImmediate(done, layerError);\n      return;\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    // get pathname of request\n    var path = getPathname(req);\n\n    if (path == null) {\n      return done(layerError);\n    }\n\n    // find next matching layer\n    var layer;\n    var match;\n    var route;\n\n    while (match !== true && idx < stack.length) {\n      layer = stack[idx++];\n      match = matchLayer(layer, path);\n      route = layer.route;\n\n      if (typeof match !== 'boolean') {\n        // hold on to layerError\n        layerError = layerError || match;\n      }\n\n      if (match !== true) {\n        continue;\n      }\n\n      if (!route) {\n        // process non-route handlers normally\n        continue;\n      }\n\n      if (layerError) {\n        // routes do not match with a pending error\n        match = false;\n        continue;\n      }\n\n      var method = req.method;\n      var has_method = route._handles_method(method);\n\n      // build up automatic options response\n      if (!has_method && method === 'OPTIONS') {\n        appendMethods(options, route._options());\n      }\n\n      // don't even bother matching route\n      if (!has_method && method !== 'HEAD') {\n        match = false;\n      }\n    }\n\n    // no match\n    if (match !== true) {\n      return done(layerError);\n    }\n\n    // store route for dispatch on change\n    if (route) {\n      req.route = route;\n    }\n\n    // Capture one-time layer values\n    req.params = self.mergeParams\n      ? mergeParams(layer.params, parentParams)\n      : layer.params;\n    var layerPath = layer.path;\n\n    // this should be done for the layer\n    self.process_params(layer, paramcalled, req, res, function (err) {\n      if (err) {\n        next(layerError || err)\n      } else if (route) {\n        layer.handle_request(req, res, next)\n      } else {\n        trim_prefix(layer, layerError, layerPath, path)\n      }\n\n      sync = 0\n    });\n  }",
+    "token_count": 628,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.router.next"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 628
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:537-543",
+    "content": "# lib/router/index.js:537-543  (lib.router.getPathname)\nfunction getPathname(req) {\n  try {\n    return parseUrl(req).pathname;\n  } catch (err) {\n    return undefined;\n  }\n}",
+    "token_count": 51,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.router.getPathname"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:583-589",
+    "content": "# lib/router/index.js:583-589  (lib.router.matchLayer)\nfunction matchLayer(layer, path) {\n  try {\n    return layer.match(path);\n  } catch (err) {\n    return err;\n  }\n}",
+    "token_count": 51,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.router.matchLayer"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 51
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:338-422",
+    "content": "# lib/router/index.js:338-422  (lib.router.process_params)\nproto.process_params = function process_params(layer, called, req, res, done) {\n  var params = this.params;\n\n  // captured parameters from the layer, keys and values\n  var keys = layer.keys;\n\n  // fast track\n  if (!keys || keys.length === 0) {\n    return done();\n  }\n\n  var i = 0;\n  var name;\n  var paramIndex = 0;\n  var key;\n  var paramVal;\n  var paramCallbacks;\n  var paramCalled;\n\n  // process params in order\n  // param callbacks can be async\n  function param(err) {\n    if (err) {\n      return done(err);\n    }\n\n    if (i >= keys.length ) {\n      return done();\n    }\n\n    paramIndex = 0;\n    key = keys[i++];\n    name = key.name;\n    paramVal = req.params[name];\n    paramCallbacks = params[name];\n    paramCalled = called[name];\n\n    if (paramVal === undefined || !paramCallbacks) {\n      return param();\n    }\n\n    // param previously called with same value or error occurred\n    if (paramCalled && (paramCalled.match === paramVal\n      || (paramCalled.error && paramCalled.error !== 'route'))) {\n      // restore value\n      req.params[name] = paramCalled.value;\n\n      // next param\n      return param(paramCalled.error);\n    }\n\n    called[name] = paramCalled = {\n      error: null,\n      match: paramVal,\n      value: paramVal\n    };\n\n    paramCallback();\n  }\n\n  // single param callbacks\n  function paramCallback(err) {\n    var fn = paramCallbacks[paramIndex++];\n\n    // store updated value\n    paramCalled.value = req.params[key.name];\n\n    if (err) {\n      // store error\n      paramCalled.error = err;\n      param(err);\n      return;\n    }\n\n    if (!fn) return param();\n\n    try {\n      fn(req, res, paramCallback, paramVal, key.name);\n    } catch (e) {\n      paramCallback(e);\n    }\n  }\n\n  param();\n};",
+    "token_count": 450,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.router.process_params"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 450
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:97-129",
+    "content": "# lib/router/index.js:97-129  (lib.router.param)\nproto.param = function param(name, fn) {\n  // param logic\n  if (typeof name === 'function') {\n    deprecate('router.param(fn): Refactor to use path params');\n    this._params.push(name);\n    return;\n  }\n\n  // apply param functions\n  var params = this._params;\n  var len = params.length;\n  var ret;\n\n  if (name[0] === ':') {\n    deprecate('router.param(' + JSON.stringify(name) + ', fn): Use router.param(' + JSON.stringify(name.slice(1)) + ', fn) instead')\n    name = name.slice(1)\n  }\n\n  for (var i = 0; i < len; ++i) {\n    if (ret = params[i](name, fn)) {\n      fn = ret;\n    }\n  }\n\n  // ensure we end up with a\n  // middleware function\n  if ('function' !== typeof fn) {\n    throw new Error('invalid param() call for ' + name + ', got ' + fn);\n  }\n\n  (this.params[name] = this.params[name] || []).push(fn);\n  return this;\n};",
+    "token_count": 258,
+    "rank": 5,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.router.param"
+    ],
+    "provenance": {
+     "in_pipeline": false,
+     "engine_token_count": 258
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1438,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating Express's router dispatch loop in lib/router/index.js. Starting from the router's internal `next` dispatch function, trace the exact causal pipeline it runs through while searching for a matching layer for an incoming request: how the request path is derived, how each stacked layer is tested for a match, and what runs once a matching layer is found.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.next\", \"lib.router.getPathname\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 5,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1438,
+   "prompt_tokens": 1720,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1733,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/router/index.js:177-291  (lib.router.next)\n  function next(err) {\n    var layerError = err === 'route'\n      ? null\n      : err;\n\n    // remove added slash\n    if (slashAdded) {\n      req.url = req.url.slice(1)\n      slashAdded = false;\n    }\n\n    // restore altered req.url\n    if (removed.length !== 0) {\n      req.baseUrl = parentUrl;\n      req.url = protohost + removed + req.url.slice(protohost.length)\n      removed = '';\n    }\n\n    // signal to exit router\n    if (layerError === 'router') {\n      setImmediate(done, null)\n      return\n    }\n\n    // no more matching layers\n    if (idx >= stack.length) {\n      setImmediate(done, layerError);\n      return;\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    // get pathname of request\n    var path = getPathname(req);\n\n    if (path == null) {\n      return done(layerError);\n    }\n\n    // find next matching layer\n    var layer;\n    var match;\n    var route;\n\n    while (match !== true && idx < stack.length) {\n      layer = stack[idx++];\n      match = matchLayer(layer, path);\n      route = layer.route;\n\n      if (typeof match !== 'boolean') {\n        // hold on to layerError\n        layerError = layerError || match;\n      }\n\n      if (match !== true) {\n        continue;\n      }\n\n      if (!route) {\n        // process non-route handlers normally\n        continue;\n      }\n\n      if (layerError) {\n        // routes do not match with a pending error\n        match = false;\n        continue;\n      }\n\n      var method = req.method;\n      var has_method = route._handles_method(method);\n\n      // build up automatic options response\n      if (!has_method && method === 'OPTIONS') {\n        appendMethods(options, route._options());\n      }\n\n      // don't even bother matching route\n      if (!has_method && method !== 'HEAD') {\n        match = false;\n      }\n    }\n\n    // no match\n    if (match !== true) {\n      return done(layerError);\n    }\n\n    // store route for dispatch on change\n    if (route) {\n      req.route = route;\n    }\n\n    // Capture one-time layer values\n    req.params = self.mergeParams\n      ? mergeParams(layer.params, parentParams)\n      : layer.params;\n    var layerPath = layer.path;\n\n    // this should be done for the layer\n    self.process_params(layer, paramcalled, req, res, function (err) {\n      if (err) {\n        next(layerError || err)\n      } else if (route) {\n        layer.handle_request(req, res, next)\n      } else {\n        trim_prefix(layer, layerError, layerPath, path)\n      }\n\n      sync = 0\n    });\n  }\n\n# lib/router/index.js:537-543  (lib.router.getPathname)\nfunction getPathname(req) {\n  try {\n    return parseUrl(req).pathname;\n  } catch (err) {\n    return undefined;\n  }\n}\n\n# lib/router/index.js:583-589  (lib.router.matchLayer)\nfunction matchLayer(layer, path) {\n  try {\n    return layer.match(path);\n  } catch (err) {\n    return err;\n  }\n}\n\n# lib/router/index.js:338-422  (lib.router.process_params)\nproto.process_params = function process_params(layer, called, req, res, done) {\n  var params = this.params;\n\n  // captured parameters from the layer, keys and values\n  var keys = layer.keys;\n\n  // fast track\n  if (!keys || keys.length === 0) {\n    return done();\n  }\n\n  var i = 0;\n  var name;\n  var paramIndex = 0;\n  var key;\n  var paramVal;\n  var paramCallbacks;\n  var paramCalled;\n\n  // process params in order\n  // param callbacks can be async\n  function param(err) {\n    if (err) {\n      return done(err);\n    }\n\n    if (i >= keys.length ) {\n      return done();\n    }\n\n    paramIndex = 0;\n    key = keys[i++];\n    name = key.name;\n    paramVal = req.params[name];\n    paramCallbacks = params[name];\n    paramCalled = called[name];\n\n    if (paramVal === undefined || !paramCallbacks) {\n      return param();\n    }\n\n    // param previously called with same value or error occurred\n    if (paramCalled && (paramCalled.match === paramVal\n      || (paramCalled.error && paramCalled.error !== 'route'))) {\n      // restore value\n      req.params[name] = paramCalled.value;\n\n      // next param\n      return param(paramCalled.error);\n    }\n\n    called[name] = paramCalled = {\n      error: null,\n      match: paramVal,\n      value: paramVal\n    };\n\n    paramCallback();\n  }\n\n  // single param callbacks\n  function paramCallback(err) {\n    var fn = paramCallbacks[paramIndex++];\n\n    // store updated value\n    paramCalled.value = req.params[key.name];\n\n    if (err) {\n      // store error\n      paramCalled.error = err;\n      param(err);\n      return;\n    }\n\n    if (!fn) return param();\n\n    try {\n      fn(req, res, paramCallback, paramVal, key.name);\n    } catch (e) {\n      paramCallback(e);\n    }\n  }\n\n  param();\n};\n\n# lib/router/index.js:97-129  (lib.router.param)\nproto.param = function param(name, fn) {\n  // param logic\n  if (typeof name === 'function') {\n    deprecate('router.param(fn): Refactor to use path params');\n    this._params.push(name);\n    return;\n  }\n\n  // apply param functions\n  var params = this._params;\n  var len = params.length;\n  var ret;\n\n  if (name[0] === ':') {\n    deprecate('router.param(' + JSON.stringify(name) + ', fn): Use router.param(' + JSON.stringify(name.slice(1)) + ', fn) instead')\n    name = name.slice(1)\n  }\n\n  for (var i = 0; i < len; ++i) {\n    if (ret = params[i](name, fn)) {\n      fn = ret;\n    }\n  }\n\n  // ensure we end up with a\n  // middleware function\n  if ('function' !== typeof fn) {\n    throw new Error('invalid param() call for ' + name + ', got ' + fn);\n  }\n\n  (this.params[name] = this.params[name] || []).push(fn);\n  return this;\n};\n\n## Task\n\nYou are investigating Express's router dispatch loop in lib/router/index.js. Starting from the router's internal `next` dispatch function, trace the exact causal pipeline it runs through while searching for a matching layer for an incoming request: how the request path is derived, how each stacked layer is tested for a match, and what runs once a matching layer is found.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.router.next\", \"lib.router.getPathname\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

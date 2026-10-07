@@ -1,0 +1,857 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "express_t02_008_view_rendering",
+  "items": [
+   {
+    "source_id": "examples/view-constructor/index.js:1-48",
+    "content": "# examples/view-constructor/index.js:1-48  (examples.view-constructor)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar GithubView = require('./github-view');\nvar md = require('marked').parse;\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\napp.engine('md', function(str, options, fn){\n  try {\n    var html = md(str);\n    html = html.replace(/\\{([^}]+)\\}/g, function(_, name){\n      return options[name] || '';\n    });\n    fn(null, html);\n  } catch(err) {\n    fn(err);\n  }\n});\n\n// pointing to a particular github repo to load files from it\napp.set('views', 'expressjs/express');\n\n// register a new view constructor\napp.set('view', GithubView);\n\napp.get('/', function(req, res){\n  // rendering a view relative to the repo.\n  // app.locals, res.locals, and locals passed\n  // work like they normally would\n  res.render('examples/markdown/views/index.md', { title: 'Example' });\n});\n\napp.get('/Readme.md', function(req, res){\n  // rendering a view from https://github.com/expressjs/express/blob/master/Readme.md\n  res.render('Readme.md');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 316,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 7,
+     "rerank_score": 3.3975439071655273,
+     "bm25_rank": 8,
+     "dense_rank": 23,
+     "oversized_chunk": false,
+     "engine_token_count": 316
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:548-610",
+    "content": "# lib/application.js:548-610  (lib.application.render)\napp.render = function render(name, options, callback) {\n  var cache = this.cache;\n  var done = callback;\n  var engines = this.engines;\n  var opts = options;\n  var renderOptions = {};\n  var view;\n\n  // support callback function as second arg\n  if (typeof options === 'function') {\n    done = options;\n    opts = {};\n  }\n\n  // merge app.locals\n  merge(renderOptions, this.locals);\n\n  // merge options._locals\n  if (opts._locals) {\n    merge(renderOptions, opts._locals);\n  }\n\n  // merge options\n  merge(renderOptions, opts);\n\n  // set .cache unless explicitly provided\n  if (renderOptions.cache == null) {\n    renderOptions.cache = this.enabled('view cache');\n  }\n\n  // primed cache\n  if (renderOptions.cache) {\n    view = cache[name];\n  }\n\n  // view\n  if (!view) {\n    var View = this.get('view');\n\n    view = new View(name, {\n      defaultEngine: this.get('view engine'),\n      root: this.get('views'),\n      engines: engines\n    });\n\n    if (!view.path) {\n      var dirs = Array.isArray(view.root) && view.root.length > 1\n        ? 'directories \"' + view.root.slice(0, -1).join('\", \"') + '\" or \"' + view.root[view.root.length - 1] + '\"'\n        : 'directory \"' + view.root + '\"'\n      var err = new Error('Failed to lookup view \"' + name + '\" in views ' + dirs);\n      err.view = view;\n      return done(err);\n    }\n\n    // prime the cache\n    if (renderOptions.cache) {\n      cache[name] = view;\n    }\n  }\n\n  // render\n  tryRender(view, renderOptions, done);\n};",
+    "token_count": 402,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.render"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 1,
+     "rerank_score": 2.952448844909668,
+     "bm25_rank": 4,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 402
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/view.js:133-136",
+    "content": "# lib/view.js:133-136  (lib.view.render)\nView.prototype.render = function render(options, callback) {\n  debug('render \"%s\"', this.path);\n  this.engine(this.path, options, callback);\n};",
+    "token_count": 50,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.view.render"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 6,
+     "rerank_score": 2.7233662605285645,
+     "bm25_rank": 28,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 50
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.render.js:229-289#part3of3",
+    "content": "# test/app.render.js:229-289#part3of3  (test.app.render)\ndescribe('app', function(){\n  describe('.render(name, fn)', function(){\n    describe('caching', function(){\n      it('should always lookup view without cache', function(done){\n        var app = express();\n        var count = 0;\n\n        function View(name, options){\n          this.name = name;\n          this.path = 'fake';\n          count++;\n        }\n\n        View.prototype.render = function(options, fn){\n          fn(null, 'abstract engine');\n        };\n\n        app.set('view cache', false);\n        app.set('view', View);\n\n        app.render('something', function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(count, 1)\n          assert.strictEqual(str, 'abstract engine')\n          app.render('something', function(err, str){\n            if (err) return done(err);\n            assert.strictEqual(count, 2)\n            assert.strictEqual(str, 'abstract engine')\n            done();\n          })\n        })\n      })\n\n      it('should cache with \"view cache\" setting', function(done){\n        var app = express();\n        var count = 0;\n\n        function View(name, options){\n          this.name = name;\n          this.path = 'fake';\n          count++;\n        }\n\n        View.prototype.render = function(options, fn){\n          fn(null, 'abstract engine');\n        };\n\n        app.set('view cache', true);\n        app.set('view', View);\n\n        app.render('something', function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(count, 1)\n          assert.strictEqual(str, 'abstract engine')\n          app.render('something', function(err, str){\n            if (err) return done(err);\n            assert.strictEqual(count, 1)\n            assert.strictEqual(str, 'abstract engine')\n            done();\n          })\n        })\n      })\n    })\n  })\n})",
+    "token_count": 397,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 22,
+     "rerank_score": 2.627429246902466,
+     "bm25_rank": 40,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 397
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.engine.js:16-83",
+    "content": "# test/app.engine.js:16-83  (test.app.engine)\ndescribe('app', function(){\n  describe('.engine(ext, fn)', function(){\n    it('should map a template engine', function(done){\n      var app = express();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.engine('.html', render);\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user.html', function(err, str){\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should throw when the callback is missing', function(){\n      var app = express();\n      assert.throws(function () {\n        app.engine('.html', null);\n      }, /callback function required/)\n    })\n\n    it('should work without leading \".\"', function(done){\n      var app = express();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.engine('html', render);\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user.html', function(err, str){\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should work \"view engine\" setting', function(done){\n      var app = express();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.engine('html', render);\n      app.set('view engine', 'html');\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user', function(err, str){\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should work \"view engine\" with leading \".\"', function(done){\n      var app = express();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.engine('.html', render);\n      app.set('view engine', '.html');\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user', function(err, str){\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n  })\n})",
+    "token_count": 475,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 14,
+     "rerank_score": 1.281499981880188,
+     "bm25_rank": 33,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 475
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:1026-1050",
+    "content": "# lib/response.js:1026-1050  (lib.response.render)\nres.render = function render(view, options, callback) {\n  var app = this.req.app;\n  var done = callback;\n  var opts = options || {};\n  var req = this.req;\n  var self = this;\n\n  // support callback function as second arg\n  if (typeof options === 'function') {\n    done = options;\n    opts = {};\n  }\n\n  // merge res.locals\n  opts._locals = self.locals;\n\n  // default callback to respond\n  done = done || function (err, str) {\n    if (err) return req.next(err);\n    self.send(str);\n  };\n\n  // render\n  app.render(view, opts, done);\n};",
+    "token_count": 160,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.render"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 11,
+     "rerank_score": 1.2071508169174194,
+     "bm25_rank": 45,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 160
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:1013-1024",
+    "content": "# lib/response.js:1013-1024  (lib.response)\n/**\n * Render `view` with the given `options` and optional callback `fn`.\n * When a callback function is given a response will _not_ be made\n * automatically, otherwise a response of _200_ and _text/html_ is given.\n *\n * Options:\n *\n *  - `cache`     boolean hinting to the engine it should cache\n *  - `filename`  filename of the view being rendered\n *\n * @public\n */",
+    "token_count": 115,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 8,
+     "rerank_score": 1.1444048881530762,
+     "bm25_rank": 13,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 115
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/markdown/index.js:1-44",
+    "content": "# examples/markdown/index.js:1-44  (examples.markdown)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar escapeHtml = require('escape-html');\nvar express = require('../..');\nvar fs = require('fs');\nvar marked = require('marked');\nvar path = require('path');\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\n\napp.engine('md', function(path, options, fn){\n  fs.readFile(path, 'utf8', function(err, str){\n    if (err) return fn(err);\n    var html = marked.parse(str).replace(/\\{([^}]+)\\}/g, function(_, name){\n      return escapeHtml(options[name] || '');\n    });\n    fn(null, html);\n  });\n});\n\napp.set('views', path.join(__dirname, 'views'));\n\n// make it the default, so we don't need .md\napp.set('view engine', 'md');\n\napp.get('/', function(req, res){\n  res.render('index', { title: 'Markdown Example' });\n});\n\napp.get('/fail', function(req, res){\n  res.render('missing', { title: 'Markdown Example' });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 281,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": 1.1173272132873535,
+     "bm25_rank": 27,
+     "dense_rank": 40,
+     "oversized_chunk": false,
+     "engine_token_count": 281
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:655-661",
+    "content": "# lib/application.js:655-661  (lib.application.tryRender)\nfunction tryRender(view, options, callback) {\n  try {\n    view.render(options, callback);\n  } catch (err) {\n    callback(err);\n  }\n}",
+    "token_count": 53,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.tryRender"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 18,
+     "rerank_score": 0.44781213998794556,
+     "bm25_rank": 7,
+     "dense_rank": 59,
+     "oversized_chunk": false,
+     "engine_token_count": 53
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/ejs/index.js:1-57",
+    "content": "# examples/ejs/index.js:1-57  (examples.ejs)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\n\nvar app = module.exports = express();\n\n// Register ejs as .html. If we did\n// not call this, we would need to\n// name our views foo.ejs instead\n// of foo.html. The __express method\n// is simply a function that engines\n// use to hook into the Express view\n// system by default, so if we want\n// to change \"foo.ejs\" to \"foo.html\"\n// we simply pass _any_ function, in this\n// case `ejs.__express`.\n\napp.engine('.html', require('ejs').__express);\n\n// Optional since express defaults to CWD/views\n\napp.set('views', path.join(__dirname, 'views'));\n\n// Path to our public directory\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// Without this you would need to\n// supply the extension to res.render()\n// ex: res.render('users.html').\napp.set('view engine', 'html');\n\n// Dummy users\nvar users = [\n  { name: 'tobi', email: 'tobi@learnboost.com' },\n  { name: 'loki', email: 'loki@learnboost.com' },\n  { name: 'jane', email: 'jane@learnboost.com' }\n];\n\napp.get('/', function(req, res){\n  res.render('users', {\n    users: users,\n    title: \"EJS example\",\n    header: \"Some users\"\n  });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 376,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 4,
+     "rerank_score": 0.29305917024612427,
+     "bm25_rank": 17,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 376
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.render.js:123-227#part2of3",
+    "content": "# test/app.render.js:123-227#part2of3  (test.app.render)\ndescribe('app', function(){\n  describe('.render(name, fn)', function(){\n    describe('when \"view engine\" is given', function(){\n      it('should render the template', function(done){\n        var app = createApp();\n\n        app.set('view engine', 'tmpl');\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.render('email', function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(str, '<p>This is an email</p>')\n          done();\n        })\n      })\n    })\n\n    describe('when \"views\" is given', function(){\n      it('should lookup the file in the path', function(done){\n        var app = createApp();\n\n        app.set('views',  path.join(__dirname, 'fixtures', 'default_layout'))\n        app.locals.user = { name: 'tobi' };\n\n        app.render('user.tmpl', function (err, str) {\n          if (err) return done(err);\n          assert.strictEqual(str, '<p>tobi</p>')\n          done();\n        })\n      })\n\n      describe('when array of paths', function(){\n        it('should lookup the file in the path', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n          app.locals.user = { name: 'tobi' };\n\n          app.render('user.tmpl', function (err, str) {\n            if (err) return done(err);\n            assert.strictEqual(str, '<span>tobi</span>')\n            done();\n          })\n        })\n\n        it('should lookup in later paths until found', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n          app.locals.name = 'tobi';\n\n          app.render('name.tmpl', function (err, str) {\n            if (err) return done(err);\n            assert.strictEqual(str, '<p>tobi</p>')\n            done();\n          })\n        })\n\n        it('should error if file does not exist', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n          app.locals.name = 'tobi';\n\n          app.render('pet.tmpl', function (err, str) {\n            assert.ok(err)\n            assert.equal(err.message, 'Failed to lookup view \"pet.tmpl\" in views directories \"' + views[0] + '\" or \"' + views[1] + '\"')\n            done();\n          })\n        })\n      })\n    })\n\n    describe('when a \"view\" constructor is given', function(){\n      it('should create an instance of it', function(done){\n        var app = express();\n\n        function View(name, options){\n          this.name = name;\n          this.path = 'path is required by application.js as a signal of success even though it is not used there.';\n        }\n\n        View.prototype.render = function(options, fn){\n          fn(null, 'abstract engine');\n        };\n\n        app.set('view', View);\n\n        app.render('something', function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(str, 'abstract engine')\n          done();\n        })\n      })\n    })\n  })\n})",
+    "token_count": 768,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 2,
+     "rerank_score": 0.03027043491601944,
+     "bm25_rank": 6,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 768
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/view.js:1-50",
+    "content": "# lib/view.js:1-50  (lib.view)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar debug = require('debug')('express:view');\nvar path = require('path');\nvar fs = require('fs');\n\n/**\n * Module variables.\n * @private\n */\n\nvar dirname = path.dirname;\nvar basename = path.basename;\nvar extname = path.extname;\nvar join = path.join;\nvar resolve = path.resolve;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = View;\n\n/**\n * Initialize a new `View` with the given `name`.\n *\n * Options:\n *\n *   - `defaultEngine` the default template engine name\n *   - `engines` template engine require() cache\n *   - `root` root path for view lookup\n *\n * @param {string} name\n * @param {object} options\n * @public\n */",
+    "token_count": 251,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 19,
+     "rerank_score": -0.3146175146102905,
+     "bm25_rank": 76,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 251
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.render.js:10-121#part1of3",
+    "content": "# test/app.render.js:10-121#part1of3  (test.app.render)\ndescribe('app', function(){\n  describe('.render(name, fn)', function(){\n    it('should support absolute paths', function(done){\n      var app = createApp();\n\n      app.locals.user = { name: 'tobi' };\n\n      app.render(path.join(__dirname, 'fixtures', 'user.tmpl'), function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should support absolute paths with \"view engine\"', function(done){\n      var app = createApp();\n\n      app.set('view engine', 'tmpl');\n      app.locals.user = { name: 'tobi' };\n\n      app.render(path.join(__dirname, 'fixtures', 'user'), function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should expose app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user.tmpl', function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should support index.<engine>', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.set('view engine', 'tmpl');\n\n      app.render('blog/post', function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<h1>blog post</h1>')\n        done();\n      })\n    })\n\n    it('should handle render error throws', function(done){\n      var app = express();\n\n      function View(name, options){\n        this.name = name;\n        this.path = 'fale';\n      }\n\n      View.prototype.render = function(options, fn){\n        throw new Error('err!');\n      };\n\n      app.set('view', View);\n\n      app.render('something', function(err, str){\n        assert.ok(err)\n        assert.strictEqual(err.message, 'err!')\n        done();\n      })\n    })\n\n    describe('when the file does not exist', function(){\n      it('should provide a helpful error', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n        app.render('rawr.tmpl', function (err) {\n          assert.ok(err)\n          assert.equal(err.message, 'Failed to lookup view \"rawr.tmpl\" in views directory \"' + path.join(__dirname, 'fixtures') + '\"')\n          done();\n        });\n      })\n    })\n\n    describe('when an error occurs', function(){\n      it('should invoke the callback', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.render('user.tmpl', function (err) {\n          assert.ok(err)\n          assert.equal(err.name, 'RenderError')\n          done()\n        })\n      })\n    })\n\n    describe('when an extension is given', function(){\n      it('should render the template', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.render('email.tmpl', function (err, str) {\n          if (err) return done(err);\n          assert.strictEqual(str, '<p>This is an email</p>')\n          done();\n        })\n      })\n    })\n  })\n})",
+    "token_count": 769,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 10,
+     "rerank_score": -0.36308926343917847,
+     "bm25_rank": 25,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 769
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/app.render.js:292-365",
+    "content": "# test/app.render.js:292-365  (test.app.render)\ndescribe('app', function(){\n  describe('.render(name, options, fn)', function(){\n    it('should render the template', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      var user = { name: 'tobi' };\n\n      app.render('user.tmpl', { user: user }, function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should expose app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user.tmpl', {}, function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should give precedence to app.render() locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n      var jane = { name: 'jane' };\n\n      app.render('user.tmpl', { user: jane }, function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>jane</p>')\n        done();\n      })\n    })\n\n    describe('caching', function(){\n      it('should cache with cache option', function(done){\n        var app = express();\n        var count = 0;\n\n        function View(name, options){\n          this.name = name;\n          this.path = 'fake';\n          count++;\n        }\n\n        View.prototype.render = function(options, fn){\n          fn(null, 'abstract engine');\n        };\n\n        app.set('view cache', false);\n        app.set('view', View);\n\n        app.render('something', {cache: true}, function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(count, 1)\n          assert.strictEqual(str, 'abstract engine')\n          app.render('something', {cache: true}, function(err, str){\n            if (err) return done(err);\n            assert.strictEqual(count, 1)\n            assert.strictEqual(str, 'abstract engine')\n            done();\n          })\n        })\n      })\n    })\n  })\n})",
+    "token_count": 520,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 12,
+     "rerank_score": -0.3696550726890564,
+     "bm25_rank": 36,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 520
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:1-62",
+    "content": "# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */",
+    "token_count": 347,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 20,
+     "rerank_score": -0.6880933046340942,
+     "bm25_rank": 32,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/session/redis.js:1-39",
+    "content": "# examples/session/redis.js:1-39  (examples.session.redis)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar session = require('express-session');\n\n// pass the express to the connect redis module\n// allowing it to inherit from session.Store\nvar RedisStore = require('connect-redis')(session);\n\nvar app = express();\n\napp.use(logger('dev'));\n\n// Populates req.session\napp.use(session({\n  resave: false, // don't save session if unmodified\n  saveUninitialized: false, // don't create session until something stored\n  secret: 'keyboard cat',\n  store: new RedisStore\n}));\n\napp.get('/', function(req, res){\n  var body = '';\n  if (req.session.views) {\n    ++req.session.views;\n  } else {\n    req.session.views = 1;\n    body += '<p>First time visiting? view this page in several browsers :)</p>';\n  }\n  res.send(body + '<p>viewed <strong>' + req.session.views + '</strong> times.</p>');\n});\n\napp.listen(3000);\nconsole.log('Express app started on port 3000');",
+    "token_count": 255,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 43,
+     "rerank_score": -0.7616830468177795,
+     "bm25_rank": 83,
+     "dense_rank": 73,
+     "oversized_chunk": false,
+     "engine_token_count": 255
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-locals/index.js:102-155",
+    "content": "# examples/view-locals/index.js:102-155  (examples.view-locals)\napp.get('/middleware-locals', count2, users2, function (req, res) {\n  // you can see now how we have much less\n  // to pass to res.render(). If we have\n  // several routes related to users this\n  // can be a great productivity booster\n  res.render('index', { title: 'Users' });\n});\n\n// keep in mind that middleware may be placed anywhere\n// and in various combinations, so if you have locals\n// that you wish to make available to all subsequent\n// middleware/routes you can do something like this:\n\n/*\n\napp.use(function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// or suppose you have some /admin\n// \"global\" local variables:\n\n/*\n\napp.use('/api', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// the following is effectively the same,\n// but uses a route instead:\n\n/*\n\napp.all('/api/*', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 310,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 15,
+     "rerank_score": -0.8472979664802551,
+     "bm25_rank": 15,
+     "dense_rank": 30,
+     "oversized_chunk": false,
+     "engine_token_count": 310
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/route-map/index.js:1-12",
+    "content": "# examples/route-map/index.js:1-12  (examples.route-map)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar escapeHtml = require('escape-html')\nvar express = require('../../lib/express');\n\nvar verbose = process.env.NODE_ENV !== 'test'\n\nvar app = module.exports = express();",
+    "token_count": 64,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 45,
+     "rerank_score": -0.8961025476455688,
+     "bm25_rank": null,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 64
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.render.js:132-201#part2of2",
+    "content": "# test/res.render.js:132-201#part2of2  (test.res.render)\ndescribe('res', function(){\n  describe('.render(name)', function(){\n    describe('when \"view engine\" is given', function(){\n      it('should render the template', function(done){\n        var app = createApp();\n\n        app.set('view engine', 'tmpl');\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.use(function(req, res){\n          res.render('email');\n        });\n\n        request(app)\n        .get('/')\n        .expect('<p>This is an email</p>', done);\n      })\n    })\n\n    describe('when \"views\" is given', function(){\n      it('should lookup the file in the path', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures', 'default_layout'))\n\n        app.use(function(req, res){\n          res.render('user.tmpl', { user: { name: 'tobi' } });\n        });\n\n        request(app)\n        .get('/')\n        .expect('<p>tobi</p>', done);\n      })\n\n      describe('when array of paths', function(){\n        it('should lookup the file in the path', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n\n          app.use(function(req, res){\n            res.render('user.tmpl', { user: { name: 'tobi' } });\n          });\n\n          request(app)\n          .get('/')\n          .expect('<span>tobi</span>', done);\n        })\n\n        it('should lookup in later paths until found', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n\n          app.use(function(req, res){\n            res.render('name.tmpl', { name: 'tobi' });\n          });\n\n          request(app)\n          .get('/')\n          .expect('<p>tobi</p>', done);\n        })\n      })\n    })\n  })\n})",
+    "token_count": 479,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 13,
+     "rerank_score": -0.9369574785232544,
+     "bm25_rank": 19,
+     "dense_rank": 22,
+     "oversized_chunk": false,
+     "engine_token_count": 479
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.render.js:204-318#part1of2",
+    "content": "# test/res.render.js:204-318#part1of2  (test.res.render)\ndescribe('res', function(){\n  describe('.render(name, option)', function(){\n    it('should render the template', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      var user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render('user.tmpl', { user: user });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should expose app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render('user.tmpl');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should expose res.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      app.use(function(req, res){\n        res.locals.user = { name: 'tobi' };\n        res.render('user.tmpl');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should give precedence to res.locals over app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.locals.user = { name: 'jane' };\n        res.render('user.tmpl', {});\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>jane</p>', done);\n    })\n\n    it('should give precedence to res.render() locals over res.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      var jane = { name: 'jane' };\n\n      app.use(function(req, res){\n        res.locals.user = { name: 'tobi' };\n        res.render('user.tmpl', { user: jane });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>jane</p>', done);\n    })\n\n    it('should give precedence to res.render() locals over app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n      var jane = { name: 'jane' };\n\n      app.use(function(req, res){\n        res.render('user.tmpl', { user: jane });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>jane</p>', done);\n    })\n  })\n\n  describe('.render(name, options, fn)', function(){\n    it('should pass the resulting string', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      app.use(function(req, res){\n        var tobi = { name: 'tobi' };\n        res.render('user.tmpl', { user: tobi }, function (err, html) {\n          html = html.replace('tobi', 'loki');\n          res.end(html);\n        });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>loki</p>', done);\n    })\n  })\n})",
+    "token_count": 758,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 27,
+     "rerank_score": -0.9463405609130859,
+     "bm25_rank": 59,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 758
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:266-298",
+    "content": "# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 321,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 3,
+     "rerank_score": -1.0354233980178833,
+     "bm25_rank": 1,
+     "dense_rank": 24,
+     "oversized_chunk": false,
+     "engine_token_count": 321
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.render.js:320-358#part2of2",
+    "content": "# test/res.render.js:320-358#part2of2  (test.res.render)\ndescribe('res', function(){\n  describe('.render(name, fn)', function(){\n    it('should pass the resulting string', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      app.use(function(req, res){\n        res.locals.user = { name: 'tobi' };\n        res.render('user.tmpl', function (err, html) {\n          html = html.replace('tobi', 'loki');\n          res.end(html);\n        });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>loki</p>', done);\n    })\n\n    describe('when an error occurs', function(){\n      it('should pass it to the callback', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.use(function(req, res){\n          res.render('user.tmpl', function (err) {\n            if (err) {\n              res.status(500).send('got error: ' + err.name)\n            }\n          });\n        });\n\n        request(app)\n        .get('/')\n        .expect(500, 'got error: RenderError', done)\n      })\n    })\n  })\n})",
+    "token_count": 281,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 31,
+     "rerank_score": -1.3739840984344482,
+     "bm25_rank": 62,
+     "dense_rank": 28,
+     "oversized_chunk": false,
+     "engine_token_count": 281
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-constructor/github-view.js:32-34",
+    "content": "# examples/view-constructor/github-view.js:32-34  (examples.view-constructor.github-view)\n/**\n * Render the view.\n */",
+    "token_count": 30,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 23,
+     "rerank_score": -1.6234270334243774,
+     "bm25_rank": 68,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 30
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/static-files/index.js:1-43",
+    "content": "# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');",
+    "token_count": 348,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 17,
+     "rerank_score": -1.6819881200790405,
+     "bm25_rank": 5,
+     "dense_rank": 64,
+     "oversized_chunk": false,
+     "engine_token_count": 348
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:527-546",
+    "content": "# lib/application.js:527-546  (lib.application)\n// del -> delete alias\n\napp.del = deprecate.function(app.delete, 'app.del: Use app.delete instead');\n\n/**\n * Render the given view `name` name with `options`\n * and a callback accepting an error and the\n * rendered template string.\n *\n * Example:\n *\n *    app.render('email', { name: 'Tobi' }, function(err, html){\n *      // ...\n *    })\n *\n * @param {String} name\n * @param {Object|Function} options or fn\n * @param {Function} callback\n * @public\n */",
+    "token_count": 137,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 24,
+     "rerank_score": -1.879967212677002,
+     "bm25_rank": 12,
+     "dense_rank": 60,
+     "oversized_chunk": false,
+     "engine_token_count": 137
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.render.js:10-130#part1of2",
+    "content": "# test/res.render.js:10-130#part1of2  (test.res.render)\ndescribe('res', function(){\n  describe('.render(name)', function(){\n    it('should support absolute paths', function(done){\n      var app = createApp();\n\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render(path.join(__dirname, 'fixtures', 'user.tmpl'))\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should support absolute paths with \"view engine\"', function(done){\n      var app = createApp();\n\n      app.locals.user = { name: 'tobi' };\n      app.set('view engine', 'tmpl');\n\n      app.use(function(req, res){\n        res.render(path.join(__dirname, 'fixtures', 'user'))\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should error without \"view engine\" set and file extension to a non-engine module', function (done) {\n      var app = createApp()\n\n      app.locals.user = { name: 'tobi' }\n\n      app.use(function (req, res) {\n        res.render(path.join(__dirname, 'fixtures', 'broken.send'))\n      })\n\n      request(app)\n      .get('/')\n      .expect(500, /does not provide a view engine/, done)\n    })\n\n    it('should error without \"view engine\" set and no file extension', function (done) {\n      var app = createApp();\n\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render(path.join(__dirname, 'fixtures', 'user'))\n      });\n\n      request(app)\n      .get('/')\n      .expect(500, /No default engine was specified/, done);\n    })\n\n    it('should expose app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render('user.tmpl');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should expose app.locals with `name` property', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.name = 'tobi';\n\n      app.use(function(req, res){\n        res.render('name.tmpl');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should support index.<engine>', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.set('view engine', 'tmpl');\n\n      app.use(function(req, res){\n        res.render('blog/post');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<h1>blog post</h1>', done);\n    })\n\n    describe('when an error occurs', function(){\n      it('should next(err)', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.use(function(req, res){\n          res.render('user.tmpl');\n        });\n\n        app.use(function(err, req, res, next){\n          res.status(500).send('got error: ' + err.name)\n        });\n\n        request(app)\n        .get('/')\n        .expect(500, 'got error: RenderError', done)\n      })\n    })\n  })\n})",
+    "token_count": 778,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 16,
+     "rerank_score": -1.971822738647461,
+     "bm25_rank": 51,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 778
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error-pages/index.js:1-103",
+    "content": "# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 721,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": -2.1285924911499023,
+     "bm25_rank": 14,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 721
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/content-negotiation/index.js:1-31",
+    "content": "# examples/content-negotiation/index.js:1-31  (examples.content-negotiation)\n'use strict'\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar users = require('./db');\n\n// so either you can deal with different types of formatting\n// for expected response in index.js\napp.get('/', function(req, res){\n  res.format({\n    html: function(){\n      res.send('<ul>' + users.map(function(user){\n        return '<li>' + user.name + '</li>';\n      }).join('') + '</ul>');\n    },\n\n    text: function(){\n      res.send(users.map(function(user){\n        return ' - ' + user.name + '\\n';\n      }).join(''));\n    },\n\n    json: function(){\n      res.json(users);\n    }\n  });\n});\n\n// or you could write a tiny middleware like\n// this to add a layer of abstraction\n// and make things a bit more declarative:",
+    "token_count": 193,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 32,
+     "rerank_score": -2.3297858238220215,
+     "bm25_rank": 57,
+     "dense_rank": 31,
+     "oversized_chunk": false,
+     "engine_token_count": 193
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/init.js:28-42",
+    "content": "# lib/middleware/init.js:28-42  (lib.middleware.init.init)\nexports.init = function(app){\n  return function expressInit(req, res, next){\n    if (app.enabled('x-powered-by')) res.setHeader('X-Powered-By', 'Express');\n    req.res = res;\n    res.req = req;\n    req.next = next;\n\n    setPrototypeOf(req, app.request)\n    setPrototypeOf(res, app.response)\n\n    res.locals = res.locals || Object.create(null);\n\n    next();\n  };\n};",
+    "token_count": 109,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.middleware.init.init"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 49,
+     "rerank_score": -2.4402058124542236,
+     "bm25_rank": null,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/mvc/lib/boot.js:1-83",
+    "content": "# examples/mvc/lib/boot.js:1-83  (examples.mvc.lib.boot)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../..');\nvar fs = require('fs');\nvar path = require('path');\n\nmodule.exports = function(parent, options){\n  var dir = path.join(__dirname, '..', 'controllers');\n  var verbose = options.verbose;\n  fs.readdirSync(dir).forEach(function(name){\n    var file = path.join(dir, name)\n    if (!fs.statSync(file).isDirectory()) return;\n    verbose && console.log('\\n   %s:', name);\n    var obj = require(file);\n    var name = obj.name || name;\n    var prefix = obj.prefix || '';\n    var app = express();\n    var handler;\n    var method;\n    var url;\n\n    // allow specifying the view engine\n    if (obj.engine) app.set('view engine', obj.engine);\n    app.set('views', path.join(__dirname, '..', 'controllers', name, 'views'));\n\n    // generate routes based\n    // on the exported methods\n    for (var key in obj) {\n      // \"reserved\" exports\n      if (~['name', 'prefix', 'engine', 'before'].indexOf(key)) continue;\n      // route exports\n      switch (key) {\n        case 'show':\n          method = 'get';\n          url = '/' + name + '/:' + name + '_id';\n          break;\n        case 'list':\n          method = 'get';\n          url = '/' + name + 's';\n          break;\n        case 'edit':\n          method = 'get';\n          url = '/' + name + '/:' + name + '_id/edit';\n          break;\n        case 'update':\n          method = 'put';\n          url = '/' + name + '/:' + name + '_id';\n          break;\n        case 'create':\n          method = 'post';\n          url = '/' + name;\n          break;\n        case 'index':\n          method = 'get';\n          url = '/';\n          break;\n        default:\n          /* istanbul ignore next */\n          throw new Error('unrecognized route: ' + name + '.' + key);\n      }\n\n      // setup\n      handler = obj[key];\n      url = prefix + url;\n\n      // before middleware support\n      if (obj.before) {\n        app[method](url, obj.before, handler);\n        verbose && console.log('     %s %s -> before -> %s', method.toUpperCase(), url, key);\n      } else {\n        app[method](url, handler);\n        verbose && console.log('     %s %s -> %s', method.toUpperCase(), url, key);\n      }\n    }\n\n    // mount the app\n    parent.use(app);\n  });\n};",
+    "token_count": 566,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 26,
+     "rerank_score": -2.516582727432251,
+     "bm25_rank": 38,
+     "dense_rank": 29,
+     "oversized_chunk": false,
+     "engine_token_count": 566
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:650-653",
+    "content": "# lib/application.js:650-653  (lib.application)\n/**\n * Try rendering a view.\n * @private\n */",
+    "token_count": 29,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 29,
+     "rerank_score": -2.8251571655273438,
+     "bm25_rank": 93,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 29
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/view.js:52-95",
+    "content": "# lib/view.js:52-95  (lib.view.View)\nfunction View(name, options) {\n  var opts = options || {};\n\n  this.defaultEngine = opts.defaultEngine;\n  this.ext = extname(name);\n  this.name = name;\n  this.root = opts.root;\n\n  if (!this.ext && !this.defaultEngine) {\n    throw new Error('No default engine was specified and no extension was provided.');\n  }\n\n  var fileName = name;\n\n  if (!this.ext) {\n    // get extension from default engine name\n    this.ext = this.defaultEngine[0] !== '.'\n      ? '.' + this.defaultEngine\n      : this.defaultEngine;\n\n    fileName += this.ext;\n  }\n\n  if (!opts.engines[this.ext]) {\n    // load engine\n    var mod = this.ext.slice(1)\n    debug('require \"%s\"', mod)\n\n    // default engine export\n    var fn = require(mod).__express\n\n    if (typeof fn !== 'function') {\n      throw new Error('Module \"' + mod + '\" does not provide a view engine.')\n    }\n\n    opts.engines[this.ext] = fn\n  }\n\n  // store loaded engine\n  this.engine = opts.engines[this.ext];\n\n  // lookup path\n  this.path = this.lookup(fileName);\n}",
+    "token_count": 268,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.view.View"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 42,
+     "rerank_score": -3.1288914680480957,
+     "bm25_rank": 75,
+     "dense_rank": 75,
+     "oversized_chunk": false,
+     "engine_token_count": 268
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/view.js:125-131",
+    "content": "# lib/view.js:125-131  (lib.view)\n/**\n * Render with the given options.\n *\n * @param {object} options\n * @param {function} callback\n * @private\n */",
+    "token_count": 47,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 28,
+     "rerank_score": -3.207357168197632,
+     "bm25_rank": 41,
+     "dense_rank": 32,
+     "oversized_chunk": false,
+     "engine_token_count": 47
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/route-separation/site.js:3-5",
+    "content": "# examples/route-separation/site.js:3-5  (examples.route-separation.site.index)\nexports.index = function(req, res){\n  res.render('index', { title: 'Route Separation Example' });\n};",
+    "token_count": 46,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.route-separation.site.index"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 41,
+     "rerank_score": -3.247795343399048,
+     "bm25_rank": null,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 46
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-constructor/github-view.js:1-21",
+    "content": "# examples/view-constructor/github-view.js:1-21  (examples.view-constructor.github-view)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar https = require('https');\nvar path = require('path');\nvar extname = path.extname;\n\n/**\n * Expose `GithubView`.\n */\n\nmodule.exports = GithubView;\n\n/**\n * Custom view that fetches and renders\n * remove github templates. You could\n * render templates from a database etc.\n */",
+    "token_count": 95,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 37,
+     "rerank_score": -3.2535409927368164,
+     "bm25_rank": 30,
+     "dense_rank": 89,
+     "oversized_chunk": false,
+     "engine_token_count": 95
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/mvc/index.js:33-95",
+    "content": "# examples/mvc/index.js:33-95  (examples.mvc)\n// log\nif (!module.parent) app.use(logger('dev'));\n\n// serve static files\napp.use(express.static(path.join(__dirname, 'public')));\n\n// session support\napp.use(session({\n  resave: false, // don't save session if unmodified\n  saveUninitialized: false, // don't create session until something stored\n  secret: 'some secret here'\n}));\n\n// parse request bodies (req.body)\napp.use(express.urlencoded({ extended: true }))\n\n// allow overriding methods in query (?_method=put)\napp.use(methodOverride('_method'));\n\n// expose the \"messages\" local variable when views are rendered\napp.use(function(req, res, next){\n  var msgs = req.session.messages || [];\n\n  // expose \"messages\" local variable\n  res.locals.messages = msgs;\n\n  // expose \"hasMessages\"\n  res.locals.hasMessages = !! msgs.length;\n\n  /* This is equivalent:\n   res.locals({\n     messages: msgs,\n     hasMessages: !! msgs.length\n   });\n  */\n\n  next();\n  // empty or \"flush\" the messages so they\n  // don't build up\n  req.session.messages = [];\n});\n\n// load controllers\nrequire('./lib/boot')(app, { verbose: !module.parent });\n\napp.use(function(err, req, res, next){\n  // log it\n  if (!module.parent) console.error(err.stack);\n\n  // error page\n  res.status(500).render('5xx');\n});\n\n// assume 404 since no middleware responded\napp.use(function(req, res, next){\n  res.status(404).render('404', { url: req.originalUrl });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 396,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 36,
+     "rerank_score": -3.374502420425415,
+     "bm25_rank": 70,
+     "dense_rank": 35,
+     "oversized_chunk": false,
+     "engine_token_count": 396
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:627-682",
+    "content": "# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 384,
+    "rank": 37,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 39,
+     "rerank_score": -3.460000991821289,
+     "bm25_rank": 3,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 384
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-locals/index.js:64-84",
+    "content": "# examples/view-locals/index.js:64-84  (examples.view-locals)\napp.get('/middleware', count, users, function (req, res) {\n  res.render('index', {\n    title: 'Users',\n    count: req.count,\n    users: req.users.filter(ferrets)\n  });\n});\n\n\n\n\n// this approach is much like the last\n// however we're explicitly exposing\n// the locals within each middleware\n//\n// note that this may not always work\n// well, for example here we filter\n// the users in the middleware, which\n// may not be ideal for our application.\n// so in that sense the previous example\n// is more flexible with `req.users`.",
+    "token_count": 147,
+    "rank": 38,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 21,
+     "rerank_score": -3.9044947624206543,
+     "bm25_rank": 18,
+     "dense_rank": 37,
+     "oversized_chunk": false,
+     "engine_token_count": 147
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:1-18",
+    "content": "# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.",
+    "token_count": 114,
+    "rank": 39,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 33,
+     "rerank_score": -3.9727673530578613,
+     "bm25_rank": 48,
+     "dense_rank": 38,
+     "oversized_chunk": false,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-constructor/github-view.js:36-53",
+    "content": "# examples/view-constructor/github-view.js:36-53  (examples.view-constructor.github-view.render)\nGithubView.prototype.render = function(options, fn){\n  var self = this;\n  var opts = {\n    host: 'raw.githubusercontent.com',\n    port: 443,\n    path: this.path,\n    method: 'GET'\n  };\n\n  https.request(opts, function(res) {\n    var buf = '';\n    res.setEncoding('utf8');\n    res.on('data', function(str){ buf += str });\n    res.on('end', function(){\n      self.engine(buf, options, fn);\n    });\n  }).end();\n};",
+    "token_count": 134,
+    "rank": 40,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.view-constructor.github-view.render"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 38,
+     "rerank_score": -4.022650241851807,
+     "bm25_rank": 58,
+     "dense_rank": 66,
+     "oversized_chunk": false,
+     "engine_token_count": 134
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:156-163",
+    "content": "# lib/application.js:156-163  (lib.application)\n/**\n * Dispatch a req, res pair into the application. Starts pipeline processing.\n *\n * If no callback is provided, then default error handlers will respond\n * in the event of an error bubbling through the stack.\n *\n * @private\n */",
+    "token_count": 67,
+    "rank": 41,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 9,
+     "rerank_score": -4.22730827331543,
+     "bm25_rank": 2,
+     "dense_rank": 39,
+     "oversized_chunk": false,
+     "engine_token_count": 67
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/view-locals/index.js:21-46",
+    "content": "# examples/view-locals/index.js:21-46  (examples.view-locals)\n// naive nesting approach,\n// delegating errors to next(err)\n// in order to expose the \"count\"\n// and \"users\" locals\n\napp.get('/', function(req, res, next){\n  User.count(function(err, count){\n    if (err) return next(err);\n    User.all(function(err, users){\n      if (err) return next(err);\n      res.render('index', {\n        title: 'Users',\n        count: count,\n        users: users.filter(ferrets)\n      });\n    })\n  })\n});\n\n\n\n\n// this approach is cleaner,\n// less nesting and we have\n// the variables available\n// on the request object",
+    "token_count": 151,
+    "rank": 42,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 35,
+     "rerank_score": -4.454715728759766,
+     "bm25_rank": 35,
+     "dense_rank": 57,
+     "oversized_chunk": false,
+     "engine_token_count": 151
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:86-130",
+    "content": "# lib/request.js:86-130  (lib.request)\n/**\n * To do: update docs.\n *\n * Check if the given `type(s)` is acceptable, returning\n * the best match when true, otherwise `undefined`, in which\n * case you should respond with 406 \"Not Acceptable\".\n *\n * The `type` value may be a single MIME type string\n * such as \"application/json\", an extension name\n * such as \"json\", a comma-delimited list such as \"json, html, text/plain\",\n * an argument list such as `\"json\", \"html\", \"text/plain\"`,\n * or an array `[\"json\", \"html\", \"text/plain\"]`. When a list\n * or array is given, the _best_ match, if any is returned.\n *\n * Examples:\n *\n *     // Accept: text/html\n *     req.accepts('html');\n *     // => \"html\"\n *\n *     // Accept: text/*, application/json\n *     req.accepts('html');\n *     // => \"html\"\n *     req.accepts('text/html');\n *     // => \"text/html\"\n *     req.accepts('json, text');\n *     // => \"json\"\n *     req.accepts('application/json');\n *     // => \"application/json\"\n *\n *     // Accept: text/*, application/json\n *     req.accepts('image/png');\n *     req.accepts('png');\n *     // => undefined\n *\n *     // Accept: text/*;q=.5, application/json\n *     req.accepts(['html', 'json']);\n *     req.accepts('html', 'json');\n *     req.accepts('html, json');\n *     // => \"json\"\n *\n * @param {String|Array} type(s)\n * @return {String|Array|Boolean}\n * @public\n */",
+    "token_count": 392,
+    "rank": 43,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 50,
+     "rerank_score": -5.209939956665039,
+     "bm25_rank": 16,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 392
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12900,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are investigating how Express renders a view, starting from the application's own `render` method in lib/application.js. Trace the real causal pipeline from `app.render(name, options, callback)` through to the point where the actual view engine is invoked.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.render\", \"lib.application.tryRender\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 586,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "lib/application.js:194-249",
+    "lib/router/index.js:63-95",
+    "lib/response.js:378-417",
+    "lib/response.js:460-499",
+    "lib/application.js:136-154",
+    "lib/application.js:77-134",
+    "examples/error/index.js:29-53"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "typescript",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     12.739937
+    ],
+    "L_embed_query": [
+     228.474578
+    ],
+    "L_dense": [
+     0.576115
+    ],
+    "L_rrf": [
+     0.099589
+    ],
+    "L_rerank": [
+     27071.367921
+    ],
+    "L_retrieve": [
+     27371.847345
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12900,
+   "prompt_tokens": 13162,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13175,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# examples/view-constructor/index.js:1-48  (examples.view-constructor)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar GithubView = require('./github-view');\nvar md = require('marked').parse;\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\napp.engine('md', function(str, options, fn){\n  try {\n    var html = md(str);\n    html = html.replace(/\\{([^}]+)\\}/g, function(_, name){\n      return options[name] || '';\n    });\n    fn(null, html);\n  } catch(err) {\n    fn(err);\n  }\n});\n\n// pointing to a particular github repo to load files from it\napp.set('views', 'expressjs/express');\n\n// register a new view constructor\napp.set('view', GithubView);\n\napp.get('/', function(req, res){\n  // rendering a view relative to the repo.\n  // app.locals, res.locals, and locals passed\n  // work like they normally would\n  res.render('examples/markdown/views/index.md', { title: 'Example' });\n});\n\napp.get('/Readme.md', function(req, res){\n  // rendering a view from https://github.com/expressjs/express/blob/master/Readme.md\n  res.render('Readme.md');\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/application.js:548-610  (lib.application.render)\napp.render = function render(name, options, callback) {\n  var cache = this.cache;\n  var done = callback;\n  var engines = this.engines;\n  var opts = options;\n  var renderOptions = {};\n  var view;\n\n  // support callback function as second arg\n  if (typeof options === 'function') {\n    done = options;\n    opts = {};\n  }\n\n  // merge app.locals\n  merge(renderOptions, this.locals);\n\n  // merge options._locals\n  if (opts._locals) {\n    merge(renderOptions, opts._locals);\n  }\n\n  // merge options\n  merge(renderOptions, opts);\n\n  // set .cache unless explicitly provided\n  if (renderOptions.cache == null) {\n    renderOptions.cache = this.enabled('view cache');\n  }\n\n  // primed cache\n  if (renderOptions.cache) {\n    view = cache[name];\n  }\n\n  // view\n  if (!view) {\n    var View = this.get('view');\n\n    view = new View(name, {\n      defaultEngine: this.get('view engine'),\n      root: this.get('views'),\n      engines: engines\n    });\n\n    if (!view.path) {\n      var dirs = Array.isArray(view.root) && view.root.length > 1\n        ? 'directories \"' + view.root.slice(0, -1).join('\", \"') + '\" or \"' + view.root[view.root.length - 1] + '\"'\n        : 'directory \"' + view.root + '\"'\n      var err = new Error('Failed to lookup view \"' + name + '\" in views ' + dirs);\n      err.view = view;\n      return done(err);\n    }\n\n    // prime the cache\n    if (renderOptions.cache) {\n      cache[name] = view;\n    }\n  }\n\n  // render\n  tryRender(view, renderOptions, done);\n};\n\n# lib/view.js:133-136  (lib.view.render)\nView.prototype.render = function render(options, callback) {\n  debug('render \"%s\"', this.path);\n  this.engine(this.path, options, callback);\n};\n\n# test/app.render.js:229-289#part3of3  (test.app.render)\ndescribe('app', function(){\n  describe('.render(name, fn)', function(){\n    describe('caching', function(){\n      it('should always lookup view without cache', function(done){\n        var app = express();\n        var count = 0;\n\n        function View(name, options){\n          this.name = name;\n          this.path = 'fake';\n          count++;\n        }\n\n        View.prototype.render = function(options, fn){\n          fn(null, 'abstract engine');\n        };\n\n        app.set('view cache', false);\n        app.set('view', View);\n\n        app.render('something', function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(count, 1)\n          assert.strictEqual(str, 'abstract engine')\n          app.render('something', function(err, str){\n            if (err) return done(err);\n            assert.strictEqual(count, 2)\n            assert.strictEqual(str, 'abstract engine')\n            done();\n          })\n        })\n      })\n\n      it('should cache with \"view cache\" setting', function(done){\n        var app = express();\n        var count = 0;\n\n        function View(name, options){\n          this.name = name;\n          this.path = 'fake';\n          count++;\n        }\n\n        View.prototype.render = function(options, fn){\n          fn(null, 'abstract engine');\n        };\n\n        app.set('view cache', true);\n        app.set('view', View);\n\n        app.render('something', function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(count, 1)\n          assert.strictEqual(str, 'abstract engine')\n          app.render('something', function(err, str){\n            if (err) return done(err);\n            assert.strictEqual(count, 1)\n            assert.strictEqual(str, 'abstract engine')\n            done();\n          })\n        })\n      })\n    })\n  })\n})\n\n# test/app.engine.js:16-83  (test.app.engine)\ndescribe('app', function(){\n  describe('.engine(ext, fn)', function(){\n    it('should map a template engine', function(done){\n      var app = express();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.engine('.html', render);\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user.html', function(err, str){\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should throw when the callback is missing', function(){\n      var app = express();\n      assert.throws(function () {\n        app.engine('.html', null);\n      }, /callback function required/)\n    })\n\n    it('should work without leading \".\"', function(done){\n      var app = express();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.engine('html', render);\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user.html', function(err, str){\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should work \"view engine\" setting', function(done){\n      var app = express();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.engine('html', render);\n      app.set('view engine', 'html');\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user', function(err, str){\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should work \"view engine\" with leading \".\"', function(done){\n      var app = express();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.engine('.html', render);\n      app.set('view engine', '.html');\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user', function(err, str){\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n  })\n})\n\n# lib/response.js:1026-1050  (lib.response.render)\nres.render = function render(view, options, callback) {\n  var app = this.req.app;\n  var done = callback;\n  var opts = options || {};\n  var req = this.req;\n  var self = this;\n\n  // support callback function as second arg\n  if (typeof options === 'function') {\n    done = options;\n    opts = {};\n  }\n\n  // merge res.locals\n  opts._locals = self.locals;\n\n  // default callback to respond\n  done = done || function (err, str) {\n    if (err) return req.next(err);\n    self.send(str);\n  };\n\n  // render\n  app.render(view, opts, done);\n};\n\n# lib/response.js:1013-1024  (lib.response)\n/**\n * Render `view` with the given `options` and optional callback `fn`.\n * When a callback function is given a response will _not_ be made\n * automatically, otherwise a response of _200_ and _text/html_ is given.\n *\n * Options:\n *\n *  - `cache`     boolean hinting to the engine it should cache\n *  - `filename`  filename of the view being rendered\n *\n * @public\n */\n\n# examples/markdown/index.js:1-44  (examples.markdown)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar escapeHtml = require('escape-html');\nvar express = require('../..');\nvar fs = require('fs');\nvar marked = require('marked');\nvar path = require('path');\n\nvar app = module.exports = express();\n\n// register .md as an engine in express view system\n\napp.engine('md', function(path, options, fn){\n  fs.readFile(path, 'utf8', function(err, str){\n    if (err) return fn(err);\n    var html = marked.parse(str).replace(/\\{([^}]+)\\}/g, function(_, name){\n      return escapeHtml(options[name] || '');\n    });\n    fn(null, html);\n  });\n});\n\napp.set('views', path.join(__dirname, 'views'));\n\n// make it the default, so we don't need .md\napp.set('view engine', 'md');\n\napp.get('/', function(req, res){\n  res.render('index', { title: 'Markdown Example' });\n});\n\napp.get('/fail', function(req, res){\n  res.render('missing', { title: 'Markdown Example' });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/application.js:655-661  (lib.application.tryRender)\nfunction tryRender(view, options, callback) {\n  try {\n    view.render(options, callback);\n  } catch (err) {\n    callback(err);\n  }\n}\n\n# examples/ejs/index.js:1-57  (examples.ejs)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\n\nvar app = module.exports = express();\n\n// Register ejs as .html. If we did\n// not call this, we would need to\n// name our views foo.ejs instead\n// of foo.html. The __express method\n// is simply a function that engines\n// use to hook into the Express view\n// system by default, so if we want\n// to change \"foo.ejs\" to \"foo.html\"\n// we simply pass _any_ function, in this\n// case `ejs.__express`.\n\napp.engine('.html', require('ejs').__express);\n\n// Optional since express defaults to CWD/views\n\napp.set('views', path.join(__dirname, 'views'));\n\n// Path to our public directory\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// Without this you would need to\n// supply the extension to res.render()\n// ex: res.render('users.html').\napp.set('view engine', 'html');\n\n// Dummy users\nvar users = [\n  { name: 'tobi', email: 'tobi@learnboost.com' },\n  { name: 'loki', email: 'loki@learnboost.com' },\n  { name: 'jane', email: 'jane@learnboost.com' }\n];\n\napp.get('/', function(req, res){\n  res.render('users', {\n    users: users,\n    title: \"EJS example\",\n    header: \"Some users\"\n  });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# test/app.render.js:123-227#part2of3  (test.app.render)\ndescribe('app', function(){\n  describe('.render(name, fn)', function(){\n    describe('when \"view engine\" is given', function(){\n      it('should render the template', function(done){\n        var app = createApp();\n\n        app.set('view engine', 'tmpl');\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.render('email', function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(str, '<p>This is an email</p>')\n          done();\n        })\n      })\n    })\n\n    describe('when \"views\" is given', function(){\n      it('should lookup the file in the path', function(done){\n        var app = createApp();\n\n        app.set('views',  path.join(__dirname, 'fixtures', 'default_layout'))\n        app.locals.user = { name: 'tobi' };\n\n        app.render('user.tmpl', function (err, str) {\n          if (err) return done(err);\n          assert.strictEqual(str, '<p>tobi</p>')\n          done();\n        })\n      })\n\n      describe('when array of paths', function(){\n        it('should lookup the file in the path', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n          app.locals.user = { name: 'tobi' };\n\n          app.render('user.tmpl', function (err, str) {\n            if (err) return done(err);\n            assert.strictEqual(str, '<span>tobi</span>')\n            done();\n          })\n        })\n\n        it('should lookup in later paths until found', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n          app.locals.name = 'tobi';\n\n          app.render('name.tmpl', function (err, str) {\n            if (err) return done(err);\n            assert.strictEqual(str, '<p>tobi</p>')\n            done();\n          })\n        })\n\n        it('should error if file does not exist', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n          app.locals.name = 'tobi';\n\n          app.render('pet.tmpl', function (err, str) {\n            assert.ok(err)\n            assert.equal(err.message, 'Failed to lookup view \"pet.tmpl\" in views directories \"' + views[0] + '\" or \"' + views[1] + '\"')\n            done();\n          })\n        })\n      })\n    })\n\n    describe('when a \"view\" constructor is given', function(){\n      it('should create an instance of it', function(done){\n        var app = express();\n\n        function View(name, options){\n          this.name = name;\n          this.path = 'path is required by application.js as a signal of success even though it is not used there.';\n        }\n\n        View.prototype.render = function(options, fn){\n          fn(null, 'abstract engine');\n        };\n\n        app.set('view', View);\n\n        app.render('something', function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(str, 'abstract engine')\n          done();\n        })\n      })\n    })\n  })\n})\n\n# lib/view.js:1-50  (lib.view)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar debug = require('debug')('express:view');\nvar path = require('path');\nvar fs = require('fs');\n\n/**\n * Module variables.\n * @private\n */\n\nvar dirname = path.dirname;\nvar basename = path.basename;\nvar extname = path.extname;\nvar join = path.join;\nvar resolve = path.resolve;\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = View;\n\n/**\n * Initialize a new `View` with the given `name`.\n *\n * Options:\n *\n *   - `defaultEngine` the default template engine name\n *   - `engines` template engine require() cache\n *   - `root` root path for view lookup\n *\n * @param {string} name\n * @param {object} options\n * @public\n */\n\n# test/app.render.js:10-121#part1of3  (test.app.render)\ndescribe('app', function(){\n  describe('.render(name, fn)', function(){\n    it('should support absolute paths', function(done){\n      var app = createApp();\n\n      app.locals.user = { name: 'tobi' };\n\n      app.render(path.join(__dirname, 'fixtures', 'user.tmpl'), function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should support absolute paths with \"view engine\"', function(done){\n      var app = createApp();\n\n      app.set('view engine', 'tmpl');\n      app.locals.user = { name: 'tobi' };\n\n      app.render(path.join(__dirname, 'fixtures', 'user'), function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should expose app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user.tmpl', function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should support index.<engine>', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.set('view engine', 'tmpl');\n\n      app.render('blog/post', function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<h1>blog post</h1>')\n        done();\n      })\n    })\n\n    it('should handle render error throws', function(done){\n      var app = express();\n\n      function View(name, options){\n        this.name = name;\n        this.path = 'fale';\n      }\n\n      View.prototype.render = function(options, fn){\n        throw new Error('err!');\n      };\n\n      app.set('view', View);\n\n      app.render('something', function(err, str){\n        assert.ok(err)\n        assert.strictEqual(err.message, 'err!')\n        done();\n      })\n    })\n\n    describe('when the file does not exist', function(){\n      it('should provide a helpful error', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n        app.render('rawr.tmpl', function (err) {\n          assert.ok(err)\n          assert.equal(err.message, 'Failed to lookup view \"rawr.tmpl\" in views directory \"' + path.join(__dirname, 'fixtures') + '\"')\n          done();\n        });\n      })\n    })\n\n    describe('when an error occurs', function(){\n      it('should invoke the callback', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.render('user.tmpl', function (err) {\n          assert.ok(err)\n          assert.equal(err.name, 'RenderError')\n          done()\n        })\n      })\n    })\n\n    describe('when an extension is given', function(){\n      it('should render the template', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.render('email.tmpl', function (err, str) {\n          if (err) return done(err);\n          assert.strictEqual(str, '<p>This is an email</p>')\n          done();\n        })\n      })\n    })\n  })\n})\n\n# test/app.render.js:292-365  (test.app.render)\ndescribe('app', function(){\n  describe('.render(name, options, fn)', function(){\n    it('should render the template', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      var user = { name: 'tobi' };\n\n      app.render('user.tmpl', { user: user }, function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should expose app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.render('user.tmpl', {}, function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>tobi</p>')\n        done();\n      })\n    })\n\n    it('should give precedence to app.render() locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n      var jane = { name: 'jane' };\n\n      app.render('user.tmpl', { user: jane }, function (err, str) {\n        if (err) return done(err);\n        assert.strictEqual(str, '<p>jane</p>')\n        done();\n      })\n    })\n\n    describe('caching', function(){\n      it('should cache with cache option', function(done){\n        var app = express();\n        var count = 0;\n\n        function View(name, options){\n          this.name = name;\n          this.path = 'fake';\n          count++;\n        }\n\n        View.prototype.render = function(options, fn){\n          fn(null, 'abstract engine');\n        };\n\n        app.set('view cache', false);\n        app.set('view', View);\n\n        app.render('something', {cache: true}, function(err, str){\n          if (err) return done(err);\n          assert.strictEqual(count, 1)\n          assert.strictEqual(str, 'abstract engine')\n          app.render('something', {cache: true}, function(err, str){\n            if (err) return done(err);\n            assert.strictEqual(count, 1)\n            assert.strictEqual(str, 'abstract engine')\n            done();\n          })\n        })\n      })\n    })\n  })\n})\n\n# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */\n\n# examples/session/redis.js:1-39  (examples.session.redis)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar session = require('express-session');\n\n// pass the express to the connect redis module\n// allowing it to inherit from session.Store\nvar RedisStore = require('connect-redis')(session);\n\nvar app = express();\n\napp.use(logger('dev'));\n\n// Populates req.session\napp.use(session({\n  resave: false, // don't save session if unmodified\n  saveUninitialized: false, // don't create session until something stored\n  secret: 'keyboard cat',\n  store: new RedisStore\n}));\n\napp.get('/', function(req, res){\n  var body = '';\n  if (req.session.views) {\n    ++req.session.views;\n  } else {\n    req.session.views = 1;\n    body += '<p>First time visiting? view this page in several browsers :)</p>';\n  }\n  res.send(body + '<p>viewed <strong>' + req.session.views + '</strong> times.</p>');\n});\n\napp.listen(3000);\nconsole.log('Express app started on port 3000');\n\n# examples/view-locals/index.js:102-155  (examples.view-locals)\napp.get('/middleware-locals', count2, users2, function (req, res) {\n  // you can see now how we have much less\n  // to pass to res.render(). If we have\n  // several routes related to users this\n  // can be a great productivity booster\n  res.render('index', { title: 'Users' });\n});\n\n// keep in mind that middleware may be placed anywhere\n// and in various combinations, so if you have locals\n// that you wish to make available to all subsequent\n// middleware/routes you can do something like this:\n\n/*\n\napp.use(function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// or suppose you have some /admin\n// \"global\" local variables:\n\n/*\n\napp.use('/api', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n// the following is effectively the same,\n// but uses a route instead:\n\n/*\n\napp.all('/api/*', function(req, res, next){\n  res.locals.user = req.user;\n  res.locals.sess = req.session;\n  next();\n});\n\n*/\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/route-map/index.js:1-12  (examples.route-map)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar escapeHtml = require('escape-html')\nvar express = require('../../lib/express');\n\nvar verbose = process.env.NODE_ENV !== 'test'\n\nvar app = module.exports = express();\n\n# test/res.render.js:132-201#part2of2  (test.res.render)\ndescribe('res', function(){\n  describe('.render(name)', function(){\n    describe('when \"view engine\" is given', function(){\n      it('should render the template', function(done){\n        var app = createApp();\n\n        app.set('view engine', 'tmpl');\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.use(function(req, res){\n          res.render('email');\n        });\n\n        request(app)\n        .get('/')\n        .expect('<p>This is an email</p>', done);\n      })\n    })\n\n    describe('when \"views\" is given', function(){\n      it('should lookup the file in the path', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures', 'default_layout'))\n\n        app.use(function(req, res){\n          res.render('user.tmpl', { user: { name: 'tobi' } });\n        });\n\n        request(app)\n        .get('/')\n        .expect('<p>tobi</p>', done);\n      })\n\n      describe('when array of paths', function(){\n        it('should lookup the file in the path', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n\n          app.use(function(req, res){\n            res.render('user.tmpl', { user: { name: 'tobi' } });\n          });\n\n          request(app)\n          .get('/')\n          .expect('<span>tobi</span>', done);\n        })\n\n        it('should lookup in later paths until found', function(done){\n          var app = createApp();\n          var views = [\n            path.join(__dirname, 'fixtures', 'local_layout'),\n            path.join(__dirname, 'fixtures', 'default_layout')\n          ]\n\n          app.set('views', views);\n\n          app.use(function(req, res){\n            res.render('name.tmpl', { name: 'tobi' });\n          });\n\n          request(app)\n          .get('/')\n          .expect('<p>tobi</p>', done);\n        })\n      })\n    })\n  })\n})\n\n# test/res.render.js:204-318#part1of2  (test.res.render)\ndescribe('res', function(){\n  describe('.render(name, option)', function(){\n    it('should render the template', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      var user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render('user.tmpl', { user: user });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should expose app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render('user.tmpl');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should expose res.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      app.use(function(req, res){\n        res.locals.user = { name: 'tobi' };\n        res.render('user.tmpl');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should give precedence to res.locals over app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.locals.user = { name: 'jane' };\n        res.render('user.tmpl', {});\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>jane</p>', done);\n    })\n\n    it('should give precedence to res.render() locals over res.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      var jane = { name: 'jane' };\n\n      app.use(function(req, res){\n        res.locals.user = { name: 'tobi' };\n        res.render('user.tmpl', { user: jane });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>jane</p>', done);\n    })\n\n    it('should give precedence to res.render() locals over app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n      var jane = { name: 'jane' };\n\n      app.use(function(req, res){\n        res.render('user.tmpl', { user: jane });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>jane</p>', done);\n    })\n  })\n\n  describe('.render(name, options, fn)', function(){\n    it('should pass the resulting string', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      app.use(function(req, res){\n        var tobi = { name: 'tobi' };\n        res.render('user.tmpl', { user: tobi }, function (err, html) {\n          html = html.replace('tobi', 'loki');\n          res.end(html);\n        });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>loki</p>', done);\n    })\n  })\n})\n\n# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# test/res.render.js:320-358#part2of2  (test.res.render)\ndescribe('res', function(){\n  describe('.render(name, fn)', function(){\n    it('should pass the resulting string', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n\n      app.use(function(req, res){\n        res.locals.user = { name: 'tobi' };\n        res.render('user.tmpl', function (err, html) {\n          html = html.replace('tobi', 'loki');\n          res.end(html);\n        });\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>loki</p>', done);\n    })\n\n    describe('when an error occurs', function(){\n      it('should pass it to the callback', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.use(function(req, res){\n          res.render('user.tmpl', function (err) {\n            if (err) {\n              res.status(500).send('got error: ' + err.name)\n            }\n          });\n        });\n\n        request(app)\n        .get('/')\n        .expect(500, 'got error: RenderError', done)\n      })\n    })\n  })\n})\n\n# examples/view-constructor/github-view.js:32-34  (examples.view-constructor.github-view)\n/**\n * Render the view.\n */\n\n# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');\n\n# lib/application.js:527-546  (lib.application)\n// del -> delete alias\n\napp.del = deprecate.function(app.delete, 'app.del: Use app.delete instead');\n\n/**\n * Render the given view `name` name with `options`\n * and a callback accepting an error and the\n * rendered template string.\n *\n * Example:\n *\n *    app.render('email', { name: 'Tobi' }, function(err, html){\n *      // ...\n *    })\n *\n * @param {String} name\n * @param {Object|Function} options or fn\n * @param {Function} callback\n * @public\n */\n\n# test/res.render.js:10-130#part1of2  (test.res.render)\ndescribe('res', function(){\n  describe('.render(name)', function(){\n    it('should support absolute paths', function(done){\n      var app = createApp();\n\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render(path.join(__dirname, 'fixtures', 'user.tmpl'))\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should support absolute paths with \"view engine\"', function(done){\n      var app = createApp();\n\n      app.locals.user = { name: 'tobi' };\n      app.set('view engine', 'tmpl');\n\n      app.use(function(req, res){\n        res.render(path.join(__dirname, 'fixtures', 'user'))\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should error without \"view engine\" set and file extension to a non-engine module', function (done) {\n      var app = createApp()\n\n      app.locals.user = { name: 'tobi' }\n\n      app.use(function (req, res) {\n        res.render(path.join(__dirname, 'fixtures', 'broken.send'))\n      })\n\n      request(app)\n      .get('/')\n      .expect(500, /does not provide a view engine/, done)\n    })\n\n    it('should error without \"view engine\" set and no file extension', function (done) {\n      var app = createApp();\n\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render(path.join(__dirname, 'fixtures', 'user'))\n      });\n\n      request(app)\n      .get('/')\n      .expect(500, /No default engine was specified/, done);\n    })\n\n    it('should expose app.locals', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.user = { name: 'tobi' };\n\n      app.use(function(req, res){\n        res.render('user.tmpl');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should expose app.locals with `name` property', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.locals.name = 'tobi';\n\n      app.use(function(req, res){\n        res.render('name.tmpl');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<p>tobi</p>', done);\n    })\n\n    it('should support index.<engine>', function(done){\n      var app = createApp();\n\n      app.set('views', path.join(__dirname, 'fixtures'))\n      app.set('view engine', 'tmpl');\n\n      app.use(function(req, res){\n        res.render('blog/post');\n      });\n\n      request(app)\n      .get('/')\n      .expect('<h1>blog post</h1>', done);\n    })\n\n    describe('when an error occurs', function(){\n      it('should next(err)', function(done){\n        var app = createApp();\n\n        app.set('views', path.join(__dirname, 'fixtures'))\n\n        app.use(function(req, res){\n          res.render('user.tmpl');\n        });\n\n        app.use(function(err, req, res, next){\n          res.status(500).send('got error: ' + err.name)\n        });\n\n        request(app)\n        .get('/')\n        .expect(500, 'got error: RenderError', done)\n      })\n    })\n  })\n})\n\n# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/content-negotiation/index.js:1-31  (examples.content-negotiation)\n'use strict'\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar users = require('./db');\n\n// so either you can deal with different types of formatting\n// for expected response in index.js\napp.get('/', function(req, res){\n  res.format({\n    html: function(){\n      res.send('<ul>' + users.map(function(user){\n        return '<li>' + user.name + '</li>';\n      }).join('') + '</ul>');\n    },\n\n    text: function(){\n      res.send(users.map(function(user){\n        return ' - ' + user.name + '\\n';\n      }).join(''));\n    },\n\n    json: function(){\n      res.json(users);\n    }\n  });\n});\n\n// or you could write a tiny middleware like\n// this to add a layer of abstraction\n// and make things a bit more declarative:\n\n# lib/middleware/init.js:28-42  (lib.middleware.init.init)\nexports.init = function(app){\n  return function expressInit(req, res, next){\n    if (app.enabled('x-powered-by')) res.setHeader('X-Powered-By', 'Express');\n    req.res = res;\n    res.req = req;\n    req.next = next;\n\n    setPrototypeOf(req, app.request)\n    setPrototypeOf(res, app.response)\n\n    res.locals = res.locals || Object.create(null);\n\n    next();\n  };\n};\n\n# examples/mvc/lib/boot.js:1-83  (examples.mvc.lib.boot)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../..');\nvar fs = require('fs');\nvar path = require('path');\n\nmodule.exports = function(parent, options){\n  var dir = path.join(__dirname, '..', 'controllers');\n  var verbose = options.verbose;\n  fs.readdirSync(dir).forEach(function(name){\n    var file = path.join(dir, name)\n    if (!fs.statSync(file).isDirectory()) return;\n    verbose && console.log('\\n   %s:', name);\n    var obj = require(file);\n    var name = obj.name || name;\n    var prefix = obj.prefix || '';\n    var app = express();\n    var handler;\n    var method;\n    var url;\n\n    // allow specifying the view engine\n    if (obj.engine) app.set('view engine', obj.engine);\n    app.set('views', path.join(__dirname, '..', 'controllers', name, 'views'));\n\n    // generate routes based\n    // on the exported methods\n    for (var key in obj) {\n      // \"reserved\" exports\n      if (~['name', 'prefix', 'engine', 'before'].indexOf(key)) continue;\n      // route exports\n      switch (key) {\n        case 'show':\n          method = 'get';\n          url = '/' + name + '/:' + name + '_id';\n          break;\n        case 'list':\n          method = 'get';\n          url = '/' + name + 's';\n          break;\n        case 'edit':\n          method = 'get';\n          url = '/' + name + '/:' + name + '_id/edit';\n          break;\n        case 'update':\n          method = 'put';\n          url = '/' + name + '/:' + name + '_id';\n          break;\n        case 'create':\n          method = 'post';\n          url = '/' + name;\n          break;\n        case 'index':\n          method = 'get';\n          url = '/';\n          break;\n        default:\n          /* istanbul ignore next */\n          throw new Error('unrecognized route: ' + name + '.' + key);\n      }\n\n      // setup\n      handler = obj[key];\n      url = prefix + url;\n\n      // before middleware support\n      if (obj.before) {\n        app[method](url, obj.before, handler);\n        verbose && console.log('     %s %s -> before -> %s', method.toUpperCase(), url, key);\n      } else {\n        app[method](url, handler);\n        verbose && console.log('     %s %s -> %s', method.toUpperCase(), url, key);\n      }\n    }\n\n    // mount the app\n    parent.use(app);\n  });\n};\n\n# lib/application.js:650-653  (lib.application)\n/**\n * Try rendering a view.\n * @private\n */\n\n# lib/view.js:52-95  (lib.view.View)\nfunction View(name, options) {\n  var opts = options || {};\n\n  this.defaultEngine = opts.defaultEngine;\n  this.ext = extname(name);\n  this.name = name;\n  this.root = opts.root;\n\n  if (!this.ext && !this.defaultEngine) {\n    throw new Error('No default engine was specified and no extension was provided.');\n  }\n\n  var fileName = name;\n\n  if (!this.ext) {\n    // get extension from default engine name\n    this.ext = this.defaultEngine[0] !== '.'\n      ? '.' + this.defaultEngine\n      : this.defaultEngine;\n\n    fileName += this.ext;\n  }\n\n  if (!opts.engines[this.ext]) {\n    // load engine\n    var mod = this.ext.slice(1)\n    debug('require \"%s\"', mod)\n\n    // default engine export\n    var fn = require(mod).__express\n\n    if (typeof fn !== 'function') {\n      throw new Error('Module \"' + mod + '\" does not provide a view engine.')\n    }\n\n    opts.engines[this.ext] = fn\n  }\n\n  // store loaded engine\n  this.engine = opts.engines[this.ext];\n\n  // lookup path\n  this.path = this.lookup(fileName);\n}\n\n# lib/view.js:125-131  (lib.view)\n/**\n * Render with the given options.\n *\n * @param {object} options\n * @param {function} callback\n * @private\n */\n\n# examples/route-separation/site.js:3-5  (examples.route-separation.site.index)\nexports.index = function(req, res){\n  res.render('index', { title: 'Route Separation Example' });\n};\n\n# examples/view-constructor/github-view.js:1-21  (examples.view-constructor.github-view)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar https = require('https');\nvar path = require('path');\nvar extname = path.extname;\n\n/**\n * Expose `GithubView`.\n */\n\nmodule.exports = GithubView;\n\n/**\n * Custom view that fetches and renders\n * remove github templates. You could\n * render templates from a database etc.\n */\n\n# examples/mvc/index.js:33-95  (examples.mvc)\n// log\nif (!module.parent) app.use(logger('dev'));\n\n// serve static files\napp.use(express.static(path.join(__dirname, 'public')));\n\n// session support\napp.use(session({\n  resave: false, // don't save session if unmodified\n  saveUninitialized: false, // don't create session until something stored\n  secret: 'some secret here'\n}));\n\n// parse request bodies (req.body)\napp.use(express.urlencoded({ extended: true }))\n\n// allow overriding methods in query (?_method=put)\napp.use(methodOverride('_method'));\n\n// expose the \"messages\" local variable when views are rendered\napp.use(function(req, res, next){\n  var msgs = req.session.messages || [];\n\n  // expose \"messages\" local variable\n  res.locals.messages = msgs;\n\n  // expose \"hasMessages\"\n  res.locals.hasMessages = !! msgs.length;\n\n  /* This is equivalent:\n   res.locals({\n     messages: msgs,\n     hasMessages: !! msgs.length\n   });\n  */\n\n  next();\n  // empty or \"flush\" the messages so they\n  // don't build up\n  req.session.messages = [];\n});\n\n// load controllers\nrequire('./lib/boot')(app, { verbose: !module.parent });\n\napp.use(function(err, req, res, next){\n  // log it\n  if (!module.parent) console.error(err.stack);\n\n  // error page\n  res.status(500).render('5xx');\n});\n\n// assume 404 since no middleware responded\napp.use(function(req, res, next){\n  res.status(404).render('404', { url: req.originalUrl });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# examples/view-locals/index.js:64-84  (examples.view-locals)\napp.get('/middleware', count, users, function (req, res) {\n  res.render('index', {\n    title: 'Users',\n    count: req.count,\n    users: req.users.filter(ferrets)\n  });\n});\n\n\n\n\n// this approach is much like the last\n// however we're explicitly exposing\n// the locals within each middleware\n//\n// note that this may not always work\n// well, for example here we filter\n// the users in the middleware, which\n// may not be ideal for our application.\n// so in that sense the previous example\n// is more flexible with `req.users`.\n\n# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.\n\n# examples/view-constructor/github-view.js:36-53  (examples.view-constructor.github-view.render)\nGithubView.prototype.render = function(options, fn){\n  var self = this;\n  var opts = {\n    host: 'raw.githubusercontent.com',\n    port: 443,\n    path: this.path,\n    method: 'GET'\n  };\n\n  https.request(opts, function(res) {\n    var buf = '';\n    res.setEncoding('utf8');\n    res.on('data', function(str){ buf += str });\n    res.on('end', function(){\n      self.engine(buf, options, fn);\n    });\n  }).end();\n};\n\n# lib/application.js:156-163  (lib.application)\n/**\n * Dispatch a req, res pair into the application. Starts pipeline processing.\n *\n * If no callback is provided, then default error handlers will respond\n * in the event of an error bubbling through the stack.\n *\n * @private\n */\n\n# examples/view-locals/index.js:21-46  (examples.view-locals)\n// naive nesting approach,\n// delegating errors to next(err)\n// in order to expose the \"count\"\n// and \"users\" locals\n\napp.get('/', function(req, res, next){\n  User.count(function(err, count){\n    if (err) return next(err);\n    User.all(function(err, users){\n      if (err) return next(err);\n      res.render('index', {\n        title: 'Users',\n        count: count,\n        users: users.filter(ferrets)\n      });\n    })\n  })\n});\n\n\n\n\n// this approach is cleaner,\n// less nesting and we have\n// the variables available\n// on the request object\n\n# lib/request.js:86-130  (lib.request)\n/**\n * To do: update docs.\n *\n * Check if the given `type(s)` is acceptable, returning\n * the best match when true, otherwise `undefined`, in which\n * case you should respond with 406 \"Not Acceptable\".\n *\n * The `type` value may be a single MIME type string\n * such as \"application/json\", an extension name\n * such as \"json\", a comma-delimited list such as \"json, html, text/plain\",\n * an argument list such as `\"json\", \"html\", \"text/plain\"`,\n * or an array `[\"json\", \"html\", \"text/plain\"]`. When a list\n * or array is given, the _best_ match, if any is returned.\n *\n * Examples:\n *\n *     // Accept: text/html\n *     req.accepts('html');\n *     // => \"html\"\n *\n *     // Accept: text/*, application/json\n *     req.accepts('html');\n *     // => \"html\"\n *     req.accepts('text/html');\n *     // => \"text/html\"\n *     req.accepts('json, text');\n *     // => \"json\"\n *     req.accepts('application/json');\n *     // => \"application/json\"\n *\n *     // Accept: text/*, application/json\n *     req.accepts('image/png');\n *     req.accepts('png');\n *     // => undefined\n *\n *     // Accept: text/*;q=.5, application/json\n *     req.accepts(['html', 'json']);\n *     req.accepts('html', 'json');\n *     req.accepts('html, json');\n *     // => \"json\"\n *\n * @param {String|Array} type(s)\n * @return {String|Array|Boolean}\n * @public\n */\n\n## Task\n\nYou are investigating how Express renders a view, starting from the application's own `render` method in lib/application.js. Trace the real causal pipeline from `app.render(name, options, callback)` through to the point where the actual view engine is invoked.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.render\", \"lib.application.tryRender\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

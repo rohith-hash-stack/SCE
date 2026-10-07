@@ -1,0 +1,737 @@
+{
+ "bundle": {
+  "arm": "arm1",
+  "task_id": "express_t02_010_redirection",
+  "items": [
+   {
+    "source_id": "test/res.location.js:185-283#part1of2",
+    "content": "# test/res.location.js:185-283#part1of2  (test.res.location)\ndescribe('res', function(){\n  describe('location header encoding', function() {\n    function createRedirectServerForDomain (domain) {\n      var app = express();\n      app.use(function (req, res) {\n        var host = url.parse(req.query.q, false, true).host;\n        // This is here to show a basic check one might do which\n        // would pass but then the location header would still be bad\n        if (host !== domain) {\n          res.status(400).end('Bad host: ' + host + ' !== ' + domain);\n        }\n        res.location(req.query.q).end();\n      });\n      return app;\n    }\n\n    function testRequestedRedirect (app, inputUrl, expected, expectedHost, done) {\n      return request(app)\n        // Encode uri because old supertest does not and is required\n        // to test older node versions. New supertest doesn't re-encode\n        // so this works in both.\n        .get('/?q=' + encodeURIComponent(inputUrl))\n        .expect('') // No body.\n        .expect(200)\n        .expect('Location', expected)\n        .end(function (err, res) {\n          if (err) {\n            console.log('headers:', res.headers)\n            console.error('error', res.error, err);\n            return done(err, res);\n          }\n\n          // Parse the hosts from the input URL and the Location header\n          var inputHost = url.parse(inputUrl, false, true).host;\n          var locationHost = url.parse(res.headers['location'], false, true).host;\n\n          assert.strictEqual(locationHost, expectedHost);\n\n          // Assert that the hosts are the same\n          if (inputHost !== locationHost) {\n            return done(new Error('Hosts do not match: ' + inputHost + \" !== \" +  locationHost));\n          }\n\n          return done(null, res);\n        });\n    }\n\n    it('should not touch already-encoded sequences in \"url\"', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'https://google.com?q=%A710',\n        'https://google.com?q=%A710',\n        'google.com',\n        done\n      );\n    });\n\n    it('should consistently handle relative urls', function (done) {\n      var app = createRedirectServerForDomain(null);\n      testRequestedRedirect(\n        app,\n        '/foo/bar',\n        '/foo/bar',\n        null,\n        done\n      );\n    });\n\n    it('should not encode urls in such a way that they can bypass redirect allow lists', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'http://google.com\\\\@apple.com',\n        'http://google.com\\\\@apple.com',\n        'google.com',\n        done\n      );\n    });\n\n    it('should not be case sensitive', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'HTTP://google.com\\\\@apple.com',\n        'HTTP://google.com\\\\@apple.com',\n        'google.com',\n        done\n      );\n    });\n\n    it('should work with https', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'https://google.com\\\\@apple.com',\n        'https://google.com\\\\@apple.com',\n        'google.com',\n        done\n      );\n    });\n  });\n})",
+    "token_count": 771,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 2,
+     "rerank_score": 0.39928582310676575,
+     "bm25_rank": 4,
+     "dense_rank": 8,
+     "oversized_chunk": false,
+     "engine_token_count": 771
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.location.js:131-181#part2of2",
+    "content": "# test/res.location.js:131-181#part2of2  (test.res.location)\ndescribe('res', function(){\n  describe('.location(url)', function(){\n    it('should consistently handle non-string inputs: object', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location({}).end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', '[object%20Object]')\n        .expect(200, done)\n    });\n\n    it('should consistently handle non-string inputs: array', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location([]).end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', '')\n        .expect(200, done)\n    });\n\n    it('should consistently handle empty string input', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location('').end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', '')\n        .expect(200, done)\n    });\n\n\n    if (typeof URL !== 'undefined') {\n      it('should accept an instance of URL', function (done) {\n        var app = express();\n\n        app.use(function(req, res){\n          res.location(new URL('http://google.com/')).end();\n        });\n\n        request(app)\n          .get('/')\n          .expect('Location', 'http://google.com/')\n          .expect(200, done);\n      });\n    }\n  })\n})",
+    "token_count": 340,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 19,
+     "rerank_score": 0.36504945158958435,
+     "bm25_rank": 84,
+     "dense_rank": 13,
+     "oversized_chunk": false,
+     "engine_token_count": 340
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.location.js:10-129#part1of2",
+    "content": "# test/res.location.js:10-129#part1of2  (test.res.location)\ndescribe('res', function(){\n  describe('.location(url)', function(){\n    it('should set the header', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.location('http://google.com/').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Location', 'http://google.com/')\n      .expect(200, done)\n    })\n\n    it('should preserve trailing slashes when not present', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.location('http://google.com').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Location', 'http://google.com')\n      .expect(200, done)\n    })\n\n    it('should encode \"url\"', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.location('https://google.com?q=\\u2603 \u00a710').end()\n      })\n\n      request(app)\n      .get('/')\n      .expect('Location', 'https://google.com?q=%E2%98%83%20%C2%A710')\n      .expect(200, done)\n    })\n\n    describe('when url is \"back\"', function () {\n      it('should set location from \"Referer\" header', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.location('back').end()\n        })\n\n        request(app)\n        .get('/')\n        .set('Referer', '/some/page.html')\n        .expect('Location', '/some/page.html')\n        .expect(200, done)\n      })\n\n      it('should set location from \"Referrer\" header', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.location('back').end()\n        })\n\n        request(app)\n        .get('/')\n        .set('Referrer', '/some/page.html')\n        .expect('Location', '/some/page.html')\n        .expect(200, done)\n      })\n\n      it('should prefer \"Referrer\" header', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.location('back').end()\n        })\n\n        request(app)\n        .get('/')\n        .set('Referer', '/some/page1.html')\n        .set('Referrer', '/some/page2.html')\n        .expect('Location', '/some/page2.html')\n        .expect(200, done)\n      })\n\n      it('should set the header to \"/\" without referrer', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.location('back').end()\n        })\n\n        request(app)\n        .get('/')\n        .expect('Location', '/')\n        .expect(200, done)\n      })\n    })\n\n    it('should encode data uri', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location('data:text/javascript,export default () => { }').end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', 'data:text/javascript,export%20default%20()%20=%3E%20%7B%20%7D')\n        .expect(200, done)\n    })\n\n    it('should consistently handle non-string input: boolean', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location(true).end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', 'true')\n        .expect(200, done)\n    });\n  })\n})",
+    "token_count": 823,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 11,
+     "rerank_score": 0.1910056322813034,
+     "bm25_rank": 44,
+     "dense_rank": 6,
+     "oversized_chunk": false,
+     "engine_token_count": 823
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.location.js:285-360#part2of2",
+    "content": "# test/res.location.js:285-360#part2of2  (test.res.location)\ndescribe('res', function(){\n  describe('location header encoding', function() {\n    it('should correctly encode schemaless paths', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        '//google.com\\\\@apple.com/',\n        '//google.com\\\\@apple.com/',\n        'google.com',\n        done\n      );\n    });\n\n    it('should keep backslashes in the path', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'https://google.com/foo\\\\bar\\\\baz',\n        'https://google.com/foo\\\\bar\\\\baz',\n        'google.com',\n        done\n      );\n    });\n\n    it('should escape header splitting for old node versions', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'http://google.com\\\\@apple.com/%0d%0afoo:%20bar',\n        'http://google.com\\\\@apple.com/%0d%0afoo:%20bar',\n        'google.com',\n        done\n      );\n    });\n\n    it('should encode unicode correctly', function (done) {\n      var app = createRedirectServerForDomain(null);\n      testRequestedRedirect(\n        app,\n        '/%e2%98%83',\n        '/%e2%98%83',\n        null,\n        done\n      );\n    });\n\n    it('should encode unicode correctly even with a bad host', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'http://google.com\\\\@apple.com/%e2%98%83',\n        'http://google.com\\\\@apple.com/%e2%98%83',\n        'google.com',\n        done\n      );\n    });\n\n    it('should work correctly despite using deprecated url.parse', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'https://google.com\\'.bb.com/1.html',\n        'https://google.com\\'.bb.com/1.html',\n        'google.com',\n        done\n      );\n    });\n\n    it('should encode file uri path', function (done) {\n      var app = createRedirectServerForDomain('');\n      testRequestedRedirect(\n        app,\n        'file:///etc\\\\passwd',\n        'file:///etc\\\\passwd',\n        '',\n        done\n      );\n    });\n  });\n})",
+    "token_count": 568,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 9,
+     "rerank_score": 0.16580423712730408,
+     "bm25_rank": 30,
+     "dense_rank": 9,
+     "oversized_chunk": false,
+     "engine_token_count": 568
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:897-912",
+    "content": "# lib/response.js:897-912  (lib.response)\n/**\n * Set the location header to `url`.\n *\n * The given `url` can also be \"back\", which redirects\n * to the _Referrer_ or _Referer_ headers or \"/\".\n *\n * Examples:\n *\n *    res.location('/foo/bar').;\n *    res.location('http://example.com');\n *    res.location('../login');\n *\n * @param {String} url\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 114,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 13,
+     "rerank_score": -0.19167105853557587,
+     "bm25_rank": 23,
+     "dense_rank": 21,
+     "oversized_chunk": false,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.redirect.js:162-228#part3of3",
+    "content": "# test/res.redirect.js:162-228#part3of3  (test.res.redirect)\ndescribe('res', function(){\n  describe('when accepting text', function(){\n    it('should respond with text', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/plain, */*')\n      .expect('Content-Type', /plain/)\n      .expect('Location', 'http://google.com')\n      .expect(302, 'Found. Redirecting to http://google.com', done)\n    })\n\n    it('should encode the url', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://example.com/?param=<script>alert(\"hax\");</script>');\n      });\n\n      request(app)\n      .get('/')\n      .set('Host', 'http://example.com')\n      .set('Accept', 'text/plain, */*')\n      .expect('Content-Type', /plain/)\n      .expect('Location', 'http://example.com/?param=%3Cscript%3Ealert(%22hax%22);%3C/script%3E')\n      .expect(302, 'Found. Redirecting to http://example.com/?param=%3Cscript%3Ealert(%22hax%22);%3C/script%3E', done)\n    })\n\n    it('should include the redirect type', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect(301, 'http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/plain, */*')\n      .expect('Content-Type', /plain/)\n      .expect('Location', 'http://google.com')\n      .expect(301, 'Moved Permanently. Redirecting to http://google.com', done);\n    })\n  })\n\n  describe('when accepting neither text or html', function(){\n    it('should respond with an empty body', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n        .get('/')\n        .set('Accept', 'application/octet-stream')\n        .expect(302)\n        .expect('location', 'http://google.com')\n        .expect('content-length', '0')\n        .expect(utils.shouldNotHaveHeader('Content-Type'))\n        .expect(utils.shouldNotHaveBody())\n        .end(done)\n    })\n  })\n})",
+    "token_count": 561,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 8,
+     "rerank_score": -0.35806065797805786,
+     "bm25_rank": 27,
+     "dense_rank": 5,
+     "oversized_chunk": false,
+     "engine_token_count": 561
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.redirect.js:8-94#part1of3",
+    "content": "# test/res.redirect.js:8-94#part1of3  (test.res.redirect)\ndescribe('res', function(){\n  describe('.redirect(url)', function(){\n    it('should default to a 302 redirect', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .expect('location', 'http://google.com')\n      .expect(302, done)\n    })\n\n    it('should encode \"url\"', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.redirect('https://google.com?q=\\u2603 \u00a710')\n      })\n\n      request(app)\n      .get('/')\n      .expect('Location', 'https://google.com?q=%E2%98%83%20%C2%A710')\n      .expect(302, done)\n    })\n\n    it('should not touch already-encoded sequences in \"url\"', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.redirect('https://google.com?q=%A710')\n      })\n\n      request(app)\n      .get('/')\n      .expect('Location', 'https://google.com?q=%A710')\n      .expect(302, done)\n    })\n  })\n\n  describe('.redirect(status, url)', function(){\n    it('should set the response status', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect(303, 'http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .expect('Location', 'http://google.com')\n      .expect(303, done)\n    })\n  })\n\n  describe('.redirect(url, status)', function(){\n    it('should set the response status', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com', 303);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Location', 'http://google.com')\n      .expect(303, done)\n    })\n  })\n\n  describe('when the request method is HEAD', function(){\n    it('should ignore the body', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n        .head('/')\n        .expect(302)\n        .expect('Location', 'http://google.com')\n        .expect(utils.shouldNotHaveBody())\n        .end(done)\n    })\n  })\n})",
+    "token_count": 567,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 1,
+     "rerank_score": -0.46678876876831055,
+     "bm25_rank": 3,
+     "dense_rank": 2,
+     "oversized_chunk": false,
+     "engine_token_count": 567
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:1-62",
+    "content": "# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */",
+    "token_count": 347,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 21,
+     "rerank_score": -0.6279256343841553,
+     "bm25_rank": 87,
+     "dense_rank": 14,
+     "oversized_chunk": false,
+     "engine_token_count": 347
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/express.static.js:467-572#part2of5",
+    "content": "# test/express.static.js:467-572#part2of5  (test.express.static)\ndescribe('express.static()', function () {\n  describe('redirect', function () {\n    before(function () {\n      this.app = express()\n      this.app.use(function (req, res, next) {\n        req.originalUrl = req.url =\n          req.originalUrl.replace(/\\/snow(\\/|$)/, '/snow \\u2603$1')\n        next()\n      })\n      this.app.use(express.static(fixtures))\n    })\n\n    it('should redirect directories', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect('Location', '/users/')\n        .expect(301, done)\n    })\n\n    it('should include HTML link', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect('Location', '/users/')\n        .expect(301, /\\/users\\//, done)\n    })\n\n    it('should redirect directories with query string', function (done) {\n      request(this.app)\n        .get('/users?name=john')\n        .expect('Location', '/users/?name=john')\n        .expect(301, done)\n    })\n\n    it('should not redirect to protocol-relative locations', function (done) {\n      request(this.app)\n        .get('//users')\n        .expect('Location', '/users/')\n        .expect(301, done)\n    })\n\n    it('should ensure redirect URL is properly encoded', function (done) {\n      request(this.app)\n        .get('/snow')\n        .expect('Location', '/snow%20%E2%98%83/')\n        .expect('Content-Type', /html/)\n        .expect(301, />Redirecting to \\/snow%20%E2%98%83\\/</, done)\n    })\n\n    it('should respond with default Content-Security-Policy', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect('Content-Security-Policy', \"default-src 'none'\")\n        .expect(301, done)\n    })\n\n    it('should not redirect incorrectly', function (done) {\n      request(this.app)\n        .get('/')\n        .expect(404, done)\n    })\n\n    describe('when false', function () {\n      before(function () {\n        this.app = createApp(fixtures, { 'redirect': false })\n      })\n\n      it('should disable redirect', function (done) {\n        request(this.app)\n          .get('/users')\n          .expect(404, done)\n      })\n    })\n  })\n\n  describe('setHeaders', function () {\n    before(function () {\n      this.app = express()\n      this.app.use(express.static(fixtures, { 'setHeaders': function (res) {\n        res.setHeader('x-custom', 'set')\n      } }))\n    })\n\n    it('should reject non-functions', function () {\n      assert.throws(express.static.bind(null, fixtures, { 'setHeaders': 3 }), /setHeaders.*function/)\n    })\n\n    it('should get called when sending file', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .expect('x-custom', 'set')\n        .expect(200, done)\n    })\n\n    it('should not get called on 404', function (done) {\n      request(this.app)\n        .get('/bogus')\n        .expect(utils.shouldNotHaveHeader('x-custom'))\n        .expect(404, done)\n    })\n\n    it('should not get called on redirect', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect(utils.shouldNotHaveHeader('x-custom'))\n        .expect(301, done)\n    })\n  })\n})",
+    "token_count": 814,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 12,
+     "rerank_score": -0.6378911733627319,
+     "bm25_rank": 37,
+     "dense_rank": 10,
+     "oversized_chunk": false,
+     "engine_token_count": 814
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/res.redirect.js:96-160#part2of3",
+    "content": "# test/res.redirect.js:96-160#part2of3  (test.res.redirect)\ndescribe('res', function(){\n  describe('when accepting html', function(){\n    it('should respond with html', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('Content-Type', /html/)\n      .expect('Location', 'http://google.com')\n      .expect(302, '<p>Found. Redirecting to http://google.com</p>', done)\n    })\n\n    it('should escape the url', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('<la\\'me>');\n      });\n\n      request(app)\n      .get('/')\n      .set('Host', 'http://example.com')\n      .set('Accept', 'text/html')\n      .expect('Content-Type', /html/)\n      .expect('Location', '%3Cla\\'me%3E')\n      .expect(302, '<p>Found. Redirecting to %3Cla&#39;me%3E</p>', done)\n    })\n\n    it('should not render evil javascript links in anchor href (prevent XSS)', function(done){\n      var app = express();\n      var xss = 'javascript:eval(document.body.innerHTML=`<p>XSS</p>`);';\n      var encodedXss = 'javascript:eval(document.body.innerHTML=%60%3Cp%3EXSS%3C/p%3E%60);';\n\n      app.use(function(req, res){\n        res.redirect(xss);\n      });\n\n      request(app)\n      .get('/')\n      .set('Host', 'http://example.com')\n      .set('Accept', 'text/html')\n      .expect('Content-Type', /html/)\n      .expect('Location', encodedXss)\n      .expect(302, '<p>Found. Redirecting to ' + encodedXss +'</p>', done);\n    });\n\n    it('should include the redirect type', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect(301, 'http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('Content-Type', /html/)\n      .expect('Location', 'http://google.com')\n      .expect(301, '<p>Moved Permanently. Redirecting to http://google.com</p>', done);\n    })\n  })\n})",
+    "token_count": 558,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 6,
+     "rerank_score": -0.7138975858688354,
+     "bm25_rank": 22,
+     "dense_rank": 3,
+     "oversized_chunk": false,
+     "engine_token_count": 558
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/init.js:28-42",
+    "content": "# lib/middleware/init.js:28-42  (lib.middleware.init.init)\nexports.init = function(app){\n  return function expressInit(req, res, next){\n    if (app.enabled('x-powered-by')) res.setHeader('X-Powered-By', 'Express');\n    req.res = res;\n    res.req = req;\n    req.next = next;\n\n    setPrototypeOf(req, app.request)\n    setPrototypeOf(res, app.response)\n\n    res.locals = res.locals || Object.create(null);\n\n    next();\n  };\n};",
+    "token_count": 109,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.middleware.init.init"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 48,
+     "rerank_score": -1.0587977170944214,
+     "bm25_rank": null,
+     "dense_rank": 18,
+     "oversized_chunk": false,
+     "engine_token_count": 109
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:1-65",
+    "content": "# lib/response.js:1-65  (lib.response)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar createError = require('http-errors')\nvar deprecate = require('depd')('express');\nvar encodeUrl = require('encodeurl');\nvar escapeHtml = require('escape-html');\nvar http = require('http');\nvar isAbsolute = require('./utils').isAbsolute;\nvar onFinished = require('on-finished');\nvar path = require('path');\nvar statuses = require('statuses')\nvar merge = require('utils-merge');\nvar sign = require('cookie-signature').sign;\nvar normalizeType = require('./utils').normalizeType;\nvar normalizeTypes = require('./utils').normalizeTypes;\nvar setCharset = require('./utils').setCharset;\nvar cookie = require('cookie');\nvar send = require('send');\nvar extname = path.extname;\nvar mime = send.mime;\nvar resolve = path.resolve;\nvar vary = require('vary');\n\n/**\n * Response prototype.\n * @public\n */\n\nvar res = Object.create(http.ServerResponse.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = res\n\n/**\n * Module variables.\n * @private\n */\n\nvar charsetRegExp = /;\\s*charset\\s*=/;\n\n/**\n * Set status `code`.\n *\n * @param {Number} code\n * @return {ServerResponse}\n * @public\n */",
+    "token_count": 357,
+    "rank": 12,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 37,
+     "rerank_score": -1.4974925518035889,
+     "bm25_rank": null,
+     "dense_rank": 11,
+     "oversized_chunk": false,
+     "engine_token_count": 357
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:946-990",
+    "content": "# lib/response.js:946-990  (lib.response.redirect)\nres.redirect = function redirect(url) {\n  var address = url;\n  var body;\n  var status = 302;\n\n  // allow status / url\n  if (arguments.length === 2) {\n    if (typeof arguments[0] === 'number') {\n      status = arguments[0];\n      address = arguments[1];\n    } else {\n      deprecate('res.redirect(url, status): Use res.redirect(status, url) instead');\n      status = arguments[1];\n    }\n  }\n\n  // Set location header\n  address = this.location(address).get('Location');\n\n  // Support text/{plain,html} by default\n  this.format({\n    text: function(){\n      body = statuses.message[status] + '. Redirecting to ' + address\n    },\n\n    html: function(){\n      var u = escapeHtml(address);\n      body = '<p>' + statuses.message[status] + '. Redirecting to ' + u + '</p>'\n    },\n\n    default: function(){\n      body = '';\n    }\n  });\n\n  // Respond\n  this.statusCode = status;\n  this.set('Content-Length', Buffer.byteLength(body));\n\n  if (this.req.method === 'HEAD') {\n    this.end();\n  } else {\n    this.end(body);\n  }\n};",
+    "token_count": 282,
+    "rank": 13,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.redirect",
+     "lib.response.redirect.text",
+     "lib.response.redirect.html",
+     "lib.response.redirect.default"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 3,
+     "rerank_score": -1.6217265129089355,
+     "bm25_rank": 12,
+     "dense_rank": 1,
+     "oversized_chunk": false,
+     "engine_token_count": 282
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/web-service/index.js:21-117",
+    "content": "# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 774,
+    "rank": 14,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 42,
+     "rerank_score": -1.9266819953918457,
+     "bm25_rank": 14,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 774
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/mvc/controllers/main/index.js:3-5",
+    "content": "# examples/mvc/controllers/main/index.js:3-5  (examples.mvc.controllers.main.index)\nexports.index = function(req, res){\n  res.redirect('/users');\n};",
+    "token_count": 35,
+    "rank": 15,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.mvc.controllers.main.index"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 45,
+     "rerank_score": -1.9334197044372559,
+     "bm25_rank": null,
+     "dense_rank": 17,
+     "oversized_chunk": false,
+     "engine_token_count": 35
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/express.static.js:691-800#part5of5",
+    "content": "# test/express.static.js:691-800#part5of5  (test.express.static)\ndescribe('express.static()', function () {\n  describe('when index at mount point', function () {\n    before(function () {\n      this.app = express()\n      this.app.use('/users', express.static(fixtures + '/users'))\n    })\n\n    it('should redirect correctly', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect('Location', '/users/')\n        .expect(301, done)\n    })\n  })\n\n  describe('when mounted', function () {\n    before(function () {\n      this.app = express()\n      this.app.use('/static', express.static(fixtures))\n    })\n\n    it('should redirect relative to the originalUrl', function (done) {\n      request(this.app)\n        .get('/static/users')\n        .expect('Location', '/static/users/')\n        .expect(301, done)\n    })\n\n    it('should not choke on auth-looking URL', function (done) {\n      request(this.app)\n        .get('//todo@txt')\n        .expect(404, done)\n    })\n  })\n\n  //\n  // NOTE: This is not a real part of the API, but\n  //       over time this has become something users\n  //       are doing, so this will prevent unseen\n  //       regressions around this use-case.\n  //\n  describe('when mounted \"root\" as a file', function () {\n    before(function () {\n      this.app = express()\n      this.app.use('/todo.txt', express.static(fixtures + '/todo.txt'))\n    })\n\n    it('should load the file when on trailing slash', function (done) {\n      request(this.app)\n        .get('/todo.txt')\n        .expect(200, '- groceries', done)\n    })\n\n    it('should 404 when trailing slash', function (done) {\n      request(this.app)\n        .get('/todo.txt/')\n        .expect(404, done)\n    })\n  })\n\n  describe('when responding non-2xx or 304', function () {\n    it('should not alter the status', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.status(501)\n        next()\n      })\n      app.use(express.static(fixtures))\n\n      request(app)\n        .get('/todo.txt')\n        .expect(501, '- groceries', done)\n    })\n  })\n\n  describe('when index file serving disabled', function () {\n    before(function () {\n      this.app = express()\n      this.app.use('/static', express.static(fixtures, { 'index': false }))\n      this.app.use(function (req, res, next) {\n        res.sendStatus(404)\n      })\n    })\n\n    it('should next() on directory', function (done) {\n      request(this.app)\n        .get('/static/users/')\n        .expect(404, 'Not Found', done)\n    })\n\n    it('should redirect to trailing slash', function (done) {\n      request(this.app)\n        .get('/static/users')\n        .expect('Location', '/static/users/')\n        .expect(301, done)\n    })\n\n    it('should next() on mount point', function (done) {\n      request(this.app)\n        .get('/static/')\n        .expect(404, 'Not Found', done)\n    })\n\n    it('should redirect to trailing slash mount point', function (done) {\n      request(this.app)\n        .get('/static')\n        .expect('Location', '/static/')\n        .expect(301, done)\n    })\n  })\n})",
+    "token_count": 785,
+    "rank": 16,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 17,
+     "rerank_score": -2.1640167236328125,
+     "bm25_rank": 25,
+     "dense_rank": 41,
+     "oversized_chunk": false,
+     "engine_token_count": 785
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:1-62",
+    "content": "# lib/request.js:1-62  (lib.request)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar accepts = require('accepts');\nvar deprecate = require('depd')('express');\nvar isIP = require('net').isIP;\nvar typeis = require('type-is');\nvar http = require('http');\nvar fresh = require('fresh');\nvar parseRange = require('range-parser');\nvar parse = require('parseurl');\nvar proxyaddr = require('proxy-addr');\n\n/**\n * Request prototype.\n * @public\n */\n\nvar req = Object.create(http.IncomingMessage.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = req\n\n/**\n * Return request header.\n *\n * The `Referrer` header field is special-cased,\n * both `Referrer` and `Referer` are interchangeable.\n *\n * Examples:\n *\n *     req.get('Content-Type');\n *     // => \"text/plain\"\n *\n *     req.get('content-type');\n *     // => \"text/plain\"\n *\n *     req.get('Something');\n *     // => undefined\n *\n * Aliased as `req.header()`.\n *\n * @param {String} name\n * @return {String}\n * @public\n */",
+    "token_count": 324,
+    "rank": 17,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 39,
+     "rerank_score": -2.3379290103912354,
+     "bm25_rank": null,
+     "dense_rank": 12,
+     "oversized_chunk": false,
+     "engine_token_count": 324
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/static-files/index.js:1-43",
+    "content": "# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');",
+    "token_count": 348,
+    "rank": 18,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 36,
+     "rerank_score": -2.7247557640075684,
+     "bm25_rank": 10,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 348
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/content-negotiation/index.js:1-31",
+    "content": "# examples/content-negotiation/index.js:1-31  (examples.content-negotiation)\n'use strict'\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar users = require('./db');\n\n// so either you can deal with different types of formatting\n// for expected response in index.js\napp.get('/', function(req, res){\n  res.format({\n    html: function(){\n      res.send('<ul>' + users.map(function(user){\n        return '<li>' + user.name + '</li>';\n      }).join('') + '</ul>');\n    },\n\n    text: function(){\n      res.send(users.map(function(user){\n        return ' - ' + user.name + '\\n';\n      }).join(''));\n    },\n\n    json: function(){\n      res.json(users);\n    }\n  });\n});\n\n// or you could write a tiny middleware like\n// this to add a layer of abstraction\n// and make things a bit more declarative:",
+    "token_count": 193,
+    "rank": 19,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 25,
+     "rerank_score": -2.7870686054229736,
+     "bm25_rank": 24,
+     "dense_rank": 96,
+     "oversized_chunk": false,
+     "engine_token_count": 193
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:928-944",
+    "content": "# lib/response.js:928-944  (lib.response)\n/**\n * Redirect to the given `url` with optional response `status`\n * defaulting to 302.\n *\n * The resulting `url` is determined by `res.location()`, so\n * it will play nicely with mounted apps, relative paths,\n * `\"back\"` etc.\n *\n * Examples:\n *\n *    res.redirect('/foo/bar');\n *    res.redirect('http://example.com');\n *    res.redirect(301, 'http://example.com');\n *    res.redirect('../login'); // /blog/post/1 -> /blog/login\n *\n * @public\n */",
+    "token_count": 138,
+    "rank": 20,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 5,
+     "rerank_score": -2.8354201316833496,
+     "bm25_rank": 7,
+     "dense_rank": 7,
+     "oversized_chunk": false,
+     "engine_token_count": 138
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:1-54",
+    "content": "# lib/utils.js:1-54  (lib.utils)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @api private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar contentType = require('content-type');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar mime = require('send').mime;\nvar etag = require('etag');\nvar proxyaddr = require('proxy-addr');\nvar qs = require('qs');\nvar querystring = require('querystring');\n\n/**\n * Return strong ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.etag = createETagGenerator({ weak: false })\n\n/**\n * Return weak ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.wetag = createETagGenerator({ weak: true })\n\n/**\n * Check if `path` looks absolute.\n *\n * @param {String} path\n * @return {Boolean}\n * @api private\n */",
+    "token_count": 310,
+    "rank": 21,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 44,
+     "rerank_score": -2.950568675994873,
+     "bm25_rank": null,
+     "dense_rank": 16,
+     "oversized_chunk": false,
+     "engine_token_count": 310
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:156-163",
+    "content": "# lib/application.js:156-163  (lib.application)\n/**\n * Dispatch a req, res pair into the application. Starts pipeline processing.\n *\n * If no callback is provided, then default error handlers will respond\n * in the event of an error bubbling through the stack.\n *\n * @private\n */",
+    "token_count": 67,
+    "rank": 22,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 7,
+     "rerank_score": -3.060581684112549,
+     "bm25_rank": 1,
+     "dense_rank": 29,
+     "oversized_chunk": false,
+     "engine_token_count": 67
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/middleware/init.js:1-26",
+    "content": "# lib/middleware/init.js:1-26  (lib.middleware.init)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Initialization middleware, exposing the\n * request and response to each other, as well\n * as defaulting the X-Powered-By header field.\n *\n * @param {Function} app\n * @return {Function}\n * @api private\n */",
+    "token_count": 156,
+    "rank": 23,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 16,
+     "rerank_score": -3.2210068702697754,
+     "bm25_rank": 50,
+     "dense_rank": 15,
+     "oversized_chunk": false,
+     "engine_token_count": 156
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "test/express.static.js:247-325#part1of2",
+    "content": "# test/express.static.js:247-325#part1of2  (test.express.static)\ndescribe('express.static()', function () {\n  describe('fallthrough', function () {\n    it('should default to true', function (done) {\n      request(createApp())\n        .get('/does-not-exist')\n        .expect(404, 'Not Found', done)\n    })\n\n    describe('when true', function () {\n      before(function () {\n        this.app = createApp(fixtures, { 'fallthrough': true })\n      })\n\n      it('should fall-through when OPTIONS request', function (done) {\n        request(this.app)\n          .options('/todo.txt')\n          .expect(404, 'Not Found', done)\n      })\n\n      it('should fall-through when URL malformed', function (done) {\n        request(this.app)\n          .get('/%')\n          .expect(404, 'Not Found', done)\n      })\n\n      it('should fall-through when traversing past root', function (done) {\n        request(this.app)\n          .get('/users/../../todo.txt')\n          .expect(404, 'Not Found', done)\n      })\n\n      it('should fall-through when URL too long', function (done) {\n        var app = express()\n        var root = fixtures + Array(10000).join('/foobar')\n\n        app.use(express.static(root, { 'fallthrough': true }))\n        app.use(function (req, res, next) {\n          res.sendStatus(404)\n        })\n\n        request(app)\n          .get('/')\n          .expect(404, 'Not Found', done)\n      })\n\n      describe('with redirect: true', function () {\n        before(function () {\n          this.app = createApp(fixtures, { 'fallthrough': true, 'redirect': true })\n        })\n\n        it('should fall-through when directory', function (done) {\n          request(this.app)\n            .get('/pets/')\n            .expect(404, 'Not Found', done)\n        })\n\n        it('should redirect when directory without slash', function (done) {\n          request(this.app)\n            .get('/pets')\n            .expect(301, /Redirecting/, done)\n        })\n      })\n\n      describe('with redirect: false', function () {\n        before(function () {\n          this.app = createApp(fixtures, { 'fallthrough': true, 'redirect': false })\n        })\n\n        it('should fall-through when directory', function (done) {\n          request(this.app)\n            .get('/pets/')\n            .expect(404, 'Not Found', done)\n        })\n\n        it('should fall-through when directory without slash', function (done) {\n          request(this.app)\n            .get('/pets')\n            .expect(404, 'Not Found', done)\n        })\n      })\n    })\n  })\n})",
+    "token_count": 608,
+    "rank": 24,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 30,
+     "rerank_score": -3.27569580078125,
+     "bm25_rank": 89,
+     "dense_rank": 39,
+     "oversized_chunk": false,
+     "engine_token_count": 608
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/web-service/index.js:1-13",
+    "content": "# examples/web-service/index.js:1-13  (examples.web-service)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\n\nvar app = module.exports = express();\n\n// create an error with .status. we\n// can then use the property in our\n// custom error handler (Connect respects this prop as well)",
+    "token_count": 71,
+    "rank": 25,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 26,
+     "rerank_score": -3.3562216758728027,
+     "bm25_rank": 96,
+     "dense_rank": 26,
+     "oversized_chunk": false,
+     "engine_token_count": 71
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:378-417",
+    "content": "# lib/response.js:378-417  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendFile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendFile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendFile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */",
+    "token_count": 357,
+    "rank": 26,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 35,
+     "rerank_score": -3.8018054962158203,
+     "bm25_rank": 6,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 357
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:914-926",
+    "content": "# lib/response.js:914-926  (lib.response.location)\nres.location = function location(url) {\n  var loc;\n\n  // \"back\" is an alias for the referrer\n  if (url === 'back') {\n    deprecate('res.location(\"back\"): use res.location(req.get(\"Referrer\") || \"/\") and refer to https://dub.sh/security-redirect for best practices');\n    loc = this.req.get('Referrer') || '/';\n  } else {\n    loc = String(url);\n  }\n\n  return this.set('Location', encodeUrl(loc));\n};",
+    "token_count": 125,
+    "rank": 27,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.location"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 4,
+     "rerank_score": -3.8338489532470703,
+     "bm25_rank": 9,
+     "dense_rank": 4,
+     "oversized_chunk": false,
+     "engine_token_count": 125
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:460-499",
+    "content": "# lib/response.js:460-499  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendfile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendfile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendfile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */",
+    "token_count": 360,
+    "rank": 28,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 34,
+     "rerank_score": -3.94031023979187,
+     "bm25_rank": 5,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 360
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:627-682",
+    "content": "# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */",
+    "token_count": 384,
+    "rank": 29,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 33,
+     "rerank_score": -4.033786773681641,
+     "bm25_rank": 2,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 384
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error/index.js:1-18",
+    "content": "# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.",
+    "token_count": 114,
+    "rank": 30,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 18,
+     "rerank_score": -4.137176513671875,
+     "bm25_rank": 26,
+     "dense_rank": 50,
+     "oversized_chunk": false,
+     "engine_token_count": 114
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/error-pages/index.js:1-103",
+    "content": "# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}",
+    "token_count": 721,
+    "rank": 31,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 10,
+     "rerank_score": -4.241586208343506,
+     "bm25_rank": 19,
+     "dense_rank": 20,
+     "oversized_chunk": false,
+     "engine_token_count": 721
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:293-330#part3of3",
+    "content": "# lib/router/index.js:293-330#part3of3  (lib.router.handle)\nproto.handle = function handle(req, res, out) {\n  function trim_prefix(layer, layerError, layerPath, path) {\n    if (layerPath.length !== 0) {\n      // Validate path is a prefix match\n      if (layerPath !== path.slice(0, layerPath.length)) {\n        next(layerError)\n        return\n      }\n\n      // Validate path breaks on a path separator\n      var c = path[layerPath.length]\n      if (c && c !== '/' && c !== '.') return next(layerError)\n\n      // Trim off the part of the url that matches the route\n      // middleware (.use stuff) needs to have the path stripped\n      debug('trim prefix (%s) from url %s', layerPath, req.url);\n      removed = layerPath;\n      req.url = protohost + req.url.slice(protohost.length + removed.length)\n\n      // Ensure leading slash\n      if (!protohost && req.url[0] !== '/') {\n        req.url = '/' + req.url;\n        slashAdded = true;\n      }\n\n      // Setup base URL (no trailing slash)\n      req.baseUrl = parentUrl + (removed[removed.length - 1] === '/'\n        ? removed.substring(0, removed.length - 1)\n        : removed);\n    }\n\n    debug('%s %s : %s', layer.name, layerPath, req.originalUrl);\n\n    if (layerError) {\n      layer.handle_error(layerError, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n  }\n};",
+    "token_count": 346,
+    "rank": 32,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.handle"
+    ],
+    "provenance": {
+     "chunk_kind": "function_part",
+     "fused_rank": 31,
+     "rerank_score": -4.437341690063477,
+     "bm25_rank": 88,
+     "dense_rank": 42,
+     "oversized_chunk": false,
+     "engine_token_count": 346
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:266-298",
+    "content": "# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */",
+    "token_count": 321,
+    "rank": 33,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 46,
+     "rerank_score": -4.631070613861084,
+     "bm25_rank": 17,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 321
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/route.js:96-99",
+    "content": "# lib/router/route.js:96-99  (lib.router.route)\n/**\n * dispatch req, res into this route\n * @private\n */",
+    "token_count": 33,
+    "rank": 34,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 49,
+     "rerank_score": -4.891390800476074,
+     "bm25_rank": null,
+     "dense_rank": 19,
+     "oversized_chunk": false,
+     "engine_token_count": 33
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "examples/mvc/index.js:22-31",
+    "content": "# examples/mvc/index.js:22-31  (examples.mvc.message)\n// define a custom res.message() method\n// which stores messages in the session\napp.response.message = function(msg){\n  // reference `req.session` via the `this.req` reference\n  var sess = this.req.session;\n  // simply add the msg to an array for later\n  sess.messages = sess.messages || [];\n  sess.messages.push(msg);\n  return this;\n};",
+    "token_count": 96,
+    "rank": 35,
+    "kind": "code_chunk",
+    "symbols": [
+     "examples.mvc.message"
+    ],
+    "provenance": {
+     "chunk_kind": "function",
+     "fused_rank": 24,
+     "rerank_score": -6.518402099609375,
+     "bm25_rank": 36,
+     "dense_rank": 57,
+     "oversized_chunk": false,
+     "engine_token_count": 96
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:354-367",
+    "content": "# lib/response.js:354-367  (lib.response)\n/**\n * Send given HTTP status code.\n *\n * Sets the response status to `statusCode` and the body of the\n * response to the standard description from node's http.STATUS_CODES\n * or the statusCode number if no description.\n *\n * Examples:\n *\n *     res.sendStatus(200);\n *\n * @param {number} statusCode\n * @public\n */",
+    "token_count": 91,
+    "rank": 36,
+    "kind": "code_chunk",
+    "symbols": [],
+    "provenance": {
+     "chunk_kind": "module_block",
+     "fused_rank": 38,
+     "rerank_score": -7.170976161956787,
+     "bm25_rank": 11,
+     "dense_rank": null,
+     "oversized_chunk": false,
+     "engine_token_count": 91
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 12968,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "Advanced RAG (AST chunks + BM25 + dense + RRF + cross-encoder)",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "indexes the corpus's own language only: .py for FastAPI and Django, .ts/.tsx/.js/.jsx for Express and tRPC",
+    "chunk symbols = the definition each chunk belongs to (module blocks carry none)",
+    "reranker sees at most a quarter of its 512-token window for the query"
+   ],
+   "query": "You are investigating Express's redirect handling, starting from `res.redirect` in lib/response.js. Trace the real causal pipeline it runs through to determine the target Location header and build the fallback response body.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.redirect\", \"lib.response.location\"]\n```\n",
+   "task_type": "T2_localization",
+   "n_chunks_indexed": 586,
+   "n_fused_candidates": 50,
+   "skipped_for_budget": [
+    "examples/view-locals/index.js:102-155",
+    "lib/express.js:59-116",
+    "test/acceptance/auth.js:8-117",
+    "lib/response.js:293-352",
+    "examples/auth/index.js:84-133",
+    "lib/response.js:112-225#part1of2",
+    "lib/application.js:194-249",
+    "lib/router/layer.js:77-84",
+    "lib/response.js:529-548",
+    "lib/request.js:416-509#part2of2",
+    "lib/request.js:292-414#part1of2",
+    "examples/error/index.js:29-53",
+    "lib/response.js:992-999",
+    "lib/request.js:184-210"
+   ],
+   "over_budget": false,
+   "turn_count": 1,
+   "embedder": "jinaai/jina-embeddings-v2-base-code",
+   "reranker": "BAAI/bge-reranker-base+onnxruntime",
+   "excluded_dirs": [],
+   "language": "typescript",
+   "ranking_method": "cross_encoder",
+   "latency_ms": {
+    "L_bm25": [
+     20.1241
+    ],
+    "L_embed_query": [
+     235.848084
+    ],
+    "L_dense": [
+     0.648866
+    ],
+    "L_rrf": [
+     0.104102
+    ],
+    "L_rerank": [
+     26361.371264
+    ],
+    "L_retrieve": [
+     26689.160791
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 12968,
+   "prompt_tokens": 13217,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 13230,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# test/res.location.js:185-283#part1of2  (test.res.location)\ndescribe('res', function(){\n  describe('location header encoding', function() {\n    function createRedirectServerForDomain (domain) {\n      var app = express();\n      app.use(function (req, res) {\n        var host = url.parse(req.query.q, false, true).host;\n        // This is here to show a basic check one might do which\n        // would pass but then the location header would still be bad\n        if (host !== domain) {\n          res.status(400).end('Bad host: ' + host + ' !== ' + domain);\n        }\n        res.location(req.query.q).end();\n      });\n      return app;\n    }\n\n    function testRequestedRedirect (app, inputUrl, expected, expectedHost, done) {\n      return request(app)\n        // Encode uri because old supertest does not and is required\n        // to test older node versions. New supertest doesn't re-encode\n        // so this works in both.\n        .get('/?q=' + encodeURIComponent(inputUrl))\n        .expect('') // No body.\n        .expect(200)\n        .expect('Location', expected)\n        .end(function (err, res) {\n          if (err) {\n            console.log('headers:', res.headers)\n            console.error('error', res.error, err);\n            return done(err, res);\n          }\n\n          // Parse the hosts from the input URL and the Location header\n          var inputHost = url.parse(inputUrl, false, true).host;\n          var locationHost = url.parse(res.headers['location'], false, true).host;\n\n          assert.strictEqual(locationHost, expectedHost);\n\n          // Assert that the hosts are the same\n          if (inputHost !== locationHost) {\n            return done(new Error('Hosts do not match: ' + inputHost + \" !== \" +  locationHost));\n          }\n\n          return done(null, res);\n        });\n    }\n\n    it('should not touch already-encoded sequences in \"url\"', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'https://google.com?q=%A710',\n        'https://google.com?q=%A710',\n        'google.com',\n        done\n      );\n    });\n\n    it('should consistently handle relative urls', function (done) {\n      var app = createRedirectServerForDomain(null);\n      testRequestedRedirect(\n        app,\n        '/foo/bar',\n        '/foo/bar',\n        null,\n        done\n      );\n    });\n\n    it('should not encode urls in such a way that they can bypass redirect allow lists', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'http://google.com\\\\@apple.com',\n        'http://google.com\\\\@apple.com',\n        'google.com',\n        done\n      );\n    });\n\n    it('should not be case sensitive', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'HTTP://google.com\\\\@apple.com',\n        'HTTP://google.com\\\\@apple.com',\n        'google.com',\n        done\n      );\n    });\n\n    it('should work with https', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'https://google.com\\\\@apple.com',\n        'https://google.com\\\\@apple.com',\n        'google.com',\n        done\n      );\n    });\n  });\n})\n\n# test/res.location.js:131-181#part2of2  (test.res.location)\ndescribe('res', function(){\n  describe('.location(url)', function(){\n    it('should consistently handle non-string inputs: object', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location({}).end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', '[object%20Object]')\n        .expect(200, done)\n    });\n\n    it('should consistently handle non-string inputs: array', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location([]).end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', '')\n        .expect(200, done)\n    });\n\n    it('should consistently handle empty string input', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location('').end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', '')\n        .expect(200, done)\n    });\n\n\n    if (typeof URL !== 'undefined') {\n      it('should accept an instance of URL', function (done) {\n        var app = express();\n\n        app.use(function(req, res){\n          res.location(new URL('http://google.com/')).end();\n        });\n\n        request(app)\n          .get('/')\n          .expect('Location', 'http://google.com/')\n          .expect(200, done);\n      });\n    }\n  })\n})\n\n# test/res.location.js:10-129#part1of2  (test.res.location)\ndescribe('res', function(){\n  describe('.location(url)', function(){\n    it('should set the header', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.location('http://google.com/').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Location', 'http://google.com/')\n      .expect(200, done)\n    })\n\n    it('should preserve trailing slashes when not present', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.location('http://google.com').end();\n      });\n\n      request(app)\n      .get('/')\n      .expect('Location', 'http://google.com')\n      .expect(200, done)\n    })\n\n    it('should encode \"url\"', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.location('https://google.com?q=\\u2603 \u00a710').end()\n      })\n\n      request(app)\n      .get('/')\n      .expect('Location', 'https://google.com?q=%E2%98%83%20%C2%A710')\n      .expect(200, done)\n    })\n\n    describe('when url is \"back\"', function () {\n      it('should set location from \"Referer\" header', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.location('back').end()\n        })\n\n        request(app)\n        .get('/')\n        .set('Referer', '/some/page.html')\n        .expect('Location', '/some/page.html')\n        .expect(200, done)\n      })\n\n      it('should set location from \"Referrer\" header', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.location('back').end()\n        })\n\n        request(app)\n        .get('/')\n        .set('Referrer', '/some/page.html')\n        .expect('Location', '/some/page.html')\n        .expect(200, done)\n      })\n\n      it('should prefer \"Referrer\" header', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.location('back').end()\n        })\n\n        request(app)\n        .get('/')\n        .set('Referer', '/some/page1.html')\n        .set('Referrer', '/some/page2.html')\n        .expect('Location', '/some/page2.html')\n        .expect(200, done)\n      })\n\n      it('should set the header to \"/\" without referrer', function (done) {\n        var app = express()\n\n        app.use(function (req, res) {\n          res.location('back').end()\n        })\n\n        request(app)\n        .get('/')\n        .expect('Location', '/')\n        .expect(200, done)\n      })\n    })\n\n    it('should encode data uri', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location('data:text/javascript,export default () => { }').end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', 'data:text/javascript,export%20default%20()%20=%3E%20%7B%20%7D')\n        .expect(200, done)\n    })\n\n    it('should consistently handle non-string input: boolean', function (done) {\n      var app = express()\n      app.use(function (req, res) {\n        res.location(true).end();\n      });\n\n      request(app)\n        .get('/')\n        .expect('Location', 'true')\n        .expect(200, done)\n    });\n  })\n})\n\n# test/res.location.js:285-360#part2of2  (test.res.location)\ndescribe('res', function(){\n  describe('location header encoding', function() {\n    it('should correctly encode schemaless paths', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        '//google.com\\\\@apple.com/',\n        '//google.com\\\\@apple.com/',\n        'google.com',\n        done\n      );\n    });\n\n    it('should keep backslashes in the path', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'https://google.com/foo\\\\bar\\\\baz',\n        'https://google.com/foo\\\\bar\\\\baz',\n        'google.com',\n        done\n      );\n    });\n\n    it('should escape header splitting for old node versions', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'http://google.com\\\\@apple.com/%0d%0afoo:%20bar',\n        'http://google.com\\\\@apple.com/%0d%0afoo:%20bar',\n        'google.com',\n        done\n      );\n    });\n\n    it('should encode unicode correctly', function (done) {\n      var app = createRedirectServerForDomain(null);\n      testRequestedRedirect(\n        app,\n        '/%e2%98%83',\n        '/%e2%98%83',\n        null,\n        done\n      );\n    });\n\n    it('should encode unicode correctly even with a bad host', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'http://google.com\\\\@apple.com/%e2%98%83',\n        'http://google.com\\\\@apple.com/%e2%98%83',\n        'google.com',\n        done\n      );\n    });\n\n    it('should work correctly despite using deprecated url.parse', function (done) {\n      var app = createRedirectServerForDomain('google.com');\n      testRequestedRedirect(\n        app,\n        'https://google.com\\'.bb.com/1.html',\n        'https://google.com\\'.bb.com/1.html',\n        'google.com',\n        done\n      );\n    });\n\n    it('should encode file uri path', function (done) {\n      var app = createRedirectServerForDomain('');\n      testRequestedRedirect(\n        app,\n        'file:///etc\\\\passwd',\n        'file:///etc\\\\passwd',\n        '',\n        done\n      );\n    });\n  });\n})\n\n# lib/response.js:897-912  (lib.response)\n/**\n * Set the location header to `url`.\n *\n * The given `url` can also be \"back\", which redirects\n * to the _Referrer_ or _Referer_ headers or \"/\".\n *\n * Examples:\n *\n *    res.location('/foo/bar').;\n *    res.location('http://example.com');\n *    res.location('../login');\n *\n * @param {String} url\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# test/res.redirect.js:162-228#part3of3  (test.res.redirect)\ndescribe('res', function(){\n  describe('when accepting text', function(){\n    it('should respond with text', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/plain, */*')\n      .expect('Content-Type', /plain/)\n      .expect('Location', 'http://google.com')\n      .expect(302, 'Found. Redirecting to http://google.com', done)\n    })\n\n    it('should encode the url', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://example.com/?param=<script>alert(\"hax\");</script>');\n      });\n\n      request(app)\n      .get('/')\n      .set('Host', 'http://example.com')\n      .set('Accept', 'text/plain, */*')\n      .expect('Content-Type', /plain/)\n      .expect('Location', 'http://example.com/?param=%3Cscript%3Ealert(%22hax%22);%3C/script%3E')\n      .expect(302, 'Found. Redirecting to http://example.com/?param=%3Cscript%3Ealert(%22hax%22);%3C/script%3E', done)\n    })\n\n    it('should include the redirect type', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect(301, 'http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/plain, */*')\n      .expect('Content-Type', /plain/)\n      .expect('Location', 'http://google.com')\n      .expect(301, 'Moved Permanently. Redirecting to http://google.com', done);\n    })\n  })\n\n  describe('when accepting neither text or html', function(){\n    it('should respond with an empty body', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n        .get('/')\n        .set('Accept', 'application/octet-stream')\n        .expect(302)\n        .expect('location', 'http://google.com')\n        .expect('content-length', '0')\n        .expect(utils.shouldNotHaveHeader('Content-Type'))\n        .expect(utils.shouldNotHaveBody())\n        .end(done)\n    })\n  })\n})\n\n# test/res.redirect.js:8-94#part1of3  (test.res.redirect)\ndescribe('res', function(){\n  describe('.redirect(url)', function(){\n    it('should default to a 302 redirect', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .expect('location', 'http://google.com')\n      .expect(302, done)\n    })\n\n    it('should encode \"url\"', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.redirect('https://google.com?q=\\u2603 \u00a710')\n      })\n\n      request(app)\n      .get('/')\n      .expect('Location', 'https://google.com?q=%E2%98%83%20%C2%A710')\n      .expect(302, done)\n    })\n\n    it('should not touch already-encoded sequences in \"url\"', function (done) {\n      var app = express()\n\n      app.use(function (req, res) {\n        res.redirect('https://google.com?q=%A710')\n      })\n\n      request(app)\n      .get('/')\n      .expect('Location', 'https://google.com?q=%A710')\n      .expect(302, done)\n    })\n  })\n\n  describe('.redirect(status, url)', function(){\n    it('should set the response status', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect(303, 'http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .expect('Location', 'http://google.com')\n      .expect(303, done)\n    })\n  })\n\n  describe('.redirect(url, status)', function(){\n    it('should set the response status', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com', 303);\n      });\n\n      request(app)\n      .get('/')\n      .expect('Location', 'http://google.com')\n      .expect(303, done)\n    })\n  })\n\n  describe('when the request method is HEAD', function(){\n    it('should ignore the body', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n        .head('/')\n        .expect(302)\n        .expect('Location', 'http://google.com')\n        .expect(utils.shouldNotHaveBody())\n        .end(done)\n    })\n  })\n})\n\n# lib/application.js:1-62  (lib.application)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar finalhandler = require('finalhandler');\nvar Router = require('./router');\nvar methods = require('methods');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\nvar debug = require('debug')('express:application');\nvar View = require('./view');\nvar http = require('http');\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar merge = require('utils-merge');\nvar resolve = require('path').resolve;\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Module variables.\n * @private\n */\n\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar slice = Array.prototype.slice;\n\n/**\n * Application prototype.\n */\n\nvar app = exports = module.exports = {};\n\n/**\n * Variable for trust proxy inheritance back-compat\n * @private\n */\n\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n/**\n * Initialize the server.\n *\n *   - setup default configuration\n *   - setup default middleware\n *   - setup route reflection methods\n *\n * @private\n */\n\n# test/express.static.js:467-572#part2of5  (test.express.static)\ndescribe('express.static()', function () {\n  describe('redirect', function () {\n    before(function () {\n      this.app = express()\n      this.app.use(function (req, res, next) {\n        req.originalUrl = req.url =\n          req.originalUrl.replace(/\\/snow(\\/|$)/, '/snow \\u2603$1')\n        next()\n      })\n      this.app.use(express.static(fixtures))\n    })\n\n    it('should redirect directories', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect('Location', '/users/')\n        .expect(301, done)\n    })\n\n    it('should include HTML link', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect('Location', '/users/')\n        .expect(301, /\\/users\\//, done)\n    })\n\n    it('should redirect directories with query string', function (done) {\n      request(this.app)\n        .get('/users?name=john')\n        .expect('Location', '/users/?name=john')\n        .expect(301, done)\n    })\n\n    it('should not redirect to protocol-relative locations', function (done) {\n      request(this.app)\n        .get('//users')\n        .expect('Location', '/users/')\n        .expect(301, done)\n    })\n\n    it('should ensure redirect URL is properly encoded', function (done) {\n      request(this.app)\n        .get('/snow')\n        .expect('Location', '/snow%20%E2%98%83/')\n        .expect('Content-Type', /html/)\n        .expect(301, />Redirecting to \\/snow%20%E2%98%83\\/</, done)\n    })\n\n    it('should respond with default Content-Security-Policy', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect('Content-Security-Policy', \"default-src 'none'\")\n        .expect(301, done)\n    })\n\n    it('should not redirect incorrectly', function (done) {\n      request(this.app)\n        .get('/')\n        .expect(404, done)\n    })\n\n    describe('when false', function () {\n      before(function () {\n        this.app = createApp(fixtures, { 'redirect': false })\n      })\n\n      it('should disable redirect', function (done) {\n        request(this.app)\n          .get('/users')\n          .expect(404, done)\n      })\n    })\n  })\n\n  describe('setHeaders', function () {\n    before(function () {\n      this.app = express()\n      this.app.use(express.static(fixtures, { 'setHeaders': function (res) {\n        res.setHeader('x-custom', 'set')\n      } }))\n    })\n\n    it('should reject non-functions', function () {\n      assert.throws(express.static.bind(null, fixtures, { 'setHeaders': 3 }), /setHeaders.*function/)\n    })\n\n    it('should get called when sending file', function (done) {\n      request(this.app)\n        .get('/nums.txt')\n        .expect('x-custom', 'set')\n        .expect(200, done)\n    })\n\n    it('should not get called on 404', function (done) {\n      request(this.app)\n        .get('/bogus')\n        .expect(utils.shouldNotHaveHeader('x-custom'))\n        .expect(404, done)\n    })\n\n    it('should not get called on redirect', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect(utils.shouldNotHaveHeader('x-custom'))\n        .expect(301, done)\n    })\n  })\n})\n\n# test/res.redirect.js:96-160#part2of3  (test.res.redirect)\ndescribe('res', function(){\n  describe('when accepting html', function(){\n    it('should respond with html', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('Content-Type', /html/)\n      .expect('Location', 'http://google.com')\n      .expect(302, '<p>Found. Redirecting to http://google.com</p>', done)\n    })\n\n    it('should escape the url', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect('<la\\'me>');\n      });\n\n      request(app)\n      .get('/')\n      .set('Host', 'http://example.com')\n      .set('Accept', 'text/html')\n      .expect('Content-Type', /html/)\n      .expect('Location', '%3Cla\\'me%3E')\n      .expect(302, '<p>Found. Redirecting to %3Cla&#39;me%3E</p>', done)\n    })\n\n    it('should not render evil javascript links in anchor href (prevent XSS)', function(done){\n      var app = express();\n      var xss = 'javascript:eval(document.body.innerHTML=`<p>XSS</p>`);';\n      var encodedXss = 'javascript:eval(document.body.innerHTML=%60%3Cp%3EXSS%3C/p%3E%60);';\n\n      app.use(function(req, res){\n        res.redirect(xss);\n      });\n\n      request(app)\n      .get('/')\n      .set('Host', 'http://example.com')\n      .set('Accept', 'text/html')\n      .expect('Content-Type', /html/)\n      .expect('Location', encodedXss)\n      .expect(302, '<p>Found. Redirecting to ' + encodedXss +'</p>', done);\n    });\n\n    it('should include the redirect type', function(done){\n      var app = express();\n\n      app.use(function(req, res){\n        res.redirect(301, 'http://google.com');\n      });\n\n      request(app)\n      .get('/')\n      .set('Accept', 'text/html')\n      .expect('Content-Type', /html/)\n      .expect('Location', 'http://google.com')\n      .expect(301, '<p>Moved Permanently. Redirecting to http://google.com</p>', done);\n    })\n  })\n})\n\n# lib/middleware/init.js:28-42  (lib.middleware.init.init)\nexports.init = function(app){\n  return function expressInit(req, res, next){\n    if (app.enabled('x-powered-by')) res.setHeader('X-Powered-By', 'Express');\n    req.res = res;\n    res.req = req;\n    req.next = next;\n\n    setPrototypeOf(req, app.request)\n    setPrototypeOf(res, app.response)\n\n    res.locals = res.locals || Object.create(null);\n\n    next();\n  };\n};\n\n# lib/response.js:1-65  (lib.response)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar createError = require('http-errors')\nvar deprecate = require('depd')('express');\nvar encodeUrl = require('encodeurl');\nvar escapeHtml = require('escape-html');\nvar http = require('http');\nvar isAbsolute = require('./utils').isAbsolute;\nvar onFinished = require('on-finished');\nvar path = require('path');\nvar statuses = require('statuses')\nvar merge = require('utils-merge');\nvar sign = require('cookie-signature').sign;\nvar normalizeType = require('./utils').normalizeType;\nvar normalizeTypes = require('./utils').normalizeTypes;\nvar setCharset = require('./utils').setCharset;\nvar cookie = require('cookie');\nvar send = require('send');\nvar extname = path.extname;\nvar mime = send.mime;\nvar resolve = path.resolve;\nvar vary = require('vary');\n\n/**\n * Response prototype.\n * @public\n */\n\nvar res = Object.create(http.ServerResponse.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = res\n\n/**\n * Module variables.\n * @private\n */\n\nvar charsetRegExp = /;\\s*charset\\s*=/;\n\n/**\n * Set status `code`.\n *\n * @param {Number} code\n * @return {ServerResponse}\n * @public\n */\n\n# lib/response.js:946-990  (lib.response.redirect)\nres.redirect = function redirect(url) {\n  var address = url;\n  var body;\n  var status = 302;\n\n  // allow status / url\n  if (arguments.length === 2) {\n    if (typeof arguments[0] === 'number') {\n      status = arguments[0];\n      address = arguments[1];\n    } else {\n      deprecate('res.redirect(url, status): Use res.redirect(status, url) instead');\n      status = arguments[1];\n    }\n  }\n\n  // Set location header\n  address = this.location(address).get('Location');\n\n  // Support text/{plain,html} by default\n  this.format({\n    text: function(){\n      body = statuses.message[status] + '. Redirecting to ' + address\n    },\n\n    html: function(){\n      var u = escapeHtml(address);\n      body = '<p>' + statuses.message[status] + '. Redirecting to ' + u + '</p>'\n    },\n\n    default: function(){\n      body = '';\n    }\n  });\n\n  // Respond\n  this.statusCode = status;\n  this.set('Content-Length', Buffer.byteLength(body));\n\n  if (this.req.method === 'HEAD') {\n    this.end();\n  } else {\n    this.end(body);\n  }\n};\n\n# examples/web-service/index.js:21-117  (examples.web-service)\n// if we wanted to supply more than JSON, we could\n// use something similar to the content-negotiation\n// example.\n\n// here we validate the API key,\n// by mounting this middleware to /api\n// meaning only paths prefixed with \"/api\"\n// will cause this middleware to be invoked\n\napp.use('/api', function(req, res, next){\n  var key = req.query['api-key'];\n\n  // key isn't present\n  if (!key) return next(error(400, 'api key required'));\n\n  // key is invalid\n  if (apiKeys.indexOf(key) === -1) return next(error(401, 'invalid api key'))\n\n  // all good, store req.key for route access\n  req.key = key;\n  next();\n});\n\n// map of valid api keys, typically mapped to\n// account info with some sort of database like redis.\n// api keys do _not_ serve as authentication, merely to\n// track API usage or help prevent malicious behavior etc.\n\nvar apiKeys = ['foo', 'bar', 'baz'];\n\n// these two objects will serve as our faux database\n\nvar repos = [\n  { name: 'express', url: 'https://github.com/expressjs/express' },\n  { name: 'stylus', url: 'https://github.com/learnboost/stylus' },\n  { name: 'cluster', url: 'https://github.com/learnboost/cluster' }\n];\n\nvar users = [\n  { name: 'tobi' }\n  , { name: 'loki' }\n  , { name: 'jane' }\n];\n\nvar userRepos = {\n  tobi: [repos[0], repos[1]]\n  , loki: [repos[1]]\n  , jane: [repos[2]]\n};\n\n// we now can assume the api key is valid,\n// and simply expose the data\n\n// example: http://localhost:3000/api/users/?api-key=foo\napp.get('/api/users', function (req, res) {\n  res.send(users);\n});\n\n// example: http://localhost:3000/api/repos/?api-key=foo\napp.get('/api/repos', function (req, res) {\n  res.send(repos);\n});\n\n// example: http://localhost:3000/api/user/tobi/repos/?api-key=foo\napp.get('/api/user/:name/repos', function(req, res, next){\n  var name = req.params.name;\n  var user = userRepos[name];\n\n  if (user) res.send(user);\n  else next();\n});\n\n// middleware with an arity of 4 are considered\n// error handling middleware. When you next(err)\n// it will be passed through the defined middleware\n// in order, but ONLY those with an arity of 4, ignoring\n// regular middleware.\napp.use(function(err, req, res, next){\n  // whatever you want here, feel free to populate\n  // properties on `err` to treat it differently in here.\n  res.status(err.status || 500);\n  res.send({ error: err.message });\n});\n\n// our custom JSON 404 middleware. Since it's placed last\n// it will be the last middleware called, if all others\n// invoke next() and do not respond.\napp.use(function(req, res){\n  res.status(404);\n  res.send({ error: \"Sorry, can't find that\" })\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# examples/mvc/controllers/main/index.js:3-5  (examples.mvc.controllers.main.index)\nexports.index = function(req, res){\n  res.redirect('/users');\n};\n\n# test/express.static.js:691-800#part5of5  (test.express.static)\ndescribe('express.static()', function () {\n  describe('when index at mount point', function () {\n    before(function () {\n      this.app = express()\n      this.app.use('/users', express.static(fixtures + '/users'))\n    })\n\n    it('should redirect correctly', function (done) {\n      request(this.app)\n        .get('/users')\n        .expect('Location', '/users/')\n        .expect(301, done)\n    })\n  })\n\n  describe('when mounted', function () {\n    before(function () {\n      this.app = express()\n      this.app.use('/static', express.static(fixtures))\n    })\n\n    it('should redirect relative to the originalUrl', function (done) {\n      request(this.app)\n        .get('/static/users')\n        .expect('Location', '/static/users/')\n        .expect(301, done)\n    })\n\n    it('should not choke on auth-looking URL', function (done) {\n      request(this.app)\n        .get('//todo@txt')\n        .expect(404, done)\n    })\n  })\n\n  //\n  // NOTE: This is not a real part of the API, but\n  //       over time this has become something users\n  //       are doing, so this will prevent unseen\n  //       regressions around this use-case.\n  //\n  describe('when mounted \"root\" as a file', function () {\n    before(function () {\n      this.app = express()\n      this.app.use('/todo.txt', express.static(fixtures + '/todo.txt'))\n    })\n\n    it('should load the file when on trailing slash', function (done) {\n      request(this.app)\n        .get('/todo.txt')\n        .expect(200, '- groceries', done)\n    })\n\n    it('should 404 when trailing slash', function (done) {\n      request(this.app)\n        .get('/todo.txt/')\n        .expect(404, done)\n    })\n  })\n\n  describe('when responding non-2xx or 304', function () {\n    it('should not alter the status', function (done) {\n      var app = express()\n\n      app.use(function (req, res, next) {\n        res.status(501)\n        next()\n      })\n      app.use(express.static(fixtures))\n\n      request(app)\n        .get('/todo.txt')\n        .expect(501, '- groceries', done)\n    })\n  })\n\n  describe('when index file serving disabled', function () {\n    before(function () {\n      this.app = express()\n      this.app.use('/static', express.static(fixtures, { 'index': false }))\n      this.app.use(function (req, res, next) {\n        res.sendStatus(404)\n      })\n    })\n\n    it('should next() on directory', function (done) {\n      request(this.app)\n        .get('/static/users/')\n        .expect(404, 'Not Found', done)\n    })\n\n    it('should redirect to trailing slash', function (done) {\n      request(this.app)\n        .get('/static/users')\n        .expect('Location', '/static/users/')\n        .expect(301, done)\n    })\n\n    it('should next() on mount point', function (done) {\n      request(this.app)\n        .get('/static/')\n        .expect(404, 'Not Found', done)\n    })\n\n    it('should redirect to trailing slash mount point', function (done) {\n      request(this.app)\n        .get('/static')\n        .expect('Location', '/static/')\n        .expect(301, done)\n    })\n  })\n})\n\n# lib/request.js:1-62  (lib.request)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar accepts = require('accepts');\nvar deprecate = require('depd')('express');\nvar isIP = require('net').isIP;\nvar typeis = require('type-is');\nvar http = require('http');\nvar fresh = require('fresh');\nvar parseRange = require('range-parser');\nvar parse = require('parseurl');\nvar proxyaddr = require('proxy-addr');\n\n/**\n * Request prototype.\n * @public\n */\n\nvar req = Object.create(http.IncomingMessage.prototype)\n\n/**\n * Module exports.\n * @public\n */\n\nmodule.exports = req\n\n/**\n * Return request header.\n *\n * The `Referrer` header field is special-cased,\n * both `Referrer` and `Referer` are interchangeable.\n *\n * Examples:\n *\n *     req.get('Content-Type');\n *     // => \"text/plain\"\n *\n *     req.get('content-type');\n *     // => \"text/plain\"\n *\n *     req.get('Something');\n *     // => undefined\n *\n * Aliased as `req.header()`.\n *\n * @param {String} name\n * @return {String}\n * @public\n */\n\n# examples/static-files/index.js:1-43  (examples.static-files)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../..');\nvar logger = require('morgan');\nvar path = require('path');\nvar app = express();\n\n// log requests\napp.use(logger('dev'));\n\n// express on its own has no notion\n// of a \"file\". The express.static()\n// middleware checks for a file matching\n// the `req.path` within the directory\n// that you pass it. In this case \"GET /js/app.js\"\n// will look for \"./public/js/app.js\".\n\napp.use(express.static(path.join(__dirname, 'public')));\n\n// if you wanted to \"prefix\" you may use\n// the mounting feature of Connect, for example\n// \"GET /static/js/app.js\" instead of \"GET /js/app.js\".\n// The mount-path \"/static\" is simply removed before\n// passing control to the express.static() middleware,\n// thus it serves the file correctly by ignoring \"/static\"\napp.use('/static', express.static(path.join(__dirname, 'public')));\n\n// if for some reason you want to serve files from\n// several directories, you can use express.static()\n// multiple times! Here we're passing \"./public/css\",\n// this will allow \"GET /style.css\" instead of \"GET /css/style.css\":\napp.use(express.static(path.join(__dirname, 'public', 'css')));\n\napp.listen(3000);\nconsole.log('listening on port 3000');\nconsole.log('try:');\nconsole.log('  GET /hello.txt');\nconsole.log('  GET /js/app.js');\nconsole.log('  GET /css/style.css');\n\n# examples/content-negotiation/index.js:1-31  (examples.content-negotiation)\n'use strict'\n\nvar express = require('../../');\nvar app = module.exports = express();\nvar users = require('./db');\n\n// so either you can deal with different types of formatting\n// for expected response in index.js\napp.get('/', function(req, res){\n  res.format({\n    html: function(){\n      res.send('<ul>' + users.map(function(user){\n        return '<li>' + user.name + '</li>';\n      }).join('') + '</ul>');\n    },\n\n    text: function(){\n      res.send(users.map(function(user){\n        return ' - ' + user.name + '\\n';\n      }).join(''));\n    },\n\n    json: function(){\n      res.json(users);\n    }\n  });\n});\n\n// or you could write a tiny middleware like\n// this to add a layer of abstraction\n// and make things a bit more declarative:\n\n# lib/response.js:928-944  (lib.response)\n/**\n * Redirect to the given `url` with optional response `status`\n * defaulting to 302.\n *\n * The resulting `url` is determined by `res.location()`, so\n * it will play nicely with mounted apps, relative paths,\n * `\"back\"` etc.\n *\n * Examples:\n *\n *    res.redirect('/foo/bar');\n *    res.redirect('http://example.com');\n *    res.redirect(301, 'http://example.com');\n *    res.redirect('../login'); // /blog/post/1 -> /blog/login\n *\n * @public\n */\n\n# lib/utils.js:1-54  (lib.utils)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @api private\n */\n\nvar Buffer = require('safe-buffer').Buffer\nvar contentDisposition = require('content-disposition');\nvar contentType = require('content-type');\nvar deprecate = require('depd')('express');\nvar flatten = require('array-flatten');\nvar mime = require('send').mime;\nvar etag = require('etag');\nvar proxyaddr = require('proxy-addr');\nvar qs = require('qs');\nvar querystring = require('querystring');\n\n/**\n * Return strong ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.etag = createETagGenerator({ weak: false })\n\n/**\n * Return weak ETag for `body`.\n *\n * @param {String|Buffer} body\n * @param {String} [encoding]\n * @return {String}\n * @api private\n */\n\nexports.wetag = createETagGenerator({ weak: true })\n\n/**\n * Check if `path` looks absolute.\n *\n * @param {String} path\n * @return {Boolean}\n * @api private\n */\n\n# lib/application.js:156-163  (lib.application)\n/**\n * Dispatch a req, res pair into the application. Starts pipeline processing.\n *\n * If no callback is provided, then default error handlers will respond\n * in the event of an error bubbling through the stack.\n *\n * @private\n */\n\n# lib/middleware/init.js:1-26  (lib.middleware.init)\n/*!\n * express\n * Copyright(c) 2009-2013 TJ Holowaychuk\n * Copyright(c) 2013 Roman Shtylman\n * Copyright(c) 2014-2015 Douglas Christopher Wilson\n * MIT Licensed\n */\n\n'use strict';\n\n/**\n * Module dependencies.\n * @private\n */\n\nvar setPrototypeOf = require('setprototypeof')\n\n/**\n * Initialization middleware, exposing the\n * request and response to each other, as well\n * as defaulting the X-Powered-By header field.\n *\n * @param {Function} app\n * @return {Function}\n * @api private\n */\n\n# test/express.static.js:247-325#part1of2  (test.express.static)\ndescribe('express.static()', function () {\n  describe('fallthrough', function () {\n    it('should default to true', function (done) {\n      request(createApp())\n        .get('/does-not-exist')\n        .expect(404, 'Not Found', done)\n    })\n\n    describe('when true', function () {\n      before(function () {\n        this.app = createApp(fixtures, { 'fallthrough': true })\n      })\n\n      it('should fall-through when OPTIONS request', function (done) {\n        request(this.app)\n          .options('/todo.txt')\n          .expect(404, 'Not Found', done)\n      })\n\n      it('should fall-through when URL malformed', function (done) {\n        request(this.app)\n          .get('/%')\n          .expect(404, 'Not Found', done)\n      })\n\n      it('should fall-through when traversing past root', function (done) {\n        request(this.app)\n          .get('/users/../../todo.txt')\n          .expect(404, 'Not Found', done)\n      })\n\n      it('should fall-through when URL too long', function (done) {\n        var app = express()\n        var root = fixtures + Array(10000).join('/foobar')\n\n        app.use(express.static(root, { 'fallthrough': true }))\n        app.use(function (req, res, next) {\n          res.sendStatus(404)\n        })\n\n        request(app)\n          .get('/')\n          .expect(404, 'Not Found', done)\n      })\n\n      describe('with redirect: true', function () {\n        before(function () {\n          this.app = createApp(fixtures, { 'fallthrough': true, 'redirect': true })\n        })\n\n        it('should fall-through when directory', function (done) {\n          request(this.app)\n            .get('/pets/')\n            .expect(404, 'Not Found', done)\n        })\n\n        it('should redirect when directory without slash', function (done) {\n          request(this.app)\n            .get('/pets')\n            .expect(301, /Redirecting/, done)\n        })\n      })\n\n      describe('with redirect: false', function () {\n        before(function () {\n          this.app = createApp(fixtures, { 'fallthrough': true, 'redirect': false })\n        })\n\n        it('should fall-through when directory', function (done) {\n          request(this.app)\n            .get('/pets/')\n            .expect(404, 'Not Found', done)\n        })\n\n        it('should fall-through when directory without slash', function (done) {\n          request(this.app)\n            .get('/pets')\n            .expect(404, 'Not Found', done)\n        })\n      })\n    })\n  })\n})\n\n# examples/web-service/index.js:1-13  (examples.web-service)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\n\nvar app = module.exports = express();\n\n// create an error with .status. we\n// can then use the property in our\n// custom error handler (Connect respects this prop as well)\n\n# lib/response.js:378-417  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendFile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendFile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendFile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */\n\n# lib/response.js:914-926  (lib.response.location)\nres.location = function location(url) {\n  var loc;\n\n  // \"back\" is an alias for the referrer\n  if (url === 'back') {\n    deprecate('res.location(\"back\"): use res.location(req.get(\"Referrer\") || \"/\") and refer to https://dub.sh/security-redirect for best practices');\n    loc = this.req.get('Referrer') || '/';\n  } else {\n    loc = String(url);\n  }\n\n  return this.set('Location', encodeUrl(loc));\n};\n\n# lib/response.js:460-499  (lib.response)\n/**\n * Transfer the file at the given `path`.\n *\n * Automatically sets the _Content-Type_ response header field.\n * The callback `callback(err)` is invoked when the transfer is complete\n * or when an error occurs. Be sure to check `res.headersSent`\n * if you wish to attempt responding, as the header and some data\n * may have already been transferred.\n *\n * Options:\n *\n *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)\n *   - `root`     root directory for relative filenames\n *   - `headers`  object of headers to serve with file\n *   - `dotfiles` serve dotfiles, defaulting to false; can be `\"allow\"` to send them\n *\n * Other options are passed along to `send`.\n *\n * Examples:\n *\n *  The following example illustrates how `res.sendfile()` may\n *  be used as an alternative for the `static()` middleware for\n *  dynamic situations. The code backing `res.sendfile()` is actually\n *  the same code, so HTTP cache support etc is identical.\n *\n *     app.get('/user/:uid/photos/:file', function(req, res){\n *       var uid = req.params.uid\n *         , file = req.params.file;\n *\n *       req.user.mayViewFilesFrom(uid, function(yes){\n *         if (yes) {\n *           res.sendfile('/uploads/' + uid + '/' + file);\n *         } else {\n *           res.send(403, 'Sorry! you cant see that.');\n *         }\n *       });\n *     });\n *\n * @public\n */\n\n# lib/response.js:627-682  (lib.response)\n/**\n * Respond to the Acceptable formats using an `obj`\n * of mime-type callbacks.\n *\n * This method uses `req.accepted`, an array of\n * acceptable types ordered by their quality values.\n * When \"Accept\" is not present the _first_ callback\n * is invoked, otherwise the first match is used. When\n * no match is performed the server responds with\n * 406 \"Not Acceptable\".\n *\n * Content-Type is set for you, however if you choose\n * you may alter this within the callback using `res.type()`\n * or `res.set('Content-Type', ...)`.\n *\n *    res.format({\n *      'text/plain': function(){\n *        res.send('hey');\n *      },\n *\n *      'text/html': function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      'application/json': function () {\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * In addition to canonicalized MIME types you may\n * also use extnames mapped to these types:\n *\n *    res.format({\n *      text: function(){\n *        res.send('hey');\n *      },\n *\n *      html: function(){\n *        res.send('<p>hey</p>');\n *      },\n *\n *      json: function(){\n *        res.send({ message: 'hey' });\n *      }\n *    });\n *\n * By default Express passes an `Error`\n * with a `.status` of 406 to `next(err)`\n * if a match is not made. If you provide\n * a `.default` callback it will be invoked\n * instead.\n *\n * @param {Object} obj\n * @return {ServerResponse} for chaining\n * @public\n */\n\n# examples/error/index.js:1-18  (examples.error)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar logger = require('morgan');\nvar app = module.exports = express();\nvar test = app.get('env') === 'test'\n\nif (!test) app.use(logger('dev'));\n\n// error handling middleware have an arity of 4\n// instead of the typical (req, res, next),\n// otherwise they behave exactly like regular\n// middleware, you may have several of them,\n// in different orders etc.\n\n# examples/error-pages/index.js:1-103  (examples.error-pages)\n'use strict'\n\n/**\n * Module dependencies.\n */\n\nvar express = require('../../');\nvar path = require('path');\nvar app = module.exports = express();\nvar logger = require('morgan');\nvar silent = process.env.NODE_ENV === 'test'\n\n// general config\napp.set('views', path.join(__dirname, 'views'));\napp.set('view engine', 'ejs');\n\n// our custom \"verbose errors\" setting\n// which we can use in the templates\n// via settings['verbose errors']\napp.enable('verbose errors');\n\n// disable them in production\n// use $ NODE_ENV=production node examples/error-pages\nif (app.settings.env === 'production') app.disable('verbose errors')\n\nsilent || app.use(logger('dev'));\n\n// Routes\n\napp.get('/', function(req, res){\n  res.render('index.ejs');\n});\n\napp.get('/404', function(req, res, next){\n  // trigger a 404 since no other middleware\n  // will match /404 after this one, and we're not\n  // responding here\n  next();\n});\n\napp.get('/403', function(req, res, next){\n  // trigger a 403 error\n  var err = new Error('not allowed!');\n  err.status = 403;\n  next(err);\n});\n\napp.get('/500', function(req, res, next){\n  // trigger a generic (500) error\n  next(new Error('keyboard cat!'));\n});\n\n// Error handlers\n\n// Since this is the last non-error-handling\n// middleware use()d, we assume 404, as nothing else\n// responded.\n\n// $ curl http://localhost:3000/notfound\n// $ curl http://localhost:3000/notfound -H \"Accept: application/json\"\n// $ curl http://localhost:3000/notfound -H \"Accept: text/plain\"\n\napp.use(function(req, res, next){\n  res.status(404);\n\n  res.format({\n    html: function () {\n      res.render('404', { url: req.url })\n    },\n    json: function () {\n      res.json({ error: 'Not found' })\n    },\n    default: function () {\n      res.type('txt').send('Not found')\n    }\n  })\n});\n\n// error-handling middleware, take the same form\n// as regular middleware, however they require an\n// arity of 4, aka the signature (err, req, res, next).\n// when connect has an error, it will invoke ONLY error-handling\n// middleware.\n\n// If we were to next() here any remaining non-error-handling\n// middleware would then be executed, or if we next(err) to\n// continue passing the error, only error-handling middleware\n// would remain being executed, however here\n// we simply respond with an error page.\n\napp.use(function(err, req, res, next){\n  // we may use properties of the error object\n  // here and next(err) appropriately, or if\n  // we possibly recovered from the error, simply next().\n  res.status(err.status || 500);\n  res.render('500', { error: err });\n});\n\n/* istanbul ignore next */\nif (!module.parent) {\n  app.listen(3000);\n  console.log('Express started on port 3000');\n}\n\n# lib/router/index.js:293-330#part3of3  (lib.router.handle)\nproto.handle = function handle(req, res, out) {\n  function trim_prefix(layer, layerError, layerPath, path) {\n    if (layerPath.length !== 0) {\n      // Validate path is a prefix match\n      if (layerPath !== path.slice(0, layerPath.length)) {\n        next(layerError)\n        return\n      }\n\n      // Validate path breaks on a path separator\n      var c = path[layerPath.length]\n      if (c && c !== '/' && c !== '.') return next(layerError)\n\n      // Trim off the part of the url that matches the route\n      // middleware (.use stuff) needs to have the path stripped\n      debug('trim prefix (%s) from url %s', layerPath, req.url);\n      removed = layerPath;\n      req.url = protohost + req.url.slice(protohost.length + removed.length)\n\n      // Ensure leading slash\n      if (!protohost && req.url[0] !== '/') {\n        req.url = '/' + req.url;\n        slashAdded = true;\n      }\n\n      // Setup base URL (no trailing slash)\n      req.baseUrl = parentUrl + (removed[removed.length - 1] === '/'\n        ? removed.substring(0, removed.length - 1)\n        : removed);\n    }\n\n    debug('%s %s : %s', layer.name, layerPath, req.originalUrl);\n\n    if (layerError) {\n      layer.handle_error(layerError, req, res, next);\n    } else {\n      layer.handle_request(req, res, next);\n    }\n  }\n};\n\n# lib/application.js:266-298  (lib.application)\n/**\n * Register the given template engine callback `fn`\n * as `ext`.\n *\n * By default will `require()` the engine based on the\n * file extension. For example if you try to render\n * a \"foo.ejs\" file Express will invoke the following internally:\n *\n *     app.engine('ejs', require('ejs').__express);\n *\n * For engines that do not provide `.__express` out of the box,\n * or if you wish to \"map\" a different extension to the template engine\n * you may use this method. For example mapping the EJS template engine to\n * \".html\" files:\n *\n *     app.engine('html', require('ejs').renderFile);\n *\n * In this case EJS provides a `.renderFile()` method with\n * the same signature that Express expects: `(path, options, callback)`,\n * though note that it aliases this method as `ejs.__express` internally\n * so if you're using \".ejs\" extensions you don't need to do anything.\n *\n * Some template engines do not follow this convention, the\n * [Consolidate.js](https://github.com/tj/consolidate.js)\n * library was created to map all of node's popular template\n * engines to follow this convention, thus allowing them to\n * work seamlessly within Express.\n *\n * @param {String} ext\n * @param {Function} fn\n * @return {app} for chaining\n * @public\n */\n\n# lib/router/route.js:96-99  (lib.router.route)\n/**\n * dispatch req, res into this route\n * @private\n */\n\n# examples/mvc/index.js:22-31  (examples.mvc.message)\n// define a custom res.message() method\n// which stores messages in the session\napp.response.message = function(msg){\n  // reference `req.session` via the `this.req` reference\n  var sess = this.req.session;\n  // simply add the msg to an array for later\n  sess.messages = sess.messages || [];\n  sess.messages.push(msg);\n  return this;\n};\n\n# lib/response.js:354-367  (lib.response)\n/**\n * Send given HTTP status code.\n *\n * Sets the response status to `statusCode` and the body of the\n * response to the standard description from node's http.STATUS_CODES\n * or the statusCode number if no description.\n *\n * Examples:\n *\n *     res.sendStatus(200);\n *\n * @param {number} statusCode\n * @public\n */\n\n## Task\n\nYou are investigating Express's redirect handling, starting from `res.redirect` in lib/response.js. Trace the real causal pipeline it runs through to determine the target Location header and build the fallback response body.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.redirect\", \"lib.response.location\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

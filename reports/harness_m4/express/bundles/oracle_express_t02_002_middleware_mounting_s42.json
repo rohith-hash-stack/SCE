@@ -1,0 +1,91 @@
+{
+ "bundle": {
+  "arm": "oracle",
+  "task_id": "express_t02_002_middleware_mounting",
+  "items": [
+   {
+    "source_id": "lib/application.js:194-249",
+    "content": "# lib/application.js:194-249  (lib.application.use)\napp.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate app.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var fns = flatten(slice.call(arguments, offset));\n\n  if (fns.length === 0) {\n    throw new TypeError('app.use() requires a middleware function')\n  }\n\n  // setup router\n  this.lazyrouter();\n  var router = this._router;\n\n  fns.forEach(function (fn) {\n    // non-express app\n    if (!fn || !fn.handle || !fn.set) {\n      return router.use(path, fn);\n    }\n\n    debug('.use app under %s', path);\n    fn.mountpath = path;\n    fn.parent = this;\n\n    // restore .app property on req and res\n    router.use(path, function mounted_app(req, res, next) {\n      var orig = req.app;\n      fn.handle(req, res, function (err) {\n        setPrototypeOf(req, orig.request)\n        setPrototypeOf(res, orig.response)\n        next(err);\n      });\n    });\n\n    // mounted an app\n    fn.emit('mount', this);\n  }, this);\n\n  return this;\n};",
+    "token_count": 341,
+    "rank": 1,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.application.use"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 341
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:144-154",
+    "content": "# lib/application.js:144-154  (lib.application.lazyrouter)\napp.lazyrouter = function lazyrouter() {\n  if (!this._router) {\n    this._router = new Router({\n      caseSensitive: this.enabled('case sensitive routing'),\n      strict: this.enabled('strict routing')\n    });\n\n    this._router.use(query(this.get('query parser fn')));\n    this._router.use(middleware.init(this));\n  }\n};",
+    "token_count": 92,
+    "rank": 2,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.application.lazyrouter"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 92
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:438-440",
+    "content": "# lib/application.js:438-440  (lib.application.enabled)\napp.enabled = function enabled(setting) {\n  return Boolean(this.set(setting));\n};",
+    "token_count": 34,
+    "rank": 3,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.application.enabled"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 34
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:359-401",
+    "content": "# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};",
+    "token_count": 241,
+    "rank": 4,
+    "kind": "oracle_truth",
+    "symbols": [
+     "lib.application.set"
+    ],
+    "provenance": {
+     "in_pipeline": true,
+     "engine_token_count": 241
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 708,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PragmaticOracle (ground-truth universe)",
+   "fidelity": "CEILING",
+   "simplifications": [],
+   "query": "You are investigating how Express mounts middleware in lib/application.js. Starting from `use`, trace the exact causal pipeline that runs when middleware is mounted on an application for the first time: what triggers the application's internal router to be lazily constructed, and what real configuration lookups happen along the way.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.use\", \"lib.application.lazyrouter\"]\n```\n",
+   "task_type": "T2_localization",
+   "turn_count": 1,
+   "over_budget": false,
+   "ranking_method": "pipeline_then_alphabetical",
+   "universe_size": 4,
+   "unresolved_universe": [],
+   "delivered_from_gold_location": [],
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 708,
+   "prompt_tokens": 978,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 991,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/application.js:194-249  (lib.application.use)\napp.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate app.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var fns = flatten(slice.call(arguments, offset));\n\n  if (fns.length === 0) {\n    throw new TypeError('app.use() requires a middleware function')\n  }\n\n  // setup router\n  this.lazyrouter();\n  var router = this._router;\n\n  fns.forEach(function (fn) {\n    // non-express app\n    if (!fn || !fn.handle || !fn.set) {\n      return router.use(path, fn);\n    }\n\n    debug('.use app under %s', path);\n    fn.mountpath = path;\n    fn.parent = this;\n\n    // restore .app property on req and res\n    router.use(path, function mounted_app(req, res, next) {\n      var orig = req.app;\n      fn.handle(req, res, function (err) {\n        setPrototypeOf(req, orig.request)\n        setPrototypeOf(res, orig.response)\n        next(err);\n      });\n    });\n\n    // mounted an app\n    fn.emit('mount', this);\n  }, this);\n\n  return this;\n};\n\n# lib/application.js:144-154  (lib.application.lazyrouter)\napp.lazyrouter = function lazyrouter() {\n  if (!this._router) {\n    this._router = new Router({\n      caseSensitive: this.enabled('case sensitive routing'),\n      strict: this.enabled('strict routing')\n    });\n\n    this._router.use(query(this.get('query parser fn')));\n    this._router.use(middleware.init(this));\n  }\n};\n\n# lib/application.js:438-440  (lib.application.enabled)\napp.enabled = function enabled(setting) {\n  return Boolean(this.set(setting));\n};\n\n# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n## Task\n\nYou are investigating how Express mounts middleware in lib/application.js. Starting from `use`, trace the exact causal pipeline that runs when middleware is mounted on an application for the first time: what triggers the application's internal router to be lazily constructed, and what real configuration lookups happen along the way.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.use\", \"lib.application.lazyrouter\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

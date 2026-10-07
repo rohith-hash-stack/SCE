@@ -1,0 +1,192 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_002_middleware_mounting",
+  "items": [
+   {
+    "source_id": "lib/application.js:194-249",
+    "content": "# lib/application.js:194-249  (lib.application.use)\napp.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate app.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var fns = flatten(slice.call(arguments, offset));\n\n  if (fns.length === 0) {\n    throw new TypeError('app.use() requires a middleware function')\n  }\n\n  // setup router\n  this.lazyrouter();\n  var router = this._router;\n\n  fns.forEach(function (fn) {\n    // non-express app\n    if (!fn || !fn.handle || !fn.set) {\n      return router.use(path, fn);\n    }\n\n    debug('.use app under %s', path);\n    fn.mountpath = path;\n    fn.parent = this;\n\n    // restore .app property on req and res\n    router.use(path, function mounted_app(req, res, next) {\n      var orig = req.app;\n      fn.handle(req, res, function (err) {\n        setPrototypeOf(req, orig.request)\n        setPrototypeOf(res, orig.response)\n        next(err);\n      });\n    });\n\n    // mounted an app\n    fn.emit('mount', this);\n  }, this);\n\n  return this;\n};\n\n# Referenced module constants:\nvar flatten = require('array-flatten');\nvar setPrototypeOf = require('setprototypeof')\nvar slice = Array.prototype.slice;",
+    "token_count": 373,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.use"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 349,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:144-154",
+    "content": "# lib/application.js:144-154  (lib.application.lazyrouter)\napp.lazyrouter = function lazyrouter() {\n  if (!this._router) {\n    this._router = new Router({\n      caseSensitive: this.enabled('case sensitive routing'),\n      strict: this.enabled('strict routing')\n    });\n\n    this._router.use(query(this.get('query parser fn')));\n    this._router.use(middleware.init(this));\n  }\n};\n\n# Referenced module constants:\nvar Router = require('./router');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');",
+    "token_count": 121,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.lazyrouter"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 96,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:438-440",
+    "content": "# lib/application.js:438-440  (lib.application.enabled)\napp.enabled = function enabled(setting) {\n  return Boolean(this.set(setting));\n};",
+    "token_count": 34,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.enabled"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 16,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:359-401",
+    "content": "# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';",
+    "token_count": 306,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.set"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 281,
+     "distance": 2.7272727272727275
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:21-21",
+    "content": "# lib/application.js:21-21  (lib.application.debug)\nvar debug = require('debug')('express:application');",
+    "token_count": 28,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.debug"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 12,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/router/index.js:177-291",
+    "content": "# lib/router/index.js:177-291  (lib.router.next)\n  function next(err) {\n    var layerError = err === 'route'\n      ? null\n      : err;\n\n    // remove added slash\n    if (slashAdded) {\n      req.url = req.url.slice(1)\n      slashAdded = false;\n    }\n\n    // restore altered req.url\n    if (removed.length !== 0) {\n      req.baseUrl = parentUrl;\n      req.url = protohost + removed + req.url.slice(protohost.length)\n      removed = '';\n    }\n\n    // signal to exit router\n    if (layerError === 'router') {\n      setImmediate(done, null)\n      return\n    }\n\n    // no more matching layers\n    if (idx >= stack.length) {\n      setImmediate(done, layerError);\n      return;\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    // get pathname of request\n    var path = getPathname(req);\n\n    if (path == null) {\n      return done(layerError);\n    }\n\n    // find next matching layer\n    var layer;\n    var match;\n    var route;\n\n    while (match !== true && idx < stack.length) {\n      layer = stack[idx++];\n      match = matchLayer(layer, path);\n      route = layer.route;\n\n      if (typeof match !== 'boolean') {\n        // hold on to layerError\n        layerError = layerError || match;\n      }\n\n      if (match !== true) {\n        continue;\n      }\n\n      if (!route) {\n        // process non-route handlers normally\n        continue;\n      }\n\n      if (layerError) {\n        // routes do not match with a pending error\n        match = false;\n        continue;\n      }\n\n      var method = req.method;\n      var has_method = route._handles_method(method);\n\n      // build up automatic options response\n      if (!has_method && method === 'OPTIONS') {\n        appendMethods(options, route._options());\n      }\n\n      // don't even bother matching route\n      if (!has_method && method !== 'HEAD') {\n        match = false;\n      }\n    }\n\n    // no match\n    if (match !== true) {\n      return done(layerError);\n    }\n\n    // store route for dispatch on change\n    if (route) {\n      req.route = route;\n    }\n\n    // Capture one-time layer values\n    req.params = self.mergeParams\n      ? mergeParams(layer.params, parentParams)\n      : layer.params;\n    var layerPath = layer.path;\n\n    // this should be done for the layer\n    self.process_params(layer, paramcalled, req, res, function (err) {\n      if (err) {\n        next(layerError || err)\n      } else if (route) {\n        layer.handle_request(req, res, next)\n      } else {\n        trim_prefix(layer, layerError, layerPath, path)\n      }\n\n      sync = 0\n    });\n  }",
+    "token_count": 628,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.router.next"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 607,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:165-182",
+    "content": "# lib/application.js:165-182  (lib.application.handle)\napp.handle = function handle(req, res, callback) {\n  var router = this._router;\n\n  // final handler\n  var done = callback || finalhandler(req, res, {\n    env: this.get('env'),\n    onerror: logerror.bind(this)\n  });\n\n  // no routes\n  if (!router) {\n    debug('no routes defined on app');\n    done();\n    return;\n  }\n\n  router.handle(req, res, done);\n};\n\n# Referenced module constants:\nvar finalhandler = require('finalhandler');",
+    "token_count": 128,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.handle"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 104,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 1618,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating how Express mounts middleware in lib/application.js. Starting from `use`, trace the exact causal pipeline that runs when middleware is mounted on an application for the first time: what triggers the application's internal router to be lazily constructed, and what real configuration lookups happen along the way.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.use\", \"lib.application.lazyrouter\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.application.use",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 21,
+   "manifest_candidates_unfiltered": 21,
+   "requested_symbols": [
+    "lib.application.use",
+    "lib.application.lazyrouter",
+    "lib.application.enabled",
+    "lib.application.set",
+    "lib.application.debug",
+    "lib.application.use",
+    "lib.router.next"
+   ],
+   "turn1_requested_count": 7,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"When middleware is mounted using `app.use`, it triggers the internal router to be lazily constructed if it hasn't been already. This involves checking if certain settings are enabled and setting up the router with necessary middleware.\",\n  \"requested_symbols\": [\n    \"lib.application.use\",\n    \"lib.application.lazyrouter\",\n    \"lib.application.enabled\",\n    \"lib.application.set\",\n    \"lib.application.debug\",\n    \"lib.application.use\",\n    \"lib.router.next\"\n  ]\n}\n```",
+     "prompt_tokens": 1068,
+     "completion_tokens": 107,
+     "latency_seconds": 8.57460109700014,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     20.310375
+    ],
+    "L_turn2_hydrate": [
+     48.418909
+    ],
+    "L_retrieve": [
+     8649.242007
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 1618,
+   "prompt_tokens": 1888,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1901,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/application.js:194-249  (lib.application.use)\napp.use = function use(fn) {\n  var offset = 0;\n  var path = '/';\n\n  // default path to '/'\n  // disambiguate app.use([fn])\n  if (typeof fn !== 'function') {\n    var arg = fn;\n\n    while (Array.isArray(arg) && arg.length !== 0) {\n      arg = arg[0];\n    }\n\n    // first arg is the path\n    if (typeof arg !== 'function') {\n      offset = 1;\n      path = fn;\n    }\n  }\n\n  var fns = flatten(slice.call(arguments, offset));\n\n  if (fns.length === 0) {\n    throw new TypeError('app.use() requires a middleware function')\n  }\n\n  // setup router\n  this.lazyrouter();\n  var router = this._router;\n\n  fns.forEach(function (fn) {\n    // non-express app\n    if (!fn || !fn.handle || !fn.set) {\n      return router.use(path, fn);\n    }\n\n    debug('.use app under %s', path);\n    fn.mountpath = path;\n    fn.parent = this;\n\n    // restore .app property on req and res\n    router.use(path, function mounted_app(req, res, next) {\n      var orig = req.app;\n      fn.handle(req, res, function (err) {\n        setPrototypeOf(req, orig.request)\n        setPrototypeOf(res, orig.response)\n        next(err);\n      });\n    });\n\n    // mounted an app\n    fn.emit('mount', this);\n  }, this);\n\n  return this;\n};\n\n# Referenced module constants:\nvar flatten = require('array-flatten');\nvar setPrototypeOf = require('setprototypeof')\nvar slice = Array.prototype.slice;\n\n# lib/application.js:144-154  (lib.application.lazyrouter)\napp.lazyrouter = function lazyrouter() {\n  if (!this._router) {\n    this._router = new Router({\n      caseSensitive: this.enabled('case sensitive routing'),\n      strict: this.enabled('strict routing')\n    });\n\n    this._router.use(query(this.get('query parser fn')));\n    this._router.use(middleware.init(this));\n  }\n};\n\n# Referenced module constants:\nvar Router = require('./router');\nvar middleware = require('./middleware/init');\nvar query = require('./middleware/query');\n\n# lib/application.js:438-440  (lib.application.enabled)\napp.enabled = function enabled(setting) {\n  return Boolean(this.set(setting));\n};\n\n# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n# lib/application.js:21-21  (lib.application.debug)\nvar debug = require('debug')('express:application');\n\n# lib/router/index.js:177-291  (lib.router.next)\n  function next(err) {\n    var layerError = err === 'route'\n      ? null\n      : err;\n\n    // remove added slash\n    if (slashAdded) {\n      req.url = req.url.slice(1)\n      slashAdded = false;\n    }\n\n    // restore altered req.url\n    if (removed.length !== 0) {\n      req.baseUrl = parentUrl;\n      req.url = protohost + removed + req.url.slice(protohost.length)\n      removed = '';\n    }\n\n    // signal to exit router\n    if (layerError === 'router') {\n      setImmediate(done, null)\n      return\n    }\n\n    // no more matching layers\n    if (idx >= stack.length) {\n      setImmediate(done, layerError);\n      return;\n    }\n\n    // max sync stack\n    if (++sync > 100) {\n      return setImmediate(next, err)\n    }\n\n    // get pathname of request\n    var path = getPathname(req);\n\n    if (path == null) {\n      return done(layerError);\n    }\n\n    // find next matching layer\n    var layer;\n    var match;\n    var route;\n\n    while (match !== true && idx < stack.length) {\n      layer = stack[idx++];\n      match = matchLayer(layer, path);\n      route = layer.route;\n\n      if (typeof match !== 'boolean') {\n        // hold on to layerError\n        layerError = layerError || match;\n      }\n\n      if (match !== true) {\n        continue;\n      }\n\n      if (!route) {\n        // process non-route handlers normally\n        continue;\n      }\n\n      if (layerError) {\n        // routes do not match with a pending error\n        match = false;\n        continue;\n      }\n\n      var method = req.method;\n      var has_method = route._handles_method(method);\n\n      // build up automatic options response\n      if (!has_method && method === 'OPTIONS') {\n        appendMethods(options, route._options());\n      }\n\n      // don't even bother matching route\n      if (!has_method && method !== 'HEAD') {\n        match = false;\n      }\n    }\n\n    // no match\n    if (match !== true) {\n      return done(layerError);\n    }\n\n    // store route for dispatch on change\n    if (route) {\n      req.route = route;\n    }\n\n    // Capture one-time layer values\n    req.params = self.mergeParams\n      ? mergeParams(layer.params, parentParams)\n      : layer.params;\n    var layerPath = layer.path;\n\n    // this should be done for the layer\n    self.process_params(layer, paramcalled, req, res, function (err) {\n      if (err) {\n        next(layerError || err)\n      } else if (route) {\n        layer.handle_request(req, res, next)\n      } else {\n        trim_prefix(layer, layerError, layerPath, path)\n      }\n\n      sync = 0\n    });\n  }\n\n# lib/application.js:165-182  (lib.application.handle)\napp.handle = function handle(req, res, callback) {\n  var router = this._router;\n\n  // final handler\n  var done = callback || finalhandler(req, res, {\n    env: this.get('env'),\n    onerror: logerror.bind(this)\n  });\n\n  // no routes\n  if (!router) {\n    debug('no routes defined on app');\n    done();\n    return;\n  }\n\n  router.handle(req, res, done);\n};\n\n# Referenced module constants:\nvar finalhandler = require('finalhandler');\n\n## Task\n\nYou are investigating how Express mounts middleware in lib/application.js. Starting from `use`, trace the exact causal pipeline that runs when middleware is mounted on an application for the first time: what triggers the application's internal router to be lazily constructed, and what real configuration lookups happen along the way.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names in that causal order - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.application.use\", \"lib.application.lazyrouter\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}

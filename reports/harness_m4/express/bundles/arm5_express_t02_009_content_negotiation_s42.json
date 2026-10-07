@@ -1,0 +1,175 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "express_t02_009_content_negotiation",
+  "items": [
+   {
+    "source_id": "lib/response.js:684-709",
+    "content": "# lib/response.js:684-709  (lib.response.format)\nres.format = function(obj){\n  var req = this.req;\n  var next = req.next;\n\n  var keys = Object.keys(obj)\n    .filter(function (v) { return v !== 'default' })\n\n  var key = keys.length > 0\n    ? req.accepts(keys)\n    : false;\n\n  this.vary(\"Accept\");\n\n  if (key) {\n    this.set('Content-Type', normalizeType(key).value);\n    obj[key](req, this, next);\n  } else if (obj.default) {\n    obj.default(req, this, next)\n  } else {\n    next(createError(406, {\n      types: normalizeTypes(keys).map(function (o) { return o.value })\n    }))\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar createError = require('http-errors')\nvar normalizeType = require('./utils').normalizeType;\nvar normalizeTypes = require('./utils').normalizeTypes;",
+    "token_count": 213,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.format"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 187,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/request.js:132-135",
+    "content": "# lib/request.js:132-135  (lib.request.accepts)\nreq.accepts = function(){\n  var accept = accepts(this);\n  return accept.types.apply(accept, arguments);\n};",
+    "token_count": 43,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.request.accepts"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 24,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:81-85",
+    "content": "# lib/utils.js:81-85  (lib.utils.normalizeType)\nexports.normalizeType = function(type){\n  return ~type.indexOf('/')\n    ? acceptParams(type)\n    : { value: mime.lookup(type), params: {} };\n};\n\n# Referenced module constants:\nvar mime = require('send').mime;",
+    "token_count": 65,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.utils.normalizeType"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 42,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/utils.js:95-103",
+    "content": "# lib/utils.js:95-103  (lib.utils.normalizeTypes)\nexports.normalizeTypes = function(types){\n  var ret = [];\n\n  for (var i = 0; i < types.length; ++i) {\n    ret.push(exports.normalizeType(types[i]));\n  }\n\n  return ret;\n};",
+    "token_count": 64,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.utils.normalizeTypes"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 46,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/application.js:359-401",
+    "content": "# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar debug = require('debug')('express:application');\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';",
+    "token_count": 318,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.application.set"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 293,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "lib/response.js:1001-1011",
+    "content": "# lib/response.js:1001-1011  (lib.response.vary)\nres.vary = function(field){\n  // checks for back-compat\n  if (!field || (Array.isArray(field) && !field.length)) {\n    deprecate('res.vary(): Provide a field name');\n    return this;\n  }\n\n  vary(this, field);\n\n  return this;\n};\n\n# Referenced module constants:\nvar deprecate = require('depd')('express');",
+    "token_count": 102,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "lib.response.vary"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 75,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 805,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "You are investigating Express's content-negotiation logic, starting from `res.format` in lib/response.js. Trace the real causal pipeline it runs through to decide which of the caller's handlers to invoke, including which real third-party npm packages it actually delegates to for accept-header parsing and error construction.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.format\", \"lib.request.accepts\"]\n```\n",
+   "task_type": "T2_localization",
+   "anchor": "lib.response.format",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "manifest_candidates": 16,
+   "manifest_candidates_unfiltered": 16,
+   "requested_symbols": [
+    "lib.response.format",
+    "lib.request.accepts",
+    "lib.utils.normalizeType",
+    "lib.utils.normalizeTypes"
+   ],
+   "turn1_requested_count": 4,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The `res.format` function in Express is responsible for content negotiation based on the request's accept headers. It uses `lib.request.accepts` to determine the best response format and then invokes the appropriate handler provided by the caller. This process involves parsing the accept headers and normalizing the types to decide which handler to execute.\",\n  \"requested_symbols\": [\n    \"lib.response.format\",\n    \"lib.request.accepts\",\n    \"lib.utils.normalizeType\",\n    \"lib.utils.normalizeTypes\"\n  ]\n}\n```",
+     "prompt_tokens": 945,
+     "completion_tokens": 113,
+     "latency_seconds": 8.77866522100021,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     21.503747
+    ],
+    "L_turn2_hydrate": [
+     46.525508
+    ],
+    "L_turn2b_external": [
+     1.370874
+    ],
+    "L_retrieve": [
+     8851.319029
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 805,
+   "prompt_tokens": 1072,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1085,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# lib/response.js:684-709  (lib.response.format)\nres.format = function(obj){\n  var req = this.req;\n  var next = req.next;\n\n  var keys = Object.keys(obj)\n    .filter(function (v) { return v !== 'default' })\n\n  var key = keys.length > 0\n    ? req.accepts(keys)\n    : false;\n\n  this.vary(\"Accept\");\n\n  if (key) {\n    this.set('Content-Type', normalizeType(key).value);\n    obj[key](req, this, next);\n  } else if (obj.default) {\n    obj.default(req, this, next)\n  } else {\n    next(createError(406, {\n      types: normalizeTypes(keys).map(function (o) { return o.value })\n    }))\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar createError = require('http-errors')\nvar normalizeType = require('./utils').normalizeType;\nvar normalizeTypes = require('./utils').normalizeTypes;\n\n# lib/request.js:132-135  (lib.request.accepts)\nreq.accepts = function(){\n  var accept = accepts(this);\n  return accept.types.apply(accept, arguments);\n};\n\n# lib/utils.js:81-85  (lib.utils.normalizeType)\nexports.normalizeType = function(type){\n  return ~type.indexOf('/')\n    ? acceptParams(type)\n    : { value: mime.lookup(type), params: {} };\n};\n\n# Referenced module constants:\nvar mime = require('send').mime;\n\n# lib/utils.js:95-103  (lib.utils.normalizeTypes)\nexports.normalizeTypes = function(types){\n  var ret = [];\n\n  for (var i = 0; i < types.length; ++i) {\n    ret.push(exports.normalizeType(types[i]));\n  }\n\n  return ret;\n};\n\n# lib/application.js:359-401  (lib.application.set)\napp.set = function set(setting, val) {\n  if (arguments.length === 1) {\n    // app.get(setting)\n    var settings = this.settings\n\n    while (settings && settings !== Object.prototype) {\n      if (hasOwnProperty.call(settings, setting)) {\n        return settings[setting]\n      }\n\n      settings = Object.getPrototypeOf(settings)\n    }\n\n    return undefined\n  }\n\n  debug('set \"%s\" to %o', setting, val);\n\n  // set value\n  this.settings[setting] = val;\n\n  // trigger matched settings\n  switch (setting) {\n    case 'etag':\n      this.set('etag fn', compileETag(val));\n      break;\n    case 'query parser':\n      this.set('query parser fn', compileQueryParser(val));\n      break;\n    case 'trust proxy':\n      this.set('trust proxy fn', compileTrust(val));\n\n      // trust proxy inherit back-compat\n      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {\n        configurable: true,\n        value: false\n      });\n\n      break;\n  }\n\n  return this;\n};\n\n# Referenced module constants:\nvar compileETag = require('./utils').compileETag;\nvar compileQueryParser = require('./utils').compileQueryParser;\nvar compileTrust = require('./utils').compileTrust;\nvar debug = require('debug')('express:application');\nvar hasOwnProperty = Object.prototype.hasOwnProperty\nvar trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';\n\n# lib/response.js:1001-1011  (lib.response.vary)\nres.vary = function(field){\n  // checks for back-compat\n  if (!field || (Array.isArray(field) && !field.length)) {\n    deprecate('res.vary(): Provide a field name');\n    return this;\n  }\n\n  vary(this, field);\n\n  return this;\n};\n\n# Referenced module constants:\nvar deprecate = require('depd')('express');\n\n## Task\n\nYou are investigating Express's content-negotiation logic, starting from `res.format` in lib/response.js. Trace the real causal pipeline it runs through to decide which of the caller's handlers to invoke, including which real third-party npm packages it actually delegates to for accept-header parsing and error construction.\n\nFirst give a short (2-4 sentence) explanation of the pipeline.\n\nThen, on its own line, emit a fenced JSON code block containing an ordered array of the fully-qualified symbol names involved - only symbols actually present in the provided context package may appear, e.g.:\n\n```json\n[\"lib.response.format\", \"lib.request.accepts\"]\n```\n\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every code symbol that is part of your answer, in order, by exact fully-qualified name."
+}
