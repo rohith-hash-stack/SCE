@@ -54,6 +54,9 @@ from prism.language_tiers import precision_tier_for
 from prism.mcp.auth import enforce as enforce_auth
 from prism.mcp.cache import GraphCache, RepoNotFoundError
 from prism.mcp.security import SecurityError, validate_symbol_name, validate_tag, validate_token_budget
+from prism.engine import PrismEngine
+from prism.graph.symbol_table import SymbolRole
+from prism.packer.candidate_index import upstream_callers_by_hop
 from prism.packer.submodular_knapsack import DEFAULT_MAX_HOPS
 from prism.query.errors import QueryValidationError
 from prism.query.schema import PrismQuery
@@ -596,6 +599,122 @@ def prism_explain(
         repo_path, seed_symbol, seeds, budget_tokens, language_tier, format, task_type, d_max, include_warnings, api_key, ctx,
         detail_level=detail_level,
     )
+
+
+#: Same budget the benchmark's Arm 5 used for the blast-radius manifest and
+#: for hydrating it (`harness.config.RETRIEVAL_BUDGET`).
+BLAST_RADIUS_DEFAULT_BUDGET = 13_000
+#: The returned `callers` list is names and locations only, but a hub seed
+#: can have thousands of transitive callers; past this it is cut (sorted by
+#: hop) and `callers_truncated` is set.
+BLAST_RADIUS_MAX_LISTED_CALLERS = 500
+
+
+def _manifest_roles(manifest: str) -> list[tuple[str, str]]:
+    rows = []
+    for line in manifest.splitlines():
+        parts = line.split("|")
+        if len(parts) >= 2 and not line.startswith("<"):
+            rows.append((parts[0], parts[1]))
+    return rows
+
+
+@server.tool(name="prism.blast_radius")
+def prism_blast_radius(
+    repo_path: str,
+    seed_symbol: str,
+    budget_tokens: int = BLAST_RADIUS_DEFAULT_BUDGET,
+    include_tests: bool = True,
+    format: str = "xml",
+    api_key: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """What may break if `seed_symbol` changes: every transitive caller
+    (tests included by default), plus a token-budgeted context envelope
+    with the callers' code.
+
+    This is the retrieval the benchmark measured for blast-radius tasks
+    (`reports/harness_r0r1/R0_vs_R1_T5.md`, config R0): the bidirectional
+    candidate manifest (transitive callers up to 6 hops, interleaved with
+    the seed's downstream dependencies under `budget_tokens`), with every
+    `caller` row selected by rule - no model picks - then hydrated by
+    `PrismEngine.retrieve_requested`. `prism.slice` uses a different packer
+    with a shallower caller search (at most 3 callers per step, 1.5 hops).
+
+    Args:
+        repo_path: Absolute path to the repository root (same sandbox rules
+            as `prism.slice`).
+        seed_symbol: Fully qualified symbol name, exactly as indexed.
+            Unknown names return `-32002` with candidates. Playwright/Jest
+            tests are `<module>.<describe>.<title>`, Robot Framework tests
+            and keywords `<module>.<Name_With_Underscores>`.
+        budget_tokens: 500-128000 (default 13000): the manifest and the
+            hydrated envelope share it.
+        include_tests: Keep test code (Playwright/Jest/Mocha tests, hooks
+            and fixtures, Robot test cases, pytest tests) among the callers.
+            `False` gives production callers only, as the benchmark did.
+        format: "xml" (the `<prism_context>` envelope) or "json".
+
+    Returns `{seed, callers, callers_total, callers_truncated,
+    callers_in_context, envelope, token_count, truncated}`. `callers` lists
+    each caller's `symbol`, `hop`, `is_test`, `language`, `file` and `line`,
+    nearest first, with no budget applied; `callers_in_context` are the
+    ones whose code is in `envelope`.
+    """
+    if not (500 <= budget_tokens <= 128_000):
+        raise MCPError(code=-32602, message=f"budget_tokens must be between 500 and 128000, got {budget_tokens}")
+    if format not in ("xml", "json"):
+        raise MCPError(code=-32602, message=f"format must be 'xml' or 'json' - got {format!r}")
+    try:
+        seed_symbol = validate_symbol_name(seed_symbol)
+    except SecurityError as exc:
+        raise MCPError(code=-32602, message=str(exc)) from exc
+    enforce_auth(_authorization_header(ctx), api_key)
+
+    repo_ctx = _repo_context_for_surface(repo_path)
+    _resolve_seed_or_raise(repo_ctx, seed_symbol)
+    builder = repo_ctx.builder
+
+    engine = PrismEngine(builder, repo_ctx.repo_root, contracts=repo_ctx.contracts)
+    manifest, universe = engine.build_candidate_manifest(
+        seed_symbol, direction="both", budget_tokens=budget_tokens, include_tests=include_tests,
+    )
+    requested = [q for q, role in _manifest_roles(manifest) if role == "caller" and q != seed_symbol]
+    pkg, _skipped = engine.retrieve_requested(seed_symbol, budget_tokens, requested, universe, task_type="blast")
+    walked = upstream_callers_by_hop(builder, seed_symbol, include_tests=include_tests)
+    # The packer labels only direct callers `caller`; a caller two or more
+    # hops up comes back as `transitive` with no distance. Label it by hop.
+    pkg = pkg.model_copy(update={"nodes": [
+        n.model_copy(update={"role": "caller", "distance": float(walked[n.id])})
+        if n.id in walked and n.role == "transitive" else n
+        for n in pkg.nodes
+    ]})
+    envelope = pkg.model_dump_json(indent=2) if format == "json" else render(pkg, RenderOptions())
+    token_count = count_tokens(envelope)
+
+    ordered = sorted(walked, key=lambda q: (walked[q], q))
+    callers = []
+    for qname in ordered[:BLAST_RADIUS_MAX_LISTED_CALLERS]:
+        info = builder.symbol_table.get(qname)
+        callers.append({
+            "symbol": qname,
+            "hop": walked[qname],
+            "is_test": info is not None and info.role == SymbolRole.VERIFICATION,
+            "language": info.language_id if info is not None else None,
+            "file": _relative_path(repo_ctx.repo_root, info.file) if info is not None else None,
+            "line": info.line_range[0] if info is not None else None,
+        })
+    in_context = sorted({n.id for n in pkg.nodes if n.role != "seed"} & set(walked))
+    return {
+        "seed": seed_symbol,
+        "callers": callers,
+        "callers_total": len(walked),
+        "callers_truncated": len(walked) > BLAST_RADIUS_MAX_LISTED_CALLERS,
+        "callers_in_context": in_context,
+        "envelope": envelope,
+        "token_count": token_count,
+        "truncated": token_count > budget_tokens,
+    }
 
 
 def run_server(transport: str = "stdio", repo_path: str | None = None) -> None:

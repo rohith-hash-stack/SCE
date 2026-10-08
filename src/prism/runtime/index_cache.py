@@ -53,6 +53,7 @@ import sqlite3
 from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder, outer_definition_node
+from prism.graph.js_test_blocks import find_test_blocks
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolInfo, SymbolRole
 from prism.parser.lang_config import find_all
 from prism.parser.queries import run_query
@@ -96,7 +97,7 @@ except ImportError:  # pragma: no cover - networkx is a hard dependency elsewher
 #: ...)` fallback on the read side alone would have silently kept
 #: masking the same bug for any repo whose cache was written before
 #: this fix landed.
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 
 def index_cache_path(repo_root: str) -> Path:
@@ -429,6 +430,27 @@ _ATTRIBUTE_DEF_NODE_TYPES = {
 }
 
 
+def _rehydrate_js_test_block_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symbols: list) -> None:
+    """`_def_nodes` for JS/TS test/hook/fixture callbacks
+    (`prism.graph.js_test_blocks`), which the `definitions` query that
+    `_rehydrate_def_nodes` replays never captures. Same join as there: the
+    cached symbol's line range against a fresh `find_test_blocks` run."""
+    if parsed.language_id not in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+        return
+    pending = {
+        tuple(s.line_range): s.qualified_name
+        for s in symbols
+        if s.kind == "function" and s.qualified_name not in builder._def_nodes
+    }
+    if not pending:
+        return
+    module = builder._module_for_file(parsed)
+    for block in find_test_blocks(parsed.root_node, parsed.source, module):
+        key = pending.get((block.outer.start_point[0] + 1, block.outer.end_point[0] + 1))
+        if key is not None:
+            builder._def_nodes[key] = block.callback
+
+
 def _rehydrate_attribute_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symbols: list) -> None:
     """The same real gap `_rehydrate_def_nodes`'s own docstring documents
     for function/class/method symbols, found again while wiring the
@@ -572,6 +594,7 @@ def load_pipeline_from_cache(
             if parsed is not None:
                 builder._parsed_files[file_path] = parsed
                 _rehydrate_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
+                _rehydrate_js_test_block_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
                 _rehydrate_attribute_def_nodes(builder, parsed, symbols_by_file.get(file_path, []))
                 _rehydrate_import_maps(builder, parsed)
 

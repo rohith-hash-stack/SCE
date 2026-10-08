@@ -135,6 +135,15 @@ def compute_upstream_callers(builder: ConcreteGraphBuilder, seed_id: str) -> dic
         if relation not in ("CALLS", "INSTANTIATES"):
             continue
 
+        if "robot_binds_return" in data:
+            # A Robot Framework keyword call (`prism.graph.robot_framework`):
+            # no parse tree to re-read, so the two indicators were recorded
+            # on the edge when the call was linked.
+            result[caller] = _upstream_caller(
+                caller, relation, data, bool(data["robot_binds_return"]), bool(data.get("robot_args"))
+            )
+            continue
+
         def_node = builder.def_node(caller)
         info = builder.symbol_table.get(caller)
         if def_node is None or info is None:
@@ -168,19 +177,23 @@ def compute_upstream_callers(builder: ConcreteGraphBuilder, seed_id: str) -> dic
                 nontrivial_args = True
                 break
 
-        base = BASE_RELATION_WEIGHT.get(relation, 1.0) * tentative_factor(data)
-        weight = base * (
-            1.0
-            + MU_RETURN_UNPACK * (1.0 if unpacks_return else 0.0)
-            + MU_NONTRIVIAL_ARGS * (1.0 if nontrivial_args else 0.0)
-        )
-        result[caller] = UpstreamCaller(
-            symbol=caller,
-            weight=weight,
-            dist_w_upstream=edge_cost(weight),
-            unpacks_return=unpacks_return,
-            supplies_nontrivial_args=nontrivial_args,
-            tentative=tentative_factor(data) < 1.0,
-        )
+        result[caller] = _upstream_caller(caller, relation, data, unpacks_return, nontrivial_args)
 
     return result
+
+
+def _upstream_caller(caller: str, relation: str, data: dict, unpacks_return: bool, nontrivial_args: bool) -> UpstreamCaller:
+    base = BASE_RELATION_WEIGHT.get(relation, 1.0) * tentative_factor(data)
+    weight = base * (
+        1.0
+        + MU_RETURN_UNPACK * (1.0 if unpacks_return else 0.0)
+        + MU_NONTRIVIAL_ARGS * (1.0 if nontrivial_args else 0.0)
+    )
+    return UpstreamCaller(
+        symbol=caller,
+        weight=weight,
+        dist_w_upstream=edge_cost(weight),
+        unpacks_return=unpacks_return,
+        supplies_nontrivial_args=nontrivial_args,
+        tentative=tentative_factor(data) < 1.0,
+    )

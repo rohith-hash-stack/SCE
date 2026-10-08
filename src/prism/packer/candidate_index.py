@@ -222,14 +222,16 @@ def _combined_hop_scope_filtered(
     return kept
 
 
-def _upstream_walk(builder: ConcreteGraphBuilder, seed_id: str, max_hops: int = UPSTREAM_WALK_MAX_HOPS) -> dict[str, int]:
+def _upstream_walk(
+    builder: ConcreteGraphBuilder, seed_id: str, max_hops: int = UPSTREAM_WALK_MAX_HOPS, include_tests: bool = False
+) -> dict[str, int]:
     """`{caller: hop}` for every transitive caller of `seed_id` within
     `max_hops`, breadth-first over `CALLS`/`INSTANTIATES` in-edges of the
     structural graph (tentative dispatch edges included). Callers that are
     test code (`SymbolRole.VERIFICATION`) are excluded and not walked
-    through, unless the seed itself is test code."""
+    through, unless the seed itself is test code or `include_tests`."""
     seed_info = builder.symbol_table.get(seed_id)
-    allow_tests = seed_info is not None and seed_info.role == SymbolRole.VERIFICATION
+    allow_tests = include_tests or (seed_info is not None and seed_info.role == SymbolRole.VERIFICATION)
     hops = {seed_id: 0}
     queue = deque([seed_id])
     while queue:
@@ -252,6 +254,16 @@ def _upstream_walk(builder: ConcreteGraphBuilder, seed_id: str, max_hops: int = 
             queue.append(pred)
     hops.pop(seed_id)
     return hops
+
+
+def upstream_callers_by_hop(
+    builder: ConcreteGraphBuilder, seed_id: str, max_hops: int = UPSTREAM_WALK_MAX_HOPS, include_tests: bool = True
+) -> dict[str, int]:
+    """Every transitive caller of `seed_id` within `max_hops` with its hop
+    count - the walk blast-radius mode builds its caller rows from, with no
+    token budget applied. Test code is included by default here: for "which
+    tests does this change affect?" the tests are the answer."""
+    return _upstream_walk(builder, seed_id, max_hops=max_hops, include_tests=include_tests)
 
 
 def _interleave_within_budget(
@@ -287,6 +299,7 @@ def build_candidate_manifest(
     upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
     direction: str = "downstream",
     budget_tokens: int | None = None,
+    include_tests: bool = False,
 ) -> tuple[str, set[str]]:
     """`(manifest_text, candidate_universe)`: one compact
     `qualified_name|role|kind|signature|calls=[...]|lines=N` line per real
@@ -327,7 +340,9 @@ def build_candidate_manifest(
     (`_upstream_walk`, test code excluded), interleaved with the
     downstream candidates under a shared `budget_tokens` (no cap when
     `None`). The default `"downstream"` leaves every existing caller's
-    manifest unchanged.
+    manifest unchanged. `include_tests` keeps test code among the walked
+    callers (the MCP `prism.blast_radius` tool sets it; the benchmark
+    harness, whose gold is production callers, does not).
 
     Raises `SeedNotFoundError` if `seed_id` isn't in `builder.
     symbol_table`, carrying up to 5 fuzzy-matched suggestions - the same
@@ -363,7 +378,7 @@ def build_candidate_manifest(
         # with the downstream candidates in distance order until the shared
         # token budget is spent. Every upstream candidate is labelled
         # `caller` (hop distance recorded for _classify_role).
-        walked = _upstream_walk(builder, seed_id)
+        walked = _upstream_walk(builder, seed_id, include_tests=include_tests)
         upstream_order = sorted(
             walked,
             key=lambda q: (walked[q], -(upstream_callers[q].weight if q in upstream_callers else 0.0), q),

@@ -93,6 +93,8 @@ def test_server_lists_all_seven_tools():
         # v1.1+ Agent Surface (prism.surface) - see tests/surface/test_mcp_surface.py
         "prism.slice",
         "prism.explain",
+        # blast-radius caller slice (prism.mcp.server.prism_blast_radius)
+        "prism.blast_radius",
     }
 
 

@@ -149,10 +149,9 @@ def _node_body(builder: ConcreteGraphBuilder, qname: str) -> str:
     info = builder.symbol_table.get(qname)
     if info is None:
         return ""
-    parsed = builder.parsed_file(info.file)
-    if parsed is None:
+    source = builder.source_text(info.file)
+    if source is None:
         return ""
-    source = parsed.source.decode("utf-8", errors="replace")
     lines = source.splitlines()
     start, end = info.line_range
     return "\n".join(lines[max(start - 1, 0):end])

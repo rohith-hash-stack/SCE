@@ -192,6 +192,9 @@ They are guarded by one `_lazy_cache_lock` with double-checked locking, so the w
 | TypeScript / TSX / JavaScript | `tier2` Structural & Lexical | CST linking, import/export, class relations; no instance binding |
 | Java, C# | `tier2` | as above |
 | Go | `tier3` Lexical & Package-level | Package imports, receiver/parameter type binding, `EMBEDS` |
+| Robot Framework (`.robot`, `.resource`) | — (no grammar; line-based reader) | Test cases and user keywords as symbols; keyword calls to user keywords and Python library keywords (`prism.graph.robot_framework`) |
+
+JS/TS test-runner callbacks (Playwright, Jest, Vitest, Mocha) are registered as test symbols, and Playwright fixtures are typed through `base.extend<T>()` and `use(new C())` (`prism.graph.js_test_blocks`). See `docs/manual_sanity_check.md`.
 
 The tier label is a coarse summary. The authoritative per-feature capability matrix is in `docs/design_formalism.md` §7.
 
@@ -766,9 +769,10 @@ $$
 | `reindex_repo` | Force a rebuild of the repository's cached graph |
 | `prism.slice` | v1.1 `<prism_context>` envelope (callers + callees, causal knapsack) |
 | `prism.explain` | Same envelope at reduced detail |
+| `prism.blast_radius` | Every transitive caller of a seed (tests included by default) with hops, plus a budgeted envelope of their code. This is the measured R0 path: Design C manifest, every caller row, `retrieve_requested`. |
 
 The tool names sometimes expected (`get_blast_radius`, `trace_call_chain`, `verify_contract`) **do not exist**. Their equivalents:
-- blast radius → `prism.slice` with `task_type="blast"`;
+- blast radius → `prism.blast_radius`;
 - call chain → `prism.slice` with `task_type="chain"` (includes `<causal_path>`);
 - contracts → `get_architectural_invariants`, plus the `contract` element on envelope nodes.
 
@@ -793,6 +797,12 @@ The tool names sometimes expected (`get_blast_radius`, `trace_call_chain`, `veri
 
 // get_graph_status → {symbols, call edges, confirmed_runtime_edges, runtime_discovered_edges, tag_counts}
 // reindex_repo     → status object for the rebuilt context
+
+// prism.blast_radius → {seed, callers:[{symbol, hop, is_test, language, file, line}], callers_total,
+//                        callers_truncated, callers_in_context, envelope, token_count, truncated}
+{ "repo_path": "string (required)", "seed_symbol": "string (required)",
+  "budget_tokens": "int 500..128000 = 13000", "include_tests": "bool = true",
+  "format": "xml|json", "api_key": "string|null" }
 
 // prism.slice / prism.explain → {"envelope": "string", "token_count": int, "truncated": bool}
 { "repo_path": "string (required)",

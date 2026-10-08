@@ -60,6 +60,8 @@ from prism.graph.call_site import (
     detect_call_site_hazard,
     dynamic_edge_sentinel_id,
 )
+from prism.graph.js_test_blocks import find_fixture_types, find_test_blocks
+from prism.graph.robot_framework import ROBOT_EXTENSIONS
 from prism.graph.weights import MAX_INHERITANCE_DEPTH
 from prism.graph.symbol_table import (
     ExportRegistry,
@@ -196,6 +198,12 @@ class ConcreteGraphBuilder:
         self._parsed_files: dict[str, ParsedFile] = {}
         self._def_nodes: dict[str, Node] = {}
         self._methods_by_class: dict[str, list[str]] = {}
+        #: JS/TS test-runner blocks (`prism.graph.js_test_blocks`): each
+        #: test/hook/fixture symbol's destructured fixture parameters
+        #: (`"name"` or `"name=alias"`), and the repo-wide fixture-name ->
+        #: class map `<x>.extend<T>({...})` declares (built in Pass 2a).
+        self._js_test_fixture_params: dict[str, tuple[str, ...]] = {}
+        self._js_fixture_types: dict[str, set[str]] = {}
         #: Import-Alias Resolution (Phase C prerequisite, `docs/
         #: roadmap_public_release.md` Section 4): every file's own
         #: `LocalImportMap`, computed once in `pass2_resolve_calls`'s own
@@ -305,6 +313,24 @@ class ConcreteGraphBuilder:
         #: importing file.
         self._tsconfig_lookup_cache: dict[str, str | None] = {}
         self._tsconfig_parse_cache: dict[str, _TsPathAliasConfig | None] = {}
+        self._grammarless_sources: dict[str, str | None] = {}
+
+    def source_text(self, path: str) -> str | None:
+        """The text of an indexed file: the parsed source, or for a file
+        indexed without a grammar (Robot Framework, `prism.graph.
+        robot_framework`) the file read from disk. `None` for anything else."""
+        parsed = self._parsed_files.get(path)
+        if parsed is not None:
+            return parsed.source.decode("utf-8", errors="replace")
+        if not path.endswith(ROBOT_EXTENSIONS):
+            return None
+        if path not in self._grammarless_sources:
+            try:
+                with open(path, encoding="utf-8", errors="replace") as handle:
+                    self._grammarless_sources[path] = handle.read()
+            except OSError:
+                self._grammarless_sources[path] = None
+        return self._grammarless_sources[path]
 
     def parsed_file(self, path: str) -> ParsedFile | None:
         return self._parsed_files.get(path)
@@ -528,6 +554,51 @@ class ConcreteGraphBuilder:
             self._collect_attribute_definitions(parsed, module)
         elif lang in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
             self._collect_js_module_constants(parsed, module)
+            self._collect_js_test_blocks(parsed, module)
+
+    def _collect_js_test_blocks(self, parsed: ParsedFile, module: str) -> None:
+        """Registers every Playwright/Jest/Vitest/Mocha test, hook and
+        fixture callback in this file as a `function` symbol with role
+        `VERIFICATION` (`prism.graph.js_test_blocks`). The callback is its
+        def node, so Pass 2b resolves its calls like any other function's."""
+        for block in find_test_blocks(parsed.root_node, parsed.source, module):
+            line_range = (block.outer.start_point[0] + 1, block.outer.end_point[0] + 1)
+            symbol = SymbolInfo(
+                qualified_name=block.qualified_name,
+                kind="function",
+                file=parsed.path,
+                line_range=line_range,
+                language_id=parsed.language_id,
+                module=module,
+                enclosing_class=None,
+                role=SymbolRole.VERIFICATION,
+            )
+            key = self.symbol_table.add(symbol)
+            self._def_nodes[key] = block.callback
+            self.graph.add_node(
+                key, kind="function", file=parsed.path, line_range=line_range, language_id=parsed.language_id,
+                module=module, enclosing_class=None, role=SymbolRole.VERIFICATION, test_block=block.kind,
+            )
+            if block.fixture_params:
+                self._js_test_fixture_params[key] = block.fixture_params
+
+    def _build_js_fixture_registry(self, import_maps: dict[str, "LocalImportMap"]) -> None:
+        """Fixture name -> class qualified names, from every JS/TS file's
+        `<x>.extend<T>({...})` declarations, each class name resolved
+        through its own file's import map. A name two files map to
+        different classes keeps both (the binding is then ambiguous and
+        its calls are linked as tentative)."""
+        registry: dict[str, set[str]] = {}
+        for path, import_map in sorted(import_maps.items()):
+            parsed = self._parsed_files.get(path)
+            if parsed is None or parsed.language_id not in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX):
+                continue
+            module = self._module_for_file(parsed)
+            for fixture, class_name in find_fixture_types(parsed.root_node, parsed.source).items():
+                resolved = self._resolve_reference_chain([class_name], module, import_map)
+                if self._is_known_class(resolved):
+                    registry.setdefault(fixture, set()).add(resolved)
+        self._js_fixture_types = registry
 
     def _register_definition(
         self, node: Node, is_class: bool, parsed: ParsedFile, module: str, force_kind: str | None = None
@@ -850,6 +921,7 @@ class ConcreteGraphBuilder:
         # relations` call above has finished, exactly the same ordering
         # requirement `_register_exports` has for barrel files.
         self._link_overrides()
+        self._build_js_fixture_registry(import_maps)
 
         # Sub-pass 2b: resolve every call site, now that the whole repo's
         # export registry and class-relation graph (EXTENDS/IMPLEMENTS/
@@ -967,6 +1039,12 @@ class ConcreteGraphBuilder:
                 func_instance_map = self._build_function_instance_map(
                     def_node, parsed, module, import_map, symbol.enclosing_class
                 )
+            for param in self._js_test_fixture_params.get(qualified_name, ()):
+                fixture, _, local_name = param.partition("=")
+                if local_name in func_instance_map.bindings:
+                    continue                   # rebound locally in the body
+                for fixture_class in sorted(self._js_fixture_types.get(fixture, ())):
+                    func_instance_map.bind(local_name or fixture, fixture_class)
             self._resolve_calls_in_function(
                 qualified_name, def_node, parsed, module, symbol.enclosing_class,
                 import_map, class_instance_map, func_instance_map,
@@ -2062,6 +2140,21 @@ class ConcreteGraphBuilder:
             for param in params.named_children if params is not None else ():
                 if param.type in ("list_splat_pattern", "dictionary_splat_pattern") and param.named_children:
                     instance_map.bind_builtin(node_text(param.named_children[0], parsed.source))
+        elif lang in (LanguageID.TYPESCRIPT, LanguageID.TSX):
+            # `async function f(lp: LoginPage)`: a parameter annotated with
+            # an indexed class is an instance of it.
+            params = def_node.child_by_field_name("parameters")
+            for param in params.named_children if params is not None else ():
+                if param.type not in ("required_parameter", "optional_parameter"):
+                    continue
+                pattern = param.child_by_field_name("pattern")
+                annotation = param.child_by_field_name("type")
+                type_node = next(iter(annotation.named_children), None) if annotation is not None else None
+                if pattern is None or pattern.type != "identifier" or type_node is None or type_node.type != "type_identifier":
+                    continue
+                resolved = self._resolve_reference_chain([node_text(type_node, parsed.source)], module, import_map)
+                if self._is_known_class(resolved):
+                    instance_map.bind(node_text(pattern, parsed.source), resolved)
         ctx = _ExprContext(module, import_map, enclosing_class, lang, parsed.source, def_node)
         assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
         if assign_type is not None:
@@ -2739,6 +2832,15 @@ class ConcreteGraphBuilder:
             if caller_info is not None and not _shares_package_scope(caller_info.module, candidate.module):
                 return
             target = candidate.qualified_name
+            # A recursive call is `m()` or `this.m()`. `this.page.goto()`
+            # inside `goto` itself, linked only because `goto` is the one
+            # repo method with that name, is a call on some other object
+            # (Playwright's `Page.goto` here), not recursion.
+            own_receiver = len(segments) == 1 or (
+                len(segments) == 2 and segments[0] in SELF_TOKEN_TEXT.get(lang, ())
+            )
+            if target == caller_qname and not own_receiver:
+                return
             if target not in self.graph:
                 self.graph.add_node(target, external=False)
             self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL")

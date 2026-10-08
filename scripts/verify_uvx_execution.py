@@ -24,7 +24,7 @@ Checks, in order (see the corresponding `run_check` calls in `main()`):
      tool `prism.mcp.server` registers: `get_symbol_context`,
      `get_architectural_invariants`, `find_symbols_by_tag`,
      `get_graph_status`, `reindex_repo`, and (v1.1+ Agent Surface)
-     `prism.slice`, `prism.explain`.
+     `prism.slice`, `prism.explain`, `prism.blast_radius`.
 
 Usage:
     python scripts/verify_uvx_execution.py
@@ -45,7 +45,7 @@ MCP_PROTOCOL_VERSION = "2025-03-26"
 EXPECTED_TOOL_NAMES = frozenset(
     {
         "get_symbol_context", "get_architectural_invariants", "find_symbols_by_tag", "get_graph_status", "reindex_repo",
-        "prism.slice", "prism.explain",
+        "prism.slice", "prism.explain", "prism.blast_radius",
     }
 )
 SUBPROCESS_TIMEOUT_SECONDS = 120

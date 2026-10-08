@@ -298,6 +298,7 @@ class PrismEngine:
         upstream_max_hops: float = DEFAULT_UPSTREAM_MAX_HOPS,
         direction: str = "downstream",
         budget_tokens: int | None = None,
+        include_tests: bool = False,
     ) -> tuple[str, set[str]]:
         """Turn 1: `(manifest_text, candidate_universe)` for `seed_id` -
         every symbol reachable within `max_hops` (default 3, the
@@ -309,7 +310,7 @@ class PrismEngine:
         else in this class - see `retrieve_two_pass`'s own docstring."""
         return build_candidate_manifest(
             self._builder, seed_id, max_hops=max_hops, upstream_max_hops=upstream_max_hops,
-            direction=direction, budget_tokens=budget_tokens,
+            direction=direction, budget_tokens=budget_tokens, include_tests=include_tests,
         )
 
     def retrieve_requested(

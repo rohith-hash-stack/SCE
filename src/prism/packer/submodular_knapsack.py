@@ -1234,11 +1234,10 @@ def _default_costs(
         if info is None:
             costs[qname] = 0
             continue
-        parsed = builder.parsed_file(info.file)
-        if parsed is None:
+        source = builder.source_text(info.file)
+        if source is None:
             costs[qname] = 0
             continue
-        source = parsed.source.decode("utf-8", errors="replace")
         lines = source.splitlines()
         start, end = info.line_range
         snippet = "\n".join(lines[max(start - 1, 0):end])
@@ -1271,10 +1270,9 @@ def _signature_stub(builder: ConcreteGraphBuilder, qname: str) -> str | None:
     info = builder.symbol_table.get(qname)
     if info is None:
         return None
-    parsed = builder.parsed_file(info.file)
-    if parsed is None:
+    source = builder.source_text(info.file)
+    if source is None:
         return None
-    source = parsed.source.decode("utf-8", errors="replace")
     lines = source.splitlines()
     start, end = info.line_range
     snippet_lines = lines[max(start - 1, 0):end]

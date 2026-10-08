@@ -10,6 +10,7 @@ from prism.analysis.hybrid_engine import DEFAULT_RUNTIME_BIAS, HybridFlowEngine
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.hierarchy import compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
+from prism.graph.robot_framework import ROBOT_EXTENSIONS, link_robot_framework
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.language_tiers import TIER_1_ONLY_LANGUAGES
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
@@ -121,6 +122,20 @@ def discover_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE
     return sorted(files)
 
 
+def discover_robot_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE) -> list[str]:
+    """`.robot`/`.resource` files (`prism.graph.robot_framework`); none
+    under `tier1-only`, which indexes Python alone."""
+    if language_tier == LANGUAGE_TIER_TIER1_ONLY:
+        return []
+    files: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(repo_root):
+        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")]
+        for filename in filenames:
+            if filename.endswith(ROBOT_EXTENSIONS):
+                files.append(os.path.join(dirpath, filename))
+    return sorted(files)
+
+
 def build_pipeline(
     repo_path: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE, use_cache: bool = True
 ) -> tuple[ConcreteGraphBuilder, dict[str, set[str]]]:
@@ -138,9 +153,14 @@ def build_pipeline(
     """
     repo_root = os.path.abspath(repo_path)
     files = discover_files(repo_root, language_tier)
+    # Robot Framework suites/resources have no grammar: they are read by
+    # `prism.graph.robot_framework` after Pass 2, but still belong in the
+    # cache fingerprint so editing one invalidates the cache.
+    robot_files = discover_robot_files(repo_root, language_tier)
+    fingerprint_files = sorted(files + robot_files)
 
     if use_cache:
-        cached = load_pipeline_from_cache(repo_root, files, language_tier)
+        cached = load_pipeline_from_cache(repo_root, fingerprint_files, language_tier)
         if cached is not None:
             return cached
 
@@ -148,10 +168,12 @@ def build_pipeline(
     builder = ConcreteGraphBuilder(repo_root, symbol_table)
     builder.pass1_collect_definitions(files)
     builder.pass2_resolve_calls(files)
+    if robot_files:
+        link_robot_framework(builder, robot_files)
     tag_matrix = TaggingEngine().tag_graph(builder)
 
     if use_cache:
-        save_pipeline_to_cache(repo_root, files, language_tier, builder, tag_matrix)
+        save_pipeline_to_cache(repo_root, fingerprint_files, language_tier, builder, tag_matrix)
 
     return builder, tag_matrix
 
