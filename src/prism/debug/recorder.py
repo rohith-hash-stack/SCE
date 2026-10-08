@@ -1,5 +1,6 @@
-"""Prism-side recording: wraps the MCP server's tools and a few internal
-functions so each tool call produces one JSON line plus its full payloads.
+"""Recording for `prism mcp --debug-log <dir>`: wraps the MCP server's tools
+and a few internal functions so each tool call produces one JSON line plus
+its full payloads.
 
 Layout of a session directory (one per server process):
 
@@ -9,9 +10,8 @@ Layout of a session directory (one per server process):
     payloads/<call_id>/manifest.txt  the candidate manifest, when one was built
     payloads/<call_id>/result.*      what the tool returned to the client
 
-Everything is wrapped at runtime (`install`); nothing under `src/prism` is
-changed, and nothing is recorded unless the server is started through
-`python tools/debug_log serve`.
+Nothing is wrapped or recorded unless `install` is called, which only
+`prism mcp --debug-log` does.
 """
 from __future__ import annotations
 

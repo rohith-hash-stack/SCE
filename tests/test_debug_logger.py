@@ -1,4 +1,4 @@
-"""tools/debug_log: the recording MCP server (over real stdio), the Copilot
+"""prism.debug: `prism mcp --debug-log` (over real stdio), the Copilot
 chat-export reader, and the timeline join."""
 import json
 import os
@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from tools.debug_log.copilot import load_copilot_session
-from tools.debug_log.timeline import join, load_calls, render_markdown
+from prism.debug.copilot import load_copilot_session
+from prism.debug.timeline import join, load_calls, render_markdown
 
 REPO = Path(__file__).resolve().parents[1]
 FIXTURE = REPO / "tests" / "fixtures" / "test_frameworks"
@@ -20,7 +20,7 @@ SEED = "api.libraries.UserApi.UserApi.create_user"
 class _Server:
     def __init__(self, repo: str, log_dir: str) -> None:
         self.proc = subprocess.Popen(
-            [sys.executable, str(REPO / "tools" / "debug_log"), "serve", "--repo", repo, "--log-dir", log_dir],
+            [sys.executable, "-m", "prism.cli", "mcp", "--repo", repo, "--debug-log", log_dir],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=str(REPO.parent),
         )
         self.next_id = 1
@@ -151,9 +151,8 @@ def test_timeline_joins_by_time_and_cli_writes_a_report(recorded, tmp_path):
     turns, unmatched = join(load_copilot_session(str(path)), calls)
     assert all(not t["prism_calls"] for t in turns) and len(unmatched) == 3
     out = tmp_path / "timeline.md"
-    proc = subprocess.run([sys.executable, str(REPO / "tools" / "debug_log"), "timeline", "--log-dir", str(log_dir),
-                           "--out", str(out)], capture_output=True, text=True, cwd=str(REPO.parent),
-                          env={**os.environ, "PYTHONPATH": str(REPO / "src")})
+    proc = subprocess.run([sys.executable, "-m", "prism.cli", "debug", "timeline", "--log-dir", str(log_dir),
+                           "--out", str(out)], capture_output=True, text=True, cwd=str(REPO.parent))
     assert proc.returncode == 0, proc.stderr
     assert "## Prism calls" in out.read_text() and "prism.blast_radius" in out.read_text()
 
@@ -161,9 +160,20 @@ def test_timeline_joins_by_time_and_cli_writes_a_report(recorded, tmp_path):
 def test_find_lists_exact_symbol_names(tmp_path):
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURE, repo)
-    proc = subprocess.run([sys.executable, str(REPO / "tools" / "debug_log"), "find", "--repo", str(repo), "create", "user"],
-                          capture_output=True, text=True, cwd=str(REPO.parent),
-                          env={**os.environ, "PYTHONPATH": str(REPO / "src")})
+    proc = subprocess.run([sys.executable, "-m", "prism.cli", "debug", "find", "--repo", str(repo), "create", "user"],
+                          capture_output=True, text=True, cwd=str(REPO.parent))
     assert proc.returncode == 0, proc.stderr
     assert f"{SEED}\n    method, implementation, api/libraries/UserApi.py:13, 1 direct caller(s)" in proc.stdout
     assert "3 match(es)" in proc.stdout
+
+
+def test_mcp_without_debug_log_records_nothing(tmp_path, monkeypatch):
+    """Off by default: plain `prism mcp` never imports the recorder."""
+    monkeypatch.delenv("PRISM_DEBUG_LOG", raising=False)
+    probe = ("import sys, prism.cli, prism.mcp.server as s; s.run_server = lambda **k: None; "
+             "sys.argv = ['prism', 'mcp']; "
+             "import contextlib\nwith contextlib.suppress(SystemExit): prism.cli.main()\n"
+             "print('prism.debug.recorder' in sys.modules)")
+    proc = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, cwd=str(tmp_path))
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip().splitlines()[-1] == "False"

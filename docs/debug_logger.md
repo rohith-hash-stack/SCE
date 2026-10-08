@@ -1,11 +1,39 @@
-# Prism debug logger (developer tool)
+# Prism debug logging
 
-`tools/debug_log/` is for investigating Prism during manual testing. It is not part of Prism: nothing under
-`src/prism/` changes, and nothing is recorded unless you start the server through this tool.
+For investigating Prism during manual testing. It is off unless you turn it on, and it doesn't change what
+Prism retrieves.
+
+## Turn it on
+
+Add one argument, `--debug-log <folder>`, to the `prism mcp` command you already have in VS Code's
+`mcp.json`:
+
+```json
+{
+  "servers": {
+    "prism": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--refresh", "--from",
+        "git+https://github.com/rohith-hash-stack/SCE.git@manual-sanity-check/test-framework-support",
+        "prism", "mcp", "--transport", "stdio", "--repo", "${workspaceFolder}",
+        "--debug-log", "C:\\work\\prism-logs"
+      ]
+    }
+  }
+}
+```
+
+Instead of the argument you can set the environment variable `PRISM_DEBUG_LOG=<folder>`, for example in
+the server's `"env"` block. Remove the argument (or the variable) and logging is off again.
+
+Each server start creates `<folder>/session-<date>-<time>-<pid>/`. The server's output in VS Code shows the
+exact path: `prism debug log: ...`.
 
 ## Why there are two halves
 
-When you use Prism from VS Code Copilot, three parties are involved:
+When you use Prism from Copilot, three parties are involved:
 
 ```
  You ──question──▶ Copilot (in VS Code) ──tool call: prism.blast_radius(seed=…)──▶ Prism MCP server
@@ -15,80 +43,45 @@ When you use Prism from VS Code Copilot, three parties are involved:
                  the language model ──answer──▶ You
 ```
 
-Prism only sees the middle arrow: the tool call Copilot decides to make, and what Prism sends back. It never
-sees your question, the prompt Copilot builds, the model's answer, or token usage. Those stay inside VS Code.
-So "log everything" needs two sources, joined afterwards:
+Prism only sees the middle arrow: the tool call Copilot makes and what Prism sends back. Your question, the
+prompt Copilot builds and the model's answer stay inside VS Code. So there are two sources, joined
+afterwards:
 
 | Half | Where it comes from | What it contains |
 |---|---|---|
-| **Prism side** | this logger, running the MCP server | every tool call: arguments, whether the index was in memory, loaded from disk cache or fully rebuilt (and how long), the candidate manifest, callers by hop, each delivered symbol with its compression level and token cost, the exact envelope sent back, time per stage, errors with codes |
-| **Copilot side** | VS Code's own record of the chat | your question, which tools Copilot called and with what input, Copilot's answer, the model id, Copilot's total time and time to first output |
+| **Prism side** | `--debug-log` | every tool call: arguments, whether the index was in memory / loaded from disk cache / fully rebuilt (and how long), the candidate manifest, callers by hop, each delivered symbol with its compression and token cost, the exact envelope sent back, time per stage, errors with codes |
+| **Copilot side** | VS Code: **Chat: Export Chat...** | your question, which tools Copilot called with what input, Copilot's answer, the model id, Copilot's total time and time to first output |
 
-`timeline` joins them into one report per question: what you asked → what Copilot asked Prism → what Prism
-found and sent → what Copilot answered.
+`prism debug timeline` joins them into one report per question.
 
-**What no half can give.** Copilot does not record token usage or its hidden system prompt in its chat files.
-The report shows *estimated* tokens for your message and the answer (cl100k count of the visible text), and
-*exact* tokens for what Prism delivered.
+**Not available from either half:** Copilot does not record token usage or its hidden system prompt. The
+report shows *estimated* tokens for your message and the answer, and *exact* tokens for what Prism
+delivered.
 
-## 1. Run Prism through the logger in VS Code
+## Commands
 
-In the repository you test, create `.vscode/mcp.json` (or edit your user MCP config). Replace the paths.
-
-```json
-{
-  "servers": {
-    "prism-debug": {
-      "type": "stdio",
-      "command": "python",
-      "args": [
-        "/path/to/SCE/tools/debug_log",
-        "serve",
-        "--repo", "${workspaceFolder}",
-        "--log-dir", "/path/to/prism-debug-logs"
-      ],
-      "env": { "PYTHONPATH": "/path/to/SCE/src" }
-    }
-  }
-}
-```
-
-- `python` must be the interpreter Prism is installed in (`pip install -e /path/to/SCE`). With that
-  install, the `PYTHONPATH` line is optional.
-- On Windows, use `C:\\path\\to\\SCE\\tools\\debug_log` style paths.
-- Disable the normal `prism` server while testing, so Copilot calls the logged one.
-- Each server start creates `/path/to/prism-debug-logs/session-<date>-<time>-<pid>/`. The log directory
-  defaults to `~/.prism-debug`, or `PRISM_DEBUG_LOG_DIR` if set.
-
-Then use Copilot Chat in agent mode as usual. The tools appear under `prism-debug`.
-
-## 2. Save the Copilot side
-
-After a chat, open the Command Palette and run **Chat: Export Chat...**, then save the JSON. VS Code also
-keeps sessions on disk, typically `<VS Code user dir>/workspaceStorage/<hash>/chatSessions/*.json`. Either
-file works.
-
-The format is VS Code's own and changes between versions. The reader is tolerant: missing fields show as
-unknown rather than failing.
-
-## 3. Build the timeline
+You need `prism` in a terminal. Either install it (`pip install -e <SCE clone>`), or run it without
+installing through the same `uvx` source as `mcp.json`:
 
 ```bash
-python /path/to/SCE/tools/debug_log timeline --log-dir /path/to/prism-debug-logs \
-    --copilot chat.json --out timeline.md
+uvx --from git+https://github.com/rohith-hash-stack/SCE.git@manual-sanity-check/test-framework-support prism debug --help
 ```
 
-- Without `--copilot`, you get the Prism calls alone.
-- `--session <dir name>` limits it to one server run.
-- `--json` gives machine-readable output.
+| Command | Does |
+|---|---|
+| `prism debug find --repo <repo> <words...>` | exact symbol names containing all the words, with file:line and direct caller count |
+| `prism debug timeline --log-dir <folder> --copilot chat.json --out timeline.md` | the joined report. Without `--copilot` you get Prism's calls alone; `--session <name>` limits it to one server run; `--json` gives machine-readable output |
 
 How calls are matched to questions:
-- **By time** when the export has timestamps: a Prism call belongs to the last question asked before it.
-- **By order** otherwise: each Prism tool call Copilot made is paired with the next recorded call of that
+- **By time** when the export has timestamps: a call belongs to the last question asked before it.
+- **By order** otherwise: each Prism tool call in the chat is paired with the next recorded call of that
   tool.
 - Anything unmatched is listed at the end.
 
-## What is in a session directory
+The VS Code export format changes between versions. The reader is tolerant, and missing fields show as
+unknown.
+
+## What is in a session folder
 
 ```
 session.json                      server start: repo, Prism commit, Python version
@@ -114,21 +107,28 @@ A `calls.jsonl` line, shortened:
             "delivered": ["seed|L0_full|61|...create_user", "caller|L0_full|37|...Create_Test_User"]}}
 ```
 
-## Using it to explain a miss
+## Explaining a miss
 
 For a test you expected but did not get:
 
-| Look at | If missing there | The cause |
+| Look at | If it's missing there | Cause |
 |---|---|---|
-| `args.seed_symbol` | Copilot asked about a different symbol | the question / Copilot's choice of seed |
-| `result.callers` | not among the callers | not in Prism's graph: a resolution gap, so send the pattern |
-| `result.callers_in_context` / `delivered` | listed as a caller but its code wasn't sent | cut by the token budget |
+| `args.seed_symbol` | Copilot asked about a different symbol | Copilot's choice of seed |
+| `result.callers` | not among the callers | not in Prism's graph (a resolution gap) |
+| `callers_in_context` / `delivered` | a caller, but its code wasn't sent | cut by the token budget |
 | Copilot's answer | delivered but not mentioned | the model ignored it |
+
+## How it stays out of the way
+
+- **Code location:** the logger lives in `prism.debug`.
+- **Off by default:** plain `prism mcp` never imports it; a test checks this.
+- **No logging in retrieval code:** with `--debug-log`, it wraps the tool functions and a few internal
+  functions at server start. The retrieval modules contain no logging code, and results are identical with
+  and without it.
 
 ## Privacy
 
-Logs contain your source code and your questions. Keep the log directory outside the repository or
-git-ignored (`.prism-debug/` is in `.gitignore`), don't share it outside your team, and delete sessions you
-no longer need.
+Logs contain your source code and your questions. Keep the folder outside your repositories (or git-ignore
+it; `.prism-debug/` is already ignored here), don't share it outside your team, and delete old sessions.
 
-Step-by-step first query from VS Code Copilot: `docs/first_query_walkthrough.md`.
+Step-by-step first query: `docs/first_query_walkthrough.md`.

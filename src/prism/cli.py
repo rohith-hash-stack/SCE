@@ -624,7 +624,12 @@ def status(repo_path: str) -> None:
     "--repo", "repo_path", type=click.Path(exists=True, file_okay=False), default=None,
     help="Default repository root for a tool call that omits its own repo_path (defaults to this process's cwd).",
 )
-def mcp_command(transport: str, repo_path: str | None) -> None:
+@click.option(
+    "--debug-log", "debug_log", envvar="PRISM_DEBUG_LOG", type=click.Path(file_okay=False), default=None,
+    help="Record every tool call (arguments, stage timings, what was retrieved and delivered, tokens, errors) "
+    "under this directory, for debugging. Off unless given. See docs/debug_logger.md.",
+)
+def mcp_command(transport: str, repo_path: str | None, debug_log: str | None) -> None:
     """Run Prism as a Model Context Protocol server (see docs/mcp_setup.md)."""
     try:
         from prism.mcp.server import run_server
@@ -640,7 +645,69 @@ def mcp_command(transport: str, repo_path: str | None) -> None:
             err=True,
         )
         raise SystemExit(1) from exc
+    if debug_log:
+        from prism.debug.recorder import install
+
+        recorder = install(debug_log, repo=repo_path)
+        click.echo(f"prism debug log: {recorder.dir}", err=True)     # stdout is the MCP channel
     run_server(transport=transport, repo_path=repo_path)
+
+
+@main.group(name="debug")
+def debug_group() -> None:
+    """Tools for investigating Prism by hand (see docs/debug_logger.md)."""
+
+
+@debug_group.command(name="find")
+@click.option("--repo", "repo_path", required=True, type=click.Path(exists=True, file_okay=False))
+@click.argument("words", nargs=-1, required=True)
+@click.option("--limit", type=int, default=40, show_default=True)
+def debug_find(repo_path: str, words: tuple[str, ...], limit: int) -> None:
+    """Exact symbol names containing every one of WORDS (case-insensitive)."""
+    builder, _ = build_pipeline(repo_path)
+    wanted = [w.lower() for w in words]
+    rows = []
+    for symbol in builder.symbol_table:
+        if symbol.kind not in ("function", "method", "class"):
+            continue
+        if all(w in symbol.qualified_name.lower() for w in wanted):
+            callers = builder.graph.in_degree(symbol.qualified_name) if symbol.qualified_name in builder.graph else 0
+            where = f"{os.path.relpath(symbol.file, repo_path)}:{symbol.line_range[0]}"
+            rows.append((symbol.qualified_name, symbol.kind, symbol.role.value, where, callers))
+    rows.sort()
+    for qname, kind, role, where, callers in rows[:limit]:
+        click.echo(f"{qname}\n    {kind}, {role}, {where}, {callers} direct caller(s)")
+    click.echo(f"{len(rows)} match(es)" + (f", first {limit} shown" if len(rows) > limit else ""))
+
+
+@debug_group.command(name="timeline")
+@click.option("--log-dir", required=True, type=click.Path(exists=True, file_okay=False),
+              help="The directory given to `prism mcp --debug-log`.")
+@click.option("--copilot", "copilot_path", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="A VS Code Copilot chat export (Chat: Export Chat...).")
+@click.option("--session", default=None, help="Only this session directory name.")
+@click.option("--out", "out_path", type=click.Path(dir_okay=False), default=None, help="Write here instead of stdout.")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
+def debug_timeline(log_dir: str, copilot_path: str | None, session: str | None, out_path: str | None, as_json: bool) -> None:
+    """One timeline: each chat question joined with the Prism calls it caused."""
+    from prism.debug.copilot import load_copilot_session
+    from prism.debug.timeline import join, load_calls, render_markdown
+
+    calls = load_calls(log_dir)
+    if session:
+        calls = [c for c in calls if c["session"] == session]
+    turns = load_copilot_session(copilot_path) if copilot_path else []
+    turns, unmatched = join(turns, calls)
+    if as_json:
+        text = json.dumps({"turns": turns, "unmatched_calls": unmatched}, indent=2, default=str)
+    else:
+        text = render_markdown(turns, unmatched, log_dir)
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        click.echo(f"wrote {out_path} ({len(turns)} turns, {len(calls)} Prism calls)")
+    else:
+        click.echo(text)
 
 
 if __name__ == "__main__":
