@@ -123,3 +123,8 @@ seed, gold count, Prism recall/precision, baseline recall/precision, and time.
 - The benchmark harness still excludes test code from blast-radius callers, because its gold is
   production callers. Only `prism.blast_radius` includes tests, and its `include_tests=false` reproduces
   the harness behaviour.
+
+## Debugging a miss
+
+To see exactly what Copilot asked Prism, what Prism found and sent, and what Copilot answered, run the
+server through the debug logger. See `docs/debug_logger.md`.
