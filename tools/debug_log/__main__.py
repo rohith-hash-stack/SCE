@@ -27,6 +27,28 @@ def _serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _find(args: argparse.Namespace) -> int:
+    """Symbols whose name contains every given word (case-insensitive)."""
+    from prism.cli import build_pipeline
+
+    builder, _ = build_pipeline(args.repo)
+    words = [w.lower() for w in args.words]
+    rows = []
+    for symbol in builder.symbol_table:
+        if symbol.kind not in ("function", "method", "class"):
+            continue
+        name = symbol.qualified_name.lower()
+        if all(w in name for w in words):
+            callers = builder.graph.in_degree(symbol.qualified_name) if symbol.qualified_name in builder.graph else 0
+            rel = os.path.relpath(symbol.file, args.repo)
+            rows.append((symbol.qualified_name, symbol.kind, symbol.role.value, f"{rel}:{symbol.line_range[0]}", callers))
+    rows.sort()
+    for qname, kind, role, where, callers in rows[: args.limit]:
+        print(f"{qname}\n    {kind}, {role}, {where}, {callers} direct caller(s)")
+    print(f"{len(rows)} match(es)" + (f", first {args.limit} shown" if len(rows) > args.limit else ""))
+    return 0
+
+
 def _timeline(args: argparse.Namespace) -> int:
     log_dir = str(Path(args.log_dir).expanduser())
     calls = load_calls(log_dir)
@@ -55,6 +77,12 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--log-dir", default=DEFAULT_LOG_DIR, help="where sessions are written (default %(default)s)")
     serve.add_argument("--transport", default="stdio")
     serve.set_defaults(func=_serve)
+
+    find = sub.add_parser("find", help="look up exact symbol names to ask about (e.g. `find --repo . login page`)")
+    find.add_argument("--repo", required=True)
+    find.add_argument("words", nargs="+", help="every word must appear in the symbol name")
+    find.add_argument("--limit", type=int, default=40)
+    find.set_defaults(func=_find)
 
     timeline = sub.add_parser("timeline", help="one timeline: chat turns joined with Prism calls")
     timeline.add_argument("--log-dir", default=DEFAULT_LOG_DIR)

@@ -130,3 +130,5 @@ For a test you expected but did not get:
 Logs contain your source code and your questions. Keep the log directory outside the repository or
 git-ignored (`.prism-debug/` is in `.gitignore`), don't share it outside your team, and delete sessions you
 no longer need.
+
+Step-by-step first query from VS Code Copilot: `docs/first_query_walkthrough.md`.

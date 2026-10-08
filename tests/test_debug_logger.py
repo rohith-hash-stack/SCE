@@ -156,3 +156,14 @@ def test_timeline_joins_by_time_and_cli_writes_a_report(recorded, tmp_path):
                           env={**os.environ, "PYTHONPATH": str(REPO / "src")})
     assert proc.returncode == 0, proc.stderr
     assert "## Prism calls" in out.read_text() and "prism.blast_radius" in out.read_text()
+
+
+def test_find_lists_exact_symbol_names(tmp_path):
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURE, repo)
+    proc = subprocess.run([sys.executable, str(REPO / "tools" / "debug_log"), "find", "--repo", str(repo), "create", "user"],
+                          capture_output=True, text=True, cwd=str(REPO.parent),
+                          env={**os.environ, "PYTHONPATH": str(REPO / "src")})
+    assert proc.returncode == 0, proc.stderr
+    assert f"{SEED}\n    method, implementation, api/libraries/UserApi.py:13, 1 direct caller(s)" in proc.stdout
+    assert "3 match(es)" in proc.stdout
