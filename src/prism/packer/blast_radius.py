@@ -112,7 +112,15 @@ class UpstreamCaller:
     tentative: bool = False
 
 
-def compute_upstream_callers(builder: ConcreteGraphBuilder, seed_id: str) -> dict[str, UpstreamCaller]:
+#: Graph-node `test_block` values of test code registered from files with no
+#: named functions (`prism.graph.js_test_blocks`, `prism.graph.robot_framework`).
+#: A Robot user keyword (`robot_keyword`) is reusable code, not a test.
+TEST_BLOCK_KINDS = frozenset({"test", "hook", "fixture", "robot_test", "robot_suite"})
+
+
+def compute_upstream_callers(
+    builder: ConcreteGraphBuilder, seed_id: str, include_test_blocks: bool = False
+) -> dict[str, UpstreamCaller]:
     """`{caller_qualified_name: UpstreamCaller}` for every direct
     (`CALLS`/`INSTANTIATES`) predecessor of `seed_id` in `builder.graph` -
     the candidate set `prism.packer.submodular_knapsack.
@@ -133,6 +141,11 @@ def compute_upstream_callers(builder: ConcreteGraphBuilder, seed_id: str) -> dic
     for caller, _seed, data in builder.graph.in_edges(seed_id, data=True):
         relation = data.get("relation", "CALLS")
         if relation not in ("CALLS", "INSTANTIATES"):
+            continue
+        if not include_test_blocks and builder.graph.nodes[caller].get("test_block") in TEST_BLOCK_KINDS:
+            # Test callbacks and Robot tests are only callers when asked for
+            # (`prism.blast_radius`); the manifest's top direct callers and
+            # the packer's upstream frontier stay production code.
             continue
 
         if "robot_binds_return" in data:

@@ -280,3 +280,24 @@ def test_robot_output_xml_scoring_against_prism_callers(tmp_path):
     assert row["gold"] == 3 and row["predicted"] == 4
     assert row["recall"] == 1.0 and row["precision"] == 0.75
     assert row["extra"] == [f"{SUITE}.Auth_Header_Works"] and row["missed"] == []
+
+
+def test_test_titles_never_become_call_targets(tmp_path):
+    repo = _copy(tmp_path)
+    Path(repo, "ui", "tests", "helpers.spec.ts").write_text(textwrap.dedent("""
+        import { LoginPage } from '../pages/LoginPage';
+        async function loginAs(p: LoginPage) {
+          await p.login('a', 'b');
+        }
+        test('loginAs', async ({ loginPage }) => {
+          await loginAs(loginPage);
+        });
+        test('submit', async () => {});
+    """))
+    builder, _ = build_pipeline(repo, use_cache=False)
+    module = "ui.tests.helpers.spec"
+    # the test titled like the helper still calls the helper, not itself
+    assert builder.graph.has_edge(f"{module}.loginAs#2", f"{module}.loginAs")
+    assert builder.graph.has_edge(f"{module}.loginAs", f"{LOGIN}.login")
+    # a test titled `submit` does not make the page object's `submit` ambiguous
+    assert [c.qualified_name for c in builder.symbol_table.candidates_for_simple_name("submit")] == [f"{LOGIN}.submit"]

@@ -128,7 +128,7 @@ class GlobalSymbolTable:
         #: which never collide at all. Queried via `collisions_for`.
         self.collisions: dict[str, list[str]] = {}
 
-    def add(self, symbol: SymbolInfo) -> str:
+    def add(self, symbol: SymbolInfo, index_by_name: bool = True) -> str:
         """Registers `symbol`, returning the real key it was stored
         under - identical to `symbol.qualified_name` unless a genuine
         collision was detected, in which case a deterministic `#N`
@@ -167,6 +167,21 @@ class GlobalSymbolTable:
         base_key = symbol.qualified_name
         existing = self._symbols.get(base_key)
         simple_name = base_key.rsplit(".", 1)[-1]
+        if not index_by_name:
+            # A symbol nothing calls by name (a JS/TS test callback named
+            # after its title): registered, but kept out of the by-name
+            # indexes call resolution reads, so a test titled `map` or
+            # `loginAs` never becomes a candidate target or shadows a real
+            # same-named function in its module.
+            key = base_key
+            n = 2
+            while key in self._symbols and (self._symbols[key].file, self._symbols[key].line_range) != (symbol.file, symbol.line_range):
+                key = f"{base_key}#{n}"
+                n += 1
+            if key != base_key:
+                symbol.qualified_name = key
+            self._symbols[key] = symbol
+            return key
 
         if existing is None or (existing.file, existing.line_range) == (symbol.file, symbol.line_range):
             # First registration, or a harmless re-registration of the

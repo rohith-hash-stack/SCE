@@ -573,7 +573,7 @@ class ConcreteGraphBuilder:
                 enclosing_class=None,
                 role=SymbolRole.VERIFICATION,
             )
-            key = self.symbol_table.add(symbol)
+            key = self.symbol_table.add(symbol, index_by_name=False)
             self._def_nodes[key] = block.callback
             self.graph.add_node(
                 key, kind="function", file=parsed.path, line_range=line_range, language_id=parsed.language_id,
@@ -2834,8 +2834,11 @@ class ConcreteGraphBuilder:
             target = candidate.qualified_name
             # A recursive call is `m()` or `this.m()`. `this.page.goto()`
             # inside `goto` itself, linked only because `goto` is the one
-            # repo method with that name, is a call on some other object
-            # (Playwright's `Page.goto` here), not recursion.
+            # repo method with that name, is usually a call on some other
+            # object (Playwright's `Page.goto`, `JSON.stringify` inside a
+            # `stringify`). Recursion through a linked structure
+            # (`this.parent.path()`) is dropped too; a self-edge adds no
+            # caller or callee to any slice either way.
             own_receiver = len(segments) == 1 or (
                 len(segments) == 2 and segments[0] in SELF_TOKEN_TEXT.get(lang, ())
             )

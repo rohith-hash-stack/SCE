@@ -553,6 +553,10 @@ def load_pipeline_from_cache(
 
         symbol_table = GlobalSymbolTable()
         for entry in json.loads(symbols_json):
+            # JS/TS test callbacks are registered without name indexing,
+            # as Pass 1 does (`ConcreteGraphBuilder._collect_js_test_blocks`).
+            node_attrs = graph.nodes[entry["qualified_name"]] if entry["qualified_name"] in graph else {}
+            js_test_block = node_attrs.get("test_block") in ("test", "hook", "fixture")
             symbol_table.add(
                 SymbolInfo(
                     qualified_name=entry["qualified_name"],
@@ -563,7 +567,8 @@ def load_pipeline_from_cache(
                     module=entry["module"],
                     enclosing_class=entry["enclosing_class"],
                     role=SymbolRole(entry["role"]),
-                )
+                ),
+                index_by_name=not js_test_block,
             )
 
         builder = ConcreteGraphBuilder(repo_root, symbol_table)
