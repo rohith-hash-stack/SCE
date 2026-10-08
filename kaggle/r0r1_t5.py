@@ -21,7 +21,9 @@
 # mid-run; archive + raw directory at the end), then the ablation report is
 # built in-session (CPU only) and pushed to reports/harness_r0r1/report/.
 # If the session dies, re-run this cell: pushed checkpoints are restored and
-# the runner skips completed cells.
+# the runner skips completed cells. A restored directory is accepted only if
+# it was produced by identical code (tree hashes of src/, harness/,
+# benchmarks/); results commits pushed by this cell do not count as a change.
 import json
 import os
 import shutil
@@ -78,6 +80,16 @@ def head():
     return run(["git", "rev-parse", "HEAD"], cwd=SCE_DIR, capture=True).stdout.strip()
 
 
+#: The code a run executes. Results commits pushed by this cell (reports/)
+#: move HEAD but never change these trees.
+CODE_PATHS = ("src", "harness", "benchmarks")
+
+
+def code_identity(rev="HEAD"):
+    """Git tree hashes of the code paths at `rev` - equal iff the code is equal."""
+    return {p: run(["git", "rev-parse", f"{rev}:{p}"], cwd=SCE_DIR, capture=True).stdout.strip() for p in CODE_PATHS}
+
+
 # ---- preflight ----
 problems = []
 if not os.path.isdir(f"{SCE_DIR}/.git"):
@@ -103,7 +115,8 @@ for name in ("HARNESS_PRISM_T5_RULE_SELECTOR", "HARNESS_PRISM_PRODUCTION_ROUTING
 if problems:
     raise SystemExit("preflight failed:\n  - " + "\n  - ".join(problems))
 COMMIT = head()
-print("preflight OK, commit", COMMIT)
+CODE = code_identity()
+print("preflight OK, commit", COMMIT, "code", CODE)
 
 base_env = dict(os.environ, CUDA_VISIBLE_DEVICES="", PYTHONPATH=SCE_DIR, HARNESS_WORKDIR="/kaggle/working",
                 LLM_BASE_URL=f"{OLLAMA}/v1", HARNESS_ACTIVE_ARMS="arm5")
@@ -127,8 +140,8 @@ def isolation_check(config, corpus, out, env):
     start, the expected flags and Arm 5 class in the child environment, Arm 5
     the only active arm, and an output directory owned by this config."""
     errs = []
-    if head() != COMMIT:
-        errs.append(f"commit changed: {head()} != {COMMIT}")
+    if code_identity() != CODE:
+        errs.append(f"code changed since the session started: {code_identity()} != {CODE}")
     probe = run([sys.executable, "-c", PROBE], cwd=SCE_DIR, env=env, capture=True, check=False)
     try:
         p = json.loads(probe.stdout.strip().splitlines()[-1])
@@ -147,14 +160,15 @@ def isolation_check(config, corpus, out, env):
     marker = f"{out}/ablation_config.json"
     if os.path.exists(marker):
         m = json.load(open(marker))
-        if (m["config"], m["corpus"], m["commit"]) != (config, corpus, COMMIT):
-            errs.append(f"{out} belongs to {m} - refusing to mix configs or commits")
+        m_code = m.get("code") or code_identity(m["commit"])        # markers written before "code" existed
+        if (m["config"], m["corpus"]) != (config, corpus) or m_code != CODE:
+            errs.append(f"{out} belongs to {m} - refusing to mix configs or code versions")
     elif os.path.isdir(out) and os.listdir(out):
         errs.append(f"{out} is not empty and has no ablation marker")
     if errs:
         raise SystemExit(f"isolation check FAILED for {config}/{corpus}:\n  - " + "\n  - ".join(errs))
     os.makedirs(out, exist_ok=True)
-    json.dump({"config": config, "corpus": corpus, "commit": COMMIT, "env": CONFIGS[config]}, open(marker, "w"))
+    json.dump({"config": config, "corpus": corpus, "commit": COMMIT, "code": CODE, "env": CONFIGS[config]}, open(marker, "w"))
     print(f"isolation OK: {config}/{corpus} -> {p}")
 
 
