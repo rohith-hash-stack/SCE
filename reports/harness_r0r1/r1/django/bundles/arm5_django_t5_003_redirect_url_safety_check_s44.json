@@ -1,0 +1,261 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t5_003_redirect_url_safety_check",
+  "items": [
+   {
+    "source_id": "django/utils/http.py:259-286",
+    "content": "# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme)\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    \"\"\"\n    Return ``True`` if the url uses an allowed host and a safe scheme.\n\n    Always return ``False`` on an empty url.\n\n    If ``require_https`` is ``True``, only 'https' will be considered a valid\n    scheme, as opposed to 'http' and 'https' with the default, ``False``.\n\n    Note: \"True\" doesn't entail that a URL is \"safe\". It may still be e.g.\n    quoted incorrectly. Ensure to also use django.utils.encoding.iri_to_uri()\n    on the path component of untrusted URLs.\n    \"\"\"\n    if url is not None:\n        url = url.strip()\n    if not url:\n        return False\n    if allowed_hosts is None:\n        allowed_hosts = set()\n    elif isinstance(allowed_hosts, str):\n        allowed_hosts = {allowed_hosts}\n    # Chrome treats \\ completely as / in paths but it could be part of some\n    # basic auth credentials so we need to check both URLs.\n    return _url_has_allowed_host_and_scheme(\n        url, allowed_hosts, require_https=require_https\n    ) and _url_has_allowed_host_and_scheme(\n        url.replace(\"\\\\\", \"/\"), allowed_hosts, require_https=require_https\n    )",
+    "token_count": 295,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.http.url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 270,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:37-64",
+    "content": "# django/contrib/auth/views.py:37-64  (django.contrib.auth.views.RedirectURLMixin)\nclass RedirectURLMixin:\n    next_page = None\n    redirect_field_name = REDIRECT_FIELD_NAME\n    success_url_allowed_hosts = set()\n\n    def get_success_url(self):\n        return self.get_redirect_url() or self.get_default_redirect_url()\n\n    def get_redirect_url(self):\n        \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n        redirect_to = self.request.POST.get(\n            self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n        )\n        url_is_safe = url_has_allowed_host_and_scheme(\n            url=redirect_to,\n            allowed_hosts=self.get_success_url_allowed_hosts(),\n            require_https=self.request.is_secure(),\n        )\n        return redirect_to if url_is_safe else \"\"\n\n    def get_success_url_allowed_hosts(self):\n        return {self.request.get_host(), *self.success_url_allowed_hosts}\n\n    def get_default_redirect_url(self):\n        \"\"\"Return the default redirect URL.\"\"\"\n        if self.next_page:\n            return resolve_url(self.next_page)\n        raise ImproperlyConfigured(\"No URL to redirect to. Provide a next_page.\")",
+    "token_count": 241,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 218,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:45-55",
+    "content": "# django/contrib/auth/views.py:45-55  (django.contrib.auth.views.RedirectURLMixin.get_redirect_url)\n    def get_redirect_url(self):\n        \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n        redirect_to = self.request.POST.get(\n            self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n        )\n        url_is_safe = url_has_allowed_host_and_scheme(\n            url=redirect_to,\n            allowed_hosts=self.get_success_url_allowed_hosts(),\n            require_https=self.request.is_secure(),\n        )\n        return redirect_to if url_is_safe else \"\"",
+    "token_count": 121,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin.get_redirect_url"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 95,
+     "distance": 0.6666666666666666
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:42-43",
+    "content": "# django/contrib/auth/views.py:42-43  (django.contrib.auth.views.RedirectURLMixin.get_success_url)\n    def get_success_url(self):\n        return self.get_redirect_url() or self.get_default_redirect_url()",
+    "token_count": 47,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.RedirectURLMixin.get_success_url"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 21,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:67-123",
+    "content": "# django/contrib/auth/views.py:67-123  (django.contrib.auth.views.LoginView)\nclass LoginView(RedirectURLMixin, FormView):\n    \"\"\"\n    Display the login form and handle the login action.\n    \"\"\"\n\n    form_class = AuthenticationForm\n    authentication_form = None\n    template_name = \"registration/login.html\"\n    redirect_authenticated_user = False\n    extra_context = None\n\n    @method_decorator(sensitive_post_parameters())\n    @method_decorator(csrf_protect)\n    @method_decorator(never_cache)\n    def dispatch(self, request, *args, **kwargs):\n        if self.redirect_authenticated_user and self.request.user.is_authenticated:\n            redirect_to = self.get_success_url()\n            if redirect_to == self.request.path:\n                raise ValueError(\n                    \"Redirection loop for authenticated user detected. Check that \"\n                    \"your LOGIN_REDIRECT_URL doesn't point to a login page.\"\n                )\n            return HttpResponseRedirect(redirect_to)\n        return super().dispatch(request, *args, **kwargs)\n\n    def get_default_redirect_url(self):\n        \"\"\"Return the default redirect URL.\"\"\"\n        if self.next_page:\n            return resolve_url(self.next_page)\n        else:\n            return resolve_url(settings.LOGIN_REDIRECT_URL)\n\n    def get_form_class(self):\n        return self.authentication_form or self.form_class\n\n    def get_form_kwargs(self):\n        kwargs = super().get_form_kwargs()\n        kwargs[\"request\"] = self.request\n        return kwargs\n\n    def form_valid(self, form):\n        \"\"\"Security check complete. Log the user in.\"\"\"\n        auth_login(self.request, form.get_user())\n        return HttpResponseRedirect(self.get_success_url())\n\n    def get_context_data(self, **kwargs):\n        context = super().get_context_data(**kwargs)\n        current_site = get_current_site(self.request)\n        context.update(\n            {\n                self.redirect_field_name: self.get_redirect_url(),\n                \"site\": current_site,\n                \"site_name\": current_site.name,\n                **(self.extra_context or {}),\n            }\n        )\n        return context",
+    "token_count": 412,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.LoginView"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 389,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:112-123",
+    "content": "# django/contrib/auth/views.py:112-123  (django.contrib.auth.views.LoginView.get_context_data)\n    def get_context_data(self, **kwargs):\n        context = super().get_context_data(**kwargs)\n        current_site = get_current_site(self.request)\n        context.update(\n            {\n                self.redirect_field_name: self.get_redirect_url(),\n                \"site\": current_site,\n                \"site_name\": current_site.name,\n                **(self.extra_context or {}),\n            }\n        )\n        return context",
+    "token_count": 106,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.LoginView.get_context_data"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 79,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:107-110",
+    "content": "# django/contrib/auth/views.py:107-110  (django.contrib.auth.views.LoginView.form_valid)\n    def form_valid(self, form):\n        \"\"\"Security check complete. Log the user in.\"\"\"\n        auth_login(self.request, form.get_user())\n        return HttpResponseRedirect(self.get_success_url())",
+    "token_count": 63,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.LoginView.form_valid"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 37,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:126-183",
+    "content": "# django/contrib/auth/views.py:126-183  (django.contrib.auth.views.LogoutView)\nclass LogoutView(RedirectURLMixin, TemplateView):\n    \"\"\"\n    Log out the user and display the 'You are logged out' message.\n    \"\"\"\n\n    # RemovedInDjango50Warning: when the deprecation ends, remove \"get\" and\n    # \"head\" from http_method_names.\n    http_method_names = [\"get\", \"head\", \"post\", \"options\"]\n    template_name = \"registration/logged_out.html\"\n    extra_context = None\n\n    # RemovedInDjango50Warning: when the deprecation ends, move\n    # @method_decorator(csrf_protect) from post() to dispatch().\n    @method_decorator(never_cache)\n    def dispatch(self, request, *args, **kwargs):\n        if request.method.lower() == \"get\":\n            warnings.warn(\n                \"Log out via GET requests is deprecated and will be removed in Django \"\n                \"5.0. Use POST requests for logging out.\",\n                RemovedInDjango50Warning,\n            )\n        return super().dispatch(request, *args, **kwargs)\n\n    @method_decorator(csrf_protect)\n    def post(self, request, *args, **kwargs):\n        \"\"\"Logout may be done via POST.\"\"\"\n        auth_logout(request)\n        redirect_to = self.get_success_url()\n        if redirect_to != request.get_full_path():\n            # Redirect to target page once the session has been cleared.\n            return HttpResponseRedirect(redirect_to)\n        return super().get(request, *args, **kwargs)\n\n    # RemovedInDjango50Warning.\n    get = post\n\n    def get_default_redirect_url(self):\n        \"\"\"Return the default redirect URL.\"\"\"\n        if self.next_page:\n            return resolve_url(self.next_page)\n        elif settings.LOGOUT_REDIRECT_URL:\n            return resolve_url(settings.LOGOUT_REDIRECT_URL)\n        else:\n            return self.request.path\n\n    def get_context_data(self, **kwargs):\n        context = super().get_context_data(**kwargs)\n        current_site = get_current_site(self.request)\n        context.update(\n            {\n                \"site\": current_site,\n                \"site_name\": current_site.name,\n                \"title\": _(\"Logged out\"),\n                \"subtitle\": None,\n                **(self.extra_context or {}),\n            }\n        )\n        return context",
+    "token_count": 487,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.LogoutView"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 458,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/contrib/auth/views.py:149-157",
+    "content": "# django/contrib/auth/views.py:149-157  (django.contrib.auth.views.LogoutView.post)\n    @method_decorator(csrf_protect)\n    def post(self, request, *args, **kwargs):\n        \"\"\"Logout may be done via POST.\"\"\"\n        auth_logout(request)\n        redirect_to = self.get_success_url()\n        if redirect_to != request.get_full_path():\n            # Redirect to target page once the session has been cleared.\n            return HttpResponseRedirect(redirect_to)\n        return super().get(request, *args, **kwargs)",
+    "token_count": 114,
+    "rank": 9,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.contrib.auth.views.LogoutView.post"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 88,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/views/i18n.py:19-63",
+    "content": "# django/views/i18n.py:19-63  (django.views.i18n.set_language)\ndef set_language(request):\n    \"\"\"\n    Redirect to a given URL while setting the chosen language in the session\n    (if enabled) and in a cookie. The URL and the language code need to be\n    specified in the request parameters.\n\n    Since this view changes how the user will see the rest of the site, it must\n    only be accessed as a POST request. If called as a GET request, it will\n    redirect to the page in the request (the 'next' parameter) without changing\n    any state.\n    \"\"\"\n    next_url = request.POST.get(\"next\", request.GET.get(\"next\"))\n    if (\n        next_url or request.accepts(\"text/html\")\n    ) and not url_has_allowed_host_and_scheme(\n        url=next_url,\n        allowed_hosts={request.get_host()},\n        require_https=request.is_secure(),\n    ):\n        next_url = request.META.get(\"HTTP_REFERER\")\n        if not url_has_allowed_host_and_scheme(\n            url=next_url,\n            allowed_hosts={request.get_host()},\n            require_https=request.is_secure(),\n        ):\n            next_url = \"/\"\n    response = HttpResponseRedirect(next_url) if next_url else HttpResponse(status=204)\n    if request.method == \"POST\":\n        lang_code = request.POST.get(LANGUAGE_QUERY_PARAMETER)\n        if lang_code and check_for_language(lang_code):\n            if next_url:\n                next_trans = translate_url(next_url, lang_code)\n                if next_trans != next_url:\n                    response = HttpResponseRedirect(next_trans)\n            response.set_cookie(\n                settings.LANGUAGE_COOKIE_NAME,\n                lang_code,\n                max_age=settings.LANGUAGE_COOKIE_AGE,\n                path=settings.LANGUAGE_COOKIE_PATH,\n                domain=settings.LANGUAGE_COOKIE_DOMAIN,\n                secure=settings.LANGUAGE_COOKIE_SECURE,\n                httponly=settings.LANGUAGE_COOKIE_HTTPONLY,\n                samesite=settings.LANGUAGE_COOKIE_SAMESITE,\n            )\n    return response\n\n# Referenced module constants:\nLANGUAGE_QUERY_PARAMETER = \"language\"",
+    "token_count": 423,
+    "rank": 10,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.views.i18n.set_language"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 389,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/utils/http.py:368-395",
+    "content": "# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme)\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    if url.startswith(\"///\"):\n        return False\n    try:\n        url_info = _urlparse(url)\n    except ValueError:  # e.g. invalid IPv6 addresses\n        return False\n    # Forbid URLs like http:///example.com - with a scheme, but without a hostname.\n    # In that URL, example.com is not the hostname but, a path component. However,\n    # Chrome will still consider example.com to be the hostname, so we must not\n    # allow this syntax.\n    if not url_info.netloc and url_info.scheme:\n        return False\n    # Forbid URLs that start with control characters. Some browsers (like\n    # Chrome) ignore quite a few control characters at the start of a\n    # URL and might consider the URL as scheme relative.\n    if unicodedata.category(url[0])[0] == \"C\":\n        return False\n    scheme = url_info.scheme\n    # Consider URLs without a scheme (e.g. //example.com/p) to be http.\n    if not url_info.scheme and url_info.netloc:\n        scheme = \"http\"\n    valid_schemes = [\"https\"] if require_https else [\"http\", \"https\"]\n    return (not url_info.netloc or url_info.netloc in allowed_hosts) and (\n        not scheme or scheme in valid_schemes\n    )",
+    "token_count": 356,
+    "rank": 11,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.utils.http._url_has_allowed_host_and_scheme"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 330,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 2665,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `django.utils.http.url_has_allowed_host_and_scheme` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "django.utils.http.url_has_allowed_host_and_scheme",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "prism_blast_mode": true,
+   "manifest_candidates": 11,
+   "manifest_candidates_unfiltered": 11,
+   "requested_symbols": [
+    "django.utils.http.url_has_allowed_host_and_scheme",
+    "django.contrib.auth.views.RedirectURLMixin.get_redirect_url",
+    "django.contrib.auth.views.RedirectURLMixin.get_success_url",
+    "django.contrib.auth.views.LoginView.get_context_data",
+    "django.contrib.auth.views.LoginView.form_valid",
+    "django.contrib.auth.views.LogoutView.post",
+    "django.views.i18n.set_language"
+   ],
+   "turn1_requested_count": 7,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"The function `django.utils.http.url_has_allowed_host_and_scheme` is a critical component for validating URLs against allowed hosts and schemes. If it changes, it could break the functionality of any view or function that relies on it to ensure URLs are safe and valid, potentially leading to security vulnerabilities or incorrect redirections.\",\n  \"requested_symbols\": [\n    \"django.utils.http.url_has_allowed_host_and_scheme\",\n    \"django.contrib.auth.views.RedirectURLMixin.get_redirect_url\",\n    \"django.contrib.auth.views.RedirectURLMixin.get_success_url\",\n    \"django.contrib.auth.views.LoginView.get_context_data\",\n    \"django.contrib.auth.views.LoginView.form_valid\",\n    \"django.contrib.auth.views.LogoutView.post\",\n    \"django.views.i18n.set_language\"\n  ]\n}\n```",
+     "prompt_tokens": 1131,
+     "completion_tokens": 166,
+     "latency_seconds": 12.442886779999753,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     234.237923
+    ],
+    "L_turn2_hydrate": [
+     723.991857
+    ],
+    "L_retrieve": [
+     13410.120482
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 2665,
+   "prompt_tokens": 2808,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 2821,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/utils/http.py:259-286  (django.utils.http.url_has_allowed_host_and_scheme)\ndef url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    \"\"\"\n    Return ``True`` if the url uses an allowed host and a safe scheme.\n\n    Always return ``False`` on an empty url.\n\n    If ``require_https`` is ``True``, only 'https' will be considered a valid\n    scheme, as opposed to 'http' and 'https' with the default, ``False``.\n\n    Note: \"True\" doesn't entail that a URL is \"safe\". It may still be e.g.\n    quoted incorrectly. Ensure to also use django.utils.encoding.iri_to_uri()\n    on the path component of untrusted URLs.\n    \"\"\"\n    if url is not None:\n        url = url.strip()\n    if not url:\n        return False\n    if allowed_hosts is None:\n        allowed_hosts = set()\n    elif isinstance(allowed_hosts, str):\n        allowed_hosts = {allowed_hosts}\n    # Chrome treats \\ completely as / in paths but it could be part of some\n    # basic auth credentials so we need to check both URLs.\n    return _url_has_allowed_host_and_scheme(\n        url, allowed_hosts, require_https=require_https\n    ) and _url_has_allowed_host_and_scheme(\n        url.replace(\"\\\\\", \"/\"), allowed_hosts, require_https=require_https\n    )\n\n# django/contrib/auth/views.py:37-64  (django.contrib.auth.views.RedirectURLMixin)\nclass RedirectURLMixin:\n    next_page = None\n    redirect_field_name = REDIRECT_FIELD_NAME\n    success_url_allowed_hosts = set()\n\n    def get_success_url(self):\n        return self.get_redirect_url() or self.get_default_redirect_url()\n\n    def get_redirect_url(self):\n        \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n        redirect_to = self.request.POST.get(\n            self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n        )\n        url_is_safe = url_has_allowed_host_and_scheme(\n            url=redirect_to,\n            allowed_hosts=self.get_success_url_allowed_hosts(),\n            require_https=self.request.is_secure(),\n        )\n        return redirect_to if url_is_safe else \"\"\n\n    def get_success_url_allowed_hosts(self):\n        return {self.request.get_host(), *self.success_url_allowed_hosts}\n\n    def get_default_redirect_url(self):\n        \"\"\"Return the default redirect URL.\"\"\"\n        if self.next_page:\n            return resolve_url(self.next_page)\n        raise ImproperlyConfigured(\"No URL to redirect to. Provide a next_page.\")\n\n# django/contrib/auth/views.py:45-55  (django.contrib.auth.views.RedirectURLMixin.get_redirect_url)\n    def get_redirect_url(self):\n        \"\"\"Return the user-originating redirect URL if it's safe.\"\"\"\n        redirect_to = self.request.POST.get(\n            self.redirect_field_name, self.request.GET.get(self.redirect_field_name)\n        )\n        url_is_safe = url_has_allowed_host_and_scheme(\n            url=redirect_to,\n            allowed_hosts=self.get_success_url_allowed_hosts(),\n            require_https=self.request.is_secure(),\n        )\n        return redirect_to if url_is_safe else \"\"\n\n# django/contrib/auth/views.py:42-43  (django.contrib.auth.views.RedirectURLMixin.get_success_url)\n    def get_success_url(self):\n        return self.get_redirect_url() or self.get_default_redirect_url()\n\n# django/contrib/auth/views.py:67-123  (django.contrib.auth.views.LoginView)\nclass LoginView(RedirectURLMixin, FormView):\n    \"\"\"\n    Display the login form and handle the login action.\n    \"\"\"\n\n    form_class = AuthenticationForm\n    authentication_form = None\n    template_name = \"registration/login.html\"\n    redirect_authenticated_user = False\n    extra_context = None\n\n    @method_decorator(sensitive_post_parameters())\n    @method_decorator(csrf_protect)\n    @method_decorator(never_cache)\n    def dispatch(self, request, *args, **kwargs):\n        if self.redirect_authenticated_user and self.request.user.is_authenticated:\n            redirect_to = self.get_success_url()\n            if redirect_to == self.request.path:\n                raise ValueError(\n                    \"Redirection loop for authenticated user detected. Check that \"\n                    \"your LOGIN_REDIRECT_URL doesn't point to a login page.\"\n                )\n            return HttpResponseRedirect(redirect_to)\n        return super().dispatch(request, *args, **kwargs)\n\n    def get_default_redirect_url(self):\n        \"\"\"Return the default redirect URL.\"\"\"\n        if self.next_page:\n            return resolve_url(self.next_page)\n        else:\n            return resolve_url(settings.LOGIN_REDIRECT_URL)\n\n    def get_form_class(self):\n        return self.authentication_form or self.form_class\n\n    def get_form_kwargs(self):\n        kwargs = super().get_form_kwargs()\n        kwargs[\"request\"] = self.request\n        return kwargs\n\n    def form_valid(self, form):\n        \"\"\"Security check complete. Log the user in.\"\"\"\n        auth_login(self.request, form.get_user())\n        return HttpResponseRedirect(self.get_success_url())\n\n    def get_context_data(self, **kwargs):\n        context = super().get_context_data(**kwargs)\n        current_site = get_current_site(self.request)\n        context.update(\n            {\n                self.redirect_field_name: self.get_redirect_url(),\n                \"site\": current_site,\n                \"site_name\": current_site.name,\n                **(self.extra_context or {}),\n            }\n        )\n        return context\n\n# django/contrib/auth/views.py:112-123  (django.contrib.auth.views.LoginView.get_context_data)\n    def get_context_data(self, **kwargs):\n        context = super().get_context_data(**kwargs)\n        current_site = get_current_site(self.request)\n        context.update(\n            {\n                self.redirect_field_name: self.get_redirect_url(),\n                \"site\": current_site,\n                \"site_name\": current_site.name,\n                **(self.extra_context or {}),\n            }\n        )\n        return context\n\n# django/contrib/auth/views.py:107-110  (django.contrib.auth.views.LoginView.form_valid)\n    def form_valid(self, form):\n        \"\"\"Security check complete. Log the user in.\"\"\"\n        auth_login(self.request, form.get_user())\n        return HttpResponseRedirect(self.get_success_url())\n\n# django/contrib/auth/views.py:126-183  (django.contrib.auth.views.LogoutView)\nclass LogoutView(RedirectURLMixin, TemplateView):\n    \"\"\"\n    Log out the user and display the 'You are logged out' message.\n    \"\"\"\n\n    # RemovedInDjango50Warning: when the deprecation ends, remove \"get\" and\n    # \"head\" from http_method_names.\n    http_method_names = [\"get\", \"head\", \"post\", \"options\"]\n    template_name = \"registration/logged_out.html\"\n    extra_context = None\n\n    # RemovedInDjango50Warning: when the deprecation ends, move\n    # @method_decorator(csrf_protect) from post() to dispatch().\n    @method_decorator(never_cache)\n    def dispatch(self, request, *args, **kwargs):\n        if request.method.lower() == \"get\":\n            warnings.warn(\n                \"Log out via GET requests is deprecated and will be removed in Django \"\n                \"5.0. Use POST requests for logging out.\",\n                RemovedInDjango50Warning,\n            )\n        return super().dispatch(request, *args, **kwargs)\n\n    @method_decorator(csrf_protect)\n    def post(self, request, *args, **kwargs):\n        \"\"\"Logout may be done via POST.\"\"\"\n        auth_logout(request)\n        redirect_to = self.get_success_url()\n        if redirect_to != request.get_full_path():\n            # Redirect to target page once the session has been cleared.\n            return HttpResponseRedirect(redirect_to)\n        return super().get(request, *args, **kwargs)\n\n    # RemovedInDjango50Warning.\n    get = post\n\n    def get_default_redirect_url(self):\n        \"\"\"Return the default redirect URL.\"\"\"\n        if self.next_page:\n            return resolve_url(self.next_page)\n        elif settings.LOGOUT_REDIRECT_URL:\n            return resolve_url(settings.LOGOUT_REDIRECT_URL)\n        else:\n            return self.request.path\n\n    def get_context_data(self, **kwargs):\n        context = super().get_context_data(**kwargs)\n        current_site = get_current_site(self.request)\n        context.update(\n            {\n                \"site\": current_site,\n                \"site_name\": current_site.name,\n                \"title\": _(\"Logged out\"),\n                \"subtitle\": None,\n                **(self.extra_context or {}),\n            }\n        )\n        return context\n\n# django/contrib/auth/views.py:149-157  (django.contrib.auth.views.LogoutView.post)\n    @method_decorator(csrf_protect)\n    def post(self, request, *args, **kwargs):\n        \"\"\"Logout may be done via POST.\"\"\"\n        auth_logout(request)\n        redirect_to = self.get_success_url()\n        if redirect_to != request.get_full_path():\n            # Redirect to target page once the session has been cleared.\n            return HttpResponseRedirect(redirect_to)\n        return super().get(request, *args, **kwargs)\n\n# django/views/i18n.py:19-63  (django.views.i18n.set_language)\ndef set_language(request):\n    \"\"\"\n    Redirect to a given URL while setting the chosen language in the session\n    (if enabled) and in a cookie. The URL and the language code need to be\n    specified in the request parameters.\n\n    Since this view changes how the user will see the rest of the site, it must\n    only be accessed as a POST request. If called as a GET request, it will\n    redirect to the page in the request (the 'next' parameter) without changing\n    any state.\n    \"\"\"\n    next_url = request.POST.get(\"next\", request.GET.get(\"next\"))\n    if (\n        next_url or request.accepts(\"text/html\")\n    ) and not url_has_allowed_host_and_scheme(\n        url=next_url,\n        allowed_hosts={request.get_host()},\n        require_https=request.is_secure(),\n    ):\n        next_url = request.META.get(\"HTTP_REFERER\")\n        if not url_has_allowed_host_and_scheme(\n            url=next_url,\n            allowed_hosts={request.get_host()},\n            require_https=request.is_secure(),\n        ):\n            next_url = \"/\"\n    response = HttpResponseRedirect(next_url) if next_url else HttpResponse(status=204)\n    if request.method == \"POST\":\n        lang_code = request.POST.get(LANGUAGE_QUERY_PARAMETER)\n        if lang_code and check_for_language(lang_code):\n            if next_url:\n                next_trans = translate_url(next_url, lang_code)\n                if next_trans != next_url:\n                    response = HttpResponseRedirect(next_trans)\n            response.set_cookie(\n                settings.LANGUAGE_COOKIE_NAME,\n                lang_code,\n                max_age=settings.LANGUAGE_COOKIE_AGE,\n                path=settings.LANGUAGE_COOKIE_PATH,\n                domain=settings.LANGUAGE_COOKIE_DOMAIN,\n                secure=settings.LANGUAGE_COOKIE_SECURE,\n                httponly=settings.LANGUAGE_COOKIE_HTTPONLY,\n                samesite=settings.LANGUAGE_COOKIE_SAMESITE,\n            )\n    return response\n\n# Referenced module constants:\nLANGUAGE_QUERY_PARAMETER = \"language\"\n\n# django/utils/http.py:368-395  (django.utils.http._url_has_allowed_host_and_scheme)\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    if url.startswith(\"///\"):\n        return False\n    try:\n        url_info = _urlparse(url)\n    except ValueError:  # e.g. invalid IPv6 addresses\n        return False\n    # Forbid URLs like http:///example.com - with a scheme, but without a hostname.\n    # In that URL, example.com is not the hostname but, a path component. However,\n    # Chrome will still consider example.com to be the hostname, so we must not\n    # allow this syntax.\n    if not url_info.netloc and url_info.scheme:\n        return False\n    # Forbid URLs that start with control characters. Some browsers (like\n    # Chrome) ignore quite a few control characters at the start of a\n    # URL and might consider the URL as scheme relative.\n    if unicodedata.category(url[0])[0] == \"C\":\n        return False\n    scheme = url_info.scheme\n    # Consider URLs without a scheme (e.g. //example.com/p) to be http.\n    if not url_info.scheme and url_info.netloc:\n        scheme = \"http\"\n    valid_schemes = [\"https\"] if require_https else [\"http\", \"https\"]\n    return (not url_info.netloc or url_info.netloc in allowed_hosts) and (\n        not scheme or scheme in valid_schemes\n    )\n\n## Task\n\nWhat breaks if `django.utils.http.url_has_allowed_host_and_scheme` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

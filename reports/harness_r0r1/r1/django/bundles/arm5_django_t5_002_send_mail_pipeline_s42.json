@@ -1,0 +1,205 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "django_t5_002_send_mail_pipeline",
+  "items": [
+   {
+    "source_id": "django/core/mail/__init__.py:54-87",
+    "content": "# django/core/mail/__init__.py:54-87  (django.core.mail.send_mail)\ndef send_mail(\n    subject,\n    message,\n    from_email,\n    recipient_list,\n    fail_silently=False,\n    auth_user=None,\n    auth_password=None,\n    connection=None,\n    html_message=None,\n):\n    \"\"\"\n    Easy wrapper for sending a single message to a recipient list. All members\n    of the recipient list will see the other recipients in the 'To' field.\n\n    If from_email is None, use the DEFAULT_FROM_EMAIL setting.\n    If auth_user is None, use the EMAIL_HOST_USER setting.\n    If auth_password is None, use the EMAIL_HOST_PASSWORD setting.\n\n    Note: The API for this method is frozen. New code wanting to extend the\n    functionality should use the EmailMessage class directly.\n    \"\"\"\n    connection = connection or get_connection(\n        username=auth_user,\n        password=auth_password,\n        fail_silently=fail_silently,\n    )\n    mail = EmailMultiAlternatives(\n        subject, message, from_email, recipient_list, connection=connection\n    )\n    if html_message:\n        mail.attach_alternative(html_message, \"text/html\")\n\n    return mail.send()",
+    "token_count": 254,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.send_mail"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 232,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/commands/sendtestemail.py:8-46",
+    "content": "# django/core/management/commands/sendtestemail.py:8-46  (django.core.management.commands.sendtestemail.Command)\nclass Command(BaseCommand):\n    help = \"Sends a test email to the email addresses specified as arguments.\"\n    missing_args_message = (\n        \"You must specify some email recipients, or pass the --managers or --admin \"\n        \"options.\"\n    )\n\n    def add_arguments(self, parser):\n        parser.add_argument(\n            \"email\",\n            nargs=\"*\",\n            help=\"One or more email addresses to send a test email to.\",\n        )\n        parser.add_argument(\n            \"--managers\",\n            action=\"store_true\",\n            help=\"Send a test email to the addresses specified in settings.MANAGERS.\",\n        )\n        parser.add_argument(\n            \"--admins\",\n            action=\"store_true\",\n            help=\"Send a test email to the addresses specified in settings.ADMINS.\",\n        )\n\n    def handle(self, *args, **kwargs):\n        subject = \"Test email from %s on %s\" % (socket.gethostname(), timezone.now())\n\n        send_mail(\n            subject=subject,\n            message=\"If you're reading this, it was successful.\",\n            from_email=None,\n            recipient_list=kwargs[\"email\"],\n        )\n\n        if kwargs[\"managers\"]:\n            mail_managers(subject, \"This email was sent to the site managers.\")\n\n        if kwargs[\"admins\"]:\n            mail_admins(subject, \"This email was sent to the site admins.\")",
+    "token_count": 304,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.management.commands.sendtestemail.Command"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 277,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/management/commands/sendtestemail.py:32-46",
+    "content": "# django/core/management/commands/sendtestemail.py:32-46  (django.core.management.commands.sendtestemail.Command.handle)\n    def handle(self, *args, **kwargs):\n        subject = \"Test email from %s on %s\" % (socket.gethostname(), timezone.now())\n\n        send_mail(\n            subject=subject,\n            message=\"If you're reading this, it was successful.\",\n            from_email=None,\n            recipient_list=kwargs[\"email\"],\n        )\n\n        if kwargs[\"managers\"]:\n            mail_managers(subject, \"This email was sent to the site managers.\")\n\n        if kwargs[\"admins\"]:\n            mail_admins(subject, \"This email was sent to the site admins.\")",
+    "token_count": 144,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.management.commands.sendtestemail.Command.handle"
+    ],
+    "provenance": {
+     "role": "caller",
+     "compression": "L0_full",
+     "engine_token_count": 115,
+     "distance": 0.8333333333333334
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/__init__.py:42-51",
+    "content": "# django/core/mail/__init__.py:42-51  (django.core.mail.get_connection)\ndef get_connection(backend=None, fail_silently=False, **kwds):\n    \"\"\"Load an email backend and return an instance of it.\n\n    If backend is None (default), use settings.EMAIL_BACKEND.\n\n    Both fail_silently and other keyword arguments are used in the\n    constructor of the backend.\n    \"\"\"\n    klass = import_string(backend or settings.EMAIL_BACKEND)\n    return klass(fail_silently=fail_silently, **kwds)",
+    "token_count": 118,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.get_connection"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 96,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:191-430",
+    "content": "# django/core/mail/message.py:191-430  (django.core.mail.message.EmailMessage)\nclass EmailMessage:\n    \"\"\"A container for email information.\"\"\"\n\n    content_subtype = \"plain\"\n    mixed_subtype = \"mixed\"\n    encoding = None  # None => use settings default\n\n    def __init__(\n        self,\n        subject=\"\",\n        body=\"\",\n        from_email=None,\n        to=None,\n        bcc=None,\n        connection=None,\n        attachments=None,\n        headers=None,\n        cc=None,\n        reply_to=None,\n    ):\n        \"\"\"\n        Initialize a single email message (which can be sent to multiple\n        recipients).\n        \"\"\"\n        if to:\n            if isinstance(to, str):\n                raise TypeError('\"to\" argument must be a list or tuple')\n            self.to = list(to)\n        else:\n            self.to = []\n        if cc:\n            if isinstance(cc, str):\n                raise TypeError('\"cc\" argument must be a list or tuple')\n            self.cc = list(cc)\n        else:\n            self.cc = []\n        if bcc:\n            if isinstance(bcc, str):\n                raise TypeError('\"bcc\" argument must be a list or tuple')\n            self.bcc = list(bcc)\n        else:\n            self.bcc = []\n        if reply_to:\n            if isinstance(reply_to, str):\n                raise TypeError('\"reply_to\" argument must be a list or tuple')\n            self.reply_to = list(reply_to)\n        else:\n            self.reply_to = []\n        self.from_email = from_email or settings.DEFAULT_FROM_EMAIL\n        self.subject = subject\n        self.body = body or \"\"\n        self.attachments = []\n        if attachments:\n            for attachment in attachments:\n                if isinstance(attachment, MIMEBase):\n                    self.attach(attachment)\n                else:\n                    self.attach(*attachment)\n        self.extra_headers = headers or {}\n        self.connection = connection\n\n    def get_connection(self, fail_silently=False):\n        from django.core.mail import get_connection\n\n        if not self.connection:\n            self.connection = get_connection(fail_silently=fail_silently)\n        return self.connection\n\n    def message(self):\n        encoding = self.encoding or settings.DEFAULT_CHARSET\n        msg = SafeMIMEText(self.body, self.content_subtype, encoding)\n        msg = self._create_message(msg)\n        msg[\"Subject\"] = self.subject\n        msg[\"From\"] = self.extra_headers.get(\"From\", self.from_email)\n        self._set_list_header_if_not_empty(msg, \"To\", self.to)\n        self._set_list_header_if_not_empty(msg, \"Cc\", self.cc)\n        self._set_list_header_if_not_empty(msg, \"Reply-To\", self.reply_to)\n\n        # Email header names are case-insensitive (RFC 2045), so we have to\n        # accommodate that when doing comparisons.\n        header_names = [key.lower() for key in self.extra_headers]\n        if \"date\" not in header_names:\n            # formatdate() uses stdlib methods to format the date, which use\n            # the stdlib/OS concept of a timezone, however, Django sets the\n            # TZ environment variable based on the TIME_ZONE setting which\n            # will get picked up by formatdate().\n            msg[\"Date\"] = formatdate(localtime=settings.EMAIL_USE_LOCALTIME)\n        if \"message-id\" not in header_names:\n            # Use cached DNS_NAME for performance\n            msg[\"Message-ID\"] = make_msgid(domain=DNS_NAME)\n        for name, value in self.extra_headers.items():\n            if name.lower() != \"from\":  # From is already handled\n                msg[name] = value\n        return msg\n\n    def recipients(self):\n        \"\"\"\n        Return a list of all recipients of the email (includes direct\n        addressees as well as Cc and Bcc entries).\n        \"\"\"\n        return [email for email in (self.to + self.cc + self.bcc) if email]\n\n    def send(self, fail_silently=False):\n        \"\"\"Send the email message.\"\"\"\n        if not self.recipients():\n            # Don't bother creating the network connection if there's nobody to\n            # send to.\n            return 0\n        return self.get_connection(fail_silently).send_messages([self])\n\n    def attach(self, filename=None, content=None, mimetype=None):\n        \"\"\"\n        Attach a file with the given filename and content. The filename can\n        be omitted and the mimetype is guessed, if not provided.\n\n        If the first parameter is a MIMEBase subclass, insert it directly\n        into the resulting message attachments.\n\n        For a text/* mimetype (guessed or specified), when a bytes object is\n        specified as content, decode it as UTF-8. If that fails, set the\n        mimetype to DEFAULT_ATTACHMENT_MIME_TYPE and don't decode the content.\n        \"\"\"\n        if isinstance(filename, MIMEBase):\n            if content is not None or mimetype is not None:\n                raise ValueError(\n                    \"content and mimetype must not be given when a MIMEBase \"\n                    \"instance is provided.\"\n                )\n            self.attachments.append(filename)\n        elif content is None:\n            raise ValueError(\"content must be provided.\")\n        else:\n            mimetype = (\n                mimetype\n                or mimetypes.guess_type(filename)[0]\n                or DEFAULT_ATTACHMENT_MIME_TYPE\n            )\n            basetype, subtype = mimetype.split(\"/\", 1)\n\n            if basetype == \"text\":\n                if isinstance(content, bytes):\n                    try:\n                        content = content.decode()\n                    except UnicodeDecodeError:\n                        # If mimetype suggests the file is text but it's\n                        # actually binary, read() raises a UnicodeDecodeError.\n                        mimetype = DEFAULT_ATTACHMENT_MIME_TYPE\n\n            self.attachments.append((filename, content, mimetype))\n\n    def attach_file(self, path, mimetype=None):\n        \"\"\"\n        Attach a file from the filesystem.\n\n        Set the mimetype to DEFAULT_ATTACHMENT_MIME_TYPE if it isn't specified\n        and cannot be guessed.\n\n        For a text/* mimetype (guessed or specified), decode the file's content\n        as UTF-8. If that fails, set the mimetype to\n        DEFAULT_ATTACHMENT_MIME_TYPE and don't decode the content.\n        \"\"\"\n        path = Path(path)\n        with path.open(\"rb\") as file:\n            content = file.read()\n            self.attach(path.name, content, mimetype)\n\n    def _create_message(self, msg):\n        return self._create_attachments(msg)\n\n    def _create_attachments(self, msg):\n        if self.attachments:\n            encoding = self.encoding or settings.DEFAULT_CHARSET\n            body_msg = msg\n            msg = SafeMIMEMultipart(_subtype=self.mixed_subtype, encoding=encoding)\n            if self.body or body_msg.is_multipart():\n                msg.attach(body_msg)\n            for attachment in self.attachments:\n                if isinstance(attachment, MIMEBase):\n                    msg.attach(attachment)\n                else:\n                    msg.attach(self._create_attachment(*attachment))\n        return msg\n\n    def _create_mime_attachment(self, content, mimetype):\n        \"\"\"\n        Convert the content, mimetype pair into a MIME attachment object.\n\n        If the mimetype is message/rfc822, content may be an\n        email.Message or EmailMessage object, as well as a str.\n        \"\"\"\n        basetype, subtype = mimetype.split(\"/\", 1)\n        if basetype == \"text\":\n            encoding = self.encoding or settings.DEFAULT_CHARSET\n            attachment = SafeMIMEText(content, subtype, encoding)\n        elif basetype == \"message\" and subtype == \"rfc822\":\n            # Bug #18967: Per RFC 2046 Section 5.2.1, message/rfc822\n            # attachments must not be base64 encoded.\n            if isinstance(content, EmailMessage):\n                # convert content into an email.Message first\n                content = content.message()\n            elif not isinstance(content, Message):\n                # For compatibility with existing code, parse the message\n                # into an email.Message object if it is not one already.\n                content = message_from_string(force_str(content))\n\n            attachment = SafeMIMEMessage(content, subtype)\n        else:\n            # Encode non-text attachments with base64.\n            attachment = MIMEBase(basetype, subtype)\n            attachment.set_payload(content)\n            Encoders.encode_base64(attachment)\n        return attachment\n\n    def _create_attachment(self, filename, content, mimetype=None):\n        \"\"\"\n        Convert the filename, content, mimetype triple into a MIME attachment\n        object.\n        \"\"\"\n        attachment = self._create_mime_attachment(content, mimetype)\n        if filename:\n            try:\n                filename.encode(\"ascii\")\n            except UnicodeEncodeError:\n                filename = (\"utf-8\", \"\", filename)\n            attachment.add_header(\n                \"Content-Disposition\", \"attachment\", filename=filename\n            )\n        return attachment\n\n    def _set_list_header_if_not_empty(self, msg, header, values):\n        \"\"\"\n        Set msg's header, either from self.extra_headers, if present, or from\n        the values argument.\n        \"\"\"\n        if values:\n            try:\n                value = self.extra_headers[header]\n            except KeyError:\n                value = \", \".join(str(v) for v in values)\n            msg[header] = value",
+    "token_count": 1906,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMessage"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 1867,
+     "distance": 2.1764705882352944
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:293-299",
+    "content": "# django/core/mail/message.py:293-299  (django.core.mail.message.EmailMessage.send)\n    def send(self, fail_silently=False):\n        \"\"\"Send the email message.\"\"\"\n        if not self.recipients():\n            # Don't bother creating the network connection if there's nobody to\n            # send to.\n            return 0\n        return self.get_connection(fail_silently).send_messages([self])",
+    "token_count": 90,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMessage.send"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 66,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:433-494",
+    "content": "# django/core/mail/message.py:433-494  (django.core.mail.message.EmailMultiAlternatives)\nclass EmailMultiAlternatives(EmailMessage):\n    \"\"\"\n    A version of EmailMessage that makes it easy to send multipart/alternative\n    messages. For example, including text and HTML versions of the text is\n    made easier.\n    \"\"\"\n\n    alternative_subtype = \"alternative\"\n\n    def __init__(\n        self,\n        subject=\"\",\n        body=\"\",\n        from_email=None,\n        to=None,\n        bcc=None,\n        connection=None,\n        attachments=None,\n        headers=None,\n        alternatives=None,\n        cc=None,\n        reply_to=None,\n    ):\n        \"\"\"\n        Initialize a single email message (which can be sent to multiple\n        recipients).\n        \"\"\"\n        super().__init__(\n            subject,\n            body,\n            from_email,\n            to,\n            bcc,\n            connection,\n            attachments,\n            headers,\n            cc,\n            reply_to,\n        )\n        self.alternatives = alternatives or []\n\n    def attach_alternative(self, content, mimetype):\n        \"\"\"Attach an alternative content representation.\"\"\"\n        if content is None or mimetype is None:\n            raise ValueError(\"Both content and mimetype must be provided.\")\n        self.alternatives.append((content, mimetype))\n\n    def _create_message(self, msg):\n        return self._create_attachments(self._create_alternatives(msg))\n\n    def _create_alternatives(self, msg):\n        encoding = self.encoding or settings.DEFAULT_CHARSET\n        if self.alternatives:\n            body_msg = msg\n            msg = SafeMIMEMultipart(\n                _subtype=self.alternative_subtype, encoding=encoding\n            )\n            if self.body:\n                msg.attach(body_msg)\n            for alternative in self.alternatives:\n                msg.attach(self._create_mime_attachment(*alternative))\n        return msg",
+    "token_count": 373,
+    "rank": 7,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMultiAlternatives"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 348,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "django/core/mail/message.py:474-478",
+    "content": "# django/core/mail/message.py:474-478  (django.core.mail.message.EmailMultiAlternatives.attach_alternative)\n    def attach_alternative(self, content, mimetype):\n        \"\"\"Attach an alternative content representation.\"\"\"\n        if content is None or mimetype is None:\n            raise ValueError(\"Both content and mimetype must be provided.\")\n        self.alternatives.append((content, mimetype))",
+    "token_count": 80,
+    "rank": 8,
+    "kind": "code_chunk",
+    "symbols": [
+     "django.core.mail.message.EmailMultiAlternatives.attach_alternative"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 52,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 3269,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `django.core.mail.send_mail` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "django.core.mail.send_mail",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "prism_blast_mode": true,
+   "manifest_candidates": 26,
+   "manifest_candidates_unfiltered": 26,
+   "requested_symbols": [
+    "django.core.mail.send_mail",
+    "django.core.management.commands.sendtestemail.Command.handle"
+   ],
+   "turn1_requested_count": 2,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"If `django.core.mail.send_mail` changes, it could break any functionality that relies on sending emails, such as user notifications, password resets, or any other email-based features. This includes any command that directly or indirectly calls `send_mail`, such as `django.core.management.commands.sendtestemail.Command.handle`.\",\n  \"requested_symbols\": [\n    \"django.core.mail.send_mail\",\n    \"django.core.management.commands.sendtestemail.Command.handle\"\n  ]\n}\n```",
+     "prompt_tokens": 1975,
+     "completion_tokens": 104,
+     "latency_seconds": 9.506832150000037,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     382.830364
+    ],
+    "L_turn2_hydrate": [
+     719.319938
+    ],
+    "L_retrieve": [
+     10620.536494
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 3269,
+   "prompt_tokens": 3407,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 3420,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# django/core/mail/__init__.py:54-87  (django.core.mail.send_mail)\ndef send_mail(\n    subject,\n    message,\n    from_email,\n    recipient_list,\n    fail_silently=False,\n    auth_user=None,\n    auth_password=None,\n    connection=None,\n    html_message=None,\n):\n    \"\"\"\n    Easy wrapper for sending a single message to a recipient list. All members\n    of the recipient list will see the other recipients in the 'To' field.\n\n    If from_email is None, use the DEFAULT_FROM_EMAIL setting.\n    If auth_user is None, use the EMAIL_HOST_USER setting.\n    If auth_password is None, use the EMAIL_HOST_PASSWORD setting.\n\n    Note: The API for this method is frozen. New code wanting to extend the\n    functionality should use the EmailMessage class directly.\n    \"\"\"\n    connection = connection or get_connection(\n        username=auth_user,\n        password=auth_password,\n        fail_silently=fail_silently,\n    )\n    mail = EmailMultiAlternatives(\n        subject, message, from_email, recipient_list, connection=connection\n    )\n    if html_message:\n        mail.attach_alternative(html_message, \"text/html\")\n\n    return mail.send()\n\n# django/core/management/commands/sendtestemail.py:8-46  (django.core.management.commands.sendtestemail.Command)\nclass Command(BaseCommand):\n    help = \"Sends a test email to the email addresses specified as arguments.\"\n    missing_args_message = (\n        \"You must specify some email recipients, or pass the --managers or --admin \"\n        \"options.\"\n    )\n\n    def add_arguments(self, parser):\n        parser.add_argument(\n            \"email\",\n            nargs=\"*\",\n            help=\"One or more email addresses to send a test email to.\",\n        )\n        parser.add_argument(\n            \"--managers\",\n            action=\"store_true\",\n            help=\"Send a test email to the addresses specified in settings.MANAGERS.\",\n        )\n        parser.add_argument(\n            \"--admins\",\n            action=\"store_true\",\n            help=\"Send a test email to the addresses specified in settings.ADMINS.\",\n        )\n\n    def handle(self, *args, **kwargs):\n        subject = \"Test email from %s on %s\" % (socket.gethostname(), timezone.now())\n\n        send_mail(\n            subject=subject,\n            message=\"If you're reading this, it was successful.\",\n            from_email=None,\n            recipient_list=kwargs[\"email\"],\n        )\n\n        if kwargs[\"managers\"]:\n            mail_managers(subject, \"This email was sent to the site managers.\")\n\n        if kwargs[\"admins\"]:\n            mail_admins(subject, \"This email was sent to the site admins.\")\n\n# django/core/management/commands/sendtestemail.py:32-46  (django.core.management.commands.sendtestemail.Command.handle)\n    def handle(self, *args, **kwargs):\n        subject = \"Test email from %s on %s\" % (socket.gethostname(), timezone.now())\n\n        send_mail(\n            subject=subject,\n            message=\"If you're reading this, it was successful.\",\n            from_email=None,\n            recipient_list=kwargs[\"email\"],\n        )\n\n        if kwargs[\"managers\"]:\n            mail_managers(subject, \"This email was sent to the site managers.\")\n\n        if kwargs[\"admins\"]:\n            mail_admins(subject, \"This email was sent to the site admins.\")\n\n# django/core/mail/__init__.py:42-51  (django.core.mail.get_connection)\ndef get_connection(backend=None, fail_silently=False, **kwds):\n    \"\"\"Load an email backend and return an instance of it.\n\n    If backend is None (default), use settings.EMAIL_BACKEND.\n\n    Both fail_silently and other keyword arguments are used in the\n    constructor of the backend.\n    \"\"\"\n    klass = import_string(backend or settings.EMAIL_BACKEND)\n    return klass(fail_silently=fail_silently, **kwds)\n\n# django/core/mail/message.py:191-430  (django.core.mail.message.EmailMessage)\nclass EmailMessage:\n    \"\"\"A container for email information.\"\"\"\n\n    content_subtype = \"plain\"\n    mixed_subtype = \"mixed\"\n    encoding = None  # None => use settings default\n\n    def __init__(\n        self,\n        subject=\"\",\n        body=\"\",\n        from_email=None,\n        to=None,\n        bcc=None,\n        connection=None,\n        attachments=None,\n        headers=None,\n        cc=None,\n        reply_to=None,\n    ):\n        \"\"\"\n        Initialize a single email message (which can be sent to multiple\n        recipients).\n        \"\"\"\n        if to:\n            if isinstance(to, str):\n                raise TypeError('\"to\" argument must be a list or tuple')\n            self.to = list(to)\n        else:\n            self.to = []\n        if cc:\n            if isinstance(cc, str):\n                raise TypeError('\"cc\" argument must be a list or tuple')\n            self.cc = list(cc)\n        else:\n            self.cc = []\n        if bcc:\n            if isinstance(bcc, str):\n                raise TypeError('\"bcc\" argument must be a list or tuple')\n            self.bcc = list(bcc)\n        else:\n            self.bcc = []\n        if reply_to:\n            if isinstance(reply_to, str):\n                raise TypeError('\"reply_to\" argument must be a list or tuple')\n            self.reply_to = list(reply_to)\n        else:\n            self.reply_to = []\n        self.from_email = from_email or settings.DEFAULT_FROM_EMAIL\n        self.subject = subject\n        self.body = body or \"\"\n        self.attachments = []\n        if attachments:\n            for attachment in attachments:\n                if isinstance(attachment, MIMEBase):\n                    self.attach(attachment)\n                else:\n                    self.attach(*attachment)\n        self.extra_headers = headers or {}\n        self.connection = connection\n\n    def get_connection(self, fail_silently=False):\n        from django.core.mail import get_connection\n\n        if not self.connection:\n            self.connection = get_connection(fail_silently=fail_silently)\n        return self.connection\n\n    def message(self):\n        encoding = self.encoding or settings.DEFAULT_CHARSET\n        msg = SafeMIMEText(self.body, self.content_subtype, encoding)\n        msg = self._create_message(msg)\n        msg[\"Subject\"] = self.subject\n        msg[\"From\"] = self.extra_headers.get(\"From\", self.from_email)\n        self._set_list_header_if_not_empty(msg, \"To\", self.to)\n        self._set_list_header_if_not_empty(msg, \"Cc\", self.cc)\n        self._set_list_header_if_not_empty(msg, \"Reply-To\", self.reply_to)\n\n        # Email header names are case-insensitive (RFC 2045), so we have to\n        # accommodate that when doing comparisons.\n        header_names = [key.lower() for key in self.extra_headers]\n        if \"date\" not in header_names:\n            # formatdate() uses stdlib methods to format the date, which use\n            # the stdlib/OS concept of a timezone, however, Django sets the\n            # TZ environment variable based on the TIME_ZONE setting which\n            # will get picked up by formatdate().\n            msg[\"Date\"] = formatdate(localtime=settings.EMAIL_USE_LOCALTIME)\n        if \"message-id\" not in header_names:\n            # Use cached DNS_NAME for performance\n            msg[\"Message-ID\"] = make_msgid(domain=DNS_NAME)\n        for name, value in self.extra_headers.items():\n            if name.lower() != \"from\":  # From is already handled\n                msg[name] = value\n        return msg\n\n    def recipients(self):\n        \"\"\"\n        Return a list of all recipients of the email (includes direct\n        addressees as well as Cc and Bcc entries).\n        \"\"\"\n        return [email for email in (self.to + self.cc + self.bcc) if email]\n\n    def send(self, fail_silently=False):\n        \"\"\"Send the email message.\"\"\"\n        if not self.recipients():\n            # Don't bother creating the network connection if there's nobody to\n            # send to.\n            return 0\n        return self.get_connection(fail_silently).send_messages([self])\n\n    def attach(self, filename=None, content=None, mimetype=None):\n        \"\"\"\n        Attach a file with the given filename and content. The filename can\n        be omitted and the mimetype is guessed, if not provided.\n\n        If the first parameter is a MIMEBase subclass, insert it directly\n        into the resulting message attachments.\n\n        For a text/* mimetype (guessed or specified), when a bytes object is\n        specified as content, decode it as UTF-8. If that fails, set the\n        mimetype to DEFAULT_ATTACHMENT_MIME_TYPE and don't decode the content.\n        \"\"\"\n        if isinstance(filename, MIMEBase):\n            if content is not None or mimetype is not None:\n                raise ValueError(\n                    \"content and mimetype must not be given when a MIMEBase \"\n                    \"instance is provided.\"\n                )\n            self.attachments.append(filename)\n        elif content is None:\n            raise ValueError(\"content must be provided.\")\n        else:\n            mimetype = (\n                mimetype\n                or mimetypes.guess_type(filename)[0]\n                or DEFAULT_ATTACHMENT_MIME_TYPE\n            )\n            basetype, subtype = mimetype.split(\"/\", 1)\n\n            if basetype == \"text\":\n                if isinstance(content, bytes):\n                    try:\n                        content = content.decode()\n                    except UnicodeDecodeError:\n                        # If mimetype suggests the file is text but it's\n                        # actually binary, read() raises a UnicodeDecodeError.\n                        mimetype = DEFAULT_ATTACHMENT_MIME_TYPE\n\n            self.attachments.append((filename, content, mimetype))\n\n    def attach_file(self, path, mimetype=None):\n        \"\"\"\n        Attach a file from the filesystem.\n\n        Set the mimetype to DEFAULT_ATTACHMENT_MIME_TYPE if it isn't specified\n        and cannot be guessed.\n\n        For a text/* mimetype (guessed or specified), decode the file's content\n        as UTF-8. If that fails, set the mimetype to\n        DEFAULT_ATTACHMENT_MIME_TYPE and don't decode the content.\n        \"\"\"\n        path = Path(path)\n        with path.open(\"rb\") as file:\n            content = file.read()\n            self.attach(path.name, content, mimetype)\n\n    def _create_message(self, msg):\n        return self._create_attachments(msg)\n\n    def _create_attachments(self, msg):\n        if self.attachments:\n            encoding = self.encoding or settings.DEFAULT_CHARSET\n            body_msg = msg\n            msg = SafeMIMEMultipart(_subtype=self.mixed_subtype, encoding=encoding)\n            if self.body or body_msg.is_multipart():\n                msg.attach(body_msg)\n            for attachment in self.attachments:\n                if isinstance(attachment, MIMEBase):\n                    msg.attach(attachment)\n                else:\n                    msg.attach(self._create_attachment(*attachment))\n        return msg\n\n    def _create_mime_attachment(self, content, mimetype):\n        \"\"\"\n        Convert the content, mimetype pair into a MIME attachment object.\n\n        If the mimetype is message/rfc822, content may be an\n        email.Message or EmailMessage object, as well as a str.\n        \"\"\"\n        basetype, subtype = mimetype.split(\"/\", 1)\n        if basetype == \"text\":\n            encoding = self.encoding or settings.DEFAULT_CHARSET\n            attachment = SafeMIMEText(content, subtype, encoding)\n        elif basetype == \"message\" and subtype == \"rfc822\":\n            # Bug #18967: Per RFC 2046 Section 5.2.1, message/rfc822\n            # attachments must not be base64 encoded.\n            if isinstance(content, EmailMessage):\n                # convert content into an email.Message first\n                content = content.message()\n            elif not isinstance(content, Message):\n                # For compatibility with existing code, parse the message\n                # into an email.Message object if it is not one already.\n                content = message_from_string(force_str(content))\n\n            attachment = SafeMIMEMessage(content, subtype)\n        else:\n            # Encode non-text attachments with base64.\n            attachment = MIMEBase(basetype, subtype)\n            attachment.set_payload(content)\n            Encoders.encode_base64(attachment)\n        return attachment\n\n    def _create_attachment(self, filename, content, mimetype=None):\n        \"\"\"\n        Convert the filename, content, mimetype triple into a MIME attachment\n        object.\n        \"\"\"\n        attachment = self._create_mime_attachment(content, mimetype)\n        if filename:\n            try:\n                filename.encode(\"ascii\")\n            except UnicodeEncodeError:\n                filename = (\"utf-8\", \"\", filename)\n            attachment.add_header(\n                \"Content-Disposition\", \"attachment\", filename=filename\n            )\n        return attachment\n\n    def _set_list_header_if_not_empty(self, msg, header, values):\n        \"\"\"\n        Set msg's header, either from self.extra_headers, if present, or from\n        the values argument.\n        \"\"\"\n        if values:\n            try:\n                value = self.extra_headers[header]\n            except KeyError:\n                value = \", \".join(str(v) for v in values)\n            msg[header] = value\n\n# django/core/mail/message.py:293-299  (django.core.mail.message.EmailMessage.send)\n    def send(self, fail_silently=False):\n        \"\"\"Send the email message.\"\"\"\n        if not self.recipients():\n            # Don't bother creating the network connection if there's nobody to\n            # send to.\n            return 0\n        return self.get_connection(fail_silently).send_messages([self])\n\n# django/core/mail/message.py:433-494  (django.core.mail.message.EmailMultiAlternatives)\nclass EmailMultiAlternatives(EmailMessage):\n    \"\"\"\n    A version of EmailMessage that makes it easy to send multipart/alternative\n    messages. For example, including text and HTML versions of the text is\n    made easier.\n    \"\"\"\n\n    alternative_subtype = \"alternative\"\n\n    def __init__(\n        self,\n        subject=\"\",\n        body=\"\",\n        from_email=None,\n        to=None,\n        bcc=None,\n        connection=None,\n        attachments=None,\n        headers=None,\n        alternatives=None,\n        cc=None,\n        reply_to=None,\n    ):\n        \"\"\"\n        Initialize a single email message (which can be sent to multiple\n        recipients).\n        \"\"\"\n        super().__init__(\n            subject,\n            body,\n            from_email,\n            to,\n            bcc,\n            connection,\n            attachments,\n            headers,\n            cc,\n            reply_to,\n        )\n        self.alternatives = alternatives or []\n\n    def attach_alternative(self, content, mimetype):\n        \"\"\"Attach an alternative content representation.\"\"\"\n        if content is None or mimetype is None:\n            raise ValueError(\"Both content and mimetype must be provided.\")\n        self.alternatives.append((content, mimetype))\n\n    def _create_message(self, msg):\n        return self._create_attachments(self._create_alternatives(msg))\n\n    def _create_alternatives(self, msg):\n        encoding = self.encoding or settings.DEFAULT_CHARSET\n        if self.alternatives:\n            body_msg = msg\n            msg = SafeMIMEMultipart(\n                _subtype=self.alternative_subtype, encoding=encoding\n            )\n            if self.body:\n                msg.attach(body_msg)\n            for alternative in self.alternatives:\n                msg.attach(self._create_mime_attachment(*alternative))\n        return msg\n\n# django/core/mail/message.py:474-478  (django.core.mail.message.EmailMultiAlternatives.attach_alternative)\n    def attach_alternative(self, content, mimetype):\n        \"\"\"Attach an alternative content representation.\"\"\"\n        if content is None or mimetype is None:\n            raise ValueError(\"Both content and mimetype must be provided.\")\n        self.alternatives.append((content, mimetype))\n\n## Task\n\nWhat breaks if `django.core.mail.send_mail` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}

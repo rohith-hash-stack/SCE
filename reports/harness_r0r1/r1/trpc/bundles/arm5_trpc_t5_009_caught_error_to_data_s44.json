@@ -1,0 +1,175 @@
+{
+ "bundle": {
+  "arm": "arm5",
+  "task_id": "trpc_t5_009_caught_error_to_data",
+  "items": [
+   {
+    "source_id": "http/resolveHTTPResponse.ts:177-223",
+    "content": "# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData)\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  const { router, req, onError } = errorOpts.opts;\n  const error = getTRPCErrorFromUnknown(cause);\n  onError?.({\n    error,\n    path: errorOpts.path,\n    input: errorOpts.input,\n    ctx: errorOpts.ctx,\n    type: errorOpts.type,\n    req,\n  });\n  const untransformedJSON = {\n    error: getErrorShape({\n      config: router._def._config,\n      error,\n      type: errorOpts.type,\n      path: errorOpts.path,\n      input: errorOpts.input,\n      ctx: errorOpts.ctx,\n    }),\n  };\n  const transformedJSON = transformTRPCResponse(\n    router._def._config,\n    untransformedJSON,\n  );\n  const body = JSON.stringify(transformedJSON);\n  return {\n    error,\n    untransformedJSON,\n    body,\n  };\n}",
+    "token_count": 305,
+    "rank": 1,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.resolveHTTPResponse.caughtErrorToData"
+    ],
+    "provenance": {
+     "role": "seed",
+     "compression": "L0_full",
+     "engine_token_count": 278,
+     "distance": 0.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "error/TRPCError.ts:4-24",
+    "content": "# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}",
+    "token_count": 162,
+    "rank": 2,
+    "kind": "code_chunk",
+    "symbols": [
+     "error.TRPCError.getTRPCErrorFromUnknown"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 136,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/getErrorShape.ts:10-35",
+    "content": "# shared/getErrorShape.ts:10-35  (shared.getErrorShape.getErrorShape)\nexport function getErrorShape<TConfig extends AnyRootConfig>(opts: {\n  config: TConfig;\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TConfig['$types']['ctx'] | undefined;\n}): TConfig['$types']['errorShape'] {\n  const { path, error, config } = opts;\n  const { code } = opts.error;\n  const shape: DefaultErrorShape = {\n    message: error.message,\n    code: TRPC_ERROR_CODES_BY_KEY[code],\n    data: {\n      code,\n      httpStatus: getHTTPStatusCodeFromError(error),\n    },\n  };\n  if (config.isDev && typeof opts.error.stack === 'string') {\n    shape.data.stack = opts.error.stack;\n  }\n  if (typeof path === 'string') {\n    shape.data.path = path;\n  }\n  return config.errorFormatter({ ...opts, shape });\n}",
+    "token_count": 221,
+    "rank": 3,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.getErrorShape.getErrorShape"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 201,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "shared/transformTRPCResponse.ts:30-40",
+    "content": "# shared/transformTRPCResponse.ts:30-40  (shared.transformTRPCResponse.transformTRPCResponse)\nexport function transformTRPCResponse<\n  TResponse extends\n    | TRPCResponse\n    | TRPCResponse[]\n    | TRPCResponseMessage\n    | TRPCResponseMessage[],\n>(config: AnyRootConfig, itemOrItems: TResponse) {\n  return Array.isArray(itemOrItems)\n    ? itemOrItems.map((item) => transformTRPCResponseItem(config, item))\n    : transformTRPCResponseItem(config, itemOrItems);\n}",
+    "token_count": 120,
+    "rank": 4,
+    "kind": "code_chunk",
+    "symbols": [
+     "shared.transformTRPCResponse.transformTRPCResponse"
+    ],
+    "provenance": {
+     "role": "callee",
+     "compression": "L0_full",
+     "engine_token_count": 94,
+     "distance": 1.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:60-62",
+    "content": "# http/getHTTPStatusCode.ts:60-62  (http.getHTTPStatusCode.getHTTPStatusCodeFromError)\nexport function getHTTPStatusCodeFromError(error: TRPCError) {\n  return getStatusCodeFromKey(error.code);\n}",
+    "token_count": 48,
+    "rank": 5,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.getHTTPStatusCode.getHTTPStatusCodeFromError"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 24,
+     "distance": 2.0
+    },
+    "symbol_provenance": ""
+   },
+   {
+    "source_id": "http/getHTTPStatusCode.ts:31-33",
+    "content": "# http/getHTTPStatusCode.ts:31-33  (http.getHTTPStatusCode.getStatusCodeFromKey)\nfunction getStatusCodeFromKey(code: keyof typeof TRPC_ERROR_CODES_BY_KEY) {\n  return JSONRPC2_TO_HTTP_CODE[code] ?? 500;\n}\n\n# Referenced module constants:\nJSONRPC2_TO_HTTP_CODE = {...}  # 15 entries",
+    "token_count": 77,
+    "rank": 6,
+    "kind": "code_chunk",
+    "symbols": [
+     "http.getHTTPStatusCode.getStatusCodeFromKey"
+    ],
+    "provenance": {
+     "role": "transitive",
+     "compression": "L0_full",
+     "engine_token_count": 46,
+     "distance": 3.0
+    },
+    "symbol_provenance": ""
+   }
+  ],
+  "total_tokens": 933,
+  "budget_tokens": 13000,
+  "build_meta": {
+   "arm_name": "PRISM two-pass",
+   "fidelity": "HIGH",
+   "simplifications": [
+    "hydrated nodes are rendered in the harness's uniform item format, not PRISM's <prism_context> XML envelope",
+    "token budget re-counted with the harness tokenizer and trimmed from the lowest rank (PRISM packs in cl100k)"
+   ],
+   "query": "What breaks if `http.resolveHTTPResponse.caughtErrorToData` changes?",
+   "task_type": "T5_blast_radius",
+   "anchor": "http.resolveHTTPResponse.caughtErrorToData",
+   "turn2b_triggered": false,
+   "turn_count": 2,
+   "over_budget": false,
+   "ranking_method": "prism_order",
+   "prism_manifest_strict": false,
+   "prism_turn1_strict_prompt": false,
+   "prism_blast_mode": true,
+   "manifest_candidates": 19,
+   "manifest_candidates_unfiltered": 19,
+   "requested_symbols": [
+    "http.resolveHTTPResponse.caughtErrorToData",
+    "error.TRPCError.getTRPCErrorFromUnknown",
+    "shared.getErrorShape.getErrorShape",
+    "shared.transformTRPCResponse.transformTRPCResponse",
+    "http.getHTTPStatusCode.getHTTPStatusCodeFromError",
+    "http.getHTTPStatusCode.getStatusCodeFromKey"
+   ],
+   "turn1_requested_count": 6,
+   "turn1_parsed_ok": true,
+   "turn1_degenerate": false,
+   "external_requested": [],
+   "skipped_hallucinated": [],
+   "retrieval_turns": [
+    {
+     "text": "```json\n{\n  \"thought_process\": \"If `http.resolveHTTPResponse.caughtErrorToData` changes, it could affect how errors are handled and transformed in HTTP responses, potentially breaking the error response format and consistency across the application.\",\n  \"requested_symbols\": [\n    \"http.resolveHTTPResponse.caughtErrorToData\",\n    \"error.TRPCError.getTRPCErrorFromUnknown\",\n    \"shared.getErrorShape.getErrorShape\",\n    \"shared.transformTRPCResponse.transformTRPCResponse\",\n    \"http.getHTTPStatusCode.getHTTPStatusCodeFromError\",\n    \"http.getHTTPStatusCode.getStatusCodeFromKey\"\n  ]\n}\n```",
+     "prompt_tokens": 1895,
+     "completion_tokens": 127,
+     "latency_seconds": 10.413767860000007,
+     "model": "qwen2.5-coder:14b-instruct-q8_0",
+     "finish_reason": "stop",
+     "purpose": "turn1"
+    }
+   ],
+   "latency_ms": {
+    "L_turn1_manifest": [
+     16.123536
+    ],
+    "L_turn2_hydrate": [
+     29.377707
+    ],
+    "L_retrieve": [
+     10462.307207
+    ]
+   },
+   "tokenizer": "hf:Qwen/Qwen2.5-Coder-14B-Instruct",
+   "budget_dropped": [],
+   "pre_trim_tokens": 933,
+   "prompt_tokens": 1074,
+   "prompt_over_window": false,
+   "server_prompt_tokens": 1087,
+   "server_prompt_shortfall": false
+  }
+ },
+ "prompt": "## Repository context\n\n# http/resolveHTTPResponse.ts:177-223  (http.resolveHTTPResponse.caughtErrorToData)\nfunction caughtErrorToData<\n  TRouter extends AnyRouter,\n  TRequest extends HTTPRequest,\n>(\n  cause: unknown,\n  errorOpts: {\n    opts: Pick<\n      ResolveHTTPRequestOptions<TRouter, TRequest>,\n      'onError' | 'req' | 'router'\n    >;\n    ctx: inferRouterContext<TRouter> | undefined;\n    type: ProcedureType | 'unknown';\n    path?: string;\n    input?: unknown;\n  },\n) {\n  const { router, req, onError } = errorOpts.opts;\n  const error = getTRPCErrorFromUnknown(cause);\n  onError?.({\n    error,\n    path: errorOpts.path,\n    input: errorOpts.input,\n    ctx: errorOpts.ctx,\n    type: errorOpts.type,\n    req,\n  });\n  const untransformedJSON = {\n    error: getErrorShape({\n      config: router._def._config,\n      error,\n      type: errorOpts.type,\n      path: errorOpts.path,\n      input: errorOpts.input,\n      ctx: errorOpts.ctx,\n    }),\n  };\n  const transformedJSON = transformTRPCResponse(\n    router._def._config,\n    untransformedJSON,\n  );\n  const body = JSON.stringify(transformedJSON);\n  return {\n    error,\n    untransformedJSON,\n    body,\n  };\n}\n\n# error/TRPCError.ts:4-24  (error.TRPCError.getTRPCErrorFromUnknown)\nexport function getTRPCErrorFromUnknown(cause: unknown): TRPCError {\n  if (cause instanceof TRPCError) {\n    return cause;\n  }\n  if (cause instanceof Error && cause.name === 'TRPCError') {\n    // https://github.com/trpc/trpc/pull/4848\n    return cause as TRPCError;\n  }\n\n  const trpcError = new TRPCError({\n    code: 'INTERNAL_SERVER_ERROR',\n    cause,\n  });\n\n  // Inherit stack from error\n  if (cause instanceof Error && cause.stack) {\n    trpcError.stack = cause.stack;\n  }\n\n  return trpcError;\n}\n\n# shared/getErrorShape.ts:10-35  (shared.getErrorShape.getErrorShape)\nexport function getErrorShape<TConfig extends AnyRootConfig>(opts: {\n  config: TConfig;\n  error: TRPCError;\n  type: ProcedureType | 'unknown';\n  path: string | undefined;\n  input: unknown;\n  ctx: TConfig['$types']['ctx'] | undefined;\n}): TConfig['$types']['errorShape'] {\n  const { path, error, config } = opts;\n  const { code } = opts.error;\n  const shape: DefaultErrorShape = {\n    message: error.message,\n    code: TRPC_ERROR_CODES_BY_KEY[code],\n    data: {\n      code,\n      httpStatus: getHTTPStatusCodeFromError(error),\n    },\n  };\n  if (config.isDev && typeof opts.error.stack === 'string') {\n    shape.data.stack = opts.error.stack;\n  }\n  if (typeof path === 'string') {\n    shape.data.path = path;\n  }\n  return config.errorFormatter({ ...opts, shape });\n}\n\n# shared/transformTRPCResponse.ts:30-40  (shared.transformTRPCResponse.transformTRPCResponse)\nexport function transformTRPCResponse<\n  TResponse extends\n    | TRPCResponse\n    | TRPCResponse[]\n    | TRPCResponseMessage\n    | TRPCResponseMessage[],\n>(config: AnyRootConfig, itemOrItems: TResponse) {\n  return Array.isArray(itemOrItems)\n    ? itemOrItems.map((item) => transformTRPCResponseItem(config, item))\n    : transformTRPCResponseItem(config, itemOrItems);\n}\n\n# http/getHTTPStatusCode.ts:60-62  (http.getHTTPStatusCode.getHTTPStatusCodeFromError)\nexport function getHTTPStatusCodeFromError(error: TRPCError) {\n  return getStatusCodeFromKey(error.code);\n}\n\n# http/getHTTPStatusCode.ts:31-33  (http.getHTTPStatusCode.getStatusCodeFromKey)\nfunction getStatusCodeFromKey(code: keyof typeof TRPC_ERROR_CODES_BY_KEY) {\n  return JSONRPC2_TO_HTTP_CODE[code] ?? 500;\n}\n\n# Referenced module constants:\nJSONRPC2_TO_HTTP_CODE = {...}  # 15 entries\n\n## Task\n\nWhat breaks if `http.resolveHTTPResponse.caughtErrorToData` changes?\n\n## Response format\n\nRespond with a single fenced JSON object and nothing else:\n```json\n{\"reasoning\": \"<short explanation>\", \"symbols\": [\"<fully.qualified.name>\", \"...\"]}\n```\n`symbols` lists every affected symbol by exact fully-qualified name."
+}
