@@ -13,6 +13,7 @@ production-grade behaviour? Design and offline evidence:
 | `routing.py` | pool shaping: `route_manifest(engine, seed, query, budget)` and `RoutedEngine`, an engine wrapper whose `build_candidate_manifest` routes by the current query |
 | `arms.py` | `ProductionRoutingArm5` (config R2) and `RuleSelectorArm5` (config R0), both subclasses of the unmodified `Arm5Prism` |
 | `b0m4.py` | B0M4: the M4 Arm 5 baseline recomputed from stored cells, checked against the published M4 matrices |
+| `ablation_report.py` | per-cell table and T5 matrix / pairwise / anomaly report for B0M4, R1 and R0 (M4 statistics) |
 | `heldout_queries.json` | 36 generic developer queries (written before the classifier was finalised) for the classifier test |
 
 Core PRISM (`src/prism/`) and `harness/arms/arm5_prism.py` are not modified by
@@ -33,18 +34,62 @@ Rows are filtered, never rewritten. The task-type label is never read for
 routing. The base arm's label-driven `PRISM_BLAST_MODE` is ignored, and
 `build_meta["prism_blast_mode"]` is set to `None` in routed cells.
 
-## Configs (Kaggle ablation)
+## Configs
 
-| config | how to run | GPU |
+**Current run: R1 vs R0, T5 only** (192 cells). R2 (routing) is parked as
+exploratory: it stays in the repo, default off, and is not part of this run.
+
+| config | flags | cells |
 |---|---|---|
-| **B0M4** | stored M4 cells, `python -m harness.experiments.production_routing.b0m4` | none |
-| **R1** | flags off (the fixed baseline: hop-count admission, full signatures, `lines=N`) | 363 cells |
-| **R2** | `HARNESS_PRISM_PRODUCTION_ROUTING=1` | 363 cells |
-| **R0** | `HARNESS_PRISM_T5_RULE_SELECTOR=1`: on T5 seeds Turn 1 requests every `caller` row of R1's manifest without calling the model; T2 runs exactly as R1 | 363 cells |
+| **B0M4** | stored M4 cells, `python -m harness.experiments.production_routing.b0m4` | 0 (no GPU) |
+| **R1** | none: the pipeline as currently shipped | 32 T5 tasks × 3 seeds = 96 |
+| **R0** | `HARNESS_PRISM_T5_RULE_SELECTOR=1` | 96 |
+| R2 (parked) | `HARNESS_PRISM_PRODUCTION_ROUTING=1` | not run |
 
-Common to R1, R2 and R0: Arm 5 only (`HARNESS_ACTIVE_ARMS=arm5`), all four
-corpora, seeds 42,43,44, T2 + T5, a separate `--out` directory per config.
-Setting both flags is rejected at import.
+R1 is not "M4 + three fixes". It is everything shipped since M4:
+* the call-resolution fixes and best-effort edge pricing;
+* Design C for T5 (`PRISM_BLAST_MODE`, on by default);
+* the three manifest fixes: hop-count admission, full signatures, `lines=N`.
+
+R0 differs from R1 only at Turn 1 on T5 seeds: it requests every `caller`
+row of the same manifest and makes no model call. The manifest call,
+manifest text, Turn-2 hydration arguments and answer turn are identical.
+
+Run commands (Kaggle; same model and server arguments as M4), one process
+per config per corpus, each with its own `--out` directory:
+
+```bash
+for c in fastapi django express trpc; do
+  HARNESS_ACTIVE_ARMS=arm5 python -m harness.kaggle_m1 --corpus $c --seeds 42,43,44 --task-types T5 \
+      --out /kaggle/working/r1/$c --model qwen2.5-coder:14b-instruct-q8_0 \
+      --llm-url http://localhost:11434/v1 --ollama-url http://localhost:11434
+  HARNESS_ACTIVE_ARMS=arm5 HARNESS_PRISM_T5_RULE_SELECTOR=1 python -m harness.kaggle_m1 --corpus $c --seeds 42,43,44 \
+      --task-types T5 --out /kaggle/working/r0/$c --model qwen2.5-coder:14b-instruct-q8_0 \
+      --llm-url http://localhost:11434/v1 --ollama-url http://localhost:11434
+done
+```
+
+Report (offline, after copying `/kaggle/working/r1` and `/kaggle/working/r0`
+back, e.g. to `reports/harness_r0r1/{r1,r0}/<corpus>/`):
+
+```bash
+python -m harness.experiments.production_routing.ablation_report \
+    --config R1=reports/harness_r0r1/r1 --config R0=reports/harness_r0r1/r0 \
+    --out reports/harness_r0r1/report
+```
+
+This writes `per_cell.csv`, with one row per cell:
+* config, corpus, seed, task_id, TSR;
+* gold coverage, selection precision, selection recall;
+* turn1_source, plus diagnostics.
+
+It also writes `ablation.json` and `ablation.md` with:
+* the T5 matrix with 95% CIs;
+* R0 vs R1, Holm-corrected over the four corpora;
+* the comparisons against B0M4;
+* the anomaly scan.
+
+Gold is read only here, at analysis time; arms never see it.
 
 ### Methods note: B0M4 is not a re-run
 

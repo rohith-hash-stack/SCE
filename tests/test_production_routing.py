@@ -135,3 +135,28 @@ def test_b0m4_from_stored_cells_matches_the_published_m4_matrices():
     from harness.experiments.production_routing.b0m4 import check_against_published, summarize
     summary = summarize()
     assert len(summary) == 8 and check_against_published(summary) == []
+
+
+def test_ablation_report_reproduces_the_published_m4_t5_matrix_for_b0m4():
+    from harness.experiments.production_routing.ablation_report import CORPORA, M4, _gold, analyse, load_config
+    gold = {c: _gold(c) for c in CORPORA}
+    res = analyse(load_config("B0M4", M4, gold), ["B0M4"])
+    published = json.loads((M4 / "analysis" / "summary.json").read_text())["t5_matrix"]
+    for corpus in CORPORA:
+        mine, pub = res["matrix"][corpus]["B0M4"], published[corpus]["arm5"]
+        assert (mine["n_tasks"], mine["n_cells"]) == (pub["n_tasks"], pub["n_cells"])
+        for k, pk in (("mean_tsr", "mean"), ("ci_low", "ci_low"), ("ci_high", "ci_high")):
+            assert mine[k] == pytest.approx(pub[pk], abs=1e-12)
+    assert res["anomalies"] == []
+
+
+def test_cell_metrics_use_resolved_picks_and_report_the_turn1_source():
+    from harness.experiments.production_routing.ablation_report import cell_metrics
+    bundle = {"items": [{"symbols": ["s"]}, {"symbols": ["a"]}, {"symbols": ["x"]}],
+              "build_meta": {"requested_symbols": ["a", "x", "ghost"], "skipped_hallucinated": ["ghost"],
+                             "retrieval_turns": [{"model": "rule_callers", "purpose": "turn1"}]}}
+    m = cell_metrics(bundle, "s", {"s", "a", "b"})
+    assert (m["gold_coverage"], m["selection_precision"], m["selection_recall"]) == (0.5, 0.5, 0.5)
+    assert m["turn1_source"] == "rule" and m["n_picks"] == 2
+    bundle["build_meta"]["retrieval_turns"] = [{"model": "qwen", "purpose": "turn1"}]
+    assert cell_metrics(bundle, "s", {"s", "a", "b"})["turn1_source"] == "llm"

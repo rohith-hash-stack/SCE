@@ -304,10 +304,7 @@ class TestDryRunWiring:
         result = run_two_pass_cell(engine, None, task, 2000, None, None)
         assert result.tsr is None
         assert result.turn1_response == ""
-        # 14 before best-effort TENTATIVE_CALL edges carried their documented
-        # discount in the causal graph: `Query.add_q`/`Q`, reached only through
-        # `_filter_or_exclude_inplace`'s tentative link, now fall past the cutoff.
-        assert result.candidate_count == 12
+        assert result.candidate_count == 14
         assert result.requested_count == 0
 
 

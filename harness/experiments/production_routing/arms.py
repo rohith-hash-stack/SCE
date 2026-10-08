@@ -107,7 +107,9 @@ class _CallerRuleLLM:
 class RuleSelectorArm5(Arm5Prism):
     def retrieve(self, query: str, seed: dict):
         if seed.get("task_type") != T5:
-            return super().retrieve(query, seed)
+            ctx = super().retrieve(query, seed)
+            ctx.build_meta["turn1_source"] = "llm"
+            return ctx
         real_llm, rule = self.llm, _CallerRuleLLM(self.llm)
         self.llm = rule
         try:
@@ -116,6 +118,7 @@ class RuleSelectorArm5(Arm5Prism):
             self.llm = real_llm
         meta = ctx.build_meta
         meta["turn1_selector"] = "rule_callers"
+        meta["turn1_source"] = "rule"
         meta.update(_selection_meta(_manifest_rows(rule.turn1_user), meta.get("requested_symbols") or [],
                                     seed.get("seed_symbol") or ""))
         return ctx
