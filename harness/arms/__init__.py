@@ -20,8 +20,9 @@ def build_arm(arm_id: str, **kwargs):
     if arm_id == "arm5":
         from harness import config as C
         if C.PRISM_PRODUCTION_ROUTING or C.PRISM_T5_RULE_SELECTOR:
-            # Experiment configs (harness/experiments/production_routing):
-            # same arm id, same scoring; imported only when a flag is on.
+            # harness/experiments/production_routing: the T5 rule selector
+            # (R0, default) or routing (R2); same arm id, same scoring. Both
+            # flags off (HARNESS_PRISM_T5_RULE_SELECTOR=0) = plain Arm 5 (R1).
             from harness.experiments.production_routing.arms import ProductionRoutingArm5, RuleSelectorArm5
             return (ProductionRoutingArm5 if C.PRISM_PRODUCTION_ROUTING else RuleSelectorArm5)(**kwargs)
     return ARM_CLASSES[arm_id](**kwargs)

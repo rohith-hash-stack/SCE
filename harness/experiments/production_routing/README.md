@@ -18,8 +18,9 @@ production-grade behaviour? Design and offline evidence:
 
 Core PRISM (`src/prism/`) and `harness/arms/arm5_prism.py` are not modified by
 this experiment. The only hook is in `harness/arms/__init__.py:build_arm`,
-which builds one of the two experiment arms for `"arm5"` when a flag is on.
-The experiment package is not imported when both flags are off. Both arms
+which builds one of the two experiment arms for `"arm5"` when a flag is on
+(the rule selector's flag is on by default). The experiment package is not
+imported when both flags are off. Both arms
 keep the arm id `arm5`, so cells are scored exactly like Arm 5.
 
 ## Routing policy (pool shaping)
@@ -36,14 +37,21 @@ routing. The base arm's label-driven `PRISM_BLAST_MODE` is ignored, and
 
 ## Configs
 
+**Default since the R1 vs R0 ablation** (`reports/harness_r0r1/R0_vs_R1_T5.md`):
+`build_arm("arm5")` builds `RuleSelectorArm5`, so Arm 5's Turn 1 on T5 seeds is
+the caller rule (R0). T2 and other task types still use the model at Turn 1.
+`HARNESS_PRISM_T5_RULE_SELECTOR=0` gives the plain `Arm5Prism` (R1). Setting
+`HARNESS_PRISM_PRODUCTION_ROUTING=1` alone selects R2 and turns the rule off;
+setting both flags to 1 is an error.
+
 **Current run: R1 vs R0, T5 only** (192 cells). R2 (routing) is parked as
 exploratory: it stays in the repo, default off, and is not part of this run.
 
 | config | flags | cells |
 |---|---|---|
 | **B0M4** | stored M4 cells, `python -m harness.experiments.production_routing.b0m4` | 0 (no GPU) |
-| **R1** | none: the pipeline as currently shipped | 32 T5 tasks × 3 seeds = 96 |
-| **R0** | `HARNESS_PRISM_T5_RULE_SELECTOR=1` | 96 |
+| **R1** | `HARNESS_PRISM_T5_RULE_SELECTOR=0` (the default when the ablation ran) | 32 T5 tasks × 3 seeds = 96 |
+| **R0** | `HARNESS_PRISM_T5_RULE_SELECTOR=1` (**now the default**) | 96 |
 | R2 (parked) | `HARNESS_PRISM_PRODUCTION_ROUTING=1` | not run |
 
 R1 is not "M4 + three fixes". It is everything shipped since M4:
@@ -60,7 +68,7 @@ per config per corpus, each with its own `--out` directory:
 
 ```bash
 for c in fastapi django express trpc; do
-  HARNESS_ACTIVE_ARMS=arm5 python -m harness.kaggle_m1 --corpus $c --seeds 42,43,44 --task-types T5 \
+  HARNESS_ACTIVE_ARMS=arm5 HARNESS_PRISM_T5_RULE_SELECTOR=0 python -m harness.kaggle_m1 --corpus $c --seeds 42,43,44 --task-types T5 \
       --out /kaggle/working/r1/$c --model qwen2.5-coder:14b-instruct-q8_0 \
       --llm-url http://localhost:11434/v1 --ollama-url http://localhost:11434
   HARNESS_ACTIVE_ARMS=arm5 HARNESS_PRISM_T5_RULE_SELECTOR=1 python -m harness.kaggle_m1 --corpus $c --seeds 42,43,44 \

@@ -131,6 +131,22 @@ def test_flags_select_the_arm_class_and_off_is_plain_arm5(monkeypatch):
     assert proc.returncode != 0 and "enable at most one" in proc.stderr
 
 
+def test_rule_selector_is_the_default_and_opt_outs_work():
+    probe = ("from harness import config as C; from harness.arms import build_arm; "
+             "arm = build_arm('arm5', tokenizer=type('W', (), {'name': 'w', 'count': lambda s, t: len(t.split())})()); "
+             "print(C.PRISM_T5_RULE_SELECTOR, C.PRISM_PRODUCTION_ROUTING, type(arm).__name__)")
+    base = {k: v for k, v in os.environ.items()
+            if k not in ("HARNESS_PRISM_T5_RULE_SELECTOR", "HARNESS_PRISM_PRODUCTION_ROUTING")}
+    cases = (({}, "True False RuleSelectorArm5"),                                        # default: R0
+             ({"HARNESS_PRISM_T5_RULE_SELECTOR": "0"}, "False False Arm5Prism"),         # R1
+             ({"HARNESS_PRISM_PRODUCTION_ROUTING": "1"}, "False True ProductionRoutingArm5"))  # R2
+    for extra, want in cases:
+        proc = subprocess.run([sys.executable, "-c", probe], cwd=REPO, env={**base, **extra},
+                              capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout.strip().splitlines()[-1] == want
+
+
 def test_b0m4_from_stored_cells_matches_the_published_m4_matrices():
     from harness.experiments.production_routing.b0m4 import check_against_published, summarize
     summary = summarize()

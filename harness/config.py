@@ -226,11 +226,14 @@ def _env_flag(name: str, default: bool = False) -> bool:
 #: the manifest's direction from the query text alone (intent classifier +
 #: pool shaping) - no task-type label is read. Off = the plain Arm 5 path.
 PRISM_PRODUCTION_ROUTING: bool = _env_flag("HARNESS_PRISM_PRODUCTION_ROUTING")
-#: Experiment ceiling (OFF): on T5 seeds, Turn 1 requests every `caller`
-#: row of the manifest instead of calling the model (prompt, manifest,
-#: Turn-2 hydration and the answer turn unchanged). Other task types are
-#: untouched.
-PRISM_T5_RULE_SELECTOR: bool = _env_flag("HARNESS_PRISM_T5_RULE_SELECTOR")
+#: T5 Turn-1 rule selector (config R0, ON by default): on T5 seeds, Turn 1
+#: requests every `caller` row of the manifest instead of calling the model
+#: (prompt, manifest, Turn-2 hydration and the answer turn unchanged). Other
+#: task types are untouched. Default since the R1 vs R0 ablation
+#: (reports/harness_r0r1/R0_vs_R1_T5.md). HARNESS_PRISM_T5_RULE_SELECTOR=0
+#: restores the model's Turn-1 selection (config R1). Routing (R2) is a
+#: separate config: when it is on and this flag is unset, this one is off.
+PRISM_T5_RULE_SELECTOR: bool = _env_flag("HARNESS_PRISM_T5_RULE_SELECTOR", default=not PRISM_PRODUCTION_ROUTING)
 if PRISM_PRODUCTION_ROUTING and PRISM_T5_RULE_SELECTOR:
     raise ValueError("HARNESS_PRISM_PRODUCTION_ROUTING and HARNESS_PRISM_T5_RULE_SELECTOR are separate configs; "
                      "enable at most one")

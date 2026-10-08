@@ -915,7 +915,7 @@ Caveat: T5 gold is PRISM-derived, which favours R0.
 
 The large gain is from pipeline improvements (call resolution, Design C, manifest fixes), not from LLM selection.
 
-**Recommendation:** for impact queries, hand the deterministic caller slice straight to the answer model.
+**Adopted:** for T5 (impact) queries, Arm 5 now hands the deterministic caller slice straight to Turn 2 by default, with no Turn-1 model call. `HARNESS_PRISM_T5_RULE_SELECTOR=0` restores the LLM selection (R1).
 
 ---
 
@@ -962,7 +962,7 @@ Sources: [GitNexus README](https://cdn.jsdelivr.net/gh/abhigyanpatwari/GitNexus@
 | Edge pricing | `tentative_factor` applied consistently in causal weights, Dijkstra and upstream; synthetic edges gated on a confident common caller; force-admit only confident upstream | Fixed T2 selection regressions |
 | Design C | Bidirectional manifest: upstream BFS to depth 6 excluding VERIFICATION, interleaved with downstream | T5 gold reach 0.30 → 0.89 |
 | Manifest | Hop-count admission of the real call chain; full declarations (128-token cap, truncation marker, literal collapsing, `\|` → `¦`); `lines=N` | Fixed an Express T2 regression |
-| Experiments | `harness/experiments/production_routing` (default-off flags `HARNESS_PRISM_PRODUCTION_ROUTING`, `HARNESS_PRISM_T5_RULE_SELECTOR`, mutually exclusive) | R0/R1 ablation (§10). R2 routing is parked. |
+| Experiments | `harness/experiments/production_routing`: flags `HARNESS_PRISM_T5_RULE_SELECTOR` (R0, **on by default** for T5 since the ablation) and `HARNESS_PRISM_PRODUCTION_ROUTING` (R2, off), mutually exclusive | R0/R1 ablation (§10). R0 is the T5 default; R2 routing is parked. |
 | Tests | +33 tests (call resolution 17, manifest 6, routing 10) | |
 
 ---
