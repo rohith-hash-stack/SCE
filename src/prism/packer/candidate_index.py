@@ -36,6 +36,7 @@ before running the caller-supplied selection.
 """
 from __future__ import annotations
 
+import re
 from collections import deque
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
@@ -51,6 +52,7 @@ from prism.packer.submodular_knapsack import (
     _signature_stub,
     suggest_similar_seeds,
 )
+from prism.slicer.tokenizer import count_tokens
 from prism.traversal.continuous_dijkstra import build_causal_graph, compute_topological_distances
 
 #: The validated floor (see this module's own docstring) - hop=2 was
@@ -90,6 +92,60 @@ def _declaration_line(builder: ConcreteGraphBuilder, qname: str) -> str | None:
     if stub is None:
         return None
     return stub.rsplit("\n", 1)[0]
+
+
+#: A manifest signature longer than this many tokens (after long string
+#: literals are collapsed) is cut and marked with `SIGNATURE_TRUNCATED_MARK`.
+MANIFEST_SIGNATURE_MAX_TOKENS = 128
+SIGNATURE_TRUNCATED_MARK = " …[signature truncated]"
+
+#: String literals inside a declaration header (default values, or
+#: documentation embedded in type annotations) longer than this many
+#: characters are collapsed to `"…"` - they describe, they don't declare.
+_LONG_STRING_LITERAL = re.compile(
+    r'"""[\s\S]*?"""' r"|'''[\s\S]*?'''"
+    r'|"(?:[^"\\\n]|\\.){25,}"' r"|'(?:[^'\\\n]|\\.){25,}'" r"|`(?:[^`\\]|\\.){25,}`"
+)
+
+
+def _full_declaration(builder: ConcreteGraphBuilder, qname: str, max_tokens: int = MANIFEST_SIGNATURE_MAX_TOKENS) -> str | None:
+    """`qname`'s complete declaration header on one line: the source from
+    the symbol's first line (decorators included) up to where its body
+    starts, so a parameter list or return annotation spanning several lines
+    is kept whole in every language. Long string literals are collapsed,
+    whitespace is normalized, and `|` (the manifest's field separator) is
+    replaced by `¦`. A header still longer than `max_tokens` is cut there
+    and marked with `SIGNATURE_TRUNCATED_MARK`. Falls back to
+    `_declaration_line` for a symbol without a body node."""
+    info = builder.symbol_table.get(qname)
+    node = builder.def_node(qname)
+    parsed = builder.parsed_file(info.file) if info is not None else None
+    body = node.child_by_field_name("body") if node is not None else None
+    if info is None or parsed is None or body is None:
+        raw = _declaration_line(builder, qname)
+        return None if raw is None else " ".join(raw.split()).replace("|", "¦")
+    source = parsed.source
+    line_start = 0
+    for _ in range(info.line_range[0] - 1):
+        nl = source.find(b"\n", line_start)
+        if nl < 0:
+            break
+        line_start = nl + 1
+    start = min(line_start, node.start_byte)
+    header = source[start:body.start_byte].decode("utf-8", errors="replace")
+    header = _LONG_STRING_LITERAL.sub('"…"', header)
+    header = " ".join(header.split()).replace("|", "¦")
+    if count_tokens(header) <= max_tokens:
+        return header
+    words = header.split(" ")
+    lo, hi = 0, len(words)
+    while lo < hi:  # longest word prefix within the cap
+        mid = (lo + hi + 1) // 2
+        if count_tokens(" ".join(words[:mid])) <= max_tokens:
+            lo = mid
+        else:
+            hi = mid - 1
+    return " ".join(words[:lo]) + SIGNATURE_TRUNCATED_MARK
 
 
 def _outgoing_call_names(builder: ConcreteGraphBuilder, qname: str) -> list[str]:
@@ -233,13 +289,16 @@ def build_candidate_manifest(
     budget_tokens: int | None = None,
 ) -> tuple[str, set[str]]:
     """`(manifest_text, candidate_universe)`: one compact
-    `qualified_name|role|kind|signature|calls=[...]` line per real
+    `qualified_name|role|kind|signature|calls=[...]|lines=N` line per real
     (symbol-table-resolved) downstream candidate reachable from `seed_id`
     within `max_hops` (default `CANDIDATE_INDEX_MAX_HOPS=3.0`), plus up
     to `UPSTREAM_FRONTIER_CAP` upstream callers - a `role == "caller"`
     line additionally carries two contract-protection flags:
     `|binds_return=true/false|nontrivial_args=true/false` (`prism.packer.
-    blast_radius.UpstreamCaller.unpacks_return`/`.supplies_nontrivial_args`).
+    blast_radius.UpstreamCaller.unpacks_return`/`.supplies_nontrivial_args`)
+    before the final `|lines=N` (the symbol's body length in lines). The
+    signature is the full declaration header on one line
+    (`_full_declaration`, capped at `MANIFEST_SIGNATURE_MAX_TOKENS`).
 
     Upstream admission (pilot-4 finding): `compute_upstream_callers`
     returns every direct caller, unranked and uncapped - on a hub seed
@@ -285,6 +344,11 @@ def build_candidate_manifest(
     direct_successors = set(graph.successors(seed_id)) if seed_id in graph else set()
 
     downstream_candidates = {seed_id} | {n for n in dist_w_map if dist_w_map[n] <= max_hops}
+    # Hop-count admission: a symbol within `max_hops` structural CALLS/
+    # INSTANTIATES hops is a candidate even when its weighted distance is
+    # larger (a chain of best-effort `TENTATIVE_CALL` links is priced above
+    # one hop each); the weighted distance still orders candidates.
+    downstream_candidates |= set(_real_call_chain_reachable(builder, seed_id, max_hops=int(max_hops)))
     downstream_candidates = _combined_hop_scope_filtered(builder, seed_id, downstream_candidates, max_hops=int(max_hops))
 
     ranked_upstream = sorted(upstream_callers.values(), key=lambda c: -c.weight)
@@ -304,7 +368,7 @@ def build_candidate_manifest(
             walked,
             key=lambda q: (walked[q], -(upstream_callers[q].weight if q in upstream_callers else 0.0), q),
         )
-        downstream_order = sorted(downstream_candidates - {seed_id}, key=lambda q: (dist_w_map.get(q, 0.0), q))
+        downstream_order = sorted(downstream_candidates - {seed_id}, key=lambda q: (dist_w_map.get(q, float("inf")), q))
         admitted = _interleave_within_budget(builder, seed_id, upstream_order, downstream_order, budget_tokens)
         upstream_candidates = {q for q in walked if q in admitted}
         downstream_candidates = {seed_id} | {q for q in downstream_candidates if q in admitted}
@@ -327,14 +391,14 @@ def build_candidate_manifest(
         # own "one candidate per line" contract - the spike found this
         # directly via a real num_lines/candidate_universe count mismatch
         # during validation, not assumed away.
-        raw_signature = _declaration_line(builder, qname) or ""
-        signature = " ".join(raw_signature.split())
+        signature = _full_declaration(builder, qname) or ""
         calls = _outgoing_call_names(builder, qname)
         line = f"{qname}|{role}|{info.kind}|{signature}|calls=[{','.join(calls)}]"
         if role == "caller" and qname in upstream_callers:
             caller = upstream_callers[qname]
             line += f"|binds_return={'true' if caller.unpacks_return else 'false'}"
             line += f"|nontrivial_args={'true' if caller.supplies_nontrivial_args else 'false'}"
+        line += f"|lines={info.line_range[1] - info.line_range[0] + 1}"
         lines.append(line)
         resolved.add(qname)
     manifest = "<candidate_index>\n" + "\n".join(lines) + "\n</candidate_index>"

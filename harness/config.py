@@ -211,6 +211,31 @@ PRISM_TURN1_TARGET_MAX: int = 20
 PRISM_BLAST_MODE: bool = True
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    if value.strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    if value.strip().lower() in ("0", "false", "no", "off", ""):
+        return False
+    raise ValueError(f"{name}={value!r}: expected 1/0, true/false, yes/no or on/off")
+
+
+#: Experiment (harness/experiments/production_routing, OFF): Arm 5 decides
+#: the manifest's direction from the query text alone (intent classifier +
+#: pool shaping) - no task-type label is read. Off = the plain Arm 5 path.
+PRISM_PRODUCTION_ROUTING: bool = _env_flag("HARNESS_PRISM_PRODUCTION_ROUTING")
+#: Experiment ceiling (OFF): on T5 seeds, Turn 1 requests every `caller`
+#: row of the manifest instead of calling the model (prompt, manifest,
+#: Turn-2 hydration and the answer turn unchanged). Other task types are
+#: untouched.
+PRISM_T5_RULE_SELECTOR: bool = _env_flag("HARNESS_PRISM_T5_RULE_SELECTOR")
+if PRISM_PRODUCTION_ROUTING and PRISM_T5_RULE_SELECTOR:
+    raise ValueError("HARNESS_PRISM_PRODUCTION_ROUTING and HARNESS_PRISM_T5_RULE_SELECTOR are separate configs; "
+                     "enable at most one")
+
+
 # --------------------------------------------------------------------------
 # Arm 3 — Pyright LSP (M2)
 # --------------------------------------------------------------------------
