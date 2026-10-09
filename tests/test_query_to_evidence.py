@@ -4,9 +4,11 @@ Two layers:
   - pure tests on hand-built cases (schema rules, stage accounting, first-loss
     attribution, full vs stub, edges in the graph but missing from the model
     input, claim grounding) - no index needed;
-  - `slow` tests against the real, pinned FastAPI corpus (same discipline as
-    tests/test_two_pass_engine.py): dataset validation against the index,
-    unanswerable vs retrieval failure, deterministic replay of stored cells,
+  - `slow` tests against the real, pinned FastAPI and Django corpora (same
+    discipline as tests/test_two_pass_engine.py): dataset validation against
+    the index, unanswerable vs retrieval failure, exact replay of the stored
+    cells the container-class-first stubbing fix leaves unchanged (q03-q06,
+    q08), explicit regression checks for the ones it changes (q01, q02, q07),
     and tracer on/off equivalence.
 """
 from __future__ import annotations
@@ -299,7 +301,7 @@ def test_turn1_stand_ins_are_labelled_and_replay_is_strict():
 
 
 # --------------------------------------------------------------------------
-# real corpus (FastAPI): validation, outcomes, replay, equivalence
+# real corpora: validation, outcomes, replay, equivalence
 # --------------------------------------------------------------------------
 @pytest.fixture(scope="module")
 def evaluation():
@@ -330,17 +332,109 @@ def test_unanswerable_is_expected_absence_and_unseeded_is_a_resolution_loss(eval
     assert all(e["stages"]["graph"] for r in beh["production"]["requirements"] for e in r["edges"])
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("qid", ["q01", "q05"])
-def test_controls_replay_the_stored_cell_exactly(evaluation, qid):
+def _exact_replay(ev, corpus, qid):
     from harness.experiments.query_to_evidence.run import compare_to_baseline
-    q = next(x for x in evaluation.questions if x["id"] == qid)
-    seed, stored, llm = evaluation.control_inputs(q)
-    case = evaluation._run("fastapi", q["query"], seed, llm)
+    q = next(x for x in ev.questions if x["id"] == qid)
+    seed, stored, llm = ev.control_inputs(q)
+    case = ev._run(corpus, q["query"], seed, llm)
     cmp_ = compare_to_baseline(case, stored)
     assert cmp_["equivalent"], cmp_
-    again = evaluation._run("fastapi", q["query"], seed, evaluation.control_inputs(q)[2])
+    again = ev._run(corpus, q["query"], seed, ev.control_inputs(q)[2])
     assert again["model_input"] == case["model_input"]
+
+
+# Controls the container-class-first stubbing fix leaves untouched replay
+# their stored s42 cell exactly (requested, delivered, stubs, item text,
+# prompt string).
+@pytest.mark.slow
+@pytest.mark.parametrize("qid", ["q05", "q06"])
+def test_controls_replay_the_stored_cell_exactly(evaluation, qid):
+    _exact_replay(evaluation, "fastapi", qid)
+
+
+def _run_affected_control(ev, corpus, qid, monkeypatch):
+    """Run a control whose stored cell predates the container-class-first
+    stubbing fix. Returns (case, stored, gold symbols, renders) where
+    `renders` is the final rendered-package size and limit of every
+    `_enforce_render_budget` call (test-only wrapper; result unchanged)."""
+    import prism.surface.build as sb
+    from prism.slicer.tokenizer import count_tokens
+
+    renders = []
+    real = sb._enforce_render_budget
+
+    def recording(pkg, target_budget, builder):
+        out = real(pkg, target_budget, builder)
+        text = sb.render(out, sb.RenderOptions(include_timestamp=False, include_run_id=False))
+        renders.append({"tokens": count_tokens(text), "limit": target_budget * (1 + sb._RENDER_BUDGET_TOLERANCE)})
+        return out
+
+    monkeypatch.setattr(sb, "_enforce_render_budget", recording)
+    q = next(x for x in ev.questions if x["id"] == qid)
+    seed, stored, llm = ev.control_inputs(q)
+    case = ev._run(corpus, q["query"], seed, llm)
+    gold = {s for r in ev.gold[qid]["requirements"] for s in r["required_symbols"]}
+    return case, stored, gold, renders
+
+
+def _assert_selection_unchanged_and_within_budget(case, stored, renders):
+    syms = lambda items: {s for i in items for s in i["symbols"]}
+    stored_items = stored["bundle"]["items"]
+    assert case["build_meta"]["requested_symbols"] == stored["bundle"]["build_meta"]["requested_symbols"]
+    assert syms(case["items"]) == syms(stored_items)
+    assert renders and all(r["tokens"] <= r["limit"] for r in renders), renders
+
+
+def _stubbed(case):
+    return {s for i in case["items"] if i["kind"] == "signature_stub" for s in i["symbols"]}
+
+
+def _full(case):
+    return {s for i in case["items"] if i["kind"] == "code_chunk" for s in i["symbols"]}
+
+
+@pytest.mark.slow
+def test_q01_keeps_gold_callers_full_after_container_first_stubbing(evaluation, monkeypatch):
+    case, stored, gold, renders = _run_affected_control(evaluation, "fastapi", "q01", monkeypatch)
+    _assert_selection_unchanged_and_within_budget(case, stored, renders)
+    assert _stubbed(case) & gold == set()
+    assert "fastapi.dependencies.utils.get_parameterless_sub_dependant" in _full(case)
+    assert "return get_sub_dependant(depends=depends, dependency=depends.dependency, path=path)" in case["model_input"]
+    assert _stubbed(case) == {"fastapi.routing.APIRoute"}          # only the promoted container class
+
+
+@pytest.mark.slow
+def test_q02_stubs_only_the_promoted_container_class(evaluation, monkeypatch):
+    case, stored, gold, renders = _run_affected_control(evaluation, "fastapi", "q02", monkeypatch)
+    _assert_selection_unchanged_and_within_budget(case, stored, renders)
+    assert _stubbed(case) & gold == set()
+    assert _stubbed(case) == {"fastapi.applications.FastAPI"}
+
+
+# ---- Django controls (one more index) -----------------------------------
+@pytest.fixture(scope="module")
+def django_evaluation():
+    from prism.slicer.tokenizer import is_exact
+    if not is_exact():
+        pytest.skip("exact cl100k tokenizer unavailable (set TIKTOKEN_CACHE_DIR)")
+    from harness.experiments.query_to_evidence.run import Evaluation
+    return Evaluation(["django"])
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("qid", ["q03", "q04", "q08"])
+def test_django_controls_replay_the_stored_cell_exactly(django_evaluation, qid):
+    _exact_replay(django_evaluation, "django", qid)
+
+
+@pytest.mark.slow
+def test_q07_keeps_chain_and_clone_full_after_container_first_stubbing(django_evaluation, monkeypatch):
+    case, stored, gold, renders = _run_affected_control(django_evaluation, "django", "q07", monkeypatch)
+    _assert_selection_unchanged_and_within_budget(case, stored, renders)
+    assert _stubbed(case) & gold == set()
+    assert {"django.db.models.query.QuerySet._chain", "django.db.models.query.QuerySet._clone"} <= _full(case)
+    assert "obj = self._clone()" in case["model_input"]
+    assert _stubbed(case) == {"django.db.models.query.QuerySet"}   # only the promoted container class
 
 
 @pytest.mark.slow

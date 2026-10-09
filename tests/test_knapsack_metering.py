@@ -309,3 +309,74 @@ def test_metadata_aware_pricing_is_opt_in_pack_symbol_context_unaffected(tmp_pat
         start, end = info.line_range
         snippet = "\n".join(source.splitlines()[max(start - 1, 0):end])
         assert item.cost == max(count_tokens(snippet), 1) or item.compression == "L2_skeleton"
+
+
+# A promoted container class packed alongside its own methods (the shape of
+# `django_t02_009`: `QuerySet.filter` -> `_filter_or_exclude` -> `_chain` ->
+# `_clone`, with `QuerySet` itself promoted in at full size). The padding
+# methods are never requested, so they exist only inside the class body.
+_CONTAINER_SOURCE = (
+    "class Big:\n"
+    "    def entry(self):\n"
+    "        return self._step()\n\n"
+    "    def _step(self):\n"
+    "        clone = self._chain()\n"
+    "        return clone\n\n"
+    "    def _chain(self):\n"
+    "        obj = self._clone()\n"
+    "        return obj\n\n"
+    "    def _clone(self):\n"
+    "        c = self.__class__()\n"
+    "        return c\n"
+    + "".join(
+        f"\n    def pad_{i}(self, value):\n"
+        f"        '''Padding method {i} that only lives inside the class body.'''\n"
+        f"        total = value * {i} + len(str(value)) - {i}\n"
+        f"        return [total, total + 1, total + 2, 'pad-{i}']\n"
+        for i in range(40)
+    )
+)
+
+
+def test_promoted_container_class_is_stubbed_before_its_packed_methods(tmp_path):
+    """Over budget only because of a promoted class's full body: the class
+    (not its packed methods) is reduced to a skeleton, the render ends
+    within the limit, the node set is unchanged, and the protected seed and
+    1-hop callee stay full."""
+    from prism.surface.build import build_context_package_requested
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(_CONTAINER_SOURCE)
+    builder, _tags = build_pipeline(str(repo))
+    contracts = compute_contracts(builder)
+    seed = "mod.Big.entry"
+    requested = ["mod.Big._step", "mod.Big._chain", "mod.Big._clone"]
+    universe = {seed, *requested}
+
+    def build(budget):
+        pkg, skipped = build_context_package_requested(builder, seed, str(repo), budget, requested, universe,
+                                                       contracts=contracts, task_type="debug")
+        assert skipped == []
+        return pkg, count_tokens(render_envelope(pkg, RenderOptions(include_timestamp=False, include_run_id=False)))
+
+    roomy, roomy_tokens = build(100_000)
+    nodes = {n.id: n for n in roomy.nodes}
+    assert set(nodes) == {"mod.Big", seed, *requested}
+    assert all(n.compression == "L0_full" for n in roomy.nodes)
+    assert nodes["mod.Big._chain"].role == nodes["mod.Big._clone"].role == "transitive"
+    assert nodes["mod.Big._clone"].distance > nodes["mod.Big"].distance   # distance order alone picks _clone first
+
+    # over budget, but stubbing the class alone is enough
+    class_tokens = count_tokens(nodes["mod.Big"].body)
+    budget = int((roomy_tokens - class_tokens // 2) / (1 + _RENDER_BUDGET_TOLERANCE))
+    assert roomy_tokens > budget * (1 + _RENDER_BUDGET_TOLERANCE)
+
+    pkg, actual = build(budget)
+    compression = {n.id: n.compression for n in pkg.nodes}
+    assert actual <= budget * (1 + _RENDER_BUDGET_TOLERANCE), (budget, actual)
+    assert set(compression) == set(nodes)                    # node set unchanged
+    assert compression["mod.Big"] == "L2_skeleton"
+    assert compression["mod.Big._chain"] == compression["mod.Big._clone"] == "L0_full"
+    assert compression[seed] == compression["mod.Big._step"] == "L0_full"   # protected roles untouched
+    assert "obj = self._clone()" in {n.id: n.body for n in pkg.nodes}["mod.Big._chain"]

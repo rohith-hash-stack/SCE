@@ -347,6 +347,13 @@ def _downgrade_to_stub(pkg: ContextPackage, builder: ConcreteGraphBuilder, node_
     return pkg.model_copy(update={"nodes": updated_nodes, "manifest": manifest})
 
 
+def _is_packed_container(node: NodeEntry, packed_ids: set[str]) -> bool:
+    """`node` is a class whose own methods (or other members) are also
+    packed nodes - its full body duplicates their source."""
+    prefix = node.id + "."
+    return node.symbol_kind == "class" and any(other.startswith(prefix) for other in packed_ids)
+
+
 def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: ConcreteGraphBuilder) -> ContextPackage:
     """Fix #2's best-effort guarantee - not an absolute one; see below.
     `_default_costs`'s metadata-aware pricing (`prism.packer.
@@ -432,7 +439,15 @@ def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: Con
         # `pkg.seed.symbol`'s own role is always exactly `ROLE_SEED` for
         # every possible caller of this function (only `_classify_role`
         # itself guarantees that), and this costs nothing if it is.
-        worst = max(candidates, key=lambda n: (n.id != pkg.seed.symbol, n.distance))
+        #
+        # A container class packed alongside any of its own methods is
+        # stubbed before every other candidate: its L0 body repeats those
+        # methods' source verbatim, and a promoted class usually carries no
+        # measured distance (it defaults to 0.0), so distance order alone would stub the
+        # methods first and the class last (django_t02_009: `QuerySet`,
+        # 13k tokens, was stubbed only after `_clone`/`_chain`).
+        packed_ids = {n.id for n in pkg.nodes}
+        worst = max(candidates, key=lambda n: (n.id != pkg.seed.symbol, _is_packed_container(n, packed_ids), n.distance))
         downgraded = _downgrade_to_stub(pkg, builder, worst.id)
         if downgraded is None:
             exhausted.add(worst.id)
