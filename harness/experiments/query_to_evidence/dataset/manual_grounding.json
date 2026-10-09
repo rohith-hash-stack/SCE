@@ -1,0 +1,29 @@
+{
+ "version": 1,
+ "label": "MANUAL SUBSET - prose claims in the stored s42 answers of the 8 seeded controls, checked by hand against the stored model input (the bundle's `prompt`). Not automated; not a sample of anything beyond these 8 answers.",
+ "method": "Each answer's `reasoning` field was split into checkable factual claims. A claim is `supported` when the stored input contains source text that states it (line = line of the stored prompt); `partial` when only part is visible (e.g. a callee's body arrived as a signature stub); `unsupported` when the input does not show it; `vague` when the claim names no checkable fact.",
+ "claims": [
+  {"id": "q01", "claim": "a change to get_dependant affects how route handlers and websockets process dependencies", "verdict": "vague",
+   "evidence": "true in direction (APIRoute.__init__ and APIWebSocketRoute.__init__ bodies, both delivered in full, call get_dependant), but the sentence names no checkable behaviour"},
+  {"id": "q02", "claim": "get_openapi_path relies on the security definitions returned by get_openapi_security_definitions to populate the security schemes of each operation", "verdict": "supported",
+   "evidence": "stored prompt L194 `security_definitions, operation_security = get_openapi_security_definitions(`, L198 `operation.setdefault(\"security\", []).extend(operation_security)`, L200 `security_schemes.update(security_definitions)`"},
+  {"id": "q03", "claim": "url_has_allowed_host_and_scheme is used to validate URLs in several places", "verdict": "vague",
+   "evidence": "the answer names one delivered caller (RedirectURLMixin.get_redirect_url) and one non-existent symbol (`django.views.set_language`; the real one is django.views.i18n.set_language); 'several places' is not checkable"},
+  {"id": "q04", "claim": "changing HttpResponse.__init__ can break subclasses that extend it", "verdict": "supported",
+   "evidence": "the delivered subclass constructors (HttpResponseRedirectBase, HttpResponseNotModified, HttpResponseNotAllowed, JsonResponse, SimpleTemplateResponse) call super().__init__(...) in their full bodies"},
+  {"id": "q05", "claim": "request_params_to_args first extracts raw values with _get_multidict_value", "verdict": "supported",
+   "evidence": "stored prompt L45/L67 `value = _get_multidict_value(...)` inside request_params_to_args"},
+  {"id": "q05", "claim": "it then validates and coerces them with _validate_value_with_model_field, which uses the field's Pydantic validation", "verdict": "partial",
+   "evidence": "the call (L61/L73) and the body of _validate_value_with_model_field (L112) are delivered; that the body delegates to Pydantic is visible only as `field.validate(...)` - the Pydantic side is not in the input"},
+  {"id": "q06", "claim": "get_openapi_path calls get_openapi_operation_metadata, _get_openapi_operation_parameters and get_openapi_operation_request_body in sequence", "verdict": "supported",
+   "evidence": "stored prompt L27, L39, L61, in that order, inside get_openapi_path"},
+  {"id": "q07", "claim": "filter() returns a new QuerySet created by cloning the existing one", "verdict": "partial",
+   "evidence": "filter's docstring ('Return a new QuerySet instance') and `clone = self._chain()` in _filter_or_exclude are delivered, but QuerySet._chain and QuerySet._clone - the methods that actually copy - arrived as signature stubs (`...`); the cloning mechanism is not in the input"},
+  {"id": "q08", "claim": "url_has_allowed_host_and_scheme rejects an empty URL and normalises allowed_hosts", "verdict": "supported",
+   "evidence": "stored prompt lines 17-24: `if not url: return False`, allowed_hosts None -> set(), str -> {str}"},
+  {"id": "q08", "claim": "it calls _url_has_allowed_host_and_scheme twice, with the original URL and with backslashes replaced by slashes", "verdict": "supported",
+   "evidence": "stored prompt L27-L30"},
+  {"id": "q08", "claim": "_url_has_allowed_host_and_scheme parses the URL with _urlparse and _urlsplit", "verdict": "supported",
+   "evidence": "L40 `url_info = _urlparse(url)`; _urlparse calls _urlsplit (L71)"}
+ ]
+}
