@@ -77,6 +77,36 @@ recorded in the question's `provenance.corrections`.
   sent to the model. It has no trace, so manifest and hydration show as `not
   measured`.
 
+All three modes above measure the **Arm 5 benchmark prompt**. Arm 5 sends
+each node as a header plus body and drops the rest of Prism's envelope
+(`<edges>`, `<contract>`, `<warnings>`, `<causal_path>`). So "edge record
+delivered" is always 0 there by construction.
+
+### Production-envelope modes (`envelope.py`)
+
+`slice@4k`, `slice@13k`, `blast_radius@4k` and `blast_radius@13k` call the
+real MCP tool functions `prism.mcp.server.prism_slice` and
+`prism_blast_radius`, with production defaults apart from the seed (the gold
+subject), the budget and, for slice, `task_type` (T5 → `blast`, T2 →
+`debug`).
+
+- The harness's in-memory index is registered in the server's `GraphCache`
+  for the call. Those two tools read only `builder`, `contracts` and
+  `repo_root`.
+- The rendered XML is parsed using its real attribute names (`<edge from to
+  type weight data_flow guard back_edge>`, `<contract target_id call_line>`).
+- For each gold edge the harness reports, independently: in graph, both ends
+  selected, `<edge>` record present, contract on callee, call site in full
+  caller body, and warnings.
+- `first_loss` separates `caller_not_selected` / `callee_not_selected` from
+  `not_in_graph` and `both_selected_no_record`.
+- Denominators: slice uses every requirement with gold edges (70 edges);
+  blast_radius uses impact requirements only (43).
+- `BUDGET_OVERFLOW` is counted once per envelope.
+- Run by default from `run.py` (`--skip-envelope-modes` to skip). Results go
+  under `delivery_modes`, and `report.md` gets a "Gold-edge delivery by mode"
+  table.
+
 ## Stage accounting
 
 Per required symbol, in pipeline order:

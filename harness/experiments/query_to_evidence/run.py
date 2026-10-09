@@ -373,6 +373,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default=str(REPO / "reports/query_to_evidence"))
     ap.add_argument("--corpus", action="append")
     ap.add_argument("--skip-equivalence", action="store_true")
+    ap.add_argument("--skip-envelope-modes", action="store_true",
+                    help="skip the production-envelope modes (prism.slice / prism.blast_radius)")
     args = ap.parse_args(argv)
     from prism.slicer.tokenizer import active_backend, is_exact
     if not is_exact():
@@ -382,6 +384,16 @@ def main(argv: list[str] | None = None) -> int:
     result = ev.evaluate()
     result["dataset_problems"] = problems
     result["equivalence"] = [] if args.skip_equivalence else ev.equivalence()
+    if not args.skip_envelope_modes:
+        from harness.experiments.query_to_evidence import envelope as E
+        modes = E.evaluate_modes({c: a.engine for c, a in ev.arms.items()}, ev.questions, ev.gold)
+        result["delivery_modes"] = {
+            "arm5_benchmark_production_inputs": {"kind": "benchmark prompt (Arm 5 items; no envelope)",
+                                                 "summary": E.arm5_summary(result["questions"], "production")},
+            "arm5_benchmark_gold_subject": {"kind": "benchmark prompt (Arm 5 items; no envelope)",
+                                            "summary": E.arm5_summary(result["questions"], "counterfactual")},
+            **{name: {"kind": "production envelope (real MCP tool)", **m} for name, m in modes.items()},
+        }
     manual = json.loads((D.DATASET_DIR / "manual_grounding.json").read_text())
     result["manual_grounding"] = {"label": manual["label"], "verdicts": dict(Counter(c["verdict"] for c in manual["claims"])),
                                   "claims": manual["claims"]}

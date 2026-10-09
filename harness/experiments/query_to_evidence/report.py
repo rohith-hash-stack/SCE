@@ -108,6 +108,23 @@ def render(result: dict) -> str:
             f"- retrieval latency median: {c['retrieve_ms_median']} ms (offline, includes no model time)",
             f"- prompt tokens median (cl100k): {c['prompt_tokens_cl100k_median']}",
             f"- context budget use median: {c['budget_use_median']}", ""]
+    dm = result.get("delivery_modes")
+    if dm:
+        out += ["## Gold-edge delivery by mode", "",
+                "Arm 5 rows are the benchmark prompt (header + body items only; no `<edges>`/`<contract>`/`<warnings>`). "
+                "The other rows parse the real `prism.slice` / `prism.blast_radius` envelopes, seeded with the gold subject. "
+                "Denominator = gold edges in scope for the mode.", "",
+                "| mode | kind | edges | in graph | both ends selected | `<edge>` record | contract on callee | call site in full body | first loss | envelopes with BUDGET_OVERFLOW |",
+                "|---|---|---|---|---|---|---|---|---|---|"]
+        for name, m in dm.items():
+            s_ = m["summary"]
+            fl = _counter(s_.get("first_loss", {})) if "first_loss" in s_ else "-"
+            bo = s_.get("envelopes_with_warning", {}).get("BUDGET_OVERFLOW", 0) if "envelopes" in s_ else "-"
+            bo = f"{bo}/{s_['envelopes']}" if "envelopes" in s_ else bo
+            out.append(f"| {name} | {m['kind']} | {s_['edges']} | {_fmt(s_.get('in_graph'))} | {_fmt(s_.get('both_selected'))} | "
+                       f"{_fmt(s_.get('edge_record'))} | {_fmt(s_.get('contract')) if 'contract' in s_ else '-'} | "
+                       f"{_fmt(s_.get('call_site_in_full_caller_body'))} | {fl} | {bo} |")
+        out.append("")
     eq = result.get("equivalence") or []
     out += ["## Instrumentation equivalence (tracer on vs off)", ""]
     if eq:

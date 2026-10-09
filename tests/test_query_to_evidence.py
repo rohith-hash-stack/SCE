@@ -441,3 +441,166 @@ def test_q07_keeps_chain_and_clone_full_after_container_first_stubbing(django_ev
 def test_tracer_on_and_off_give_identical_selection_and_model_input(evaluation):
     rows = evaluation.equivalence()
     assert rows and all(r["identical"] for r in rows), [r for r in rows if not r["identical"]]
+
+
+# --------------------------------------------------------------------------
+# production-envelope delivery modes (envelope.py)
+# --------------------------------------------------------------------------
+from harness.experiments.query_to_evidence import envelope as E  # noqa: E402
+
+_XML = """<prism_context schema_version="3">
+  <warnings>
+    <warning code="BUDGET_OVERFLOW" severity="high"><message>over</message>
+      <detail key="actual_tokens" type="int" value="4400"/><detail key="budget_tokens" type="int" value="4000"/>
+    </warning>
+  </warnings>
+  <nodes>
+    <node id="m.caller" role="caller" compression="L0_full" file="m.py" line="1" end_line="2">
+      <body><![CDATA[def caller():
+    return callee(1)]]></body>
+    </node>
+    <node id="m.callee" role="seed" compression="L0_full" file="m.py" line="4" end_line="5">
+      <contract call_line="2" target_id="m.caller" passes_args="1"/>
+      <body><![CDATA[def callee(x):
+    return x]]></body>
+    </node>
+    <node id="m.stubbed" role="caller" compression="L2_skeleton" file="m.py" line="7" end_line="8">
+      <body><![CDATA[def stubbed(): ...]]></body>
+    </node>
+  </nodes>
+  <edges>
+    <edge back_edge="false" data_flow="true" from="m.caller" guard="false" to="m.callee" type="CALLS" weight="1.0"/>
+    <edge back_edge="true" data_flow="false" from="m.stubbed" guard="true" to="m.callee" type="CALLS" weight="0.5"/>
+  </edges>
+</prism_context>"""
+
+
+def test_parse_envelope_reads_real_attribute_names():
+    p = E.parse_envelope(_XML)
+    assert p["edges"][0] == {"from": "m.caller", "to": "m.callee", "type": "CALLS", "weight": 1.0,
+                             "data_flow": True, "guard": False, "back_edge": False}
+    assert p["edges"][1]["back_edge"] is True and p["edges"][1]["guard"] is True
+    assert p["nodes"]["m.callee"]["contract"] == {"target_id": "m.caller", "call_line": 2}
+    assert p["nodes"]["m.caller"]["contract"] is None
+    assert "return callee(1)" in p["nodes"]["m.caller"]["body"]
+    assert p["warnings"] == [{"code": "BUDGET_OVERFLOW", "severity": "high",
+                              "details": {"actual_tokens": "4400", "budget_tokens": "4000"}}]
+
+
+def test_edge_record_contract_and_call_site_are_detected_independently():
+    p = E.parse_envelope(_XML)
+    full = E.edge_delivery(p, "m.caller", "m.callee", "return callee(1)")
+    assert full == {"from_selected": True, "to_selected": True, "edge_record": True, "edge_type": "CALLS",
+                    "contract": True, "contract_call_line": 2, "call_site_in_full_caller_body": True, "first_loss": None}
+    # edge record present, but the caller is a stub and the callee's contract names another caller
+    stub = E.edge_delivery(p, "m.stubbed", "m.callee", "callee()")
+    assert stub["edge_record"] and not stub["contract"] and not stub["call_site_in_full_caller_body"]
+
+
+@pytest.mark.parametrize("frm, to, loss", [
+    ("m.missing", "m.callee", "caller_not_selected"),
+    ("m.caller", "m.missing", "callee_not_selected"),
+    ("m.callee", "m.caller", "both_selected_no_record"),
+])
+def test_missing_edge_record_is_attributed_to_its_cause(frm, to, loss):
+    d = E.edge_delivery(E.parse_envelope(_XML), frm, to, "x")
+    assert not d["edge_record"] and d["first_loss"] == loss
+
+
+def test_summary_denominators_are_the_gold_edges_in_scope():
+    rows = [{"q": "q1", "req": "r1", "graph": "static", "from_selected": True, "to_selected": True, "edge_record": True,
+             "contract": False, "call_site_in_full_caller_body": True, "first_loss": None, "warnings": ["BUDGET_OVERFLOW"],
+             "tool_error": False},
+            {"q": "q1", "req": "r1", "graph": "static", "from_selected": False, "to_selected": True, "edge_record": False,
+             "contract": False, "call_site_in_full_caller_body": False, "first_loss": "caller_not_selected",
+             "warnings": ["BUDGET_OVERFLOW"], "tool_error": False},
+            {"q": "q2", "req": "r1", "graph": "unresolved", "from_selected": True, "to_selected": True,
+             "edge_record": False, "contract": False, "call_site_in_full_caller_body": False,
+             "first_loss": "not_in_graph", "warnings": [], "tool_error": False}]
+    s = E.summarize(rows)
+    assert s["edges"] == 3 and s["edge_record"] == {"num": 1, "den": 3} and s["in_graph"] == {"num": 2, "den": 3}
+    assert s["both_selected"] == {"num": 2, "den": 3}
+    assert s["first_loss"] == {"none (edge record delivered)": 1, "caller_not_selected": 1, "not_in_graph": 1}
+    assert s["envelopes"] == 2 and s["envelopes_with_warning"] == {"BUDGET_OVERFLOW": 1}   # once per envelope
+
+
+def test_arm5_summary_counts_benchmark_prompt_edges():
+    edge = lambda rec, site: {"stages": {"graph": True, "call_site_in_model_input": site},
+                              "relationship_record_delivered": rec, "endpoint_delivery": {"from": "full", "to": None}}
+    results = [{"production": {"requirements": [{"edges": [edge(False, True), edge(False, False)]}]},
+                "counterfactual": [{"edges": [edge(False, True)]}, {"status": "n/a"}]}]
+    p, c = E.arm5_summary(results, "production"), E.arm5_summary(results, "counterfactual")
+    assert p["edges"] == 2 and p["edge_record"] == {"num": 0, "den": 2} and p["call_site_in_full_caller_body"]["num"] == 1
+    assert c["edges"] == 1 and p["both_selected"]["num"] == 0
+
+
+_TINY = (
+    "def leaf(x):\n    return x + 1\n\n\n"
+    "def seed(x):\n    return leaf(x) * 2\n\n\n"
+    "def caller(y):\n    return seed(y) - 3\n"
+)
+
+
+@pytest.fixture
+def tiny_engine(tmp_path):
+    from harness.experiments.query_to_evidence.run import build_engine
+    (tmp_path / "mod.py").write_text(_TINY)
+    return build_engine(str(tmp_path))
+
+
+def test_real_slice_envelope_renders_edges_between_selected_nodes(tiny_engine):
+    with E.registered_repo(tiny_engine) as server:
+        out = E.call_tool(server, "slice", tiny_engine.repo_root, "mod.seed", 4000, "debug")
+        again = E.call_tool(server, "slice", tiny_engine.repo_root, "mod.seed", 4000, "debug")
+    assert out["envelope"] == again["envelope"]                                # deterministic
+    p = E.parse_envelope(out["envelope"])
+    assert {"mod.seed", "mod.leaf"} <= set(p["nodes"])
+    d = E.edge_delivery(p, "mod.seed", "mod.leaf", "return leaf(x) * 2")
+    assert d["edge_record"] and d["call_site_in_full_caller_body"] and d["first_loss"] is None
+    # every rendered edge joins two selected nodes
+    assert all(e["from"] in p["nodes"] and e["to"] in p["nodes"] for e in p["edges"])
+    # a symbol the tool did not select has no edge record
+    assert E.edge_delivery(p, "mod.not_a_symbol", "mod.seed", "x")["first_loss"] == "caller_not_selected"
+
+
+def test_registered_repo_restores_the_server_cache(tiny_engine):
+    from prism.mcp import server
+    from prism.mcp.cache import GraphCache
+    key = GraphCache.canonical_path(tiny_engine.repo_root)
+    assert key not in server._cache._entries
+    with E.registered_repo(tiny_engine):
+        assert server._cache._entries[key].builder is tiny_engine.builder
+    assert key not in server._cache._entries
+
+
+def test_tool_errors_are_reported_not_raised(tiny_engine):
+    with E.registered_repo(tiny_engine) as server:
+        out = E.call_tool(server, "blast_radius", tiny_engine.repo_root, "mod.nope", 4000, None)
+    assert out["error"]["code"] == -32002
+
+
+@pytest.mark.slow
+def test_fastapi_envelope_modes_are_consistent_and_deterministic(evaluation):
+    engines = {"fastapi": evaluation.arms["fastapi"].engine}
+    qs = [q for q in evaluation.questions if q["corpus"] == "fastapi"]
+    a = E.evaluate_modes(engines, qs, evaluation.gold)
+    b = E.evaluate_modes(engines, qs, evaluation.gold)
+    assert set(a) == {"slice@4k", "slice@13k", "blast_radius@4k", "blast_radius@13k"}
+    for mode, m in a.items():
+        assert m["rows"] == b[mode]["rows"]
+        assert {k: v.get("sha") for k, v in m["envelopes"].items()} == {k: v.get("sha") for k, v in b[mode]["envelopes"].items()}
+        for r in m["rows"]:
+            assert r["edge_record"] == (r["from_selected"] and r["to_selected"]) or r["first_loss"] == "both_selected_no_record"
+            assert (r["first_loss"] == "caller_not_selected") == (not r["from_selected"] and not r["tool_error"])
+        s = m["summary"]
+        assert s["edges"] == len(m["rows"]) and s["edge_record"]["den"] == s["edges"]
+    # blast_radius scope = impact requirements only, so its denominator is a subset of slice's
+    assert a["blast_radius@4k"]["summary"]["edges"] <= a["slice@4k"]["summary"]["edges"]
+
+
+@pytest.mark.slow
+def test_arm5_benchmark_prompt_still_carries_no_edge_records(evaluation):
+    q = next(x for x in evaluation.questions if x["id"] == "q01")
+    res = evaluation.evaluate_question(q)
+    s = E.arm5_summary([res], "production")
+    assert s["edges"] > 0 and s["edge_record"]["num"] == 0 and s["call_site_in_full_caller_body"]["num"] > 0
