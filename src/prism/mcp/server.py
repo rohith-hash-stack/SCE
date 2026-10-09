@@ -59,6 +59,7 @@ from prism.graph.symbol_table import SymbolRole
 from prism.packer.candidate_index import upstream_callers_by_hop
 from prism.packer.submodular_knapsack import DEFAULT_MAX_HOPS
 from prism.query.errors import QueryValidationError
+from prism.query.locate import qualified_name_matches
 from prism.query.schema import PrismQuery
 from prism.serializers.markdown import render_markdown
 from prism.slicer.blueprint import mine_sibling_blueprint
@@ -367,13 +368,41 @@ def _repo_context_for_surface(repo_path: str):
         raise MCPError(code=-32001, message=str(exc)) from exc
 
 
-def _resolve_seed_or_raise(repo_ctx, seed_symbol: str) -> None:
-    """-32002, with a fuzzy-matched `candidates` list in `data` when one
-    exists - `difflib.get_close_matches` against every indexed qualified
-    name, the same "did you mean" a human would want typing a symbol name
-    from memory."""
+#: Most candidates listed in an ambiguous-name error (`data.match_count`
+#: always carries the full count, `data.truncated` whether any were cut).
+_AMBIGUOUS_CANDIDATE_LIMIT = 20
+
+
+def _resolve_seed_or_raise(repo_ctx, seed_symbol: str) -> str:
+    """The seed's qualified name.
+
+    - An indexed qualified name is returned unchanged.
+    - A bare (`include_router`) or partially qualified
+      (`Router.include_router`) name that exactly one indexed symbol
+      matches on whole trailing segments is resolved to that symbol
+      (`prism.query.locate.qualified_name_matches`).
+    - A name several symbols match is never guessed: -32002 with
+      `data = {"ambiguous": True, "match_count": n, "truncated": bool,
+      "candidates": [...]}` (sorted qualified names, at most
+      `_AMBIGUOUS_CANDIDATE_LIMIT`).
+    - Otherwise -32002, with a fuzzy-matched `candidates` list in `data`
+      when one exists - `difflib.get_close_matches` against every indexed
+      qualified name, the same "did you mean" a human would want typing a
+      symbol name from memory."""
     if seed_symbol in repo_ctx.symbol_table:
-        return
+        return seed_symbol
+    matches = qualified_name_matches(repo_ctx.builder, seed_symbol)
+    if len(matches) == 1:
+        return matches[0]
+    if matches:
+        shown = matches[:_AMBIGUOUS_CANDIDATE_LIMIT]
+        raise MCPError(
+            code=-32002,
+            message=(f"symbol '{seed_symbol}' is ambiguous in '{repo_ctx.repo_root}': {len(matches)} symbols match "
+                     f"'{seed_symbol}' - pass one of the candidates' qualified names"),
+            data={"ambiguous": True, "match_count": len(matches), "truncated": len(matches) > len(shown),
+                  "candidates": shown},
+        )
     all_names = [s.qualified_name for s in repo_ctx.symbol_table]
     candidates = difflib.get_close_matches(seed_symbol, all_names, n=5, cutoff=0.5)
     raise MCPError(
@@ -483,7 +512,7 @@ def _build_envelope_response(
     enforce_auth(_authorization_header(ctx), api_key)
 
     repo_ctx = _repo_context_for_surface(repo_path)
-    _resolve_seed_or_raise(repo_ctx, resolved_seed)
+    resolved_seed = _resolve_seed_or_raise(repo_ctx, resolved_seed)
 
     seed_cost = count_tokens(_node_body(repo_ctx.builder, resolved_seed))
     if seed_cost > budget_tokens:
@@ -672,7 +701,7 @@ def prism_blast_radius(
     enforce_auth(_authorization_header(ctx), api_key)
 
     repo_ctx = _repo_context_for_surface(repo_path)
-    _resolve_seed_or_raise(repo_ctx, seed_symbol)
+    seed_symbol = _resolve_seed_or_raise(repo_ctx, seed_symbol)
     builder = repo_ctx.builder
 
     engine = PrismEngine(builder, repo_ctx.repo_root, contracts=repo_ctx.contracts)

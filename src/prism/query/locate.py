@@ -56,36 +56,51 @@ def locate_symbol_at(builder: ConcreteGraphBuilder, file_path: str, line_no: int
     return best
 
 
+def qualified_name_matches(builder: ConcreteGraphBuilder, name: str) -> list[str]:
+    """Every indexed qualified name that `name` denotes, sorted: the name
+    itself, or one ending in `"." + name` on whole dotted segments. A bare
+    name (`"include_router"`) therefore matches by its last segment, and a
+    partially qualified one (`"Router.include_router"`) by its trailing
+    segments - no fuzzy matching, no ranking. A name with an empty segment
+    (`""`, `".x"`, `"a..b"`, `"x."`) matches nothing."""
+    if not name or any(not part for part in name.split(".")):
+        return []
+    suffix = "." + name
+    return sorted(
+        info.qualified_name for info in builder.symbol_table
+        if info.qualified_name == name or info.qualified_name.endswith(suffix)
+    )
+
+
 def locate_symbol_by_name(
     builder: ConcreteGraphBuilder, name: str, top_k: int = DEFAULT_CANDIDATE_TOP_K
 ) -> str:
-    """Resolves a bare (unqualified, e.g. `"execute"`) or already-fully-
-    qualified name to exactly one real qualified name.
+    """Resolves a bare (unqualified, e.g. `"execute"`), partially
+    qualified (`"Router.include_router"`) or already-fully-qualified name
+    to exactly one real qualified name.
 
     A name already in `builder.symbol_table` (a fully-qualified name, or
     a bare name that also happens to be a real top-level qualified name)
-    resolves directly. Otherwise, every symbol whose own unqualified
-    name (`qualified_name.rsplit(".", 1)[-1]`) matches `name` exactly is
-    a candidate: exactly one resolves directly; anything else (zero, or
-    more than one - a real, genuine ambiguity, e.g. two different
-    classes each defining their own `execute`) raises
-    `SymbolNotFoundError` carrying `.candidates` - up to `top_k` ranked
-    qualified names for the caller to disambiguate with, fuzzy-matched
-    (`suggest_similar_seeds`) when there are zero exact unqualified
-    matches, or the real ambiguous matches themselves (sorted,
-    deterministic) when there are more than one - "ranked candidates"
-    either way, never a silent guess.
+    resolves directly. Otherwise every symbol `qualified_name_matches`
+    returns is a candidate - for a bare name, exactly the symbols whose
+    own unqualified name (`qualified_name.rsplit(".", 1)[-1]`) is `name`:
+    exactly one resolves directly; anything else (zero, or more than one
+    - a real, genuine ambiguity, e.g. two different classes each defining
+    their own `execute`) raises `SymbolNotFoundError` carrying
+    `.candidates` - up to `top_k` ranked qualified names for the caller
+    to disambiguate with, fuzzy-matched (`suggest_similar_seeds`) when
+    there are no matches, or the real ambiguous matches themselves
+    (sorted, deterministic) when there are more than one - "ranked
+    candidates" either way, never a silent guess.
     """
     if name in builder.symbol_table:
         return name
 
-    exact_unqualified_matches = sorted(
-        info.qualified_name for info in builder.symbol_table if info.qualified_name.rsplit(".", 1)[-1] == name
-    )
-    if len(exact_unqualified_matches) == 1:
-        return exact_unqualified_matches[0]
-    if len(exact_unqualified_matches) > 1:
-        raise SymbolNotFoundError(name, candidates=exact_unqualified_matches[:top_k])
+    matches = qualified_name_matches(builder, name)
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise SymbolNotFoundError(name, candidates=matches[:top_k])
 
     candidates = suggest_similar_seeds(builder, name, top_k=top_k)
     raise SymbolNotFoundError(name, candidates=candidates)
