@@ -29,6 +29,7 @@ the causal engine rather than re-deriving it a second way:
 """
 from __future__ import annotations
 
+import math
 import os
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
@@ -354,6 +355,77 @@ def _is_packed_container(node: NodeEntry, packed_ids: set[str]) -> bool:
     return node.symbol_kind == "class" and any(other.startswith(prefix) for other in packed_ids)
 
 
+def _class_only_tokens(builder: ConcreteGraphBuilder, pkg: ContextPackage, cls: NodeEntry) -> int:
+    """Tokens of `cls`'s own source that no packed member repeats: the
+    non-blank class lines outside every packed member's line range (class
+    attributes, docstring, unpacked methods). What stubbing the class
+    actually removes from the package."""
+    info = builder.symbol_table.get(cls.id)
+    source = builder.source_text(info.file) if info is not None else None
+    if source is None:
+        return 0
+    members = [(m.line, m.end_line) for m in pkg.nodes if m.id.startswith(cls.id + ".")]
+    lines = source.splitlines()[cls.line - 1:cls.end_line]
+    own = [ln for i, ln in enumerate(lines, start=cls.line)
+           if ln.strip() and not any(a <= i <= b for a, b in members)]
+    return count_tokens("\n".join(own))
+
+
+#: At most this many trial renders per `_enforce_render_budget` call are
+#: spent looking for a cheaper non-container stub
+#: (`_cheaper_sufficient_alternative`); once spent, every remaining
+#: decision in that call is plain container-first. On the 244-cell one-pass
+#: evaluation (61 Django/FastAPI tasks x budgets 2k/4k/8k/13k) no call
+#: needed more than 2 with `_STUB_SAVING_SLACK` below, and both
+#: substitutions that fire needed 1; 8 leaves 4x headroom.
+_CONTAINER_ALTERNATIVE_TRIAL_CAP = 8
+
+#: A candidate is trial-rendered only if `cost + slack` covers the current
+#: overrun. A stub's rendered saving was at most 59 tokens above the node's
+#: priced `cost` on the same evaluation (rendered metadata); 128 is about
+#: twice that. A sufficient candidate this filters out only means the
+#: container-first choice stands.
+_STUB_SAVING_SLACK = 128
+
+
+def _trial_render_tokens(pkg: ContextPackage) -> int:
+    return count_tokens(render(pkg, RenderOptions(include_timestamp=False, include_run_id=False)))
+
+
+def _cheaper_sufficient_alternative(
+    pkg: ContextPackage, builder: ConcreteGraphBuilder, candidates: list[NodeEntry], container: NodeEntry,
+    packed_ids: set[str], limit: float, overrun: int, trials_left: list[int],
+) -> NodeEntry | None:
+    """The cheapest non-container candidate whose stub alone brings the
+    render within `limit` and whose own body costs fewer tokens than
+    `container`'s class-only content, or `None`. Lets a small overrun be
+    closed without discarding class-level code (an unpacked `__init__`, a
+    property, class attributes) the packed methods depend on. Never swaps
+    one container for another.
+
+    Candidates are tried cheapest first (ties: larger distance, then id),
+    so the first one that fits is the answer. Only candidates whose cost
+    could cover `overrun` are tried, and each trial render spends one of
+    `trials_left` (shared across the whole enforcement call); when it runs
+    out the search stops and the caller keeps its container-first choice."""
+    unique = _class_only_tokens(builder, pkg, container)
+    eligible = sorted(
+        (n for n in candidates
+         if not _is_packed_container(n, packed_ids) and n.cost < unique and n.cost + _STUB_SAVING_SLACK >= overrun),
+        key=lambda n: (n.cost, -n.distance, n.id),
+    )
+    for node in eligible:
+        if trials_left[0] <= 0:
+            return None
+        trial = _downgrade_to_stub(pkg, builder, node.id)
+        if trial is None:
+            continue
+        trials_left[0] -= 1
+        if _trial_render_tokens(trial) <= limit:
+            return node
+    return None
+
+
 def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: ConcreteGraphBuilder) -> ContextPackage:
     """Fix #2's best-effort guarantee - not an absolute one; see below.
     `_default_costs`'s metadata-aware pricing (`prism.packer.
@@ -422,9 +494,10 @@ def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: Con
     """
     limit = target_budget * (1 + _RENDER_BUDGET_TOLERANCE)
     exhausted: set[str] = set()
+    trials_left = [_CONTAINER_ALTERNATIVE_TRIAL_CAP]
     while True:
-        rendered = render(pkg, RenderOptions(include_timestamp=False, include_run_id=False))
-        if count_tokens(rendered) <= limit:
+        rendered_tokens = count_tokens(render(pkg, RenderOptions(include_timestamp=False, include_run_id=False)))
+        if rendered_tokens <= limit:
             return pkg
         candidates = [
             n for n in pkg.nodes
@@ -448,6 +521,13 @@ def _enforce_render_budget(pkg: ContextPackage, target_budget: int, builder: Con
         # 13k tokens, was stubbed only after `_clone`/`_chain`).
         packed_ids = {n.id for n in pkg.nodes}
         worst = max(candidates, key=lambda n: (n.id != pkg.seed.symbol, _is_packed_container(n, packed_ids), n.distance))
+        # ...unless one cheaper non-container stub alone closes the gap:
+        # then the class keeps its class-level code.
+        if _is_packed_container(worst, packed_ids):
+            overrun = math.ceil(rendered_tokens - limit)
+            worst = _cheaper_sufficient_alternative(
+                pkg, builder, candidates, worst, packed_ids, limit, overrun, trials_left,
+            ) or worst
         downgraded = _downgrade_to_stub(pkg, builder, worst.id)
         if downgraded is None:
             exhausted.add(worst.id)

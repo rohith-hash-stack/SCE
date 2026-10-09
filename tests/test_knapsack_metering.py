@@ -380,3 +380,148 @@ def test_promoted_container_class_is_stubbed_before_its_packed_methods(tmp_path)
     assert compression["mod.Big._chain"] == compression["mod.Big._clone"] == "L0_full"
     assert compression[seed] == compression["mod.Big._step"] == "L0_full"   # protected roles untouched
     assert "obj = self._clone()" in {n.id: n.body for n in pkg.nodes}["mod.Big._chain"]
+
+
+# The opposite shape: the overrun is small and one cheap, unrelated helper
+# closes it, while the container's class-only code (an unpacked `__init__`
+# that sets the state its packed method reads) is larger than that helper.
+# Shape of fastapi_t02_014 (`HTTPBasic.__init__` sets `realm`) and
+# django_t02_008 (`SessionStore.model`).
+_STATEFUL_SOURCE = (
+    "class Guard:\n"
+    "    def __init__(self, realm=None, auto_error=True):\n"
+    "        '''Configure the guard.\n\n"
+    + "".join(f"        Option note {i}: realm and auto_error control the challenge header.\n" for i in range(12))
+    + "        '''\n"
+    "        self.realm = realm\n"
+    "        self.auto_error = auto_error\n\n"
+    "    def entry(self):\n"
+    "        return self._step()\n\n"
+    "    def _step(self):\n"
+    "        return self._check()\n\n"
+    "    def _check(self):\n"
+    "        if self.realm:\n"
+    "            return self._header()\n"
+    "        return None\n\n"
+    "    def _header(self):\n"
+    "        return helper(self.realm)\n\n\n"
+    "def helper(realm):\n"
+    "    parts = [realm, realm.upper(), realm.lower()]\n"
+    + "".join(f"    parts.append('segment-{i}-' + realm)\n" for i in range(8))
+    + "    return ', '.join(parts)\n"
+)
+
+
+def test_small_overrun_closed_by_a_cheaper_stub_keeps_the_container_full(tmp_path):
+    """A container is not stubbed when a single cheaper non-container stub
+    already brings the render within budget: the class-only `__init__`
+    (the state `_check` reads) stays, the render ends within the limit, the
+    node set is unchanged and protected roles stay full."""
+    from prism.surface.build import _class_only_tokens, build_context_package_requested
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(_STATEFUL_SOURCE)
+    builder, _tags = build_pipeline(str(repo))
+    contracts = compute_contracts(builder)
+    seed = "mod.Guard.entry"
+    requested = ["mod.Guard._step", "mod.Guard._check", "mod.Guard._header", "mod.helper"]
+    universe = {seed, *requested}
+
+    def build(budget):
+        pkg, skipped = build_context_package_requested(builder, seed, str(repo), budget, requested, universe,
+                                                       contracts=contracts, task_type="debug")
+        assert skipped == []
+        return pkg, count_tokens(render_envelope(pkg, RenderOptions(include_timestamp=False, include_run_id=False)))
+
+    roomy, roomy_tokens = build(100_000)
+    nodes = {n.id: n for n in roomy.nodes}
+    assert set(nodes) == {"mod.Guard", seed, *requested}
+    helper_cost = nodes["mod.helper"].cost
+    assert helper_cost < _class_only_tokens(builder, roomy, nodes["mod.Guard"])   # helper is the cheaper loss
+
+    # over budget by less than what stubbing the helper saves
+    budget = int((roomy_tokens - helper_cost // 2) / (1 + _RENDER_BUDGET_TOLERANCE))
+    assert roomy_tokens > budget * (1 + _RENDER_BUDGET_TOLERANCE)
+
+    pkg, actual = build(budget)
+    compression = {n.id: n.compression for n in pkg.nodes}
+    bodies = {n.id: n.body for n in pkg.nodes}
+    assert actual <= budget * (1 + _RENDER_BUDGET_TOLERANCE), (budget, actual)
+    assert set(compression) == set(nodes)                                    # node set unchanged
+    assert compression["mod.Guard"] == "L0_full"
+    assert "self.realm = realm" in bodies["mod.Guard"]                        # class-level state retained
+    assert compression["mod.helper"] == "L2_skeleton"
+    assert compression["mod.Guard._check"] == compression["mod.Guard._header"] == "L0_full"
+    assert compression[seed] == compression["mod.Guard._step"] == "L0_full"  # protected roles untouched
+    assert build(budget)[1] == actual                                        # deterministic
+
+
+def _guard_package(tmp_path):
+    """`_STATEFUL_SOURCE` indexed, plus a `build(budget)` closure and a
+    budget whose overrun is half of what stubbing `mod.helper` saves."""
+    from prism.surface.build import build_context_package_requested
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "mod.py").write_text(_STATEFUL_SOURCE)
+    builder, _tags = build_pipeline(str(repo))
+    contracts = compute_contracts(builder)
+    seed = "mod.Guard.entry"
+    requested = ["mod.Guard._step", "mod.Guard._check", "mod.Guard._header", "mod.helper"]
+
+    def build(budget):
+        pkg, _skipped = build_context_package_requested(builder, seed, str(repo), budget, requested,
+                                                        {seed, *requested}, contracts=contracts, task_type="debug")
+        return pkg, count_tokens(render_envelope(pkg, RenderOptions(include_timestamp=False, include_run_id=False)))
+
+    roomy, roomy_tokens = build(100_000)
+    helper_cost = next(n.cost for n in roomy.nodes if n.id == "mod.helper")
+    budget = int((roomy_tokens - helper_cost // 2) / (1 + _RENDER_BUDGET_TOLERANCE))
+    return build, budget, {n.id for n in roomy.nodes}
+
+
+def _count_trials(monkeypatch):
+    import prism.surface.build as build_module
+
+    calls = []
+    real = build_module._trial_render_tokens
+
+    def counting(pkg):
+        calls.append(1)
+        return real(pkg)
+
+    monkeypatch.setattr(build_module, "_trial_render_tokens", counting)
+    return calls
+
+
+def test_cheaper_stub_search_stays_within_the_trial_cap(tmp_path, monkeypatch):
+    import prism.surface.build as build_module
+
+    build, budget, _ids = _guard_package(tmp_path)
+    trials = _count_trials(monkeypatch)
+    pkg, _actual = build(budget)
+    assert 1 <= len(trials) <= build_module._CONTAINER_ALTERNATIVE_TRIAL_CAP
+    assert {n.id: n.compression for n in pkg.nodes}["mod.Guard"] == "L0_full"
+
+
+def test_exhausted_trial_cap_falls_back_to_container_first(tmp_path, monkeypatch):
+    """With no trial renders allowed the decision is exactly the
+    container-first one: the class is stubbed, its methods stay full, the
+    render still ends within the limit, the node set is unchanged, protected
+    roles stay full, and the outcome is deterministic."""
+    import prism.surface.build as build_module
+
+    build, budget, ids = _guard_package(tmp_path)
+    monkeypatch.setattr(build_module, "_CONTAINER_ALTERNATIVE_TRIAL_CAP", 0)
+    trials = _count_trials(monkeypatch)
+    pkg, actual = build(budget)
+    compression = {n.id: n.compression for n in pkg.nodes}
+    assert trials == []
+    assert actual <= budget * (1 + _RENDER_BUDGET_TOLERANCE)
+    assert set(compression) == ids
+    assert compression["mod.Guard"] == "L2_skeleton"
+    assert compression["mod.helper"] == compression["mod.Guard._check"] == compression["mod.Guard._header"] == "L0_full"
+    assert compression["mod.Guard.entry"] == compression["mod.Guard._step"] == "L0_full"
+    again, again_tokens = build(budget)
+    assert again_tokens == actual and [n.compression for n in again.nodes] == [n.compression for n in pkg.nodes]
