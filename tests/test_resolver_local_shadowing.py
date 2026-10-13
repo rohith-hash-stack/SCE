@@ -557,7 +557,7 @@ PROBE_EXPECTED = {
     "S2_attr_injected_untyped.run": (POST, TENTATIVE),
     "S2u_attr_injected_untyped_unique_name.run": (FETCH, TENTATIVE),
     "S3_attr_injected_annotated.run": (POST, TENTATIVE),
-    "S4_class_annotation.run": (POST, TENTATIVE),
+    "S4_class_annotation.run": (POST, None),  # class-level `client: HttpClient` (Spec 2)
     "S5_attr_factory.run": (POST, TENTATIVE),
     "S6_attr_injected_factory.run": (POST, TENTATIVE),
 }

@@ -54,7 +54,7 @@ from prism.parser.lang_config import (
 )
 from prism.parser.cache import parse_file_cached
 from prism.parser.queries import run_query
-from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
+from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, get_parser, node_text
 from prism.graph.call_site import (
     DynamicEdgeSentinel,
     compute_call_site_context,
@@ -1044,7 +1044,7 @@ class ConcreteGraphBuilder:
             func_instance_map = InstanceTypeMap()
             if parsed.language_id in instance_binding_langs:
                 func_instance_map = self._build_function_instance_map(
-                    def_node, parsed, module, import_map, symbol.enclosing_class
+                    def_node, parsed, module, import_map, symbol.enclosing_class, class_instance_map
                 )
             for param in self._js_test_fixture_params.get(qualified_name, ()):
                 fixture, _, local_name = param.partition("=")
@@ -1731,6 +1731,8 @@ class ConcreteGraphBuilder:
         if assign_type is None:
             return instance_map
         self_tokens = SELF_TOKEN_TEXT[parsed.language_id]
+        if parsed.language_id == LanguageID.PYTHON:
+            self._bind_python_class_level_annotations(enclosing_class, parsed, module, import_map, instance_map)
         for method_qname in self._methods_by_class.get(enclosing_class, []):
             method_node = self._def_nodes.get(method_qname)
             if method_node is None:
@@ -1743,6 +1745,16 @@ class ConcreteGraphBuilder:
                 if not target_segments or len(target_segments) != 2 or target_segments[0] not in self_tokens:
                     continue
                 value = assign.child_by_field_name("right")
+                annotation = assign.child_by_field_name("type") if parsed.language_id == LanguageID.PYTHON else None
+                if annotation is not None:
+                    # `self.attr: T` / `self.attr: Optional[T] = None`: the
+                    # annotation types the attribute (see the shared helper
+                    # for the unwrapped forms).
+                    ann = self._python_annotation_type(annotation, module, import_map, parsed.source)
+                    if self._bind_annotated_value(
+                        instance_map, ".".join(target_segments), ann, value, parsed.source, module, import_map
+                    ):
+                        continue
                 inferred_attr = False
                 if value is not None:
                     ctor_segments = _constructor_call_segments(value, parsed.language_id, parsed.source)
@@ -1766,32 +1778,35 @@ class ConcreteGraphBuilder:
                         instance_map.bind_builtin(".".join(target_segments))
                         continue
                 else:
-                    # Phase B (G41): a bare type-annotated attribute with
-                    # no constructor call at all (`self.attr:
-                    # ServiceClient`, tree-sitter-python's "assignment"
-                    # node with a "type" field but no "right" child) -
-                    # the annotation alone is enough to bind the
-                    # receiver's type when it names a single, simple
-                    # class directly. A subscripted/generic annotation
-                    # (`Optional[ServiceClient]`, `list[ServiceClient]`)
-                    # is not attempted - its own "type" child is not a
-                    # bare `identifier`, so it falls through and is left
-                    # unresolved rather than guessed.
-                    # tree-sitter-python wraps the annotation in its own
-                    # "type" grammar node (`type_node.type == "type"`),
-                    # one level above the actual `identifier` - confirmed
-                    # directly against the parse tree, not assumed.
-                    type_node = assign.child_by_field_name("type")
-                    if type_node is not None and len(type_node.named_children) == 1:
-                        type_node = type_node.named_children[0]
-                    if type_node is None or type_node.type != "identifier":
-                        continue
-                    resolved_class = self._resolve_reference_chain(
-                        [node_text(type_node, parsed.source)], module, import_map
-                    )
+                    # A bare annotated attribute (`self.attr: T`) is handled
+                    # above; one whose annotation names nothing indexed has
+                    # nothing to bind.
+                    continue
                 if self._is_known_class(resolved_class):
                     instance_map.bind(".".join(target_segments), resolved_class, inferred=inferred_attr)
         return instance_map
+
+    def _bind_python_class_level_annotations(
+        self, enclosing_class: str, parsed: ParsedFile, module: str, import_map: LocalImportMap,
+        instance_map: InstanceTypeMap,
+    ) -> None:
+        """Class-body annotations (`client: Optional[HttpClient] = None`,
+        dataclass fields) type `self.<name>` in every method."""
+        class_node = self._def_nodes.get(enclosing_class)
+        body = class_node.child_by_field_name("body") if class_node is not None else None
+        for statement in body.named_children if body is not None else ():
+            if statement.type != "expression_statement" or not statement.named_children:
+                continue
+            assign = statement.named_children[0]
+            target = assign.child_by_field_name("left") if assign.type == "assignment" else None
+            annotation = assign.child_by_field_name("type") if target is not None else None
+            if annotation is None or target.type != "identifier":
+                continue
+            ann = self._python_annotation_type(annotation, module, import_map, parsed.source)
+            self._bind_annotated_value(
+                instance_map, f"self.{node_text(target, parsed.source)}", ann,
+                assign.child_by_field_name("right"), parsed.source, module, import_map,
+            )
 
     def _is_known_class(self, qualified_name: str | None) -> bool:
         if not qualified_name:
@@ -2135,7 +2150,7 @@ class ConcreteGraphBuilder:
 
     def _build_function_instance_map(
         self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap,
-        enclosing_class: str | None = None,
+        enclosing_class: str | None = None, class_instance_map: InstanceTypeMap | None = None,
     ) -> InstanceTypeMap:
         instance_map = InstanceTypeMap()
         lang = parsed.language_id
@@ -2153,9 +2168,9 @@ class ConcreteGraphBuilder:
                     name_node = param.child_by_field_name("name") or next(
                         (c for c in param.named_children if c.type == "identifier"), None
                     )
-                    resolved = self._python_annotation_class(param.child_by_field_name("type"), module, import_map, parsed.source)
-                    if name_node is not None and name_node.type == "identifier" and resolved is not None:
-                        instance_map.bind(node_text(name_node, parsed.source), resolved)
+                    if name_node is not None and name_node.type == "identifier":
+                        ann = self._python_annotation_type(param.child_by_field_name("type"), module, import_map, parsed.source)
+                        self._bind_annotation(instance_map, node_text(name_node, parsed.source), ann)
             instance_map.local_names = _python_local_names(def_node, parsed.source)
         elif lang in (LanguageID.TYPESCRIPT, LanguageID.TSX):
             # `async function f(lp: LoginPage)`: a parameter annotated with
@@ -2178,7 +2193,17 @@ class ConcreteGraphBuilder:
             for assign in iter_scoped_nodes(def_node, {assign_type}, lang):
                 target = assign.child_by_field_name("left")
                 value = assign.child_by_field_name("right")
-                if target is None or value is None or target.type != "identifier":
+                if target is None or target.type != "identifier":
+                    continue
+                annotation = assign.child_by_field_name("type") if lang == LanguageID.PYTHON else None
+                if annotation is not None:
+                    # `x: T = ...` / `x: T`: the annotation types the local.
+                    ann = self._python_annotation_type(annotation, module, import_map, parsed.source)
+                    if self._bind_annotated_value(
+                        instance_map, node_text(target, parsed.source), ann, value, parsed.source, module, import_map
+                    ):
+                        continue
+                if value is None:
                     continue
                 if value.type == ATTRIBUTE_NODE_TYPE.get(lang):
                     prop = value.child_by_field_name(ATTR_PROPERTY_FIELD[lang])
@@ -2220,10 +2245,59 @@ class ConcreteGraphBuilder:
                 if self._is_known_class(resolved_class):
                     instance_map.bind(node_text(name_node, parsed.source), resolved_class)
 
+        if lang == LanguageID.PYTHON:
+            self._bind_python_loop_elements(def_node, parsed, instance_map, class_instance_map)
+
         if lang == LanguageID.GO:
             self._bind_go_typed_parameters(def_node, parsed, module, instance_map)
             self._bind_go_short_var_declarations(def_node, parsed, module, instance_map)
         return instance_map
+
+    def _bind_annotated_value(
+        self, instance_map: InstanceTypeMap, name: str, ann: "_AnnotationType | None",
+        value: Node | None, source: bytes, module: str, import_map: LocalImportMap,
+    ) -> bool:
+        """Bind an annotated Python assignment target (`x: T = value`).
+
+        The annotation wins over anything inferred from `value`, except
+        that a constructor of a subclass of the annotated class (`x: Base =
+        Sub()`) binds the more specific class. Returns `False` when the
+        annotation names nothing indexed, leaving `value` to the ordinary
+        inference."""
+        if ann is None or not (ann.container or ann.classes):
+            return False
+        ctor_segments = (
+            _constructor_call_segments(value, LanguageID.PYTHON, source)
+            if value is not None and not ann.container else None
+        )
+        if ctor_segments:
+            ctor_class = self._resolve_reference_chain(ctor_segments, module, import_map)
+            if self._is_known_class(ctor_class) and any(
+                ctor_class == c or c in self._mro_ancestors(ctor_class) for c in ann.classes
+            ):
+                instance_map.bind(name, ctor_class)
+                return True
+        return self._bind_annotation(instance_map, name, ann)
+
+    def _bind_python_loop_elements(
+        self, def_node: Node, parsed: ParsedFile, instance_map: InstanceTypeMap,
+        class_instance_map: InstanceTypeMap | None,
+    ) -> None:
+        """`for c in xs:` where `xs` is annotated as a container of `T`
+        (`xs: list[T]`, or a `self.xs: list[T]` attribute) binds `c` to `T`."""
+        for loop in iter_scoped_nodes(def_node, {"for_statement", "for_in_clause"}, LanguageID.PYTHON):
+            left, right = loop.child_by_field_name("left"), loop.child_by_field_name("right")
+            if left is None or right is None or left.type != "identifier":
+                continue
+            segments = flatten_reference_chain(right, parsed.source, LanguageID.PYTHON)
+            if not segments:
+                continue
+            key = ".".join(segments)
+            element = instance_map.element_types.get(key)
+            if element is None and class_instance_map is not None:
+                element = class_instance_map.element_types.get(key)
+            if element is not None:
+                instance_map.bind(node_text(left, parsed.source), element)
 
     def _bind_go_short_var_declarations(
         self, def_node: Node, parsed: ParsedFile, module: str, instance_map: InstanceTypeMap
@@ -2571,21 +2645,114 @@ class ConcreteGraphBuilder:
     def _python_annotation_class(
         self, type_node: Node | None, module: str, import_map: LocalImportMap, source: bytes
     ) -> str | None:
-        """The indexed class a Python annotation names: a bare (`T`) or
-        dotted (`mod.T`) reference only. Wrapped/subscripted forms
-        (`Optional[T]`, `list[T]`) and string forward references are not
-        unwrapped yet, and an unindexed external class yields `None`."""
-        if type_node is not None and type_node.type == "type" and len(type_node.named_children) == 1:
-            type_node = type_node.named_children[0]
-        if type_node is None or type_node.type not in ("identifier", "attribute"):
+        """The one indexed class a Python annotation names after unwrapping
+        (`T`, `mod.T`, `"T"`, `Optional[T]`, `T | None`, `Annotated[T, ...]`),
+        or `None` - including for unions of several classes and containers."""
+        ann = self._python_annotation_type(type_node, module, import_map, source)
+        return ann.classes[0] if ann is not None and len(ann.classes) == 1 else None
+
+    def _python_annotation_type(
+        self, node: Node | None, module: str, import_map: LocalImportMap, source: bytes, _depth: int = 0
+    ) -> "_AnnotationType | None":
+        """What a Python annotation says about a value, or `None` when it
+        names nothing indexed (an external class, `Callable`, a `TypeVar`) -
+        never a guess. A union with any such member is `None` as a whole."""
+        if node is None or _depth > _ANNOTATION_MAX_DEPTH:
             return None
-        segments = flatten_reference_chain(type_node, source, LanguageID.PYTHON)
-        resolved = self._resolve_reference_chain(segments, module, import_map) if segments else None
-        return resolved if self._is_known_class(resolved) else None
+        if node.type in ("type", "parenthesized_expression") and len(node.named_children) == 1:
+            return self._python_annotation_type(node.named_children[0], module, import_map, source, _depth + 1)
+        if node.type == "none":
+            return _NONE_ANNOTATION
+        if node.type == "string":
+            inner = _parse_python_annotation_string(node, source)
+            if inner is None:
+                return None
+            inner_node, inner_source = inner
+            return self._python_annotation_type(inner_node, module, import_map, inner_source, _depth + 1)
+        if node.type == "binary_operator":
+            operator = node.child_by_field_name("operator")
+            if operator is None or node_text(operator, source) != "|":
+                return None
+            members = [node.child_by_field_name("left"), node.child_by_field_name("right")]
+            return self._python_annotation_union(members, module, import_map, source, _depth)
+        if node.type in ("identifier", "attribute"):
+            segments = flatten_reference_chain(node, source, LanguageID.PYTHON)
+            if not segments:
+                return None
+            if segments[-1] in _PY_SEQUENCE_ANNOTATIONS or segments[-1] in _PY_MAPPING_ANNOTATIONS:
+                return _AnnotationType(container=True)
+            resolved = self._resolve_reference_chain(segments, module, import_map)
+            return _AnnotationType(classes=(resolved,)) if self._is_known_class(resolved) else None
+        if node.type == "generic_type":
+            head = node.named_children[0] if node.named_children else None
+            params = next((c for c in node.named_children if c.type == "type_parameter"), None)
+            args = list(params.named_children) if params is not None else []
+        elif node.type == "subscript":
+            head = node.child_by_field_name("value")
+            args = node.children_by_field_name("subscript")
+        else:
+            return None
+        head_segments = flatten_reference_chain(head, source, LanguageID.PYTHON) if head is not None else None
+        if not head_segments:
+            return None
+        head_name = head_segments[-1]
+        if head_name == "Optional":
+            return self._python_annotation_union([*args, None], module, import_map, source, _depth)
+        if head_name == "Union":
+            return self._python_annotation_union(args, module, import_map, source, _depth)
+        if head_name in _PY_TRANSPARENT_ANNOTATIONS:
+            return self._python_annotation_type(args[0], module, import_map, source, _depth + 1) if args else None
+        if head_name in _PY_SEQUENCE_ANNOTATIONS or head_name in _PY_MAPPING_ANNOTATIONS:
+            # Iterating a sequence yields its item type, a mapping its key
+            # type - both the first argument (`tuple[T, ...]` included).
+            element = self._python_annotation_type(args[0], module, import_map, source, _depth + 1) if args else None
+            return _AnnotationType(container=True, element=element.classes[0] if element and len(element.classes) == 1 else None)
+        # A user generic (`Repo[Model]`) is still an instance of its own class.
+        resolved = self._resolve_reference_chain(head_segments, module, import_map)
+        return _AnnotationType(classes=(resolved,)) if self._is_known_class(resolved) else None
+
+    def _python_annotation_union(
+        self, members: list, module: str, import_map: LocalImportMap, source: bytes, depth: int
+    ) -> "_AnnotationType | None":
+        """`None` members drop out (`Optional`); a lone container survives
+        as itself; otherwise every remaining member must be a known class."""
+        classes: list[str] = []
+        containers: list[_AnnotationType] = []
+        for member in members:
+            ann = _NONE_ANNOTATION if member is None else self._python_annotation_type(member, module, import_map, source, depth + 1)
+            if ann is None:
+                return None
+            if ann is _NONE_ANNOTATION:
+                continue
+            if ann.container:
+                containers.append(ann)
+            else:
+                classes.extend(c for c in ann.classes if c not in classes)
+        if containers:
+            return containers[0] if len(containers) == 1 and not classes else None
+        return _AnnotationType(classes=tuple(classes)) if classes else None
+
+    def _bind_annotation(self, instance_map: InstanceTypeMap, name: str, ann: "_AnnotationType | None") -> bool:
+        """Bind `name` from an annotation; `False` when it says nothing."""
+        if ann is None:
+            return False
+        if ann.container:
+            instance_map.bind_container(name, ann.element)
+        elif len(ann.classes) == 1:
+            instance_map.bind(name, ann.classes[0])
+        elif ann.classes:
+            instance_map.bind_union(name, ann.classes)
+        else:
+            return False
+        return True
 
     def _annotation_class(self, type_node: Node | None, ctx: "_ExprContext") -> str | None:
         """A return/variable annotation naming exactly one known class
-        (`-> QuerySet`, `: Promise<Foo>` is not attempted)."""
+        (`-> QuerySet`, `: Promise<Foo>` is not attempted). Python
+        annotations are unwrapped by the shared helper (`-> Optional[T]`,
+        `-> "T"`)."""
+        if ctx.lang == LanguageID.PYTHON:
+            return self._python_annotation_class(type_node, ctx.module, ctx.import_map, ctx.source)
         while type_node is not None and type_node.type not in ("identifier", "type_identifier", ATTRIBUTE_NODE_TYPE.get(ctx.lang)):
             if len(type_node.named_children) != 1:
                 return None
@@ -3058,9 +3225,14 @@ class ConcreteGraphBuilder:
             if func_instance_map.resolve(receiver_key) is not None:
                 candidate = func_instance_map.resolve(receiver_key)
                 ambiguous = func_instance_map.is_ambiguous(receiver_key)
+                union = func_instance_map.union_members.get(receiver_key)
             else:
                 candidate = class_instance_map.resolve(receiver_key)
                 ambiguous = class_instance_map.is_ambiguous(receiver_key)
+                union = class_instance_map.union_members.get(receiver_key)
+            if candidate and union:
+                candidate = self._union_member_for(union, method)
+                ambiguous = False
             if candidate:
                 if ambiguous:
                     # G41 Invariant 3: branching initialization bound
@@ -3114,6 +3286,13 @@ class ConcreteGraphBuilder:
             )
 
         candidate = func_instance_map.resolve(receiver_key) or class_instance_map.resolve(receiver_key)
+        union = (
+            func_instance_map.union_members.get(receiver_key)
+            if func_instance_map.resolve(receiver_key) is not None
+            else class_instance_map.union_members.get(receiver_key)
+        )
+        if candidate and union:
+            candidate = self._union_member_for(union, method)
         if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
             # Builtin-Receiver Exclusion fix: a local variable known to
             # hold a Python builtin container/primitive
@@ -3210,6 +3389,17 @@ class ConcreteGraphBuilder:
                 self._last_resolution_was_tentative = True
                 return unique
         return None
+
+    def _union_member_for(self, members: tuple[str, ...], method: str) -> str:
+        """The first member of a `Union[...]` binding that defines `method`
+        (directly or inherited), else the first member. Union-bound names
+        are `inferred`, so the call links as `TENTATIVE_CALL` either way."""
+        for member in members:
+            if f"{member}.{method}" in self.symbol_table or any(
+                f"{ancestor}.{method}" in self.symbol_table for ancestor in self._mro_ancestors(member)
+            ):
+                return member
+        return members[0]
 
     def _go_promoted_method(self, struct_qname: str, method: str) -> str | None:
         """Item 7 (second post-implementation audit): Go's real method-
@@ -3671,6 +3861,57 @@ _FUNCTION_SCOPE_TYPES = frozenset({
 #: How many nested calls/assignments `_infer_return_class`/`_expr_class`
 #: follow before giving up (each level is memoized per function).
 _RETURN_INFERENCE_MAX_DEPTH = 6
+
+
+@dataclass(frozen=True)
+class _AnnotationType:
+    """What a Python annotation says about a value: one known class
+    (confident), several (a union - best-effort), or a builtin container
+    with the known class its iteration yields."""
+
+    classes: tuple[str, ...] = ()
+    container: bool = False
+    element: str | None = None
+
+
+#: The `None` member of `Optional[T]` / `T | None` (dropped from unions).
+_NONE_ANNOTATION = _AnnotationType()
+#: Nesting bound for annotation unwrapping (`Optional["Annotated[T, x]"]`).
+_ANNOTATION_MAX_DEPTH = 8
+#: Wrappers whose first argument is the value's real type.
+_PY_TRANSPARENT_ANNOTATIONS = frozenset({
+    "Annotated", "Final", "ClassVar", "Required", "NotRequired", "ReadOnly", "InitVar",
+})
+#: Builtin/typing sequence and set types: iteration yields the first argument.
+_PY_SEQUENCE_ANNOTATIONS = frozenset({
+    "list", "List", "tuple", "Tuple", "set", "Set", "frozenset", "FrozenSet", "deque", "Deque",
+    "Sequence", "MutableSequence", "Collection", "Iterable", "Iterator", "AbstractSet", "MutableSet",
+    "Generator", "AsyncIterable", "AsyncIterator", "AsyncGenerator", "Reversible",
+})
+#: Builtin/typing mappings: iteration yields the key type (first argument).
+_PY_MAPPING_ANNOTATIONS = frozenset({
+    "dict", "Dict", "Mapping", "MutableMapping", "DefaultDict", "defaultdict", "OrderedDict", "Counter",
+    "ChainMap",
+})
+
+
+def _parse_python_annotation_string(node: Node, source: bytes) -> tuple[Node, bytes] | None:
+    """The annotation a string forward reference (`"T"`, `"Optional[T]"`)
+    spells, parsed on its own: `(type node, its source)`."""
+    content = next((c for c in node.named_children if c.type == "string_content"), None)
+    if content is None:
+        return None
+    text = node_text(content, source).strip()
+    if not text or "\n" in text or len(text) > 200:
+        return None
+    inner_source = f"_: {text}\n".encode()
+    tree = get_parser(LanguageID.PYTHON).parse(inner_source)
+    statement = tree.root_node.named_children[0] if tree.root_node.named_children else None
+    assignment = statement.named_children[0] if statement is not None and statement.named_children else None
+    if tree.root_node.has_error or assignment is None or assignment.type != "assignment":
+        return None
+    type_node = assignment.child_by_field_name("type")
+    return (type_node, inner_source) if type_node is not None else None
 
 
 class _ExprContext:

@@ -510,6 +510,16 @@ class InstanceTypeMap:
         # from an earlier assignment to the same name (most-recent-
         # assignment-wins, matching `ambiguous`'s own convention above).
         self.builtin_bindings.discard(var_name)
+        self.element_types.pop(var_name, None)
+        self.union_members.pop(var_name, None)
+
+    def bind_union(self, var_name: str, members: tuple[str, ...]) -> None:
+        """`x: Union[A, B]`: any of `members` at run time. Linked as a
+        best-effort (`inferred`) binding to the first member; callers pick
+        the member that actually defines the called method via
+        `union_members`."""
+        self.bind(var_name, members[0], inferred=True)
+        self.union_members[var_name] = members
 
     def bind_builtin(self, var_name: str) -> None:
         self.builtin_bindings.add(var_name)
@@ -519,6 +529,14 @@ class InstanceTypeMap:
         self.bindings.pop(var_name, None)
         self.ambiguous.discard(var_name)
         self.inferred.discard(var_name)
+        self.union_members.pop(var_name, None)
+        self.element_types.pop(var_name, None)
+
+    def bind_container(self, var_name: str, element: str | None) -> None:
+        """`xs: list[T]`: a builtin container whose items are `T`."""
+        self.bind_builtin(var_name)
+        if element is not None:
+            self.element_types[var_name] = element
 
     def resolve(self, var_name: str) -> str | None:
         return self.bindings.get(var_name)
@@ -547,6 +565,11 @@ class InstanceTypeMap:
     #: module-level symbol, so call resolution never looks one up through
     #: Rule D (Python only; empty for other languages).
     local_names: set[str] = field(default_factory=set)
+    #: `x: Union[A, B]` -> (A, B): the classes a union annotation allows.
+    union_members: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: `xs: list[T]` -> T: what iterating a container-annotated name yields
+    #: (a mapping's key type).
+    element_types: dict[str, str] = field(default_factory=dict)
 
     def is_local(self, var_name: str) -> bool:
         return var_name in self.local_names
