@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
-from prism.semantics.bitmask import FeatureBit
+from prism.semantics.bitmask import FeatureBit, distinct_source_matches
 from prism.semantics.boundary_stubs_l3 import L3_BOUNDARY_STUBS
 from prism.semantics.primitives_l2 import L2_PRIMITIVE_ENTRIES
 
@@ -172,8 +172,15 @@ class CompositeProfile:
         return mask
 
     def coverage(self, bits: int) -> float:
-        """Fraction of groups `bits` satisfies (0.0-1.0)."""
+        """Fraction of groups `bits` satisfies (0.0-1.0), with every group
+        allowed to come from the same mask - see `coverage_from_sources`
+        for the distinct-source rule capability scoring uses."""
         return sum(1 for g in self.groups if bits & g) / len(self.groups)
+
+    def coverage_from_sources(self, sources: "tuple[int, ...] | list[int]") -> float:
+        """Fraction of groups satisfiable when each group needs its own
+        source (`bitmask.distinct_source_matches`)."""
+        return distinct_source_matches(self.groups, sources) / len(self.groups)
 
 
 _NET_ANY = int(F.PRIM_NET_CONNECT | F.PRIM_NET_LISTEN)

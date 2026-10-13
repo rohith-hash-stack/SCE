@@ -149,3 +149,28 @@ def describe_mask(mask: int) -> list[str]:
     position - a debugging/test-assertion convenience, never used in the
     knapsack's own hot path (which only ever needs the raw int)."""
     return [b.name for b in sorted(ALL_KNOWN_BITS, key=lambda f: int(f)) if mask & int(b) and b.name]
+
+
+def distinct_source_matches(groups: "tuple[int, ...] | list[int]", sources: "tuple[int, ...] | list[int]") -> int:
+    """The distinct-source rule for composite capabilities: how many of
+    `groups` (each an any-of primitive mask) can be satisfied when every
+    group must be met by a *different* source mask (one call site, or one
+    callee's whole summary).
+
+    A composite like ASSET_EGRESS (read a file, send over the network)
+    means two operations; a single library call that *incidentally*
+    touches both - `requests.post` reads TLS key files and sleeps between
+    retries - must not count as both. Maximum bipartite matching between
+    groups and sources (augmenting paths; both sides are tiny)."""
+    owner: dict[int, int] = {}  # source index -> group index
+
+    def assign(g: int, seen: set[int]) -> bool:
+        for s, mask in enumerate(sources):
+            if mask & groups[g] and s not in seen:
+                seen.add(s)
+                if s not in owner or assign(owner[s], seen):
+                    owner[s] = g
+                    return True
+        return False
+
+    return sum(1 for g in range(len(groups)) if assign(g, set()))

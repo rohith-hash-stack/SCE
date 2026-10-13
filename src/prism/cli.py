@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import TYPE_CHECKING
 
 import click
 
@@ -40,6 +41,9 @@ from prism.slicer.distance import DistanceConfig, DistanceEngine
 from prism.slicer.blueprint import mine_sibling_blueprint
 from prism.slicer.knapsack import QUERY_TYPE_BUG_LOCALIZATION, QUERY_TYPE_GENERAL, ContextKnapsackPacker
 from prism.tagger.engine import TaggingEngine
+
+if TYPE_CHECKING:
+    from prism.deps.index import DependencyIndex
 
 IGNORED_DIRS = {
     ".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build",
@@ -137,7 +141,8 @@ def discover_robot_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERM
 
 
 def build_pipeline(
-    repo_path: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE, use_cache: bool = True
+    repo_path: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE, use_cache: bool = True,
+    dependencies: "DependencyIndex | None" = None,
 ) -> tuple[ConcreteGraphBuilder, dict[str, set[str]]]:
     """Run Stages 1-3 (parse, link, tag) end to end for one repository.
 
@@ -150,6 +155,13 @@ def build_pipeline(
     incremental linking. Any cache miss, corruption, or `use_cache=False`
     falls straight through to the full Stage 1-3 run below, and a fresh
     result is always cached afterward for next time.
+
+    `dependencies` (opt-in): resolve calls into installed third-party
+    packages against their offline summaries (`prism.deps`). Each called
+    dependency entry point becomes one external boundary node carrying its
+    capability summary; no dependency internals enter the index. The
+    whole-repo index cache is bypassed in this mode - its fingerprint does
+    not cover dependency state.
     """
     repo_root = os.path.abspath(repo_path)
     files = discover_files(repo_root, language_tier)
@@ -159,6 +171,8 @@ def build_pipeline(
     robot_files = discover_robot_files(repo_root, language_tier)
     fingerprint_files = sorted(files + robot_files)
 
+    if dependencies is not None:
+        use_cache = False
     if use_cache:
         cached = load_pipeline_from_cache(repo_root, fingerprint_files, language_tier)
         if cached is not None:
@@ -166,8 +180,19 @@ def build_pipeline(
 
     symbol_table = GlobalSymbolTable()
     builder = ConcreteGraphBuilder(repo_root, symbol_table)
-    builder.pass1_collect_definitions(files)
-    builder.pass2_resolve_calls(files)
+    if dependencies is None:
+        builder.pass1_collect_definitions(files)
+        builder.pass2_resolve_calls(files)
+    else:
+        from prism.deps.host import attach_dependency_headers, cleanup_header_root, detach_dependency_headers
+
+        header_files, summaries, header_root = attach_dependency_headers(builder, files, dependencies)
+        try:
+            builder.pass1_collect_definitions(files + header_files)
+            builder.pass2_resolve_calls(files + header_files)
+            detach_dependency_headers(builder, summaries, header_root)
+        finally:
+            cleanup_header_root(header_root)
     if robot_files:
         link_robot_framework(builder, robot_files)
     tag_matrix = TaggingEngine().tag_graph(builder)

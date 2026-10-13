@@ -309,3 +309,40 @@ def test_java_same_package_sibling_still_resolves(tmp_path):
         ),
     })
     assert builder.graph.has_edge("com.ex.Service.run", "com.ex.Validator.check")
+
+
+# --------------------------------------------------------------------- #
+# Recursion guard: a call on another object is never the caller itself
+# --------------------------------------------------------------------- #
+ADAPTERS = (
+    "class BaseAdapter:\n    def send(self, request, **kwargs):\n        raise NotImplementedError\n\n\n"
+    "class HTTPAdapter(BaseAdapter):\n    def send(self, request, **kwargs):\n        return request\n"
+)
+
+
+def test_non_self_receiver_never_resolves_to_the_caller(tmp_path):
+    builder = _build(tmp_path, {
+        **INIT,
+        "pkg/adapters.py": ADAPTERS,
+        "pkg/sessions.py": (
+            "from .adapters import HTTPAdapter\n\n\n"
+            "class Session:\n"
+            "    def get_adapter(self, url):\n        return self.adapters[url]\n\n"
+            "    def send(self, request, **kwargs):\n"
+            "        adapter = self.get_adapter(request)\n"
+            "        return adapter.send(request, **kwargs)\n"
+        ),
+    })
+    calls = _calls(builder, "pkg.sessions.Session.send")
+    assert "pkg.sessions.Session.send" not in calls
+    # Without the caller, the candidates form one family: root + overrides.
+    assert calls.get("pkg.adapters.BaseAdapter.send") == "TENTATIVE_CALL"
+    assert calls.get("pkg.adapters.HTTPAdapter.send") == "TENTATIVE_CALL"
+
+
+def test_self_receiver_recursion_is_still_allowed(tmp_path):
+    builder = _build(tmp_path, {
+        **INIT,
+        "pkg/tree.py": "class Node:\n    def walk(self, n):\n        return self.walk(n - 1)\n",
+    })
+    assert "pkg.tree.Node.walk" in _calls(builder, "pkg.tree.Node.walk")

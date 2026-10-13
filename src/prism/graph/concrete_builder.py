@@ -186,6 +186,10 @@ class ConcreteGraphBuilder:
 
     def __init__(self, repo_root: str, symbol_table: GlobalSymbolTable | None = None) -> None:
         self.repo_root = repo_root
+        #: Extra source roots whose files are named relative to themselves,
+        #: not to `repo_root` - dependency header packages materialized
+        #: outside the repository (`prism.deps.host`).
+        self.module_roots: list[str] = []
         #: Item 4: `[{"file": path, "category": "RecursionError" | ...,
         #: "message": str, "stage": "pass1" | "pass2"}, ...]` - one entry
         #: per file an error boundary caught and skipped, in the order
@@ -525,6 +529,9 @@ class ConcreteGraphBuilder:
             declared = _parse_package_or_namespace(parsed)
             if declared is not None:
                 return declared
+        for root in self.module_roots:
+            if parsed.path.startswith(root.rstrip(os.sep) + os.sep):
+                return path_to_module(parsed.path, root)
         return path_to_module(parsed.path, self.repo_root)
 
     def _collect_definitions_in_file(self, parsed: ParsedFile, module: str) -> None:
@@ -2938,8 +2945,14 @@ class ConcreteGraphBuilder:
 
     def _path_partition(self, path: str) -> str:
         """`"vendor"`, `"test"` or `"first_party"` for a repo file, judged
-        on its repo-relative path (cached)."""
+        on its repo-relative path (cached) - or `"dependency"` for a
+        dependency header under one of `module_roots`: header symbols exist
+        mainly for typed resolution (constructors, annotations, re-exports)
+        and are bare-name fallback candidates only when nothing in the
+        caller's own code is."""
         partition = self._path_partitions.get(path)
+        if partition is None and any(path.startswith(r.rstrip(os.sep) + os.sep) for r in self.module_roots):
+            partition = self._path_partitions[path] = "dependency"
         if partition is None:
             try:
                 relative = os.path.relpath(path, self.repo_root)
@@ -3028,10 +3041,24 @@ class ConcreteGraphBuilder:
         # Scoping guards (Spec 3): another language, test code or vendored
         # code is never a candidate unless the caller is in that same
         # partition (`_fallback_candidate_allowed`).
+        # A call on another object (`adapter.send()` inside `Session.send`)
+        # is never the caller itself - the recursion guard the unique-name
+        # link below already applied, now for every fallback: the caller
+        # stays out of the candidate set, so a family root or a score can
+        # still pick the real target instead.
+        bare_or_self = len(segments) == 1 or (len(segments) == 2 and segments[0] in SELF_TOKEN_TEXT.get(lang, ()))
         candidates = [
             c for c in self.symbol_table.candidates_for_simple_name(simple_name)
             if _fallback_candidate_allowed(self._path_partition(parsed.path), lang, self._path_partition(c.file), c.language_id)
+            and (bare_or_self or c.qualified_name != caller_qname)
         ]
+        # A dependency header is a candidate only when the caller's own code
+        # offers none: `adapter.send()` in requests stays inside requests'
+        # own `send` family, while `conn.urlopen()` - defined only in the
+        # urllib3 header - still crosses the package boundary.
+        own_code = [c for c in candidates if self._path_partition(c.file) != "dependency"]
+        if own_code:
+            candidates = own_code
         builtin_named = len(segments) >= 2 and simple_name in _BUILTIN_METHOD_NAMES.get(lang, ())
         own_receiver = len(segments) == 2 and segments[0] in SELF_TOKEN_TEXT.get(lang, ())
         if builtin_named and (len(candidates) >= 2 or (candidates and not own_receiver)):
@@ -4476,11 +4503,13 @@ def _path_partition_of(relative_path: str) -> str:
 def _fallback_candidate_allowed(caller_partition: str, caller_lang: str | None, candidate_partition: str, candidate_lang: str | None) -> bool:
     """Whether a receiver-type-unknown fallback (G44 unique name, family
     root, scored polysemy, attribute index, receiver naming convention) may
-    bind a caller to a candidate: same language family, and a test or
-    vendored candidate only for a caller in that same partition."""
+    bind a caller to a candidate: same language family, a test or vendored
+    candidate only for a caller in that same partition. A dependency header
+    is allowed here; `_resolve_ambiguous_call` only falls back to one when
+    the caller's own code has no candidate at all."""
     if _LANGUAGE_FAMILY.get(caller_lang, caller_lang) != _LANGUAGE_FAMILY.get(candidate_lang, candidate_lang):
         return False
-    return candidate_partition == "first_party" or candidate_partition == caller_partition
+    return candidate_partition in ("first_party", "dependency") or candidate_partition == caller_partition
 
 
 def _imports_module_directly(candidate: SymbolInfo, import_map: LocalImportMap) -> bool:
