@@ -183,42 +183,50 @@ def _match_sink_bits_for_call(segments: list[str], import_map, lang: str, regist
     """
     if not segments:
         return FeatureBit(0)
-    joined = ".".join(segments)
-    root = segments[0]
-    resolved_root = import_map.resolve(root) if import_map is not None else None
-    resolved_joined = ".".join([resolved_root, *segments[1:]]) if resolved_root is not None else None
-    suffix_after_root = ".".join(segments[1:]) if len(segments) > 1 else None
+    joined, root, resolved_root, resolved_joined, suffix_after_root = _call_shape(segments, import_map)
 
     bits = FeatureBit(0)
     for category, entries in registry.items():
         bit = _CATEGORY_BIT[category]
         for entry in entries:
-            if "/" in entry:
-                split = _split_go_import_entry(entry)
-                if split is None:
-                    continue
-                import_path, entry_suffix = split
-                normalized_import_path = _normalize_go(import_path)
-                if (
-                    resolved_root is not None
-                    and resolved_root == normalized_import_path
-                    and suffix_after_root is not None
-                    and _chain_matches(suffix_after_root, entry_suffix)
-                ):
-                    bits |= bit
-                    break
-            elif "." in entry:
-                if joined == entry or joined.startswith(entry + "."):
-                    bits |= bit
-                    break
-                if resolved_joined is not None and (resolved_joined == entry or resolved_joined.startswith(entry + ".")):
-                    bits |= bit
-                    break
-            else:
-                if root == entry or resolved_root == entry:
-                    bits |= bit
-                    break
+            if _entry_matches(entry, joined, root, resolved_root, resolved_joined, suffix_after_root):
+                bits |= bit
+                break
     return bits
+
+
+def _call_shape(segments: list[str], import_map) -> tuple[str, str, str | None, str | None, str | None]:
+    """`(joined, root, resolved_root, resolved_joined, suffix_after_root)`
+    for one call's segments - what `_entry_matches` compares against."""
+    joined = ".".join(segments)
+    root = segments[0]
+    resolved_root = import_map.resolve(root) if import_map is not None else None
+    resolved_joined = ".".join([resolved_root, *segments[1:]]) if resolved_root is not None else None
+    suffix_after_root = ".".join(segments[1:]) if len(segments) > 1 else None
+    return joined, root, resolved_root, resolved_joined, suffix_after_root
+
+
+def _entry_matches(
+    entry: str, joined: str, root: str, resolved_root: str | None, resolved_joined: str | None, suffix_after_root: str | None
+) -> bool:
+    """Whether one registry entry names this call - see this module's own
+    docstring for the three entry shapes (Go import path, dotted, bare)."""
+    if "/" in entry:
+        split = _split_go_import_entry(entry)
+        if split is None:
+            return False
+        import_path, entry_suffix = split
+        return (
+            resolved_root is not None
+            and resolved_root == _normalize_go(import_path)
+            and suffix_after_root is not None
+            and _chain_matches(suffix_after_root, entry_suffix)
+        )
+    if "." in entry:
+        if joined == entry or joined.startswith(entry + "."):
+            return True
+        return resolved_joined is not None and (resolved_joined == entry or resolved_joined.startswith(entry + "."))
+    return root == entry or resolved_root == entry
 
 
 def _suffix_fallback_bits(method_name: str) -> FeatureBit:
@@ -255,6 +263,19 @@ def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> Feature
     registry = _registry_for(lang)
     if registry is None:
         return FeatureBit(0)
+    return _direct_call_bits(
+        def_node, parsed,
+        lambda segments, _node: _match_sink_bits_for_call(segments, import_map, lang, registry),
+        _suffix_fallback_bits,
+    )
+
+
+def _direct_call_bits(def_node: Node, parsed: ParsedFile, match, fallback) -> FeatureBit:
+    """The three-phase direct scan shared by Substance sink bits and Phase 2
+    primitive bits: `match(segments, node)` per call/instantiation (Phase 1),
+    local constructor provenance (Phase 2a), then `fallback(method_name)`
+    for an otherwise unmatched call (Phase 2b)."""
+    lang = parsed.language_id
     call_type = CALL_NODE_TYPE.get(lang)
     new_expr_type = _NEW_EXPRESSION_NODE_TYPE.get(lang)
     if not call_type and not new_expr_type:
@@ -269,7 +290,7 @@ def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> Feature
             continue
         key = _node_key(node)
         segments_by_key[key] = segments
-        phase1_bits[key] = _match_sink_bits_for_call(segments, import_map, lang, registry)
+        phase1_bits[key] = match(segments, node)
 
     # Phase 2a: local constructor provenance - a variable bound directly
     # from a Phase-1-matched call/instantiation inherits its sink bits
@@ -291,7 +312,7 @@ def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> Feature
         if not call_bits and len(segments) >= 2 and segments[0] in local_bindings:
             call_bits = local_bindings[segments[0]]  # Phase 2a
         if not call_bits:
-            call_bits = _suffix_fallback_bits(segments[-1])  # Phase 2b
+            call_bits = fallback(segments[-1])  # Phase 2b
         bits |= call_bits
     return bits
 

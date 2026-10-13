@@ -20,7 +20,11 @@ Bit layout (bits 0-63), exactly as specified:
     Bits 10-24  Form (motifs)
     Bits 25-34  Output (return contract)
     Bits 35-44  Role (topological neighborhood)
-    Bits 45-63  Reserved for v1.2 extension tags
+    Bits 45-60  Atomic primitives (Phase 2): the physical operations the
+                Layer 2 runtime exposes - see `PRIMITIVE_BITS`. Carried in
+                capability profiles (`prism.semantics.capabilities`), not
+                in the four-axis feature mask.
+    Bits 61-63  Reserved
 """
 from __future__ import annotations
 
@@ -78,6 +82,27 @@ class FeatureBit(IntFlag):
     ROLE_PUBLIC_API = 1 << 40  # exported, in=0
     ROLE_LEAF_SERVICE = 1 << 41  # fan_out <= 1, has side-effect sink
 
+    # -- Atomic primitives: Bits 45-60 (Phase 2) ---------------------------- #
+    # One bit per physical operation a Layer 2 runtime primitive performs
+    # (`prism.semantics.primitives` derives them for every catalog entry).
+    # Composite capabilities (`ASSET_EGRESS`, ...) are bitwise ORs of these.
+    PRIM_NET_CONNECT = 1 << 45  # outbound connection / request
+    PRIM_NET_LISTEN = 1 << 46  # bind, listen, accept, serve
+    PRIM_NET_DNS = 1 << 47  # name resolution
+    PRIM_NET_TLS = 1 << 48  # TLS/SSL session
+    PRIM_FS_READ = 1 << 49  # read file content or metadata
+    PRIM_FS_WRITE = 1 << 50  # create or modify files/directories
+    PRIM_FS_DELETE = 1 << 51  # remove files/directories
+    PRIM_DB_CONNECT = 1 << 52  # open a database/cache connection or pool
+    PRIM_DB_READ = 1 << 53  # query/read stored data
+    PRIM_DB_WRITE = 1 << 54  # insert/update/delete/commit
+    PRIM_PROC_SPAWN = 1 << 55  # start a process/worker
+    PRIM_PROC_SIGNAL = 1 << 56  # signal/kill a process
+    PRIM_TIME_CLOCK = 1 << 57  # read a clock
+    PRIM_TIME_WAIT = 1 << 58  # sleep, timer, scheduled callback
+    PRIM_RAND_PRNG = 1 << 59  # pseudo-random generator
+    PRIM_RAND_CSPRNG = 1 << 60  # cryptographic randomness / random UUIDs
+
 
 #: Axis membership tables - which `FeatureBit` members belong to each of
 #: the four axes, derived from `FeatureBit` itself (not hand-duplicated)
@@ -96,7 +121,12 @@ ROLE_BITS = frozenset(b for b in FeatureBit if b.name and b.name.startswith("ROL
 #: definitive answer to "is bit N reserved" without re-deriving it.
 #: Modifier bits: flags about a symbol that belong to no axis.
 MODIFIER_BITS = frozenset({FeatureBit.HAS_REFLECTION})
-ALL_KNOWN_BITS = SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS | MODIFIER_BITS
+#: Atomic primitive bits (Phase 2) - capability-profile bits, no axis.
+PRIMITIVE_BITS = frozenset(b for b in FeatureBit if b.name and b.name.startswith("PRIM_"))
+ALL_KNOWN_BITS = SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS | MODIFIER_BITS | PRIMITIVE_BITS
+#: Bits a context pack can "cover" (four axes only) - packing and coverage
+#: reports never count modifier or primitive bits as features.
+AXIS_BITS = SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS
 
 
 def compose_mask(*axis_values: "FeatureBit | int") -> int:

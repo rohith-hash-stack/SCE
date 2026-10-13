@@ -47,9 +47,8 @@ from prism.packer.submodular_knapsack import (
 )
 from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.semantics.bitmask import (
-    ALL_KNOWN_BITS,
+    AXIS_BITS,
     FORM_BITS,
-    MODIFIER_BITS,
     OUTPUT_BITS,
     ROLE_BITS,
     SUBSTANCE_BITS,
@@ -224,8 +223,8 @@ def _derive_contract(node_qname: str, builder: ConcreteGraphBuilder, packed_ids:
     return None
 
 
-#: Features a pack can cover: every axis bit, not modifier flags.
-_COVERAGE_BITS = ALL_KNOWN_BITS - MODIFIER_BITS
+#: Features a pack can cover: every axis bit, not modifier/primitive bits.
+_COVERAGE_BITS = AXIS_BITS
 
 
 def _coverage_summary(feature_masks: dict[str, int], reachable_ids: set[str], packed_ids: set[str]) -> CoverageSummary:

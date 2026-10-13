@@ -19,6 +19,7 @@ from prism.semantics.bitmask import (
     FORM_BITS,
     MODIFIER_BITS,
     OUTPUT_BITS,
+    PRIMITIVE_BITS,
     ROLE_BITS,
     SUBSTANCE_BITS,
     compose_mask,
@@ -41,8 +42,9 @@ def test_the_four_axes_are_pairwise_disjoint():
 
 
 def test_the_four_axes_union_to_exactly_all_known_bits():
-    # Plus the modifier flags (HAS_REFLECTION), which belong to no axis.
-    assert SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS | MODIFIER_BITS == ALL_KNOWN_BITS
+    # Plus the modifier flags (HAS_REFLECTION) and the Phase 2 primitives,
+    # which belong to no axis.
+    assert SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS | MODIFIER_BITS | PRIMITIVE_BITS == ALL_KNOWN_BITS
 
 
 @given(st.sets(st.sampled_from(_ALL_BITS_LIST)))

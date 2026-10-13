@@ -1,0 +1,534 @@
+"""Layer 2: runtime/stdlib primitives Prism ships (Phase 2, Operation
+Groundwire).
+
+The deterministic, finite standard-library and runtime wrappers around the
+OS kernel floor (Layer 1) - `socket`, `open`, `subprocess`, Node `fs`/`net`/
+`child_process`/timers, Go `net/http`/`os`/`database/sql`. Every entry keeps
+the Substance category it had in the retired 639-entry catalog; its atomic
+primitive bits are derived by `prism.semantics.primitives`.
+
+Split mechanically from that catalog: an entry is Layer 2 when its root is
+the language's own standard library or runtime (Python
+`sys.stdlib_module_names`, Node core modules and runtime globals, a Go
+import path without a domain)."""
+from __future__ import annotations
+
+L2_PRIMITIVE_ENTRIES: dict[str, dict[str, set[str]]] = {
+    "network_io": {
+        "python": {
+            # ftplib
+            "ftplib.FTP",
+            "ftplib.FTP.connect",
+            "ftplib.FTP.login",
+            "ftplib.FTP.retrbinary",
+            "ftplib.FTP.retrlines",
+            "ftplib.FTP.storbinary",
+            "ftplib.FTP.storlines",
+            # http
+            "http.client.HTTPConnection",
+            "http.client.HTTPConnection.request",
+            "http.client.HTTPConnection.send",
+            "http.client.HTTPSConnection",
+            "http.client.HTTPSConnection.request",
+            # imaplib
+            "imaplib.IMAP4",
+            "imaplib.IMAP4.fetch",
+            "imaplib.IMAP4.login",
+            "imaplib.IMAP4.search",
+            "imaplib.IMAP4.select",
+            "imaplib.IMAP4_SSL",
+            # poplib
+            "poplib.POP3",
+            "poplib.POP3.pass_",
+            "poplib.POP3.user",
+            "poplib.POP3_SSL",
+            # smtplib
+            "smtplib.SMTP",
+            "smtplib.SMTP.connect",
+            "smtplib.SMTP.send_message",
+            "smtplib.SMTP.sendmail",
+            "smtplib.SMTP_SSL",
+            # socket
+            "socket.create_connection",
+            "socket.create_server",
+            "socket.socket",
+            "socket.socket.accept",
+            "socket.socket.connect",
+            "socket.socket.connect_ex",
+            "socket.socket.recv",
+            "socket.socket.recvfrom",
+            "socket.socket.send",
+            "socket.socket.sendall",
+            # ssl
+            "ssl.SSLContext.wrap_bio",
+            "ssl.SSLContext.wrap_socket",
+            "ssl.wrap_socket",
+            # urllib
+            "urllib.request.Request",
+            "urllib.request.urlopen",
+        },
+        "javascript": {
+            # WebSocket
+            "WebSocket",
+            # dgram
+            "dgram.createSocket",
+            # dns
+            "dns.lookup",
+            "dns.resolve",
+            "dns.resolve4",
+            "dns.resolve6",
+            "dns.resolveMx",
+            "dns.resolveSrv",
+            "dns.resolveTxt",
+            # fetch
+            "fetch",
+            # globalThis
+            "globalThis.fetch",
+            # http
+            "http.get",
+            "http.request",
+            # https
+            "https.get",
+            "https.request",
+            # net
+            "net.connect",
+            "net.createConnection",
+            "net.createServer",
+            # tls
+            "tls.connect",
+            "tls.createServer",
+            # window
+            "window.fetch",
+        },
+        "go": {
+            # crypto
+            "crypto/tls.Dial",
+            "crypto/tls.DialWithDialer",
+            "crypto/tls.Listen",
+            "crypto/tls.Server",
+            # net
+            "net.Dial",
+            "net.DialTCP",
+            "net.DialTimeout",
+            "net.DialUDP",
+            "net.Listen",
+            "net.ListenPacket",
+            "net.ListenTCP",
+            "net.ListenUDP",
+            "net.ResolveIPAddr",
+            "net.ResolveTCPAddr",
+            "net.ResolveUDPAddr",
+            "net/http.Client.Do",
+            "net/http.Client.Get",
+            "net/http.Client.Head",
+            "net/http.Client.Post",
+            "net/http.Client.PostForm",
+            "net/http.Get",
+            "net/http.Head",
+            "net/http.NewRequest",
+            "net/http.NewRequestWithContext",
+            "net/http.Post",
+            "net/http.PostForm",
+            "net/http.Transport.RoundTrip",
+        },
+    },
+    "database_io": {
+        "python": {
+            # sqlite3
+            "sqlite3.Connection.commit",
+            "sqlite3.Connection.execute",
+            "sqlite3.Connection.executemany",
+            "sqlite3.Connection.executescript",
+            "sqlite3.Connection.rollback",
+            "sqlite3.Cursor.execute",
+            "sqlite3.Cursor.executemany",
+            "sqlite3.Cursor.executescript",
+            "sqlite3.connect",
+        },
+        "go": {
+            # database
+            "database/sql.DB.Begin",
+            "database/sql.DB.BeginTx",
+            "database/sql.DB.Exec",
+            "database/sql.DB.ExecContext",
+            "database/sql.DB.Ping",
+            "database/sql.DB.PingContext",
+            "database/sql.DB.Prepare",
+            "database/sql.DB.PrepareContext",
+            "database/sql.DB.Query",
+            "database/sql.DB.QueryContext",
+            "database/sql.DB.QueryRow",
+            "database/sql.DB.QueryRowContext",
+            "database/sql.Open",
+            "database/sql.OpenDB",
+            "database/sql.Tx.Commit",
+            "database/sql.Tx.Exec",
+            "database/sql.Tx.ExecContext",
+            "database/sql.Tx.Query",
+            "database/sql.Tx.QueryContext",
+            "database/sql.Tx.QueryRow",
+            "database/sql.Tx.QueryRowContext",
+            "database/sql.Tx.Rollback",
+        },
+    },
+    "filesystem_io": {
+        "python": {
+            # builtins
+            "builtins.open",
+            # mmap
+            "mmap.mmap",
+            # open
+            "open",
+            # os
+            "os.chmod",
+            "os.chown",
+            "os.close",
+            "os.link",
+            "os.listdir",
+            "os.lstat",
+            "os.makedirs",
+            "os.mkdir",
+            "os.open",
+            "os.pread",
+            "os.pwrite",
+            "os.read",
+            "os.readv",
+            "os.remove",
+            "os.rename",
+            "os.replace",
+            "os.rmdir",
+            "os.scandir",
+            "os.stat",
+            "os.symlink",
+            "os.truncate",
+            "os.unlink",
+            "os.write",
+            "os.writev",
+            # pathlib
+            "pathlib.Path.chmod",
+            "pathlib.Path.hardlink_to",
+            "pathlib.Path.mkdir",
+            "pathlib.Path.open",
+            "pathlib.Path.read_bytes",
+            "pathlib.Path.read_text",
+            "pathlib.Path.rename",
+            "pathlib.Path.replace",
+            "pathlib.Path.rmdir",
+            "pathlib.Path.symlink_to",
+            "pathlib.Path.touch",
+            "pathlib.Path.unlink",
+            "pathlib.Path.write_bytes",
+            "pathlib.Path.write_text",
+            # shutil
+            "shutil.copy",
+            "shutil.copy2",
+            "shutil.copyfile",
+            "shutil.copytree",
+            "shutil.move",
+            "shutil.rmtree",
+            # tarfile
+            "tarfile.TarFile.add",
+            "tarfile.TarFile.extract",
+            "tarfile.TarFile.extractall",
+            "tarfile.open",
+            # tempfile
+            "tempfile.NamedTemporaryFile",
+            "tempfile.SpooledTemporaryFile",
+            "tempfile.TemporaryDirectory",
+            "tempfile.TemporaryFile",
+            "tempfile.mkdtemp",
+            "tempfile.mkstemp",
+            # zipfile
+            "zipfile.ZipFile",
+            "zipfile.ZipFile.write",
+            "zipfile.ZipFile.writestr",
+        },
+        "javascript": {
+            # fs
+            "fs.appendFile",
+            "fs.appendFileSync",
+            "fs.close",
+            "fs.closeSync",
+            "fs.copyFile",
+            "fs.copyFileSync",
+            "fs.cp",
+            "fs.cpSync",
+            "fs.lstat",
+            "fs.lstatSync",
+            "fs.mkdir",
+            "fs.mkdirSync",
+            "fs.open",
+            "fs.openSync",
+            "fs.promises.appendFile",
+            "fs.promises.copyFile",
+            "fs.promises.cp",
+            "fs.promises.lstat",
+            "fs.promises.mkdir",
+            "fs.promises.open",
+            "fs.promises.readFile",
+            "fs.promises.readdir",
+            "fs.promises.rename",
+            "fs.promises.rm",
+            "fs.promises.stat",
+            "fs.promises.truncate",
+            "fs.promises.unlink",
+            "fs.promises.writeFile",
+            "fs.read",
+            "fs.readFile",
+            "fs.readFileSync",
+            "fs.readSync",
+            "fs.readdir",
+            "fs.readdirSync",
+            "fs.rename",
+            "fs.renameSync",
+            "fs.rm",
+            "fs.rmSync",
+            "fs.rmdir",
+            "fs.rmdirSync",
+            "fs.stat",
+            "fs.statSync",
+            "fs.truncate",
+            "fs.truncateSync",
+            "fs.unlink",
+            "fs.unlinkSync",
+            "fs.watch",
+            "fs.write",
+            "fs.writeFile",
+            "fs.writeFileSync",
+            "fs.writeSync",
+        },
+        "go": {
+            # archive
+            "archive/tar.Writer.Write",
+            "archive/tar.Writer.WriteHeader",
+            "archive/zip.Writer.Create",
+            "archive/zip.Writer.CreateHeader",
+            # io
+            "io.Copy",
+            "io.CopyBuffer",
+            "io.CopyN",
+            "io.ReadAll",
+            "io.WriteString",
+            "io/ioutil.ReadFile",
+            "io/ioutil.TempDir",
+            "io/ioutil.TempFile",
+            "io/ioutil.WriteFile",
+            # os
+            "os.Chmod",
+            "os.Chown",
+            "os.Create",
+            "os.File.Close",
+            "os.File.Read",
+            "os.File.ReadAt",
+            "os.File.ReadFrom",
+            "os.File.Seek",
+            "os.File.Sync",
+            "os.File.Truncate",
+            "os.File.Write",
+            "os.File.WriteAt",
+            "os.File.WriteString",
+            "os.Link",
+            "os.Lstat",
+            "os.Mkdir",
+            "os.MkdirAll",
+            "os.Open",
+            "os.OpenFile",
+            "os.ReadDir",
+            "os.ReadFile",
+            "os.Remove",
+            "os.RemoveAll",
+            "os.Rename",
+            "os.Stat",
+            "os.Symlink",
+            "os.Truncate",
+            "os.WriteFile",
+            # path
+            "path/filepath.Walk",
+            "path/filepath.WalkDir",
+        },
+    },
+    "process_io": {
+        "python": {
+            # concurrent
+            "concurrent.futures.ProcessPoolExecutor",
+            # multiprocessing
+            "multiprocessing.Pool",
+            "multiprocessing.Process",
+            # os
+            "os.execl",
+            "os.execle",
+            "os.execlp",
+            "os.execlpe",
+            "os.execv",
+            "os.execve",
+            "os.popen",
+            "os.spawnl",
+            "os.spawnle",
+            "os.spawnlp",
+            "os.spawnlpe",
+            "os.spawnv",
+            "os.spawnve",
+            "os.spawnvp",
+            "os.spawnvpe",
+            "os.startfile",
+            "os.system",
+            # pty
+            "pty.fork",
+            "pty.spawn",
+            # subprocess
+            "subprocess.Popen",
+            "subprocess.call",
+            "subprocess.check_call",
+            "subprocess.check_output",
+            "subprocess.run",
+        },
+        "javascript": {
+            # child_process
+            "child_process.exec",
+            "child_process.execFile",
+            "child_process.execFileSync",
+            "child_process.execSync",
+            "child_process.fork",
+            "child_process.spawn",
+            "child_process.spawnSync",
+            # cluster
+            "cluster.fork",
+            # node:child_process
+            "node:child_process.exec",
+            "node:child_process.execFile",
+            "node:child_process.execFileSync",
+            "node:child_process.execSync",
+            "node:child_process.fork",
+            "node:child_process.spawn",
+            "node:child_process.spawnSync",
+            # worker_threads
+            "worker_threads.Worker",
+        },
+        "go": {
+            # os
+            "os.FindProcess",
+            "os.Process.Kill",
+            "os.Process.Signal",
+            "os.StartProcess",
+            "os/exec.Cmd.CombinedOutput",
+            "os/exec.Cmd.Output",
+            "os/exec.Cmd.Run",
+            "os/exec.Cmd.Start",
+            "os/exec.Command",
+            "os/exec.CommandContext",
+            # syscall
+            "syscall.Exec",
+            "syscall.ForkExec",
+            "syscall.StartProcess",
+        },
+    },
+    "time_io": {
+        "python": {
+            # asyncio
+            "asyncio.sleep",
+            # signal
+            "signal.alarm",
+            "signal.setitimer",
+            # threading
+            "threading.Timer",
+            # time
+            "time.monotonic",
+            "time.perf_counter",
+            "time.sleep",
+        },
+        "javascript": {
+            # scheduler
+            "scheduler.wait",
+            # setImmediate
+            "setImmediate",
+            # setInterval
+            "setInterval",
+            # setTimeout
+            "setTimeout",
+            # timers
+            "timers.setImmediate",
+            "timers.setInterval",
+            "timers.setTimeout",
+            "timers/promises.setImmediate",
+            "timers/promises.setTimeout",
+        },
+        "go": {
+            # time
+            "time.After",
+            "time.AfterFunc",
+            "time.NewTicker",
+            "time.NewTimer",
+            "time.Sleep",
+            "time.Tick",
+        },
+    },
+    "randomness": {
+        "python": {
+            # os
+            "os.urandom",
+            # random
+            "random.SystemRandom",
+            "random.choice",
+            "random.choices",
+            "random.gauss",
+            "random.getrandbits",
+            "random.randint",
+            "random.random",
+            "random.randrange",
+            "random.sample",
+            "random.shuffle",
+            "random.uniform",
+            # secrets
+            "secrets.choice",
+            "secrets.randbelow",
+            "secrets.randbits",
+            "secrets.token_bytes",
+            "secrets.token_hex",
+            "secrets.token_urlsafe",
+            # uuid
+            "uuid.uuid1",
+            "uuid.uuid3",
+            "uuid.uuid4",
+            "uuid.uuid5",
+            "uuid.uuid6",
+            "uuid.uuid7",
+            "uuid.uuid8",
+        },
+        "javascript": {
+            # Math
+            "Math.random",
+            # crypto
+            "crypto.randomBytes",
+            "crypto.randomFill",
+            "crypto.randomFillSync",
+            "crypto.randomInt",
+            "crypto.randomUUID",
+            "crypto.webcrypto.getRandomValues",
+            "crypto.webcrypto.randomUUID",
+            # globalThis
+            "globalThis.crypto.getRandomValues",
+            "globalThis.crypto.randomUUID",
+        },
+        "go": {
+            # crypto
+            "crypto/rand.Read",
+            "crypto/rand.Reader",
+            # math
+            "math/rand.Float32",
+            "math/rand.Float64",
+            "math/rand.Int",
+            "math/rand.Int31",
+            "math/rand.Int31n",
+            "math/rand.Int63",
+            "math/rand.Int63n",
+            "math/rand.Intn",
+            "math/rand.Read",
+            "math/rand/v2.Float32",
+            "math/rand/v2.Float64",
+            "math/rand/v2.Int",
+            "math/rand/v2.Int64",
+            "math/rand/v2.Uint",
+            "math/rand/v2.Uint64",
+        },
+    },
+}

@@ -100,7 +100,7 @@ from prism.graph.contracts import BehavioralContract
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolRole
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
 from prism.parser.tree_sitter_loader import LanguageID, node_text
-from prism.semantics.bitmask import MODIFIER_BITS, FeatureBit
+from prism.semantics.bitmask import AXIS_BITS, FeatureBit
 from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import count_tokens
 from prism.traversal._cache_keys import snapshot_file_hash_set
@@ -441,13 +441,14 @@ def compute_candidate_value(
     return decay * (1.0 + beta * delta_feat)
 
 
-_MODIFIER_MASK = 0
-for _bit in MODIFIER_BITS:
-    _MODIFIER_MASK |= int(_bit)
+_AXIS_MASK = 0
+for _bit in AXIS_BITS:
+    _AXIS_MASK |= int(_bit)
 
 
 class _AxisMasks:
-    """Read-only view of `{qname: mask}` with `MODIFIER_BITS` cleared."""
+    """Read-only view of `{qname: mask}` keeping only the four-axis bits
+    (no modifier or primitive bits)."""
 
     __slots__ = ("_masks",)
 
@@ -455,7 +456,7 @@ class _AxisMasks:
         self._masks = masks
 
     def get(self, key: str, default: int = 0) -> int:
-        return self._masks.get(key, default) & ~_MODIFIER_MASK
+        return self._masks.get(key, default) & _AXIS_MASK
 
 
 def select_submodular_context(
@@ -630,7 +631,7 @@ def select_submodular_context(
         )
 
     # Coverage is over axis features only: a modifier flag (HAS_REFLECTION)
-    # describes a symbol, it is not a feature for the pack to cover.
+    # or primitive bit describes a symbol, it is not a feature to cover.
     feature_masks = _AxisMasks(feature_masks)
     s_pack = [seed_id]
     current_cost = costs.get(seed_id, 0)
