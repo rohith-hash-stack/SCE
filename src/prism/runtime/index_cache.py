@@ -97,7 +97,10 @@ except ImportError:  # pragma: no cover - networkx is a hard dependency elsewher
 #: ...)` fallback on the read side alone would have silently kept
 #: masking the same bug for any repo whose cache was written before
 #: this fix landed.
-_SCHEMA_VERSION = 4
+#: Bumped 4 -> 5 for `SymbolInfo.nested_in_function`, for the same
+#: hand-listed-fields reason: it decides whether a symbol enters Rule D's
+#: bare-name index, so a cached build must restore it exactly.
+_SCHEMA_VERSION = 5
 
 
 def index_cache_path(repo_root: str) -> Path:
@@ -264,6 +267,7 @@ def save_pipeline_to_cache(
                 "module": s.module,
                 "enclosing_class": s.enclosing_class,
                 "role": s.role.value,
+                "nested_in_function": s.nested_in_function,
             }
             for s in builder.symbol_table
         ]
@@ -567,6 +571,7 @@ def load_pipeline_from_cache(
                     module=entry["module"],
                     enclosing_class=entry["enclosing_class"],
                     role=SymbolRole(entry["role"]),
+                    nested_in_function=entry["nested_in_function"],
                 ),
                 index_by_name=not js_test_block,
             )

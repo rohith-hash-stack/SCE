@@ -97,10 +97,12 @@ FASTAPI = "/home/user/SCE/.benchmarks/corpora/fastapi"
 
 @pytest.mark.skipif(not os.path.isdir(FASTAPI), reason="FastAPI checkout missing")
 def test_real_prism_manifest_t02_002():
-    """On the real graph: 52 candidates -> 28 kept within distance 2 (plus the upstream callers); every gold
+    """On the real graph: 53 candidates -> 28 kept within distance 2 (plus the upstream callers); every gold
     symbol of t02_002 survives (gold read here, in the test, only). `UploadFile.read` is admitted by hop count
     (two structural hops; its weighted distance is beyond the manifest horizon), so it has no distance and
-    `strict_manifest` keeps it, as it keeps every row without one."""
+    `strict_manifest` keeps it, as it keeps every row without one. (52 -> 53 when annotated Python parameters
+    started binding: `_validate_value_with_model_field(*, field: ModelField, ...)` now links `field.validate()`
+    to `ModelField.validate`.)"""
     from harness.tasks.loaders import load_tasks
     task = [t for t in load_tasks("fastapi", repo_root=FASTAPI, limit=5) if "t02_002" in t.task_id][0]
     arm = Arm5Prism(tokenizer=Words())
@@ -108,7 +110,7 @@ def test_real_prism_manifest_t02_002():
     manifest, universe = arm.engine.build_candidate_manifest(task.seed_symbol)
     _text, keep = strict_manifest(manifest, universe, task.seed_symbol,
                                   arm5_prism._downstream_distances(arm.engine, task.seed_symbol), 2.0)
-    assert (len(universe), len(keep)) == (52, 28)
+    assert (len(universe), len(keep)) == (53, 28)
     assert set(task.ground_truth.pipeline_symbols) <= keep
 
 

@@ -16,6 +16,12 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 
+#: Languages where a class member is never reachable by its bare name at
+#: module scope, so `SymbolTable.add` keeps members out of Rule D's
+#: bare-name index (`LanguageID` values, spelled out to avoid importing
+#: the parser layer here).
+_MODULE_SCOPED_MEMBER_LANGUAGES = frozenset({"python", "javascript", "typescript", "tsx"})
+
 
 class SymbolRole(str, Enum):
     """A symbol's behavioral role, orthogonal to `SymbolInfo.kind`
@@ -101,6 +107,11 @@ class SymbolInfo:
     module: str
     enclosing_class: str | None = None
     role: SymbolRole = SymbolRole.IMPLEMENTATION
+    #: Defined inside a function body (a closure), even when the ancestor
+    #: walk still names an `enclosing_class` (a `def` nested in a method is
+    #: registered as `Class.inner`). Such a definition is not a class
+    #: member, so it stays visible to Rule D's bare-name lookup.
+    nested_in_function: bool = False
 
 
 class GlobalSymbolTable:
@@ -194,7 +205,18 @@ class GlobalSymbolTable:
             # this change and still does.
             key = base_key
             self._symbols[key] = symbol
-            self._module_index.setdefault(symbol.module, {})[simple_name] = key
+            # A class member is never visible as a bare name at module
+            # scope in Python or JS/TS - indexing it there let a method or
+            # `self.<attr>` symbol shadow a same-named module function, or
+            # capture an unrelated local (`client.post()` resolving to
+            # `<Class>.client.post`). Java/C#/Go keep it: a bare `helper()`
+            # inside a class body is a same-class call there.
+            if (
+                symbol.enclosing_class is None
+                or symbol.nested_in_function
+                or symbol.language_id not in _MODULE_SCOPED_MEMBER_LANGUAGES
+            ):
+                self._module_index.setdefault(symbol.module, {})[simple_name] = key
             # Also index by the class-qualified name (Class.method) so `self.method()`
             # resolution can look up `EnclosingClass.method` without the module prefix.
             if symbol.enclosing_class is not None:
@@ -519,6 +541,15 @@ class InstanceTypeMap:
     #: class) rather than read off a constructor call or an annotation -
     #: calls through them link as best-effort (`TENTATIVE_CALL`) edges.
     inferred: set[str] = field(default_factory=set)
+    #: Every name bound in the function's own scope (parameters,
+    #: assignment/loop/`with`/`except`/comprehension/walrus targets, minus
+    #: `global`/`nonlocal` declarations). A local shadows any same-named
+    #: module-level symbol, so call resolution never looks one up through
+    #: Rule D (Python only; empty for other languages).
+    local_names: set[str] = field(default_factory=set)
+
+    def is_local(self, var_name: str) -> bool:
+        return var_name in self.local_names
 
 
 # --------------------------------------------------------------------- #

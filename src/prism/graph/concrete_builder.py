@@ -40,6 +40,7 @@ from prism.parser.lang_config import (
     CLASS_NODE_TYPES,
     DECORATED_WRAPPER_TYPES,
     ENCLOSING_FUNCTION_EXPRESSION_TYPES,
+    FUNCTION_NODE_TYPES,
     OBJECT_LITERAL_NODE_TYPES,
     RETURN_STATEMENT_NODE_TYPE,
     SELF_TOKEN_TEXT,
@@ -272,6 +273,7 @@ class ConcreteGraphBuilder:
         #: None but flag why" convention `_last_resolution_was_tentative`/
         #: `_last_resolution_was_ambiguous` above already establish.
         self._last_resolution_was_builtin_receiver = False
+        self._last_resolution_was_unbound_local = False
         #: Virtual-dispatch expansion: set by `_resolve_segments` when the
         #: target it returns was reached through a receiver that can hold
         #: a subclass at run time (`self.<method>`, or an instance-typed
@@ -613,6 +615,7 @@ class ConcreteGraphBuilder:
         class_types = CLASS_NODE_TYPES[lang]
 
         enclosing_class: str | None = None
+        nested_in_function = False
         if lang == LanguageID.GO and node.type == "method_declaration":
             # Issue B1: a Go method has no enclosing class *node* to walk
             # up to at all - `func (c *Context) JSON(...)` is a top-level
@@ -628,9 +631,12 @@ class ConcreteGraphBuilder:
         else:
             object_literal_types = OBJECT_LITERAL_NODE_TYPES.get(lang, set())
             enclosing_function_types = ENCLOSING_FUNCTION_EXPRESSION_TYPES.get(lang, set())
+            function_types = FUNCTION_NODE_TYPES.get(lang, set())
             cursor = node.parent
             passed_object_literal = False
             while cursor is not None:
+                if cursor.type in function_types:
+                    nested_in_function = True
                 if cursor.type in class_types:
                     cls_name_node = cursor.child_by_field_name("name")
                     if cls_name_node is not None:
@@ -679,6 +685,7 @@ class ConcreteGraphBuilder:
             module=module,
             enclosing_class=enclosing_class,
             role=role,
+            nested_in_function=nested_in_function,
         )
         # `key` is `qualified_name` unchanged unless `add()` just detected
         # a genuine in-module collision (Option C, `reports/symbol_table_
@@ -2140,6 +2147,16 @@ class ConcreteGraphBuilder:
             for param in params.named_children if params is not None else ():
                 if param.type in ("list_splat_pattern", "dictionary_splat_pattern") and param.named_children:
                     instance_map.bind_builtin(node_text(param.named_children[0], parsed.source))
+                elif param.type in ("typed_parameter", "typed_default_parameter"):
+                    # `def f(client: HttpClient)`: an annotation naming an
+                    # indexed class types the parameter.
+                    name_node = param.child_by_field_name("name") or next(
+                        (c for c in param.named_children if c.type == "identifier"), None
+                    )
+                    resolved = self._python_annotation_class(param.child_by_field_name("type"), module, import_map, parsed.source)
+                    if name_node is not None and name_node.type == "identifier" and resolved is not None:
+                        instance_map.bind(node_text(name_node, parsed.source), resolved)
+            instance_map.local_names = _python_local_names(def_node, parsed.source)
         elif lang in (LanguageID.TYPESCRIPT, LanguageID.TSX):
             # `async function f(lp: LoginPage)`: a parameter annotated with
             # an indexed class is an instance of it.
@@ -2373,7 +2390,10 @@ class ConcreteGraphBuilder:
                 # named method elsewhere in the repo). Suppressed the
                 # same way the `super()` call-site is suppressed just
                 # above, for the same "never let this reach G44" reason.
-                if not self._last_resolution_was_builtin_receiver:
+                # Same for a bare call on an unbound local (`callback()` on a
+                # parameter): the name says nothing about which repo
+                # function, if any, the value is.
+                if not (self._last_resolution_was_builtin_receiver or self._last_resolution_was_unbound_local):
                     self._resolve_ambiguous_call(caller_qname, call_node, parsed, module, import_map, segments)
                 continue
             if lang == LanguageID.GO and len(segments) >= 2 and import_map.resolve(segments[0]) is None:
@@ -2498,6 +2518,7 @@ class ConcreteGraphBuilder:
     _RESOLUTION_FLAGS = (
         "_last_resolution_was_tentative", "_last_resolution_was_ambiguous",
         "_last_resolution_was_builtin_receiver", "_last_resolution_was_dispatch",
+        "_last_resolution_was_unbound_local",
     )
     _NULL_LITERAL_TYPES = frozenset({"none", "null", "undefined", "nil", "null_literal"})
 
@@ -2546,6 +2567,21 @@ class ConcreteGraphBuilder:
                 setattr(self, f, v)
         self._return_class_cache[qname] = result
         return result
+
+    def _python_annotation_class(
+        self, type_node: Node | None, module: str, import_map: LocalImportMap, source: bytes
+    ) -> str | None:
+        """The indexed class a Python annotation names: a bare (`T`) or
+        dotted (`mod.T`) reference only. Wrapped/subscripted forms
+        (`Optional[T]`, `list[T]`) and string forward references are not
+        unwrapped yet, and an unindexed external class yields `None`."""
+        if type_node is not None and type_node.type == "type" and len(type_node.named_children) == 1:
+            type_node = type_node.named_children[0]
+        if type_node is None or type_node.type not in ("identifier", "attribute"):
+            return None
+        segments = flatten_reference_chain(type_node, source, LanguageID.PYTHON)
+        resolved = self._resolve_reference_chain(segments, module, import_map) if segments else None
+        return resolved if self._is_known_class(resolved) else None
 
     def _annotation_class(self, type_node: Node | None, ctx: "_ExprContext") -> str | None:
         """A return/variable annotation naming exactly one known class
@@ -2994,7 +3030,19 @@ class ConcreteGraphBuilder:
         self._last_resolution_was_ambiguous = False
         self._last_resolution_was_builtin_receiver = False
         self._last_resolution_was_dispatch = False
+        self._last_resolution_was_unbound_local = False
+        # A function-local name (parameter, assignment/loop/`with` target)
+        # shadows every same-named module-level symbol and import, so with
+        # no type binding of its own it must never be looked up through
+        # Rule D - that is how `client.post()` used to land on an unrelated
+        # `<Class>.client.post`.
+        local_root = func_instance_map.is_local(segments[0])
         if len(segments) == 1:
+            if local_root:
+                # `callback()` on a parameter/local: the callee is whatever
+                # value the name holds, not the module function of that name.
+                self._last_resolution_was_unbound_local = True
+                return None
             return self._resolve_reference_chain(segments, module, import_map)
 
         method = segments[-1]
@@ -3125,7 +3173,7 @@ class ConcreteGraphBuilder:
                         return inherited
             return direct_candidate
 
-        resolved_receiver = self._resolve_reference_chain(receiver_segments, module, import_map)
+        resolved_receiver = None if local_root else self._resolve_reference_chain(receiver_segments, module, import_map)
         if resolved_receiver:
             return f"{resolved_receiver}.{method}"
         if len(receiver_segments) >= 2:
@@ -3888,6 +3936,91 @@ def _classify_symbol_role(
         return SymbolRole.INTERFACE
 
     return SymbolRole.IMPLEMENTATION
+
+
+_PY_BINDING_PATTERN_TYPES = frozenset({
+    "pattern_list", "tuple_pattern", "list_pattern", "list_splat_pattern", "dictionary_splat_pattern",
+    "as_pattern_target", "parenthesized_expression", "expression_list", "tuple", "list",
+})
+_PY_PARAMETER_TYPES = frozenset({"typed_parameter", "default_parameter", "typed_default_parameter"})
+
+
+def _python_bound_identifiers(node: Node | None, source: bytes) -> set[str]:
+    """Identifiers a Python binding target introduces (`x`, `a, (b, c)`,
+    `*rest`); attribute and subscript targets bind nothing local."""
+    if node is None:
+        return set()
+    if node.type == "identifier":
+        return {node_text(node, source)}
+    if node.type in _PY_BINDING_PATTERN_TYPES:
+        names: set[str] = set()
+        for child in node.named_children:
+            names |= _python_bound_identifiers(child, source)
+        return names
+    return set()
+
+
+def _python_parameter_names(params: Node | None, source: bytes) -> set[str]:
+    names: set[str] = set()
+    for param in params.named_children if params is not None else ():
+        if param.type in _PY_PARAMETER_TYPES:
+            name = param.child_by_field_name("name")
+            if name is None:
+                name = next((c for c in param.named_children if c.type in ("identifier", "list_splat_pattern", "dictionary_splat_pattern")), None)
+            names |= _python_bound_identifiers(name, source)
+        else:
+            names |= _python_bound_identifiers(param, source)
+    return names
+
+
+def _python_local_names(def_node: Node, source: bytes) -> set[str]:
+    """Every name a Python function binds in its own scope - parameters,
+    assignment/augmented-assignment, `for`/comprehension, `with`/`except
+    ... as`, walrus and lambda-parameter targets - minus names declared
+    `global`/`nonlocal`. Nested function/class bodies are their own scopes
+    and are not entered."""
+    names = _python_parameter_names(def_node.child_by_field_name("parameters"), source)
+    declared_outer = _python_nested_definition_names(def_node, source)
+    scoped_types = {
+        "assignment", "augmented_assignment", "for_statement", "for_in_clause", "as_pattern",
+        "named_expression", "lambda", "global_statement", "nonlocal_statement",
+    }
+    for node in iter_scoped_nodes(def_node, scoped_types, LanguageID.PYTHON):
+        if node.type in ("assignment", "augmented_assignment", "for_statement", "for_in_clause"):
+            names |= _python_bound_identifiers(node.child_by_field_name("left"), source)
+        elif node.type == "as_pattern":
+            names |= _python_bound_identifiers(node.child_by_field_name("alias"), source)
+        elif node.type == "named_expression":
+            names |= _python_bound_identifiers(node.child_by_field_name("name"), source)
+        elif node.type == "lambda":
+            names |= _python_parameter_names(node.child_by_field_name("parameters"), source)
+        else:
+            declared_outer |= {node_text(c, source) for c in node.named_children if c.type == "identifier"}
+    return names - declared_outer
+
+
+def _python_nested_definition_names(def_node: Node, source: bytes) -> set[str]:
+    """Names of the functions/classes a Python function defines directly
+    in its own body. They are real symbols (Rule D resolves them), so they
+    are never treated as unbound locals - even when the same name is also
+    assigned (`match = parse(...)` on one branch, `def match(_)` on the
+    other)."""
+    names: set[str] = set()
+    body = def_node.child_by_field_name("body")
+    stack = list(body.children) if body is not None else []
+    while stack:
+        node = stack.pop()
+        if node.type == "decorated_definition":
+            node = node.child_by_field_name("definition") or node
+        if node.type in ("function_definition", "class_definition"):
+            name = node.child_by_field_name("name")
+            if name is not None:
+                names.add(node_text(name, source))
+            continue
+        if node.type == "lambda":
+            continue
+        stack.extend(node.children)
+    return names
 
 
 def _is_builtin_container_expr(value: Node, lang: str, source: bytes) -> bool:
