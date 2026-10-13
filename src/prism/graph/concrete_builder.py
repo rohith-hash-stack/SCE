@@ -3414,7 +3414,17 @@ class ConcreteGraphBuilder:
 
         resolved_receiver = None if local_root else self._resolve_reference_chain(receiver_segments, module, import_map)
         if resolved_receiver:
-            return f"{resolved_receiver}.{method}"
+            target = f"{resolved_receiver}.{method}"
+            if target not in self.symbol_table:
+                # `requests.post(...)`: the receiver is a package whose
+                # `__init__` only re-exports `post` (`from .api import
+                # post`). Follow the facade to the real definition, the
+                # same barrel lookup `_resolve_reference_chain` applies to
+                # a full dotted reference.
+                origin = resolve_export(resolved_receiver, method, self.export_registry, self.symbol_table)
+                if origin is not None:
+                    return origin
+            return target
         if len(receiver_segments) >= 2:
             by_attr = self._resolve_by_attribute(receiver_segments[-1], method)
             if by_attr is not None:
