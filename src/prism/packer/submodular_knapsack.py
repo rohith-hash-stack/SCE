@@ -100,7 +100,7 @@ from prism.graph.contracts import BehavioralContract
 from prism.graph.symbol_table import GlobalSymbolTable, SymbolRole
 from prism.packer.blast_radius import CONTRACT_PRESERVATION_MULTIPLIER, compute_upstream_callers
 from prism.parser.tree_sitter_loader import LanguageID, node_text
-from prism.semantics.bitmask import FeatureBit
+from prism.semantics.bitmask import MODIFIER_BITS, FeatureBit
 from prism.semantics.extractor import compute_feature_masks_cached
 from prism.slicer.tokenizer import count_tokens
 from prism.traversal._cache_keys import snapshot_file_hash_set
@@ -441,6 +441,23 @@ def compute_candidate_value(
     return decay * (1.0 + beta * delta_feat)
 
 
+_MODIFIER_MASK = 0
+for _bit in MODIFIER_BITS:
+    _MODIFIER_MASK |= int(_bit)
+
+
+class _AxisMasks:
+    """Read-only view of `{qname: mask}` with `MODIFIER_BITS` cleared."""
+
+    __slots__ = ("_masks",)
+
+    def __init__(self, masks: dict[str, int]) -> None:
+        self._masks = masks
+
+    def get(self, key: str, default: int = 0) -> int:
+        return self._masks.get(key, default) & ~_MODIFIER_MASK
+
+
 def select_submodular_context(
     graph: nx.DiGraph,
     seed_id: str,
@@ -612,6 +629,9 @@ def select_submodular_context(
             "distance, breaking the 1-hop-vs-2-hop dominance guarantee this packer depends on."
         )
 
+    # Coverage is over axis features only: a modifier flag (HAS_REFLECTION)
+    # describes a symbol, it is not a feature for the pack to cover.
+    feature_masks = _AxisMasks(feature_masks)
     s_pack = [seed_id]
     current_cost = costs.get(seed_id, 0)
     covered_mask = feature_masks.get(seed_id, 0)

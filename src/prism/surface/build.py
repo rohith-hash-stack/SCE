@@ -49,6 +49,7 @@ from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.semantics.bitmask import (
     ALL_KNOWN_BITS,
     FORM_BITS,
+    MODIFIER_BITS,
     OUTPUT_BITS,
     ROLE_BITS,
     SUBSTANCE_BITS,
@@ -223,6 +224,10 @@ def _derive_contract(node_qname: str, builder: ConcreteGraphBuilder, packed_ids:
     return None
 
 
+#: Features a pack can cover: every axis bit, not modifier flags.
+_COVERAGE_BITS = ALL_KNOWN_BITS - MODIFIER_BITS
+
+
 def _coverage_summary(feature_masks: dict[str, int], reachable_ids: set[str], packed_ids: set[str]) -> CoverageSummary:
     reachable_mask = 0
     for qname in reachable_ids:
@@ -232,11 +237,11 @@ def _coverage_summary(feature_masks: dict[str, int], reachable_ids: set[str], pa
     for qname in packed_ids:
         mask = feature_masks.get(qname, 0)
         covered_mask |= mask
-        for bit in ALL_KNOWN_BITS:
+        for bit in _COVERAGE_BITS:
             if mask & int(bit):
                 per_bit_count[bit] = per_bit_count.get(bit, 0) + 1
 
-    present_bits = [b for b in sorted(ALL_KNOWN_BITS, key=int) if reachable_mask & int(b)]
+    present_bits = [b for b in sorted(_COVERAGE_BITS, key=int) if reachable_mask & int(b)]
     features = [
         FeatureCoverage(id=b.name, present=bool(covered_mask & int(b)), count=per_bit_count.get(b, 0)) for b in present_bits
     ]

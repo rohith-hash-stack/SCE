@@ -288,7 +288,11 @@ class ConcreteGraphBuilder:
         self._class_name_index: dict[str, list[str]] | None = None
         #: `_resolve_by_attribute`'s lazily built {attribute name: {classes
         #: ever assigned to it anywhere in the repo}}.
-        self._attr_type_index: dict[str, set[str]] | None = None
+        self._attr_type_index: dict[str, set[tuple[str, str]]] | None = None
+        #: `(file, language)` of the function whose calls are being
+        #: resolved; `None` outside Pass 2 (no fallback filtering then).
+        self._fallback_caller: tuple[str, str] | None = None
+        self._path_partitions: dict[str, str] = {}
         #: `_infer_return_class` memo: {function qname: class qname | None}.
         self._return_class_cache: dict[str, str | None] = {}
         #: Item 3: `go_call_resolution_ratio` diagnostic numerator/
@@ -1036,6 +1040,10 @@ class ConcreteGraphBuilder:
         for qualified_name in file_symbols:
             symbol = self.symbol_table.get(qualified_name)
             def_node = self._def_nodes[qualified_name]
+            # Who is calling, for the fallback scoping guards
+            # (`_fallback_candidate_allowed`) reached from deep inside
+            # `_resolve_segments`/return-type inference.
+            self._fallback_caller = (parsed.path, parsed.language_id)
             class_instance_map = InstanceTypeMap()
             if symbol.enclosing_class and parsed.language_id in instance_binding_langs:
                 class_instance_map = self._build_class_instance_map(
@@ -2822,8 +2830,8 @@ class ConcreteGraphBuilder:
                 return f"{owner}.{method}"
         return None
 
-    def _build_attr_type_index(self) -> dict[str, set[str]]:
-        """{attribute name: classes assigned to it}, from every assignment
+    def _build_attr_type_index(self) -> dict[str, set[tuple[str, str]]]:
+        """{attribute name: (class, assigning file) pairs}, from every assignment
         in the repo whose target is an attribute (`obj.attr = Foo(...)`,
         `cls._meta = self`) or a class-body name (`attr = Foo(...)`), and
         whose value is a constructor of a known class or the enclosing
@@ -2869,7 +2877,7 @@ class ConcreteGraphBuilder:
                     resolved = self._resolve_reference_chain(ctor, module, import_map) if ctor else None
                     cls = resolved if self._is_known_class(resolved) else None
                 if cls:
-                    index.setdefault(attr, set()).add(cls)
+                    index.setdefault(attr, set()).add((cls, path))
         return index
 
     def _resolve_by_attribute(self, attr: str, method: str) -> str | None:
@@ -2881,7 +2889,12 @@ class ConcreteGraphBuilder:
         if self._attr_type_index is None:
             self._attr_type_index = self._build_attr_type_index()
         targets = set()
-        for cls in self._attr_type_index.get(attr, ()):
+        for cls, site in self._attr_type_index.get(attr, ()):
+            # Both where the attribute was assigned and where the class
+            # lives must be visible to the caller (a test-only fixture
+            # assignment never types production code).
+            if not (self._fallback_file_allowed(site) and self._fallback_symbol_allowed(cls)):
+                continue
             for owner in [cls, *self._mro_ancestors(cls)]:
                 if f"{owner}.{method}" in self.symbol_table:
                     targets.add(f"{owner}.{method}")
@@ -2911,7 +2924,7 @@ class ConcreteGraphBuilder:
                     simple = symbol.qualified_name.rsplit(".", 1)[-1]
                     index.setdefault(simple.replace("_", "").lower(), []).append(symbol.qualified_name)
             self._class_name_index = index
-        classes = self._class_name_index.get(key, [])
+        classes = [c for c in self._class_name_index.get(key, []) if self._fallback_symbol_allowed(c)]
         if len(classes) != 1:
             return None
         cls = classes[0]
@@ -2922,6 +2935,38 @@ class ConcreteGraphBuilder:
                 self._last_resolution_was_dispatch = True
                 return target
         return None
+
+    def _path_partition(self, path: str) -> str:
+        """`"vendor"`, `"test"` or `"first_party"` for a repo file, judged
+        on its repo-relative path (cached)."""
+        partition = self._path_partitions.get(path)
+        if partition is None:
+            try:
+                relative = os.path.relpath(path, self.repo_root)
+            except ValueError:
+                relative = path
+            partition = _path_partition_of(relative)
+            self._path_partitions[path] = partition
+        return partition
+
+    def _fallback_file_allowed(self, path: str) -> bool:
+        if self._fallback_caller is None:
+            return True
+        caller_file, caller_lang = self._fallback_caller
+        parsed = self._parsed_files.get(path)
+        lang = parsed.language_id if parsed is not None else caller_lang
+        return _fallback_candidate_allowed(self._path_partition(caller_file), caller_lang, self._path_partition(path), lang)
+
+    def _fallback_symbol_allowed(self, qualified_name: str) -> bool:
+        if self._fallback_caller is None:
+            return True
+        symbol = self.symbol_table.get(qualified_name)
+        if symbol is None:
+            return True
+        caller_file, caller_lang = self._fallback_caller
+        return _fallback_candidate_allowed(
+            self._path_partition(caller_file), caller_lang, self._path_partition(symbol.file), symbol.language_id
+        )
 
     def _single_family_root(self, candidates: list[SymbolInfo], simple_name: str) -> str | None:
         """The one root definition of `simple_name` when every candidate is
@@ -2978,19 +3023,26 @@ class ConcreteGraphBuilder:
         have discarded that existing, more informative sentinel).
         """
         simple_name = segments[-1]
-        candidates = self.symbol_table.candidates_for_simple_name(simple_name)
         caller_info = self.symbol_table.get(caller_qname)
         lang = getattr(parsed, "language_id", None) or (caller_info.language_id if caller_info else None)
+        # Scoping guards (Spec 3): another language, test code or vendored
+        # code is never a candidate unless the caller is in that same
+        # partition (`_fallback_candidate_allowed`).
+        candidates = [
+            c for c in self.symbol_table.candidates_for_simple_name(simple_name)
+            if _fallback_candidate_allowed(self._path_partition(parsed.path), lang, self._path_partition(c.file), c.language_id)
+        ]
         builtin_named = len(segments) >= 2 and simple_name in _BUILTIN_METHOD_NAMES.get(lang, ())
-        if builtin_named and len(candidates) >= 2:
-            # Receiver type unknown, the method name is one the language's
-            # own builtin types define (`options.get(...)`, `x.items()`)
-            # AND several repo classes define it too: the receiver could be
-            # the builtin or any of them, so no repo method is guessed (no
-            # family root, no scored edge) - only the honest
-            # UnresolvedPolymorphic sentinel below. A unique repo
-            # definition still takes the G44 tentative link, and typed
-            # receivers (builtins included) are resolved before this
+        own_receiver = len(segments) == 2 and segments[0] in SELF_TOKEN_TEXT.get(lang, ())
+        if builtin_named and (len(candidates) >= 2 or (candidates and not own_receiver)):
+            # Receiver type unknown and the method name is one the
+            # language's own builtin types define (`options.get(...)`,
+            # `w.capitalize()`): the receiver may well be the builtin, so
+            # no repo method is guessed - not even a unique one - only the
+            # honest UnresolvedPolymorphic sentinel. `this.set(...)` on an
+            # untyped prototype object is the object's own method, not a
+            # possible builtin, so a unique candidate still links there.
+            # Typed receivers (builtins included) are resolved before this
             # fallback and are unaffected.
             self._emit_polymorphic_sentinel(caller_qname, call_node, parsed, simple_name, candidates)
             return
@@ -3076,9 +3128,17 @@ class ConcreteGraphBuilder:
         # candidates canonically first makes the winner of a genuine tie
         # deterministic (the alphabetically-first qualified name),
         # without changing which candidate wins a real, non-tied score.
+        # A scored (confident) link needs the candidate in the caller's own
+        # top-level package or its module imported directly - importing a
+        # parent package (`import tornado`) no longer makes every internal
+        # module's same-named method a full-score candidate.
+        scorable = [
+            c for c in candidates
+            if caller_info is None or _shares_package_scope(caller_info.module, c.module) or _imports_module_directly(c, import_map)
+        ]
         best_candidate: SymbolInfo | None = None
         best_score = -1.0
-        for candidate in sorted(candidates, key=lambda c: c.qualified_name):
+        for candidate in sorted(scorable, key=lambda c: c.qualified_name):
             ns = namespace_match(candidate, module, import_map)
             loc = locality_distance(candidate, caller_file, module)
             param_count = self._param_count(candidate.qualified_name, candidate.language_id, candidate.kind == "method")
@@ -4368,6 +4428,58 @@ def _parse_package_or_namespace(parsed: ParsedFile) -> str | None:
                 if child.type in ("qualified_name", "identifier"):
                     return node_text(child, parsed.source)
     return None
+
+
+#: Language families a bare-name fallback may cross within (never between).
+_LANGUAGE_FAMILY = {
+    LanguageID.JAVASCRIPT: "js", LanguageID.TYPESCRIPT: "js", LanguageID.TSX: "js",
+}
+#: Directory names marking test code / vendored or bundled third-party code.
+_TEST_DIR_NAMES = frozenset({"test", "tests", "testing", "__tests__", "spec", "specs"})
+_VENDOR_DIR_NAMES = frozenset({
+    "vendor", "vendored", "_vendor", "third_party", "thirdparty", "node_modules", "bower_components",
+})
+
+
+def _path_partition_of(relative_path: str) -> str:
+    """`"vendor"`, `"test"` or `"first_party"` for a repo-relative path.
+    Vendored wins (a vendored library's own tests are still vendored)."""
+    parts = relative_path.replace("\\", "/").split("/")
+    directories, name = [p.lower() for p in parts[:-1]], parts[-1].lower()
+    if any(d in _VENDOR_DIR_NAMES for d in directories) or name.endswith((".min.js", ".bundle.js")) or (
+        name.startswith("vendor") and name.endswith(".js")
+    ):
+        return "vendor"
+    stem = name.rsplit(".", 1)[0]
+    if (
+        any(d in _TEST_DIR_NAMES for d in directories)
+        or name.startswith("test_")
+        or stem.endswith(("_test", "_tests"))
+        or ".test." in name
+        or ".spec." in name
+        or name == "conftest.py"
+    ):
+        return "test"
+    return "first_party"
+
+
+def _fallback_candidate_allowed(caller_partition: str, caller_lang: str | None, candidate_partition: str, candidate_lang: str | None) -> bool:
+    """Whether a receiver-type-unknown fallback (G44 unique name, family
+    root, scored polysemy, attribute index, receiver naming convention) may
+    bind a caller to a candidate: same language family, and a test or
+    vendored candidate only for a caller in that same partition."""
+    if _LANGUAGE_FAMILY.get(caller_lang, caller_lang) != _LANGUAGE_FAMILY.get(candidate_lang, candidate_lang):
+        return False
+    return candidate_partition == "first_party" or candidate_partition == caller_partition
+
+
+def _imports_module_directly(candidate: SymbolInfo, import_map: LocalImportMap) -> bool:
+    """The caller's file imports `candidate`'s own module, or a name from
+    it - not merely a parent package of it."""
+    for target in import_map.aliases.values():
+        if target == candidate.module or target.startswith(f"{candidate.module}."):
+            return True
+    return candidate.module in import_map.wildcard_targets
 
 
 def _shares_package_scope(caller_module: str, candidate_module: str) -> bool:

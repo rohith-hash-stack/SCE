@@ -633,7 +633,19 @@ def dynamic_edge_sentinel_id(call_site_file: str, call_site_line: int, hazard_ty
 
 
 _EVAL_CALLEE_NAMES = frozenset({"eval", "exec"})
-_REFLECTION_CALLEE_NAMES = frozenset({"getattr", "setattr"})
+_REFLECTION_CALLEE_NAMES = frozenset({"getattr", "setattr", "delattr", "__import__"})
+#: Python dynamic imports that still resolve to a real (external) edge, so
+#: they are counted by `has_dynamic_hazard_construct` without a sentinel.
+_PY_DYNAMIC_IMPORT_CALLEES = frozenset({("importlib", "import_module"), ("importlib", "__import__"), ("import_module",)})
+#: `globals()[k]` / `locals()[k]` / `vars(o)[k]` with a non-literal key.
+_PY_NAMESPACE_CALLEES = frozenset({"globals", "locals", "vars"})
+_PY_LITERAL_KEY_TYPES = frozenset({"string", "concatenated_string", "integer"})
+#: JS/TS runtime metaprogramming: `Reflect.*(...)`, `Function(...)`,
+#: `eval(...)`, and `new Proxy(...)` / `new Function(...)`.
+_JS_REFLECT_ROOT = "Reflect"
+_JS_DYNAMIC_CALLEES = frozenset({"Function", "eval"})
+_JS_DYNAMIC_CONSTRUCTORS = frozenset({"Proxy", "Function"})
+_JS_LANGS = frozenset({LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX})
 _SUBSCRIPT_CALLEE_TYPES = frozenset({"subscript", "index_expression"})
 _GO_REFLECT_ROOT = "reflect"
 _GO_TYPE_SWITCH_NODE_TYPE = "type_switch_statement"
@@ -703,10 +715,40 @@ def has_dynamic_hazard_construct(def_node: Node, parsed) -> bool:
         for call_node in iter_scoped_nodes(def_node, {call_type}, lang):
             if detect_call_site_hazard(call_node, lang, source, parsed.path) is not None:
                 return True
-            if lang == LanguageID.GO:
-                segments = call_callee_segments(call_node, source, lang)
-                if segments and segments[0] == _GO_REFLECT_ROOT:
-                    return True
+            segments = call_callee_segments(call_node, source, lang)
+            if not segments:
+                continue
+            if lang == LanguageID.GO and segments[0] == _GO_REFLECT_ROOT:
+                return True
+            if lang == LanguageID.PYTHON and tuple(segments) in _PY_DYNAMIC_IMPORT_CALLEES:
+                return True
+            if lang in _JS_LANGS and (
+                (len(segments) >= 2 and segments[0] == _JS_REFLECT_ROOT)
+                or (len(segments) == 1 and segments[0] in _JS_DYNAMIC_CALLEES)
+            ):
+                return True
+    if lang == LanguageID.PYTHON and any(
+        _is_dynamic_namespace_lookup(node, source) for node in iter_scoped_nodes(def_node, {"subscript"}, lang)
+    ):
+        return True
+    if lang in _JS_LANGS:
+        for new_node in iter_scoped_nodes(def_node, {"new_expression"}, lang):
+            ctor = new_node.child_by_field_name("constructor")
+            if ctor is not None and ctor.type == "identifier" and node_text(ctor, source) in _JS_DYNAMIC_CONSTRUCTORS:
+                return True
     if lang == LanguageID.GO and iter_scoped_nodes(def_node, {_GO_TYPE_SWITCH_NODE_TYPE}, lang):
         return True
     return False
+
+
+def _is_dynamic_namespace_lookup(subscript: Node, source: bytes) -> bool:
+    """`globals()[name]`, `locals()[name]`, `vars(obj)[name]`: a name looked
+    up at run time. A literal key (`globals()['__name__']`) is static."""
+    value = subscript.child_by_field_name("value")
+    if value is None or value.type != "call":
+        return False
+    callee = value.child_by_field_name("function")
+    if callee is None or callee.type != "identifier" or node_text(callee, source) not in _PY_NAMESPACE_CALLEES:
+        return False
+    keys = subscript.children_by_field_name("subscript")
+    return bool(keys) and any(k.type not in _PY_LITERAL_KEY_TYPES for k in keys)

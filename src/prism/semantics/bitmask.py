@@ -15,7 +15,8 @@ Python-level loop over a set).
 
 Bit layout (bits 0-63), exactly as specified:
 
-    Bits  0- 9  Substance (bits 0-6 used; 7-9 reserved)
+    Bits  0- 9  Substance (bits 0-6 used; 7 = HAS_REFLECTION modifier;
+                8-9 reserved)
     Bits 10-24  Form (motifs)
     Bits 25-34  Output (return contract)
     Bits 35-44  Role (topological neighborhood)
@@ -35,6 +36,15 @@ class FeatureBit(IntFlag):
     SINK_TIME_IO = 1 << 4
     SINK_RANDOMNESS = 1 << 5
     SINK_PURE_COMPUTE = 1 << 6
+    # -- Modifier (not an axis value): bit 7 ------------------------------- #
+    #: The function's own body contains a dynamic-hazard construct
+    #: (reflection, `eval`/`exec`, dynamic import or namespace lookup,
+    #: subscript dispatch, JS `Reflect`/`Proxy`/`Function`) - see
+    #: `prism.graph.call_site.has_dynamic_hazard_construct`. Mutually
+    #: exclusive with `SINK_PURE_COMPUTE` (what such a body does can't be
+    #: read statically); never propagated to callers. Deliberately not
+    #: `SINK_`-prefixed, so it is no Substance value and no sink.
+    HAS_REFLECTION = 1 << 7
 
     # -- Form (Motifs): Bits 10-24 ----------------------------------------- #
     FORM_LINEAR = 1 << 10
@@ -84,7 +94,9 @@ ROLE_BITS = frozenset(b for b in FeatureBit if b.name and b.name.startswith("ROL
 #: The 64-bit-clean mask of every bit any axis actually assigns - a sanity
 #: bound (`compose_mask`'s own output is always a subset of this), and the
 #: definitive answer to "is bit N reserved" without re-deriving it.
-ALL_KNOWN_BITS = SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS
+#: Modifier bits: flags about a symbol that belong to no axis.
+MODIFIER_BITS = frozenset({FeatureBit.HAS_REFLECTION})
+ALL_KNOWN_BITS = SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS | MODIFIER_BITS
 
 
 def compose_mask(*axis_values: "FeatureBit | int") -> int:

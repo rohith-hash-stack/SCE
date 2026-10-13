@@ -55,7 +55,8 @@ def test_axis_bit_counts_match_spec():
     assert len(FORM_BITS) == 10
     assert len(OUTPUT_BITS) == 9
     assert len(ROLE_BITS) == 7
-    assert len(ALL_KNOWN_BITS) == 33
+    # 33 axis bits + the HAS_REFLECTION modifier (MODIFIER_BITS).
+    assert len(ALL_KNOWN_BITS) == 34
 
 
 def test_compose_mask_ors_axes_together():

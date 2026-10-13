@@ -21,7 +21,9 @@ from prism.semantics.role import compute_role_bits
 from prism.semantics.substance import (
     _TRANSITIVE_WRAPPER_MAX_STATEMENTS,
     _direct_sink_bits,
+    _has_reflection,
     _has_state_mutation,
+    _is_pure_eligible,
     compute_substance_bits,
 )
 from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, target_repo_file_signature
@@ -143,8 +145,15 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
             import_map = import_map_cache[symbol.module]
             direct = _direct_sink_bits(def_node, parsed, import_map)
             statement_counts[symbol.qualified_name] = count_statements(def_node, parsed.language_id)
-            if not direct:
-                direct = FeatureBit.SINK_PURE_COMPUTE if not _has_state_mutation(def_node, parsed) else FeatureBit(0)
+            if direct:
+                reflective = _has_reflection(def_node, parsed)
+            else:
+                is_pure, reflective = _is_pure_eligible(def_node, parsed)
+                direct = FeatureBit.SINK_PURE_COMPUTE if is_pure else FeatureBit(0)
+            if reflective:
+                # Own-body modifier; bit 7 sits outside `_SUBSTANCE_MASK`,
+                # so it rides through the `non_substance` part below.
+                direct |= FeatureBit.HAS_REFLECTION
             combined = compose_mask(
                 direct,
                 extract_form(def_node, parsed, symbol.qualified_name),
@@ -189,10 +198,12 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
             # out of `own`/`callee_bits`, which must never themselves
             # carry it) also erases the impure/pure distinction the
             # earlier direct-bit computation already made.
+            # The reflection half of `_is_pure_eligible` was already
+            # decided per file (and cached) as the HAS_REFLECTION bit.
             def_node = builder.def_node(qname)
             parsed = builder.parsed_file(symbol.file)
-            is_pure = True
-            if def_node is not None and parsed is not None:
+            is_pure = not int(base_bits.get(qname, FeatureBit(0))) & int(FeatureBit.HAS_REFLECTION)
+            if is_pure and def_node is not None and parsed is not None:
                 is_pure = not _has_state_mutation(def_node, parsed)
             if is_pure:
                 combined = int(FeatureBit.SINK_PURE_COMPUTE)

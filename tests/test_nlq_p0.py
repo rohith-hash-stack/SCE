@@ -221,8 +221,8 @@ def test_recorded_candidate_list_growth(recorded):
             assert sizes == sorted(sizes) and sizes[0] >= 10           # k seeds, plus neighbours
     largest = {qid: max(recorded["queries"][qid]["expansion"][f"{v}@50"]["size"] for v in ("N", "NB"))
                for qid in M.UNSEEDED_AND_COMPOUND}
-    assert largest == {"q09": 85, "q10": 210, "q11": 541, "q12": 181, "q13": 166, "q14": 197, "q15": 164,
-                       "q16": 140, "q17": 388, "q18": 819}
+    assert largest == {"q09": 85, "q10": 210, "q11": 541, "q12": 178, "q13": 168, "q14": 197, "q15": 164,
+                       "q16": 138, "q17": 388, "q18": 819}
 
 
 def test_recorded_false_subjects_for_unanswerable_and_ambiguous(recorded):

@@ -43,14 +43,17 @@ own body (and, one hop out, its thin wrapper callees) actually touches.
     shouldn't force every one of its callers to also spell out
     `requests.post` before being recognized as network-touching.
 
-A symbol with zero sink bits after all three phases, and no detected
-state mutation (reusing `prism.graph.contracts.ContractExtractor`'s own
-mutation check), gets `SINK_PURE_COMPUTE` instead.
+A symbol with zero sink bits after all three phases, no detected state
+mutation (reusing `prism.graph.contracts.ContractExtractor`'s own mutation
+check) and no dynamic-hazard construct gets `SINK_PURE_COMPUTE` instead
+(`_is_pure_eligible`). A symbol whose own body has such a construct gets
+the `HAS_REFLECTION` modifier, with or without sinks.
 """
 from __future__ import annotations
 
 from tree_sitter import Node
 
+from prism.graph.call_site import has_dynamic_hazard_construct
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.parser.lang_config import CALL_NODE_TYPE, call_callee_segments, flatten_reference_chain, iter_scoped_nodes
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile
@@ -304,6 +307,25 @@ def _has_state_mutation(def_node: Node, parsed: ParsedFile) -> bool:
     return bool(ContractExtractor()._state_mutations(def_node, parsed))
 
 
+def _is_pure_eligible(def_node: Node, parsed: ParsedFile) -> tuple[bool, bool]:
+    """`(pure, reflective)` for one function body with no sink.
+
+    `reflective`: the body itself contains a dynamic-hazard construct
+    (`has_dynamic_hazard_construct` - reflection, `eval`/`exec`, dynamic
+    import or namespace lookup, subscript dispatch, JS `Reflect`/`Proxy`/
+    `Function`). What such a body does cannot be read statically, so it is
+    never `pure`, the same rule `ContractExtractor` applies to purity.
+    `pure` also requires no state mutation. The one predicate every
+    `SINK_PURE_COMPUTE` decision uses (here and in
+    `prism.semantics.extractor`'s cached path), so they cannot drift."""
+    reflective = _has_reflection(def_node, parsed)
+    return (not reflective and not _has_state_mutation(def_node, parsed)), reflective
+
+
+def _has_reflection(def_node: Node, parsed: ParsedFile) -> bool:
+    return has_dynamic_hazard_construct(def_node, parsed)
+
+
 def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
     """`{qualified_name: Substance bits}` for every function/method
     `builder` indexed - the one entry point `prism.semantics.extractor`
@@ -363,14 +385,20 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
                     transitive_bits |= callee_bits
         combined = own_bits | transitive_bits
 
-        if not combined:
-            def_node = builder.def_node(qname)
-            parsed = builder.parsed_file(symbol.file)
-            is_pure = True
-            if def_node is not None and parsed is not None:
-                is_pure = not _has_state_mutation(def_node, parsed)
-            if is_pure:
-                combined = FeatureBit.SINK_PURE_COMPUTE
+        # HAS_REFLECTION is an own-body modifier, set whether or not the
+        # function also reaches a sink, and never propagated to callers.
+        def_node = builder.def_node(qname)
+        parsed = builder.parsed_file(symbol.file)
+        is_pure, reflective = (True, False)
+        if def_node is not None and parsed is not None:
+            if combined:
+                reflective = _has_reflection(def_node, parsed)
+            else:
+                is_pure, reflective = _is_pure_eligible(def_node, parsed)
+        if not combined and is_pure:
+            combined = FeatureBit.SINK_PURE_COMPUTE
+        if reflective:
+            combined |= FeatureBit.HAS_REFLECTION
 
         result[qname] = int(combined)
 

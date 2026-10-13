@@ -14,7 +14,16 @@ from __future__ import annotations
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from prism.semantics.bitmask import ALL_KNOWN_BITS, FORM_BITS, OUTPUT_BITS, ROLE_BITS, SUBSTANCE_BITS, compose_mask, describe_mask
+from prism.semantics.bitmask import (
+    ALL_KNOWN_BITS,
+    FORM_BITS,
+    MODIFIER_BITS,
+    OUTPUT_BITS,
+    ROLE_BITS,
+    SUBSTANCE_BITS,
+    compose_mask,
+    describe_mask,
+)
 from prism.surface.build import _axis_labels
 
 _AXES = {"SUBSTANCE": SUBSTANCE_BITS, "FORM": FORM_BITS, "OUTPUT": OUTPUT_BITS, "ROLE": ROLE_BITS}
@@ -32,7 +41,8 @@ def test_the_four_axes_are_pairwise_disjoint():
 
 
 def test_the_four_axes_union_to_exactly_all_known_bits():
-    assert SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS == ALL_KNOWN_BITS
+    # Plus the modifier flags (HAS_REFLECTION), which belong to no axis.
+    assert SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS | MODIFIER_BITS == ALL_KNOWN_BITS
 
 
 @given(st.sets(st.sampled_from(_ALL_BITS_LIST)))
