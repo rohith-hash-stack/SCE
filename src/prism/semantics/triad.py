@@ -35,7 +35,13 @@ import re
 from dataclasses import dataclass
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
-from prism.parser.lang_config import CALL_NODE_TYPE, call_callee_segments, iter_scoped_nodes
+from prism.parser.lang_config import (
+    ATTR_PROPERTY_FIELD,
+    ATTRIBUTE_NODE_TYPE,
+    CALL_NODE_TYPE,
+    call_callee_segments,
+    iter_scoped_nodes,
+)
 from prism.semantics.bitmask import FeatureBit
 from prism.semantics.capabilities import CapabilityProfile, capability_score
 from prism.semantics.primitives import CompositeProfile
@@ -116,10 +122,21 @@ def action_tokens(builder: ConcreteGraphBuilder, qualified_name: str) -> frozens
     if def_node is not None and call_type:
         for call in iter_scoped_nodes(def_node, {call_type}, parsed.language_id):
             segments = call_callee_segments(call, parsed.source, parsed.language_id)
-            if segments:
-                words.update(_words(segments[-1]))
-                words.add(segments[-1].lower())  # whole identifiers too: `apply_async`
+            name = segments[-1] if segments else _chained_method(call, parsed)
+            if name:
+                words.update(_words(name))
+                words.add(name.lower())  # whole identifiers too: `apply_async`
     return frozenset(words)
+
+
+def _chained_method(call, parsed) -> str | None:
+    """The method of a chained call (`cursor().execute(...)` -> `execute`),
+    which has no nameable callee chain."""
+    func = call.child_by_field_name("function")
+    if func is None or func.type != ATTRIBUTE_NODE_TYPE.get(parsed.language_id):
+        return None
+    prop = func.child_by_field_name(ATTR_PROPERTY_FIELD[parsed.language_id])
+    return parsed.source[prop.start_byte:prop.end_byte].decode(errors="replace") if prop is not None else None
 
 
 def action_score(tokens: "frozenset[str] | set[str]", action: "PhysicalAction | str") -> float:

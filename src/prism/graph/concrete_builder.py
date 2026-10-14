@@ -305,6 +305,10 @@ class ConcreteGraphBuilder:
         #: native packages, every name under which is such a type.
         self.opaque_types: frozenset[str] = frozenset()
         self.opaque_prefixes: tuple[str, ...] = ()
+        #: Module-level runtime proxies of the host's dependencies
+        #: (`django.db.connection`, `flask.request`; `PackageSummary.proxies`):
+        #: values returned through one are runtime-decided too.
+        self.proxy_names: frozenset[str] = frozenset()
         self._last_resolution_alternatives: tuple[str, ...] = ()
         #: `_resolve_by_receiver_name`'s lazily built
         #: {normalized class simple name: [qualified class names]} index.
@@ -1876,20 +1880,52 @@ class ConcreteGraphBuilder:
     def _opaque_call_result(
         self, segments: list[str], instance_map: InstanceTypeMap, module: str, import_map: LocalImportMap
     ) -> str | None:
-        """The opaque value a call returns - `<type>.<method>()` for a method
-        on an opaque-typed receiver (`conn.cursor()`), `<name>()` for a
-        native function - or `None`. Its own methods then link under it,
-        and host builds turn those into OPAQUE boundary nodes."""
-        if not segments or not (self.opaque_types or self.opaque_prefixes):
+        """The unknown value a call returns - `<type>.<method>()` for a method
+        on an opaque-typed or proxy-derived receiver (`conn.cursor()`),
+        `<name>()` for a native function or a call through a runtime proxy
+        (`django.db.connection.cursor()`) - or `None`. Its own methods then
+        link under it, and host builds turn those into OPAQUE / PROXY
+        boundary nodes by the name's origin."""
+        if not segments or not (self.opaque_types or self.opaque_prefixes or self.proxy_names):
             return None
         if len(segments) >= 2:
             receiver = instance_map.resolve(".".join(segments[:-1]))
             if receiver is not None:
-                return f"{receiver}.{segments[-1]}()" if self._is_opaque_type(receiver) else None
+                return f"{receiver}.{segments[-1]}()" if self._is_unknown_value(receiver) else None
         if instance_map.is_local(segments[0]):
             return None
         resolved = self._resolve_reference_chain(segments, module, import_map)
-        return f"{resolved}()" if self._is_opaque_type(resolved) else None
+        return f"{resolved}()" if self._is_unknown_value(resolved) else None
+
+    def _is_unknown_value(self, name: str | None) -> bool:
+        """Native (`_is_opaque_type`) or reached through a runtime proxy
+        (`proxy_names`): what calls on it do is decided outside Python
+        source or at run time."""
+        if not name:
+            return False
+        return self._is_opaque_type(name) or any(name == p or name.startswith(p + ".") for p in self.proxy_names)
+
+    def _unknown_chain_target(
+        self, call_node: Node, lang: str, source: bytes, module: str, import_map: LocalImportMap,
+        instance_map: InstanceTypeMap, _depth: int = 0,
+    ) -> str | None:
+        """`<call>(...).<method>(...)` whose inner call returns an unknown
+        value (`django.db.connection.cursor().execute(...)`):
+        `<value>.<method>`. Nested chains are followed a few levels."""
+        func = call_node.child_by_field_name("function")
+        if _depth > 3 or func is None or func.type != ATTRIBUTE_NODE_TYPE.get(lang):
+            return None
+        obj = func.child_by_field_name(ATTR_OBJECT_FIELD[lang])
+        prop = func.child_by_field_name(ATTR_PROPERTY_FIELD[lang])
+        if obj is None or prop is None or obj.type != CALL_NODE_TYPE.get(lang):
+            return None
+        inner = call_callee_segments(obj, source, lang)
+        if inner:
+            value = self._opaque_call_result(inner, instance_map, module, import_map)
+        else:
+            receiver = self._unknown_chain_target(obj, lang, source, module, import_map, instance_map, _depth + 1)
+            value = f"{receiver}()" if receiver is not None else None
+        return f"{value}.{node_text(prop, source)}" if value is not None else None
 
     def _is_known_class(self, qualified_name: str | None) -> bool:
         if not qualified_name:
@@ -2522,7 +2558,7 @@ class ConcreteGraphBuilder:
                 # its class comes from return-type inference.
                 chained = self._resolve_chained_call_target(
                     call_node, _ExprContext(module, import_map, enclosing_class, lang, parsed.source, def_node)
-                )
+                ) or self._unknown_chain_target(call_node, lang, parsed.source, module, import_map, func_instance_map)
                 if chained is not None:
                     edge_kwargs = {"relation": "CALLS", "kind": "TENTATIVE_CALL"}
                     edge_kwargs.update(compute_call_site_context(call_node, def_node, lang, parsed.source).to_dict())

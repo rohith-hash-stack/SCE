@@ -92,6 +92,16 @@ def read_debug_flag():
     return config.get("debug")
 
 
+def fetch_report_rows(sql):
+    cur = dbkit.connection.cursor()
+    cur.execute(sql)
+    return cur.fetchall()
+
+
+def fetch_report_chain(sql):
+    return dbkit.connection.cursor().execute(sql)
+
+
 def format_report(rows):
     return "\\n".join(rows)
 """
@@ -213,3 +223,26 @@ def test_proxy_is_scored_like_opaque_with_its_own_provenance(host):
     assert ranked[0].qname == q and ranked[0].capability_source == "runtime-proxy"
     assert ranked[0].proxy == ("dbkit.connection.cursor",) and ranked[0].score == pytest.approx(1.40)
     assert ranked[1].score == 1.0
+
+
+# --------------------------------------------------------------------- #
+# Values returned through a proxy are runtime-decided too
+# --------------------------------------------------------------------- #
+@pytest.mark.parametrize("fn,calls", [
+    ("fetch_report_rows", ("dbkit.connection.cursor().execute", "dbkit.connection.cursor().fetchall")),
+    ("fetch_report_chain", ("dbkit.connection.cursor().execute",)),
+])
+def test_calls_on_values_returned_through_a_proxy_are_proxy_boundaries(host, fn, calls):
+    builder, profiles = host
+    targets = _targets(builder, fn)
+    assert not any(t.startswith("<ambiguous:") for t in targets)
+    for node in calls:
+        assert node in targets, node
+        attrs = builder.graph.nodes[node]
+        assert attrs["boundary_tier"] == TIER_PROXY and attrs["boundary_proxy"] == "dbkit.connection"
+    q = f"app.main.{fn}"
+    p = profiles[q]
+    assert set(calls) <= set(p.proxy) and p.within(2) == 0
+    tokens = action_tokens(builder, q)
+    assert "execute" in tokens
+    assert database_io(p, tokens) == (0.0, "runtime-proxy")

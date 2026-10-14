@@ -77,6 +77,7 @@ def attach_dependency_headers(
     builder.module_roots.append(header_root)
     # Before call resolution: annotations naming compiled-only types bind.
     builder.opaque_types, builder.opaque_prefixes = native_index(summaries)
+    builder.proxy_names = frozenset(name for summary in summaries.values() for name in summary.proxies)
     return sorted(header_files), summaries, header_root
 
 

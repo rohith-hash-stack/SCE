@@ -257,7 +257,8 @@ def test_runtime_proxy_is_a_proxy_boundary_that_shadows_its_stub(host):
     assert node["boundary_proxy_class"] == "django.db.ConnectionProxy"
     raw = _p(profiles, "raw_query")
     assert raw.own_l3 == 0 and raw.within(2) == 0  # the stub is gone, nothing invented
-    assert raw.proxy == ("django.db.connection.cursor",) and raw.opaque == ()
+    # `cur = connection.cursor(); cur.execute(sql)`: the cursor is proxy-derived too
+    assert raw.proxy == ("django.db.connection.cursor", "django.db.connection.cursor().execute") and raw.opaque == ()
 
 
 def test_shadowed_method_adds_no_stub_signal_beyond_its_constructor(host):

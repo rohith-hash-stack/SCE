@@ -250,7 +250,7 @@ def test_receiver_annotated_with_a_compiled_type_calls_opaque_boundaries(host_bu
     # annotation still types `conn`, and its method calls are OPAQUE.
     nodes = dict(host_build.graph.nodes(data=True))
     targets = {t for _, t in host_build.graph.out_edges("app.main.post_ledger")}
-    for method in ("cursor", "commit"):
+    for method in ("cursor", "commit", "cursor().execute"):  # the chained `conn.cursor().execute(...)` too
         node = f"nativedb.extensions.connection.{method}"
         assert node in targets and nodes[node]["boundary_tier"] == TIER_OPAQUE and nodes[node]["boundary_bits"] == 0
     profile = compute_capability_profiles(host_build)["app.main.post_ledger"]
