@@ -16,6 +16,21 @@ from __future__ import annotations
 L2_PRIMITIVE_ENTRIES: dict[str, dict[str, set[str]]] = {
     "network_io": {
         "python": {
+            # asyncio (streams and the event loop's transports)
+            "asyncio.AbstractEventLoop.create_connection",
+            "asyncio.AbstractEventLoop.create_datagram_endpoint",
+            "asyncio.AbstractEventLoop.create_server",
+            "asyncio.AbstractEventLoop.create_unix_connection",
+            "asyncio.AbstractEventLoop.create_unix_server",
+            "asyncio.AbstractEventLoop.getaddrinfo",
+            "asyncio.AbstractEventLoop.sock_accept",
+            "asyncio.AbstractEventLoop.sock_connect",
+            "asyncio.AbstractEventLoop.sock_recv",
+            "asyncio.AbstractEventLoop.sock_sendall",
+            "asyncio.open_connection",
+            "asyncio.open_unix_connection",
+            "asyncio.start_server",
+            "asyncio.start_unix_server",
             # ftplib
             "ftplib.FTP",
             "ftplib.FTP.connect",
@@ -51,6 +66,8 @@ L2_PRIMITIVE_ENTRIES: dict[str, dict[str, set[str]]] = {
             # socket
             "socket.create_connection",
             "socket.create_server",
+            "socket.getaddrinfo",
+            "socket.gethostbyname",
             "socket.socket",
             "socket.socket.accept",
             "socket.socket.connect",
@@ -350,6 +367,11 @@ L2_PRIMITIVE_ENTRIES: dict[str, dict[str, set[str]]] = {
     },
     "process_io": {
         "python": {
+            # asyncio
+            "asyncio.AbstractEventLoop.subprocess_exec",
+            "asyncio.AbstractEventLoop.subprocess_shell",
+            "asyncio.create_subprocess_exec",
+            "asyncio.create_subprocess_shell",
             # concurrent
             "concurrent.futures.ProcessPoolExecutor",
             # multiprocessing

@@ -261,9 +261,37 @@ def _entry_matches(
     return root == entry or resolved_root == entry
 
 
-def _suffix_fallback_bits(method_name: str) -> FeatureBit:
-    """Phase 2b - see `_UNAMBIGUOUS_DRIVER_SUFFIXES`."""
+def _event_loop_methods() -> dict[str, str]:
+    """`{method: category}` for the asyncio event loop's I/O methods, read
+    off the Layer 2 table's `asyncio.AbstractEventLoop.*` entries: the loop
+    is almost always an untyped local or attribute (`loop =
+    asyncio.get_event_loop()`, `self._loop`), so these distinctive method
+    names are matched on any receiver - never on a bare call."""
+    prefix = "asyncio.AbstractEventLoop."
+    return {
+        entry[len(prefix):]: category
+        for category, langs in CANONICAL_SINKS.items()
+        for entry in langs.get("python", ())
+        if entry.startswith(prefix)
+    }
+
+
+EVENT_LOOP_METHODS: dict[str, str] = _event_loop_methods()
+
+
+def fallback_category(method_name: str, on_receiver: bool) -> str | None:
+    """Phase 2b's category for an otherwise unmatched call: an unambiguous
+    driver method (`_UNAMBIGUOUS_DRIVER_SUFFIXES`), or - called on some
+    receiver - an event-loop I/O method (`EVENT_LOOP_METHODS`)."""
     category = _UNAMBIGUOUS_DRIVER_SUFFIXES.get(method_name)
+    if category is None and on_receiver:
+        category = EVENT_LOOP_METHODS.get(method_name)
+    return category
+
+
+def _suffix_fallback_bits(method_name: str, on_receiver: bool = False) -> FeatureBit:
+    """Phase 2b - see `fallback_category`."""
+    category = fallback_category(method_name, on_receiver)
     if category is None:
         return FeatureBit(0)
     return _CATEGORY_BIT[category]
@@ -319,7 +347,8 @@ def _direct_call_bits(def_node: Node, parsed: ParsedFile, match, fallback) -> Fe
     """The three-phase direct scan shared by Substance sink bits and Phase 2
     primitive bits: `match(segments, node)` per call/instantiation (Phase 1),
     local constructor provenance (Phase 2a), then `fallback(method_name)`
-    for an otherwise unmatched call (Phase 2b)."""
+    for an otherwise unmatched call (Phase 2b; `on_receiver`: a method call,
+    `x.m(...)`, not a bare `m(...)`)."""
     lang = parsed.language_id
     call_type = CALL_NODE_TYPE.get(lang)
     new_expr_type = _NEW_EXPRESSION_NODE_TYPE.get(lang)
@@ -357,7 +386,7 @@ def _direct_call_bits(def_node: Node, parsed: ParsedFile, match, fallback) -> Fe
         if not call_bits and len(segments) >= 2 and segments[0] in local_bindings:
             call_bits = local_bindings[segments[0]]  # Phase 2a
         if not call_bits:
-            call_bits = fallback(segments[-1])  # Phase 2b
+            call_bits = fallback(segments[-1], len(segments) >= 2)  # Phase 2b
         bits |= call_bits
     return bits
 

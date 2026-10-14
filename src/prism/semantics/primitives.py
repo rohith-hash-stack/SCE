@@ -36,7 +36,12 @@ CATEGORY_PRIMITIVES: dict[str, int] = {
 }
 
 # -- Derivation rules ---------------------------------------------------- #
-_NET_LISTEN = frozenset({"accept", "createserver", "create_server", "listen", "listentcp", "listenudp", "listenpacket", "server", "newserver"})
+_NET_LISTEN = frozenset({
+    "accept", "createserver", "create_server", "listen", "listentcp", "listenudp", "listenpacket", "server", "newserver",
+    "start_server", "start_unix_server", "create_unix_server", "sock_accept",
+})
+#: Name resolution by leaf name (beside `dns.*` and `resolve*` / `lookup*`).
+_NET_DNS = frozenset({"getaddrinfo", "getnameinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr"})
 _NET_TLS_ROOTS = frozenset({"ssl", "tls", "crypto/tls", "https"})
 
 _DB_CONNECT = frozenset({
@@ -89,7 +94,7 @@ def derive_primitive_bits(category: str, entry: str) -> int:
     leaf, root = _leaf(entry), _root(entry)
     lowered = entry.lower()
     if category == "network_io":
-        if root == "dns" or leaf.startswith(("resolve", "lookup")):
+        if root == "dns" or leaf.startswith(("resolve", "lookup")) or leaf in _NET_DNS:
             return int(F.PRIM_NET_DNS)
         tls = root in _NET_TLS_ROOTS or "ssl" in leaf or ("secure" in leaf and "insecure" not in leaf) or "https" in lowered
         if leaf in ("wrap_socket", "wrap_bio"):

@@ -61,7 +61,8 @@ def test_layer_tables_partition_the_retired_catalog():
     l2, l3 = _entries(L2_PRIMITIVE_ENTRIES), _entries(L3_BOUNDARY_STUBS)
     assert not l2 & l3
     assert l2 | l3 == _entries(CANONICAL_SINKS)
-    assert len(l2 | l3) == 640  # 639 retired-catalog entries + shutil.copyfileobj (Layer 2)
+    # 639 retired-catalog entries + shutil.copyfileobj + 20 asyncio/DNS/subprocess entries (Layer 2)
+    assert len(l2 | l3) == 660
 
 
 @pytest.mark.parametrize(

@@ -38,10 +38,10 @@ from prism.semantics.bitmask import OPERATIONAL_IO_MASK, FeatureBit, distinct_so
 from prism.semantics.primitives import COMPOSITE_PROFILES, CompositeProfile, derive_primitive_bits, primitive_registry
 from prism.semantics.substance import (
     _LANG_REGISTRY_KEY,
-    _UNAMBIGUOUS_DRIVER_SUFFIXES,
     _call_shape,
     _direct_call_bits,
     _entry_matches,
+    fallback_category,
 )
 
 #: Weight of a capability reached 0, 1 and 2 hops away. Bounded on purpose:
@@ -172,8 +172,8 @@ def _direct_primitive_bits(
             sites.append(bits)
         return FeatureBit(bits)
 
-    def fallback(method: str) -> FeatureBit:
-        category = _UNAMBIGUOUS_DRIVER_SUFFIXES.get(method)
+    def fallback(method: str, on_receiver: bool = False) -> FeatureBit:
+        category = fallback_category(method, on_receiver)
         return FeatureBit(derive_primitive_bits(category, method)) if category else FeatureBit(0)
 
     own = int(_direct_call_bits(def_node, parsed, match, fallback))

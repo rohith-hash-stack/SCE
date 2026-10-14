@@ -2646,6 +2646,45 @@ class ConcreteGraphBuilder:
         self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
         if lang == LanguageID.PYTHON:
             self._link_state_reads(caller_qname, def_node, parsed, module, enclosing_class, self_tokens)
+            if self.dispatch_all_members:
+                self._link_callback_arguments(
+                    caller_qname, def_node, parsed, module, enclosing_class, import_map,
+                    class_instance_map, func_instance_map, self_tokens,
+                )
+
+    def _link_callback_arguments(
+        self, caller_qname: str, def_node: Node, parsed: ParsedFile, module: str, enclosing_class: str | None,
+        import_map: LocalImportMap, class_instance_map: InstanceTypeMap, func_instance_map: InstanceTypeMap,
+        self_tokens: set[str],
+    ) -> None:
+        """Summary mode ("may reach"): a function handed to another call by
+        reference - `loop.run_in_executor(None, self._connect)`,
+        `Thread(target=worker)`, `executor.submit(fn)`, `create_task(...)`'s
+        callbacks - may be run by it. Linked as TENTATIVE_CALL, positional
+        or keyword, when the reference resolves to an indexed function."""
+        lang = parsed.language_id
+        for call_node in iter_scoped_nodes(def_node, {CALL_NODE_TYPE[lang]}, lang):
+            args = call_node.child_by_field_name("arguments")
+            for arg in args.named_children if args is not None else ():
+                if arg.type == "keyword_argument":
+                    arg = arg.child_by_field_name("value")
+                if arg is None or arg.type not in ("identifier", ATTRIBUTE_NODE_TYPE.get(lang)):
+                    continue
+                segments = flatten_reference_chain(arg, parsed.source, lang)
+                if not segments:
+                    continue
+                target = self._resolve_segments(
+                    segments, module, enclosing_class, import_map, class_instance_map, func_instance_map, self_tokens, lang
+                )
+                symbol = self.symbol_table.get(target) if target else None
+                if symbol is None or symbol.kind not in ("function", "method") or target == caller_qname:
+                    continue
+                existing = self.graph.get_edge_data(caller_qname, target)
+                if existing is not None and existing.get("relation") == "CALLS":
+                    continue
+                # Replaces a `READS_STATE` edge `_link_state_reads` drew for
+                # `self._connect`: a method handed on is run, not read.
+                self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL", via="callback_argument")
 
     # -- Go generic instantiation vs. real subscript dispatch (Task 2) ---- #
     def _resolve_go_generic_call(
