@@ -243,3 +243,22 @@ def test_cache_key_separates_builds_with_and_without_summaries(corpus):
     with sqlite3.connect(PC.profile_cache_path(root)) as conn:
         rows = conn.execute("SELECT payload FROM profiles").fetchall()
     assert rows and all(isinstance(json.loads(r[0]), dict) for r in rows)
+
+
+# --------------------------------------------------------------------- #
+# Messaging verbs
+# --------------------------------------------------------------------- #
+@pytest.mark.parametrize("call", ["producer.produce", "queue.enqueue", "hub.broadcast", "channel.basic_publish",
+                                  "task.apply_async"])
+def test_messaging_calls_are_send_actions(call, tmp_path):
+    (tmp_path / "jobs").mkdir()
+    (tmp_path / "jobs" / "__init__.py").write_text("")
+    (tmp_path / "jobs" / "work.py").write_text(f"def schedule_report(item):\n    return {call}(item)\n")
+    builder = build_engine(str(tmp_path)).builder
+    assert action_score(action_tokens(builder, "jobs.work.schedule_report"), "SEND") == 1.0, call
+
+
+def test_apply_async_is_a_whole_word_and_delay_stays_wait():
+    assert action_score({"apply_async"}, "SEND") == 1.0
+    assert action_score({"apply", "async"}, "SEND") == 0.0  # the words alone are no dispatch
+    assert action_score({"delay"}, "WAIT") == 1.0 and action_score({"delay"}, "SEND") == 0.0

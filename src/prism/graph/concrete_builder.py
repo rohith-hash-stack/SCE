@@ -1865,12 +1865,31 @@ class ConcreteGraphBuilder:
             )
 
     def _is_opaque_type(self, qualified_name: str | None) -> bool:
-        """A type defined only in compiled native code (`opaque_types`)."""
+        """A type or value defined only in compiled native code: one of
+        `opaque_types`, a member of one, or anything under `opaque_prefixes`."""
         if not qualified_name or not (self.opaque_types or self.opaque_prefixes):
             return False
         return qualified_name in self.opaque_types or any(
-            qualified_name == p or qualified_name.startswith(p + ".") for p in self.opaque_prefixes
-        )
+            qualified_name.startswith(t + ".") for t in self.opaque_types
+        ) or any(qualified_name == p or qualified_name.startswith(p + ".") for p in self.opaque_prefixes)
+
+    def _opaque_call_result(
+        self, segments: list[str], instance_map: InstanceTypeMap, module: str, import_map: LocalImportMap
+    ) -> str | None:
+        """The opaque value a call returns - `<type>.<method>()` for a method
+        on an opaque-typed receiver (`conn.cursor()`), `<name>()` for a
+        native function - or `None`. Its own methods then link under it,
+        and host builds turn those into OPAQUE boundary nodes."""
+        if not segments or not (self.opaque_types or self.opaque_prefixes):
+            return None
+        if len(segments) >= 2:
+            receiver = instance_map.resolve(".".join(segments[:-1]))
+            if receiver is not None:
+                return f"{receiver}.{segments[-1]}()" if self._is_opaque_type(receiver) else None
+        if instance_map.is_local(segments[0]):
+            return None
+        resolved = self._resolve_reference_chain(segments, module, import_map)
+        return f"{resolved}()" if self._is_opaque_type(resolved) else None
 
     def _is_known_class(self, qualified_name: str | None) -> bool:
         if not qualified_name:
@@ -2285,6 +2304,10 @@ class ConcreteGraphBuilder:
                     instance_map.bind(node_text(target, parsed.source), resolved_class)
                 elif _is_builtin_container_expr(value, lang, parsed.source):
                     instance_map.bind_builtin(node_text(target, parsed.source))
+                elif (opaque := self._opaque_call_result(ctor_segments, instance_map, module, import_map)) is not None:
+                    # `cursor = conn.cursor()` on a compiled-only type, or a
+                    # native function's result: the value is native too.
+                    instance_map.bind(node_text(target, parsed.source), opaque, inferred=True)
                 elif (inferred := self._expr_class(value, ctx)) is not None:
                     # `qs = self.get_queryset()` / `form = self.get_form()`:
                     # a call whose return class is inferable.

@@ -66,8 +66,9 @@ PHYSICAL_ACTIONS: dict[str, PhysicalAction] = {
                                   "store", "upsert", "persist", "drop", "truncate"),
                        int(F.PRIM_FS_WRITE | F.PRIM_FS_DELETE | F.PRIM_DB_WRITE),
                        frozenset({"hset", "lpush", "rpush", "sadd", "srem", "zadd", "incr", "decr", "mset", "expire"})),
-        PhysicalAction("SEND", ("send", "post", "upload", "publish", "emit", "push", "notify", "dispatch", "request"),
-                       int(F.PRIM_NET_CONNECT)),
+        PhysicalAction("SEND", ("send", "post", "upload", "publish", "emit", "push", "notify", "dispatch", "request",
+                                "produce", "enqueue", "broadcast"),
+                       int(F.PRIM_NET_CONNECT), frozenset({"apply_async"})),
         PhysicalAction("RECEIVE", ("listen", "serve", "accept", "receive", "subscribe", "consume", "handle", "recv"),
                        int(F.PRIM_NET_LISTEN)),
         PhysicalAction("EXECUTE", ("run", "exec", "spawn", "launch", "kill", "fork", "popen", "system"),
@@ -102,9 +103,10 @@ def _words(identifier: str) -> list[str]:
 def action_tokens(builder: ConcreteGraphBuilder, qualified_name: str) -> frozenset[str]:
     """The words a function's own name and every name it calls are made of
     (`save_user` + `cur.execute(...)` + `conn.commit()` -> save, user,
-    execute, commit) - including calls on native objects no graph edge
-    reaches."""
-    words = set(_words(qualified_name.rsplit(".", 1)[-1]))
+    execute, commit), plus those names whole (`save_user`, `apply_async`)
+    - including calls on native objects no graph edge reaches."""
+    own = qualified_name.rsplit(".", 1)[-1]
+    words = set(_words(own)) | {own.lower()}
     def_node = builder.def_node(qualified_name)
     symbol = builder.symbol_table.get(qualified_name)
     parsed = builder.parsed_file(symbol.file) if symbol is not None else None
@@ -114,6 +116,7 @@ def action_tokens(builder: ConcreteGraphBuilder, qualified_name: str) -> frozens
             segments = call_callee_segments(call, parsed.source, parsed.language_id)
             if segments:
                 words.update(_words(segments[-1]))
+                words.add(segments[-1].lower())  # whole identifiers too: `apply_async`
     return frozenset(words)
 
 

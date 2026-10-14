@@ -97,6 +97,17 @@ def format_name(user):
 def post_ledger(conn: nativedb.extensions.connection, entry):
     conn.cursor().execute("INSERT INTO ledger VALUES (%s)", (entry,))
     conn.commit()
+
+
+def post_ledger_entry(conn: nativedb.extensions.connection, entry):
+    cur = conn.cursor()
+    cur.execute("INSERT INTO ledger VALUES (%s)", (entry,))
+    conn.commit()
+
+
+def encode_user(user):
+    codec = fastser.Codec()
+    return codec.encode(user)
 """
 
 
@@ -248,6 +259,21 @@ def test_receiver_annotated_with_a_compiled_type_calls_opaque_boundaries(host_bu
     assert database_io(profile, action_tokens(host_build, "app.main.post_ledger")) == (0.0, "opaque-native")
 
 
+def test_values_returned_by_opaque_calls_are_opaque(host_build):
+    # `cur = conn.cursor()`: the cursor comes out of native code too, so
+    # `cur.execute(...)` is an OPAQUE boundary, not an ambiguous fallback.
+    nodes = dict(host_build.graph.nodes(data=True))
+    targets = {t for _, t in host_build.graph.out_edges("app.main.post_ledger_entry")}
+    execute = "nativedb.extensions.connection.cursor().execute"
+    assert execute in targets and nodes[execute]["boundary_tier"] == TIER_OPAQUE
+    assert not any(t.startswith("<ambiguous:") for t in targets)
+    assert execute in compute_capability_profiles(host_build)["app.main.post_ledger_entry"].opaque
+    # a fully native package's value: `codec = fastser.Codec(); codec.encode(...)`
+    encode = "fastser.Codec().encode"
+    assert encode in {t for _, t in host_build.graph.out_edges("app.main.encode_user")}
+    assert nodes[encode]["boundary_tier"] == TIER_OPAQUE
+
+
 def test_compiled_types_are_only_bound_in_dependency_builds(tmp_path):
     repo = tmp_path / "repo"
     (repo / "app").mkdir(parents=True)
@@ -256,6 +282,7 @@ def test_compiled_types_are_only_bound_in_dependency_builds(tmp_path):
     builder, _ = build_pipeline(str(repo), use_cache=False)
     assert builder.opaque_types == frozenset()
     assert "nativedb.extensions.connection.cursor" not in builder.graph
+    assert not any(n.endswith(")") or "()." in n for n in builder.graph)  # no opaque values without summaries
 
 
 def test_default_build_has_no_opaque_marks(tmp_path):
