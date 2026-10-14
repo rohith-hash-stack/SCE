@@ -5,15 +5,16 @@ A Python Layer 3 stub entry (`redis.Redis.get`) is *shadowed* when, with
 the dependency's headers indexed, static resolution lands it on a summarized
 symbol whose summary carries actionable signal - at least one operational
 I/O bit (`OPERATIONAL_IO_MASK`: network, filesystem, database, process; any
-tier) or OPAQUE native evidence. Ambient bits alone (clocks, timers,
-randomness - a lazy `redis.Redis()` reading a clock) never shadow an
-operational stub. A shadowed entry is
-ignored by capability and Substance matching: the summary takes full
-precedence. An entry static resolution cannot land on a summarized symbol -
-a runtime proxy (`django.db.connection.cursor`), a C type
-(`psycopg2.extensions.connection.cursor`), a bound method of a module-level
-instance (`numpy.random.rand`) - or one whose summary is empty or ambient
-only (a lazy constructor such as `httpx.Client`) stays as the fallback.
+tier) or OPAQUE native evidence - or names a call through one of the
+package's module-level runtime proxies (`django.db.connection.cursor`), a
+PROXY boundary. Ambient bits alone (clocks, timers, randomness - a lazy
+`redis.Redis()` reading a clock) never shadow an operational stub. A
+shadowed entry is ignored by capability and Substance matching: the summary
+takes full precedence. An entry static resolution cannot land on a
+summarized symbol - a bound method of a module-level instance of an
+ordinary class (`numpy.random.rand`), a name the package does not define -
+or one whose summary is empty or ambient only (a lazy constructor such as
+`httpx.Client`) stays as the fallback.
 """
 from __future__ import annotations
 
@@ -103,6 +104,10 @@ def compute_stub_shadow(
             continue
         if entry in native_names:
             shadow[entry] = entry  # re-exported straight from a compiled module
+            continue
+        proxy = next((p for p in summary.proxies if entry.startswith(p + ".")), None)
+        if proxy is not None:
+            shadow[entry] = proxy  # a runtime proxy: unknown, scored by the action leg
             continue
         target = resolve_stub_entry(builder, entry)
         if target is None:

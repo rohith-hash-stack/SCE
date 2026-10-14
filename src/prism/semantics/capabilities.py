@@ -66,7 +66,10 @@ class CapabilityProfile:
       summary.
     - `opaque`: OPAQUE dependency entry points reached within the hop
       bound - calls into compiled native code whose capability is unknown
-      (never counted as bits; see `prism.semantics.triad`)."""
+      (never counted as bits; see `prism.semantics.triad`).
+    - `proxy`: PROXY boundary nodes reached within the hop bound - calls
+      through module-level runtime proxies (`django.db.connection`), whose
+      target is decided at run time: likewise unknown, never bits."""
 
     by_hop: tuple[int, ...]
     own_l3: int = 0
@@ -74,6 +77,7 @@ class CapabilityProfile:
     established: "tuple[frozenset[str], ...] | None" = None
     tentative: int = 0
     opaque: tuple[str, ...] = ()
+    proxy: tuple[str, ...] = ()
 
     @property
     def own(self) -> int:
@@ -208,6 +212,7 @@ def compute_capability_profiles(
         if a.get("boundary")
     }
     opaque_boundary = {n for n, a in graph.nodes(data=True) if a.get("boundary") and a.get("boundary_opaque")}
+    proxy_boundary = {n for n, a in graph.nodes(data=True) if a.get("boundary") and a.get("boundary_proxy")}
     shadowed = getattr(builder, "stub_shadow", {})
     for symbol in builder.symbol_table:
         if symbol.kind not in ("function", "method"):
@@ -241,6 +246,7 @@ def compute_capability_profiles(
         hop_established: list[set[str]] = [set(own_comps[qname])] + [set() for _ in range(MAX_HOPS)]
         tentative = 0
         opaque: list[str] = []
+        proxy: list[str] = []
         seen, frontier = {qname}, [qname]
         for hop in range(1, max_hops + 1):
             next_frontier = []
@@ -254,6 +260,8 @@ def compute_capability_profiles(
                         tentative |= tentative_mask
                         if callee in opaque_boundary:
                             opaque.append(callee)
+                        if callee in proxy_boundary:
+                            proxy.append(callee)
                         comps = empty  # a summary is one source; its incidental bits never establish a composite
                         # Only a summary's operational I/O counts toward a
                         # multi-source composite: a client constructor's clock
@@ -278,6 +286,7 @@ def compute_capability_profiles(
             tuple(frozenset(e) for e in hop_established),
             tentative & confirmed,
             tuple(sorted(opaque)),
+            tuple(sorted(proxy)),
         )
     return profiles
 

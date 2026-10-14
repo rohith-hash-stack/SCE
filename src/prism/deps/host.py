@@ -18,7 +18,9 @@ the headers again:
    `boundary_opaque`), which `prism.semantics.capabilities` counts at
    hop 1. A call into compiled native code - a fully native package, or an
    entry point whose summary reaches the package's own extension module -
-   is an OPAQUE boundary: bits 0, capability unknown.
+   is an OPAQUE boundary: bits 0, capability unknown. A call through a
+   module-level runtime proxy (`PackageSummary.proxies`) is a PROXY
+   boundary, likewise bits 0.
 
 The host graph gains one boundary node per dependency entry point it
 actually calls - never a dependency's internals.
@@ -39,6 +41,10 @@ from prism.graph.symbol_table import GlobalSymbolTable, path_to_module
 
 #: `boundary_tier` values on boundary nodes.
 TIER_CONFIDENT, TIER_TENTATIVE, TIER_OPAQUE, TIER_NONE = "CONFIDENT", "TENTATIVE", "OPAQUE", "NONE"
+#: A call through a module-level runtime proxy (`django.db.connection`,
+#: `flask.request`): what it reaches is decided at run time - unknown, like
+#: OPAQUE, never invented.
+TIER_PROXY = "PROXY"
 
 
 def _host_local_roots(repo_root: str, files: list[str]) -> set[str]:
@@ -110,6 +116,20 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
         v for u, v in graph.edges()
         if u not in header_nodes and v not in builder.symbol_table and is_native(v)
     }
+    proxies = {name: (package, cls) for package, summary in summaries.items() for name, cls in summary.proxies.items()}
+
+    def proxy_of(target: str) -> str | None:
+        parts = target.split(".")
+        for k in range(len(parts) - 1, 0, -1):  # longest proxy name a strict prefix of the call
+            if ".".join(parts[:k]) in proxies:
+                return ".".join(parts[:k])
+        return None
+
+    proxy_called = {
+        v: name for u, v in graph.edges()
+        if u not in header_nodes and v not in builder.symbol_table and v not in native_called
+        and (name := proxy_of(v)) is not None
+    }
     # `Cls(...)` runs the constructor: a class entry point carries its
     # `__init__`/`__new__` summaries (own or inherited, resolved while the
     # header hierarchy is still indexed).
@@ -153,6 +173,13 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
             boundary_bits=0, boundary_confident_bits=0, boundary_tentative_bits=0,
             boundary_opaque=True, boundary_tier=TIER_OPAQUE,
         )
+    for node, name in proxy_called.items():
+        package, cls = proxies[name]
+        graph.nodes[node].update(
+            external=True, boundary=True, boundary_package=package, boundary_version=summaries[package].ref.version,
+            boundary_bits=0, boundary_confident_bits=0, boundary_tentative_bits=0,
+            boundary_opaque=False, boundary_proxy=name, boundary_proxy_class=cls, boundary_tier=TIER_PROXY,
+        )
     # Unresolved targets only header code pointed at are now isolated.
     for node in [n for n in graph.nodes if graph.degree(n) == 0 and n not in builder.symbol_table]:
         if graph.nodes[node].get("external") and node not in host_called:
@@ -172,7 +199,7 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
         builder._import_maps.pop(path, None)
     builder._methods_by_class = {c: m for c, m in builder._methods_by_class.items() if c not in header_symbols}
     builder.module_roots = [r for r in builder.module_roots if r != header_root]
-    return len(host_called) + len(native_called)
+    return len(host_called) + len(native_called) + len(proxy_called)
 
 
 def boundary_tier(mask: int, confident_mask: int, opaque: bool) -> str:

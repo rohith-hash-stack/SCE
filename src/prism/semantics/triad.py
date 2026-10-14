@@ -15,7 +15,9 @@ native code (`psycopg2`'s C core), whose capability is unknown rather than
 absent - the capability leg is not scored as a mismatch: its weight moves
 onto the physical-action leg, and the result is marked
 `capability_source="opaque-native"` with the opaque entry points it
-reached, so the provenance says exactly why it ranked where it did.
+reached, so the provenance says exactly why it ranked where it did. A call
+through a runtime proxy (`django.db.connection`, `flask.request`) is the
+same kind of unknown, reported as `"runtime-proxy"`.
 
 `DATABASE_IO` is synthesized by the triad rather than read off a catalog
 of driver names. A pure-Python driver bottoms out at a socket
@@ -140,8 +142,9 @@ def database_io(profile: CapabilityProfile | None, tokens: "frozenset[str] | set
     - `"capability"`: a DB primitive is reached (hop-decayed score);
     - `"net-socket+db-verb"`: a network connection is reached and a
       database verb is dispatched (score of the network leg);
-    - `"opaque-native"`: only opaque native code is reached, with a
-      database verb - capability unknown (0.0), matched by the action;
+    - `"opaque-native"` / `"runtime-proxy"`: only opaque native code (or a
+      runtime proxy) is reached, with a database verb - capability unknown
+      (0.0), matched by the action;
     - `"none"`: no match."""
     if profile is None:
         return 0.0, "none"
@@ -153,9 +156,19 @@ def database_io(profile: CapabilityProfile | None, tokens: "frozenset[str] | set
     network = capability_score(profile, _NET_SOCKET)
     if network > 0:
         return network, "net-socket+db-verb"
+    unknown = _unknown_source(profile)
+    return (0.0, unknown) if unknown else (0.0, "none")
+
+
+def _unknown_source(profile: CapabilityProfile | None) -> str | None:
+    """Why `profile`'s capability is unknown rather than absent: compiled
+    native code reached (`"opaque-native"`), else a runtime proxy reached
+    (`"runtime-proxy"`), else `None`."""
+    if profile is None:
+        return None
     if profile.opaque:
-        return 0.0, "opaque-native"
-    return 0.0, "none"
+        return "opaque-native"
+    return "runtime-proxy" if profile.proxy else None
 
 
 @dataclass(frozen=True)
@@ -167,8 +180,9 @@ class TriadScore:
     stems: float
     capability: float
     action: float
-    capability_source: str  # "capability" | "net-socket+db-verb" | "opaque-native" | "none"
+    capability_source: str  # "capability" | "net-socket+db-verb" | "opaque-native" | "runtime-proxy" | "none"
     opaque: tuple[str, ...] = ()
+    proxy: tuple[str, ...] = ()
 
 
 def triad_rerank(
@@ -193,11 +207,13 @@ def triad_rerank(
         words = tokens.get(qname, frozenset())
         act = action_score(words, action) if action is not None else 0.0
         opaque = profile.opaque if profile is not None else ()
+        proxy = profile.proxy if profile is not None else ()
+        unknown = _unknown_source(profile)
         if target == DATABASE_IO:
             capability, db_source = database_io(profile, words)
-            if db_source == "opaque-native":
-                # A compiled driver dispatching a database verb: the verb
-                # is the matching action.
+            if db_source in ("opaque-native", "runtime-proxy"):
+                # A compiled driver (or a proxied connection) dispatching a
+                # database verb: the verb is the matching action.
                 act = max(act, 1.0)
         else:
             capability = capability_score(profile, target) if target is not None else 0.0
@@ -205,14 +221,14 @@ def triad_rerank(
         if db_source == "net-socket+db-verb":
             source = db_source
             boost = capability_weight * capability + action_weight * act
-        elif target is not None and capability == 0.0 and opaque:
+        elif target is not None and capability == 0.0 and unknown:
             # Unknown, not absent: the capability leg's weight moves to the
             # physical-action leg instead of counting against the candidate.
-            source = "opaque-native"
+            source = unknown
             boost = (capability_weight + action_weight) * act
         else:
             source = "capability" if capability > 0 else "none"
             boost = capability_weight * capability + action_weight * act
-        rows.append((TriadScore(qname, stems * (1.0 + boost), stems, capability, act, source, opaque), i))
+        rows.append((TriadScore(qname, stems * (1.0 + boost), stems, capability, act, source, opaque, proxy), i))
     rows.sort(key=lambda r: (-r[0].score, r[1]))
     return [row for row, _ in rows]

@@ -25,7 +25,7 @@ from prism.semantics.capabilities import MAX_HOPS, CapabilityProfile, compute_ca
 from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, target_repo_file_signature
 
 #: Bump when `CapabilityProfile` or its derivation changes shape.
-PROFILE_CACHE_VERSION = 1
+PROFILE_CACHE_VERSION = 2
 _MEMORY: _LRUCache[dict[str, CapabilityProfile]] = _LRUCache(maxsize=4)
 _SCHEMA = "CREATE TABLE IF NOT EXISTS profiles (key TEXT PRIMARY KEY, payload TEXT NOT NULL)"
 
@@ -37,7 +37,7 @@ def profile_cache_path(repo_root: str) -> Path:
 def _dependency_digest(builder: ConcreteGraphBuilder) -> list:
     boundary = sorted(
         (n, a.get("boundary_package"), a.get("boundary_version"), int(a.get("boundary_bits", 0)),
-         int(a.get("boundary_tentative_bits", 0)), bool(a.get("boundary_opaque")))
+         int(a.get("boundary_tentative_bits", 0)), bool(a.get("boundary_opaque")), a.get("boundary_proxy"))
         for n, a in builder.graph.nodes(data=True) if a.get("boundary")
     )
     return [boundary, sorted(getattr(builder, "stub_shadow", {}).items())]
@@ -54,7 +54,8 @@ def profile_cache_key(builder: ConcreteGraphBuilder, repo_root: str, max_hops: i
 def _dump(profiles: dict[str, CapabilityProfile]) -> str:
     return json.dumps({
         q: [list(p.by_hop), p.own_l3, [list(s) for s in p.sources] if p.sources is not None else None,
-            [sorted(e) for e in p.established] if p.established is not None else None, p.tentative, list(p.opaque)]
+            [sorted(e) for e in p.established] if p.established is not None else None, p.tentative, list(p.opaque),
+            list(p.proxy)]
         for q, p in profiles.items()
     })
 
@@ -64,8 +65,9 @@ def _load(payload: str) -> dict[str, CapabilityProfile]:
         q: CapabilityProfile(
             tuple(by_hop), own_l3, tuple(tuple(s) for s in sources) if sources is not None else None,
             tuple(frozenset(e) for e in established) if established is not None else None, tentative, tuple(opaque),
+            tuple(proxy),
         )
-        for q, (by_hop, own_l3, sources, established, tentative, opaque) in json.loads(payload).items()
+        for q, (by_hop, own_l3, sources, established, tentative, opaque, proxy) in json.loads(payload).items()
     }
 
 

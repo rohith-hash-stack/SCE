@@ -283,12 +283,13 @@ def _callable_segments(node: Node, new_expr_type: str | None, parsed: ParsedFile
 
 
 def calls_opaque_boundary(builder: ConcreteGraphBuilder, qname: str) -> bool:
-    """`qname` directly calls compiled native dependency code whose
-    capability is unknown (an OPAQUE boundary): never `SINK_PURE_COMPUTE`."""
+    """`qname` directly calls dependency code whose capability is unknown -
+    compiled native code (OPAQUE) or a runtime proxy (PROXY): never
+    `SINK_PURE_COMPUTE`."""
     if qname not in builder.graph:
         return False
     return any(
-        builder.graph.nodes[callee].get("boundary_opaque")
+        builder.graph.nodes[callee].get("boundary_opaque") or builder.graph.nodes[callee].get("boundary_proxy")
         for _u, callee, data in builder.graph.out_edges(qname, data=True)
         if data.get("relation", "CALLS") in ("CALLS", "INSTANTIATES")
     )

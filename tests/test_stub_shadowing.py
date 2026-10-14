@@ -10,9 +10,10 @@ Synthetic packages named after real stub-table packages, so the real Layer
   the package defines - unresolved, stays.
 - `httpx`    - `httpx.get` reaches a socket (shadowed); `httpx.Client()` is
   lazy (fallback).
-- `django`   - `django.db.connection` is a runtime proxy object: static
-  resolution cannot land `django.db.connection.cursor` on a summarized
-  symbol, so the stub stays.
+- `django`   - `django.db.connection` is a module-level runtime proxy
+  (`ConnectionProxy` forwards `__getattr__`): calls through it are PROXY
+  boundaries - capability unknown - and they shadow the
+  `django.db.connection.cursor` stub.
 - `psycopg2` - `connect` is re-exported straight from the compiled
   `_psycopg` module: OPAQUE, shadowed, never invented bits.
 """
@@ -225,7 +226,6 @@ def test_actionable_summaries_shadow_their_stub_entries(host):
 def test_unshadowed_entries_stay_as_fallback(host):
     shadow = host[0].stub_shadow
     assert "httpx.Client" not in shadow  # lazy constructor: empty summary
-    assert "django.db.connection.cursor" not in shadow  # runtime proxy: nothing static to land on
     assert "redis.Redis.set" not in shadow  # not defined by the package: unresolved
     assert not any(e.split(".")[0] not in PACKAGES for e in shadow)  # only installed, summarized packages
 
@@ -244,10 +244,20 @@ def test_shadowed_call_reads_the_summary_not_the_stub(host):
     assert fetch.by_hop[1] & NET  # the summary, at hop 1
 
 
-def test_lazy_constructor_and_proxy_keep_their_stub(host):
+def test_lazy_constructor_keeps_its_stub(host):
     assert _p(host[1], "make_client").own_l3 & NET  # httpx.Client stub
-    assert _p(host[1], "raw_query").own_l3 & DB  # django.db.connection.cursor stub
     assert _p(host[1], "open_cache").own_l3 & DB  # redis.Redis stub
+
+
+def test_runtime_proxy_is_a_proxy_boundary_that_shadows_its_stub(host):
+    builder, profiles, _ = host
+    assert builder.stub_shadow["django.db.connection.cursor"] == "django.db.connection"
+    node = builder.graph.nodes["django.db.connection.cursor"]
+    assert node["boundary_tier"] == "PROXY" and node["boundary_bits"] == 0
+    assert node["boundary_proxy_class"] == "django.db.ConnectionProxy"
+    raw = _p(profiles, "raw_query")
+    assert raw.own_l3 == 0 and raw.within(2) == 0  # the stub is gone, nothing invented
+    assert raw.proxy == ("django.db.connection.cursor",) and raw.opaque == ()
 
 
 def test_shadowed_method_adds_no_stub_signal_beyond_its_constructor(host):
@@ -271,7 +281,8 @@ def test_substance_recognizes_summarized_entry_points_as_sinks(host):
     bits = compute_substance_bits(host[0])
     assert bits["app.main.fetch"] & FeatureBit.SINK_NETWORK_IO  # from the summary
     assert not bits["app.main.fetch"] & FeatureBit.SINK_PURE_COMPUTE
-    assert bits["app.main.raw_query"] & FeatureBit.SINK_DATABASE_IO  # stub fallback
+    assert not bits["app.main.raw_query"] & FeatureBit.SINK_DATABASE_IO  # proxy: unknown, no invented sink
+    assert not bits["app.main.raw_query"] & FeatureBit.SINK_PURE_COMPUTE  # ...and never "pure"
     assert bits["app.main.cache_lookup"] & FeatureBit.SINK_NETWORK_IO
 
 

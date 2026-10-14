@@ -14,6 +14,11 @@ import ast
 import os
 
 
+#: Attribute-forwarding dunders: a class defining or assigning one is a
+#: runtime proxy when instantiated at module level (`prism.deps.summarizer`).
+_FORWARDERS = ("__getattr__", "__getattribute__")
+
+
 def _stub(node):
     node.body = [ast.Expr(ast.Constant(Ellipsis))]
     return node
@@ -52,6 +57,11 @@ def _class_members(body: list) -> list:
                 members.append(_stub(m))
         elif isinstance(m, ast.AnnAssign) and isinstance(m.target, ast.Name):
             members.append(ast.AnnAssign(target=m.target, annotation=m.annotation, value=None, simple=1))
+        elif isinstance(m, ast.Assign) and any(isinstance(t, ast.Name) and t.id in _FORWARDERS for t in m.targets):
+            # `__getattr__ = _ProxyLookup(getattr)` (werkzeug's LocalProxy):
+            # an attribute-forwarding class, assigned rather than defined.
+            names = [t for t in m.targets if isinstance(t, ast.Name) and t.id in _FORWARDERS]
+            members.append(ast.Assign(targets=names, value=ast.Constant(Ellipsis), lineno=0))
         elif isinstance(m, ast.ClassDef):
             members.extend(_header_statements([m]))
         elif isinstance(m, (ast.If, ast.Try)):

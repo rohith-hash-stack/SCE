@@ -40,9 +40,10 @@ import time
 from dataclasses import dataclass, field
 
 from prism.deps.discover import DistributionRef
-from prism.deps.headers import package_headers, write_headers
+from prism.deps.headers import _FORWARDERS, package_headers, write_headers
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable
+from prism.parser.lang_config import call_callee_segments
 from prism.semantics.bitmask import PRIMITIVE_BITS
 from prism.semantics.capabilities import compute_capability_profiles
 from prism.semantics.l2_contracts import L2_CALLBACK_CONTRACTS
@@ -50,7 +51,7 @@ from prism.semantics.primitives import primitive_registry
 
 #: Bump whenever the summarization algorithm changes what it computes -
 #: the one way cached summaries are invalidated besides the package itself.
-SUMMARY_SCHEMA_VERSION = 3
+SUMMARY_SCHEMA_VERSION = 4
 CONFIDENT, TENTATIVE = 0, 1
 #: Evidence key (not a primitive bit) for "reaches compiled native code":
 #: what such code does is unknown, so it never contributes capability bits.
@@ -102,6 +103,12 @@ class PackageSummary:
     symbols: dict[str, SymbolSummary] = field(default_factory=dict)  # only symbols with any bit or NATIVE
     headers: dict[str, str] = field(default_factory=dict)
     stats: dict = field(default_factory=dict)
+    #: Module-level runtime proxies: `{name: proxy class}` for every
+    #: module-level instance of a class that forwards attribute access
+    #: (`__getattr__` / `__getattribute__`) - `django.db.connection`,
+    #: `flask.globals.request` - and each name it is re-exported under
+    #: (`flask.request`). Calls through one are PROXY boundaries.
+    proxies: dict[str, str] = field(default_factory=dict)
 
     def mask(self, qualified_name: str) -> int:
         s = self.symbols.get(qualified_name)
@@ -142,6 +149,70 @@ def _class_bases(builder: ConcreteGraphBuilder, cls: str) -> list[str]:
     if sup is None or parsed is None:
         return []
     return [parsed.source[c.start_byte:c.end_byte].decode(errors="replace") for c in sup.named_children]
+
+
+def proxy_instances(builder: ConcreteGraphBuilder, package: str) -> dict[str, str]:
+    """`{module-level name: proxy class}` for `package`'s own module-level
+    instances of attribute-forwarding classes. A class forwards when it, or
+    any ancestor - a dependency's header class included (werkzeug's
+    `LocalProxy` seen from flask) - defines `__getattr__` or
+    `__getattribute__`."""
+    table = builder.symbol_table
+    forwarding: dict[str, bool] = {}
+
+    def forwards(cls: str) -> bool:
+        if cls not in forwarding:
+            forwarding[cls] = any(f"{owner}.{m}" in table for owner in (cls, *builder._mro_ancestors(cls)) for m in _FORWARDERS)
+        return forwarding[cls]
+
+    out: dict[str, str] = {}
+    for symbol in table:
+        q = symbol.qualified_name
+        if symbol.kind != "attribute" or symbol.enclosing_class or not (q == package or q.startswith(package + ".")):
+            continue
+        assign = builder.def_node(q)
+        value = assign.child_by_field_name("right") if assign is not None else None
+        parsed = builder.parsed_file(symbol.file)
+        import_map = builder._import_maps.get(symbol.file)
+        if value is None or value.type != "call" or parsed is None or import_map is None:
+            continue
+        segments = call_callee_segments(value, parsed.source, parsed.language_id)
+        cls = builder._resolve_reference_chain(segments, symbol.module, import_map) if segments else None
+        cls_symbol = table.get(cls) if cls else None
+        if cls_symbol is not None and cls_symbol.kind == "class" and forwards(cls):
+            out[q] = cls
+    return out
+
+
+def reexport_aliases(headers: dict[str, str], package: str, targets: dict[str, str]) -> dict[str, str]:
+    """`targets` plus every name a module of `package` re-exports one of
+    them under (`from .globals import request` in `flask/__init__.py` ->
+    `flask.request`), followed through chains of re-exports."""
+    out = dict(targets)
+    imports = []
+    for rel, text in headers.items():
+        parts = [package, *rel[:-3].split(os.sep)]
+        is_init = parts[-1] == "__init__"
+        module = ".".join(parts[:-1] if is_init else parts)
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+        for stmt in tree.body:
+            if isinstance(stmt, ast.ImportFrom):
+                base = module.split(".") if is_init else module.split(".")[:-1]
+                if stmt.level > 1:
+                    base = base[: len(base) - (stmt.level - 1)]
+                source = ".".join([*base, *([stmt.module] if stmt.module else [])]) if stmt.level else (stmt.module or "")
+                imports.extend((f"{source}.{a.name}", f"{module}.{a.asname or a.name}") for a in stmt.names)
+    changed = True
+    while changed:
+        changed = False
+        for origin, alias in imports:
+            if origin in out and alias not in out:
+                out[alias] = out[origin]
+                changed = True
+    return out
 
 
 def native_reexports(headers: dict[str, str], package: str, natives: set[str]) -> set[str]:
@@ -226,9 +297,12 @@ def summarize_package(ref: DistributionRef, dependencies: list[PackageSummary] =
         builder.pass1_collect_definitions(files)
         builder.pass2_resolve_calls(files)
         summary = _summarize_built(builder, ref, dependencies, natives)
+        proxies = proxy_instances(builder, ref.package)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     summary.headers = package_headers(ref.package_dir)
+    summary.proxies = reexport_aliases(summary.headers, ref.package, proxies)
+    summary.stats["proxy_instances"] = len(proxies)
     summary.stats["t_total_s"] = round(time.time() - started, 3)
     return summary
 
