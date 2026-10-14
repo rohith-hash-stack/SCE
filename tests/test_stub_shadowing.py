@@ -24,7 +24,9 @@ import pytest
 
 from prism.cli import build_pipeline
 from prism.deps import DependencyIndex, SummaryStore
-from prism.semantics.bitmask import FeatureBit
+from prism.deps.shadow import shadows
+from prism.deps.summarizer import CONFIDENT, NATIVE, TENTATIVE, BitEvidence, SymbolSummary
+from prism.semantics.bitmask import AMBIENT_PRIMITIVE_MASK, OPERATIONAL_IO_MASK, PRIMITIVE_BITS, FeatureBit
 from prism.semantics.capabilities import compute_capability_profiles
 from prism.semantics.extractor import compute_feature_masks, compute_feature_masks_cached
 from prism.semantics.substance import compute_substance_bits
@@ -38,6 +40,7 @@ PACKAGES = {
         "__init__.py": "from redis.client import Redis\n",
         "client.py": """
             import socket
+            import time
 
             from redis.commands import KeyCommands
 
@@ -45,6 +48,7 @@ PACKAGES = {
             class Redis(KeyCommands):
                 def __init__(self, host="localhost"):
                     self.host = host
+                    self.created = time.monotonic()
 
                 def execute_command(self, *args):
                     sock = socket.create_connection((self.host, 6379))
@@ -88,9 +92,37 @@ PACKAGES = {
         """,
     },
     "psycopg2": {"__init__.py": "from psycopg2._psycopg import connect\n"},
+    "asyncpg": {
+        "__init__.py": "from .connection import connect\n",
+        "connection.py": """
+            import random
+
+
+            class Connection:
+                def __init__(self, dsn):
+                    self.dsn = dsn
+                    self.backoff = random.random()
+
+
+            def connect(dsn):
+                return Connection(dsn)
+        """,
+    },
+    "boto3": {
+        "__init__.py": """
+            import os
+
+
+            def client(service):
+                with open(os.path.expanduser("~/.aws/config")) as fh:
+                    return fh.read()
+        """,
+    },
 }
 
 HOST = """
+import asyncpg
+import boto3
 import django.db
 import httpx
 import psycopg2
@@ -121,6 +153,14 @@ def raw_query(sql):
 
 def pg_connect():
     return psycopg2.connect("dbname=app")
+
+
+def pool_connect(dsn):
+    return asyncpg.connect(dsn)
+
+
+def make_s3():
+    return boto3.client("s3")
 """
 
 
@@ -184,7 +224,7 @@ def test_actionable_summaries_shadow_their_stub_entries(host):
 
 def test_unshadowed_entries_stay_as_fallback(host):
     shadow = host[0].stub_shadow
-    assert "redis.Redis" not in shadow and "httpx.Client" not in shadow  # lazy constructors: summary is empty
+    assert "httpx.Client" not in shadow  # lazy constructor: empty summary
     assert "django.db.connection.cursor" not in shadow  # runtime proxy: nothing static to land on
     assert "redis.Redis.set" not in shadow  # not defined by the package: unresolved
     assert not any(e.split(".")[0] not in PACKAGES for e in shadow)  # only installed, summarized packages
@@ -245,3 +285,40 @@ def test_cached_feature_masks_match_uncached_with_shadowing(host):
     builder, _, repo = host
     uncached = compute_feature_masks(builder)
     assert compute_feature_masks_cached(builder, repo) == uncached
+
+
+# --------------------------------------------------------------------- #
+# Only operational I/O (or native code) shadows - ambient bits never do
+# --------------------------------------------------------------------- #
+def _summary(*bits, tier=CONFIDENT):
+    return SymbolSummary("function", {int(b): BitEvidence(tier, 1, ("x",)) for b in bits})
+
+
+def test_operational_and_ambient_masks_partition_the_primitives():
+    assert OPERATIONAL_IO_MASK & AMBIENT_PRIMITIVE_MASK == 0
+    assert OPERATIONAL_IO_MASK | AMBIENT_PRIMITIVE_MASK == sum(int(b) for b in PRIMITIVE_BITS)
+
+
+def test_shadowing_predicate():
+    F = FeatureBit
+    assert shadows(_summary(F.PRIM_NET_CONNECT)) and shadows(_summary(F.PRIM_FS_READ, tier=TENTATIVE))
+    assert shadows(_summary(F.PRIM_DB_WRITE)) and shadows(_summary(F.PRIM_PROC_SPAWN, F.PRIM_TIME_CLOCK))
+    assert not shadows(_summary(F.PRIM_TIME_CLOCK, F.PRIM_TIME_WAIT, F.PRIM_RAND_PRNG, F.PRIM_RAND_CSPRNG))
+    assert not shadows(_summary())
+    assert shadows(_summary(NATIVE)) and shadows(_summary(NATIVE, F.PRIM_TIME_CLOCK))  # native code reached
+
+
+def test_ambient_only_summary_keeps_the_operational_stub(host):
+    builder, profiles, _ = host
+    for entry, fn in (("redis.Redis", "open_cache"), ("asyncpg.connect", "pool_connect")):
+        assert entry not in builder.stub_shadow, entry
+        p = _p(profiles, fn)
+        assert p.by_hop[1] & AMBIENT_PRIMITIVE_MASK and not p.by_hop[1] & OPERATIONAL_IO_MASK  # summary: ambient only
+        assert p.own_l3 & DB, fn  # the database stub still applies
+
+
+def test_filesystem_summary_shadows_a_network_stub(host):
+    builder, profiles, _ = host
+    assert builder.stub_shadow["boto3.client"] == "boto3.client"
+    s3 = _p(profiles, "make_s3")
+    assert s3.own_l3 == 0 and s3.by_hop[1] & int(FeatureBit.PRIM_FS_READ) and not s3.within(2) & NET

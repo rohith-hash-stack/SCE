@@ -3,20 +3,24 @@
 
 A Python Layer 3 stub entry (`redis.Redis.get`) is *shadowed* when, with
 the dependency's headers indexed, static resolution lands it on a summarized
-symbol whose summary carries actionable signal - non-zero capability bits
-(CONFIDENT or TENTATIVE) or OPAQUE native evidence. A shadowed entry is
+symbol whose summary carries actionable signal - at least one operational
+I/O bit (`OPERATIONAL_IO_MASK`: network, filesystem, database, process; any
+tier) or OPAQUE native evidence. Ambient bits alone (clocks, timers,
+randomness - a lazy `redis.Redis()` reading a clock) never shadow an
+operational stub. A shadowed entry is
 ignored by capability and Substance matching: the summary takes full
 precedence. An entry static resolution cannot land on a summarized symbol -
 a runtime proxy (`django.db.connection.cursor`), a C type
 (`psycopg2.extensions.connection.cursor`), a bound method of a module-level
-instance (`numpy.random.rand`) - or one whose summary is empty (a lazy
-constructor such as `httpx.Client`) stays as the fallback.
+instance (`numpy.random.rand`) - or one whose summary is empty or ambient
+only (a lazy constructor such as `httpx.Client`) stays as the fallback.
 """
 from __future__ import annotations
 
 from prism.deps.summarizer import PackageSummary, SymbolSummary, constructor_methods
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import resolve_export
+from prism.semantics.bitmask import OPERATIONAL_IO_MASK
 from prism.semantics.boundary_stubs_l3 import L3_BOUNDARY_STUBS
 
 #: Shadow value for an entry landing on a fully native (opaque) package.
@@ -74,6 +78,12 @@ def merge_summaries(symbols: list[SymbolSummary]) -> SymbolSummary | None:
     return SymbolSummary("class", evidence)
 
 
+def shadows(symbol: SymbolSummary) -> bool:
+    """Actionable summary signal: native code reached (OPAQUE evidence), or
+    at least one operational I/O bit."""
+    return symbol.opaque or bool(symbol.mask & OPERATIONAL_IO_MASK)
+
+
 def compute_stub_shadow(
     builder: ConcreteGraphBuilder,
     summaries: dict[str, PackageSummary],
@@ -98,6 +108,6 @@ def compute_stub_shadow(
         if target is None:
             continue
         symbol = entry_summary(builder, target, summary, header_funcs)
-        if symbol is not None and (symbol.mask or symbol.opaque):
+        if symbol is not None and shadows(symbol):
             shadow[entry] = target
     return shadow

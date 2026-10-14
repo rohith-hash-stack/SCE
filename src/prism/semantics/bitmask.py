@@ -123,6 +123,20 @@ ROLE_BITS = frozenset(b for b in FeatureBit if b.name and b.name.startswith("ROL
 MODIFIER_BITS = frozenset({FeatureBit.HAS_REFLECTION})
 #: Atomic primitive bits (Phase 2) - capability-profile bits, no axis.
 PRIMITIVE_BITS = frozenset(b for b in FeatureBit if b.name and b.name.startswith("PRIM_"))
+#: Ambient primitives: clocks, timers and randomness that almost every
+#: client library touches incidentally (timeouts, backoff jitter, request
+#: ids) - not physical external I/O.
+AMBIENT_PRIMITIVE_MASK = int(
+    FeatureBit.PRIM_TIME_CLOCK | FeatureBit.PRIM_TIME_WAIT | FeatureBit.PRIM_RAND_PRNG | FeatureBit.PRIM_RAND_CSPRNG
+)
+#: Operational I/O primitives: network (connect, listen, DNS, TLS),
+#: filesystem, database and process - every primitive that is not ambient.
+OPERATIONAL_IO_MASK = int(
+    FeatureBit.PRIM_NET_CONNECT | FeatureBit.PRIM_NET_LISTEN | FeatureBit.PRIM_NET_DNS | FeatureBit.PRIM_NET_TLS
+    | FeatureBit.PRIM_FS_READ | FeatureBit.PRIM_FS_WRITE | FeatureBit.PRIM_FS_DELETE
+    | FeatureBit.PRIM_DB_CONNECT | FeatureBit.PRIM_DB_READ | FeatureBit.PRIM_DB_WRITE
+    | FeatureBit.PRIM_PROC_SPAWN | FeatureBit.PRIM_PROC_SIGNAL
+)
 ALL_KNOWN_BITS = SUBSTANCE_BITS | FORM_BITS | OUTPUT_BITS | ROLE_BITS | MODIFIER_BITS | PRIMITIVE_BITS
 #: Bits a context pack can "cover" (four axes only) - packing and coverage
 #: reports never count modifier or primitive bits as features.
