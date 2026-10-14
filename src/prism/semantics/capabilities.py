@@ -69,7 +69,13 @@ class CapabilityProfile:
       (never counted as bits; see `prism.semantics.triad`).
     - `proxy`: PROXY boundary nodes reached within the hop bound - calls
       through module-level runtime proxies (`django.db.connection`), whose
-      target is decided at run time: likewise unknown, never bits."""
+      target is decided at run time: likewise unknown, never bits.
+    - `internal`: the same reach counted in *repo-internal* call edges
+      (`internal[h]`: bits first reached through `h` of them). A call into
+      a summarized dependency costs no hop - the function that makes it is
+      the sink (`internal[0]`), its caller one hop up - where `by_hop`
+      counts the dependency call itself as a hop. Read by the attenuated
+      capability score (`capability_score(..., gamma=...)`)."""
 
     by_hop: tuple[int, ...]
     own_l3: int = 0
@@ -78,6 +84,7 @@ class CapabilityProfile:
     tentative: int = 0
     opaque: tuple[str, ...] = ()
     proxy: tuple[str, ...] = ()
+    internal: "tuple[int, ...] | None" = None
 
     @property
     def own(self) -> int:
@@ -242,17 +249,25 @@ def compute_capability_profiles(
     empty: frozenset[str] = frozenset()
     for qname, bits in own.items():
         by_hop = [bits] + [0] * MAX_HOPS
+        internal = [bits] + [0] * MAX_HOPS
         hop_sources: list[list[int]] = [list(sites[qname])] + [[] for _ in range(MAX_HOPS)]
         hop_established: list[set[str]] = [set(own_comps[qname])] + [set() for _ in range(MAX_HOPS)]
         tentative = 0
         opaque: list[str] = []
         proxy: list[str] = []
         seen, frontier = {qname}, [qname]
-        for hop in range(1, max_hops + 1):
+        for hop in range(1, max_hops + 2):
             next_frontier = []
             for node in frontier:
                 for callee in callees(node):
                     if callee in seen:
+                        continue
+                    if hop > max_hops:
+                        # One hop past the bound, for `internal` only: a
+                        # dependency call made `max_hops` repo edges away.
+                        if callee in boundary:
+                            seen.add(callee)
+                            internal[hop - 1] |= boundary[callee][0]
                         continue
                     seen.add(callee)
                     if callee in boundary:
@@ -267,10 +282,12 @@ def compute_capability_profiles(
                         # multi-source composite: a client constructor's clock
                         # read plus another call's socket is no heartbeat.
                         source = mask & OPERATIONAL_IO_MASK
+                        internal[hop - 1] |= mask
                     else:
                         next_frontier.append(callee)
                         mask, comps = own[callee], own_comps[callee]
                         source = mask
+                        internal[hop] |= mask
                     by_hop[hop] |= mask
                     if source:
                         hop_sources[hop].append(source)
@@ -287,8 +304,17 @@ def compute_capability_profiles(
             tentative & confirmed,
             tuple(sorted(opaque)),
             tuple(sorted(proxy)),
+            tuple(internal),
         )
     return profiles
+
+
+def _mask_coverage(mask: int, target: "CompositeProfile | str | int") -> float:
+    if isinstance(target, str):
+        target = COMPOSITE_PROFILES[target]
+    if isinstance(target, CompositeProfile):
+        return target.coverage(mask)
+    return 1.0 if mask & int(target) else 0.0
 
 
 def _groups(target: "CompositeProfile | str | int") -> tuple[int, ...]:
@@ -315,14 +341,29 @@ def _coverage(profile: CapabilityProfile, target: "CompositeProfile | str | int"
     return target.coverage_from_sources(sources)
 
 
-def capability_score(profile: CapabilityProfile | None, target: "CompositeProfile | str | int") -> float:
+def capability_score(
+    profile: CapabilityProfile | None, target: "CompositeProfile | str | int", gamma: float | None = None
+) -> float:
     """0-1 soft signal: the best hop-decayed coverage of `target` by what
     the function reaches within each hop distance. A composite is covered
     in proportion to the share of its groups present, each from its own
     source; a primitive mask (any of its bits) counts as one group.
-    TENTATIVE dependency bits count in full - this is a soft signal."""
+    TENTATIVE dependency bits count in full - this is a soft signal.
+
+    `gamma` (opt-in): attenuate by repo-internal hops instead -
+    `gamma ** h` for reach first made through `h` internal call edges
+    (`CapabilityProfile.internal`), a summarized dependency call costing
+    none. A composite is then covered by the union of the masks within
+    `h` (no distinct-source rule)."""
     if profile is None:
         return 0.0
+    if gamma is not None and profile.internal is not None:
+        best, reach = 0.0, 0
+        for h, mask in enumerate(profile.internal):
+            reach |= mask
+            covered = _mask_coverage(reach, target)
+            best = max(best, (gamma ** h) * covered)
+        return best
     return max(decay * _coverage(profile, target, hop) for hop, decay in enumerate(HOP_DECAY[: len(profile.by_hop)]))
 
 

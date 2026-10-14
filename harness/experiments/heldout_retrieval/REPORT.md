@@ -61,3 +61,54 @@ python -m harness.experiments.heldout_retrieval.run --repos-dir R --sites-dir S 
 ```
 
 `R/microblog` and `R/realworld` are checkouts at the pinned commits. `S/<repo>` is a `pip install --target` directory holding that repo's requirements. `results.json` is the run reported here, and the output is deterministic: two runs were identical.
+
+---
+
+# Round 2: hop attenuation and intent oracle
+
+## What changed
+
+- **Internal-hop attenuation** (`hop_gamma`, opt-in): `CapabilityProfile.internal` counts reach in repo-internal call edges only.
+  - A function calling a summarized dependency, or an L2 primitive, is the sink and scores γ⁰ = 1. Each repo caller above it scores γ^h, with γ = 0.5.
+  - Note that `HOP_DECAY = (1.0, 0.5, 0.25)` already decayed by graph hops. The difference is that a dependency call no longer costs a hop: the sink used to score 0.5, the same as a caller one hop above a primitive.
+  - Default scoring is unchanged. The profile cache version is now 3. Tests are in `tests/test_hop_attenuation.py`.
+- **Intent oracle** (`intent_oracle.json`): an action and capability per question, frozen in `b32c606` before any oracle run.
+  - 39 questions have a capability: 28 DATABASE_IO, 9 network, 1 process, 1 file write.
+  - The 11 pure-computation questions are null by rule, so they rank as plain BM25.
+
+## Results (same 50 frozen questions)
+
+| system | top-1 | recall@5 | MRR | separation |
+|---|---|---|---|---|
+| BM25 + stemming | **0.68** | **0.93** | 0.782 | **0.84** |
+| Triad, rule intent | 0.66 | 0.92 | 0.777 | 0.80 |
+| Triad, rule intent, attenuated | 0.66 | 0.92 | 0.777 | 0.80 |
+| Triad, oracle intent | 0.66 | 0.92 | **0.786** | 0.82 |
+| Triad, oracle intent, attenuated | 0.66 | 0.92 | **0.786** | 0.82 |
+
+- **Attenuation changed nothing measurable.** The top 5 changed on only mb06 and rw01, and no top-1 or separation outcome changed in either intent mode (0 wins, 0 losses).
+- **The oracle intent alone is a wash.** Against the rule intent it gains 1 and loses 1 on top-1, and gains 1 on separation. Against stemmed BM25 it loses one more than it wins. Every paired sign test has p = 1.0.
+
+## Why: the capability leg has almost no evidence on these repos
+
+- Of the 39 gold functions the oracle gives a capability, about 4 carry a matching bit.
+- **Microblog:** database work goes through Flask-SQLAlchemy's `db.session`, and the SQLAlchemy constructors are OPAQUE (compiled extensions). Elasticsearch and rq calls go through the `current_app.*` runtime proxy, so they are PROXY.
+- **Realworld:** every SQL call is an aiosql method generated at runtime from `.sql` files (`queries.create_new_user(...)`), on a connection injected by FastAPI `Depends`. Only `connect_to_db` (`asyncpg.create_pool`) has a DB bit.
+
+With zero capability on both sink and caller, decay has nothing to attenuate.
+
+## The two regressions were not caused by hop distance
+
+- **mb20** (`add_notification` loses to the `notifications` route): both have capability 0.
+  - The route reaches the `flask_login.current_user` proxy, so its capability is "unknown". The triad then moves the capability weight onto the action leg, giving a boost of 0.40 against 0.15 for the true sink.
+  - Route handlers touch `request`/`current_user` proxies constantly. This rule therefore systematically favours callers over sinks in Flask apps.
+- **rw16** (`check_password` loses to `login`): the rule intent misread the question as MUTATE, and the action leg matched `login`. The oracle correctly emits no intent here, and the regression disappears.
+
+## Implications
+
+1. The bottleneck is **evidence coverage on framework-mediated I/O**: ORM sessions, app-context proxies, query builders generated at runtime, and injected connections. Neither hop decay nor intent quality can recover a signal that was never computed. Under the Rule of 3 these land in OPAQUE/PROXY, and the triad can only score them through action verbs.
+2. **The unknown-to-action weight transfer** should not reward a function just because it touches *any* proxy. Candidate fixes, untested:
+   - transfer the weight only when the proxy is the I/O receiver itself;
+   - transfer only `capability_weight × γ^h` of the weight;
+   - transfer nothing.
+3. With today's evidence, the triad does not beat stemmed BM25 on held-out code. The unit-harness separation came from synthetic packages built to carry the bits.

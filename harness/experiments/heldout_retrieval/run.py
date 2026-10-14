@@ -27,6 +27,14 @@ Systems:
              capability, index-time capability profiles with dependency
              summaries); the intent comes from the question text by the
              deterministic `rule_intent` - no per-question annotation.
+  prism_triad_att
+             prism_triad with internal-hop attenuation of the capability
+             leg (`hop_gamma` = HOP_GAMMA): the function making the I/O call
+             scores in full, each caller above it HOP_GAMMA times less.
+  prism_triad_oracle / prism_triad_oracle_att
+             the triad without / with attenuation, the intent read from
+             `intent_oracle.json` (annotated per question, frozen before
+             these runs) instead of `rule_intent`.
   embedding  sentence-transformers cosine similarity (question vs. candidate
              source); recorded as not run when the model cannot be loaded.
 
@@ -50,7 +58,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DATASET = HERE / "dataset.json"
-SYSTEMS = ("ripgrep", "bm25", "bm25_stem", "prism_bm25", "prism_triad", "embedding")
+SYSTEMS = ("ripgrep", "bm25", "bm25_stem", "prism_bm25", "prism_triad", "prism_triad_att", "prism_triad_oracle",
+           "prism_triad_oracle_att", "embedding")
+INTENT_ORACLE = HERE / "intent_oracle.json"
+HOP_GAMMA = 0.5
 _STOP = set(
     "a an the of in on to and or is are be by for from with what which where how when does do did its it if "
     "i my our we that this those these into out up as at whose has have there their them they who app code "
@@ -167,11 +178,20 @@ class PrismLexical:
     def __init__(self, c: Corpus):
         from harness.experiments.query_to_evidence.nlq.lexical import LexicalIndex, TriadContext
         self.ix = LexicalIndex(c.builder, c.root, relative_paths=True, triad=TriadContext(c.builder, c.root))
+        self.plain, self.attenuated = self.ix.triad, TriadContext(c.builder, c.root, hop_gamma=HOP_GAMMA)
+        self.oracle = {k: {f: v for f, v in i.items() if v} or None
+                       for k, i in json.loads(INTENT_ORACLE.read_text())["intents"].items()}
 
-    def rank(self, question: str, triad: bool) -> tuple[list[str], dict | None]:
+    def intent(self, q: dict, source: str) -> dict | None:
         from harness.experiments.query_to_evidence.nlq.triad_eval import rule_intent
-        intent = rule_intent(question) if triad else None
-        return self.ix.ranked(question, "NB", intent), intent
+        return {"none": lambda: None, "rule": lambda: rule_intent(q["question"]), "oracle": lambda: self.oracle[q["id"]]}[source]()
+
+    def rank(self, q: dict, source: str = "none", attenuate: bool = False) -> list[str]:
+        self.ix.triad = self.attenuated if attenuate else self.plain
+        try:
+            return self.ix.ranked(q["question"], "NB", self.intent(q, source))
+        finally:
+            self.ix.triad = self.plain
 
 
 class Embedding:
@@ -242,25 +262,31 @@ def main(argv=None) -> int:
             continue
         if missing:
             raise SystemExit(f"{repo}: dataset names not in the candidate pool: {missing}")
+        bm25, bm25_stem = IndependentBM25(c), StemmedBM25(c)
         runners = {
-            "ripgrep": lambda q, c=c: rank_ripgrep(c, q),
-            "bm25": IndependentBM25(c).rank,
-            "bm25_stem": StemmedBM25(c).rank,
+            "ripgrep": lambda q, c=c: rank_ripgrep(c, q["question"]),
+            "bm25": lambda q: bm25.rank(q["question"]),
+            "bm25_stem": lambda q: bm25_stem.rank(q["question"]),
         }
         prism = PrismLexical(c)
-        runners["prism_bm25"] = lambda q: prism.rank(q, triad=False)[0]
-        runners["prism_triad"] = lambda q: prism.rank(q, triad=True)[0]
+        runners["prism_bm25"] = lambda q: prism.rank(q)
+        runners["prism_triad"] = lambda q: prism.rank(q, "rule")
+        runners["prism_triad_att"] = lambda q: prism.rank(q, "rule", attenuate=True)
+        runners["prism_triad_oracle"] = lambda q: prism.rank(q, "oracle")
+        runners["prism_triad_oracle_att"] = lambda q: prism.rank(q, "oracle", attenuate=True)
         try:
-            runners["embedding"] = Embedding(c, args.embed_model).rank
+            embedding = Embedding(c, args.embed_model)
+            runners["embedding"] = lambda q: embedding.rank(q["question"])
         except Exception as exc:  # model weights unavailable offline
             results["notes"]["embedding"] = f"not run: {type(exc).__name__}: {str(exc)[:200]}"
         for q in qs:
             row = results["per_question"].setdefault(q["id"], {"repo": repo, "category": q["category"],
                                                                 "intent": None, "systems": {}})
-            row["intent"] = prism.rank(q["question"], triad=True)[1]
+            row["intent"] = prism.intent(q, "rule")
+            row["oracle_intent"] = prism.intent(q, "oracle")
             for system, run in runners.items():
                 t = time.perf_counter()
-                ranking = run(q["question"])
+                ranking = run(q)
                 s = score(ranking, q["gold"], q["decoys"])
                 s["ms"] = round((time.perf_counter() - t) * 1000, 1)
                 row["systems"][system] = s

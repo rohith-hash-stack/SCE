@@ -153,7 +153,9 @@ def has_database_verb(tokens: "frozenset[str] | set[str]") -> bool:
     return any(t.startswith(v) for t in tokens for v in DATABASE_VERBS) or not DATASTORE_VERBS.isdisjoint(tokens)
 
 
-def database_io(profile: CapabilityProfile | None, tokens: "frozenset[str] | set[str]") -> tuple[float, str]:
+def database_io(
+    profile: CapabilityProfile | None, tokens: "frozenset[str] | set[str]", gamma: float | None = None
+) -> tuple[float, str]:
     """`(capability, source)` for the synthesized `DATABASE_IO` target:
 
     - `"capability"`: a DB primitive is reached (hop-decayed score);
@@ -165,12 +167,12 @@ def database_io(profile: CapabilityProfile | None, tokens: "frozenset[str] | set
     - `"none"`: no match."""
     if profile is None:
         return 0.0, "none"
-    direct = capability_score(profile, _DB_BITS)
+    direct = capability_score(profile, _DB_BITS, gamma)
     if direct > 0:
         return direct, "capability"
     if not has_database_verb(tokens):
         return 0.0, "none"
-    network = capability_score(profile, _NET_SOCKET)
+    network = capability_score(profile, _NET_SOCKET, gamma)
     if network > 0:
         return network, "net-socket+db-verb"
     unknown = _unknown_source(profile)
@@ -211,10 +213,14 @@ def triad_rerank(
     action: "PhysicalAction | str | None" = None,
     capability_weight: float = CAPABILITY_WEIGHT,
     action_weight: float = ACTION_WEIGHT,
+    hop_gamma: float | None = None,
 ) -> list[TriadScore]:
     """`candidates` re-ranked by the triad; every candidate is kept, the
     boost is at most `1 + capability_weight + action_weight`, and ties keep
-    their input order (identity when no leg fires)."""
+    their input order (identity when no leg fires). `hop_gamma` (opt-in)
+    attenuates the capability leg by repo-internal hops: the function that
+    makes the I/O call scores in full, each caller above it `hop_gamma`
+    times less (`capability_score`)."""
     if capability_weight < 0 or action_weight < 0:
         raise ValueError("weights must be >= 0")
     rows = []
@@ -227,13 +233,13 @@ def triad_rerank(
         proxy = profile.proxy if profile is not None else ()
         unknown = _unknown_source(profile)
         if target == DATABASE_IO:
-            capability, db_source = database_io(profile, words)
+            capability, db_source = database_io(profile, words, hop_gamma)
             if db_source in ("opaque-native", "runtime-proxy"):
                 # A compiled driver (or a proxied connection) dispatching a
                 # database verb: the verb is the matching action.
                 act = max(act, 1.0)
         else:
-            capability = capability_score(profile, target) if target is not None else 0.0
+            capability = capability_score(profile, target, hop_gamma) if target is not None else 0.0
             db_source = None
         if db_source == "net-socket+db-verb":
             source = db_source

@@ -127,9 +127,10 @@ TRIAD_WINDOW = 200
 class TriadContext:
     """Index-time capability profiles plus memoized action tokens."""
 
-    def __init__(self, builder, repo_root: str):
+    def __init__(self, builder, repo_root: str, hop_gamma: float | None = None):
         from prism.semantics.profile_cache import cached_capability_profiles
         self.builder = builder
+        self.hop_gamma = hop_gamma  # opt-in internal-hop attenuation (`triad_rerank`)
         self.profiles = cached_capability_profiles(builder, repo_root)
         self._tokens: dict[str, frozenset[str]] = {}
 
@@ -211,6 +212,7 @@ class LexicalIndex:
         rows = triad_rerank(
             names, {self.names[i]: sc[i] for i in window}, self.triad.profiles,
             {n: self.triad.tokens(n) for n in names}, target=capability, action=action,
+            hop_gamma=self.triad.hop_gamma,
         )
         rest = [TriadScore(self.names[i], sc[i], sc[i], 0.0, 0.0, "none") for i in order[len(window):]]
         return rows + rest

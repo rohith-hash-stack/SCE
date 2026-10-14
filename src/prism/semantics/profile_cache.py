@@ -25,7 +25,7 @@ from prism.semantics.capabilities import MAX_HOPS, CapabilityProfile, compute_ca
 from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, target_repo_file_signature
 
 #: Bump when `CapabilityProfile` or its derivation changes shape.
-PROFILE_CACHE_VERSION = 2
+PROFILE_CACHE_VERSION = 3
 _MEMORY: _LRUCache[dict[str, CapabilityProfile]] = _LRUCache(maxsize=4)
 _SCHEMA = "CREATE TABLE IF NOT EXISTS profiles (key TEXT PRIMARY KEY, payload TEXT NOT NULL)"
 
@@ -55,7 +55,7 @@ def _dump(profiles: dict[str, CapabilityProfile]) -> str:
     return json.dumps({
         q: [list(p.by_hop), p.own_l3, [list(s) for s in p.sources] if p.sources is not None else None,
             [sorted(e) for e in p.established] if p.established is not None else None, p.tentative, list(p.opaque),
-            list(p.proxy)]
+            list(p.proxy), list(p.internal) if p.internal is not None else None]
         for q, p in profiles.items()
     })
 
@@ -65,9 +65,9 @@ def _load(payload: str) -> dict[str, CapabilityProfile]:
         q: CapabilityProfile(
             tuple(by_hop), own_l3, tuple(tuple(s) for s in sources) if sources is not None else None,
             tuple(frozenset(e) for e in established) if established is not None else None, tentative, tuple(opaque),
-            tuple(proxy),
+            tuple(proxy), tuple(internal) if internal is not None else None,
         )
-        for q, (by_hop, own_l3, sources, established, tentative, opaque, proxy) in json.loads(payload).items()
+        for q, (by_hop, own_l3, sources, established, tentative, opaque, proxy, internal) in json.loads(payload).items()
     }
 
 
