@@ -51,7 +51,7 @@ from prism.semantics.primitives import primitive_registry
 
 #: Bump whenever the summarization algorithm changes what it computes -
 #: the one way cached summaries are invalidated besides the package itself.
-SUMMARY_SCHEMA_VERSION = 4
+SUMMARY_SCHEMA_VERSION = 5
 CONFIDENT, TENTATIVE = 0, 1
 #: Evidence key (not a primitive bit) for "reaches compiled native code":
 #: what such code does is unknown, so it never contributes capability bits.
@@ -109,6 +109,15 @@ class PackageSummary:
     #: `flask.globals.request` - and each name it is re-exported under
     #: (`flask.request`). Calls through one are PROXY boundaries.
     proxies: dict[str, str] = field(default_factory=dict)
+    #: Synthesized-method dispatchers: `{class: method}` where the package
+    #: generates methods at run time as closures that call one `self.<m>`
+    #: (botocore's `_create_api_method` -> `self._make_api_call`), installed
+    #: on subclasses of the class defining `<m>`.
+    dispatchers: dict[str, str] = field(default_factory=dict)
+    #: Each own class's base classes, resolved through the module's imports
+    #: even when the base is not indexed (`mypy_boto3_s3.client.S3Client` ->
+    #: `botocore.client.BaseClient`).
+    bases: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def mask(self, qualified_name: str) -> int:
         s = self.symbols.get(qualified_name)
@@ -181,6 +190,106 @@ def proxy_instances(builder: ConcreteGraphBuilder, package: str) -> dict[str, st
         cls_symbol = table.get(cls) if cls else None
         if cls_symbol is not None and cls_symbol.kind == "class" and forwards(cls):
             out[q] = cls
+    return out
+
+
+def synthesized_dispatchers(builder: ConcreteGraphBuilder, package_dir: str, package: str) -> dict[str, str]:
+    """`{class: dispatcher method}` from method factories: a function that
+    defines a nested `def g(self, ...)` and returns it, `g` calling exactly
+    one `self.<m>(...)`; `<m>` must be defined by exactly one class of the
+    package - the class the synthesized methods are installed under."""
+    names: set[str] = set()
+    for path in _python_files(package_dir):
+        try:
+            tree = ast.parse(open(path, encoding="utf-8").read())
+        except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
+            continue
+        for factory in ast.walk(tree):
+            if not isinstance(factory, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            returned = {n.value.id for n in ast.walk(factory) if isinstance(n, ast.Return) and isinstance(n.value, ast.Name)}
+            for inner in factory.body:
+                if not isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef)) or inner.name not in returned:
+                    continue
+                if not inner.args.args or inner.args.args[0].arg != "self":
+                    continue
+                called = {
+                    n.func.attr for n in ast.walk(inner)
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                    and isinstance(n.func.value, ast.Name) and n.func.value.id == "self"
+                }
+                if len(called) == 1:
+                    names |= called
+    out: dict[str, str] = {}
+    for name in names:
+        owners = [
+            s.enclosing_class for s in builder.symbol_table
+            if s.kind == "method" and s.enclosing_class and s.qualified_name == f"{s.enclosing_class}.{name}"
+            and (s.qualified_name == package or s.qualified_name.startswith(package + "."))
+        ]
+        if len(owners) == 1:
+            out[owners[0]] = f"{owners[0]}.{name}"
+    return out
+
+
+def resolved_bases(builder: ConcreteGraphBuilder, package: str) -> dict[str, tuple[str, ...]]:
+    """Each own class's bases as dotted names through its module's imports."""
+    out: dict[str, tuple[str, ...]] = {}
+    for symbol in builder.symbol_table:
+        q = symbol.qualified_name
+        if symbol.kind != "class" or not (q == package or q.startswith(package + ".")):
+            continue
+        import_map = builder._import_maps.get(symbol.file)
+        names = []
+        for text in _class_bases(builder, q):
+            segments = text.split("[")[0].strip().split(".")
+            if import_map is not None and all(seg.isidentifier() for seg in segments):
+                resolved = builder._resolve_reference_chain(segments, symbol.module, import_map)
+                if resolved:
+                    names.append(resolved)
+        if names:
+            out[q] = tuple(names)
+    return out
+
+
+def header_bases(headers: dict[str, str], package: str) -> dict[str, tuple[str, ...]]:
+    """Each class's bases as declared by the published headers (a `.pyi`
+    stub is the typing contract: `class S3Client(BaseClient)` even where the
+    runtime class is generated), resolved through the module's imports."""
+    out: dict[str, tuple[str, ...]] = {}
+    for rel, text in headers.items():
+        parts = [package, *rel[:-3].split(os.sep)]
+        is_init = parts[-1] == "__init__"
+        module = ".".join(parts[:-1] if is_init else parts)
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+        origin: dict[str, str] = {}
+        for stmt in tree.body:
+            if isinstance(stmt, ast.ImportFrom):
+                base = module.split(".") if is_init else module.split(".")[:-1]
+                if stmt.level > 1:
+                    base = base[: len(base) - (stmt.level - 1)]
+                source = ".".join([*base, *([stmt.module] if stmt.module else [])]) if stmt.level else (stmt.module or "")
+                for a in stmt.names:
+                    origin[a.asname or a.name] = f"{source}.{a.name}"
+            elif isinstance(stmt, ast.Import):
+                for a in stmt.names:
+                    origin[a.asname or a.name.split(".")[0]] = a.asname and a.name or a.name.split(".")[0]
+        for stmt in tree.body:
+            if not isinstance(stmt, ast.ClassDef):
+                continue
+            names = []
+            for b in stmt.bases:
+                dotted = ast.unparse(b).split("[")[0]
+                head, _, rest = dotted.partition(".")
+                if head in origin:
+                    names.append(origin[head] + (f".{rest}" if rest else ""))
+                elif head.isidentifier():
+                    names.append(f"{module}.{dotted}")
+            if names:
+                out[f"{module}.{stmt.name}"] = tuple(names)
     return out
 
 
@@ -271,14 +380,19 @@ def _enclosing_function(builder: ConcreteGraphBuilder, qname: str, by_span: dict
     return by_span.get((symbol.file if symbol else None, cursor.start_byte, cursor.end_byte))
 
 
-def summarize_package(ref: DistributionRef, dependencies: list[PackageSummary] = ()) -> PackageSummary:
+def summarize_package(
+    ref: DistributionRef, dependencies: list[PackageSummary] = (), stubs_dir: str | None = None
+) -> PackageSummary:
     """Summarize `ref`'s package against its already summarized
-    `dependencies` (their headers and bits only)."""
+    `dependencies` (their headers and bits only). `stubs_dir`: a separate
+    stub package whose `.pyi` files type the published headers."""
     started = time.time()
     sources = _python_files(ref.package_dir)
     natives = native_modules(ref.package_dir, ref.package)
     if not sources:
-        return PackageSummary(ref, "opaque", stats={"reason": "no Python source", "native_modules": len(natives)})
+        # Compiled only - but `.pyi` stubs, when shipped, still type its API.
+        return PackageSummary(ref, "opaque", headers=package_headers(ref.package_dir, stubs_dir),
+                              stats={"reason": "no Python source", "native_modules": len(natives)})
     scratch = tempfile.mkdtemp(prefix="prism-summarize-")
     work, header_root = os.path.join(scratch, "src"), os.path.join(scratch, "headers")
     try:
@@ -298,11 +412,19 @@ def summarize_package(ref: DistributionRef, dependencies: list[PackageSummary] =
         builder.pass2_resolve_calls(files)
         summary = _summarize_built(builder, ref, dependencies, natives)
         proxies = proxy_instances(builder, ref.package)
+        dispatchers = synthesized_dispatchers(builder, ref.package_dir, ref.package)
+        bases = resolved_bases(builder, ref.package)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
-    summary.headers = package_headers(ref.package_dir)
+    summary.headers = package_headers(ref.package_dir, stubs_dir)
+    if stubs_dir is not None:
+        summary.stats["stubs"] = os.path.basename(stubs_dir)
     summary.proxies = reexport_aliases(summary.headers, ref.package, proxies)
+    declared = header_bases(summary.headers, ref.package)
+    summary.dispatchers = dispatchers
+    summary.bases = {c: tuple(dict.fromkeys((*bases.get(c, ()), *declared.get(c, ())))) for c in {*bases, *declared}}
     summary.stats["proxy_instances"] = len(proxies)
+    summary.stats["dispatchers"] = len(dispatchers)
     summary.stats["t_total_s"] = round(time.time() - started, 3)
     return summary
 

@@ -80,21 +80,31 @@ def header_source(source: str) -> str:
     return ast.unparse(ast.Module(body=_header_statements(tree.body), type_ignores=[])) + "\n"
 
 
-def package_headers(package_dir: str) -> dict[str, str]:
+def package_headers(package_dir: str, stubs_dir: str | None = None) -> dict[str, str]:
     """`{path relative to the package directory: header source}` for every
-    parseable `.py` file of a package (unparseable files are skipped)."""
+    parseable module of a package. A `.pyi` stub is the module's typing
+    contract and wins over its `.py`; a separate stub package (`stubs_dir`,
+    e.g. `boto3-stubs/` for `boto3`) is overlaid on top. Keys always name
+    the `.py` module (unparseable files are skipped)."""
     headers: dict[str, str] = {}
-    for root, dirs, files in os.walk(package_dir):
-        dirs[:] = sorted(d for d in dirs if d != "__pycache__")
-        for name in sorted(files):
-            if not name.endswith(".py"):
-                continue
-            path = os.path.join(root, name)
-            try:
-                with open(path, encoding="utf-8") as fh:
-                    headers[os.path.relpath(path, package_dir)] = header_source(fh.read())
-            except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
-                continue
+    for root_dir in (package_dir, stubs_dir):
+        if root_dir is None:
+            continue
+        for root, dirs, files in os.walk(root_dir):
+            dirs[:] = sorted(d for d in dirs if d != "__pycache__")
+            for name in sorted(files, key=lambda f: (f.endswith(".pyi"), f)):  # .py first, .pyi overrides
+                if not (name.endswith(".py") or name.endswith(".pyi")):
+                    continue
+                if root_dir == stubs_dir and not name.endswith(".pyi"):
+                    continue
+                path = os.path.join(root, name)
+                rel = os.path.relpath(path, root_dir)
+                key = rel[:-1] if rel.endswith(".pyi") else rel
+                try:
+                    with open(path, encoding="utf-8") as fh:
+                        headers[key] = header_source(fh.read())
+                except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
+                    continue
     return headers
 
 

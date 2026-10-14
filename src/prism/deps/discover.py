@@ -40,7 +40,29 @@ def _normalize(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def _top_level_names(dist: metadata.Distribution) -> set[str]:
+_TOP_LEVEL_CACHE: dict[tuple[str, float], frozenset[str]] = {}
+
+
+def _top_level_names(dist: metadata.Distribution) -> frozenset[str]:
+    """Import names a distribution installs, memoized per dist-info
+    directory (and its mtime): reading `RECORD` is the expensive part of
+    every lookup, and a host build looks up hundreds of names."""
+    path = getattr(dist, "_path", None)
+    key = None
+    if path is not None:
+        try:
+            key = (str(path), os.path.getmtime(path))
+        except OSError:
+            key = None
+    if key is not None and key in _TOP_LEVEL_CACHE:
+        return _TOP_LEVEL_CACHE[key]
+    names = _read_top_level_names(dist)
+    if key is not None:
+        _TOP_LEVEL_CACHE[key] = names
+    return names
+
+
+def _read_top_level_names(dist: metadata.Distribution) -> frozenset[str]:
     names = set()
     text = dist.read_text("top_level.txt")
     if text:
@@ -49,7 +71,7 @@ def _top_level_names(dist: metadata.Distribution) -> set[str]:
         parts = str(f).split("/")
         if parts and not parts[0].endswith((".dist-info", ".egg-info", ".data")) and parts[0] != "..":
             names.add(parts[0][:-3] if parts[0].endswith(".py") else parts[0])
-    return names
+    return frozenset(names)
 
 
 def _record_hash(dist: metadata.Distribution, package_dir: str) -> str:
@@ -100,6 +122,25 @@ def find_distribution(import_name: str, paths: list[str] | None = None) -> Distr
             package_dir=package_dir,
             requires=_requires(dist),
         )
+    return None
+
+
+def find_stubs(import_name: str, paths: list[str] | None = None) -> tuple[str, str] | None:
+    """`(directory, signature)` of an installed PEP 561 stub-only package
+    for `import_name` (`boto3-stubs/`, as installed by `boto3-stubs` or a
+    `types-*` distribution), or `None`. The signature changes whenever
+    any of its stub files does."""
+    for base in paths if paths is not None else sys.path:
+        stubs_dir = os.path.join(base or ".", f"{import_name}-stubs")
+        if os.path.isdir(stubs_dir):
+            digest = hashlib.sha256()
+            for root, dirs, files in os.walk(stubs_dir):
+                dirs.sort()
+                for name in sorted(f for f in files if f.endswith(".pyi")):
+                    path = os.path.join(root, name)
+                    digest.update(os.path.relpath(path, stubs_dir).encode())
+                    digest.update(str(os.path.getsize(path)).encode())
+            return stubs_dir, digest.hexdigest()[:16]
     return None
 
 

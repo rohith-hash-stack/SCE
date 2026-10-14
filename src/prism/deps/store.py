@@ -11,6 +11,8 @@ Schema:
   evidence(summary_id, qualified_name, bit, tier, depth, path)   -- witness per bit
   headers(summary_id, relpath, source)                           -- signature-only package
   proxies(summary_id, name, class)                               -- module-level runtime proxies
+  dispatchers(summary_id, class, method)                         -- synthesized-method dispatchers
+  bases(summary_id, class, bases)                                -- resolved base names, JSON list
 Masks are plain integers (primitive bits 45-60 fit a signed 64-bit column).
 """
 from __future__ import annotations
@@ -45,6 +47,14 @@ CREATE TABLE IF NOT EXISTS evidence (
 CREATE TABLE IF NOT EXISTS headers (
     summary_id INTEGER NOT NULL, relpath TEXT NOT NULL, source TEXT NOT NULL,
     PRIMARY KEY (summary_id, relpath)
+);
+CREATE TABLE IF NOT EXISTS dispatchers (
+    summary_id INTEGER NOT NULL, class TEXT NOT NULL, method TEXT NOT NULL,
+    PRIMARY KEY (summary_id, class)
+);
+CREATE TABLE IF NOT EXISTS bases (
+    summary_id INTEGER NOT NULL, class TEXT NOT NULL, bases TEXT NOT NULL,
+    PRIMARY KEY (summary_id, class)
 );
 CREATE TABLE IF NOT EXISTS proxies (
     summary_id INTEGER NOT NULL, name TEXT NOT NULL, class TEXT NOT NULL,
@@ -92,7 +102,9 @@ class SummaryStore:
                 symbols[qname].evidence[bit] = BitEvidence(tier, depth, tuple(json.loads(path)))
             headers = dict(conn.execute("SELECT relpath, source FROM headers WHERE summary_id=?", (sid,)))
             proxies = dict(conn.execute("SELECT name, class FROM proxies WHERE summary_id=?", (sid,)))
-        return PackageSummary(ref, status, symbols, headers, json.loads(stats), proxies)
+            dispatchers = dict(conn.execute("SELECT class, method FROM dispatchers WHERE summary_id=?", (sid,)))
+            bases = {c: tuple(json.loads(b)) for c, b in conn.execute("SELECT class, bases FROM bases WHERE summary_id=?", (sid,))}
+        return PackageSummary(ref, status, symbols, headers, json.loads(stats), proxies, dispatchers, bases)
 
     def put(self, summary: PackageSummary) -> None:
         ref = summary.ref
@@ -118,11 +130,15 @@ class SummaryStore:
             )
             conn.executemany("INSERT INTO headers VALUES (?, ?, ?)", [(sid, rel, src) for rel, src in summary.headers.items()])
             conn.executemany("INSERT INTO proxies VALUES (?, ?, ?)", [(sid, n, c) for n, c in summary.proxies.items()])
+            conn.executemany("INSERT INTO dispatchers VALUES (?, ?, ?)", [(sid, c, m) for c, m in summary.dispatchers.items()])
+            conn.executemany("INSERT INTO bases VALUES (?, ?, ?)", [(sid, c, json.dumps(list(b))) for c, b in summary.bases.items()])
             # stale rows from deleted summaries
             conn.execute("DELETE FROM symbols WHERE summary_id NOT IN (SELECT id FROM summaries)")
             conn.execute("DELETE FROM evidence WHERE summary_id NOT IN (SELECT id FROM summaries)")
             conn.execute("DELETE FROM headers WHERE summary_id NOT IN (SELECT id FROM summaries)")
             conn.execute("DELETE FROM proxies WHERE summary_id NOT IN (SELECT id FROM summaries)")
+            conn.execute("DELETE FROM dispatchers WHERE summary_id NOT IN (SELECT id FROM summaries)")
+            conn.execute("DELETE FROM bases WHERE summary_id NOT IN (SELECT id FROM summaries)")
 
     def keys(self) -> list[tuple]:
         with closing(self._connect()) as conn:

@@ -322,6 +322,7 @@ class ConcreteGraphBuilder:
         self._path_partitions: dict[str, str] = {}
         #: `_infer_return_class` memo: {function qname: class qname | None}.
         self._return_class_cache: dict[str, str | None] = {}
+        self._class_map_cache: dict[str, InstanceTypeMap] = {}
         #: Item 3: `go_call_resolution_ratio` diagnostic numerator/
         #: denominator - see that property's own docstring.
         self._go_receiver_call_sites_total = 0
@@ -2344,6 +2345,12 @@ class ConcreteGraphBuilder:
                     # `cursor = conn.cursor()` on a compiled-only type, or a
                     # native function's result: the value is native too.
                     instance_map.bind(node_text(target, parsed.source), opaque, inferred=True)
+                elif self.dispatch_all_members and (
+                    returned := self._bound_receiver_return(ctor_segments, instance_map)
+                ) is not None:
+                    # Summary mode: `conn = manager.connection_from_url(url)`
+                    # with `manager` already typed in this function.
+                    instance_map.bind(node_text(target, parsed.source), returned, inferred=True)
                 elif (inferred := self._expr_class(value, ctx)) is not None:
                     # `qs = self.get_queryset()` / `form = self.get_form()`:
                     # a call whose return class is inferable.
@@ -2760,6 +2767,8 @@ class ConcreteGraphBuilder:
                         continue
                     cls = self._expr_class(expr, ctx, _depth + 1)
                     if cls is None:
+                        if self.dispatch_all_members:
+                            continue  # summary mode: the known returns still say what it may be
                         unknown = True
                         break
                     classes.add(cls)
@@ -2907,7 +2916,16 @@ class ConcreteGraphBuilder:
                 return None
             values = ctx.assignments().get(text, [])
             classes = {self._expr_class(v, ctx, _depth + 1, _names | {text}) for v in values}
+            if self.dispatch_all_members and len(classes - {None}) == 1:
+                # Summary mode ("may reach"): an unknown assignment beside a
+                # known one (`manager = self._manager` / `= proxies[url]`).
+                return (classes - {None}).pop()
             return classes.pop() if len(classes) == 1 else None
+        if self.dispatch_all_members and ctx.enclosing_class and expr.type == ATTRIBUTE_NODE_TYPE.get(lang):
+            # Summary mode: `self.<attr>` typed by the class's own instance map.
+            segments = flatten_reference_chain(expr, src, lang)
+            if segments and len(segments) == 2 and segments[0] in self_tokens:
+                return self._self_attribute_class(ctx.enclosing_class, ".".join(segments))
         call_type = CALL_NODE_TYPE.get(lang)
         if expr.type not in (call_type, "new_expression"):
             return None
@@ -2926,7 +2944,64 @@ class ConcreteGraphBuilder:
         else:
             target = self._resolve_chained_call_target(expr, ctx, _depth + 1)
         if target is not None and (sym := self.symbol_table.get(target)) is not None and sym.kind in ("function", "method"):
-            return self._infer_return_class(target, _depth + 1)
+            overloaded = self._overload_return_class(target, expr, src)
+            return overloaded if overloaded is not None else self._infer_return_class(target, _depth + 1)
+        return None
+
+    def _overload_return_class(self, target: str, call_node: Node, source: bytes) -> str | None:
+        """For a target declared by `@overload` variants (a `.pyi` stub's
+        `def client(service_name: Literal["s3"], ...) -> S3Client`), the return
+        class of the variant whose `Literal[...]` parameter matches the call's
+        string argument - positional or by keyword - else `None`."""
+        variants, i = [target], 2
+        while f"{target}#{i}" in self.symbol_table:
+            variants.append(f"{target}#{i}")
+            i += 1
+        if len(variants) < 2:
+            return None
+        positional, keywords = _string_arguments(call_node, source)
+        for key in variants:
+            node = self._def_nodes.get(key)
+            symbol = self.symbol_table.get(key)
+            parsed = self._parsed_files.get(symbol.file) if symbol is not None else None
+            if node is None or parsed is None:
+                continue
+            literal = _first_literal_parameter(node, parsed.source)
+            if literal is None:
+                continue
+            name, value = literal
+            if keywords.get(name, positional) != value:
+                continue
+            ctx = _ExprContext(symbol.module, self._import_maps.get(symbol.file), symbol.enclosing_class,
+                               parsed.language_id, parsed.source, node)
+            return self._annotation_class(node.child_by_field_name("return_type"), ctx)
+        return None
+
+    def _bound_receiver_return(self, segments: list[str], instance_map: InstanceTypeMap) -> str | None:
+        """The return class of `<receiver>.<method>(...)` when `<receiver>` is
+        typed in `instance_map` (a local or parameter)."""
+        if len(segments) < 2:
+            return None
+        receiver = instance_map.resolve(".".join(segments[:-1]))
+        if not self._is_known_class(receiver):
+            return None
+        method = self._inherited_method(receiver, segments[-1])
+        return self._infer_return_class(method) if method in self.symbol_table else None
+
+    def _self_attribute_class(self, cls: str, key: str) -> str | None:
+        """The known class `self.<attr>` (`key`) is bound to in `cls`'s
+        instance map, or the nearest ancestor's."""
+        for owner in (cls, *self._mro_ancestors(cls)):
+            if owner not in self._class_map_cache:
+                self._class_map_cache[owner] = InstanceTypeMap()  # cycle guard while building
+                symbol = self.symbol_table.get(owner)
+                parsed = self._parsed_files.get(symbol.file) if symbol is not None else None
+                import_map = self._import_maps.get(symbol.file) if symbol is not None else None
+                if parsed is not None and import_map is not None:
+                    self._class_map_cache[owner] = self._build_class_instance_map(owner, parsed, symbol.module, import_map)
+            found = self._class_map_cache[owner].resolve(key)
+            if self._is_known_class(found):
+                return found
         return None
 
     def _resolve_chained_call_target(self, call_node: Node, ctx: "_ExprContext", _depth: int = 0) -> str | None:
@@ -3735,6 +3810,50 @@ _LOCAL_VAR_DECLARATOR_TYPE: dict[str, str] = {
     LanguageID.TYPESCRIPT: "variable_declarator",
     LanguageID.TSX: "variable_declarator",
 }
+
+
+_LITERAL_ANNOTATION = re.compile(r"""^(?:\w+\.)*Literal\[\s*(['"])(.*?)\1\s*\]$""")
+
+
+def _string_arguments(call_node: Node, source: bytes) -> tuple[str | None, dict[str, str]]:
+    """A Python call's first positional argument when it is a plain string
+    literal, and its keyword arguments that are."""
+    args = call_node.child_by_field_name("arguments")
+    positional, keywords = None, {}
+    for i, arg in enumerate(args.named_children if args is not None else ()):
+        if arg.type == "keyword_argument":
+            name, value = arg.child_by_field_name("name"), arg.child_by_field_name("value")
+            text = _plain_string(value, source)
+            if name is not None and text is not None:
+                keywords[node_text(name, source)] = text
+        elif i == 0:
+            positional = _plain_string(arg, source)
+    return positional, keywords
+
+
+def _plain_string(node: Node | None, source: bytes) -> str | None:
+    if node is None or node.type != "string":
+        return None
+    parts = [c for c in node.named_children if c.type == "string_content"]
+    if len(parts) > 1 or any(c.type == "interpolation" for c in node.named_children):
+        return None
+    return node_text(parts[0], source) if parts else ""
+
+
+def _first_literal_parameter(def_node: Node, source: bytes) -> tuple[str, str] | None:
+    """`(name, value)` of a function's first parameter annotated
+    `Literal["value"]` (after `self`/`cls`), else `None`."""
+    params = def_node.child_by_field_name("parameters")
+    for param in params.named_children if params is not None else ():
+        if param.type not in ("typed_parameter", "typed_default_parameter"):
+            continue
+        ann = param.child_by_field_name("type")
+        name_node = param.child_by_field_name("name") or (param.named_children[0] if param.named_children else None)
+        match = _LITERAL_ANNOTATION.match(node_text(ann, source).strip()) if ann is not None else None
+        if match is not None and name_node is not None:
+            return node_text(name_node, source), match.group(2)
+        return None  # the first annotated parameter is not a Literal
+    return None
 
 
 def _declarator_value_node(declarator: Node) -> Node | None:

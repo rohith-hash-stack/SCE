@@ -10,7 +10,9 @@ tries (`brotli`, `h2`, ...) are not followed.
 """
 from __future__ import annotations
 
-from prism.deps.discover import distribution_packages, find_distribution
+import dataclasses
+
+from prism.deps.discover import distribution_packages, find_distribution, find_stubs
 from prism.deps.store import SummaryStore
 from prism.deps.summarizer import PackageSummary, summarize_package
 
@@ -24,6 +26,11 @@ class DependencyIndex:
         #: instance, in build order.
         self.built: list[str] = []
 
+    def ensured(self) -> dict[str, PackageSummary]:
+        """Every summary this index has served so far - the imported
+        packages and their summarized requirements, transitively."""
+        return {name: s for name, s in self._memo.items() if s is not None}
+
     def ensure(self, import_name: str, _active: frozenset[str] = frozenset()) -> PackageSummary | None:
         """The summary for installed package `import_name`, or `None` when
         it is not an installed third-party package."""
@@ -33,6 +40,10 @@ class DependencyIndex:
         if ref is None:
             self._memo[import_name] = None
             return None
+        stubs = find_stubs(import_name, self.paths)
+        if stubs is not None:
+            # Headers depend on the stub package too: part of the cache key.
+            ref = dataclasses.replace(ref, record_hash=f"{ref.record_hash}+stubs:{stubs[1]}")
         summary = self.store.get(ref)
         if summary is None:
             active = _active | {import_name}
@@ -43,7 +54,7 @@ class DependencyIndex:
                         dep = self.ensure(package, active)
                         if dep is not None and dep.status == "summarized":
                             dependencies.append(dep)
-            summary = summarize_package(ref, dependencies)
+            summary = summarize_package(ref, dependencies, stubs[0] if stubs is not None else None)
             self.store.put(summary)
             self.built.append(import_name)
         self._memo[import_name] = summary

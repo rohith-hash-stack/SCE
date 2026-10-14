@@ -27,6 +27,7 @@ actually calls - never a dependency's internals.
 """
 from __future__ import annotations
 
+import ast
 import os
 import shutil
 import tempfile
@@ -35,7 +36,7 @@ from prism.deps.discover import imported_roots
 from prism.deps.headers import write_headers
 from prism.deps.index import DependencyIndex
 from prism.deps.shadow import compute_stub_shadow, merge_summaries
-from prism.deps.summarizer import PackageSummary, constructor_methods, native_modules, native_reexports
+from prism.deps.summarizer import PackageSummary, SymbolSummary, constructor_methods, native_modules, native_reexports
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable, path_to_module
 
@@ -56,6 +57,31 @@ def _host_local_roots(repo_root: str, files: list[str]) -> set[str]:
     return roots
 
 
+def _return_type_roots(source: str) -> set[str]:
+    """Top-level packages that provide the names a module's functions
+    declare as return types (`-> S3Client` with `from mypy_boto3_s3.client
+    import S3Client` -> `mypy_boto3_s3`)."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    origin: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and not node.level and node.module:
+            for a in node.names:
+                origin[a.asname or a.name] = node.module.split(".")[0]
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                origin[a.asname or a.name.split(".")[0]] = a.name.split(".")[0]
+    roots = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.returns is not None:
+            for name in ast.walk(node.returns):
+                if isinstance(name, ast.Name) and name.id in origin:
+                    roots.add(origin[name.id])
+    return roots
+
+
 def attach_dependency_headers(
     builder: ConcreteGraphBuilder, files: list[str], index: DependencyIndex
 ) -> tuple[list[str], dict[str, PackageSummary], str]:
@@ -69,15 +95,29 @@ def attach_dependency_headers(
         summary = index.ensure(name)
         if summary is not None:
             summaries[name] = summary  # opaque packages too: their calls become OPAQUE boundary nodes
+    # One level further: packages providing the return types the headers
+    # declare - a stub's overload returns a class from another package
+    # (`boto3.client("s3") -> mypy_boto3_s3.client.S3Client`).
+    header_imports: set[str] = set()
+    for summary in summaries.values():
+        for text in summary.headers.values():
+            header_imports |= _return_type_roots(text)
+    for name in sorted(header_imports - set(summaries) - _host_local_roots(builder.repo_root, files)):
+        summary = index.ensure(name)
+        if summary is not None:
+            summaries[name] = summary
     header_root = tempfile.mkdtemp(prefix="prism-host-deps-")
     header_files: list[str] = []
     for name, summary in summaries.items():
-        if summary.status == "summarized":
+        if summary.headers:  # an opaque package's `.pyi` stubs type its API too
             header_files.extend(write_headers(summary.headers, name, header_root))
     builder.module_roots.append(header_root)
     # Before call resolution: annotations naming compiled-only types bind.
     builder.opaque_types, builder.opaque_prefixes = native_index(summaries)
     builder.proxy_names = frozenset(name for summary in summaries.values() for name in summary.proxies)
+    # The whole requirement closure (botocore behind boto3): consulted for
+    # base classes and synthesized-method dispatchers, never indexed.
+    builder.dependency_closure = index.ensured()
     return sorted(header_files), summaries, header_root
 
 
@@ -95,6 +135,53 @@ def native_index(summaries: dict[str, PackageSummary]) -> tuple[frozenset[str], 
             prefixes |= mods
             names |= native_reexports(summary.headers, summary.ref.package, mods)
     return frozenset(names), tuple(sorted(prefixes))
+
+
+class SynthesizedDispatch:
+    """Which dispatcher a method call on a class runs when that method is
+    synthesized at run time (`PackageSummary.dispatchers`): found through
+    each summary's resolved class bases."""
+
+    def __init__(self, summaries: dict[str, PackageSummary]):
+        self.summaries = summaries
+        self.bases: dict[str, tuple[str, ...]] = {}
+        self.dispatchers: dict[str, tuple[str, PackageSummary]] = {}
+        for summary in summaries.values():
+            self.bases.update(summary.bases)
+            for cls, method in summary.dispatchers.items():
+                self.dispatchers[cls] = (method, summary)
+
+    def lookup(self, cls: str, method: str) -> tuple[str, SymbolSummary] | None:
+        """`(dispatcher, its summary)` for `cls.method`, or `None` - also when
+        the dispatcher's class defines `method` itself (a real method)."""
+        seen, stack = set(), [cls]
+        while stack:
+            c = stack.pop()
+            if c in seen:
+                continue
+            seen.add(c)
+            if c in self.dispatchers:
+                dispatcher, summary = self.dispatchers[c]
+                if method in _class_method_names(summary, c):
+                    return None
+                symbol = summary.symbols.get(dispatcher)
+                return (dispatcher, symbol) if symbol is not None else None
+            stack.extend(self.bases.get(c, ()))
+        return None
+
+
+def _class_method_names(summary: PackageSummary, cls: str) -> set[str]:
+    """Methods `cls` defines in its package's header source."""
+    module, name = cls.rsplit(".", 1)
+    rel = module[len(summary.ref.package) + 1:].replace(".", os.sep) if module != summary.ref.package else ""
+    for candidate in (f"{rel}.py" if rel else "__init__.py", os.path.join(rel, "__init__.py")):
+        text = summary.headers.get(candidate)
+        if text is None:
+            continue
+        for stmt in ast.parse(text).body:
+            if isinstance(stmt, ast.ClassDef) and stmt.name == name:
+                return {m.name for m in stmt.body if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return set()
 
 
 def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str, PackageSummary], header_root: str) -> int:
@@ -143,6 +230,14 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
     # Summary-first precedence, entry by entry: Layer 3 stub entries landing
     # on actionable summary signal are shadowed (`prism.deps.shadow`).
     builder.stub_shadow = compute_stub_shadow(builder, summaries, header_funcs, native_names)
+    # A method with no summary of its own on a class whose runtime methods
+    # are synthesized (boto3's `S3Client.put_object`, declared by a stub
+    # package): it runs the synthesized-method dispatcher.
+    method_owner = {
+        node: symbol.enclosing_class for node in host_called
+        if (symbol := builder.symbol_table.get(node)) is not None and symbol.kind == "method" and symbol.enclosing_class
+    }
+    dispatch = SynthesizedDispatch(getattr(builder, "dependency_closure", {}) or summaries)
     for node in header_nodes:
         for _, target in list(graph.out_edges(node)):
             graph.remove_edge(node, target)
@@ -155,18 +250,31 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
         symbol = summary.symbols.get(node) if summary is not None else None
         if symbol is None and node in constructors and summary is not None:
             symbol = merge_summaries([summary.symbols[c] for c in constructors[node] if c in summary.symbols])
+        dispatched = None
+        if symbol is None and node in method_owner:
+            dispatched = dispatch.lookup(method_owner[node], node.rsplit(".", 1)[1])
+            if dispatched is not None:
+                symbol = dispatched[1]
         mask = symbol.mask if symbol is not None else 0
         confident = symbol.confident_mask if symbol is not None else 0
         attrs = graph.nodes[node]
         kind = attrs.get("kind")
         attrs.clear()
-        opaque = bool(symbol is not None and symbol.opaque)
+        # Native too: a header symbol declared by a `.pyi` for a compiled
+        # module (`numpy.random._generator.default_rng`).
+        opaque = (
+            bool(symbol is not None and symbol.opaque)
+            or (summary is not None and summary.status == "opaque")
+            or (symbol is None and is_native(node))
+        )
         attrs.update(
             external=True, boundary=True, kind=kind, boundary_package=package,
             boundary_version=summary.ref.version if summary is not None else None,
             boundary_bits=mask, boundary_confident_bits=confident, boundary_tentative_bits=mask & ~confident,
             boundary_opaque=opaque, boundary_tier=boundary_tier(mask, confident, opaque),
         )
+        if dispatched is not None:
+            attrs["boundary_dispatch"] = dispatched[0]
     for node in native_called:
         summary = summaries[node.split(".")[0]]
         graph.nodes[node].update(
