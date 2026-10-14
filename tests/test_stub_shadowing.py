@@ -12,10 +12,11 @@ Synthetic packages named after real stub-table packages, so the real Layer
   lazy (fallback).
 - `django`   - `django.db.connection` is a module-level runtime proxy
   (`ConnectionProxy` forwards `__getattr__`): calls through it are PROXY
-  boundaries - capability unknown - and they shadow the
-  `django.db.connection.cursor` stub.
+  boundaries - capability unknown - so the curated
+  `django.db.connection.cursor` stub stands (known beats unknown).
 - `psycopg2` - `connect` is re-exported straight from the compiled
-  `_psycopg` module: OPAQUE, shadowed, never invented bits.
+  `_psycopg` module: an OPAQUE boundary, and the `psycopg2.connect` stub
+  stands next to it.
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ from prism.semantics.bitmask import AMBIENT_PRIMITIVE_MASK, OPERATIONAL_IO_MASK,
 from prism.semantics.capabilities import compute_capability_profiles
 from prism.semantics.extractor import compute_feature_masks, compute_feature_masks_cached
 from prism.semantics.substance import compute_substance_bits
+from prism.semantics.triad import action_tokens, database_io
 
 NET = int(FeatureBit.PRIM_NET_CONNECT)
 DB = int(FeatureBit.PRIM_DB_CONNECT | FeatureBit.PRIM_DB_READ | FeatureBit.PRIM_DB_WRITE)
@@ -220,13 +222,14 @@ def test_actionable_summaries_shadow_their_stub_entries(host):
     shadow = host[0].stub_shadow
     assert shadow["redis.Redis.get"] == "redis.commands.core.KeyCommands.get"  # via the mixin, through the barrel
     assert shadow["httpx.get"] == "httpx._api.get"
-    assert "psycopg2.connect" in shadow  # opaque native re-export
 
 
 def test_unshadowed_entries_stay_as_fallback(host):
     shadow = host[0].stub_shadow
     assert "httpx.Client" not in shadow  # lazy constructor: empty summary
     assert "redis.Redis.set" not in shadow  # not defined by the package: unresolved
+    assert "psycopg2.connect" not in shadow  # OPAQUE: unknown never shadows a known stub
+    assert "django.db.connection.cursor" not in shadow  # PROXY: likewise
     assert not any(e.split(".")[0] not in PACKAGES for e in shadow)  # only installed, summarized packages
 
 
@@ -249,14 +252,13 @@ def test_lazy_constructor_keeps_its_stub(host):
     assert _p(host[1], "open_cache").own_l3 & DB  # redis.Redis stub
 
 
-def test_runtime_proxy_is_a_proxy_boundary_that_shadows_its_stub(host):
+def test_runtime_proxy_keeps_its_stub_and_records_the_proxy(host):
     builder, profiles, _ = host
-    assert builder.stub_shadow["django.db.connection.cursor"] == "django.db.connection"
     node = builder.graph.nodes["django.db.connection.cursor"]
     assert node["boundary_tier"] == "PROXY" and node["boundary_bits"] == 0
     assert node["boundary_proxy_class"] == "django.db.ConnectionProxy"
     raw = _p(profiles, "raw_query")
-    assert raw.own_l3 == 0 and raw.within(2) == 0  # the stub is gone, nothing invented
+    assert raw.own_l3 & DB  # the curated stub's known category stands
     # `cur = connection.cursor(); cur.execute(sql)`: the cursor is proxy-derived too
     assert raw.proxy == ("django.db.connection.cursor", "django.db.connection.cursor().execute") and raw.opaque == ()
 
@@ -270,9 +272,13 @@ def test_shadowed_method_adds_no_stub_signal_beyond_its_constructor(host):
     assert lookup.by_hop[1] & NET
 
 
-def test_opaque_shadow_invents_no_bits(host):
-    pg = _p(host[1], "pg_connect")
-    assert pg.own == 0 and pg.within(2) == 0 and pg.opaque
+def test_known_stub_beats_an_opaque_native_export(host):
+    builder, profiles, _ = host
+    assert builder.graph.nodes["psycopg2.connect"]["boundary_tier"] == "OPAQUE"  # still recorded
+    pg = _p(profiles, "pg_connect")
+    assert pg.own_l3 & DB and pg.opaque == ("psycopg2.connect",)  # the stub's DB_CONNECT, plus the opaque entry
+    tokens = action_tokens(builder, "app.main.pg_connect")
+    assert database_io(pg, tokens)[1] == "capability"  # scored on known capability, not the unknown fallback
 
 
 # --------------------------------------------------------------------- #
@@ -282,15 +288,15 @@ def test_substance_recognizes_summarized_entry_points_as_sinks(host):
     bits = compute_substance_bits(host[0])
     assert bits["app.main.fetch"] & FeatureBit.SINK_NETWORK_IO  # from the summary
     assert not bits["app.main.fetch"] & FeatureBit.SINK_PURE_COMPUTE
-    assert not bits["app.main.raw_query"] & FeatureBit.SINK_DATABASE_IO  # proxy: unknown, no invented sink
-    assert not bits["app.main.raw_query"] & FeatureBit.SINK_PURE_COMPUTE  # ...and never "pure"
+    assert bits["app.main.raw_query"] & FeatureBit.SINK_DATABASE_IO  # the stub (proxy call next to it)
+    assert not bits["app.main.raw_query"] & FeatureBit.SINK_PURE_COMPUTE
     assert bits["app.main.cache_lookup"] & FeatureBit.SINK_NETWORK_IO
 
 
-def test_substance_never_calls_an_opaque_call_pure(host):
+def test_substance_keeps_the_stub_category_next_to_an_opaque_call(host):
     bits = compute_substance_bits(host[0])
     assert bits["app.main.pg_connect"] & int(FeatureBit.SINK_PURE_COMPUTE) == 0
-    assert bits["app.main.pg_connect"] & int(FeatureBit.SINK_DATABASE_IO) == 0  # no invented sink either
+    assert bits["app.main.pg_connect"] & int(FeatureBit.SINK_DATABASE_IO)  # the psycopg2.connect stub
 
 
 def test_cached_feature_masks_match_uncached_with_shadowing(host):
@@ -300,7 +306,7 @@ def test_cached_feature_masks_match_uncached_with_shadowing(host):
 
 
 # --------------------------------------------------------------------- #
-# Only operational I/O (or native code) shadows - ambient bits never do
+# Only operational I/O shadows - ambient bits and unknowns never do
 # --------------------------------------------------------------------- #
 def _summary(*bits, tier=CONFIDENT):
     return SymbolSummary("function", {int(b): BitEvidence(tier, 1, ("x",)) for b in bits})
@@ -317,7 +323,8 @@ def test_shadowing_predicate():
     assert shadows(_summary(F.PRIM_DB_WRITE)) and shadows(_summary(F.PRIM_PROC_SPAWN, F.PRIM_TIME_CLOCK))
     assert not shadows(_summary(F.PRIM_TIME_CLOCK, F.PRIM_TIME_WAIT, F.PRIM_RAND_PRNG, F.PRIM_RAND_CSPRNG))
     assert not shadows(_summary())
-    assert shadows(_summary(NATIVE)) and shadows(_summary(NATIVE, F.PRIM_TIME_CLOCK))  # native code reached
+    assert not shadows(_summary(NATIVE)) and not shadows(_summary(NATIVE, F.PRIM_TIME_CLOCK))  # unknown
+    assert shadows(_summary(NATIVE, F.PRIM_NET_CONNECT))  # known operational bits beside native code
 
 
 def test_ambient_only_summary_keeps_the_operational_stub(host):

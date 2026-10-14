@@ -229,7 +229,7 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
     }
     # Summary-first precedence, entry by entry: Layer 3 stub entries landing
     # on actionable summary signal are shadowed (`prism.deps.shadow`).
-    builder.stub_shadow = compute_stub_shadow(builder, summaries, header_funcs, native_names)
+    builder.stub_shadow = compute_stub_shadow(builder, summaries, header_funcs)
     # A method with no summary of its own on a class whose runtime methods
     # are synthesized (boto3's `S3Client.put_object`, declared by a stub
     # package): it runs the synthesized-method dispatcher.

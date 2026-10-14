@@ -3,18 +3,20 @@
 
 A Python Layer 3 stub entry (`redis.Redis.get`) is *shadowed* when, with
 the dependency's headers indexed, static resolution lands it on a summarized
-symbol whose summary carries actionable signal - at least one operational
-I/O bit (`OPERATIONAL_IO_MASK`: network, filesystem, database, process; any
-tier) or OPAQUE native evidence - or names a call through one of the
-package's module-level runtime proxies (`django.db.connection.cursor`), a
-PROXY boundary. Ambient bits alone (clocks, timers, randomness - a lazy
-`redis.Redis()` reading a clock) never shadow an operational stub. A
-shadowed entry is ignored by capability and Substance matching: the summary
-takes full precedence. An entry static resolution cannot land on a
-summarized symbol - a bound method of a module-level instance of an
-ordinary class (`numpy.random.rand`), a name the package does not define -
-or one whose summary is empty or ambient only (a lazy constructor such as
-`httpx.Client`) stays as the fallback.
+symbol whose summary carries at least one operational I/O bit
+(`OPERATIONAL_IO_MASK`: network, filesystem, database, process; any tier).
+A shadowed entry is ignored by capability and Substance matching: the
+summary takes full precedence.
+
+Known always beats unknown: OPAQUE (compiled native code) and PROXY (a
+runtime proxy) mean "capability unknown at static analysis time", so they
+never shadow a stub - `psycopg2.connect`, `numpy.random.rand`,
+`django.db.connection.cursor` keep their curated category, and the
+OPAQUE / PROXY boundary is still recorded next to it. Ambient bits alone
+(clocks, timers, randomness - a lazy `redis.Redis()` reading a clock) never
+shadow either. An entry static resolution cannot land on a summarized
+symbol, or whose summary is empty, unknown or ambient only, stays as the
+fallback.
 """
 from __future__ import annotations
 
@@ -24,8 +26,6 @@ from prism.graph.symbol_table import resolve_export
 from prism.semantics.bitmask import OPERATIONAL_IO_MASK
 from prism.semantics.boundary_stubs_l3 import L3_BOUNDARY_STUBS
 
-#: Shadow value for an entry landing on a fully native (opaque) package.
-OPAQUE_PACKAGE = "<opaque-package>"
 
 
 def python_stub_entries() -> frozenset[str]:
@@ -80,35 +80,22 @@ def merge_summaries(symbols: list[SymbolSummary]) -> SymbolSummary | None:
 
 
 def shadows(symbol: SymbolSummary) -> bool:
-    """Actionable summary signal: native code reached (OPAQUE evidence), or
-    at least one operational I/O bit."""
-    return symbol.opaque or bool(symbol.mask & OPERATIONAL_IO_MASK)
+    """Known operational capability: at least one operational I/O bit.
+    Native-code evidence alone (OPAQUE) is unknown, never a shadow."""
+    return bool(symbol.mask & OPERATIONAL_IO_MASK)
 
 
 def compute_stub_shadow(
-    builder: ConcreteGraphBuilder,
-    summaries: dict[str, PackageSummary],
-    header_funcs: set[str],
-    native_names: frozenset[str] = frozenset(),
+    builder: ConcreteGraphBuilder, summaries: dict[str, PackageSummary], header_funcs: set[str]
 ) -> dict[str, str]:
     """`{stub entry: shadowing summarized symbol}` for every Python Layer 3
-    entry of a package in `summaries` that resolves to actionable summary
-    signal. Must run while the headers are still indexed."""
+    entry of a package in `summaries` that resolves to known operational
+    capability. Must run while the headers are still indexed."""
     shadow: dict[str, str] = {}
     for entry in sorted(python_stub_entries()):
         summary = summaries.get(entry.split(".")[0])
-        if summary is None:
-            continue
-        if summary.status == "opaque":
-            shadow[entry] = OPAQUE_PACKAGE
-            continue
-        if entry in native_names:
-            shadow[entry] = entry  # re-exported straight from a compiled module
-            continue
-        proxy = next((p for p in summary.proxies if entry.startswith(p + ".")), None)
-        if proxy is not None:
-            shadow[entry] = proxy  # a runtime proxy: unknown, scored by the action leg
-            continue
+        if summary is None or summary.status != "summarized":
+            continue  # a fully native package is unknown: its stubs stand
         target = resolve_stub_entry(builder, entry)
         if target is None:
             continue
