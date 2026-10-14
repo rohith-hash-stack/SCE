@@ -14,8 +14,11 @@ the headers again:
    node and edge from the host's index. A host -> header edge keeps its
    target as an external *boundary* node carrying that entry point's
    summary (`boundary_bits`, `boundary_confident_bits`,
-   `boundary_tentative_bits`, `boundary_package`), which
-   `prism.semantics.capabilities` counts at hop 1.
+   `boundary_tentative_bits`, `boundary_package`, `boundary_tier`,
+   `boundary_opaque`), which `prism.semantics.capabilities` counts at
+   hop 1. A call into compiled native code - a fully native package, or an
+   entry point whose summary reaches the package's own extension module -
+   is an OPAQUE boundary: bits 0, capability unknown.
 
 The host graph gains one boundary node per dependency entry point it
 actually calls - never a dependency's internals.
@@ -32,6 +35,9 @@ from prism.deps.index import DependencyIndex
 from prism.deps.summarizer import PackageSummary
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable, path_to_module
+
+#: `boundary_tier` values on boundary nodes.
+TIER_CONFIDENT, TIER_TENTATIVE, TIER_OPAQUE, TIER_NONE = "CONFIDENT", "TENTATIVE", "OPAQUE", "NONE"
 
 
 def _host_local_roots(repo_root: str, files: list[str]) -> set[str]:
@@ -54,12 +60,13 @@ def attach_dependency_headers(
     summaries: dict[str, PackageSummary] = {}
     for name in sorted(wanted):
         summary = index.ensure(name)
-        if summary is not None and summary.status == "summarized":
-            summaries[name] = summary
+        if summary is not None:
+            summaries[name] = summary  # opaque packages too: their calls become OPAQUE boundary nodes
     header_root = tempfile.mkdtemp(prefix="prism-host-deps-")
     header_files: list[str] = []
     for name, summary in summaries.items():
-        header_files.extend(write_headers(summary.headers, name, header_root))
+        if summary.status == "summarized":
+            header_files.extend(write_headers(summary.headers, name, header_root))
     builder.module_roots.append(header_root)
     return sorted(header_files), summaries, header_root
 
@@ -73,6 +80,13 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
     header_nodes = {n for n, a in graph.nodes(data=True) if n in header_symbols or str(a.get("file", "")).startswith(prefix)}
 
     host_called = {v for u, v in graph.edges() if v in header_nodes and u not in header_nodes}
+    # A fully native package has no header; the host's calls into it are
+    # ordinary unresolved external targets named after the package.
+    opaque_packages = {name for name, summary in summaries.items() if summary.status == "opaque"}
+    native_called = {
+        v for u, v in graph.edges()
+        if u not in header_nodes and v not in builder.symbol_table and v.split(".")[0] in opaque_packages
+    }
     for node in header_nodes:
         for _, target in list(graph.out_edges(node)):
             graph.remove_edge(node, target)
@@ -88,10 +102,19 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
         attrs = graph.nodes[node]
         kind = attrs.get("kind")
         attrs.clear()
+        opaque = bool(symbol is not None and symbol.opaque)
         attrs.update(
             external=True, boundary=True, kind=kind, boundary_package=package,
             boundary_version=summary.ref.version if summary is not None else None,
             boundary_bits=mask, boundary_confident_bits=confident, boundary_tentative_bits=mask & ~confident,
+            boundary_opaque=opaque, boundary_tier=boundary_tier(mask, confident, opaque),
+        )
+    for node in native_called:
+        summary = summaries[node.split(".")[0]]
+        graph.nodes[node].update(
+            external=True, boundary=True, boundary_package=summary.ref.package, boundary_version=summary.ref.version,
+            boundary_bits=0, boundary_confident_bits=0, boundary_tentative_bits=0,
+            boundary_opaque=True, boundary_tier=TIER_OPAQUE,
         )
     # Unresolved targets only header code pointed at are now isolated.
     for node in [n for n in graph.nodes if graph.degree(n) == 0 and n not in builder.symbol_table]:
@@ -112,7 +135,16 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
         builder._import_maps.pop(path, None)
     builder._methods_by_class = {c: m for c, m in builder._methods_by_class.items() if c not in header_symbols}
     builder.module_roots = [r for r in builder.module_roots if r != header_root]
-    return len(host_called)
+    return len(host_called) + len(native_called)
+
+
+def boundary_tier(mask: int, confident_mask: int, opaque: bool) -> str:
+    """A boundary node's evidence tier: OPAQUE when the entry point's only
+    evidence is compiled native code (bits stay 0 - never invented),
+    otherwise CONFIDENT/TENTATIVE by its summary bits, NONE without any."""
+    if mask == 0:
+        return TIER_OPAQUE if opaque else TIER_NONE
+    return TIER_CONFIDENT if confident_mask == mask else TIER_TENTATIVE
 
 
 def cleanup_header_root(header_root: str) -> None:

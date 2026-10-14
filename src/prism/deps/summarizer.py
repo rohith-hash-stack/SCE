@@ -21,7 +21,11 @@ reach at any depth:
    overrides the stdlib calls back;
 4. a fixpoint per primitive: best (tier, depth) from any function to a
    holder of that primitive, CONFIDENT only when no TENTATIVE edge is on
-   the path, with one witness path kept.
+   the path, with one witness path kept;
+5. the same fixpoint for `NATIVE`: a call into the package's own compiled
+   extension module (`psycopg2._psycopg`) marks the caller - and, through
+   the fixpoint, every function reaching it - as opaque. Native code never
+   contributes capability bits; its capability is unknown, not zero.
 
 The result is pure data (`PackageSummary`), cached by `prism.deps.store`.
 """
@@ -45,9 +49,14 @@ from prism.semantics.primitives import primitive_registry
 
 #: Bump whenever the summarization algorithm changes what it computes -
 #: the one way cached summaries are invalidated besides the package itself.
-SUMMARY_SCHEMA_VERSION = 1
+SUMMARY_SCHEMA_VERSION = 2
 CONFIDENT, TENTATIVE = 0, 1
+#: Evidence key (not a primitive bit) for "reaches compiled native code":
+#: what such code does is unknown, so it never contributes capability bits.
+NATIVE = -1
 _BITS = tuple(int(b) for b in sorted(PRIMITIVE_BITS, key=int))
+#: Compiled extension modules (CPython `.so`/`.pyd`, any ABI tag).
+_NATIVE_SUFFIXES = (".so", ".pyd")
 _PROPAGATING = ("CALLS", "INSTANTIATES")
 
 
@@ -67,23 +76,29 @@ class SymbolSummary:
     def mask(self) -> int:
         out = 0
         for bit in self.evidence:
-            out |= bit
+            if bit > 0:
+                out |= bit
         return out
 
     @property
     def confident_mask(self) -> int:
         out = 0
         for bit, ev in self.evidence.items():
-            if ev.tier == CONFIDENT:
+            if bit > 0 and ev.tier == CONFIDENT:
                 out |= bit
         return out
+
+    @property
+    def opaque(self) -> bool:
+        """Reaches compiled native code (its capability there is unknown)."""
+        return NATIVE in self.evidence
 
 
 @dataclass
 class PackageSummary:
     ref: DistributionRef
     status: str  # "summarized" | "opaque" (no Python source to read)
-    symbols: dict[str, SymbolSummary] = field(default_factory=dict)  # only symbols with any bit
+    symbols: dict[str, SymbolSummary] = field(default_factory=dict)  # only symbols with any bit or NATIVE
     headers: dict[str, str] = field(default_factory=dict)
     stats: dict = field(default_factory=dict)
 
@@ -97,6 +112,24 @@ def _python_files(root: str) -> list[str]:
     for dirpath, dirs, files in os.walk(root):
         dirs[:] = sorted(d for d in dirs if d != "__pycache__")
         out.extend(os.path.join(dirpath, f) for f in sorted(files) if f.endswith(".py"))
+    return out
+
+
+def native_modules(package_dir: str, package: str) -> set[str]:
+    """Dotted names of the compiled extension modules inside a package
+    whose source is not shipped (`psycopg2/_psycopg.cpython-311-x86_64-
+    linux-gnu.so` -> `psycopg2._psycopg`). A compiled module next to a
+    same-named `.py` (mypyc/Cython pure-Python mode, e.g.
+    `charset_normalizer/md.py`) is compiled *from* that source, which is
+    analysed as usual - not opaque."""
+    out = set()
+    for dirpath, dirs, files in os.walk(package_dir):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for name in files:
+            stem = name.split(".")[0]
+            if name.endswith(_NATIVE_SUFFIXES) and f"{stem}.py" not in files:
+                rel = os.path.relpath(os.path.join(dirpath, stem), package_dir)
+                out.add(".".join([package, *rel.split(os.sep)]))
     return out
 
 
@@ -115,8 +148,9 @@ def summarize_package(ref: DistributionRef, dependencies: list[PackageSummary] =
     `dependencies` (their headers and bits only)."""
     started = time.time()
     sources = _python_files(ref.package_dir)
+    natives = native_modules(ref.package_dir, ref.package)
     if not sources:
-        return PackageSummary(ref, "opaque", stats={"reason": "no Python source"})
+        return PackageSummary(ref, "opaque", stats={"reason": "no Python source", "native_modules": len(natives)})
     scratch = tempfile.mkdtemp(prefix="prism-summarize-")
     work, header_root = os.path.join(scratch, "src"), os.path.join(scratch, "headers")
     try:
@@ -133,7 +167,7 @@ def summarize_package(ref: DistributionRef, dependencies: list[PackageSummary] =
         builder.module_roots.append(header_root)  # headers: typed resolution only, never fallback candidates
         builder.pass1_collect_definitions(files)
         builder.pass2_resolve_calls(files)
-        summary = _summarize_built(builder, ref, dependencies)
+        summary = _summarize_built(builder, ref, dependencies, natives)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     summary.headers = package_headers(ref.package_dir)
@@ -141,7 +175,9 @@ def summarize_package(ref: DistributionRef, dependencies: list[PackageSummary] =
     return summary
 
 
-def _summarize_built(builder: ConcreteGraphBuilder, ref: DistributionRef, dependencies: list[PackageSummary]) -> PackageSummary:
+def _summarize_built(
+    builder: ConcreteGraphBuilder, ref: DistributionRef, dependencies: list[PackageSummary], natives: set[str] = frozenset()
+) -> PackageSummary:
     package = ref.package
     own_pkg = lambda q: q == package or q.startswith(package + ".")  # noqa: E731
     table = {s.qualified_name: s for s in builder.symbol_table}
@@ -172,9 +208,15 @@ def _summarize_built(builder: ConcreteGraphBuilder, ref: DistributionRef, depend
                 seeds[q] = {b: BitEvidence(ev.tier, ev.depth, (q, *ev.path[1:])) for b, ev in sym.evidence.items()}
 
     edges: list[tuple[str, str, int]] = []
+    native_calls = 0
     for u, v, d in builder.graph.edges(data=True):
         if d.get("relation", "CALLS") in _PROPAGATING and u in funcs and own_pkg(u):
             edges.append((u, v, TENTATIVE if d.get("kind") == "TENTATIVE_CALL" else CONFIDENT))
+            if any(v == m or v.startswith(m + ".") for m in natives):
+                # A call into the package's own compiled module: the work
+                # happens in native code. Seeded as NATIVE, never as bits.
+                seeds.setdefault(u, {})[NATIVE] = BitEvidence(CONFIDENT, 1, (u, v))
+                native_calls += 1
 
     # 2a. class-hierarchy dispatch: a call that reaches `Base.m` may run any
     #     override of `m` in a subclass (TENTATIVE) - the summary is a "may
@@ -259,7 +301,7 @@ def _summarize_built(builder: ConcreteGraphBuilder, ref: DistributionRef, depend
     for u, v, tier in edges:
         reverse.setdefault(v, []).append((u, tier))
     evidence: dict[str, dict[int, BitEvidence]] = {}
-    for bit in _BITS:
+    for bit in (*_BITS, NATIVE):
         heap = [(ev.tier, ev.depth, n, ev.path) for n, per in seeds.items() for b, ev in per.items() if b == bit]
         heapq.heapify(heap)
         settled: set[str] = set()
@@ -285,5 +327,8 @@ def _summarize_built(builder: ConcreteGraphBuilder, ref: DistributionRef, depend
             "dispatch_edges": dispatch_edges,
             "protocol_edges": protocol_edges,
             "callback_edges": callback_edges,
+            "native_modules": len(natives),
+            "native_calls": native_calls,
+            "opaque_symbols": sum(1 for s in symbols.values() if s.opaque),
         },
     )

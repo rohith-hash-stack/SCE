@@ -60,13 +60,17 @@ class CapabilityProfile:
     - `established[h]`: composites a hop-`h` source satisfies on its own
       (hop 0: this function's own composites).
     - `tentative`: bits whose only evidence is a TENTATIVE dependency
-      summary."""
+      summary.
+    - `opaque`: OPAQUE dependency entry points reached within the hop
+      bound - calls into compiled native code whose capability is unknown
+      (never counted as bits; see `prism.semantics.triad`)."""
 
     by_hop: tuple[int, ...]
     own_l3: int = 0
     sources: "tuple[tuple[int, ...], ...] | None" = None
     established: "tuple[frozenset[str], ...] | None" = None
     tentative: int = 0
+    opaque: tuple[str, ...] = ()
 
     @property
     def own(self) -> int:
@@ -204,6 +208,7 @@ def compute_capability_profiles(
         for n, a in graph.nodes(data=True)
         if a.get("boundary")
     }
+    opaque_boundary = {n for n, a in graph.nodes(data=True) if a.get("boundary") and a.get("boundary_opaque")}
     summarized = frozenset(a["boundary_package"] for _, a in graph.nodes(data=True) if a.get("boundary_package"))
     for symbol in builder.symbol_table:
         if symbol.kind not in ("function", "method"):
@@ -236,6 +241,7 @@ def compute_capability_profiles(
         hop_sources: list[list[int]] = [list(sites[qname])] + [[] for _ in range(MAX_HOPS)]
         hop_established: list[set[str]] = [set(own_comps[qname])] + [set() for _ in range(MAX_HOPS)]
         tentative = 0
+        opaque: list[str] = []
         seen, frontier = {qname}, [qname]
         for hop in range(1, max_hops + 1):
             next_frontier = []
@@ -247,6 +253,8 @@ def compute_capability_profiles(
                     if callee in boundary:
                         mask, tentative_mask = boundary[callee]
                         tentative |= tentative_mask
+                        if callee in opaque_boundary:
+                            opaque.append(callee)
                         comps = empty  # a summary is one source; its incidental bits never establish a composite
                     else:
                         next_frontier.append(callee)
@@ -265,6 +273,7 @@ def compute_capability_profiles(
             tuple(tuple(s) for s in hop_sources),
             tuple(frozenset(e) for e in hop_established),
             tentative & confirmed,
+            tuple(sorted(opaque)),
         )
     return profiles
 
