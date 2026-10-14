@@ -24,6 +24,8 @@ from prism.semantics.substance import (
     _has_reflection,
     _has_state_mutation,
     _is_pure_eligible,
+    boundary_sink_bits,
+    calls_opaque_boundary,
     compute_substance_bits,
 )
 from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, target_repo_file_signature
@@ -46,7 +48,7 @@ _SUBSTANCE_MASK = compose_mask(*SUBSTANCE_BITS)
 _FEATURE_MASKS_CACHE: _LRUCache[dict[str, int]] = _LRUCache(maxsize=10)
 
 
-def _feature_masks_cache_key(repo_root: str) -> str:
+def _feature_masks_cache_key(repo_root: str, shadow: "dict[str, str] | None" = None) -> str:
     """`file_hash_set` here is `target_repo_file_signature(repo_root)` -
     not itself session-cached (no `@lru_cache`), but measured directly
     against the real Django corpus at ~2-3ms/call (a single `git
@@ -54,6 +56,9 @@ def _feature_masks_cache_key(repo_root: str) -> str:
     - cheap enough to call fresh on every `compute_feature_masks_cached`
     invocation without threatening the <100ms warm-call target."""
     raw = "|".join((str(Path(repo_root).resolve()), engine_commit_hash(), target_repo_file_signature(repo_root)))
+    if shadow:
+        # Dependency summaries change which stub entries match.
+        raw += "|" + "|".join(f"{k}={v}" for k, v in sorted(shadow.items()))
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -105,7 +110,8 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
     Step 1c: an in-memory session cache sits in front of the whole
     function body below - see `_FEATURE_MASKS_CACHE`'s own docstring.
     """
-    cache_key = _feature_masks_cache_key(repo_root)
+    shadow = getattr(builder, "stub_shadow", {})
+    cache_key = _feature_masks_cache_key(repo_root, shadow)
     cached_masks = _FEATURE_MASKS_CACHE.get(cache_key)
     if cached_masks is not None:
         return cached_masks
@@ -126,7 +132,10 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
             continue
         content_hash = _file_content_hash(file_path)
         relative_path = symbols[0].module  # stable, file-derived identifier for this cache's own key
-        cached = load_file_cache_entry(repo_root, relative_path, content_hash) if content_hash else None
+        # The per-file cache holds direct bits for the default stub table; a
+        # build whose dependency summaries shadow stub entries computes fresh.
+        use_file_cache = bool(content_hash) and not shadow
+        cached = load_file_cache_entry(repo_root, relative_path, content_hash) if use_file_cache else None
 
         if cached is not None:
             for symbol in symbols:
@@ -143,7 +152,7 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
             if symbol.module not in import_map_cache:
                 import_map_cache[symbol.module] = builder._build_import_map(parsed, symbol.module)
             import_map = import_map_cache[symbol.module]
-            direct = _direct_sink_bits(def_node, parsed, import_map)
+            direct = _direct_sink_bits(def_node, parsed, import_map, shadow)
             statement_counts[symbol.qualified_name] = count_statements(def_node, parsed.language_id)
             if direct:
                 reflective = _has_reflection(def_node, parsed)
@@ -162,7 +171,7 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
             base_bits[symbol.qualified_name] = FeatureBit(combined)
             file_bitmasks[symbol.qualified_name] = combined
 
-        if content_hash:
+        if use_file_cache:
             save_file_cache_entry(
                 repo_root, relative_path, content_hash, 0.0,
                 serialized_symbols=[s.qualified_name for s in symbols],
@@ -172,6 +181,14 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
 
     # Substance-transitive propagation and Role are graph-shaped - always
     # recomputed fresh (cheap: no AST walking, just edge/dict lookups).
+    # Calls into summarized dependency entry points are graph-shaped too.
+    for symbol in builder.symbol_table:
+        if symbol.kind in ("function", "method"):
+            boundary = int(boundary_sink_bits(builder, symbol.qualified_name))
+            if boundary:
+                base_bits[symbol.qualified_name] = FeatureBit(
+                    (int(base_bits.get(symbol.qualified_name, FeatureBit(0))) & ~int(FeatureBit.SINK_PURE_COMPUTE)) | boundary
+                )
     substance_only: dict[str, int] = {}
     for symbol in builder.symbol_table:
         if symbol.kind not in ("function", "method"):
@@ -205,6 +222,8 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
             is_pure = not int(base_bits.get(qname, FeatureBit(0))) & int(FeatureBit.HAS_REFLECTION)
             if is_pure and def_node is not None and parsed is not None:
                 is_pure = not _has_state_mutation(def_node, parsed)
+            if is_pure:
+                is_pure = not calls_opaque_boundary(builder, qname)
             if is_pure:
                 combined = int(FeatureBit.SINK_PURE_COMPUTE)
         substance_only[qname] = combined

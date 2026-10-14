@@ -127,21 +127,17 @@ def _python_open_mode_bits(call_node, source: bytes, entry: str, default: int) -
     return int(FeatureBit.PRIM_FS_READ)
 
 
-def _entry_root(entry: str) -> str:
-    return entry.split("/")[0].split(".")[0]
-
-
 def _direct_primitive_bits(
-    def_node, parsed, import_map, include_l3_stubs: bool = True, summarized: frozenset[str] = frozenset()
+    def_node, parsed, import_map, include_l3_stubs: bool = True, shadowed: "frozenset[str] | dict" = frozenset()
 ) -> tuple[int, int, tuple[int, ...]]:
     """`(own primitive bits, bits only Layer 3 stubs supplied, per-call-site
     masks)` for one function body, through the same three-phase scan as the
     Substance axis (`prism.semantics.substance._direct_call_bits`). Unlike
     Substance's first-match-per-category rule, every matching entry
     contributes. Bits from the scan's fallbacks that no single call site
-    explains form one extra trailing site. A Layer 3 stub of a package in
-    `summarized` is skipped: that package's calls are read from its offline
-    summary instead (boundary nodes), never counted twice."""
+    explains form one extra trailing site. A Layer 3 stub entry in
+    `shadowed` is skipped: its offline summary (a boundary node) takes
+    precedence and is never counted twice (`prism.deps.shadow`)."""
     lang_key = _LANG_REGISTRY_KEY.get(parsed.language_id)
     if lang_key is None:
         return 0, 0, ()
@@ -155,7 +151,7 @@ def _direct_primitive_bits(
         shape = _call_shape(segments, import_map)
         bits = 0
         for entry, entry_bits, layer in entries:
-            if layer != "L2" and summarized and _entry_root(entry) in summarized:
+            if layer != "L2" and entry in shadowed:
                 continue
             if _entry_matches(entry, *shape):
                 if entry in _PY_OPEN_ENTRIES and lang_key == "python":
@@ -209,7 +205,7 @@ def compute_capability_profiles(
         if a.get("boundary")
     }
     opaque_boundary = {n for n, a in graph.nodes(data=True) if a.get("boundary") and a.get("boundary_opaque")}
-    summarized = frozenset(a["boundary_package"] for _, a in graph.nodes(data=True) if a.get("boundary_package"))
+    shadowed = getattr(builder, "stub_shadow", {})
     for symbol in builder.symbol_table:
         if symbol.kind not in ("function", "method"):
             continue
@@ -222,7 +218,7 @@ def compute_capability_profiles(
         if symbol.module not in import_maps:
             import_maps[symbol.module] = builder._build_import_map(parsed, symbol.module)
         own[q], own_l3[q], sites[q] = _direct_primitive_bits(
-            def_node, parsed, import_maps[symbol.module], include_l3_stubs, summarized
+            def_node, parsed, import_maps[symbol.module], include_l3_stubs, shadowed
         )
     own_comps = {q: _own_composites(s) for q, s in sites.items()}
 

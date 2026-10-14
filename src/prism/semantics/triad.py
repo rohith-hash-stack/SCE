@@ -82,7 +82,7 @@ DATABASE_VERBS = ("query", "execute", "select", "insert", "commit", "find", "cur
 #: matched as whole words only (a prefix `decr` would match `decrypt`).
 #: Bare `get`/`set`/`delete` are deliberately absent: they collide with
 #: HTTP verbs, accessors and collection helpers.
-DATASTORE_VERBS = frozenset({"hset", "hget", "lpush", "rpush", "sadd", "zadd", "expire", "incr", "decr", "mget", "mset"})
+DATASTORE_VERBS = frozenset({"hset", "hget", "lpush", "rpush", "sadd", "srem", "zadd", "expire", "incr", "decr", "mget", "mset"})
 #: The triad-synthesized database capability target.
 DATABASE_IO = "DATABASE_IO"
 _DB_BITS = int(F.PRIM_DB_CONNECT | F.PRIM_DB_READ | F.PRIM_DB_WRITE)

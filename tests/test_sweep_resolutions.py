@@ -531,6 +531,6 @@ def test_bare_get_and_set_stay_out_of_database_io(host):
 
 
 def test_kv_verbs_match_whole_words_only():
-    assert has_database_verb({"hset"}) and has_database_verb({"decr"}) and has_database_verb({"zadd"})
+    assert all(has_database_verb({v}) for v in ("hset", "decr", "zadd", "sadd", "srem"))
     for words in ({"decrypt"}, {"increment"}, {"expired"}, {"get"}, {"set"}, {"delete"}, {"msets"}):
         assert not has_database_verb(words), words

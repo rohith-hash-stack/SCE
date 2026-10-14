@@ -60,6 +60,7 @@ from prism.parser.tree_sitter_loader import LanguageID, ParsedFile
 from prism.semantics._ast_utils import count_statements
 from prism.semantics.bitmask import FeatureBit
 from prism.semantics.canonical_sinks import CANONICAL_SINKS
+from prism.semantics.primitives import CATEGORY_PRIMITIVES
 from prism.traversal._data_flow_common import _bindings, _decl_node_types, _node_key
 
 #: The maximum statement count a callee `B` may have for its own direct
@@ -124,11 +125,42 @@ _UNAMBIGUOUS_DRIVER_SUFFIXES: dict[str, str] = {
 }
 
 
-def _registry_for(lang: str) -> dict[str, set[str]] | None:
+def _registry_for(lang: str, shadowed: "frozenset[str] | dict" = frozenset()) -> dict[str, set[str]] | None:
+    """`{category: entries}` for `lang`; Layer 3 stub entries in `shadowed`
+    (their dependency summary takes precedence, `prism.deps.shadow`) are
+    left out."""
     key = _LANG_REGISTRY_KEY.get(lang)
     if key is None:
         return None
-    return {category: entries.get(key, set()) for category, entries in CANONICAL_SINKS.items()}
+    return {category: entries.get(key, set()) - set(shadowed) for category, entries in CANONICAL_SINKS.items()}
+
+
+def summary_sink_bits(primitive_bits: int) -> FeatureBit:
+    """Substance sink bits for a dependency entry point's summary bits: each
+    category any of its primitives reach. OPAQUE (bits 0) yields none -
+    never invented."""
+    bits = FeatureBit(0)
+    for category, mask in CATEGORY_PRIMITIVES.items():
+        if primitive_bits & mask:
+            bits |= _CATEGORY_BIT[category]
+    return bits
+
+
+def boundary_sink_bits(builder: ConcreteGraphBuilder, qname: str) -> FeatureBit:
+    """Sink bits from `qname`'s direct calls into summarized dependency entry
+    points (`boundary_bits`, `prism.deps.host`): canonical sinks of their
+    own, like a matched registry entry - not subject to the thin-wrapper
+    limit. Empty in builds without dependency summaries."""
+    bits = FeatureBit(0)
+    if qname not in builder.graph:
+        return bits
+    for _u, callee, data in builder.graph.out_edges(qname, data=True):
+        if data.get("relation", "CALLS") not in ("CALLS", "INSTANTIATES"):
+            continue
+        attrs = builder.graph.nodes[callee]
+        if attrs.get("boundary") and attrs.get("boundary_bits"):
+            bits |= summary_sink_bits(int(attrs["boundary_bits"]))
+    return bits
 
 
 def _normalize_go(path: str) -> str:
@@ -250,7 +282,19 @@ def _callable_segments(node: Node, new_expr_type: str | None, parsed: ParsedFile
     return call_callee_segments(node, parsed.source, lang)
 
 
-def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> FeatureBit:
+def calls_opaque_boundary(builder: ConcreteGraphBuilder, qname: str) -> bool:
+    """`qname` directly calls compiled native dependency code whose
+    capability is unknown (an OPAQUE boundary): never `SINK_PURE_COMPUTE`."""
+    if qname not in builder.graph:
+        return False
+    return any(
+        builder.graph.nodes[callee].get("boundary_opaque")
+        for _u, callee, data in builder.graph.out_edges(qname, data=True)
+        if data.get("relation", "CALLS") in ("CALLS", "INSTANTIATES")
+    )
+
+
+def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map, shadowed: "frozenset[str] | dict" = frozenset()) -> FeatureBit:
     """`S_direct(v)` - Phases 1 and 2 combined, scoped to `def_node`'s own
     body. Two passes over the same call/instantiation-site set rather
     than one: Phase 2a (local constructor provenance) needs every site's
@@ -260,7 +304,7 @@ def _direct_sink_bits(def_node: Node, parsed: ParsedFile, import_map) -> Feature
     from was itself resolved.
     """
     lang = parsed.language_id
-    registry = _registry_for(lang)
+    registry = _registry_for(lang, shadowed)
     if registry is None:
         return FeatureBit(0)
     return _direct_call_bits(
@@ -358,6 +402,7 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
     direct: dict[str, FeatureBit] = {}
     wrapper_statement_counts: dict[str, int] = {}
     import_maps: dict[str, object] = {}
+    shadowed = getattr(builder, "stub_shadow", {})
 
     for symbol in builder.symbol_table:
         if symbol.kind not in ("function", "method"):
@@ -369,7 +414,9 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
         if symbol.module not in import_maps:
             import_maps[symbol.module] = builder._build_import_map(parsed, symbol.module)
         import_map = import_maps[symbol.module]
-        direct[symbol.qualified_name] = _direct_sink_bits(def_node, parsed, import_map)
+        direct[symbol.qualified_name] = _direct_sink_bits(def_node, parsed, import_map, shadowed) | boundary_sink_bits(
+            builder, symbol.qualified_name
+        )
         wrapper_statement_counts[symbol.qualified_name] = count_statements(def_node, parsed.language_id)
 
     result: dict[str, int] = {}
@@ -416,7 +463,7 @@ def compute_substance_bits(builder: ConcreteGraphBuilder) -> dict[str, int]:
                 reflective = _has_reflection(def_node, parsed)
             else:
                 is_pure, reflective = _is_pure_eligible(def_node, parsed)
-        if not combined and is_pure:
+        if not combined and is_pure and not calls_opaque_boundary(builder, qname):
             combined = FeatureBit.SINK_PURE_COMPUTE
         if reflective:
             combined |= FeatureBit.HAS_REFLECTION

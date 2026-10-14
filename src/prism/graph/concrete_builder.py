@@ -293,6 +293,10 @@ class ConcreteGraphBuilder:
         #: TENTATIVE_CALL, every other member's method
         #: (`_last_resolution_alternatives`). Host builds keep one target.
         self.dispatch_all_members = False
+        #: `{Layer 3 stub entry: summarized symbol}` - stub entries whose
+        #: offline dependency summary takes precedence (`prism.deps.shadow`);
+        #: set by host builds given dependencies, empty otherwise.
+        self.stub_shadow: dict[str, str] = {}
         self._last_resolution_alternatives: tuple[str, ...] = ()
         #: `_resolve_by_receiver_name`'s lazily built
         #: {normalized class simple name: [qualified class names]} index.

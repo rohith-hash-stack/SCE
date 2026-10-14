@@ -32,7 +32,8 @@ import tempfile
 from prism.deps.discover import imported_roots
 from prism.deps.headers import write_headers
 from prism.deps.index import DependencyIndex
-from prism.deps.summarizer import PackageSummary, SymbolSummary, constructor_methods, native_modules, native_reexports
+from prism.deps.shadow import compute_stub_shadow, merge_summaries
+from prism.deps.summarizer import PackageSummary, constructor_methods, native_modules, native_reexports
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable, path_to_module
 
@@ -113,6 +114,9 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
         for node in host_called
         if (symbol := builder.symbol_table.get(node)) is not None and symbol.kind == "class"
     }
+    # Summary-first precedence, entry by entry: Layer 3 stub entries landing
+    # on actionable summary signal are shadowed (`prism.deps.shadow`).
+    builder.stub_shadow = compute_stub_shadow(builder, summaries, header_funcs, frozenset(native_names))
     for node in header_nodes:
         for _, target in list(graph.out_edges(node)):
             graph.remove_edge(node, target)
@@ -124,7 +128,7 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
         summary = by_package.get(package)
         symbol = summary.symbols.get(node) if summary is not None else None
         if symbol is None and node in constructors and summary is not None:
-            symbol = _merged([summary.symbols[c] for c in constructors[node] if c in summary.symbols])
+            symbol = merge_summaries([summary.symbols[c] for c in constructors[node] if c in summary.symbols])
         mask = symbol.mask if symbol is not None else 0
         confident = symbol.confident_mask if symbol is not None else 0
         attrs = graph.nodes[node]
@@ -164,19 +168,6 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
     builder._methods_by_class = {c: m for c, m in builder._methods_by_class.items() if c not in header_symbols}
     builder.module_roots = [r for r in builder.module_roots if r != header_root]
     return len(host_called) + len(native_called)
-
-
-def _merged(symbols: list[SymbolSummary]) -> SymbolSummary | None:
-    """One summary for several functions that all run (a constructor's
-    `__new__` and `__init__`): per bit, the best evidence."""
-    if not symbols:
-        return None
-    evidence = {}
-    for symbol in symbols:
-        for bit, ev in symbol.evidence.items():
-            if bit not in evidence or (ev.tier, ev.depth) < (evidence[bit].tier, evidence[bit].depth):
-                evidence[bit] = ev
-    return SymbolSummary("class", evidence)
 
 
 def boundary_tier(mask: int, confident_mask: int, opaque: bool) -> str:
