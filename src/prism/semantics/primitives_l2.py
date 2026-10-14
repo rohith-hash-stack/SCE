@@ -223,6 +223,7 @@ L2_PRIMITIVE_ENTRIES: dict[str, dict[str, set[str]]] = {
             "shutil.copy",
             "shutil.copy2",
             "shutil.copyfile",
+            "shutil.copyfileobj",
             "shutil.copytree",
             "shutil.move",
             "shutil.rmtree",

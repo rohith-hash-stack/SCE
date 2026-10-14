@@ -61,7 +61,7 @@ def test_layer_tables_partition_the_retired_catalog():
     l2, l3 = _entries(L2_PRIMITIVE_ENTRIES), _entries(L3_BOUNDARY_STUBS)
     assert not l2 & l3
     assert l2 | l3 == _entries(CANONICAL_SINKS)
-    assert len(l2 | l3) == 639
+    assert len(l2 | l3) == 640  # 639 retired-catalog entries + shutil.copyfileobj (Layer 2)
 
 
 @pytest.mark.parametrize(
@@ -70,6 +70,7 @@ def test_layer_tables_partition_the_retired_catalog():
         ("python", "socket.socket.send", "L2"),
         ("python", "subprocess.Popen", "L2"),
         ("python", "open", "L2"),
+        ("python", "shutil.copyfileobj", "L2"),
         ("python", "requests.post", "L3"),
         ("python", "psycopg2.connect", "L3"),
         ("javascript", "fs.readFileSync", "L2"),
@@ -106,6 +107,9 @@ def test_every_entry_maps_to_a_nonempty_subset_of_its_category():
         ("filesystem_io", "os.ReadDir", F.PRIM_FS_READ),
         ("filesystem_io", "fs.writeFileSync", F.PRIM_FS_WRITE),
         ("filesystem_io", "shutil.rmtree", F.PRIM_FS_DELETE),
+        ("filesystem_io", "shutil.copyfileobj", F.PRIM_FS_READ | F.PRIM_FS_WRITE),
+        ("filesystem_io", "shutil.copyfile", F.PRIM_FS_READ | F.PRIM_FS_WRITE),
+        ("filesystem_io", "shutil.copy", F.PRIM_FS_READ | F.PRIM_FS_WRITE),
         ("filesystem_io", "open", F.PRIM_FS_READ | F.PRIM_FS_WRITE),
         ("filesystem_io", "os.File.ReadFrom", F.PRIM_FS_WRITE),
         ("database_io", "psycopg2.connect", F.PRIM_DB_CONNECT),

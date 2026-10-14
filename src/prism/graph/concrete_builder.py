@@ -297,6 +297,14 @@ class ConcreteGraphBuilder:
         #: offline dependency summary takes precedence (`prism.deps.shadow`);
         #: set by host builds given dependencies, empty otherwise.
         self.stub_shadow: dict[str, str] = {}
+        #: Names whose definitions exist only in compiled native code
+        #: (`psycopg2.extensions.connection`, re-exported from `_psycopg`):
+        #: an annotation naming one types its variable, so method calls on it
+        #: link to `<type>.<method>` - OPAQUE boundaries in host builds
+        #: (`prism.deps.host`). `opaque_prefixes`: compiled modules and fully
+        #: native packages, every name under which is such a type.
+        self.opaque_types: frozenset[str] = frozenset()
+        self.opaque_prefixes: tuple[str, ...] = ()
         self._last_resolution_alternatives: tuple[str, ...] = ()
         #: `_resolve_by_receiver_name`'s lazily built
         #: {normalized class simple name: [qualified class names]} index.
@@ -1856,6 +1864,14 @@ class ConcreteGraphBuilder:
                 assign.child_by_field_name("right"), parsed.source, module, import_map,
             )
 
+    def _is_opaque_type(self, qualified_name: str | None) -> bool:
+        """A type defined only in compiled native code (`opaque_types`)."""
+        if not qualified_name or not (self.opaque_types or self.opaque_prefixes):
+            return False
+        return qualified_name in self.opaque_types or any(
+            qualified_name == p or qualified_name.startswith(p + ".") for p in self.opaque_prefixes
+        )
+
     def _is_known_class(self, qualified_name: str | None) -> bool:
         if not qualified_name:
             return False
@@ -2735,7 +2751,7 @@ class ConcreteGraphBuilder:
             if segments[-1] in _PY_SEQUENCE_ANNOTATIONS or segments[-1] in _PY_MAPPING_ANNOTATIONS:
                 return _AnnotationType(container=True)
             resolved = self._resolve_reference_chain(segments, module, import_map)
-            return _AnnotationType(classes=(resolved,)) if self._is_known_class(resolved) else None
+            return _AnnotationType(classes=(resolved,)) if self._is_known_class(resolved) or self._is_opaque_type(resolved) else None
         if node.type == "generic_type":
             head = node.named_children[0] if node.named_children else None
             params = next((c for c in node.named_children if c.type == "type_parameter"), None)

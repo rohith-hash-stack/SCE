@@ -29,7 +29,7 @@ from prism.deps.host import TIER_OPAQUE
 from prism.deps.summarizer import NATIVE, native_modules, summarize_package
 from prism.semantics.bitmask import FeatureBit
 from prism.semantics.capabilities import capability_score, compute_capability_profiles
-from prism.semantics.triad import PHYSICAL_ACTIONS, action_score, action_tokens, triad_rerank
+from prism.semantics.triad import PHYSICAL_ACTIONS, action_score, action_tokens, database_io, triad_rerank
 
 DB_WRITE = int(FeatureBit.PRIM_DB_WRITE)
 NET = int(FeatureBit.PRIM_NET_CONNECT)
@@ -44,6 +44,7 @@ NATIVEDB = {
             return _connect(dsn)
     """,
     "extras.py": "def quote_ident(name):\n    return '\"' + name + '\"'\n",
+    "extensions.py": "from nativedb._core import connection, cursor\n",
 }
 
 NETLIB = {
@@ -61,6 +62,7 @@ NETLIB = {
 HOST = """
 import fastser
 import nativedb
+import nativedb.extensions
 import netlib
 
 
@@ -90,6 +92,11 @@ def save_preferences(prefs):
 
 def format_name(user):
     return user.title()
+
+
+def post_ledger(conn: nativedb.extensions.connection, entry):
+    conn.cursor().execute("INSERT INTO ledger VALUES (%s)", (entry,))
+    conn.commit()
 """
 
 
@@ -225,6 +232,30 @@ def test_triad_is_identity_without_legs(host_build):
     ranked = triad_rerank(order, {q: 0.5 for q in order}, profiles, {})
     assert [r.qname for r in ranked] == order and all(r.score == 0.5 for r in ranked)
     assert set(PHYSICAL_ACTIONS) >= {"READ", "MUTATE", "SEND", "RECEIVE", "EXECUTE", "WAIT", "CONNECT"}
+
+
+def test_receiver_annotated_with_a_compiled_type_calls_opaque_boundaries(host_build):
+    # `nativedb.extensions.connection` exists only in `_core.so`: the
+    # annotation still types `conn`, and its method calls are OPAQUE.
+    nodes = dict(host_build.graph.nodes(data=True))
+    targets = {t for _, t in host_build.graph.out_edges("app.main.post_ledger")}
+    for method in ("cursor", "commit"):
+        node = f"nativedb.extensions.connection.{method}"
+        assert node in targets and nodes[node]["boundary_tier"] == TIER_OPAQUE and nodes[node]["boundary_bits"] == 0
+    profile = compute_capability_profiles(host_build)["app.main.post_ledger"]
+    assert set(profile.opaque) >= {"nativedb.extensions.connection.cursor", "nativedb.extensions.connection.commit"}
+    assert profile.within(2) == 0  # unknown, never invented
+    assert database_io(profile, action_tokens(host_build, "app.main.post_ledger")) == (0.0, "opaque-native")
+
+
+def test_compiled_types_are_only_bound_in_dependency_builds(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "app").mkdir(parents=True)
+    (repo / "app" / "__init__.py").write_text("")
+    (repo / "app" / "main.py").write_text(HOST)
+    builder, _ = build_pipeline(str(repo), use_cache=False)
+    assert builder.opaque_types == frozenset()
+    assert "nativedb.extensions.connection.cursor" not in builder.graph
 
 
 def test_default_build_has_no_opaque_marks(tmp_path):

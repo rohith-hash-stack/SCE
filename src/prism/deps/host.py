@@ -69,7 +69,25 @@ def attach_dependency_headers(
         if summary.status == "summarized":
             header_files.extend(write_headers(summary.headers, name, header_root))
     builder.module_roots.append(header_root)
+    # Before call resolution: annotations naming compiled-only types bind.
+    builder.opaque_types, builder.opaque_prefixes = native_index(summaries)
     return sorted(header_files), summaries, header_root
+
+
+def native_index(summaries: dict[str, PackageSummary]) -> tuple[frozenset[str], tuple[str, ...]]:
+    """`(native names, native prefixes)`: names a summarized package
+    re-exports straight from its own compiled modules (`from ._core import
+    connect`, `from psycopg2._psycopg import connection`), and the compiled
+    modules plus fully native packages (no header at all), every name under
+    which is native."""
+    names: set[str] = set()
+    prefixes = {name for name, summary in summaries.items() if summary.status == "opaque"}
+    for summary in summaries.values():
+        if summary.status == "summarized" and summary.stats.get("native_modules"):
+            mods = native_modules(summary.ref.package_dir, summary.ref.package)
+            prefixes |= mods
+            names |= native_reexports(summary.headers, summary.ref.package, mods)
+    return frozenset(names), tuple(sorted(prefixes))
 
 
 def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str, PackageSummary], header_root: str) -> int:
@@ -81,25 +99,12 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
     header_nodes = {n for n, a in graph.nodes(data=True) if n in header_symbols or str(a.get("file", "")).startswith(prefix)}
 
     host_called = {v for u, v in graph.edges() if v in header_nodes and u not in header_nodes}
-    # A fully native package has no header; the host's calls into it are
-    # ordinary unresolved external targets named after the package.
-    opaque_packages = {name for name, summary in summaries.items() if summary.status == "opaque"}
-    # A summarized package's own compiled modules, and the names it
-    # re-exports from them (`from ._core import connect`), are opaque too.
-    native_names: set[str] = set()
-    native_mods: set[str] = set()
-    for name, summary in summaries.items():
-        if summary.status == "summarized" and summary.stats.get("native_modules"):
-            mods = native_modules(summary.ref.package_dir, summary.ref.package)
-            native_mods |= mods
-            native_names |= native_reexports(summary.headers, summary.ref.package, mods)
+    native_names, native_prefixes = native_index(summaries)
 
     def is_native(target: str) -> bool:
-        return (
-            target.split(".")[0] in opaque_packages
-            or target in native_names
-            or any(target == m or target.startswith(m + ".") for m in native_mods)
-        )
+        # A native name itself, or a member of one (`conn.cursor()` on a
+        # receiver annotated `psycopg2.extensions.connection`).
+        return any(target == n or target.startswith(n + ".") for n in (*native_names, *native_prefixes))
 
     native_called = {
         v for u, v in graph.edges()
@@ -116,7 +121,7 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
     }
     # Summary-first precedence, entry by entry: Layer 3 stub entries landing
     # on actionable summary signal are shadowed (`prism.deps.shadow`).
-    builder.stub_shadow = compute_stub_shadow(builder, summaries, header_funcs, frozenset(native_names))
+    builder.stub_shadow = compute_stub_shadow(builder, summaries, header_funcs, native_names)
     for node in header_nodes:
         for _, target in list(graph.out_edges(node)):
             graph.remove_edge(node, target)
