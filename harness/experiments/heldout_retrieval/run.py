@@ -17,6 +17,9 @@ Systems:
              matched, then total matches.
   bm25       BM25Okapi (rank_bm25) over each candidate's source, plain
              identifier-split tokens, no stemming - independent of Prism.
+  bm25_stem  post-hoc ablation, added after the first run: the same BM25Okapi
+             with Prism's tokenizer (one-suffix stemming, Prism's stop words)
+             over qualified name + source - what a stemmed BM25 alone does.
   prism_bm25 Prism's own lexical leg alone (NB documents, repo-relative
              paths) - the triad's stems leg with no action/capability legs.
   prism_triad
@@ -47,7 +50,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DATASET = HERE / "dataset.json"
-SYSTEMS = ("ripgrep", "bm25", "prism_bm25", "prism_triad", "embedding")
+SYSTEMS = ("ripgrep", "bm25", "bm25_stem", "prism_bm25", "prism_triad", "embedding")
 _STOP = set(
     "a an the of in on to and or is are be by for from with what which where how when does do did its it if "
     "i my our we that this those these into out up as at whose has have there their them they who app code "
@@ -147,6 +150,19 @@ class IndependentBM25:
         return [self.c.names[i] for i in sorted(idx, key=lambda i: (-scores[i], i))]
 
 
+class StemmedBM25:
+    def __init__(self, c: Corpus):
+        from harness.experiments.query_to_evidence.nlq.lexical import tokenize
+        from rank_bm25 import BM25Okapi
+        self.c, self.tokenize = c, tokenize
+        self.bm25 = BM25Okapi([tokenize(s.qualified_name) + tokenize(c.source(s)) for s in c.pool])
+
+    def rank(self, question: str) -> list[str]:
+        scores = self.bm25.get_scores(self.tokenize(question))
+        idx = [i for i in range(len(scores)) if scores[i] > 0]
+        return [self.c.names[i] for i in sorted(idx, key=lambda i: (-scores[i], i))]
+
+
 class PrismLexical:
     def __init__(self, c: Corpus):
         from harness.experiments.query_to_evidence.nlq.lexical import LexicalIndex, TriadContext
@@ -229,6 +245,7 @@ def main(argv=None) -> int:
         runners = {
             "ripgrep": lambda q, c=c: rank_ripgrep(c, q),
             "bm25": IndependentBM25(c).rank,
+            "bm25_stem": StemmedBM25(c).rank,
         }
         prism = PrismLexical(c)
         runners["prism_bm25"] = lambda q: prism.rank(q, triad=False)[0]
