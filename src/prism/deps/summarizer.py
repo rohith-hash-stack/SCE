@@ -31,6 +31,7 @@ The result is pure data (`PackageSummary`), cached by `prism.deps.store`.
 """
 from __future__ import annotations
 
+import ast
 import heapq
 import os
 import shutil
@@ -49,7 +50,7 @@ from prism.semantics.primitives import primitive_registry
 
 #: Bump whenever the summarization algorithm changes what it computes -
 #: the one way cached summaries are invalidated besides the package itself.
-SUMMARY_SCHEMA_VERSION = 2
+SUMMARY_SCHEMA_VERSION = 3
 CONFIDENT, TENTATIVE = 0, 1
 #: Evidence key (not a primitive bit) for "reaches compiled native code":
 #: what such code does is unknown, so it never contributes capability bits.
@@ -143,6 +144,62 @@ def _class_bases(builder: ConcreteGraphBuilder, cls: str) -> list[str]:
     return [parsed.source[c.start_byte:c.end_byte].decode(errors="replace") for c in sup.named_children]
 
 
+def native_reexports(headers: dict[str, str], package: str, natives: set[str]) -> set[str]:
+    """Public names a package's modules import straight from its own
+    compiled modules (`from ._core import connect` in `__init__.py` ->
+    `nativedb.connect`): calling one runs native code."""
+    names: set[str] = set()
+    if not natives:
+        return names
+    for rel, text in headers.items():
+        parts = [package, *rel[:-3].split(os.sep)]
+        is_init = parts[-1] == "__init__"
+        module = ".".join(parts[:-1] if is_init else parts)
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+        for stmt in tree.body:
+            if not isinstance(stmt, ast.ImportFrom):
+                continue
+            if stmt.level:
+                base = module.split(".") if is_init else module.split(".")[:-1]
+                base = base[: len(base) - (stmt.level - 1)] if stmt.level > 1 else base
+                source = ".".join([*base, *([stmt.module] if stmt.module else [])])
+            else:
+                source = stmt.module or ""
+            for alias in stmt.names:
+                full = f"{source}.{alias.name}"
+                if any(source == m or source.startswith(m + ".") or full == m for m in natives):
+                    names.add(f"{module}.{alias.asname or alias.name}")
+    return names
+
+
+def constructor_methods(builder: ConcreteGraphBuilder, cls: str, funcs) -> list[str]:
+    """`cls`'s `__init__` and `__new__` as run by `cls(...)`: each the
+    nearest definition along the MRO (`object`'s own are not indexed)."""
+    found = []
+    for name in ("__init__", "__new__"):
+        for owner in (cls, *builder._mro_ancestors(cls)):
+            if f"{owner}.{name}" in funcs:
+                found.append(f"{owner}.{name}")
+                break
+    return found
+
+
+def _enclosing_function(builder: ConcreteGraphBuilder, qname: str, by_span: dict) -> str | None:
+    """The innermost function or method whose body defines `qname`
+    (`by_span`: `(file, start_byte, end_byte)` -> function qname)."""
+    node = builder.def_node(qname)
+    cursor = node.parent if node is not None else None
+    while cursor is not None and cursor.type != "function_definition":
+        cursor = cursor.parent
+    if cursor is None:
+        return None
+    symbol = builder.symbol_table.get(qname)
+    return by_span.get((symbol.file if symbol else None, cursor.start_byte, cursor.end_byte))
+
+
 def summarize_package(ref: DistributionRef, dependencies: list[PackageSummary] = ()) -> PackageSummary:
     """Summarize `ref`'s package against its already summarized
     `dependencies` (their headers and bits only)."""
@@ -165,6 +222,7 @@ def summarize_package(ref: DistributionRef, dependencies: list[PackageSummary] =
         files = _python_files(work) + _python_files(header_root)
         builder = ConcreteGraphBuilder(work, GlobalSymbolTable())
         builder.module_roots.append(header_root)  # headers: typed resolution only, never fallback candidates
+        builder.dispatch_all_members = True  # a union/branch-typed receiver may be any of its classes
         builder.pass1_collect_definitions(files)
         builder.pass2_resolve_calls(files)
         summary = _summarize_built(builder, ref, dependencies, natives)
@@ -218,6 +276,31 @@ def _summarize_built(
                 seeds.setdefault(u, {})[NATIVE] = BitEvidence(CONFIDENT, 1, (u, v))
                 native_calls += 1
 
+    # 1b. closures: a function may run every closure it defines - called
+    #     directly, or handed on (`handler = _connect_and_send_request`,
+    #     a middleware chain, a callback). TENTATIVE.
+    closure_edges = 0
+    by_span = {}
+    for q in funcs:
+        node = builder.def_node(q)
+        if node is not None:
+            by_span[(table[q].file, node.start_byte, node.end_byte)] = q
+    for q in funcs:
+        if own_pkg(q) and table[q].nested_in_function:
+            outer = _enclosing_function(builder, q, by_span)
+            if outer is not None and outer != q:
+                edges.append((outer, q, TENTATIVE))
+                closure_edges += 1
+
+    # 1c. construction runs the constructor: `Cls(...)` (an INSTANTIATES
+    #     edge to the class) reaches `__init__`/`__new__`, own or inherited.
+    ctor_edges = 0
+    for cls, symbol in table.items():
+        if symbol.kind == "class":
+            for ctor in constructor_methods(builder, cls, funcs):
+                edges.append((cls, ctor, CONFIDENT))
+                ctor_edges += 1
+
     # 2a. class-hierarchy dispatch: a call that reaches `Base.m` may run any
     #     override of `m` in a subclass (TENTATIVE) - the summary is a "may
     #     reach" over-approximation, and an abstract base's own body (a bare
@@ -242,6 +325,36 @@ def _summarize_built(
             if override != u:
                 edges.append((u, override, TENTATIVE))
                 dispatch_edges += 1
+
+    # 2a-bis. mixin dispatch: `self.execute_command()` in a mixin that
+    #     never declares it (only the classes mixing it in do) resolves to
+    #     a name no function holds; every subclass defining it may run.
+    subclasses: dict[str, set[str]] = {}
+    for u, v, d in builder.graph.edges(data=True):
+        if d.get("relation") == "EXTENDS":
+            subclasses.setdefault(v, set()).add(u)
+
+    def all_subclasses(cls: str) -> set[str]:
+        found, stack = set(), list(subclasses.get(cls, ()))
+        while stack:
+            c = stack.pop()
+            if c not in found:
+                found.add(c)
+                stack.extend(subclasses.get(c, ()))
+        return found
+
+    mixin_edges = 0
+    for u, v, _tier in list(edges):
+        if v in funcs or "." not in v:
+            continue
+        cls, name = v.rsplit(".", 1)
+        if cls not in table or table[cls].kind != "class":
+            continue
+        for sub in sorted(all_subclasses(cls)):
+            target = f"{sub}.{name}" if f"{sub}.{name}" in funcs else None
+            if target and target != u:
+                edges.append((u, target, TENTATIVE))
+                mixin_edges += 1
 
     # 2b. typing.Protocol structural dispatch
     protocols = {c for c in classes if any(b.split(".")[-1].split("[")[0] == "Protocol" for b in _class_bases(builder, c))}
@@ -325,6 +438,9 @@ def _summarize_built(
             "with_bits": len(symbols),
             "edges": len(edges),
             "dispatch_edges": dispatch_edges,
+            "closure_edges": closure_edges,
+            "ctor_edges": ctor_edges,
+            "mixin_edges": mixin_edges,
             "protocol_edges": protocol_edges,
             "callback_edges": callback_edges,
             "native_modules": len(natives),

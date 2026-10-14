@@ -27,15 +27,7 @@ def _header_statements(body: list) -> list:
         elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
             out.append(_stub(stmt))
         elif isinstance(stmt, ast.ClassDef):
-            members = []
-            for m in stmt.body:
-                if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    members.append(_stub(m))
-                elif isinstance(m, ast.AnnAssign) and isinstance(m.target, ast.Name):
-                    members.append(ast.AnnAssign(target=m.target, annotation=m.annotation, value=None, simple=1))
-                elif isinstance(m, ast.ClassDef):
-                    members.extend(_header_statements([m]))
-            stmt.body = members or [ast.Pass()]
+            stmt.body = _class_members(stmt.body) or [ast.Pass()]
             out.append(stmt)
         elif isinstance(stmt, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "__all__" for t in stmt.targets):
             out.append(stmt)
@@ -44,6 +36,32 @@ def _header_statements(body: list) -> list:
         elif isinstance(stmt, ast.Try):  # `try: import x` - the primary branch
             out.extend(_header_statements(stmt.body))
     return out
+
+
+def _class_members(body: list) -> list:
+    """A class body's methods, annotated fields and nested classes -
+    including those declared under `if TYPE_CHECKING:` / version branches
+    (aiohttp's `ClientSession.get`) or `try:` (both arms of an `if`: a
+    name declared only in `else` still exists)."""
+    members = []
+    seen: set[str] = set()
+    for m in body:
+        if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if m.name not in seen:
+                seen.add(m.name)
+                members.append(_stub(m))
+        elif isinstance(m, ast.AnnAssign) and isinstance(m.target, ast.Name):
+            members.append(ast.AnnAssign(target=m.target, annotation=m.annotation, value=None, simple=1))
+        elif isinstance(m, ast.ClassDef):
+            members.extend(_header_statements([m]))
+        elif isinstance(m, (ast.If, ast.Try)):
+            for nested in _class_members([*m.body, *m.orelse]):
+                name = getattr(nested, "name", None)
+                if name is None or name not in seen:
+                    if name is not None:
+                        seen.add(name)
+                    members.append(nested)
+    return members
 
 
 def header_source(source: str) -> str:

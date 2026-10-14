@@ -16,6 +16,15 @@ absent - the capability leg is not scored as a mismatch: its weight moves
 onto the physical-action leg, and the result is marked
 `capability_source="opaque-native"` with the opaque entry points it
 reached, so the provenance says exactly why it ranked where it did.
+
+`DATABASE_IO` is synthesized by the triad rather than read off a catalog
+of driver names. A pure-Python driver bottoms out at a socket
+(`PRIM_NET_CONNECT`) - that is the ground truth of what it physically does;
+what makes the connection a database is the action dispatched over it. So
+a candidate is database I/O when it reaches a DB primitive, or when it
+reaches a network connection *and* its own name or a call it makes is a
+database verb (`DATABASE_VERBS`), or when it reaches opaque native code
+with such a verb (a compiled driver).
 """
 from __future__ import annotations
 
@@ -65,6 +74,14 @@ PHYSICAL_ACTIONS: dict[str, PhysicalAction] = {
     )
 }
 
+#: Verbs that dispatch a database action (a call site's callee or the
+#: function's own name): `cur.execute(...)`, `conn.commit()`.
+DATABASE_VERBS = ("query", "execute", "select", "insert", "commit", "find", "cursor")
+#: The triad-synthesized database capability target.
+DATABASE_IO = "DATABASE_IO"
+_DB_BITS = int(F.PRIM_DB_CONNECT | F.PRIM_DB_READ | F.PRIM_DB_WRITE)
+_NET_SOCKET = int(F.PRIM_NET_CONNECT)
+
 _WORD = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+")
 
 
@@ -97,6 +114,34 @@ def action_score(tokens: "frozenset[str] | set[str]", action: "PhysicalAction | 
     return 1.0 if any(t.startswith(v) for t in tokens for v in action.verbs) else 0.0
 
 
+def has_database_verb(tokens: "frozenset[str] | set[str]") -> bool:
+    return any(t.startswith(v) for t in tokens for v in DATABASE_VERBS)
+
+
+def database_io(profile: CapabilityProfile | None, tokens: "frozenset[str] | set[str]") -> tuple[float, str]:
+    """`(capability, source)` for the synthesized `DATABASE_IO` target:
+
+    - `"capability"`: a DB primitive is reached (hop-decayed score);
+    - `"net-socket+db-verb"`: a network connection is reached and a
+      database verb is dispatched (score of the network leg);
+    - `"opaque-native"`: only opaque native code is reached, with a
+      database verb - capability unknown (0.0), matched by the action;
+    - `"none"`: no match."""
+    if profile is None:
+        return 0.0, "none"
+    direct = capability_score(profile, _DB_BITS)
+    if direct > 0:
+        return direct, "capability"
+    if not has_database_verb(tokens):
+        return 0.0, "none"
+    network = capability_score(profile, _NET_SOCKET)
+    if network > 0:
+        return network, "net-socket+db-verb"
+    if profile.opaque:
+        return 0.0, "opaque-native"
+    return 0.0, "none"
+
+
 @dataclass(frozen=True)
 class TriadScore:
     """One re-ranked candidate and why it scored as it did."""
@@ -106,7 +151,7 @@ class TriadScore:
     stems: float
     capability: float
     action: float
-    capability_source: str  # "capability" | "opaque-native" | "none"
+    capability_source: str  # "capability" | "net-socket+db-verb" | "opaque-native" | "none"
     opaque: tuple[str, ...] = ()
 
 
@@ -129,10 +174,22 @@ def triad_rerank(
     for i, qname in enumerate(candidates):
         stems = stem_scores.get(qname, 0.0)
         profile = profiles.get(qname)
-        capability = capability_score(profile, target) if target is not None else 0.0
-        act = action_score(tokens.get(qname, frozenset()), action) if action is not None else 0.0
+        words = tokens.get(qname, frozenset())
+        act = action_score(words, action) if action is not None else 0.0
         opaque = profile.opaque if profile is not None else ()
-        if target is not None and capability == 0.0 and opaque:
+        if target == DATABASE_IO:
+            capability, db_source = database_io(profile, words)
+            if db_source == "opaque-native":
+                # A compiled driver dispatching a database verb: the verb
+                # is the matching action.
+                act = max(act, 1.0)
+        else:
+            capability = capability_score(profile, target) if target is not None else 0.0
+            db_source = None
+        if db_source == "net-socket+db-verb":
+            source = db_source
+            boost = capability_weight * capability + action_weight * act
+        elif target is not None and capability == 0.0 and opaque:
             # Unknown, not absent: the capability leg's weight moves to the
             # physical-action leg instead of counting against the candidate.
             source = "opaque-native"

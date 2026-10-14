@@ -501,6 +501,9 @@ class InstanceTypeMap:
         existing = self.bindings.get(var_name)
         if existing is not None and existing != qualified_class:
             self.ambiguous.add(var_name)
+            members = self.branch_members.get(var_name, (existing,))
+            if qualified_class not in members:
+                self.branch_members[var_name] = (*members, qualified_class)
         self.bindings[var_name] = qualified_class
         if inferred:
             self.inferred.add(var_name)
@@ -528,6 +531,7 @@ class InstanceTypeMap:
         # the same name.
         self.bindings.pop(var_name, None)
         self.ambiguous.discard(var_name)
+        self.branch_members.pop(var_name, None)
         self.inferred.discard(var_name)
         self.union_members.pop(var_name, None)
         self.element_types.pop(var_name, None)
@@ -570,6 +574,10 @@ class InstanceTypeMap:
     #: `xs: list[T]` -> T: what iterating a container-annotated name yields
     #: (a mapping's key type).
     element_types: dict[str, str] = field(default_factory=dict)
+    #: Every class an `ambiguous` name was bound to, in binding order
+    #: (`self._pool = ConnectionPool(...)` / `= HTTPProxy(...)` on separate
+    #: branches). `resolve()` is unchanged (the most recent binding).
+    branch_members: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def is_local(self, var_name: str) -> bool:
         return var_name in self.local_names

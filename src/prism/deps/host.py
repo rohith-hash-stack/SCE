@@ -32,7 +32,7 @@ import tempfile
 from prism.deps.discover import imported_roots
 from prism.deps.headers import write_headers
 from prism.deps.index import DependencyIndex
-from prism.deps.summarizer import PackageSummary
+from prism.deps.summarizer import PackageSummary, SymbolSummary, constructor_methods, native_modules, native_reexports
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable, path_to_module
 
@@ -83,9 +83,35 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
     # A fully native package has no header; the host's calls into it are
     # ordinary unresolved external targets named after the package.
     opaque_packages = {name for name, summary in summaries.items() if summary.status == "opaque"}
+    # A summarized package's own compiled modules, and the names it
+    # re-exports from them (`from ._core import connect`), are opaque too.
+    native_names: set[str] = set()
+    native_mods: set[str] = set()
+    for name, summary in summaries.items():
+        if summary.status == "summarized" and summary.stats.get("native_modules"):
+            mods = native_modules(summary.ref.package_dir, summary.ref.package)
+            native_mods |= mods
+            native_names |= native_reexports(summary.headers, summary.ref.package, mods)
+
+    def is_native(target: str) -> bool:
+        return (
+            target.split(".")[0] in opaque_packages
+            or target in native_names
+            or any(target == m or target.startswith(m + ".") for m in native_mods)
+        )
+
     native_called = {
         v for u, v in graph.edges()
-        if u not in header_nodes and v not in builder.symbol_table and v.split(".")[0] in opaque_packages
+        if u not in header_nodes and v not in builder.symbol_table and is_native(v)
+    }
+    # `Cls(...)` runs the constructor: a class entry point carries its
+    # `__init__`/`__new__` summaries (own or inherited, resolved while the
+    # header hierarchy is still indexed).
+    header_funcs = {q for q in header_symbols if builder.symbol_table.get(q).kind in ("function", "method")}
+    constructors = {
+        node: constructor_methods(builder, node, header_funcs)
+        for node in host_called
+        if (symbol := builder.symbol_table.get(node)) is not None and symbol.kind == "class"
     }
     for node in header_nodes:
         for _, target in list(graph.out_edges(node)):
@@ -97,6 +123,8 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
         package = node.split(".")[0]
         summary = by_package.get(package)
         symbol = summary.symbols.get(node) if summary is not None else None
+        if symbol is None and node in constructors and summary is not None:
+            symbol = _merged([summary.symbols[c] for c in constructors[node] if c in summary.symbols])
         mask = symbol.mask if symbol is not None else 0
         confident = symbol.confident_mask if symbol is not None else 0
         attrs = graph.nodes[node]
@@ -136,6 +164,19 @@ def detach_dependency_headers(builder: ConcreteGraphBuilder, summaries: dict[str
     builder._methods_by_class = {c: m for c, m in builder._methods_by_class.items() if c not in header_symbols}
     builder.module_roots = [r for r in builder.module_roots if r != header_root]
     return len(host_called) + len(native_called)
+
+
+def _merged(symbols: list[SymbolSummary]) -> SymbolSummary | None:
+    """One summary for several functions that all run (a constructor's
+    `__new__` and `__init__`): per bit, the best evidence."""
+    if not symbols:
+        return None
+    evidence = {}
+    for symbol in symbols:
+        for bit, ev in symbol.evidence.items():
+            if bit not in evidence or (ev.tier, ev.depth) < (evidence[bit].tier, evidence[bit].depth):
+                evidence[bit] = ev
+    return SymbolSummary("class", evidence)
 
 
 def boundary_tier(mask: int, confident_mask: int, opaque: bool) -> str:

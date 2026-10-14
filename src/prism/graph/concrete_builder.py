@@ -287,6 +287,13 @@ class ConcreteGraphBuilder:
         #: override of its target once the whole repo is resolved.
         self._last_resolution_was_dispatch = False
         self._dispatch_sites: list[tuple[str, str]] = []
+        #: When set (offline dependency summarization, a "may reach"
+        #: analysis), a call through a receiver typed as a union or bound
+        #: to different classes on different branches also links, as
+        #: TENTATIVE_CALL, every other member's method
+        #: (`_last_resolution_alternatives`). Host builds keep one target.
+        self.dispatch_all_members = False
+        self._last_resolution_alternatives: tuple[str, ...] = ()
         #: `_resolve_by_receiver_name`'s lazily built
         #: {normalized class simple name: [qualified class names]} index.
         self._class_name_index: dict[str, list[str]] | None = None
@@ -927,7 +934,20 @@ class ConcreteGraphBuilder:
                 import_maps[path] = import_map
                 self._import_maps[path] = import_map
                 self._register_exports(parsed, module, import_map)
-                self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_map)
+            except (RecursionError, UnicodeDecodeError) as exc:
+                self._record_index_error(path, exc, stage="pass2a")
+
+        # Sub-pass 2a-bis: class relations, once every file's exports are
+        # registered - a base imported through a barrel (`from redis.commands
+        # import CoreCommands`, re-exported by a `commands/__init__.py` that
+        # sorts after `client.py`) only resolves to its real class then.
+        for path in sorted(import_maps):
+            parsed = self._parsed_files.get(path)
+            if parsed is None:
+                continue
+            try:
+                module = self._module_for_file(parsed)
+                self._link_class_relations(classes_by_file.get(path, []), parsed, module, import_maps[path])
                 self._link_go_embeds(classes_by_file.get(path, []), parsed, module)
             except (RecursionError, UnicodeDecodeError) as exc:
                 self._record_index_error(path, exc, stage="pass2a")
@@ -1735,6 +1755,15 @@ class ConcreteGraphBuilder:
             resolved_attr = resolve_export(resolved_root, rest[0], self.export_registry, self.symbol_table)
             if resolved_attr is not None:
                 return ".".join([resolved_attr, *rest[1:]]) if len(rest) > 1 else resolved_attr
+            # `import sqlalchemy.orm` + `sqlalchemy.orm.Session()`: the
+            # re-exporting package is a deeper prefix of the chain - try
+            # each (longest first) as the module re-exporting the next name.
+            for k in range(len(rest) - 1, 0, -1):
+                resolved_attr = resolve_export(
+                    ".".join([resolved_root, *rest[:k]]), rest[k], self.export_registry, self.symbol_table
+                )
+                if resolved_attr is not None:
+                    return ".".join([resolved_attr, *rest[k + 1:]])
 
         return target
 
@@ -2522,6 +2551,11 @@ class ConcreteGraphBuilder:
             self.graph.add_edge(caller_qname, target, **edge_kwargs)
             if relation == "CALLS" and self._last_resolution_was_dispatch:
                 self._dispatch_sites.append((caller_qname, target))
+            if relation == "CALLS":
+                for alternative in self._last_resolution_alternatives:
+                    if not self.graph.has_edge(caller_qname, alternative):
+                        self.graph.add_edge(caller_qname, alternative, **{**edge_kwargs, "kind": "TENTATIVE_CALL"})
+                        self._dispatch_sites.append((caller_qname, alternative))
 
         self._link_new_expression_instantiations(caller_qname, def_node, parsed, module, import_map)
         if lang == LanguageID.PYTHON:
@@ -3285,6 +3319,7 @@ class ConcreteGraphBuilder:
         self._last_resolution_was_builtin_receiver = False
         self._last_resolution_was_dispatch = False
         self._last_resolution_was_unbound_local = False
+        self._last_resolution_alternatives = ()
         # A function-local name (parameter, assignment/loop/`with` target)
         # shadows every same-named module-level symbol and import, so with
         # no type binding of its own it must never be looked up through
@@ -3309,18 +3344,15 @@ class ConcreteGraphBuilder:
             # against whichever map actually supplied the candidate, not
             # both unconditionally (a name ambiguous in one scope but not
             # the one that actually resolved it should not be flagged).
-            if func_instance_map.resolve(receiver_key) is not None:
-                candidate = func_instance_map.resolve(receiver_key)
-                ambiguous = func_instance_map.is_ambiguous(receiver_key)
-                union = func_instance_map.union_members.get(receiver_key)
-            else:
-                candidate = class_instance_map.resolve(receiver_key)
-                ambiguous = class_instance_map.is_ambiguous(receiver_key)
-                union = class_instance_map.union_members.get(receiver_key)
+            source_map = func_instance_map if func_instance_map.resolve(receiver_key) is not None else class_instance_map
+            candidate = source_map.resolve(receiver_key)
+            ambiguous = source_map.is_ambiguous(receiver_key)
+            union = source_map.union_members.get(receiver_key)
             if candidate and union:
                 candidate = self._union_member_for(union, method)
                 ambiguous = False
             if candidate:
+                self._record_member_alternatives(source_map, receiver_key, candidate, method)
                 if ambiguous:
                     # G41 Invariant 3: branching initialization bound
                     # `self.<attr>` to more than one concrete class -
@@ -3336,7 +3368,7 @@ class ConcreteGraphBuilder:
                 if func_instance_map.is_inferred(receiver_key) or class_instance_map.is_inferred(receiver_key):
                     self._last_resolution_was_tentative = True
                 self._last_resolution_was_dispatch = True
-                return f"{candidate}.{method}"
+                return self._inherited_method(candidate, method)
             if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
                 # Builtin-Receiver Exclusion fix: `self.<attr>` is known
                 # to hold a Python builtin container/primitive
@@ -3373,13 +3405,12 @@ class ConcreteGraphBuilder:
             )
 
         candidate = func_instance_map.resolve(receiver_key) or class_instance_map.resolve(receiver_key)
-        union = (
-            func_instance_map.union_members.get(receiver_key)
-            if func_instance_map.resolve(receiver_key) is not None
-            else class_instance_map.union_members.get(receiver_key)
-        )
+        source_map = func_instance_map if func_instance_map.resolve(receiver_key) is not None else class_instance_map
+        union = source_map.union_members.get(receiver_key)
         if candidate and union:
             candidate = self._union_member_for(union, method)
+        if candidate:
+            self._record_member_alternatives(source_map, receiver_key, candidate, method)
         if func_instance_map.is_builtin(receiver_key) or class_instance_map.is_builtin(receiver_key):
             # Builtin-Receiver Exclusion fix: a local variable known to
             # hold a Python builtin container/primitive
@@ -3486,6 +3517,33 @@ class ConcreteGraphBuilder:
                 self._last_resolution_was_tentative = True
                 return unique
         return None
+
+    def _record_member_alternatives(self, instance_map: InstanceTypeMap, receiver_key: str, chosen: str, method: str) -> None:
+        """With `dispatch_all_members`, every other class `receiver_key` may
+        hold (union annotation or branch bindings) contributes its own
+        `method`, where defined."""
+        if not self.dispatch_all_members:
+            return
+        members = instance_map.union_members.get(receiver_key) or instance_map.branch_members.get(receiver_key) or ()
+        alternatives = []
+        for member in members:
+            if member == chosen:
+                continue
+            target = self._inherited_method(member, method)
+            if target in self.symbol_table and target not in alternatives:
+                alternatives.append(target)
+        self._last_resolution_alternatives = tuple(alternatives)
+
+    def _inherited_method(self, cls: str, method: str) -> str:
+        """`cls.method` where it is defined - on `cls` itself or the nearest
+        MRO ancestor (a mixin's `get` for `redis.Redis().get`) - else the
+        direct name, as before."""
+        direct = f"{cls}.{method}"
+        if direct not in self.symbol_table:
+            for ancestor in self._mro_ancestors(cls):
+                if f"{ancestor}.{method}" in self.symbol_table:
+                    return f"{ancestor}.{method}"
+        return direct
 
     def _union_member_for(self, members: tuple[str, ...], method: str) -> str:
         """The first member of a `Union[...]` binding that defines `method`
