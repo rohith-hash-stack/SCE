@@ -1,0 +1,673 @@
+{
+ "version": 1,
+ "repos": {
+  "microblog": {
+   "url": "https://github.com/miguelgrinberg/microblog",
+   "commit": "a975ef64864354867c88e0ed3a17ba7d17dca752"
+  },
+  "realworld": {
+   "url": "https://github.com/nsidnev/fastapi-realworld-example-app",
+   "commit": "029eb7781c60d5f563ee8990a0cbfb79b244538c"
+  }
+ },
+ "authoring_rules": [
+  "Written from reading each repo's source before any system was run on it; never edited after seeing results.",
+  "Questions describe behaviour in a developer's words; gold = the function(s) that directly answer; decoys = plausible wrong functions (same name stems, the route vs. repository layer, the inverse operation).",
+  "Candidates for every system are the same unit: each indexed non-test function, method or class, named module.Class.function."
+ ],
+ "questions": [
+  {
+   "id": "mb01",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "Where does the app call the external machine translation HTTP API?",
+   "gold": [
+    "app.translate.translate"
+   ],
+   "decoys": [
+    "app.main.routes.translate_text",
+    "app.cli.translate"
+   ]
+  },
+  {
+   "id": "mb02",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "Which code writes a post's searchable fields into the Elasticsearch index?",
+   "gold": [
+    "app.search.add_to_index"
+   ],
+   "decoys": [
+    "app.search.remove_from_index",
+    "app.models.SearchableMixin.reindex"
+   ]
+  },
+  {
+   "id": "mb03",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "Where is a document deleted from the full-text search index?",
+   "gold": [
+    "app.search.remove_from_index"
+   ],
+   "decoys": [
+    "app.search.add_to_index",
+    "app.models.SearchableMixin.after_commit"
+   ]
+  },
+  {
+   "id": "mb04",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "Which function runs the full-text query against the search server and returns the matching ids and total?",
+   "gold": [
+    "app.search.query_index"
+   ],
+   "decoys": [
+    "app.models.SearchableMixin.search",
+    "app.main.routes.search"
+   ]
+  },
+  {
+   "id": "mb05",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "Where is an outgoing email actually handed to the mail server?",
+   "gold": [
+    "app.email.send_async_email",
+    "app.email.send_email"
+   ],
+   "decoys": [
+    "app.auth.email.send_password_reset_email"
+   ]
+  },
+  {
+   "id": "mb06",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "Where is a background job pushed onto the redis task queue?",
+   "gold": [
+    "app.models.User.launch_task"
+   ],
+   "decoys": [
+    "app.main.routes.export_posts",
+    "app.tasks.export_posts"
+   ]
+  },
+  {
+   "id": "mb07",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "How does the app look up a background job's state in redis?",
+   "gold": [
+    "app.models.Task.get_rq_job"
+   ],
+   "decoys": [
+    "app.models.Task.get_progress",
+    "app.models.User.get_tasks_in_progress"
+   ]
+  },
+  {
+   "id": "mb08",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "Where is the progress of a running export job recorded and the user notified about it?",
+   "gold": [
+    "app.tasks._set_task_progress"
+   ],
+   "decoys": [
+    "app.models.Task.get_progress",
+    "app.models.User.add_notification"
+   ]
+  },
+  {
+   "id": "mb09",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "Which background task serializes all of a user's posts to JSON and emails them as an attachment?",
+   "gold": [
+    "app.tasks.export_posts"
+   ],
+   "decoys": [
+    "app.main.routes.export_posts",
+    "app.models.User.launch_task"
+   ]
+  },
+  {
+   "id": "mb10",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "How are password reset tokens generated?",
+   "gold": [
+    "app.models.User.get_reset_password_token"
+   ],
+   "decoys": [
+    "app.models.User.verify_reset_password_token",
+    "app.models.User.get_token"
+   ]
+  },
+  {
+   "id": "mb11",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "Where is a password reset JWT decoded and validated?",
+   "gold": [
+    "app.models.User.verify_reset_password_token"
+   ],
+   "decoys": [
+    "app.models.User.get_reset_password_token",
+    "app.models.User.check_token",
+    "app.api.auth.verify_token"
+   ]
+  },
+  {
+   "id": "mb12",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "How are API bearer tokens issued and their expiration extended?",
+   "gold": [
+    "app.models.User.get_token"
+   ],
+   "decoys": [
+    "app.api.tokens.get_token",
+    "app.models.User.revoke_token"
+   ]
+  },
+  {
+   "id": "mb13",
+   "repo": "microblog",
+   "category": "routing",
+   "question": "Which API endpoint revokes an access token?",
+   "gold": [
+    "app.api.tokens.revoke_token"
+   ],
+   "decoys": [
+    "app.models.User.revoke_token",
+    "app.api.tokens.get_token"
+   ]
+  },
+  {
+   "id": "mb14",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "How does the API authenticate requests with an HTTP basic auth username and password?",
+   "gold": [
+    "app.api.auth.verify_password"
+   ],
+   "decoys": [
+    "app.auth.routes.login",
+    "app.models.User.check_password"
+   ]
+  },
+  {
+   "id": "mb15",
+   "repo": "microblog",
+   "category": "routing",
+   "question": "Which API endpoint creates a new user and rejects duplicate usernames or emails?",
+   "gold": [
+    "app.api.users.create_user"
+   ],
+   "decoys": [
+    "app.auth.routes.register",
+    "app.api.users.update_user"
+   ]
+  },
+  {
+   "id": "mb16",
+   "repo": "microblog",
+   "category": "routing",
+   "question": "Which web route handles following another user?",
+   "gold": [
+    "app.main.routes.follow"
+   ],
+   "decoys": [
+    "app.models.User.follow",
+    "app.main.routes.unfollow"
+   ]
+  },
+  {
+   "id": "mb17",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "How is the home timeline of posts from followed users built?",
+   "gold": [
+    "app.models.User.following_posts"
+   ],
+   "decoys": [
+    "app.main.routes.index",
+    "app.main.routes.explore"
+   ]
+  },
+  {
+   "id": "mb18",
+   "repo": "microblog",
+   "category": "routing",
+   "question": "Which route sends a private message to another user?",
+   "gold": [
+    "app.main.routes.send_message"
+   ],
+   "decoys": [
+    "app.main.routes.messages",
+    "app.email.send_email"
+   ]
+  },
+  {
+   "id": "mb19",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "How is the number of unread private messages computed?",
+   "gold": [
+    "app.models.User.unread_message_count"
+   ],
+   "decoys": [
+    "app.main.routes.messages",
+    "app.models.User.add_notification"
+   ]
+  },
+  {
+   "id": "mb20",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "Where are notifications saved to the database, replacing older ones with the same name?",
+   "gold": [
+    "app.models.User.add_notification"
+   ],
+   "decoys": [
+    "app.main.routes.notifications",
+    "app.models.Notification.get_data"
+   ]
+  },
+  {
+   "id": "mb21",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "Where does the app detect the language of a newly submitted post?",
+   "gold": [
+    "app.main.routes.index"
+   ],
+   "decoys": [
+    "app.translate.translate",
+    "app.get_locale"
+   ]
+  },
+  {
+   "id": "mb22",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "How does a searchable model keep the search index in sync after a database commit?",
+   "gold": [
+    "app.models.SearchableMixin.after_commit"
+   ],
+   "decoys": [
+    "app.models.SearchableMixin.before_commit",
+    "app.models.SearchableMixin.reindex"
+   ]
+  },
+  {
+   "id": "mb23",
+   "repo": "microblog",
+   "category": "io_sink",
+   "question": "Which CLI commands shell out to pybabel to extract and update translation catalogs?",
+   "gold": [
+    "app.cli.update",
+    "app.cli.init"
+   ],
+   "decoys": [
+    "app.cli.compile",
+    "app.translate.translate"
+   ]
+  },
+  {
+   "id": "mb24",
+   "repo": "microblog",
+   "category": "feature_logic",
+   "question": "Where are the error-reporting email handler and rotating log file configured at startup?",
+   "gold": [
+    "app.create_app"
+   ],
+   "decoys": [
+    "app.errors.handlers.internal_error"
+   ]
+  },
+  {
+   "id": "mb25",
+   "repo": "microblog",
+   "category": "routing",
+   "question": "Which error handler rolls back the database session on internal server errors?",
+   "gold": [
+    "app.errors.handlers.internal_error"
+   ],
+   "decoys": [
+    "app.errors.handlers.not_found_error",
+    "app.api.errors.handle_exception"
+   ]
+  },
+  {
+   "id": "rw01",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Where is the PostgreSQL connection pool created at application startup?",
+   "gold": [
+    "app.db.events.connect_to_db"
+   ],
+   "decoys": [
+    "app.db.events.close_db_connection",
+    "app.core.events.create_start_app_handler"
+   ]
+  },
+  {
+   "id": "rw02",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Where is the database connection pool closed on shutdown?",
+   "gold": [
+    "app.db.events.close_db_connection"
+   ],
+   "decoys": [
+    "app.db.events.connect_to_db",
+    "app.core.events.create_stop_app_handler"
+   ]
+  },
+  {
+   "id": "rw03",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "How does a request acquire a database connection from the pool?",
+   "gold": [
+    "app.api.dependencies.database._get_connection_from_pool"
+   ],
+   "decoys": [
+    "app.api.dependencies.database._get_db_pool",
+    "app.api.dependencies.database.get_repository"
+   ]
+  },
+  {
+   "id": "rw04",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Which repository method inserts a new user row into the database?",
+   "gold": [
+    "app.db.repositories.users.UsersRepository.create_user"
+   ],
+   "decoys": [
+    "app.db.repositories.users.UsersRepository.update_user",
+    "app.api.routes.authentication.register"
+   ]
+  },
+  {
+   "id": "rw05",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Where are a user's username, email, bio, image and password updated in the database?",
+   "gold": [
+    "app.db.repositories.users.UsersRepository.update_user"
+   ],
+   "decoys": [
+    "app.api.routes.users.update_current_user",
+    "app.db.repositories.users.UsersRepository.create_user"
+   ]
+  },
+  {
+   "id": "rw06",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Which query adds a follower relationship between two users?",
+   "gold": [
+    "app.db.repositories.profiles.ProfilesRepository.add_user_into_followers"
+   ],
+   "decoys": [
+    "app.db.repositories.profiles.ProfilesRepository.remove_user_from_followers",
+    "app.api.routes.profiles.follow_for_user"
+   ]
+  },
+  {
+   "id": "rw07",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "How is an article deleted from the database?",
+   "gold": [
+    "app.db.repositories.articles.ArticlesRepository.delete_article"
+   ],
+   "decoys": [
+    "app.api.routes.articles.articles_resource.delete_article_by_slug",
+    "app.db.repositories.comments.CommentsRepository.delete_comment"
+   ]
+  },
+  {
+   "id": "rw08",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "How are articles filtered by tag, author and favorited user with limit and offset?",
+   "gold": [
+    "app.db.repositories.articles.ArticlesRepository.filter_articles"
+   ],
+   "decoys": [
+    "app.api.routes.articles.articles_resource.list_articles",
+    "app.api.dependencies.articles.get_articles_filters"
+   ]
+  },
+  {
+   "id": "rw09",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Where is an article added to a user's favorites in the database?",
+   "gold": [
+    "app.db.repositories.articles.ArticlesRepository.add_article_into_favorites"
+   ],
+   "decoys": [
+    "app.api.routes.articles.articles_common.mark_article_as_favorite",
+    "app.db.repositories.articles.ArticlesRepository.remove_article_from_favorites"
+   ]
+  },
+  {
+   "id": "rw10",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Which code inserts tags that don't exist yet?",
+   "gold": [
+    "app.db.repositories.tags.TagsRepository.create_tags_that_dont_exist"
+   ],
+   "decoys": [
+    "app.db.repositories.articles.ArticlesRepository._link_article_with_tags",
+    "app.db.repositories.tags.TagsRepository.get_all_tags"
+   ]
+  },
+  {
+   "id": "rw11",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Where is a new comment written to the database for an article?",
+   "gold": [
+    "app.db.repositories.comments.CommentsRepository.create_comment_for_article"
+   ],
+   "decoys": [
+    "app.api.routes.comments.create_comment_for_article",
+    "app.db.repositories.comments.CommentsRepository.delete_comment"
+   ]
+  },
+  {
+   "id": "rw12",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "How is the feed of articles from followed authors fetched from the database?",
+   "gold": [
+    "app.db.repositories.articles.ArticlesRepository.get_articles_for_user_feed"
+   ],
+   "decoys": [
+    "app.api.routes.articles.articles_common.get_articles_for_user_feed",
+    "app.db.repositories.articles.ArticlesRepository.filter_articles"
+   ]
+  },
+  {
+   "id": "rw13",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "How are JWT access tokens created for a user?",
+   "gold": [
+    "app.services.jwt.create_access_token_for_user",
+    "app.services.jwt.create_jwt_token"
+   ],
+   "decoys": [
+    "app.services.jwt.get_username_from_token"
+   ]
+  },
+  {
+   "id": "rw14",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "Where is the username extracted from a JWT token and decoding errors handled?",
+   "gold": [
+    "app.services.jwt.get_username_from_token"
+   ],
+   "decoys": [
+    "app.api.dependencies.authentication._get_current_user",
+    "app.services.jwt.create_jwt_token"
+   ]
+  },
+  {
+   "id": "rw15",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "How are passwords hashed with bcrypt?",
+   "gold": [
+    "app.services.security.get_password_hash"
+   ],
+   "decoys": [
+    "app.services.security.verify_password",
+    "app.services.security.generate_salt",
+    "app.models.domain.users.UserInDB.change_password"
+   ]
+  },
+  {
+   "id": "rw16",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "How is a login password checked against the stored hash?",
+   "gold": [
+    "app.models.domain.users.UserInDB.check_password",
+    "app.services.security.verify_password"
+   ],
+   "decoys": [
+    "app.services.security.get_password_hash",
+    "app.api.routes.authentication.login"
+   ]
+  },
+  {
+   "id": "rw17",
+   "repo": "realworld",
+   "category": "routing",
+   "question": "Which endpoint registers a new user and rejects a taken username or email?",
+   "gold": [
+    "app.api.routes.authentication.register"
+   ],
+   "decoys": [
+    "app.services.authentication.check_username_is_taken",
+    "app.db.repositories.users.UsersRepository.create_user"
+   ]
+  },
+  {
+   "id": "rw18",
+   "repo": "realworld",
+   "category": "routing",
+   "question": "Which endpoint logs a user in with email and password and returns a token?",
+   "gold": [
+    "app.api.routes.authentication.login"
+   ],
+   "decoys": [
+    "app.api.routes.authentication.register",
+    "app.services.security.verify_password"
+   ]
+  },
+  {
+   "id": "rw19",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "How is the Authorization header parsed and its token prefix validated?",
+   "gold": [
+    "app.api.dependencies.authentication._get_authorization_header"
+   ],
+   "decoys": [
+    "app.api.dependencies.authentication._get_authorization_header_optional",
+    "app.api.dependencies.authentication._get_current_user"
+   ]
+  },
+  {
+   "id": "rw20",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "How is the current authenticated user resolved for a request?",
+   "gold": [
+    "app.api.dependencies.authentication._get_current_user"
+   ],
+   "decoys": [
+    "app.api.dependencies.authentication._get_current_user_optional",
+    "app.api.routes.users.retrieve_current_user"
+   ]
+  },
+  {
+   "id": "rw21",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "Where is it checked that only an article's author may modify it?",
+   "gold": [
+    "app.api.dependencies.articles.check_article_modification_permissions",
+    "app.services.articles.check_user_can_modify_article"
+   ],
+   "decoys": [
+    "app.api.dependencies.comments.check_comment_modification_permissions",
+    "app.services.comments.check_user_can_modify_comment"
+   ]
+  },
+  {
+   "id": "rw22",
+   "repo": "realworld",
+   "category": "feature_logic",
+   "question": "How is an article slug generated from its title?",
+   "gold": [
+    "app.services.articles.get_slug_for_article"
+   ],
+   "decoys": [
+    "app.services.articles.check_article_exists",
+    "app.db.repositories.articles.ArticlesRepository.get_article_by_slug"
+   ]
+  },
+  {
+   "id": "rw23",
+   "repo": "realworld",
+   "category": "routing",
+   "question": "Which endpoint unfollows a user?",
+   "gold": [
+    "app.api.routes.profiles.unsubscribe_from_user"
+   ],
+   "decoys": [
+    "app.db.repositories.profiles.ProfilesRepository.remove_user_from_followers",
+    "app.api.routes.profiles.follow_for_user"
+   ]
+  },
+  {
+   "id": "rw24",
+   "repo": "realworld",
+   "category": "routing",
+   "question": "How are request validation errors turned into 422 responses?",
+   "gold": [
+    "app.api.errors.validation_error.http422_error_handler"
+   ],
+   "decoys": [
+    "app.api.errors.http_error.http_error_handler"
+   ]
+  },
+  {
+   "id": "rw25",
+   "repo": "realworld",
+   "category": "io_sink",
+   "question": "Which query checks whether one user follows another?",
+   "gold": [
+    "app.db.repositories.profiles.ProfilesRepository.is_user_following_for_another_user"
+   ],
+   "decoys": [
+    "app.db.repositories.profiles.ProfilesRepository.add_user_into_followers",
+    "app.db.repositories.profiles.ProfilesRepository.get_profile_by_username"
+   ]
+  }
+ ]
+}
