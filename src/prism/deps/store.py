@@ -73,7 +73,7 @@ class SummaryStore:
 
     def __init__(self, path: str | None = None) -> None:
         self.path = path or default_store_path()
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
         with closing(self._connect()) as conn:
             conn.executescript(_SCHEMA)
 

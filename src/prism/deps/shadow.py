@@ -6,7 +6,9 @@ the dependency's headers indexed, static resolution lands it on a summarized
 symbol whose summary carries at least one operational I/O bit
 (`OPERATIONAL_IO_MASK`: network, filesystem, database, process; any tier).
 A shadowed entry is ignored by capability and Substance matching: the
-summary takes full precedence.
+summary takes full precedence. A database stub is shadowed only by
+non-network operational bits: a socket under a wire-protocol driver is
+the transport of the stub's database I/O, not a contradiction of it.
 
 Known always beats unknown: OPAQUE (compiled native code) and PROXY (a
 runtime proxy) mean "capability unknown at static analysis time", so they
@@ -25,6 +27,7 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import resolve_export
 from prism.semantics.bitmask import OPERATIONAL_IO_MASK
 from prism.semantics.boundary_stubs_l3 import L3_BOUNDARY_STUBS
+from prism.semantics.primitives import CATEGORY_PRIMITIVES
 
 
 
@@ -79,10 +82,22 @@ def merge_summaries(symbols: list[SymbolSummary]) -> SymbolSummary | None:
     return SymbolSummary("class", evidence)
 
 
-def shadows(symbol: SymbolSummary) -> bool:
+def shadows(symbol: SymbolSummary, category: str | None = None) -> bool:
     """Known operational capability: at least one operational I/O bit.
-    Native-code evidence alone (OPAQUE) is unknown, never a shadow."""
-    return bool(symbol.mask & OPERATIONAL_IO_MASK)
+    Native-code evidence alone (OPAQUE) is unknown, never a shadow. A
+    database stub is not shadowed by network bits alone: a wire-protocol
+    driver (`asyncpg.connect`, `redis.Redis`) reaching a socket shows *how*
+    the stub's database I/O happens, not that it is something else - both
+    stand."""
+    operational = symbol.mask & OPERATIONAL_IO_MASK
+    if category == "database_io":
+        operational &= ~CATEGORY_PRIMITIVES["network_io"]
+    return bool(operational)
+
+
+_STUB_CATEGORY: dict[str, str] = {
+    entry: category for category, langs in L3_BOUNDARY_STUBS.items() for entry in langs.get("python", ())
+}
 
 
 def compute_stub_shadow(
@@ -100,6 +115,6 @@ def compute_stub_shadow(
         if target is None:
             continue
         symbol = entry_summary(builder, target, summary, header_funcs)
-        if symbol is not None and shadows(symbol):
+        if symbol is not None and shadows(symbol, _STUB_CATEGORY.get(entry)):
             shadow[entry] = target
     return shadow

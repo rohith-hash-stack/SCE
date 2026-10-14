@@ -247,3 +247,111 @@ def test_host_builds_do_not_link_callback_arguments(tmp_path):
     assert ("pkg.m.worker", "TENTATIVE_CALL") in targets(True, "pkg.m.start_thread")
     assert ("pkg.m.Pool._connect", "TENTATIVE_CALL") in targets(True, "pkg.m.Pool.acquire")
     assert not any(t == "pkg.m.worker" for t, _ in targets(False, "pkg.m.start_thread"))
+
+
+# --------------------------------------------------------------------- #
+# 4. Module-level instances and `with ... as` targets (all builds)
+# --------------------------------------------------------------------- #
+CLIENTS = """
+    class Response:
+        def text(self):
+            pass
+
+
+    class Pending:
+        async def __aenter__(self) -> Response:
+            ...
+
+
+    class Client:
+        def get(self):
+            pass
+
+        def __enter__(self):
+            return self
+
+        async def __aenter__(self):
+            return self
+
+        def stream(self) -> Pending:
+            ...
+
+
+    class AsyncClient(Client):
+        def get(self):
+            pass
+
+
+    shared = Client()
+    CACHE = {}
+"""
+
+USES = """
+    from .clients import AsyncClient, Client, shared
+
+    local_client = Client()
+
+
+    def via_module_instance():
+        return local_client.get()
+
+
+    def via_imported_instance():
+        return shared.get()
+
+
+    def shadowed():
+        shared = object()
+        return shared.get()
+
+
+    def with_target():
+        with Client() as c:
+            return c.get()
+
+
+    async def async_with_subclass():
+        async with AsyncClient() as c:
+            return c.get()
+
+
+    async def async_with_other_class():
+        async with Client().stream() as resp:
+            return resp.text()
+"""
+
+
+@pytest.fixture(scope="module")
+def binding_graph(tmp_path_factory):
+    root = tmp_path_factory.mktemp("bindings")
+    (root / "pkg").mkdir()
+    (root / "pkg" / "__init__.py").write_text("")
+    (root / "pkg" / "clients.py").write_text(textwrap.dedent(CLIENTS))
+    (root / "pkg" / "uses.py").write_text(textwrap.dedent(USES))
+    files = [str(root / "pkg" / n) for n in ("__init__.py", "clients.py", "uses.py")]
+    builder = ConcreteGraphBuilder(str(root), GlobalSymbolTable())
+    builder.pass1_collect_definitions(files)
+    builder.pass2_resolve_calls(files)
+    return builder.graph
+
+
+def _calls(graph, caller):
+    return {t for _, t, d in graph.out_edges(f"pkg.uses.{caller}", data=True) if d.get("relation") == "CALLS"}
+
+
+@pytest.mark.parametrize(
+    "caller,target",
+    [
+        ("via_module_instance", "pkg.clients.Client.get"),
+        ("via_imported_instance", "pkg.clients.Client.get"),
+        ("with_target", "pkg.clients.Client.get"),
+        ("async_with_subclass", "pkg.clients.AsyncClient.get"),  # `return self` in the base: the constructed class
+        ("async_with_other_class", "pkg.clients.Response.text"),  # `__aenter__ -> Response`
+    ],
+)
+def test_module_instances_and_with_targets_are_typed(binding_graph, caller, target):
+    assert target in _calls(binding_graph, caller)
+
+
+def test_a_local_binding_shadows_the_module_instance(binding_graph):
+    assert "pkg.clients.Client.get" not in _calls(binding_graph, "shadowed")

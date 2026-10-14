@@ -323,6 +323,9 @@ class ConcreteGraphBuilder:
         #: `_infer_return_class` memo: {function qname: class qname | None}.
         self._return_class_cache: dict[str, str | None] = {}
         self._class_map_cache: dict[str, InstanceTypeMap] = {}
+        #: `_module_instance_map`'s per-module cache (Python): module-scope
+        #: `client = httpx.Client()` / `app = Celery(...)` bindings.
+        self._module_map_cache: dict[str, InstanceTypeMap] = {}
         #: Item 3: `go_call_resolution_ratio` diagnostic numerator/
         #: denominator - see that property's own docstring.
         self._go_receiver_call_sites_total = 0
@@ -1098,6 +1101,8 @@ class ConcreteGraphBuilder:
                 func_instance_map = self._build_function_instance_map(
                     def_node, parsed, module, import_map, symbol.enclosing_class, class_instance_map
                 )
+                if parsed.language_id == LanguageID.PYTHON:
+                    self._seed_module_bindings(func_instance_map, parsed, module, import_map)
             for param in self._js_test_fixture_params.get(qualified_name, ()):
                 fixture, _, local_name = param.partition("=")
                 if local_name in func_instance_map.bindings:
@@ -2268,6 +2273,54 @@ class ConcreteGraphBuilder:
                         self._add_relation_edge(method_qname, base_method, "OVERRIDES")
                         break
 
+    def _module_instance_map(self, parsed: ParsedFile, module: str, import_map: LocalImportMap) -> InstanceTypeMap:
+        """Module-scope bindings of a Python file (`client = httpx.Client()`,
+        `app = Celery("tasks")`, `CACHE = {}`), inferred exactly as a
+        function's own locals are; cached per module."""
+        cached = self._module_map_cache.get(module)
+        if cached is None:
+            self._module_map_cache[module] = InstanceTypeMap()  # cycle guard while building
+            cached = self._build_function_instance_map(parsed.root_node, parsed, module, import_map)
+            self._module_map_cache[module] = cached
+        return cached
+
+    def _seed_module_bindings(
+        self, func_map: InstanceTypeMap, parsed: ParsedFile, module: str, import_map: LocalImportMap
+    ) -> None:
+        """A function reads a module-level name it does not bind itself -
+        its own module's (`client.get()` after `client = httpx.Client()`)
+        or one imported from another indexed module (`from .clients
+        import client`) - with that module's binding for it."""
+        own = self._module_instance_map(parsed, module, import_map)
+        candidates: list[tuple[str, InstanceTypeMap, str]] = [(name, own, name) for name in own.local_names]
+        for local, target in import_map.aliases.items():
+            symbol = self.symbol_table.get(target)
+            if symbol is None or symbol.kind != "attribute" or symbol.language_id != LanguageID.PYTHON:
+                continue
+            owner = self._parsed_files.get(symbol.file)
+            if owner is None:
+                continue
+            if symbol.module not in self._module_map_cache:
+                self._module_instance_map(owner, symbol.module, self._build_import_map(owner, symbol.module))
+            candidates.append((local, self._module_map_cache[symbol.module], target.rsplit(".", 1)[-1]))
+        for local, source_map, name in candidates:
+            if local in func_map.local_names or local in func_map.bindings or local in func_map.builtin_bindings:
+                continue
+            if name in source_map.builtin_bindings:
+                func_map.bind_builtin(local)
+                continue
+            bound = source_map.bindings.get(name)
+            if bound is None:
+                continue
+            func_map.bind(local, bound, inferred=name in source_map.inferred)
+            if name in source_map.union_members:
+                func_map.union_members[local] = source_map.union_members[name]
+            if name in source_map.branch_members:
+                func_map.branch_members[local] = source_map.branch_members[name]
+                func_map.ambiguous.add(local)
+            if name in source_map.element_types:
+                func_map.element_types[local] = source_map.element_types[name]
+
     def _build_function_instance_map(
         self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap,
         enclosing_class: str | None = None, class_instance_map: InstanceTypeMap | None = None,
@@ -2377,11 +2430,54 @@ class ConcreteGraphBuilder:
 
         if lang == LanguageID.PYTHON:
             self._bind_python_loop_elements(def_node, parsed, instance_map, class_instance_map)
+            self._bind_python_with_targets(def_node, parsed, module, import_map, instance_map, ctx)
 
         if lang == LanguageID.GO:
             self._bind_go_typed_parameters(def_node, parsed, module, instance_map)
             self._bind_go_short_var_declarations(def_node, parsed, module, instance_map)
         return instance_map
+
+    def _bind_python_with_targets(
+        self, def_node: Node, parsed: ParsedFile, module: str, import_map: LocalImportMap,
+        instance_map: InstanceTypeMap, ctx: "_ExprContext",
+    ) -> None:
+        """`with X(...) as name` / `async with expr as name`: `name` is what
+        the context manager's `__enter__`/`__aenter__` returns - by the
+        near-universal convention the manager itself (`return self`, `->
+        Self`, `-> T` bound to self, or a signature-only header with no
+        body), unless that method names another known class (aiohttp's
+        `_RequestContextManager.__aenter__ -> ClientResponse`)."""
+        for item in iter_scoped_nodes(def_node, {"with_item"}, LanguageID.PYTHON):
+            pattern = item.child_by_field_name("value")
+            if pattern is None or pattern.type != "as_pattern" or not pattern.named_children:
+                continue
+            alias = pattern.child_by_field_name("alias")
+            target = alias.named_children[0] if alias is not None and alias.named_children else None
+            if target is None or target.type != "identifier":
+                continue
+            value = pattern.named_children[0]
+            manager = None
+            ctor_segments = _constructor_call_segments(value, LanguageID.PYTHON, parsed.source)
+            if ctor_segments is not None:
+                resolved = self._resolve_reference_chain(ctor_segments, module, import_map)
+                if self._is_known_class(resolved):
+                    manager = resolved
+            if manager is None:
+                manager = self._expr_class(value, ctx)
+            if manager is None:
+                continue
+            statement = item.parent.parent if item.parent is not None else None
+            is_async = statement is not None and any(c.type == "async" for c in statement.children)
+            entered = self._entered_class(manager, "__aenter__" if is_async else "__enter__")
+            instance_map.bind(node_text(target, parsed.source), entered, inferred=ctor_segments is None or entered != manager)
+
+    def _entered_class(self, manager: str, dunder: str) -> str:
+        lineage = [manager, *self._mro_ancestors(manager)]
+        for cls in lineage:
+            if f"{cls}.{dunder}" in self.symbol_table:
+                returned = self._infer_return_class(f"{cls}.{dunder}")
+                return returned if returned is not None and returned not in lineage else manager
+        return manager
 
     def _bind_annotated_value(
         self, instance_map: InstanceTypeMap, name: str, ann: "_AnnotationType | None",

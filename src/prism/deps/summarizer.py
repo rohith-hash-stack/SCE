@@ -51,7 +51,7 @@ from prism.semantics.primitives import primitive_registry
 
 #: Bump whenever the summarization algorithm changes what it computes -
 #: the one way cached summaries are invalidated besides the package itself.
-SUMMARY_SCHEMA_VERSION = 5
+SUMMARY_SCHEMA_VERSION = 6
 CONFIDENT, TENTATIVE = 0, 1
 #: Evidence key (not a primitive bit) for "reaches compiled native code":
 #: what such code does is unknown, so it never contributes capability bits.

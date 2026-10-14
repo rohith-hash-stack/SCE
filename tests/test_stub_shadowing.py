@@ -4,8 +4,8 @@ Synthetic packages named after real stub-table packages, so the real Layer
 3 entries apply (installed into a private site; never the real libraries):
 
 - `redis`    - `Redis.get` is inherited from a barrel-imported mixin and
-  reaches a socket: the summary is actionable, `redis.Redis.get` is
-  shadowed. `Redis()` itself does no I/O (lazy constructor), so the
+  reaches a socket - the wire protocol's transport, so the `redis.Redis.get`
+  database stub is not shadowed: both stand. `Redis()` itself does no I/O (lazy constructor), so the
   `redis.Redis` stub stays as the fallback; `redis.Redis.set` names nothing
   the package defines - unresolved, stays.
 - `httpx`    - `httpx.get` reaches a socket (shadowed); `httpx.Client()` is
@@ -220,8 +220,9 @@ def _p(profiles, fn):
 # --------------------------------------------------------------------- #
 def test_actionable_summaries_shadow_their_stub_entries(host):
     shadow = host[0].stub_shadow
-    assert shadow["redis.Redis.get"] == "redis.commands.core.KeyCommands.get"  # via the mixin, through the barrel
     assert shadow["httpx.get"] == "httpx._api.get"
+    # A socket under a database stub is its transport, not another category.
+    assert "redis.Redis.get" not in shadow
 
 
 def test_unshadowed_entries_stay_as_fallback(host):
@@ -325,6 +326,10 @@ def test_shadowing_predicate():
     assert not shadows(_summary())
     assert not shadows(_summary(NATIVE)) and not shadows(_summary(NATIVE, F.PRIM_TIME_CLOCK))  # unknown
     assert shadows(_summary(NATIVE, F.PRIM_NET_CONNECT))  # known operational bits beside native code
+    # A database stub: network bits alone are its transport; anything else operational shadows it.
+    assert not shadows(_summary(F.PRIM_NET_CONNECT, F.PRIM_NET_DNS), "database_io")
+    assert shadows(_summary(F.PRIM_NET_CONNECT, F.PRIM_FS_WRITE), "database_io")
+    assert shadows(_summary(F.PRIM_NET_CONNECT), "network_io")
 
 
 def test_ambient_only_summary_keeps_the_operational_stub(host):
