@@ -23,7 +23,8 @@ of driver names. A pure-Python driver bottoms out at a socket
 what makes the connection a database is the action dispatched over it. So
 a candidate is database I/O when it reaches a DB primitive, or when it
 reaches a network connection *and* its own name or a call it makes is a
-database verb (`DATABASE_VERBS`), or when it reaches opaque native code
+database verb (`DATABASE_VERBS`, or a whole-word key-value command from
+`DATASTORE_VERBS`), or when it reaches opaque native code
 with such a verb (a compiled driver).
 """
 from __future__ import annotations
@@ -77,6 +78,11 @@ PHYSICAL_ACTIONS: dict[str, PhysicalAction] = {
 #: Verbs that dispatch a database action (a call site's callee or the
 #: function's own name): `cur.execute(...)`, `conn.commit()`.
 DATABASE_VERBS = ("query", "execute", "select", "insert", "commit", "find", "cursor")
+#: Datastore (key-value) commands with no HTTP or collection meaning,
+#: matched as whole words only (a prefix `decr` would match `decrypt`).
+#: Bare `get`/`set`/`delete` are deliberately absent: they collide with
+#: HTTP verbs, accessors and collection helpers.
+DATASTORE_VERBS = frozenset({"hset", "hget", "lpush", "rpush", "sadd", "zadd", "expire", "incr", "decr", "mget", "mset"})
 #: The triad-synthesized database capability target.
 DATABASE_IO = "DATABASE_IO"
 _DB_BITS = int(F.PRIM_DB_CONNECT | F.PRIM_DB_READ | F.PRIM_DB_WRITE)
@@ -115,7 +121,7 @@ def action_score(tokens: "frozenset[str] | set[str]", action: "PhysicalAction | 
 
 
 def has_database_verb(tokens: "frozenset[str] | set[str]") -> bool:
-    return any(t.startswith(v) for t in tokens for v in DATABASE_VERBS)
+    return any(t.startswith(v) for t in tokens for v in DATABASE_VERBS) or not DATASTORE_VERBS.isdisjoint(tokens)
 
 
 def database_io(profile: CapabilityProfile | None, tokens: "frozenset[str] | set[str]") -> tuple[float, str]:

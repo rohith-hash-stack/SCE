@@ -31,7 +31,7 @@ from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.symbol_table import GlobalSymbolTable
 from prism.semantics.bitmask import FeatureBit
 from prism.semantics.capabilities import compute_capability_profiles
-from prism.semantics.triad import DATABASE_IO, action_tokens, database_io, triad_rerank
+from prism.semantics.triad import DATABASE_IO, action_tokens, database_io, has_database_verb, triad_rerank
 
 NET = int(FeatureBit.PRIM_NET_CONNECT)
 SO = ".cpython-311-x86_64-linux-gnu.so"
@@ -176,9 +176,32 @@ WIREDB = {
 
 NATIVEDB = {"__init__.py": "from ._core import connect\n"}
 
+KVSTORE = {
+    "__init__.py": "from .client import Client\n",
+    "client.py": """
+        import socket
+
+
+        class Client:
+            def _send(self, *args):
+                sock = socket.create_connection(("localhost", 6379))
+                sock.sendall(repr(args).encode())
+
+            def hset(self, name, key, value):
+                return self._send("HSET", name, key, value)
+
+            def get(self, name):
+                return self._send("GET", name)
+
+            def set(self, name, value):
+                return self._send("SET", name, value)
+    """,
+}
+
 HOST = """
 import ctorpkg
 import dotpkg.orm
+import kvstore
 import mixpkg
 import nativedb
 import unipkg
@@ -230,6 +253,21 @@ def native_report(sql):
     conn.cursor().execute(sql)
 
 
+def store_field(user):
+    client = kvstore.Client()
+    client.hset("users", user, 1)
+
+
+def read_value(name):
+    client = kvstore.Client()
+    return client.get(name)
+
+
+def write_value(name, value):
+    client = kvstore.Client()
+    client.set(name, value)
+
+
 def format_name(user):
     return user.title()
 """
@@ -256,7 +294,7 @@ def _install(site, name, files=None, binaries=()):
 @pytest.fixture(scope="module")
 def site(tmp_path_factory):
     site = tmp_path_factory.mktemp("site")
-    for name, files in (("ctorpkg", CTORPKG), ("mixpkg", MIXPKG), ("unipkg", UNIPKG), ("dotpkg", DOTPKG), ("wiredb", WIREDB)):
+    for name, files in (("ctorpkg", CTORPKG), ("mixpkg", MIXPKG), ("unipkg", UNIPKG), ("dotpkg", DOTPKG), ("wiredb", WIREDB), ("kvstore", KVSTORE)):
         _install(site, name, files)
     _install(site, "nativedb", NATIVEDB, binaries=(f"_core{SO}",))
     return site
@@ -473,3 +511,26 @@ def test_header_keeps_methods_declared_under_class_body_branches():
     header = header_source(source)
     assert header.count("def get(") == 1 and "def close(" in header and "def _request(" in header
     assert "return" not in header
+
+
+# --------------------------------------------------------------------- #
+# Unambiguous key-value commands are DATABASE_IO; bare get/set are not
+# --------------------------------------------------------------------- #
+def test_unambiguous_kv_command_is_database_io(host):
+    builder, profiles = host
+    q = "app.main.store_field"
+    assert "hset" in action_tokens(builder, q)
+    assert database_io(profiles[q], action_tokens(builder, q)) == (0.5, "net-socket+db-verb")
+
+
+def test_bare_get_and_set_stay_out_of_database_io(host):
+    builder, profiles = host
+    for q in ("app.main.read_value", "app.main.write_value"):
+        assert profiles[q].within(2) & NET  # same socket, same client
+        assert database_io(profiles[q], action_tokens(builder, q)) == (0.0, "none")
+
+
+def test_kv_verbs_match_whole_words_only():
+    assert has_database_verb({"hset"}) and has_database_verb({"decr"}) and has_database_verb({"zadd"})
+    for words in ({"decrypt"}, {"increment"}, {"expired"}, {"get"}, {"set"}, {"delete"}, {"msets"}):
+        assert not has_database_verb(words), words
