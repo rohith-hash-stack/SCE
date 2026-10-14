@@ -45,23 +45,27 @@ ACTION_WEIGHT = 0.15
 
 @dataclass(frozen=True)
 class PhysicalAction:
-    """What a function physically does, recognized by its verbs. `bits`
-    are the primitives the action usually lands on (documentation and
-    consistency checks; scoring uses the verbs)."""
+    """What a function physically does, recognized by its verbs (a token
+    that is, or starts with, one) or by whole-word commands (`words`: short
+    datastore commands such as `hset` or `decr`, which as prefixes would
+    match `decrypt`). `bits` are the primitives the action usually lands on
+    (documentation and consistency checks; scoring uses the verbs)."""
 
     name: str
     verbs: tuple[str, ...]
     bits: int
+    words: frozenset[str] = frozenset()
 
 
 PHYSICAL_ACTIONS: dict[str, PhysicalAction] = {
     a.name: a
     for a in (
         PhysicalAction("READ", ("read", "load", "get", "fetch", "find", "query", "select", "list", "scan", "lookup"),
-                       int(F.PRIM_FS_READ | F.PRIM_DB_READ)),
+                       int(F.PRIM_FS_READ | F.PRIM_DB_READ), frozenset({"hget", "mget"})),
         PhysicalAction("MUTATE", ("write", "save", "update", "insert", "delete", "remove", "put", "create", "commit",
                                   "store", "upsert", "persist", "drop", "truncate"),
-                       int(F.PRIM_FS_WRITE | F.PRIM_FS_DELETE | F.PRIM_DB_WRITE)),
+                       int(F.PRIM_FS_WRITE | F.PRIM_FS_DELETE | F.PRIM_DB_WRITE),
+                       frozenset({"hset", "lpush", "rpush", "sadd", "srem", "zadd", "incr", "decr", "mset", "expire"})),
         PhysicalAction("SEND", ("send", "post", "upload", "publish", "emit", "push", "notify", "dispatch", "request"),
                        int(F.PRIM_NET_CONNECT)),
         PhysicalAction("RECEIVE", ("listen", "serve", "accept", "receive", "subscribe", "consume", "handle", "recv"),
@@ -114,9 +118,12 @@ def action_tokens(builder: ConcreteGraphBuilder, qualified_name: str) -> frozens
 
 
 def action_score(tokens: "frozenset[str] | set[str]", action: "PhysicalAction | str") -> float:
-    """1.0 when any token is (or starts with) one of the action's verbs."""
+    """1.0 when any token is (or starts with) one of the action's verbs, or
+    is one of its whole-word commands."""
     if isinstance(action, str):
         action = PHYSICAL_ACTIONS[action]
+    if not action.words.isdisjoint(tokens):
+        return 1.0
     return 1.0 if any(t.startswith(v) for t in tokens for v in action.verbs) else 0.0
 
 

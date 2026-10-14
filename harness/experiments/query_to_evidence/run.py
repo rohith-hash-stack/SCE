@@ -37,14 +37,15 @@ BASELINE_COMMITS = {"r0": "bcb1197", "m4": "e69f0ce"}
 SEED = 42
 
 
-def build_engine(root: str):
+def build_engine(root: str, dependencies=None):
     """Fresh in-memory index: the two calls `PrismEngine.from_repo` makes,
     without reading on-disk graph/contract caches a different code version
-    may have written."""
+    may have written. `dependencies` (a `prism.deps.DependencyIndex`, opt-in)
+    resolves calls into installed packages to depth-1 offline summaries."""
     from prism.cli import build_pipeline
     from prism.engine import PrismEngine
     from prism.runtime.contract_cache import compute_contracts
-    builder, _tags = build_pipeline(root, use_cache=False)
+    builder, _tags = build_pipeline(root, use_cache=False, dependencies=dependencies)
     return PrismEngine(builder, root, contracts=compute_contracts(builder))
 
 

@@ -4,7 +4,8 @@ Extracted verbatim (logic, constants, ordering) from the two read-only
 probes behind the NLQ investigation report (`lexical_probe.py`,
 `expand_probe.py`), so the recorded measurements in
 `fixtures/lexical_recorded.json` can be reproduced and regression-tested.
-No model, no embeddings, stdlib only; it reads the index, never changes it.
+No model, no embeddings; BM25 is stdlib only (the optional triad re-rank
+imports Prism's semantics); it reads the index, never changes it.
 
 Documents (one per *pool* symbol):
   N  = tokens of the qualified name + tokens of `SymbolInfo.file` as indexed
@@ -23,6 +24,14 @@ location (e.g. `home`, `user`). Two ways to control that:
                       checked out; at the recording location it is the identity.
   relative_paths=True tokenize the repo-relative path only - a *different*
                       variant that does not reproduce the recorded ranks.
+
+Turn-1 triad (optional): given a `TriadContext` and a retrieval intent (a
+physical action and/or a capability target, the interpretation's
+`retrieval_intent`), `ranked` re-ranks BM25 candidates with
+`prism.semantics.triad.triad_rerank` - BM25 is the stem leg; capability comes
+from index-time profiles (`prism.semantics.profile_cache`, depth-1 dependency
+summaries included when the index was built with them). Without an intent the
+ranking is exactly the BM25 one above.
 """
 from __future__ import annotations
 
@@ -109,10 +118,43 @@ def candidate_pool(builder) -> list:
     return [s for s in builder.symbol_table if s.kind != "attribute" and s.role != SymbolRole.VERIFICATION]
 
 
+#: Re-rank window: the top TRIAD_WINDOW of a triad ranking are exact; below
+#: them the BM25 order is kept (a candidate whose best possible boosted score
+#: is under the window's last BM25 score can never enter the window).
+TRIAD_WINDOW = 200
+
+
+class TriadContext:
+    """Index-time capability profiles plus memoized action tokens."""
+
+    def __init__(self, builder, repo_root: str):
+        from prism.semantics.profile_cache import cached_capability_profiles
+        self.builder = builder
+        self.profiles = cached_capability_profiles(builder, repo_root)
+        self._tokens: dict[str, frozenset[str]] = {}
+
+    def tokens(self, qname: str) -> frozenset[str]:
+        if qname not in self._tokens:
+            from prism.semantics.triad import action_tokens
+            self._tokens[qname] = action_tokens(self.builder, qname)
+        return self._tokens[qname]
+
+
+def _intent_legs(intent: dict | None) -> tuple[str | None, "str | int | None"]:
+    if not intent:
+        return None, None
+    capability = intent.get("capability")
+    if capability and capability.startswith("PRIM_"):
+        from prism.semantics.bitmask import FeatureBit
+        capability = int(FeatureBit[capability])
+    return intent.get("action"), capability
+
+
 class LexicalIndex:
     """BM25 over one corpus, both document variants, plus 1-hop expansion."""
 
-    def __init__(self, builder, repo_root: str, relative_paths: bool = False, path_tokens_root: str | None = None):
+    def __init__(self, builder, repo_root: str, relative_paths: bool = False, path_tokens_root: str | None = None,
+                 triad: TriadContext | None = None):
         if relative_paths and path_tokens_root is not None:
             raise ValueError("relative_paths and path_tokens_root are different variants; pass at most one")
         self.builder, self.root = builder, repo_root
@@ -130,6 +172,7 @@ class LexicalIndex:
         doc_nb = [doc_n[i] + tokenize("\n".join(self._source(s.file)[s.line_range[0] - 1:s.line_range[1]]))
                   for i, s in enumerate(self.pool)]
         self.bm25 = {"N": BM25(doc_n), "NB": BM25(doc_nb)}
+        self.triad = triad
 
     def _source(self, path: str) -> list[str]:
         if path not in self._lines:
@@ -140,28 +183,54 @@ class LexicalIndex:
                 self._lines[path] = []
         return self._lines[path]
 
-    def ranked(self, text: str, variant: str) -> list[str]:
-        """Every matched pool symbol, best first (see `BM25.rank`)."""
+    def ranked(self, text: str, variant: str, intent: dict | None = None) -> list[str]:
+        """Every matched pool symbol, best first (see `BM25.rank`); with an
+        `intent` and a `TriadContext`, triad-re-ranked (`triad_ranked`)."""
         if variant not in self.bm25:
             raise ValueError(f"unknown variant {variant!r}; expected one of {VARIANTS}")
-        return [self.names[i] for i in self.bm25[variant].rank(tokenize(text))]
+        action, capability = _intent_legs(intent)
+        if self.triad is None or (action is None and capability is None):
+            return [self.names[i] for i in self.bm25[variant].rank(tokenize(text))]
+        return [row.qname for row in self.triad_ranked(text, variant, intent)]
 
-    def search(self, text: str, variant: str, k: int) -> list[str]:
+    def triad_ranked(self, text: str, variant: str, intent: dict) -> list:
+        """`TriadScore` rows (provenance: stems = BM25, capability, action,
+        capability_source, opaque entry points), best first. The top
+        `TRIAD_WINDOW` are exact; the rest keep BM25 order, unboosted."""
+        from prism.semantics.triad import ACTION_WEIGHT, CAPABILITY_WEIGHT, TriadScore, triad_rerank
+        if self.triad is None:
+            raise ValueError("triad_ranked needs a TriadContext")
+        action, capability = _intent_legs(intent)
+        bm25 = self.bm25[variant]
+        sc = bm25.scores(tokenize(text))
+        order = sorted(sc, key=lambda i: (-sc[i], i))
+        floor = sc[order[TRIAD_WINDOW - 1]] if len(order) >= TRIAD_WINDOW else 0.0
+        reach = 1.0 + CAPABILITY_WEIGHT + ACTION_WEIGHT
+        window = [i for i in order if sc[i] * reach >= floor]
+        names = [self.names[i] for i in window]
+        rows = triad_rerank(
+            names, {self.names[i]: sc[i] for i in window}, self.triad.profiles,
+            {n: self.triad.tokens(n) for n in names}, target=capability, action=action,
+        )
+        rest = [TriadScore(self.names[i], sc[i], sc[i], 0.0, 0.0, "none") for i in order[len(window):]]
+        return rows + rest
+
+    def search(self, text: str, variant: str, k: int, intent: dict | None = None) -> list[str]:
         if k < 0:
             raise ValueError("k must be >= 0")
-        return self.ranked(text, variant)[:k]
+        return self.ranked(text, variant, intent)[:k]
 
-    def ranks(self, text: str, variant: str, names) -> dict[str, int | None]:
+    def ranks(self, text: str, variant: str, names, intent: dict | None = None) -> dict[str, int | None]:
         """1-based rank of each name; None if unmatched or not in the pool."""
-        pos = {n: r + 1 for r, n in enumerate(self.ranked(text, variant))}
+        pos = {n: r + 1 for r, n in enumerate(self.ranked(text, variant, intent))}
         return {n: pos.get(n) for n in names}
 
     def neighbours(self, name: str) -> set[str]:
         return neighbours(self.builder.graph, name, self.pool_set)
 
-    def expanded(self, text: str, variant: str, k: int) -> set[str]:
+    def expanded(self, text: str, variant: str, k: int, intent: dict | None = None) -> set[str]:
         """Top-k plus each one's 1-hop pool neighbours (EXPANSION_RELATIONS, both directions)."""
-        top = self.search(text, variant, k)
+        top = self.search(text, variant, k, intent)
         out = set(top)
         for n in top:
             out |= self.neighbours(n)

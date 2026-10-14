@@ -65,6 +65,16 @@ PROOF_SCOPES = ("retrieved", "no retrieval", "out of tool scope", "tool error")
 #: claim (e.g. q16 r2 "which tests ... directly": the envelope also holds
 #: production and indirect callers). `not_applicable`: nothing was retrieved.
 SCOPE_COMPLIANCE = ("no_limits", "enforced", "not_enforced", "not_applicable")
+# Optional Turn-1 retrieval intent (the triad's action and capability legs;
+# the question text is the stem leg): a physical action and/or a capability
+# target - a composite, the synthesized DATABASE_IO, or one primitive.
+# Absent, lexical candidate search is unchanged.
+def _intent_vocabulary() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    from prism.semantics.bitmask import PRIMITIVE_BITS
+    from prism.semantics.primitives import COMPOSITE_PROFILES
+    from prism.semantics.triad import DATABASE_IO, PHYSICAL_ACTIONS
+    capabilities = (*sorted(COMPOSITE_PROFILES), DATABASE_IO, *sorted(b.name for b in PRIMITIVE_BITS))
+    return tuple(PHYSICAL_ACTIONS), capabilities
 
 
 # -- helpers --------------------------------------------------------------------
@@ -102,12 +112,26 @@ def _names(lst, where: str) -> list[str]:
     return [f"{where}: duplicate names"] if len(set(lst)) != len(lst) else []
 
 
+def _validate_intent(intent: dict) -> list[str]:
+    p = _closed(intent, "retrieval_intent", {}, {"action": str, "capability": str})
+    if p:
+        return p
+    if not intent:
+        return ["retrieval_intent: an action or a capability is required"]
+    actions, capabilities = _intent_vocabulary()
+    if "action" in intent:
+        p += _enum(intent["action"], actions, "retrieval_intent.action")
+    if "capability" in intent:
+        p += _enum(intent["capability"], capabilities, "retrieval_intent.capability")
+    return p
+
+
 # -- QuestionInterpretation ---------------------------------------------------------
 def validate_interpretation(rec: dict) -> list[str]:
     p = _closed(rec, "interpretation",
                 {"schema": str, "schema_version": int, "question_id": str, "corpus": str, "question_text": str,
                  "interpreter": dict, "answerability": str, "requirements": list},
-                {"clarification": dict})
+                {"clarification": dict, "retrieval_intent": dict})
     if p:
         return p
     p += _header(rec, INTERPRETATION)
@@ -118,6 +142,8 @@ def validate_interpretation(rec: dict) -> list[str]:
         p += _enum(it["kind"], INTERPRETER_KINDS, "interpreter.kind")
         if it["kind"] != "oracle_gold_derived" and not (it.get("model_id") and it.get("prompt_version")):
             p.append("interpreter: agent/model interpretations must record model_id and prompt_version")
+    if "retrieval_intent" in rec:
+        p += _validate_intent(rec["retrieval_intent"])
     text = rec["question_text"]
     if not rec["requirements"]:
         p.append("requirements: at least one requirement is required")

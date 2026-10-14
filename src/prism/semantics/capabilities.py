@@ -23,7 +23,10 @@ function, or one callee as a whole - unless a callee already satisfies
 the composite by itself. Calls into a summarized dependency (graph nodes
 carrying `boundary_bits`, `prism.deps.host`) count at hop 1 with the
 dependency's summary bits; TENTATIVE summary bits are valid soft signals
-and are recorded in `CapabilityProfile.tentative`.
+and are recorded in `CapabilityProfile.tentative`. Toward composites, a
+summary is one source carrying only its operational I/O bits
+(`bitmask.OPERATIONAL_IO_MASK`): ambient clock/random bits of a dependency
+never combine with another source into a composite.
 """
 from __future__ import annotations
 
@@ -31,7 +34,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
-from prism.semantics.bitmask import FeatureBit, distinct_source_matches
+from prism.semantics.bitmask import OPERATIONAL_IO_MASK, FeatureBit, distinct_source_matches
 from prism.semantics.primitives import COMPOSITE_PROFILES, CompositeProfile, derive_primitive_bits, primitive_registry
 from prism.semantics.substance import (
     _LANG_REGISTRY_KEY,
@@ -252,12 +255,17 @@ def compute_capability_profiles(
                         if callee in opaque_boundary:
                             opaque.append(callee)
                         comps = empty  # a summary is one source; its incidental bits never establish a composite
+                        # Only a summary's operational I/O counts toward a
+                        # multi-source composite: a client constructor's clock
+                        # read plus another call's socket is no heartbeat.
+                        source = mask & OPERATIONAL_IO_MASK
                     else:
                         next_frontier.append(callee)
                         mask, comps = own[callee], own_comps[callee]
+                        source = mask
                     by_hop[hop] |= mask
-                    if mask:
-                        hop_sources[hop].append(mask)
+                    if source:
+                        hop_sources[hop].append(source)
                     hop_established[hop] |= comps
             frontier = next_frontier
         confirmed = 0
