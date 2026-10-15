@@ -94,9 +94,9 @@ def test_bare_assert_function_with_test_prefix_is_verification(tmp_path):
         "def test_seed_returns_one():\n"
         "    assert seed() == 1\n"
     )
-    roles = _roles(tmp_path, "mod.py", source)
-    assert roles["mod.test_seed_returns_one"] == SymbolRole.VERIFICATION
-    assert roles["mod.seed"] == SymbolRole.IMPLEMENTATION
+    roles = _roles(tmp_path, "test_mod.py", source)  # a test file: where pytest collects `test_*`
+    assert roles["test_mod.test_seed_returns_one"] == SymbolRole.VERIFICATION
+    assert roles["test_mod.seed"] == SymbolRole.IMPLEMENTATION
 
 
 # --- Python: interface-shaped body ----------------------------------------- #
@@ -168,3 +168,44 @@ def test_go_function_named_test_prefix_without_testing_param_is_not_verification
     )
     roles = _roles(tmp_path, "mod.go", source)
     assert roles["mod.TestConnection"] == SymbolRole.IMPLEMENTATION
+
+
+# --------------------------------------------------------------------- #
+# Weak test conventions apply only inside test files (held-out set 2)
+# --------------------------------------------------------------------- #
+def _roles_by_file(tmp_path, files):
+    from prism.graph.concrete_builder import ConcreteGraphBuilder
+    from prism.graph.symbol_table import GlobalSymbolTable
+    paths = []
+    for rel, text in files.items():
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        paths.append(str(path))
+    builder = ConcreteGraphBuilder(str(tmp_path), GlobalSymbolTable())
+    builder.pass1_collect_definitions(paths)
+    return {s.qualified_name: s.role for s in builder.symbol_table}
+
+
+def test_a_test_named_endpoint_in_application_code_is_implementation(tmp_path):
+    from prism.graph.symbol_table import SymbolRole
+    roles = _roles_by_file(tmp_path, {
+        "app/routes.py": "@router.post('/test-email/')\ndef test_email(to):\n    return send(to)\n",
+        "tests/test_routes.py": "def test_email_endpoint():\n    assert client.post('/test-email/').ok\n",
+    })
+    assert roles["app.routes.test_email"] == SymbolRole.IMPLEMENTATION
+    assert roles["tests.test_routes.test_email_endpoint"] == SymbolRole.VERIFICATION
+
+
+def test_calling_an_assert_named_helper_is_not_a_test_body_outside_tests(tmp_path):
+    from prism.graph.symbol_table import SymbolRole
+    body = "def s3_get_credentials():\n    config = assert_settings(['KEY'])\n    return Credentials(config)\n"
+    roles = _roles_by_file(tmp_path, {"app/aws.py": body, "tests/helpers.py": body.replace("s3_get", "check")})
+    assert roles["app.aws.s3_get_credentials"] == SymbolRole.IMPLEMENTATION
+    assert roles["tests.helpers.check_credentials"] == SymbolRole.VERIFICATION  # inside tests the convention holds
+
+
+def test_explicit_test_signals_still_apply_everywhere(tmp_path):
+    from prism.graph.symbol_table import SymbolRole
+    roles = _roles_by_file(tmp_path, {"app/fixtures.py": "import pytest\n\n\n@pytest.fixture\ndef user():\n    return 1\n"})
+    assert roles["app.fixtures.user"] == SymbolRole.VERIFICATION

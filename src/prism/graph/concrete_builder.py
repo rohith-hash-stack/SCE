@@ -713,7 +713,9 @@ class ConcreteGraphBuilder:
         line_range = (outer.start_point[0] + 1, outer.end_point[0] + 1)
         enclosing_class_info = self.symbol_table.get(enclosing_class) if enclosing_class is not None else None
         enclosing_class_role = enclosing_class_info.role if enclosing_class_info is not None else None
-        role = _classify_symbol_role(node, is_class, parsed, name, enclosing_class_role)
+        role = _classify_symbol_role(
+            node, is_class, parsed, name, enclosing_class_role, in_test_file=self._in_test_file(parsed.path)
+        )
         symbol = SymbolInfo(
             qualified_name=qualified_name,
             kind=kind,
@@ -1056,6 +1058,13 @@ class ConcreteGraphBuilder:
                     # (see `prism.traversal._data_flow_common._resolve_call_sites`).
                     self.graph.add_edge(caller, override, relation="CALLS", kind="TENTATIVE_CALL", dispatch_of=target)
         self._dispatch_sites.clear()
+
+    def _in_test_file(self, path: str) -> bool:
+        """Whether `path` is a test file (repo-relative, segment-anchored)."""
+        cache = self.__dict__.setdefault("_test_file_cache", {})
+        if path not in cache:
+            cache[path] = _repo_relative_is_test_file(path, self.repo_root)
+        return cache[path]
 
     def _resolve_calls_for_file_symbols(
         self, file_symbols: list[str], parsed: ParsedFile, module: str, import_map: LocalImportMap
@@ -4620,25 +4629,40 @@ def _is_interface_shaped_body(body: Node | None, lang: str, source: bytes) -> bo
     return False
 
 
+def _repo_relative_is_test_file(path: str, repo_root: str) -> bool:
+    from prism.scanner.entrypoint_gate import is_test_file
+    rel = os.path.relpath(path, repo_root) if os.path.isabs(path) else path
+    return is_test_file(rel.replace(os.sep, "/"))
+
+
 def _classify_symbol_role(
     node: Node,
     is_class: bool,
     parsed: ParsedFile,
     name: str,
     enclosing_class_role: SymbolRole | None,
+    in_test_file: bool = True,
 ) -> SymbolRole:
     """Deterministic, AST/naming-convention-based role classification -
     see the module-level comment above `_TEST_BASE_CLASS_PATTERN` for
     why this exists and what it deliberately does and doesn't claim.
     Called once per symbol from `_register_definition`, in the same
     Pass-1 pass every other `SymbolInfo` field is already computed in.
+
+    Explicit signals (test decorators, test-shaped base classes, Go's
+    `TestXxx(t *testing.T)`) apply everywhere. The two weak conventions -
+    a `test_`/`Test` name and an assertion-shaped body - apply only
+    `in_test_file` (`prism.scanner.entrypoint_gate.is_test_file`): pytest
+    collects `test_*` functions only from test files, and outside them a
+    `test_email` endpoint or a body calling an `assert_settings(...)`
+    helper is application code.
     """
     lang = parsed.language_id
 
     if is_class:
         if _is_test_shaped_base_classes(node, parsed):
             return SymbolRole.VERIFICATION
-        if _TEST_NAME_PATTERN.search(name):
+        if in_test_file and _TEST_NAME_PATTERN.search(name):
             return SymbolRole.VERIFICATION
         return SymbolRole.IMPLEMENTATION
 
@@ -4655,10 +4679,10 @@ def _classify_symbol_role(
         return SymbolRole.VERIFICATION
 
     body = node.child_by_field_name("body")
-    if _is_assertion_shaped_body(body, lang, parsed.source):
+    if in_test_file and _is_assertion_shaped_body(body, lang, parsed.source):
         return SymbolRole.VERIFICATION
 
-    if _TEST_NAME_PATTERN.search(name):
+    if in_test_file and _TEST_NAME_PATTERN.search(name):
         return SymbolRole.VERIFICATION
 
     if _is_interface_shaped_body(body, lang, parsed.source):
