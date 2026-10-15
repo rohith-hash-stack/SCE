@@ -73,7 +73,8 @@ def _cluster_boot(tasks_by_repo: dict[str, list], stat, iters: int = BOOT_ITERS,
 
 def analyze(rows: list[dict]) -> dict:
     repos = sorted({r["repo"] for r in rows})
-    arms = [a for a in C.ARM_ORDER if any(r["engine_id"] == a for r in rows)]
+    present = {r["engine_id"] for r in rows}
+    arms = [a for a in C.ARM_ORDER if a in present] + sorted(present - set(C.ARM_ORDER))
     fields = ("tsr", "cleanliness", "sufficiency_ratio", "context_tokens")
     means = {f: _task_means(rows, f) for f in fields}
     tasks_by_repo: dict[str, list] = defaultdict(list)

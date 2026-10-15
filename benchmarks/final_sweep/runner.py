@@ -48,7 +48,10 @@ from prism.packer.submodular_knapsack import split_budget_for_external
 from benchmarks.corpora.resolver import resolve
 from benchmarks.engines.base import selected_symbols
 from benchmarks.final_sweep import config as C
-from benchmarks.final_sweep.arms import BuiltContext, CorpusState, build_bfs, build_oracle, build_pagerank, distractor_nodes
+from benchmarks.final_sweep.arms import (
+    BuiltContext, CorpusState, build_ask, build_bfs, build_hybrid, build_none, build_oracle, build_pagerank,
+    distractor_nodes, render_breadcrumbs,
+)
 from benchmarks.final_sweep.context_ops import (
     annotate_manifest_axes,
     enforce_token_ceiling,
@@ -199,6 +202,9 @@ class CellRecord:
     distractors: list[str] = dataclasses.field(default_factory=list)
     distractors_in_context: int = 0
     distractors_named: int = 0
+    # entry-point breadcrumbs (two-stage validation arms; absent in older records)
+    n_breadcrumb_symbols: int = 0
+    breadcrumb_tokens: int = 0
     # LLM metadata
     model_requested: str = ""
     response_models: list[str] = dataclasses.field(default_factory=list)
@@ -242,6 +248,7 @@ CELL_SCHEMA: dict[str, tuple[tuple[type, ...], bool]] = {
     "skipped_hallucinated": ((list,), False),
     "distractor_k": ((int,), False), "distractors": ((list,), False),
     "distractors_in_context": ((int,), False), "distractors_named": ((int,), False),
+    "n_breadcrumb_symbols": ((int,), False), "breadcrumb_tokens": ((int,), False),
     "model_requested": ((str,), False), "response_models": ((list,), False),
     "system_fingerprint": ((str,), True), "system_fingerprints": ((list,), False),
     "n_llm_calls": ((int,), False), "n_calls_at_ctx_limit": ((int,), False), "prompt_tokens": ((int,), False), "completion_tokens": ((int,), False),
@@ -256,6 +263,11 @@ _RATE_FIELDS = (
 )
 
 
+#: Fields added after the 7,200-cell sweep was recorded: absent in its
+#: records, so their absence is not a schema violation.
+_ADDED_LATER = frozenset({"n_breadcrumb_symbols", "breadcrumb_tokens"})
+
+
 def validate_record(row: dict) -> list[str]:
     """Every schema violation in one record (empty list = valid): a
     missing or unexpected field, a wrong type, an out-of-[0,1] rate, a
@@ -263,7 +275,8 @@ def validate_record(row: dict) -> list[str]:
     problems = []
     for name, (types, nullable) in CELL_SCHEMA.items():
         if name not in row:
-            problems.append(f"missing field {name}")
+            if name not in _ADDED_LATER:
+                problems.append(f"missing field {name}")
             continue
         value = row[name]
         if value is None:
@@ -433,6 +446,10 @@ def _two_pass_context(
     return BuiltContext(pkg=pkg, n_budget_dropped=len(dropped), budget_dropped=dropped), distractors
 
 
+#: What `arm0_no_retrieval` sends in place of a context package.
+NO_CONTEXT_TEXT = "(No repository context is provided. Answer from your own knowledge of this codebase.)"
+
+
 def run_cell(
     corpus: CorpusState, client, spec: C.ArmSpec, task: EvaluationTask, seed: int | None,
     cfg: SweepConfig, turn1_cache: dict,
@@ -467,8 +484,17 @@ def _run_cell_inner(corpus, client, spec, task, seed, cfg, turn1_cache, record: 
         built = build_pagerank(corpus, task)
         record.anchor_symbol = task.seed_symbol
     elif spec.kind == "oracle":
-        built = build_oracle(corpus, task, cfg.budget, spec.scaffolded, spec.engine_id)
+        # A breadcrumb oracle renders under its base arm's engine name, so the
+        # prompt differs from that arm's by the breadcrumb block alone.
+        base_name = ("scaffolded_oracle" if spec.scaffolded else "pragmatic_oracle") if spec.breadcrumbs else spec.engine_id
+        built = build_oracle(corpus, task, cfg.budget, spec.scaffolded, base_name)
         record.anchor_symbol, record.anchor_matches_task_seed = task.seed_symbol, True
+    elif spec.kind == "none":
+        built = build_none(corpus, task, cfg.budget, spec.engine_id)
+    elif spec.kind == "hybrid":
+        built = build_hybrid(corpus, task, cfg.budget, spec.engine_id)
+    elif spec.kind == "ask":
+        built = build_ask(corpus, task, cfg.budget, spec.engine_id)
     else:
         built, distractors = _two_pass_context(corpus, client, spec, task, seed, cfg, record, log, turn1_cache)
 
@@ -477,6 +503,13 @@ def _run_cell_inner(corpus, client, spec, task, seed, cfg, turn1_cache, record: 
         pkg, ceiling_dropped, tokens_before, tokens_after = enforce_token_ceiling(pkg, cfg.token_ceiling, set(distractors))
     rendered = render_context(pkg)
     packed = selected_symbols(pkg)
+    if spec.kind == "none":
+        rendered = NO_CONTEXT_TEXT
+    if spec.breadcrumbs:
+        block, record.n_breadcrumb_symbols = render_breadcrumbs(corpus, [n.id for n in pkg.nodes])
+        from prism.slicer.tokenizer import count_tokens
+        record.breadcrumb_tokens = count_tokens(block) if block else 0
+        rendered += block
 
     if spec.kind == "pagerank":
         # A repo map has no anchor; record whether the task seed survived

@@ -22,6 +22,11 @@ PAIRED_CONTRASTS = (
     ("prism_full", "ablation_signature_only", "4-axis annotations vs signatures only"),
     ("prism_full", "ablation_no_purity", "purity axis"),
     ("prism_full", "prism_plus_distractors", "no noise vs injected distractors"),
+    # two-stage validation (contrasts whose arms are absent are skipped)
+    ("prism_ask", "arm1_hybrid_rag", "prism ask payload vs hybrid RAG"),
+    ("prism_full", "arm1_hybrid_rag", "PRISM two-pass vs hybrid RAG"),
+    ("prism_oracle", "pragmatic_oracle", "entry-point breadcrumbs over the gold slice"),
+    ("arm1_hybrid_rag", "arm0_no_retrieval", "hybrid RAG vs no retrieval"),
 )
 
 

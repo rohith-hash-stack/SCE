@@ -85,6 +85,14 @@ class CorpusState:
         self._static: dict[str, TaskStatic] = {}
         #: `baseline_pagerank_repomap`'s symbol graph, built on first use.
         self._repomap_graph = None
+        # Two-stage validation arms, built lazily (heavy models).
+        self._hybrid_index = None
+        self._reranker = None
+        self._nlq_index = None
+        #: Injectable factories (tests use doubles): an encoder with
+        #: `.name`/`.encode(texts)`, a reranker with `.score(query, docs)`.
+        self.hybrid_encoder_factory = None
+        self.reranker_factory = None
 
     def distances(self, seed: str) -> dict[str, float]:
         with self.lock:
@@ -305,6 +313,114 @@ def build_pagerank(corpus: CorpusState, task: EvaluationTask) -> BuiltContext:
     dropped = sorted(repo_map.query_hits - packed)
     return BuiltContext(pkg=pkg, n_budget_dropped=len(dropped), budget_dropped=dropped,
                         designed_partial=packed)
+
+
+#: `arm1_hybrid_rag`: candidates from each retriever, fused, and reranked.
+HYBRID_TOP_K = 100
+HYBRID_RERANK_DEPTH = 50
+#: `prism_ask`: hits considered for packing.
+ASK_TOP_K = 40
+
+
+def build_none(corpus: CorpusState, task: EvaluationTask, budget: int, engine_id: str) -> BuiltContext:
+    """`arm0_no_retrieval`: an empty package (the runner sends no context)."""
+    with corpus.lock:
+        pkg = corpus.envelope(engine_id, task.seed_symbol, budget, [], considered=0)
+    return BuiltContext(pkg=pkg)
+
+
+def _pack_ranked(corpus: CorpusState, task: EvaluationTask, ranked: list[str], budget: int, engine_id: str) -> BuiltContext:
+    """Full (L0) bodies of `ranked` in-repo symbols, in order, greedily into
+    `budget` (a symbol that does not fit is skipped, not a stop)."""
+    nodes: list[NodeEntry] = []
+    total, dropped = 0, []
+    with corpus.lock:
+        distances = corpus.distances(task.seed_symbol)
+        for qname in dict.fromkeys(ranked):
+            if corpus.builder.symbol_table.get(qname) is None:
+                continue
+            role = "seed" if qname == task.seed_symbol else "transitive"
+            node = node_for_symbol(
+                corpus.builder, corpus.repo_path, corpus.contracts, corpus.feature_masks, qname, role,
+                0.0 if role == "seed" else distances.get(qname, 1.0),
+            )
+            if node is None:
+                continue
+            if total + node.cost > budget:
+                dropped.append(qname)
+                continue
+            total += node.cost
+            nodes.append(node)
+        pkg = corpus.envelope(engine_id, task.seed_symbol, budget, nodes, considered=len(ranked))
+    return BuiltContext(pkg=pkg, n_budget_dropped=len(dropped), budget_dropped=dropped)
+
+
+def hybrid_ranking(corpus: CorpusState, query: str) -> list[str]:
+    """`arm1_hybrid_rag`'s symbol order: BM25 and dense top `HYBRID_TOP_K`
+    each, Reciprocal Rank Fusion (k=60), the top `HYBRID_RERANK_DEPTH` fused
+    re-ordered by the cross-encoder, then the rest in fused order."""
+    from benchmarks.baselines.hybrid_rag import HybridIndex, rrf
+    with corpus.lock:
+        if corpus._hybrid_index is None:
+            if corpus.hybrid_encoder_factory is not None:
+                encoder = corpus.hybrid_encoder_factory()
+            else:
+                from harness.arms.arm1_rag import JinaCodeEmbedder
+                encoder = JinaCodeEmbedder()
+            corpus._hybrid_index = HybridIndex(corpus.builder, encoder, cache_key=corpus.repo)
+        if corpus._reranker is None:
+            if corpus.reranker_factory is not None:
+                corpus._reranker = corpus.reranker_factory()
+            else:
+                from harness.arms.arm1_rag import OnnxCrossEncoder
+                corpus._reranker = OnnxCrossEncoder()
+        index, reranker = corpus._hybrid_index, corpus._reranker
+        fused = [i for i, _ in rrf([index.sparse_ranking(query), index.dense_ranking(query)])]
+        head = fused[:HYBRID_RERANK_DEPTH]
+        scores = reranker.score(query, [f"{index.chunks[i].symbol}\n{index.chunks[i].text}" for i in head])
+        order = sorted(range(len(head)), key=lambda j: (-float(scores[j]), j))  # ties keep fused order
+        reranked = [head[j] for j in order]
+        return [index.chunks[i].symbol for i in reranked + fused[HYBRID_RERANK_DEPTH:]]
+
+
+def build_hybrid(corpus: CorpusState, task: EvaluationTask, budget: int, engine_id: str) -> BuiltContext:
+    return _pack_ranked(corpus, task, hybrid_ranking(corpus, task.prompt), budget, engine_id)
+
+
+def nlq_index(corpus: CorpusState):
+    """The corpus's `prism.query.nlq.NLQIndex` (built once)."""
+    with corpus.lock:
+        if corpus._nlq_index is None:
+            from prism.query.nlq import NLQIndex
+            corpus._nlq_index = NLQIndex(corpus.builder, corpus.repo_path)
+        return corpus._nlq_index
+
+
+def build_ask(corpus: CorpusState, task: EvaluationTask, budget: int, engine_id: str) -> BuiltContext:
+    """`prism_ask`: the shipped `prism ask` pipeline on the task prompt."""
+    index = nlq_index(corpus)
+    with corpus.lock:
+        hits = index.search(task.prompt, top_k=ASK_TOP_K)["hits"]
+    return _pack_ranked(corpus, task, [h["qname"] for h in hits], budget, engine_id)
+
+
+def render_breadcrumbs(corpus: CorpusState, symbols: list[str]) -> tuple[str, int]:
+    """`(block, n_symbols_with_paths)`: each symbol's upstream entry-point
+    paths as an `<entry_context>` block appended after the context - empty
+    when no symbol has one."""
+    index = nlq_index(corpus)
+    lines = []
+    with corpus.lock:
+        for qname in symbols:
+            symbol = corpus.builder.symbol_table.get(qname)
+            if symbol is None or symbol.kind == "class":
+                continue
+            for path in index.entries.context(qname):
+                lines.append(f"{qname}: {path}")
+    n = len({ln.split(": ", 1)[0] for ln in lines})
+    if not lines:
+        return "", 0
+    return "\n<entry_context>\n" + "\n".join(lines) + "\n</entry_context>\n", n
 
 
 def distractor_nodes(corpus: CorpusState, names: list[str]) -> list[NodeEntry]:

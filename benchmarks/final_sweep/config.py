@@ -56,13 +56,16 @@ AxisPolicy = Literal["all", "none", "no_substance"]
 @dataclass(frozen=True)
 class ArmSpec:
     engine_id: str
-    kind: Literal["bfs", "oracle", "two_pass", "pagerank"]
+    kind: Literal["bfs", "oracle", "two_pass", "pagerank", "none", "hybrid", "ask"]
     #: oracle arms only: include the deterministic AST scaffold.
     scaffolded: bool = False
     #: two-pass arms only.
     anchor: AnchorMode = "taxonomy"
     axes: AxisPolicy = "all"
     distractor_k: int = 0
+    #: Append each packed symbol's upstream entry-point paths
+    #: (`prism.graph.entry_points`) after the rendered context.
+    breadcrumbs: bool = False
     description: str = ""
 
 
@@ -117,7 +120,38 @@ EXPERIMENTAL_ARMS: dict[str, ArmSpec] = {
             description="Aider-style repo map: PageRank over the AST symbol graph, personalized toward "
             "identifiers named in the task prompt; top signatures packed to a 4,000-token budget.",
         ),
+        # Two-stage validation (kaggle/final_two_stage_validation.py).
+        ArmSpec(
+            "arm0_no_retrieval", "none",
+            description="No repository context: the model's own knowledge only.",
+        ),
+        ArmSpec(
+            "arm1_hybrid_rag", "hybrid",
+            description="Symbol chunks; BM25 (k1=1.5, b=0.75) + jina-embeddings-v2-base-code, RRF (k=60) over the "
+            "top 100 of each, bge-reranker-base cross-encoder over the top 50; full bodies packed to the budget.",
+        ),
+        ArmSpec(
+            "prism_ask", "ask", breadcrumbs=True,
+            description="prism.query.nlq.NLQIndex.search(task prompt): ranked hits' full bodies packed to the "
+            "budget, plus each hit's entry-point breadcrumbs.",
+        ),
+        ArmSpec(
+            "prism_oracle", "oracle", breadcrumbs=True,
+            description="pragmatic_oracle's exact context plus entry-point breadcrumbs for its symbols: "
+            "isolates the value of architectural provenance over raw code.",
+        ),
     )
+}
+
+#: The two-stage validation's Stage 2 arms (display name -> engine id).
+STAGE2_ARMS: dict[str, str] = {
+    "arm0_no_retrieval": "arm0_no_retrieval",
+    "arm1_hybrid_rag": "arm1_hybrid_rag",
+    "repomap_pagerank": "baseline_pagerank_repomap",
+    "prism_full": "prism_full",
+    "prism_ask": "prism_ask",
+    "normal_oracle": "pragmatic_oracle",
+    "prism_oracle": "prism_oracle",
 }
 
 _DOSE_ARM_RE = re.compile(r"^prism_plus_distractors_k(\d+)$")
