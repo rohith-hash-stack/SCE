@@ -73,11 +73,18 @@ print("PRISM two-stage validation")
 print("=" * 64, flush=True)
 
 
-def run(cmd, cwd=None, check=True, env=None, capture=False, timeout=None):
-    shown = cmd if isinstance(cmd, str) else " ".join(cmd)
+MAX_PUSH_FILE_MB = 90
+# git never waits for a password prompt (a hung prompt looks like a stall)
+GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+
+
+def mask(text):
     tok = os.environ.get("GITHUB_TOKEN")
-    if tok:
-        shown = shown.replace(tok, "***")
+    return text.replace(tok, "***") if tok else text
+
+
+def run(cmd, cwd=None, check=True, env=None, capture=False, timeout=None):
+    shown = mask(cmd if isinstance(cmd, str) else " ".join(cmd))
     print(f"$ {shown}", flush=True)
     return subprocess.run(cmd, cwd=cwd, check=check, env=env,
                           shell=isinstance(cmd, str),
@@ -111,18 +118,28 @@ def push(paths, message, max_attempts=4):
     run(["git", "config", "user.email", "kaggle@local"], cwd=SCE_DIR)
     run(["git", "config", "user.name", "Kaggle"], cwd=SCE_DIR)
     run(["git", "add", "-f", *paths], cwd=SCE_DIR)
+    # GitHub rejects the whole push if any file is over 100 MB: unstage those.
+    staged = run(["git", "diff", "--cached", "--name-only"], cwd=SCE_DIR, capture=True).stdout.split()
+    for f in staged:
+        p = os.path.join(SCE_DIR, f)
+        if os.path.isfile(p) and os.path.getsize(p) > MAX_PUSH_FILE_MB * 2**20:
+            print(f"[push] [warn] not pushing {f} ({os.path.getsize(p) / 2**20:.0f} MB > {MAX_PUSH_FILE_MB} MB)", flush=True)
+            run(["git", "reset", "-q", "--", f], cwd=SCE_DIR, check=False)
     if run(["git", "diff", "--cached", "--quiet"], cwd=SCE_DIR, check=False).returncode == 0:
         print("[push] nothing new", flush=True)
         return True
     run(["git", "commit", "-q", "-m", message], cwd=SCE_DIR, check=False)
     for attempt in range(max_attempts):
         r = run(["git", "push", "origin", f"HEAD:{BRANCH}"], cwd=SCE_DIR,
-                check=False)
+                check=False, capture=True, env=GIT_ENV)
         if r.returncode == 0:
             print("[push] ok", flush=True)
             return True
-        run(["git", "pull", "--rebase", "origin", BRANCH], cwd=SCE_DIR,
-            check=False)
+        said = mask((r.stderr or "") + (r.stdout or "")).strip()
+        print(f"[push] git push exit {r.returncode}:\n{said[-1500:]}", flush=True)
+        if "non-fast-forward" in said or "fetch first" in said:
+            run(["git", "pull", "--rebase", "origin", BRANCH], cwd=SCE_DIR,
+                check=False, env=GIT_ENV)
         time.sleep(2 ** (attempt + 1))
     print("[push] FAILED after retries - results are still in WORK_DIR", flush=True)
     return False
@@ -207,10 +224,21 @@ if RUN_STAGE1 and SLM_MODEL not in tags:
 print(f"[ok] answer model: {MODEL}   SLM: {SLM_MODEL}", flush=True)
 
 print("\n[setup 5/7] Clone repo", flush=True)
+clone_url = REPO_URL.replace("https://", f"https://x-access-token:{github_token}@")
 if not os.path.isdir(f"{SCE_DIR}/.git"):
-    clone_url = REPO_URL.replace("https://", f"https://{github_token}@")
-    run(["git", "clone", clone_url, SCE_DIR], check=True)
-run(["git", "fetch", "origin", BRANCH], cwd=SCE_DIR, check=True)
+    run(["git", "clone", clone_url, SCE_DIR], check=True, env=GIT_ENV)
+run(["git", "remote", "set-url", "origin", clone_url], cwd=SCE_DIR)
+run(["git", "fetch", "origin", BRANCH], cwd=SCE_DIR, check=True, env=GIT_ENV)
+# Push access, checked now rather than after hours of GPU time: GitHub
+# authorizes a dry-run push exactly as a real one (403 without write access).
+probe = run(["git", "push", "--dry-run", "origin", f"origin/{BRANCH}:refs/heads/{BRANCH}"],
+            cwd=SCE_DIR, check=False, capture=True, env=GIT_ENV)
+if probe.returncode != 0:
+    abort("this GITHUB_TOKEN cannot push to "
+          f"{BRANCH} - checkpoints would be lost:\n{mask(probe.stderr or probe.stdout).strip()[-1500:]}\n"
+          "Fix: a classic token with the 'repo' scope, or a fine-grained token on this repository "
+          "with Contents: Read and write.")
+print(f"[ok] push access to {BRANCH}", flush=True)
 run(["git", "checkout", "-B", BRANCH, f"origin/{BRANCH}"],
     cwd=SCE_DIR, check=True)
 run(["git", "clean", "-fdx", "-e", ".benchmarks"], cwd=SCE_DIR, check=True)
