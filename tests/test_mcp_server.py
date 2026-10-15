@@ -77,7 +77,7 @@ async def _call(name: str, arguments: dict):
 # --------------------------------------------------------------------- #
 # Server startup and tool listing
 # --------------------------------------------------------------------- #
-def test_server_lists_all_seven_tools():
+def test_server_lists_all_eight_tools():
     async def go():
         async with Client(mcp_server.server) as client:
             return await client.list_tools()
@@ -95,6 +95,8 @@ def test_server_lists_all_seven_tools():
         "prism.explain",
         # blast-radius caller slice (prism.mcp.server.prism_blast_radius)
         "prism.blast_radius",
+        # natural-language search (prism.query.nlq) - see tests/test_nlq_product.py
+        "prism.ask",
     }
 
 

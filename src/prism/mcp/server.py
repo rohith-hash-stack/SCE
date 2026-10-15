@@ -746,6 +746,73 @@ def prism_blast_radius(
     }
 
 
+#: Bounds on `prism.ask` arguments.
+ASK_MAX_QUESTION_CHARS = 2000
+ASK_MAX_TOP_K = 50
+#: One `NLQIndex` per indexed repository (keyed by the cached builder, so a
+#: `reindex_repo` - a new builder - gets a fresh one).
+_nlq_indexes: dict[int, Any] = {}
+
+
+@server.tool(name="prism.ask")
+def prism_ask(
+    question: str,
+    repo_path: str | None = None,
+    top_k: int = 10,
+    action: str | None = None,
+    capability: str | None = None,
+    api_key: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Answer a natural-language question about the code with ranked
+    symbols (`prism.query.nlq`): BM25 over each function/method/class,
+    re-ranked by the triad (stems x physical action x capability), a class
+    never above its own matching method, migration files last unless asked
+    for. Each hit carries its upstream entry points as display-only
+    breadcrumbs, e.g. `[Entry: POST /follow/<username>] -> follow()`.
+
+    Args:
+        question: The question, e.g. "Where are notifications saved to the
+            database?" (1-2000 characters).
+        repo_path: Absolute path to the repository root (same sandbox rules
+            as `prism.slice`).
+        top_k: Hits to return, 1-50 (default 10).
+        action / capability: Override the intent read off the question - an
+            action of `READ`, `MUTATE`, `SEND`, `RECEIVE`, `EXECUTE`, `WAIT`
+            or `CONNECT`; a capability of `DATABASE_IO` or a primitive name
+            such as `PRIM_NET_CONNECT`. Give either to use your own reading
+            of the question; omit both for the built-in rule.
+
+    Returns `{question, intent: {action?, capability?, source}, hits: [{rank,
+    qname, kind, location, score, legs: {stems, capability, action,
+    capability_source}, entry_context}]}`. Feed a hit's `qname` to
+    `prism.slice` or `prism.blast_radius` for its context.
+    """
+    from prism.query.nlq import NLQIndex
+    from prism.semantics.bitmask import FeatureBit
+    from prism.semantics.triad import DATABASE_IO, PHYSICAL_ACTIONS
+    if not isinstance(question, str) or not question.strip() or len(question) > ASK_MAX_QUESTION_CHARS:
+        raise MCPError(code=-32602, message=f"question must be 1-{ASK_MAX_QUESTION_CHARS} characters")
+    if not (1 <= top_k <= ASK_MAX_TOP_K):
+        raise MCPError(code=-32602, message=f"top_k must be between 1 and {ASK_MAX_TOP_K}, got {top_k}")
+    if action is not None and action not in PHYSICAL_ACTIONS:
+        raise MCPError(code=-32602, message=f"action must be one of {sorted(PHYSICAL_ACTIONS)} - got {action!r}")
+    if capability is not None and capability != DATABASE_IO and not (
+        capability.startswith("PRIM_") and capability in FeatureBit.__members__
+    ):
+        raise MCPError(code=-32602, message=f"capability must be DATABASE_IO or a PRIM_* primitive - got {capability!r}")
+    enforce_auth(_authorization_header(ctx), api_key)
+    repo_ctx = _repo_context_for_surface(repo_path)
+    key = id(repo_ctx.builder)
+    if key not in _nlq_indexes:
+        _nlq_indexes.clear()  # one live index: the builder it was made for may be gone
+        _nlq_indexes[key] = NLQIndex(repo_ctx.builder, repo_ctx.repo_root)
+    intent: Any = "rule"
+    if action is not None or capability is not None:
+        intent = {k: v for k, v in (("action", action), ("capability", capability)) if v is not None}
+    return _nlq_indexes[key].search(question, top_k=top_k, intent=intent)
+
+
 def run_server(transport: str = "stdio", repo_path: str | None = None) -> None:
     """Entry point for `prism mcp` (`src/prism/cli.py`). `repo_path`, if given,
     becomes the default `repo_path` for any tool call that omits it -

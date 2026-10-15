@@ -640,6 +640,40 @@ def status(repo_path: str) -> None:
         click.echo("No runtime trace has been recorded yet - run `prism trace --repo . -- pytest ...` first.")
 
 
+@main.command()
+@click.argument("question")
+@click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
+@click.option("-k", "--top-k", "top_k", default=10, show_default=True, type=click.IntRange(1, 50), help="Hits to return.")
+@click.option("--json", "as_json", is_flag=True, help="Print the result payload as JSON.")
+@click.option(
+    "--deps", is_flag=True,
+    help="Summarize installed third-party packages (depth-1 offline summaries) so their I/O counts as capability.",
+)
+def ask(question: str, repo_path: str, top_k: int, as_json: bool, deps: bool) -> None:
+    """Answer a natural-language QUESTION about the code with ranked symbols
+    and their upstream entry points (see prism.query.nlq)."""
+    from prism.query.nlq import NLQIndex
+    repo_root = os.path.abspath(repo_path)
+    dependencies = None
+    if deps:
+        from prism.deps.index import DependencyIndex
+        dependencies = DependencyIndex()
+    builder, _tags = build_pipeline(repo_root, dependencies=dependencies)
+    result = NLQIndex(builder, repo_root).search(question, top_k=top_k)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+    intent = {k: v for k, v in result["intent"].items() if k != "source"}
+    described = ", ".join(f"{k}={v}" for k, v in intent.items()) or "none (stems only)"
+    click.echo(f"Intent: {described}")
+    if not result["hits"]:
+        click.echo("No matching symbols.")
+    for hit in result["hits"]:
+        click.echo(f"{hit['rank']:>3}. {hit['qname']}  ({hit['location']})  score {hit['score']:.2f}")
+        for line in hit["entry_context"]:
+            click.echo(f"       {line}")
+
+
 @main.command(name="mcp")
 @click.option(
     "--transport", type=click.Choice(["stdio", "sse", "streamable-http"]), default="stdio", show_default=True,

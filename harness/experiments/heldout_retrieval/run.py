@@ -43,6 +43,8 @@ Systems:
   prism_triad_classprior  prism_triad + a class never outranks its own best member
   prism_triad_nomigr      prism_triad + migration files below every other hit
   prism_triad_fixed       all three; prism_triad_oracle_fixed the same with the oracle intent
+  prism_product           the shipped API, `prism.query.nlq.NLQIndex(...).ranked(question)` -
+                          must equal prism_triad_fixed
   embedding  sentence-transformers cosine similarity (question vs. candidate
              source); recorded as not run when the model cannot be loaded.
 
@@ -68,7 +70,7 @@ HERE = Path(__file__).resolve().parent
 DATASET = HERE / "dataset.json"
 SYSTEMS = ("ripgrep", "bm25", "bm25_stem", "prism_bm25", "prism_triad", "prism_triad_att", "prism_triad_oracle",
            "prism_triad_oracle_att", "prism_triad_neutral", "prism_triad_classprior", "prism_triad_nomigr",
-           "prism_triad_fixed", "prism_triad_oracle_fixed", "embedding")
+           "prism_triad_fixed", "prism_triad_oracle_fixed", "prism_product", "embedding")
 INTENT_ORACLE = HERE / "intent_oracle.json"
 ORACLE_PATH = [INTENT_ORACLE]  # `--oracle` overrides
 HOP_GAMMA = 0.5
@@ -305,6 +307,9 @@ def main(argv=None) -> int:
         runners["prism_triad_nomigr"] = lambda q: prism.rank(q, "rule", fixes=frozenset({"migrations"}))
         runners["prism_triad_fixed"] = lambda q: prism.rank(q, "rule", fixes=ALL)
         runners["prism_triad_oracle_fixed"] = lambda q: prism.rank(q, "oracle", fixes=ALL)
+        from prism.query.nlq import NLQIndex
+        product = NLQIndex(c.builder, c.root)
+        runners["prism_product"] = lambda q: product.ranked(q["question"])
         try:
             embedding = Embedding(c, args.embed_model)
             runners["embedding"] = lambda q: embedding.rank(q["question"])

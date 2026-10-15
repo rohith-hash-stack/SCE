@@ -106,10 +106,11 @@ def _application_functions(builder: ConcreteGraphBuilder) -> set[str]:
     }
 
 
-def find_entry_points(builder: ConcreteGraphBuilder) -> dict[str, EntryPoint]:
+def find_entry_points(builder: ConcreteGraphBuilder, funcs: "set[str] | None" = None) -> dict[str, EntryPoint]:
     """`{qualified name: EntryPoint}` for every decorator-registered,
-    never-called function or method of the index (test code excluded)."""
-    funcs = _application_functions(builder)
+    never-called function or method of the index (test code excluded).
+    `funcs`: the index's application functions, when already computed."""
+    funcs = _application_functions(builder) if funcs is None else funcs
     entries: dict[str, EntryPoint] = {}
     for qname in funcs:
         node = builder.def_node(qname)
@@ -127,14 +128,19 @@ def find_entry_points(builder: ConcreteGraphBuilder) -> dict[str, EntryPoint]:
 
 
 def entry_paths(
-    builder: ConcreteGraphBuilder, qname: str, entries: dict[str, EntryPoint], max_hops: int = 3, limit: int = 3
+    builder: ConcreteGraphBuilder, qname: str, entries: dict[str, EntryPoint], max_hops: int = 3, limit: int = 3,
+    funcs: "set[str] | None" = None,
 ) -> list[list[str]]:
     """Shortest caller chains `[entry, ..., qname]` from up to `limit`
     entry points within `max_hops` caller hops (`[[qname]]` when `qname` is
-    itself an entry; `[]` when no entry reaches it through call edges)."""
+    itself an entry; `[]` when no entry reaches it through call edges).
+    Breadth-first, so nearer entries come first; callers at the same depth
+    in name order; each function is expanded once. `funcs`: the index's
+    application functions - pass them (or use `EntryIndex`) to avoid
+    recomputing them per call."""
     if qname in entries:
         return [[qname]]
-    funcs = _application_functions(builder)
+    funcs = _application_functions(builder) if funcs is None else funcs
     parent: dict[str, str | None] = {qname: None}
     depth = {qname: 0}
     queue, found = deque([qname]), []
@@ -168,3 +174,20 @@ def format_entry_context(chain: list[str], entries: dict[str, EntryPoint]) -> st
     """`[Entry: POST /follow/<username>] -> follow() -> User.follow()`."""
     entry = entries[chain[0]]
     return " -> ".join([f"[Entry: {entry.label()}]"] + [f"{_short(q)}()" for q in chain])
+
+
+class EntryIndex:
+    """Entry points and application functions of one index, computed once;
+    `paths`/`context` per symbol reuse them."""
+
+    def __init__(self, builder: ConcreteGraphBuilder, max_hops: int = 3, limit: int = 3):
+        self.builder, self.max_hops, self.limit = builder, max_hops, limit
+        self.functions = _application_functions(builder)
+        self.entries = find_entry_points(builder, self.functions)
+
+    def paths(self, qname: str) -> list[list[str]]:
+        return entry_paths(self.builder, qname, self.entries, self.max_hops, self.limit, funcs=self.functions)
+
+    def context(self, qname: str) -> list[str]:
+        """`["[Entry: POST /x] -> f() -> g()", ...]` - see `format_entry_context`."""
+        return [format_entry_context(chain, self.entries) for chain in self.paths(qname)]

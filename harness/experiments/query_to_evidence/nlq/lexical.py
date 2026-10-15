@@ -35,71 +35,27 @@ ranking is exactly the BM25 one above.
 """
 from __future__ import annotations
 
-import collections
-import math
 import os
-import re
+
+from prism.query.nlq import BM25, BM25_B, BM25_K1, MIGRATION_DIRS, MIGRATION_TERMS, stem  # noqa: F401 - re-exported
+from prism.query.nlq import intent_legs as _intent_legs
+from prism.query.nlq import raw_words as _raw_words
+from prism.query.nlq import tokenize as _tokenize
 
 #: Stop words (probe's list). `get` is deliberately kept - it is a real
 #: identifier token - and the corpus names carry no discrimination.
 STOP = (set("a an the of in on to and or is are be by for from with what which how when does do did its it if i my "
             "our we that this those these into out up as at whose has have there their them they get".split())
         - {"get"}) | {"django", "fastapi"}
-_SUFFIXES = ("ing", "ed", "es", "s")
 VARIANTS = ("N", "NB")
 #: Relations followed by the 1-hop neighbour expansion, both directions.
 EXPANSION_RELATIONS = frozenset({"CALLS", "INSTANTIATES", "OVERRIDES"})
-BM25_K1, BM25_B = 1.2, 0.75
-
-
-def stem(t: str) -> str:
-    for suf in _SUFFIXES:
-        if len(t) > len(suf) + 2 and t.endswith(suf):
-            return t[: -len(suf)]
-    return t
 
 
 def tokenize(text: str) -> list[str]:
-    """Identifier-aware tokens: split on non-alphanumerics and camelCase,
-    lower-case, drop stop words and 1-char tokens, then strip one suffix."""
-    out = []
-    for w in re.findall(r"[A-Za-z][A-Za-z0-9]*", text):
-        for p in re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+", w) or [w]:
-            p = p.lower()
-            if p not in STOP and len(p) > 1:
-                out.append(stem(p))
-    return out
-
-
-class BM25:
-    def __init__(self, docs: list[list[str]]):
-        self.N = len(docs)
-        self.tf = [collections.Counter(d) for d in docs]
-        self.len = [len(d) for d in docs]
-        self.avg = sum(self.len) / max(1, self.N)
-        df = collections.Counter(t for c in self.tf for t in c)
-        self.idf = {t: math.log(1 + (self.N - n + .5) / (n + .5)) for t, n in df.items()}
-        self.post: dict[str, list[int]] = collections.defaultdict(list)
-        for i, c in enumerate(self.tf):
-            for t in c:
-                self.post[t].append(i)
-
-    def scores(self, query: list[str], k1: float = BM25_K1, b: float = BM25_B) -> dict[int, float]:
-        sc: dict[int, float] = collections.defaultdict(float)
-        for t in set(query):
-            if t not in self.idf:
-                continue
-            for i in self.post[t]:
-                f = self.tf[i][t]
-                sc[i] += self.idf[t] * f * (k1 + 1) / (f + k1 * (1 - b + b * self.len[i] / self.avg))
-        return sc
-
-    def rank(self, query: list[str]) -> list[int]:
-        """Indices of every document sharing at least one query token, by
-        descending score, ties by ascending index. Unmatched documents are
-        not ranked (a rank of None, not "last")."""
-        sc = self.scores(query)
-        return sorted(sc, key=lambda i: (-sc[i], i))
+    """`prism.query.nlq.tokenize` with this probe's stop words (`STOP`,
+    which also drops the corpus names)."""
+    return _tokenize(text, STOP)
 
 
 def rebase_path(file: str, repo_root: str, new_root: str) -> str:
@@ -140,16 +96,6 @@ class TriadContext:
             from prism.semantics.triad import action_tokens
             self._tokens[qname] = action_tokens(self.builder, qname)
         return self._tokens[qname]
-
-
-def _intent_legs(intent: dict | None) -> tuple[str | None, "str | int | None"]:
-    if not intent:
-        return None, None
-    capability = intent.get("capability")
-    if capability and capability.startswith("PRIM_"):
-        from prism.semantics.bitmask import FeatureBit
-        capability = int(FeatureBit[capability])
-    return intent.get("action"), capability
 
 
 class LexicalIndex:
@@ -243,18 +189,18 @@ class LexicalIndex:
         """The top-`k` hits as payload rows, each with its upstream entry
         context (`prism.graph.entry_points`) - display only: the order is
         exactly `ranked`'s."""
-        from prism.graph.entry_points import entry_paths, find_entry_points, format_entry_context
+        from prism.graph.entry_points import EntryIndex
         if self._entries is None:
-            self._entries = find_entry_points(self.builder)
+            self._entries = EntryIndex(self.builder)
         out = []
         for rank, name in enumerate(self.ranked(text, variant, intent)[:k], start=1):
             symbol = self.builder.symbol_table.get(name)
-            chains = entry_paths(self.builder, name, self._entries) if symbol and symbol.kind != "class" else []
+            context = self._entries.context(name) if symbol and symbol.kind != "class" else []
             out.append({
                 "rank": rank,
                 "qname": name,
                 "location": f"{os.path.relpath(symbol.file, self.root) if os.path.isabs(symbol.file) else symbol.file}:{symbol.line_range[0]}",
-                "entry_context": [format_entry_context(c, self._entries) for c in chains],
+                "entry_context": context,
             })
         return out
 
@@ -301,17 +247,6 @@ class LexicalIndex:
         for n in top:
             out |= self.neighbours(n)
         return out
-
-
-#: Directory names holding generated schema migrations (Django, Alembic,
-#: Flask-Migrate, Rails `db/migrate`).
-MIGRATION_DIRS = frozenset({"migrations", "alembic", "migrate"})
-#: Query words that make migration files a legitimate answer.
-MIGRATION_TERMS = frozenset({"migration", "migrations", "migrate", "alembic", "schema", "upgrade", "downgrade", "revision"})
-
-
-def _raw_words(text: str) -> list[str]:
-    return [w.lower() for w in re.findall(r"[A-Za-z]+", text)]
 
 
 def neighbours(graph, name: str, pool: set[str]) -> set[str]:

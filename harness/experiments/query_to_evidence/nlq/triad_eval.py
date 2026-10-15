@@ -15,28 +15,7 @@ import time
 from harness.experiments.query_to_evidence.nlq.lexical import VARIANTS, LexicalIndex
 from harness.experiments.query_to_evidence.nlq.lexical_eval import gold_targets
 
-#: Question words naming a physical resource -> capability target.
-CAPABILITY_WORDS = {
-    "database": "DATABASE_IO", "sql": "DATABASE_IO", "db": "DATABASE_IO",
-    "file": "PRIM_FS_READ", "files": "PRIM_FS_READ", "disk": "PRIM_FS_READ", "directory": "PRIM_FS_READ",
-    "socket": "PRIM_NET_CONNECT", "network": "PRIM_NET_CONNECT", "connection": "PRIM_NET_CONNECT",
-    "subprocess": "PRIM_PROC_SPAWN", "process": "PRIM_PROC_SPAWN",
-    "expire": "PRIM_TIME_CLOCK", "expired": "PRIM_TIME_CLOCK", "expiry": "PRIM_TIME_CLOCK", "timeout": "PRIM_TIME_CLOCK",
-    "clock": "PRIM_TIME_CLOCK", "random": "PRIM_RAND_PRNG",
-}
-
-
-def rule_intent(question_text: str) -> dict | None:
-    from prism.semantics.triad import PHYSICAL_ACTIONS, _words, action_score
-    words = set(_words(question_text))
-    intent = {}
-    action = next((name for name in PHYSICAL_ACTIONS if action_score(words, name)), None)
-    if action:
-        intent["action"] = action
-    capability = next((CAPABILITY_WORDS[w] for w in _words(question_text) if w in CAPABILITY_WORDS), None)
-    if capability:
-        intent["capability"] = capability
-    return intent or None
+from prism.query.nlq import CAPABILITY_WORDS, rule_intent  # noqa: E402,F401 - moved to the product
 
 
 def compare_question(ix: LexicalIndex, q: dict, g: dict, intent: dict | None) -> dict:
