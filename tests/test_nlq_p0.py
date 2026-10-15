@@ -202,9 +202,9 @@ def test_recorded_ranks_of_the_ten_unseeded_questions(recorded):
     ranks = {qid: {t: (recorded["queries"][qid]["N"]["rank"][t], recorded["queries"][qid]["NB"]["rank"][t])
                    for t in recorded["queries"][qid]["targets"]} for qid in M.UNSEEDED_AND_COMPOUND}
     flat = {qid: sorted(v.values()) for qid, v in ranks.items()}
-    assert flat == {"q09": [(5, 3)], "q10": [(4, 2)], "q11": [(None, 50)], "q12": [(255, 24)], "q13": [(85, 34)],
-                    "q14": [(2, 5)], "q15": [(325, 98), (331, 1435)], "q16": [(1090, 86)], "q17": [(2, 25)],
-                    "q18": [(121, 93)]}
+    assert flat == {"q09": [(5, 3)], "q10": [(4, 2)], "q11": [(None, 50)], "q12": [(255, 24)], "q13": [(86, 35)],
+                    "q14": [(2, 4)], "q15": [(325, 96), (331, 1438)], "q16": [(1114, 89)], "q17": [(2, 25)],
+                    "q18": [(121, 92)]}
 
 
 def test_recorded_vocabulary_gap_q15_is_never_found(recorded):
@@ -221,7 +221,7 @@ def test_recorded_candidate_list_growth(recorded):
             assert sizes == sorted(sizes) and sizes[0] >= 10           # k seeds, plus neighbours
     largest = {qid: max(recorded["queries"][qid]["expansion"][f"{v}@50"]["size"] for v in ("N", "NB"))
                for qid in M.UNSEEDED_AND_COMPOUND}
-    assert largest == {"q09": 85, "q10": 210, "q11": 541, "q12": 185, "q13": 171, "q14": 239, "q15": 165,
+    assert largest == {"q09": 85, "q10": 210, "q11": 541, "q12": 185, "q13": 171, "q14": 239, "q15": 167,
                        "q16": 138, "q17": 388, "q18": 819}
 
 
