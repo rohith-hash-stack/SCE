@@ -1,4 +1,4 @@
-"""Stage 2 arms of the two-stage validation (`kaggle/final_two_stage_validation.py`)
+"""Stage 2 arms of the two-stage validation (`kaggle/run_validation_cell.py`)
 in the final-sweep runner: `arm0_no_retrieval`, `arm1_hybrid_rag`, `prism_ask`
 and `prism_oracle` (entry-point breadcrumbs over `pragmatic_oracle`)."""
 from __future__ import annotations

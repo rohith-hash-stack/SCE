@@ -120,7 +120,7 @@ EXPERIMENTAL_ARMS: dict[str, ArmSpec] = {
             description="Aider-style repo map: PageRank over the AST symbol graph, personalized toward "
             "identifiers named in the task prompt; top signatures packed to a 4,000-token budget.",
         ),
-        # Two-stage validation (kaggle/final_two_stage_validation.py).
+        # Two-stage validation (kaggle/run_validation_cell.py).
         ArmSpec(
             "arm0_no_retrieval", "none",
             description="No repository context: the model's own knowledge only.",
