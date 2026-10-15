@@ -70,6 +70,7 @@ SYSTEMS = ("ripgrep", "bm25", "bm25_stem", "prism_bm25", "prism_triad", "prism_t
            "prism_triad_oracle_att", "prism_triad_neutral", "prism_triad_classprior", "prism_triad_nomigr",
            "prism_triad_fixed", "prism_triad_oracle_fixed", "embedding")
 INTENT_ORACLE = HERE / "intent_oracle.json"
+ORACLE_PATH = [INTENT_ORACLE]  # `--oracle` overrides
 HOP_GAMMA = 0.5
 _STOP = set(
     "a an the of in on to and or is are be by for from with what which where how when does do did its it if "
@@ -190,7 +191,7 @@ class PrismLexical:
                                member_over_class=True, demote_migrations=True)
         self.plain, self.attenuated = self.ix.triad, TriadContext(c.builder, c.root, hop_gamma=HOP_GAMMA)
         self.oracle = {k: {f: v for f, v in i.items() if v} or None
-                       for k, i in json.loads(INTENT_ORACLE.read_text())["intents"].items()}
+                       for k, i in json.loads(Path(ORACLE_PATH[0]).read_text())["intents"].items()}
 
     def intent(self, q: dict, source: str) -> dict | None:
         from harness.experiments.query_to_evidence.nlq.triad_eval import rule_intent
@@ -265,9 +266,12 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--check-names", action="store_true", help="only verify every gold/decoy name is a candidate")
     ap.add_argument("--embed-model", default="sentence-transformers/all-MiniLM-L6-v2")
+    ap.add_argument("--dataset", default=str(DATASET), help="question set (default: set 1)")
+    ap.add_argument("--oracle", default=str(INTENT_ORACLE), help="intent oracle for --dataset")
     args = ap.parse_args(argv)
 
-    data = json.loads(DATASET.read_text())
+    data = json.loads(Path(args.dataset).read_text())
+    ORACLE_PATH[0] = args.oracle
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     results = {"dataset_version": data["version"], "systems": {}, "per_question": {}, "notes": {}}

@@ -1,0 +1,779 @@
+{
+ "version": 1,
+ "repos": {
+  "fastapi_template": {
+   "url": "https://github.com/fastapi/full-stack-fastapi-template",
+   "commit": "7257e606cb94eada1dca40173e2b7f99dd549bc6",
+   "root": "backend"
+  },
+  "styleguide": {
+   "url": "https://github.com/HackSoftware/Django-Styleguide-Example",
+   "commit": "a70ef43d7df03706c1211d4fcfd70b4b0120ba1e",
+   "root": "."
+  }
+ },
+ "authoring_rules": [
+  "Second held-out set, written from each repo's source before any system ran on these repos, after the round-3 fixes were committed (58269fc); never edited after seeing results.",
+  "Same rules as set 1: developer phrasing, gold = the function(s) that directly answer, decoys = plausible wrong functions (same stems, the route vs. the service/CRUD layer, the inverse operation).",
+  "The oracle intents (intent_oracle.json) were written in the same pass, under set 1's rules."
+ ],
+ "questions": [
+  {
+   "id": "ft01",
+   "repo": "fastapi_template",
+   "category": "io_sink",
+   "question": "Where is an email actually sent over SMTP?",
+   "gold": [
+    "app.utils.send_email"
+   ],
+   "decoys": [
+    "app.utils.generate_test_email"
+   ]
+  },
+  {
+   "id": "ft02",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "How is the HTML body of an email rendered from a template file?",
+   "gold": [
+    "app.utils.render_email_template"
+   ],
+   "decoys": [
+    "app.utils.generate_reset_password_email",
+    "app.utils.send_email"
+   ]
+  },
+  {
+   "id": "ft03",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "How is the password recovery token generated?",
+   "gold": [
+    "app.utils.generate_password_reset_token"
+   ],
+   "decoys": [
+    "app.utils.verify_password_reset_token",
+    "app.core.security.create_access_token"
+   ]
+  },
+  {
+   "id": "ft04",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "Where is a password reset token decoded and checked?",
+   "gold": [
+    "app.utils.verify_password_reset_token"
+   ],
+   "decoys": [
+    "app.utils.generate_password_reset_token",
+    "app.api.deps.get_current_user"
+   ]
+  },
+  {
+   "id": "ft05",
+   "repo": "fastapi_template",
+   "category": "io_sink",
+   "question": "Which CRUD helper inserts a new user row with a hashed password?",
+   "gold": [
+    "app.crud.create_user"
+   ],
+   "decoys": [
+    "app.api.routes.users.create_user",
+    "app.api.routes.private.create_user"
+   ]
+  },
+  {
+   "id": "ft06",
+   "repo": "fastapi_template",
+   "category": "io_sink",
+   "question": "Where is a user looked up by email address in the database?",
+   "gold": [
+    "app.crud.get_user_by_email"
+   ],
+   "decoys": [
+    "app.crud.authenticate",
+    "app.api.routes.users.read_user_me"
+   ]
+  },
+  {
+   "id": "ft07",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "How does login verify an email and password, upgrading the stored password hash when needed?",
+   "gold": [
+    "app.crud.authenticate"
+   ],
+   "decoys": [
+    "app.api.routes.login.login_access_token",
+    "app.core.security.verify_password"
+   ]
+  },
+  {
+   "id": "ft08",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "How are JWT access tokens created?",
+   "gold": [
+    "app.core.security.create_access_token"
+   ],
+   "decoys": [
+    "app.utils.generate_password_reset_token",
+    "app.api.routes.login.login_access_token"
+   ]
+  },
+  {
+   "id": "ft09",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "How are passwords hashed?",
+   "gold": [
+    "app.core.security.get_password_hash"
+   ],
+   "decoys": [
+    "app.core.security.verify_password",
+    "app.api.routes.users.update_password_me"
+   ]
+  },
+  {
+   "id": "ft10",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint exchanges a username and password for an OAuth2 access token?",
+   "gold": [
+    "app.api.routes.login.login_access_token"
+   ],
+   "decoys": [
+    "app.crud.authenticate"
+   ]
+  },
+  {
+   "id": "ft11",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint sends a password recovery email?",
+   "gold": [
+    "app.api.routes.login.recover_password"
+   ],
+   "decoys": [
+    "app.api.routes.login.recover_password_html_content",
+    "app.utils.generate_reset_password_email"
+   ]
+  },
+  {
+   "id": "ft12",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint sets a new password using a reset token?",
+   "gold": [
+    "app.api.routes.login.reset_password"
+   ],
+   "decoys": [
+    "app.api.routes.users.update_password_me",
+    "app.utils.verify_password_reset_token"
+   ]
+  },
+  {
+   "id": "ft13",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "How is the current user resolved from the bearer token on each request?",
+   "gold": [
+    "app.api.deps.get_current_user"
+   ],
+   "decoys": [
+    "app.api.routes.users.read_user_me",
+    "app.api.deps.get_current_active_superuser"
+   ]
+  },
+  {
+   "id": "ft14",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "Where is it enforced that only superusers can call an endpoint?",
+   "gold": [
+    "app.api.deps.get_current_active_superuser"
+   ],
+   "decoys": [
+    "app.api.deps.get_current_user",
+    "app.api.routes.users.read_user_by_id"
+   ]
+  },
+  {
+   "id": "ft15",
+   "repo": "fastapi_template",
+   "category": "io_sink",
+   "question": "How does a request get a database session?",
+   "gold": [
+    "app.api.deps.get_db"
+   ],
+   "decoys": [
+    "app.core.db.init_db",
+    "app.initial_data.init"
+   ]
+  },
+  {
+   "id": "ft16",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "Where is the first superuser created when the database is initialized?",
+   "gold": [
+    "app.core.db.init_db"
+   ],
+   "decoys": [
+    "app.initial_data.init",
+    "app.initial_data.main"
+   ]
+  },
+  {
+   "id": "ft17",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint lists items, showing every item to superusers but only owned items to others?",
+   "gold": [
+    "app.api.routes.items.read_items"
+   ],
+   "decoys": [
+    "app.api.routes.items.read_item",
+    "app.api.routes.users.read_users"
+   ]
+  },
+  {
+   "id": "ft18",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint deletes an item after checking ownership?",
+   "gold": [
+    "app.api.routes.items.delete_item"
+   ],
+   "decoys": [
+    "app.api.routes.users.delete_user",
+    "app.api.routes.items.update_item"
+   ]
+  },
+  {
+   "id": "ft19",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint lets a user change their own password after checking the current one?",
+   "gold": [
+    "app.api.routes.users.update_password_me"
+   ],
+   "decoys": [
+    "app.api.routes.login.reset_password",
+    "app.api.routes.users.update_user_me"
+   ]
+  },
+  {
+   "id": "ft20",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint lets a user delete their own account?",
+   "gold": [
+    "app.api.routes.users.delete_user_me"
+   ],
+   "decoys": [
+    "app.api.routes.users.delete_user",
+    "app.api.routes.items.delete_item"
+   ]
+  },
+  {
+   "id": "ft21",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint lets a superuser delete another user together with that user's items?",
+   "gold": [
+    "app.api.routes.users.delete_user"
+   ],
+   "decoys": [
+    "app.api.routes.users.delete_user_me",
+    "app.api.routes.items.delete_item"
+   ]
+  },
+  {
+   "id": "ft22",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which public signup endpoint registers a user without being logged in?",
+   "gold": [
+    "app.api.routes.users.register_user"
+   ],
+   "decoys": [
+    "app.api.routes.users.create_user",
+    "app.crud.create_user"
+   ]
+  },
+  {
+   "id": "ft23",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which admin endpoint creates a user and emails them their new account details?",
+   "gold": [
+    "app.api.routes.users.create_user"
+   ],
+   "decoys": [
+    "app.api.routes.users.register_user",
+    "app.utils.generate_new_account_email"
+   ]
+  },
+  {
+   "id": "ft25",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint returns the rendered password recovery email HTML without sending it?",
+   "gold": [
+    "app.api.routes.login.recover_password_html_content"
+   ],
+   "decoys": [
+    "app.api.routes.login.recover_password",
+    "app.utils.generate_reset_password_email"
+   ]
+  },
+  {
+   "id": "ft26",
+   "repo": "fastapi_template",
+   "category": "io_sink",
+   "question": "Which CRUD function stores a new item for its owner?",
+   "gold": [
+    "app.crud.create_item"
+   ],
+   "decoys": [
+    "app.api.routes.items.create_item",
+    "app.crud.create_user"
+   ]
+  },
+  {
+   "id": "ft27",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint updates an item's fields?",
+   "gold": [
+    "app.api.routes.items.update_item"
+   ],
+   "decoys": [
+    "app.api.routes.users.update_user",
+    "app.api.routes.items.read_item"
+   ]
+  },
+  {
+   "id": "ft28",
+   "repo": "fastapi_template",
+   "category": "feature_logic",
+   "question": "Where is a user's record updated, rehashing the password if a new one is given?",
+   "gold": [
+    "app.crud.update_user"
+   ],
+   "decoys": [
+    "app.api.routes.users.update_user",
+    "app.api.routes.users.update_user_me"
+   ]
+  },
+  {
+   "id": "ft29",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint lets a superuser fetch any user by id?",
+   "gold": [
+    "app.api.routes.users.read_user_by_id"
+   ],
+   "decoys": [
+    "app.api.routes.users.read_user_me",
+    "app.api.routes.users.read_users"
+   ]
+  },
+  {
+   "id": "ft30",
+   "repo": "fastapi_template",
+   "category": "routing",
+   "question": "Which endpoint is the health check?",
+   "gold": [
+    "app.api.routes.utils.health_check"
+   ],
+   "decoys": []
+  },
+  {
+   "id": "sg01",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Where is an email actually sent through Django's mail backend and marked as sent?",
+   "gold": [
+    "styleguide_example.emails.services.email_send"
+   ],
+   "decoys": [
+    "styleguide_example.emails.tasks.email_send",
+    "styleguide_example.emails.services.email_failed"
+   ]
+  },
+  {
+   "id": "sg02",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "Which background task sends an email and retries when it fails?",
+   "gold": [
+    "styleguide_example.emails.tasks.email_send"
+   ],
+   "decoys": [
+    "styleguide_example.emails.services.email_send",
+    "styleguide_example.emails.tasks._email_send_failure"
+   ]
+  },
+  {
+   "id": "sg03",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "Where is an email marked as failed when sending it fails?",
+   "gold": [
+    "styleguide_example.emails.services.email_failed",
+    "styleguide_example.emails.tasks._email_send_failure"
+   ],
+   "decoys": [
+    "styleguide_example.emails.services.email_send"
+   ]
+  },
+  {
+   "id": "sg04",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How are many emails queued for sending, each one after its own transaction commits?",
+   "gold": [
+    "styleguide_example.emails.services.email_send_all"
+   ],
+   "decoys": [
+    "styleguide_example.emails.services.email_send",
+    "styleguide_example.emails.tasks.email_send"
+   ]
+  },
+  {
+   "id": "sg05",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Where is an S3 presigned POST generated for a direct browser upload?",
+   "gold": [
+    "styleguide_example.integrations.aws.client.s3_generate_presigned_post"
+   ],
+   "decoys": [
+    "styleguide_example.files.services.FileDirectUploadService.start",
+    "styleguide_example.integrations.aws.client.s3_get_client"
+   ]
+  },
+  {
+   "id": "sg06",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Where is the boto3 S3 client created?",
+   "gold": [
+    "styleguide_example.integrations.aws.client.s3_get_client"
+   ],
+   "decoys": [
+    "styleguide_example.integrations.aws.client.s3_generate_presigned_post"
+   ]
+  },
+  {
+   "id": "sg08",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Which service saves an uploaded file in a single request?",
+   "gold": [
+    "styleguide_example.files.services.FileStandardUploadService.create"
+   ],
+   "decoys": [
+    "styleguide_example.files.services.FileDirectUploadService.upload_local",
+    "styleguide_example.files.apis.FileStandardUploadApi.post"
+   ]
+  },
+  {
+   "id": "sg09",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "Where does a direct upload start, creating the file record and returning the upload instructions?",
+   "gold": [
+    "styleguide_example.files.services.FileDirectUploadService.start"
+   ],
+   "decoys": [
+    "styleguide_example.files.services.FileDirectUploadService.finish",
+    "styleguide_example.files.apis.FileDirectUploadStartApi.post"
+   ]
+  },
+  {
+   "id": "sg10",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "Where is a direct upload marked as finished?",
+   "gold": [
+    "styleguide_example.files.services.FileDirectUploadService.finish"
+   ],
+   "decoys": [
+    "styleguide_example.files.services.FileDirectUploadService.start",
+    "styleguide_example.files.apis.FileDirectUploadFinishApi.post"
+   ]
+  },
+  {
+   "id": "sg11",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "Where is an uploaded file's size checked against the maximum allowed?",
+   "gold": [
+    "styleguide_example.files.services._validate_file_size"
+   ],
+   "decoys": [
+    "styleguide_example.files.utils.bytes_to_mib",
+    "styleguide_example.files.services.FileStandardUploadService.create"
+   ]
+  },
+  {
+   "id": "sg12",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How is a random stored file name generated while keeping the original extension?",
+   "gold": [
+    "styleguide_example.files.utils.file_generate_name"
+   ],
+   "decoys": [
+    "styleguide_example.files.utils.file_generate_upload_path",
+    "styleguide_example.files.services.FileStandardUploadService._infer_file_name_and_type"
+   ]
+  },
+  {
+   "id": "sg13",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How is a file's MIME type guessed from its name?",
+   "gold": [
+    "styleguide_example.files.services.FileStandardUploadService._infer_file_name_and_type"
+   ],
+   "decoys": [
+    "styleguide_example.files.utils.file_generate_name",
+    "styleguide_example.files.services._validate_file_size"
+   ]
+  },
+  {
+   "id": "sg14",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Which service creates a new user?",
+   "gold": [
+    "styleguide_example.users.services.user_create"
+   ],
+   "decoys": [
+    "styleguide_example.users.models.BaseUserManager.create_user",
+    "styleguide_example.users.apis.UserCreateApi.post"
+   ]
+  },
+  {
+   "id": "sg15",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How is a user's email normalized and the user saved with a hashed or unusable password?",
+   "gold": [
+    "styleguide_example.users.models.BaseUserManager.create_user"
+   ],
+   "decoys": [
+    "styleguide_example.users.models.BaseUserManager.create_superuser",
+    "styleguide_example.users.services.user_create"
+   ]
+  },
+  {
+   "id": "sg16",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "Where is a model instance updated only for the fields that changed, bumping updated_at?",
+   "gold": [
+    "styleguide_example.common.services.model_update"
+   ],
+   "decoys": [
+    "styleguide_example.users.services.user_update",
+    "styleguide_example.emails.services.email_failed"
+   ]
+  },
+  {
+   "id": "sg17",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "How are users listed with filters applied?",
+   "gold": [
+    "styleguide_example.users.selectors.user_list"
+   ],
+   "decoys": [
+    "styleguide_example.users.apis.UserListApi.get",
+    "styleguide_example.users.selectors.user_get"
+   ]
+  },
+  {
+   "id": "sg18",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How does JWT logout invalidate all of a user's existing tokens?",
+   "gold": [
+    "styleguide_example.authentication.services.auth_logout"
+   ],
+   "decoys": [
+    "styleguide_example.authentication.apis.UserJwtLogoutApi.post",
+    "styleguide_example.authentication.apis.UserSessionLogoutApi.post"
+   ]
+  },
+  {
+   "id": "sg19",
+   "repo": "styleguide",
+   "category": "routing",
+   "question": "Which API logs a user in with a session and returns the session key?",
+   "gold": [
+    "styleguide_example.authentication.apis.UserSessionLoginApi.post"
+   ],
+   "decoys": [
+    "styleguide_example.authentication.apis.UserJwtLoginApi.post",
+    "styleguide_example.users.selectors.user_get_login_data"
+   ]
+  },
+  {
+   "id": "sg20",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How is a user authenticated from a session id passed in the Authorization header?",
+   "gold": [
+    "styleguide_example.api.mixins.SessionAsHeaderAuthentication.authenticate"
+   ],
+   "decoys": [
+    "styleguide_example.api.mixins.get_auth_header",
+    "styleguide_example.authentication.apis.UserSessionLoginApi.post"
+   ]
+  },
+  {
+   "id": "sg21",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Where does the raw Google login flow exchange the authorization code for tokens?",
+   "gold": [
+    "styleguide_example.blog_examples.google_login_server_flow.raw.service.GoogleRawLoginFlowService.get_tokens"
+   ],
+   "decoys": [
+    "styleguide_example.blog_examples.google_login_server_flow.sdk.services.GoogleSdkLoginFlowService.get_tokens",
+    "styleguide_example.blog_examples.google_login_server_flow.raw.service.GoogleRawLoginFlowService.get_user_info"
+   ]
+  },
+  {
+   "id": "sg22",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Where is the Google user profile fetched using an access token?",
+   "gold": [
+    "styleguide_example.blog_examples.google_login_server_flow.raw.service.GoogleRawLoginFlowService.get_user_info",
+    "styleguide_example.blog_examples.google_login_server_flow.sdk.services.GoogleSdkLoginFlowService.get_user_info"
+   ],
+   "decoys": [
+    "styleguide_example.blog_examples.google_login_server_flow.raw.service.GoogleRawLoginFlowService.get_tokens"
+   ]
+  },
+  {
+   "id": "sg23",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How is the Google OAuth authorization URL built with a random state?",
+   "gold": [
+    "styleguide_example.blog_examples.google_login_server_flow.raw.service.GoogleRawLoginFlowService.get_authorization_url",
+    "styleguide_example.blog_examples.google_login_server_flow.sdk.services.GoogleSdkLoginFlowService.get_authorization_url"
+   ],
+   "decoys": [
+    "styleguide_example.blog_examples.google_login_server_flow.raw.service.GoogleRawLoginFlowService._generate_state_session_token"
+   ]
+  },
+  {
+   "id": "sg24",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How is the Google id token decoded?",
+   "gold": [
+    "styleguide_example.blog_examples.google_login_server_flow.raw.service.GoogleAccessTokens.decode_id_token",
+    "styleguide_example.blog_examples.google_login_server_flow.sdk.services.GoogleAccessTokens.decode_id_token"
+   ],
+   "decoys": [
+    "styleguide_example.blog_examples.google_login_server_flow.raw.service.GoogleRawLoginFlowService.get_tokens"
+   ]
+  },
+  {
+   "id": "sg25",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Where is the two-factor authentication secret created and stored for a user?",
+   "gold": [
+    "styleguide_example.blog_examples.admin_2fa.services.user_two_factor_auth_data_create"
+   ],
+   "decoys": [
+    "styleguide_example.blog_examples.admin_2fa.views.AdminSetupTwoFactorAuthView.post",
+    "styleguide_example.blog_examples.admin_2fa.views.AdminConfirmTwoFactorAuthView.form_valid"
+   ]
+  },
+  {
+   "id": "sg26",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How does a decorator stop a celery task from running concurrently with itself?",
+   "gold": [
+    "styleguide_example.blog_examples.celery_non_concurrent.tasks.non_concurrent_task"
+   ],
+   "decoys": []
+  },
+  {
+   "id": "sg27",
+   "repo": "styleguide",
+   "category": "io_sink",
+   "question": "Which management command recreates the periodic celery beat schedules?",
+   "gold": [
+    "styleguide_example.tasks.management.commands.setup_periodic_tasks.Command.handle"
+   ],
+   "decoys": [
+    "styleguide_example.blog_examples.celery_non_concurrent.tasks.non_concurrent_task"
+   ]
+  },
+  {
+   "id": "sg28",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How is a new student enrolled in all of their school's current courses?",
+   "gold": [
+    "styleguide_example.testing_examples.services.students.student_create"
+   ],
+   "decoys": [
+    "styleguide_example.testing_examples.services.rosters.roster_create",
+    "styleguide_example.testing_examples.services.school_courses.school_course_create"
+   ]
+  },
+  {
+   "id": "sg29",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "Where is it validated that a roster period falls inside the course period?",
+   "gold": [
+    "styleguide_example.testing_examples.services.rosters.roster_validate_period"
+   ],
+   "decoys": [
+    "styleguide_example.testing_examples.services.rosters.roster_create",
+    "styleguide_example.testing_examples.services.school_courses.school_course_create"
+   ]
+  },
+  {
+   "id": "sg30",
+   "repo": "styleguide",
+   "category": "feature_logic",
+   "question": "How are application errors converted into the API's error response format?",
+   "gold": [
+    "styleguide_example.api.exception_handlers.hacksoft_proposed_exception_handler",
+    "styleguide_example.api.exception_handlers.drf_default_with_modifications_exception_handler"
+   ],
+   "decoys": [
+    "styleguide_example.errors.services.trigger_errors"
+   ]
+  }
+ ],
+ "pool_exclusions": {
+  "note": "Found by the name-only check (--check-names) before any system ranked anything: these names are not candidates for any system, because Prism's role classifier marks them as test code. Questions whose gold is excluded were dropped; excluded decoys were removed.",
+  "names": {
+   "app.api.routes.login.test_token": "named test_*: classified as test code (SymbolRole.VERIFICATION) although it is an endpoint",
+   "app.api.routes.utils.test_email": "named test_*: classified as test code although it is an endpoint",
+   "styleguide_example.blog_examples.celery_non_concurrent.tasks.test_non_concurrent_task": "named test_*: classified as test code",
+   "styleguide_example.integrations.aws.client.s3_get_credentials": "body calls assert_settings(...): classified as an assertion-shaped test body"
+  },
+  "dropped_questions": [
+   "ft24",
+   "sg07"
+  ]
+ }
+}
