@@ -1,5 +1,37 @@
 # Held-out set 2: validating the round-3 fixes
 
+
+## Current result: all 60 questions
+
+> After `41b012a` fixed the role-classifier bugs, the four names the name-only check had excluded are candidates again. ft24 and sg07 are restored exactly as written (`0352d90`), so this run scores all 60 frozen questions. The 58-question run further down is kept for history.
+
+| system | top-1 | recall@5 | MRR | separation |
+|---|---|---|---|---|
+| ripgrep | 0.350 | 0.567 | 0.451 | 0.583 |
+| BM25 | 0.400 | 0.767 | 0.571 | 0.767 |
+| BM25 + stemming | 0.450 | 0.817 | 0.615 | **0.783** |
+| Prism lexical leg | 0.450 | 0.817 | 0.614 | **0.783** |
+| Prism triad, previous (rule intent) | 0.483 | **0.833** | 0.636 | 0.767 |
+| + neutral unknown only | 0.483 | **0.833** | 0.636 | 0.767 |
+| + class prior only | 0.533 | **0.833** | 0.668 | 0.767 |
+| + migration demotion only | 0.500 | **0.833** | 0.646 | 0.767 |
+| **Prism triad, fixed (rule intent)** | **0.550** | **0.833** | **0.678** | 0.767 |
+| **`prism.query.nlq` (shipped API, `prism ask` / `prism.ask`)** | **0.550** | **0.833** | **0.678** | 0.767 |
+| Prism triad, fixed, oracle intent | **0.633** | **0.833** | **0.735** | **0.817** |
+
+Paired sign tests (top-1 wins–losses):
+
+| comparison | top-1 | p | separation |
+|---|---|---|---|
+| fixed vs previous triad | +4 −0 (ft26, sg19, sg24, sg27) | 0.125 | +0 −0 |
+| fixed vs stemmed BM25 | +7 −1 (lost: sg10) | 0.070 | +1 −2 |
+| fixed + oracle intent vs stemmed BM25 | **+11 −0** | **0.001** | +3 −1 |
+| fixed + oracle intent vs fixed (rule intent) | +5 −0 | 0.062 | +3 −0 |
+
+- **The shipped API matches the benchmark's fixed arm.** Every metric and every gold rank agree on all 60 questions. The top-5 tails differ on two questions (ft15, sg01) because the harness keeps its corpus-specific stop words (`django`, `fastapi`) for the recorded probe, and the product does not. Those words occur in import lines.
+- **The two restored questions change nothing between systems.** ft24 (`test_email`) is rank 1 everywhere; sg07 (`s3_get_credentials`) is rank 4 everywhere.
+- **The conclusions are the same as the 58-question run, with one difference.** The fixed triad is still directionally better than stemmed BM25 with the rule intent, now +7/−1 (p = 0.07, not significant). With the oracle intent it is +11/−0 (p = 0.001).
+
 ## Why this set exists
 
 The round-3 fixes were chosen after reading set 1's failures, so set 1 could only give an in-sample upper bound. Set 2 is out-of-sample:
