@@ -213,7 +213,7 @@ def test_default_build_has_no_proxy_boundaries(tmp_path):
 # --------------------------------------------------------------------- #
 # Triad: unknown, scored by the action leg
 # --------------------------------------------------------------------- #
-def test_proxy_is_scored_like_opaque_with_its_own_provenance(host):
+def test_proxy_is_neutral_like_opaque_with_its_own_provenance(host):
     builder, profiles = host
     q = "app.main.run_report_query"
     assert database_io(profiles[q], action_tokens(builder, q)) == (0.0, "runtime-proxy")  # `cursor` is a DB verb
@@ -221,7 +221,11 @@ def test_proxy_is_scored_like_opaque_with_its_own_provenance(host):
     tokens = {c: action_tokens(builder, c) for c in candidates}
     ranked = triad_rerank(candidates, {c: 1.0 for c in candidates}, profiles, tokens, target=DATABASE_IO, action="EXECUTE")
     assert ranked[0].qname == q and ranked[0].capability_source == "runtime-proxy"
-    assert ranked[0].proxy == ("dbkit.connection.cursor",) and ranked[0].score == pytest.approx(1.40)
+    assert ranked[0].proxy == ("dbkit.connection.cursor",)
+    assert ranked[0].score == pytest.approx(1.15)  # neutral capability; its own `execute` verb matches the action
+    shifted = triad_rerank(candidates, {c: 1.0 for c in candidates}, profiles, tokens, target=DATABASE_IO, action="EXECUTE",
+                           unknown_to_action=True)
+    assert shifted[0].qname == q and shifted[0].score == pytest.approx(1.40)
     assert ranked[1].score == 1.0
 
 

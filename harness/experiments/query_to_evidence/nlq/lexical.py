@@ -127,10 +127,11 @@ TRIAD_WINDOW = 200
 class TriadContext:
     """Index-time capability profiles plus memoized action tokens."""
 
-    def __init__(self, builder, repo_root: str, hop_gamma: float | None = None):
+    def __init__(self, builder, repo_root: str, hop_gamma: float | None = None, unknown_to_action: bool = False):
         from prism.semantics.profile_cache import cached_capability_profiles
         self.builder = builder
         self.hop_gamma = hop_gamma  # opt-in internal-hop attenuation (`triad_rerank`)
+        self.unknown_to_action = unknown_to_action  # former OPAQUE/PROXY weight shift (`triad_rerank`)
         self.profiles = cached_capability_profiles(builder, repo_root)
         self._tokens: dict[str, frozenset[str]] = {}
 
@@ -155,7 +156,7 @@ class LexicalIndex:
     """BM25 over one corpus, both document variants, plus 1-hop expansion."""
 
     def __init__(self, builder, repo_root: str, relative_paths: bool = False, path_tokens_root: str | None = None,
-                 triad: TriadContext | None = None):
+                 triad: TriadContext | None = None, member_over_class: bool = False, demote_migrations: bool = False):
         if relative_paths and path_tokens_root is not None:
             raise ValueError("relative_paths and path_tokens_root are different variants; pass at most one")
         self.builder, self.root = builder, repo_root
@@ -174,6 +175,23 @@ class LexicalIndex:
                   for i, s in enumerate(self.pool)]
         self.bm25 = {"N": BM25(doc_n), "NB": BM25(doc_nb)}
         self.triad = triad
+        # Ranking priors (off by default; the recorded probe output predates them).
+        self.member_over_class = member_over_class
+        self.demote_migrations = demote_migrations
+        self._members: dict[str, list[str]] = {}
+        if member_over_class:
+            kinds = {s.qualified_name: s.kind for s in self.pool}
+            for s in self.pool:
+                if s.kind in ("function", "method") and s.enclosing_class and kinds.get(s.enclosing_class) == "class":
+                    self._members.setdefault(s.enclosing_class, []).append(s.qualified_name)
+        self._migration: set[str] = set()
+        if demote_migrations:
+            self._migration = {
+                s.qualified_name for s in self.pool
+                if MIGRATION_DIRS & set(os.path.relpath(s.file if os.path.isabs(s.file) else os.path.join(repo_root, s.file),
+                                                        repo_root).replace(os.sep, "/").split("/")[:-1])
+            }
+        self._entries = None
 
     def _source(self, path: str) -> list[str]:
         if path not in self._lines:
@@ -191,8 +209,54 @@ class LexicalIndex:
             raise ValueError(f"unknown variant {variant!r}; expected one of {VARIANTS}")
         action, capability = _intent_legs(intent)
         if self.triad is None or (action is None and capability is None):
-            return [self.names[i] for i in self.bm25[variant].rank(tokenize(text))]
-        return [row.qname for row in self.triad_ranked(text, variant, intent)]
+            if not (self.member_over_class or self.demote_migrations):
+                return [self.names[i] for i in self.bm25[variant].rank(tokenize(text))]
+            sc = self.bm25[variant].scores(tokenize(text))
+            rows = [(self.names[i], sc[i]) for i in sorted(sc, key=lambda i: (-sc[i], i))]
+        else:
+            rows = [(row.qname, row.score) for row in self.triad_ranked(text, variant, intent)]
+        return self._apply_priors(text, rows)
+
+    def _apply_priors(self, text: str, rows: list[tuple[str, float]]) -> list[str]:
+        """Re-order `(name, score)` rows, best first, by the enabled priors:
+
+        - member_over_class: a class never outranks its own best-scoring
+          method - the class document contains its methods' text, so it
+          matches whatever they match; it is placed just below that member.
+        - demote_migrations: candidates under a `migrations/` or `alembic/`
+          directory go below every other hit unless the query is about
+          migrations (`MIGRATION_TERMS`).
+        Stable otherwise: equal keys keep the incoming order."""
+        score = dict(rows)
+        if self.member_over_class:
+            for cls, members in self._members.items():
+                if cls in score:
+                    best = max((score[m] for m in members if score.get(m, 0) > 0), default=None)
+                    if best is not None and score[cls] >= best:
+                        score[cls] = best * (1 - 1e-9)
+        demote = self.demote_migrations and not (MIGRATION_TERMS & set(_raw_words(text)))
+        position = {n: i for i, (n, _) in enumerate(rows)}
+        return sorted(score, key=lambda n: (demote and n in self._migration, -score[n], position[n]))
+
+    # -- presentation ------------------------------------------------------ #
+    def hits(self, text: str, variant: str, k: int, intent: dict | None = None) -> list[dict]:
+        """The top-`k` hits as payload rows, each with its upstream entry
+        context (`prism.graph.entry_points`) - display only: the order is
+        exactly `ranked`'s."""
+        from prism.graph.entry_points import entry_paths, find_entry_points, format_entry_context
+        if self._entries is None:
+            self._entries = find_entry_points(self.builder)
+        out = []
+        for rank, name in enumerate(self.ranked(text, variant, intent)[:k], start=1):
+            symbol = self.builder.symbol_table.get(name)
+            chains = entry_paths(self.builder, name, self._entries) if symbol and symbol.kind != "class" else []
+            out.append({
+                "rank": rank,
+                "qname": name,
+                "location": f"{os.path.relpath(symbol.file, self.root) if os.path.isabs(symbol.file) else symbol.file}:{symbol.line_range[0]}",
+                "entry_context": [format_entry_context(c, self._entries) for c in chains],
+            })
+        return out
 
     def triad_ranked(self, text: str, variant: str, intent: dict) -> list:
         """`TriadScore` rows (provenance: stems = BM25, capability, action,
@@ -212,7 +276,7 @@ class LexicalIndex:
         rows = triad_rerank(
             names, {self.names[i]: sc[i] for i in window}, self.triad.profiles,
             {n: self.triad.tokens(n) for n in names}, target=capability, action=action,
-            hop_gamma=self.triad.hop_gamma,
+            hop_gamma=self.triad.hop_gamma, unknown_to_action=self.triad.unknown_to_action,
         )
         rest = [TriadScore(self.names[i], sc[i], sc[i], 0.0, 0.0, "none") for i in order[len(window):]]
         return rows + rest
@@ -237,6 +301,17 @@ class LexicalIndex:
         for n in top:
             out |= self.neighbours(n)
         return out
+
+
+#: Directory names holding generated schema migrations (Django, Alembic,
+#: Flask-Migrate, Rails `db/migrate`).
+MIGRATION_DIRS = frozenset({"migrations", "alembic", "migrate"})
+#: Query words that make migration files a legitimate answer.
+MIGRATION_TERMS = frozenset({"migration", "migrations", "migrate", "alembic", "schema", "upgrade", "downgrade", "revision"})
+
+
+def _raw_words(text: str) -> list[str]:
+    return [w.lower() for w in re.findall(r"[A-Za-z]+", text)]
 
 
 def neighbours(graph, name: str, pool: set[str]) -> set[str]:

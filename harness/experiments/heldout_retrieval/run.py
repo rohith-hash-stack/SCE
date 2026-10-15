@@ -35,6 +35,14 @@ Systems:
              the triad without / with attenuation, the intent read from
              `intent_oracle.json` (annotated per question, frozen before
              these runs) instead of `rule_intent`.
+  The arms above keep the former OPAQUE/PROXY treatment (capability weight
+  moved onto the action leg, `unknown_to_action=True`) so round 1-2 results
+  reproduce. Round 3 (fixes designed after reading this set's failures, so
+  in-sample, not held-out):
+  prism_triad_neutral     prism_triad with neutral unknown capability
+  prism_triad_classprior  prism_triad + a class never outranks its own best member
+  prism_triad_nomigr      prism_triad + migration files below every other hit
+  prism_triad_fixed       all three; prism_triad_oracle_fixed the same with the oracle intent
   embedding  sentence-transformers cosine similarity (question vs. candidate
              source); recorded as not run when the model cannot be loaded.
 
@@ -59,7 +67,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 DATASET = HERE / "dataset.json"
 SYSTEMS = ("ripgrep", "bm25", "bm25_stem", "prism_bm25", "prism_triad", "prism_triad_att", "prism_triad_oracle",
-           "prism_triad_oracle_att", "embedding")
+           "prism_triad_oracle_att", "prism_triad_neutral", "prism_triad_classprior", "prism_triad_nomigr",
+           "prism_triad_fixed", "prism_triad_oracle_fixed", "embedding")
 INTENT_ORACLE = HERE / "intent_oracle.json"
 HOP_GAMMA = 0.5
 _STOP = set(
@@ -177,7 +186,8 @@ class StemmedBM25:
 class PrismLexical:
     def __init__(self, c: Corpus):
         from harness.experiments.query_to_evidence.nlq.lexical import LexicalIndex, TriadContext
-        self.ix = LexicalIndex(c.builder, c.root, relative_paths=True, triad=TriadContext(c.builder, c.root))
+        self.ix = LexicalIndex(c.builder, c.root, relative_paths=True, triad=TriadContext(c.builder, c.root),
+                               member_over_class=True, demote_migrations=True)
         self.plain, self.attenuated = self.ix.triad, TriadContext(c.builder, c.root, hop_gamma=HOP_GAMMA)
         self.oracle = {k: {f: v for f, v in i.items() if v} or None
                        for k, i in json.loads(INTENT_ORACLE.read_text())["intents"].items()}
@@ -186,11 +196,22 @@ class PrismLexical:
         from harness.experiments.query_to_evidence.nlq.triad_eval import rule_intent
         return {"none": lambda: None, "rule": lambda: rule_intent(q["question"]), "oracle": lambda: self.oracle[q["id"]]}[source]()
 
-    def rank(self, q: dict, source: str = "none", attenuate: bool = False) -> list[str]:
-        self.ix.triad = self.attenuated if attenuate else self.plain
+    def rank(self, q: dict, source: str = "none", attenuate: bool = False, fixes: frozenset = frozenset(),
+             hits: int = 0):
+        """`fixes` (round 3): "neutral" (unknown capability neutral), "class"
+        (member over class), "migrations" (demote migration files). Without
+        "neutral" the former unknown-to-action shift applies."""
+        ctx = self.attenuated if attenuate else self.plain
+        saved = (ctx.unknown_to_action, self.ix.member_over_class, self.ix.demote_migrations)
+        ctx.unknown_to_action = "neutral" not in fixes
+        self.ix.member_over_class, self.ix.demote_migrations = "class" in fixes, "migrations" in fixes
+        self.ix.triad = ctx
         try:
+            if hits:
+                return self.ix.hits(q["question"], "NB", hits, self.intent(q, source))
             return self.ix.ranked(q["question"], "NB", self.intent(q, source))
         finally:
+            ctx.unknown_to_action, self.ix.member_over_class, self.ix.demote_migrations = saved
             self.ix.triad = self.plain
 
 
@@ -274,6 +295,12 @@ def main(argv=None) -> int:
         runners["prism_triad_att"] = lambda q: prism.rank(q, "rule", attenuate=True)
         runners["prism_triad_oracle"] = lambda q: prism.rank(q, "oracle")
         runners["prism_triad_oracle_att"] = lambda q: prism.rank(q, "oracle", attenuate=True)
+        ALL = frozenset({"neutral", "class", "migrations"})
+        runners["prism_triad_neutral"] = lambda q: prism.rank(q, "rule", fixes=frozenset({"neutral"}))
+        runners["prism_triad_classprior"] = lambda q: prism.rank(q, "rule", fixes=frozenset({"class"}))
+        runners["prism_triad_nomigr"] = lambda q: prism.rank(q, "rule", fixes=frozenset({"migrations"}))
+        runners["prism_triad_fixed"] = lambda q: prism.rank(q, "rule", fixes=ALL)
+        runners["prism_triad_oracle_fixed"] = lambda q: prism.rank(q, "oracle", fixes=ALL)
         try:
             embedding = Embedding(c, args.embed_model)
             runners["embedding"] = lambda q: embedding.rank(q["question"])
@@ -284,6 +311,7 @@ def main(argv=None) -> int:
                                                                 "intent": None, "systems": {}})
             row["intent"] = prism.intent(q, "rule")
             row["oracle_intent"] = prism.intent(q, "oracle")
+            row["fixed_hits"] = prism.rank(q, "rule", fixes=ALL, hits=5)
             for system, run in runners.items():
                 t = time.perf_counter()
                 ranking = run(q)

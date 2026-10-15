@@ -12,12 +12,15 @@ lexical (stem) scores - never a filter, never a removal:
 Capability comes from `prism.semantics.capabilities`. When it is requested
 but a candidate's dependency evidence is OPAQUE - it calls into compiled
 native code (`psycopg2`'s C core), whose capability is unknown rather than
-absent - the capability leg is not scored as a mismatch: its weight moves
-onto the physical-action leg, and the result is marked
-`capability_source="opaque-native"` with the opaque entry points it
-reached, so the provenance says exactly why it ranked where it did. A call
-through a runtime proxy (`django.db.connection`, `flask.request`) is the
-same kind of unknown, reported as `"runtime-proxy"`.
+absent - the capability leg is neutral (0.0, never a penalty) and the
+candidate is scored by its stems and its own action verbs alone; the result
+is marked `capability_source="opaque-native"` with the opaque entry points
+it reached, so the provenance says exactly why it ranked where it did. A
+call through a runtime proxy (`django.db.connection`, `flask.request`) is
+the same kind of unknown, reported as `"runtime-proxy"`. (Moving the
+capability weight onto the action leg instead - `unknown_to_action=True` -
+rewarded any function that merely touches a proxy: on held-out Flask code a
+route reading `current_user` outranked the sink it should not beat.)
 
 `DATABASE_IO` is synthesized by the triad rather than read off a catalog
 of driver names. A pure-Python driver bottoms out at a socket
@@ -214,13 +217,16 @@ def triad_rerank(
     capability_weight: float = CAPABILITY_WEIGHT,
     action_weight: float = ACTION_WEIGHT,
     hop_gamma: float | None = None,
+    unknown_to_action: bool = False,
 ) -> list[TriadScore]:
     """`candidates` re-ranked by the triad; every candidate is kept, the
     boost is at most `1 + capability_weight + action_weight`, and ties keep
     their input order (identity when no leg fires). `hop_gamma` (opt-in)
     attenuates the capability leg by repo-internal hops: the function that
     makes the I/O call scores in full, each caller above it `hop_gamma`
-    times less (`capability_score`)."""
+    times less (`capability_score`). `unknown_to_action` restores the
+    former treatment of OPAQUE/PROXY capability (its weight moved onto the
+    action leg, a compiled driver's database verb counted as the action)."""
     if capability_weight < 0 or action_weight < 0:
         raise ValueError("weights must be >= 0")
     rows = []
@@ -234,7 +240,7 @@ def triad_rerank(
         unknown = _unknown_source(profile)
         if target == DATABASE_IO:
             capability, db_source = database_io(profile, words, hop_gamma)
-            if db_source in ("opaque-native", "runtime-proxy"):
+            if unknown_to_action and db_source in ("opaque-native", "runtime-proxy"):
                 # A compiled driver (or a proxied connection) dispatching a
                 # database verb: the verb is the matching action.
                 act = max(act, 1.0)
@@ -245,10 +251,10 @@ def triad_rerank(
             source = db_source
             boost = capability_weight * capability + action_weight * act
         elif target is not None and capability == 0.0 and unknown:
-            # Unknown, not absent: the capability leg's weight moves to the
-            # physical-action leg instead of counting against the candidate.
+            # Unknown, not absent: neutral - recorded, never a penalty, and
+            # (unless `unknown_to_action`) never a boost either.
             source = unknown
-            boost = (capability_weight + action_weight) * act
+            boost = (capability_weight + action_weight) * act if unknown_to_action else action_weight * act
         else:
             source = "capability" if capability > 0 else "none"
             boost = capability_weight * capability + action_weight * act

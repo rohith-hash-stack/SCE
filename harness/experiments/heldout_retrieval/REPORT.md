@@ -112,3 +112,64 @@ With zero capability on both sink and caller, decay has nothing to attenuate.
    - transfer only `capability_weight × γ^h` of the weight;
    - transfer nothing.
 3. With today's evidence, the triad does not beat stemmed BM25 on held-out code. The unit-harness separation came from synthetic packages built to carry the bits.
+
+---
+
+# Round 3: three targeted fixes and entry-point context (in-sample)
+
+> **Read this round as in-sample.** The three fixes were designed after reading this question set's failures, so these numbers are an upper bound on what they do on unseen code. A fresh frozen question set is needed before any claim of improvement.
+
+## Fixes
+
+Each is generic, with no repo or framework names.
+
+1. **Unknown capability is neutral** (`triad_rerank`, now the default). OPAQUE or PROXY reach scores 0 on the capability leg and moves no weight onto the action leg; a compiled driver's DB verb no longer counts as the action. Provenance is still recorded. `unknown_to_action=True` restores the old behaviour.
+2. **A class never outranks its own best-matching method** (`LexicalIndex(member_over_class=True)`). A class's document contains its methods' text, so it is placed just below its best member.
+3. **Migration files go below every application hit** (`LexicalIndex(demote_migrations=True)`): files under `migrations/`, `alembic/` or `migrate/`, unless the query names migrations or schema.
+
+Priors 2–3 default off in `LexicalIndex`, so the recorded NLQ probe still reproduces. The benchmark arms turn them on.
+
+## Results
+
+| system | top-1 | recall@5 | MRR | separation |
+|---|---|---|---|---|
+| BM25 + stemming | 0.68 | **0.93** | 0.782 | **0.84** |
+| Prism triad, previous (rule intent) | 0.66 | 0.92 | 0.777 | 0.80 |
+| + neutral unknown only | 0.68 | 0.92 | 0.787 | 0.82 |
+| + class prior only | 0.66 | 0.92 | 0.780 | 0.80 |
+| + migration demotion only | 0.66 | 0.92 | 0.782 | 0.80 |
+| **Prism triad, all three fixes (rule intent)** | **0.68** | 0.92 | **0.795** | 0.82 |
+| Prism triad, all three fixes, oracle intent | **0.74** | 0.92 | **0.837** | **0.84** |
+
+- **The previous arms reproduce round 2 exactly.** They keep `unknown_to_action=True`.
+- **Neutral unknown** is the only fix that changes a top-1 outcome. It fixes mb20: `add_notification` now beats the `notifications` route.
+- **The class prior and migration demotion** improve ranks below the top: rw04 3→2 (`UsersRepository` falls below `create_user`), mb19 4→2. They change no top-1 outcome.
+- **Fixed triad vs stemmed BM25 (rule intent):** top-1 +mb06 / −rw16, which nets to a tie; separation −rw16.
+- **Fixed triad with oracle intent vs stemmed BM25:** top-1 +mb08, +mb13, +mb16, no losses (sign test p = 0.25). With a correct intent, the triad now beats the lexical baseline on 3 of 50 questions without losing any. With the rule intent it does not. Intent quality is now the limiting factor.
+
+## Entry-point context on hits (display only)
+
+`LexicalIndex.hits(...)` returns each hit with its upstream entrances (`prism.graph.entry_points`).
+- **Detection:** a function counts as an entry point when it has a non-builtin decorator and no in-repo caller. Test code is excluded.
+- **Labels:** the HTTP method comes from the decorator name or its `methods=[...]` argument; a string argument is shown as the path only when it starts with `/`.
+- **Ranking:** order is exactly `ranked(...)`.
+
+```
+mb20  Where are notifications saved to the database, replacing older ones with the same name?
+  #1 app.models.User.add_notification  (app/models.py:202)
+        [Entry: GET POST /send_message/<recipient>] -> send_message() -> User.add_notification()
+  #2 app.main.routes.notifications  (app/main/routes.py:230)
+        [Entry: /notifications] -> notifications()
+rw04  Which repository method inserts a new user row into the database?
+  #2 app.db.repositories.users.UsersRepository.create_user  (app/db/repositories/users.py:29)
+        [Entry: POST @router.post] -> register() -> UsersRepository.create_user()
+mb16  Which web route handles following another user?
+  #2 app.main.routes.follow  (app/main/routes.py:114)
+        [Entry: POST /follow/<username>] -> follow()
+  #3 app.models.User.follow  (app/models.py:144)
+        (no entry point reaches it through call edges)
+```
+
+- **Coverage:** 135 of 250 top-5 hits carry an entry path.
+- **The rest:** classes, module-level helpers, and sinks reached only through proxies, `Depends`, enqueue-by-string or event registration. `User.follow` above is one: it is called as `current_user.follow`.
+- **Mount prefixes are not resolved.** Blueprint `url_prefix` and `include_router(prefix=...)` are framework configuration, so `/api` is not prepended.

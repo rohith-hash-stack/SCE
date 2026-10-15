@@ -210,24 +210,31 @@ def test_action_tokens_include_calls_on_native_objects(host_build):
     assert action_score(tokens, "MUTATE") == 1.0 and action_score(tokens, "WAIT") == 0.0
 
 
-def test_opaque_candidate_falls_back_to_action_and_stems(host_build):
+def test_opaque_candidate_is_neutral_on_capability(host_build):
     profiles = compute_capability_profiles(host_build)
     candidates = ["app.main.save_preferences", "app.main.format_name", "app.main.save_user", "app.main.load_report"]
     tokens = {q: action_tokens(host_build, q) for q in candidates}
     stems = {"app.main.save_user": 0.8, "app.main.save_preferences": 0.8, "app.main.format_name": 0.6, "app.main.load_report": 0.6}
     ranked = triad_rerank(candidates, stems, profiles, tokens, target=DB_WRITE, action="MUTATE")
     by = {r.qname: r for r in ranked}
-    # Not a dead end: the opaque writer outranks the equally named decoy.
-    assert [r.qname for r in ranked][:2] == ["app.main.save_user", "app.main.save_preferences"]
     save = by["app.main.save_user"]
-    assert save.capability_source == "opaque-native" and save.opaque == ("nativedb.connect",)
+    assert save.capability_source == "opaque-native" and save.opaque == ("nativedb.connect",)  # recorded
     assert save.capability == 0.0 and save.action == 1.0
-    assert save.score == pytest.approx(0.8 * 1.40)  # (capability + action weights) moved onto the action leg
+    assert save.score == pytest.approx(0.8 * 1.15)  # its own action verb only - unknown is neither penalty nor boost
     decoy = by["app.main.save_preferences"]
     assert decoy.capability_source == "none" and decoy.score == pytest.approx(0.8 * 1.15)
-    # Opaque without a matching action gets no boost, and nothing is ever dropped.
     assert by["app.main.load_report"].capability_source == "opaque-native" and by["app.main.load_report"].score == 0.6
     assert sorted(by) == sorted(candidates)
+
+
+def test_unknown_to_action_restores_the_former_weight_shift(host_build):
+    profiles = compute_capability_profiles(host_build)
+    candidates = ["app.main.save_preferences", "app.main.save_user"]
+    tokens = {q: action_tokens(host_build, q) for q in candidates}
+    ranked = triad_rerank(candidates, dict.fromkeys(candidates, 0.8), profiles, tokens, target=DB_WRITE, action="MUTATE",
+                          unknown_to_action=True)
+    assert [r.qname for r in ranked] == ["app.main.save_user", "app.main.save_preferences"]
+    assert ranked[0].score == pytest.approx(0.8 * 1.40)
 
 
 def test_known_capability_uses_the_capability_leg(host_build):

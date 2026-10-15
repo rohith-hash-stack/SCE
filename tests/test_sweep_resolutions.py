@@ -476,9 +476,9 @@ def test_triad_rerank_with_database_io(host):
     assert by["app.main.run_report"].capability_source == "net-socket+db-verb"
     assert by["app.main.run_report"].score == pytest.approx(1.0 + 0.25 * 0.5)
     assert by["app.main.native_report"].capability_source == "opaque-native"
-    assert by["app.main.native_report"].score == pytest.approx(1.40)
+    assert by["app.main.native_report"].score == 1.0  # unknown capability: neutral, recorded
     assert by["app.main.check_alive"].score == 1.0 and by["app.main.format_name"].score == 1.0
-    assert [r.qname for r in ranked][:2] == ["app.main.native_report", "app.main.run_report"]
+    assert [r.qname for r in ranked][0] == "app.main.run_report"
 
 
 # --------------------------------------------------------------------- #
