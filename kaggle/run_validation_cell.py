@@ -284,7 +284,10 @@ def restore_rag_cache():
 
 
 def save_rag_cache():
-    files = sorted(f for f in (os.listdir(RAG_CACHE) if os.path.isdir(RAG_CACHE) else []) if f.endswith(".npy"))
+    # Only files untouched for 2 min: np.save writes in place, so a file
+    # still being written must not be pushed as if complete.
+    files = sorted(f for f in (os.listdir(RAG_CACHE) if os.path.isdir(RAG_CACHE) else [])
+                   if f.endswith(".npy") and time.time() - os.path.getmtime(os.path.join(RAG_CACHE, f)) > 120)
     marker = os.path.join(RAG_CACHE, ".pushed")
     pushed = set(open(marker).read().split()) if os.path.exists(marker) else set()
     if not files or set(files) <= pushed:
@@ -451,6 +454,7 @@ def run_streaming(cmd, tag):
             return None, True
         if time.time() - last >= PUSH_EVERY_S:
             push_checkpoint(f"{tag} (periodic)")
+            save_rag_cache()  # as soon as a corpus's vectors exist - a killed session keeps them
             last = time.time()
     return proc.returncode, False
 
