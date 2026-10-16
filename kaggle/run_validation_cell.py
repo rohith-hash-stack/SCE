@@ -251,6 +251,72 @@ for f in ("harness/experiments/final_validation/stage1.py",
         abort(f"{BRANCH} has no {f} (wrong branch/commit)")
 print(f"[ok] HEAD: {head_before}  code: {CODE}", flush=True)
 
+# ---------- hybrid-RAG embedding cache (not results) ----------
+# arm1_hybrid_rag embeds a whole corpus on the CPU before its first cell
+# (~3 h for Django). The vectors live in .benchmarks/cache/hybrid_rag/,
+# which a new session does not have, so they are kept on CACHE_BRANCH
+# (an orphan branch, split into <50 MB parts) and restored here. File
+# names carry a digest of the chunk texts + encoder: a stale file is
+# simply never used.
+CACHE_BRANCH = "eval/two-stage-rag-cache"
+RAG_CACHE = os.path.join(SCE_DIR, ".benchmarks", "cache", "hybrid_rag")
+
+
+def restore_rag_cache():
+    tmp = "/kaggle/working/rag_cache_pull"
+    shutil.rmtree(tmp, ignore_errors=True)
+    got = run(["git", "clone", "-q", "--depth", "1", "--branch", CACHE_BRANCH, clone_url, tmp],
+              check=False, capture=True, env=GIT_ENV)
+    if got.returncode:
+        print(f"[cache] no {CACHE_BRANCH} yet - embeddings are computed on first use", flush=True)
+        return
+    os.makedirs(RAG_CACHE, exist_ok=True)
+    parts = sorted(p for p in os.listdir(tmp) if ".npy.part" in p)
+    for name in sorted({p.split(".part")[0] for p in parts}):
+        dst = os.path.join(RAG_CACHE, name)
+        if not os.path.exists(dst):
+            with open(dst, "wb") as out:
+                for p in parts:
+                    if p.split(".part")[0] == name:
+                        out.write(open(os.path.join(tmp, p), "rb").read())
+        print(f"[cache] restored {name} ({os.path.getsize(dst) / 2**20:.0f} MB)", flush=True)
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def save_rag_cache():
+    files = sorted(f for f in (os.listdir(RAG_CACHE) if os.path.isdir(RAG_CACHE) else []) if f.endswith(".npy"))
+    marker = os.path.join(RAG_CACHE, ".pushed")
+    pushed = set(open(marker).read().split()) if os.path.exists(marker) else set()
+    if not files or set(files) <= pushed:
+        return
+    stage = "/kaggle/working/rag_cache_push"
+    shutil.rmtree(stage, ignore_errors=True)
+    os.makedirs(stage)
+    for name in files:
+        with open(os.path.join(RAG_CACHE, name), "rb") as src:
+            i = 0
+            while chunk := src.read(45 * 2**20):
+                with open(f"{stage}/{name}.part{i:03d}", "wb") as out:
+                    out.write(chunk)
+                i += 1
+    ok = True
+    for cmd in (["git", "init", "-q", "-b", "cache"], ["git", "add", "."],
+                ["git", "-c", "user.name=Kaggle", "-c", "user.email=kaggle@local", "commit", "-q", "-m",
+                 "two-stage validation: hybrid-RAG embedding cache (not results)"],
+                ["git", "push", "-q", "--force", clone_url, f"HEAD:refs/heads/{CACHE_BRANCH}"]):
+        r = run(cmd, cwd=stage, check=False, capture=True, env=GIT_ENV)
+        if r.returncode:
+            print(f"[cache] [warn] {cmd[1]} failed: {mask(r.stderr or r.stdout).strip()[-500:]}", flush=True)
+            ok = False
+            break
+    if ok:
+        open(marker, "w").write("\n".join(files))
+        print(f"[cache] saved {len(files)} file(s) to {CACHE_BRANCH}", flush=True)
+    shutil.rmtree(stage, ignore_errors=True)
+
+
+restore_rag_cache()
+
 print("\n[setup 6/7] Python deps + transformers pin", flush=True)
 run([sys.executable, "-m", "pip", "install", "-q", "-e", ".[dev,bench,baselines]", "pyarrow"],
     cwd=SCE_DIR, check=True)
@@ -483,6 +549,7 @@ if RUN_STAGE2 and not stopped_early:
         stage2_status[corpus] = "stopped early" if stopped_early else f"exit {code}"
         print(f"=== STAGE 2 {corpus} {stage2_status[corpus]} in {(time.time() - t0) / 60:.1f} min ===", flush=True)
         push_checkpoint(f"stage 2 {corpus} {stage2_status[corpus]}")
+        save_rag_cache()
         if stopped_early:
             break
         if code not in (0, 1):   # 1 = finished with schema-invalid rows, still pushed
