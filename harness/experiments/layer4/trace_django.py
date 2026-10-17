@@ -31,11 +31,13 @@ def main(argv=None) -> int:
     p.add_argument("--root", required=True, help="the Django checkout")
     p.add_argument("--focal", required=True, help="comma-separated qualified names")
     p.add_argument("--out", required=True)
+    p.add_argument("--in-tests-only", action="store_true",
+                   help="count focal calls only inside a test's run (not test-database setup / setUpClass)")
     p.add_argument("labels", nargs="+", help="runtests.py labels (after --)")
     args = p.parse_args(argv)
 
     root = os.path.realpath(args.root)
-    tracer = Tracer(root, {f.strip() for f in args.focal.split(",") if f.strip()})
+    tracer = Tracer(root, {f.strip() for f in args.focal.split(",") if f.strip()}, in_tests_only=args.in_tests_only)
 
     run_test = unittest.TestCase.run
 
@@ -62,7 +64,7 @@ def main(argv=None) -> int:
     finally:
         sys.setprofile(None)
         threading.setprofile(None)
-        manifest = tracer.manifest() | {"exit_code": code, "labels": args.labels}
+        manifest = tracer.manifest() | {"exit_code": code, "labels": args.labels, "in_tests_only": args.in_tests_only}
         with open(args.out, "w") as fh:
             json.dump(manifest, fh, indent=1, sort_keys=True)
     return code

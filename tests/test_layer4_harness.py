@@ -13,7 +13,7 @@ import pytest
 
 from harness.experiments.layer4 import splice as S
 from harness.experiments.layer4.source_edit import edited, instrument_js, locate, stub
-from harness.experiments.layer4.trace_node import RUNTIME, map_manifest, merge, rebase, run_traced
+from harness.experiments.layer4.trace_node import RUNTIME, chain_depths, map_manifest, merge, rebase, run_traced
 
 PY_LIB = '''
 def helper(x):
@@ -113,6 +113,22 @@ def test_javascript_gates_and_candidates(js_task):
     assert S.evaluate(js_task, "```js\nfunction total(items) {\n  let s = 0;\n  for (const i of items) s += i.price * i.qty;\n  return s;\n}\n```")["passed"]
     assert S.evaluate(js_task, "return items.length;")["passed"] is False
     assert Path(js_task.path).read_bytes() == original
+
+
+@needs_node
+def test_assigned_js_methods_splice_as_full_definitions(tmp_path):
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "test").mkdir()
+    (tmp_path / "lib" / "res.js").write_text(
+        "var res = module.exports = {};\nres.total = function(items) {\n  return items.length;\n};\n")
+    (tmp_path / "test" / "res.test.js").write_text(
+        "const test = require('node:test');\nconst assert = require('node:assert');\n"
+        "const res = require('../lib/res');\ntest('t', () => assert.strictEqual(res.total([1, 2]), 2));\n")
+    task = S.SpliceTask("js", str(tmp_path), "lib/res.js", 2, ["node", "--test", "test/res.test.js"], name="total")
+    assert S.is_full_definition("res.total = function(items) { return 0; };", "javascript", "total")
+    r = S.evaluate(task, "```js\nres.total = function(items) {\n  return items.length;\n};\n```")
+    assert r["passed"] and r["mode"] == "function"
+    assert "res.total = function(items)" in (tmp_path / "lib" / "res.js").read_text()
 
 
 def test_edits_are_restored_even_on_error(tmp_path):
@@ -248,6 +264,16 @@ def test_unmapped_build_output_resolves_by_name_to_the_package_source():
     assert m["descendants_unmapped"] == {"packages/server/dist/observable/index.mjs:50:<anonymous>": 1}
     assert set(m["resolved_by_name"]) == {"packages/server/dist/observable/index.mjs:4:observable",
                                           "packages/server/dist/observable/index.mjs:30:map"}
+
+
+def test_call_depths_from_caller_chains():
+    from types import SimpleNamespace as NS
+    fn = lambda q, a, b: NS(qualified_name=q, kind="function", file="lib/r.js", line_range=(a, b))  # noqa: E731
+    lines = __import__("harness.experiments.layer4.trace_node", fromlist=["LineMap"]).LineMap(
+        NS(repo_root="/r", symbol_table=[fn("r.json", 10, 20), fn("r.handle", 30, 60), fn("r.next", 40, 50)]))
+    chains = {"lib/r.js:12:json|lib/r.js:13:<anonymous>|~|lib/r.js:45:next": 3,  # json's callback folds into json
+              "~|lib/r.js:35:handle": 1}                                       # through a test handler: depth 2
+    assert chain_depths(chains, lines, "r.send") == {"r.handle": 2, "r.json": 1, "r.next": 3}
 
 
 def test_rebase_to_a_corpus_indexed_below_the_clone_root():

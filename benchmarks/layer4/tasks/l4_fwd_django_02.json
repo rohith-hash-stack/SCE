@@ -1,0 +1,89 @@
+{
+ "schema_version": "layer4.task.v1",
+ "task_id": "l4_fwd_django_02",
+ "family": "forward_blast",
+ "corpus": "django",
+ "pinned_commit": "3396992e837d5146270ea8112bb622c83fa4a919",
+ "focal": {
+  "qname": "django.db.migrations.recorder.MigrationRecorder.record_applied",
+  "file": "django/db/migrations/recorder.py",
+  "line": 91,
+  "index_file": "django/db/migrations/recorder.py",
+  "language": "python",
+  "signature": "def record_applied(self, app, name):",
+  "is_async": false,
+  "definition_sha256": "a2e77989d86b45fae5dc219f94ea74398110b8b9c37155318627f9fde03f98e4"
+ },
+ "prompt": "In the django repository, `django.db.migrations.recorder.MigrationRecorder.record_applied` (in `django/db/migrations/recorder.py`) is about to change: MigrationRecorder.record_applied(app, name) becomes record_applied(migration), taking the Migration instance and reading app_label and name from it. Which functions and methods of the repository are affected - the code that calls `record_applied` at runtime, directly or through at most 3 calls in between counting the direct call as one, and would have to be reviewed or adapted? Also name the database side effects that happen while it runs and the tables it touches.",
+ "provenance": {
+  "tracer": "trace_django",
+  "sce_commit": "0bd9b82",
+  "authored_at": "2026-10-17"
+ },
+ "change": {
+  "kind": "signature",
+  "description": "MigrationRecorder.record_applied(app, name) becomes record_applied(migration), taking the Migration instance and reading app_label and name from it."
+ },
+ "answer_contract": "forward_json_v1",
+ "arm_view": {
+  "seed_symbol": "django.db.migrations.recorder.MigrationRecorder.record_applied",
+  "task_type": "blast",
+  "oracle_symbols": [
+   "django.db.migrations.recorder.MigrationRecorder.record_applied",
+   "django.db.migrations.executor.MigrationExecutor.migrate",
+   "django.db.migrations.executor.MigrationExecutor._migrate_all_forwards",
+   "django.db.migrations.executor.MigrationExecutor.apply_migration",
+   "django.db.migrations.executor.MigrationExecutor.record_migration",
+   "django.db.migrations.executor.MigrationExecutor.check_replacements"
+  ],
+  "oracle_required_context": [],
+  "root_imports": [],
+  "mask": {
+   "symbols": [],
+   "mode": "none"
+  },
+  "exclude_paths": []
+ },
+ "gold": {
+  "source": "runtime_trace",
+  "direction": "upstream",
+  "affected_symbols": [
+   "django.db.migrations.executor.MigrationExecutor.migrate",
+   "django.db.migrations.executor.MigrationExecutor._migrate_all_forwards",
+   "django.db.migrations.executor.MigrationExecutor.apply_migration",
+   "django.db.migrations.executor.MigrationExecutor.record_migration",
+   "django.db.migrations.executor.MigrationExecutor.check_replacements"
+  ],
+  "side_effects": [
+   "DB_WRITE"
+  ],
+  "tables": [
+   "django_migrations"
+  ],
+  "trace_manifest": "benchmarks/layer4/manifests/l4_fwd_django_02.json",
+  "trace_command": [
+   "{python}",
+   "-m",
+   "harness.experiments.layer4.trace_django",
+   "--in-tests-only",
+   "--root",
+   ".",
+   "--focal",
+   "django.db.migrations.recorder.MigrationRecorder.record_applied",
+   "--",
+   "migrations.test_executor",
+   "migrations.test_loader"
+  ],
+  "min_count": 1,
+  "max_depth": 3
+ },
+ "validity": {
+  "trace_exit_code": 0,
+  "async_window": false,
+  "contamination": {
+   "arm0_score": null,
+   "flagged": null,
+   "seeds": []
+  }
+ }
+}

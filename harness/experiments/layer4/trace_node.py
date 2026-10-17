@@ -28,7 +28,7 @@ EXIT = "(globalThis.__l4 ? globalThis.__l4.exit : () => {})"
 def merge(parts: list[dict]) -> dict:
     """One raw manifest from per-process ones: counts summed, tests united,
     the first raw stack kept."""
-    out = {"focal_calls": 0, "tests": set(), "ancestors": {}, "descendants": {}, "async_window": False,
+    out = {"focal_calls": 0, "tests": set(), "ancestors": {}, "chains": {}, "descendants": {}, "async_window": False,
            "raw_stack": None, "source_mapping": {"mapped": 0, "unmapped": 0, "generated_getters": 0, "files": {}}, "processes": len(parts)}
     for part in parts:
         out["focal_file"] = part.get("focal_file", "")
@@ -36,7 +36,7 @@ def merge(parts: list[dict]) -> dict:
         out["tests"].update(part.get("tests", []))
         out["async_window"] |= bool(part.get("async_window"))
         out["raw_stack"] = out["raw_stack"] or part.get("raw_stack")
-        for key in ("ancestors", "descendants"):
+        for key in ("ancestors", "chains", "descendants"):
             for loc, n in part.get(key, {}).items():
                 out[key][loc] = out[key].get(loc, 0) + n
         sm = part.get("source_mapping", {})
@@ -46,7 +46,7 @@ def merge(parts: list[dict]) -> dict:
         for f, n in sm.get("files", {}).items():
             out["source_mapping"]["files"][f] = out["source_mapping"]["files"].get(f, 0) + n
     out["tests"] = sorted(out["tests"])
-    for key in ("ancestors", "descendants"):
+    for key in ("ancestors", "chains", "descendants"):
         out[key] = dict(sorted(out[key].items()))
     out["source_mapping"]["files"] = dict(sorted(out["source_mapping"]["files"].items()))
     return out
@@ -122,6 +122,17 @@ def rebase(raw: dict, prefix: str) -> dict:
     prefix = prefix.rstrip("/") + "/"
     dist = prefix.rsplit("/", 2)[0] + "/dist/" if prefix.rstrip("/").endswith("/src") else None
     out = dict(raw)
+
+    def move(loc):
+        if loc.startswith(prefix):
+            return loc.removeprefix(prefix)
+        if dist and loc.startswith(dist):
+            return "dist/" + loc.removeprefix(dist)
+        return "~"  # another package: outside the index, still a frame
+    out["chains"] = {}
+    for chain, n in raw.get("chains", {}).items():
+        key = "|".join(move(loc) if loc != "~" else "~" for loc in chain.split("|")) if chain else ""
+        out["chains"][key] = out["chains"].get(key, 0) + n
     for key in ("ancestors", "descendants"):
         inside, outside = {}, {}
         for loc, n in raw.get(key, {}).items():
@@ -158,4 +169,28 @@ def map_manifest(raw: dict, builder, focal_qname: str) -> dict:
                 mapped[q] = mapped.get(q, 0) + count
         out[key] = dict(sorted(mapped.items()))
         out[f"{key}_unmapped"] = dict(sorted(unmapped.items()))
+    out["ancestor_depth"] = chain_depths(raw.get("chains", {}), lines, focal_qname)
     return out
+
+
+def chain_depths(chains: dict, lines: "LineMap", focal_qname: str) -> dict[str, int]:
+    """Each mapped ancestor's smallest call distance from the focal
+    function (1 = direct caller) over the recorded caller chains. Every
+    frame counts (`~`, outside the repo, too); consecutive frames of one
+    function - its anonymous callbacks, recursion - count once."""
+    depth: dict[str, int] = {}
+    for chain in chains:
+        previous, d = focal_qname, 0
+        for loc in chain.split("|") if chain else []:
+            if loc == "~":
+                q = None
+            else:
+                rel, line, name = loc.split(":", 2)
+                q = lines.name(rel, int(line)) or lines.dist_name(rel, name) or loc
+            if q is not None and q == previous:
+                continue
+            d += 1
+            previous = q
+            if q is not None and q != focal_qname and d < depth.get(q, 1 << 30):
+                depth[q] = d
+    return dict(sorted(depth.items()))

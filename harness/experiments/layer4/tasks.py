@@ -111,9 +111,10 @@ def validate_task(task: dict, known: set[str] | None = None) -> list[str]:
     return errors
 
 
-def validate_suite(tasks: list[dict]) -> list[str]:
+def validate_suite(tasks: list[dict], corpora: tuple[str, ...] = CORPORA) -> list[str]:
     """The 16-task design: 2 forward + 2 backward per corpus, unique ids
-    and focal functions per corpus and family."""
+    and focal functions per corpus and family. `corpora` restricts the
+    check to the corpora authored so far (no task may come from another)."""
     errors = []
     counts = defaultdict(int)
     ids, focals = set(), set()
@@ -126,7 +127,8 @@ def validate_suite(tasks: list[dict]) -> list[str]:
         if key in focals:
             errors.append(f"duplicate focal {key}")
         focals.add(key)
-    for corpus in CORPORA:
+    errors += [f"{t['task_id']}: corpus {t['corpus']} outside {corpora}" for t in tasks if t["corpus"] not in corpora]
+    for corpus in corpora:
         for family in FAMILIES:
             if counts[(corpus, family)] != PER_CORPUS_PER_FAMILY:
                 errors.append(f"{corpus}/{family}: {counts[(corpus, family)]} tasks, expected {PER_CORPUS_PER_FAMILY}")
@@ -225,16 +227,24 @@ def tables_from_sql(sql: dict) -> list[str]:
 
 
 def gold_from_manifest(manifest: dict, direction: str, min_count: int = 1, known: set[str] | None = None,
-                       focal: str | None = None) -> list[str]:
+                       focal: str | None = None, max_depth: int | None = None) -> list[str]:
     """Gold affected symbols from a mapped trace manifest: ancestors
     (upstream), descendants (downstream) or both, at >= `min_count` calls,
-    restricted to names the corpus index knows (others cannot be answered
-    by any arm), ordered by count then name."""
+    ancestors within `max_depth` call hops of the focal function
+    (`ancestor_depth`; None = any depth), restricted to names the corpus
+    index knows (others cannot be answered by any arm), ordered by count
+    then name."""
     keys = {"upstream": ("ancestors",), "downstream": ("descendants",), "both": ("ancestors", "descendants")}[direction]
     counts: dict[str, int] = defaultdict(int)
     for key in keys:
         for name, n in manifest.get(key, {}).items():
             counts[name] += n
+    depth = manifest.get("ancestor_depth", {})
+    if max_depth is not None and "ancestors" in keys:
+        ancestors = set(manifest.get("ancestors", {}))
+        for name in list(counts):
+            if name in ancestors and depth.get(name, 1 << 30) > max_depth:
+                del counts[name]
     names = [n for n, c in counts.items() if c >= min_count and n != focal and (known is None or n in known)]
     return sorted(names, key=lambda n: (-counts[n], n))
 

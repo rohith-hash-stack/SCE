@@ -87,6 +87,16 @@ def test_descendants_are_what_the_focal_function_runs(manifest):
     assert manifest["descendants"] == {"app.core.Repo._write": 1, "app.core.normalize": 2}  # inner() folds into normalize
 
 
+def test_ancestor_depth_counts_every_frame(manifest):
+    # focal Repo.save <- create (1) <- handler (2); the test function is a frame but not a name
+    assert manifest["ancestor_depth"] == {"app.core.create": 1, "app.views.handler": 2}
+
+
+def test_descendant_depth(manifest):
+    # Repo.save -> _write (1) -> normalize (2); inner() folds into normalize
+    assert manifest["descendant_depth"] == {"app.core.Repo._write": 1, "app.core.normalize": 2}
+
+
 def test_tests_and_calls(manifest):
     assert manifest["tests"] == ["tests/test_flow.py::test_handler"]
     assert manifest["focal_calls"] == {"app.core.Repo.save": 1}
@@ -146,10 +156,10 @@ def _django_like(tmp_path, runtests=RUNTESTS):
     (tmp_path / "tests" / "runtests.py").write_text(textwrap.dedent(runtests))
 
 
-def _trace_django(tmp_path, *labels):
+def _trace_django(tmp_path, *labels, flags=()):
     out = tmp_path / "m.json"
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(tmp_path), str(SCE)]))
-    run = subprocess.run([sys.executable, "-m", "harness.experiments.layer4.trace_django", "--root", str(tmp_path),
+    run = subprocess.run([sys.executable, "-m", "harness.experiments.layer4.trace_django", *flags, "--root", str(tmp_path),
                           "--focal", "pkg.core.focal", "--out", str(out), "--", *labels],
                          cwd=tmp_path, env=env, capture_output=True, text=True)
     return run.returncode, json.loads(out.read_text())
@@ -181,3 +191,12 @@ def test_transaction_statements_get_their_own_bucket(tmp_path):
     for sql in ('SAVEPOINT "s1"', 'RELEASE SAVEPOINT "s1"', "BEGIN", 'DELETE FROM "a" WHERE "a"."id" IN (SELECT 1 FROM "a")'):
         t.on_sql(sql)
     assert t.manifest()["sql"] == {"_transaction": {"BEGIN": 1, "RELEASE": 1, "SAVEPOINT": 1}, "a": {"DELETE": 1}}
+
+
+def test_django_adapter_in_tests_only_ignores_setup_calls(tmp_path):
+    # runtests.py calls the focal once before the suite runs (like test-database setup)
+    _django_like(tmp_path, RUNTESTS.replace("if __name__ == \"__main__\":", "if __name__ == \"__main__\":\n    focal(1)"))
+    assert _trace_django(tmp_path, "app")[1]["focal_calls"] == {"pkg.core.focal": 2}
+    code, m = _trace_django(tmp_path, "app", flags=("--in-tests-only",))
+    assert code == 0 and m["focal_calls"] == {"pkg.core.focal": 1} and m["descendants"] == {"pkg.core.double": 1}
+    assert m["in_tests_only"] is True

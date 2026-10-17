@@ -137,6 +137,12 @@ def test_masking_and_leak_check():
     assert T.leak_check(clean, task, DEF)["focal_body_lines"] == 0
 
 
+def test_gold_within_call_depth():
+    m = {"ancestors": {"a.direct": 5, "a.near": 4, "a.far": 9}, "ancestor_depth": {"a.direct": 1, "a.near": 2, "a.far": 4}}
+    assert T.gold_from_manifest(m, "upstream", max_depth=2) == ["a.direct", "a.near"]
+    assert T.gold_from_manifest(m, "upstream") == ["a.far", "a.direct", "a.near"]
+
+
 def test_gold_from_trace_and_sql():
     m = {"ancestors": {"a.save": 140, "a.create": 100, "a.rare": 1, "x.outside": 9},
          "descendants": {"a.save_table": 140}}

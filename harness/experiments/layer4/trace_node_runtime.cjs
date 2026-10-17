@@ -6,6 +6,8 @@
 // `finally`. Records, per outermost focal call:
 //   ancestors   - repo frames below the focal function (Error().stack; Vitest
 //                 and --enable-source-maps rewrite frames to original lines)
+//   chains      - each call's caller frames in order ("~" outside the repo),
+//                 for call depths
 //   descendants - repo functions V8 executed while it was on the stack
 //                 (precise coverage, call counts, reset at entry, read at exit),
 //                 positions mapped through each script's source map - inline
@@ -33,6 +35,7 @@ const MULTI = process.env.L4_MULTI === "1";
 const FOCAL_FILE = process.env.L4_FOCAL_FILE || "";
 const FOCAL_LINE = +(process.env.L4_FOCAL_LINE || 0);
 const SELF = __filename;
+const CHAIN_FRAMES = 24;  // caller frames kept per call for depths: "~" = a frame outside the repo
 Error.stackTraceLimit = 200;
 
 const session = new inspector.Session();
@@ -48,7 +51,7 @@ post("Profiler.startPreciseCoverage", { callCount: true, detailed: false });
 let debuggerOn = false;
 
 const state = {
-  calls: 0, depth: 0, ancestors: {}, descendants: {}, tests: new Set(), rawStack: null,
+  calls: 0, depth: 0, ancestors: {}, chains: {}, descendants: {}, tests: new Set(), rawStack: null,
   asyncWindow: process.env.L4_FOCAL_ASYNC === "1", currentTest: null,
   mapping: { mapped: 0, unmapped: 0, generated: 0, files: {} },
 };
@@ -195,10 +198,13 @@ globalThis.__l4 = {
     const frames = stackFrames().filter(f => f.file !== SELF);
     if (!state.rawStack) state.rawStack = frames.slice(0, 15).map(f => `${f.file}:${f.line}:${f.name}`);
     // frames[0] is the focal function itself
+    const chain = [];
     for (const f of frames.slice(1)) {
       const rel = repoRelative(f.file);
       if (rel) bump(state.ancestors, `${rel}:${f.line}:${f.name}`);
+      if (chain.length < CHAIN_FRAMES) chain.push(rel ? `${rel}:${f.line}:${f.name}` : "~");
     }
+    bump(state.chains, chain.join("|"));  // caller order, for call depths (trace_node.map_manifest)
     post("Profiler.takePreciseCoverage");  // reset call counts at entry
     return { outer: true };
   },
@@ -231,7 +237,7 @@ function write() {
   const target = MULTI ? `${OUT}.${process.pid}.json` : OUT;
   fs.writeFileSync(target, JSON.stringify({
     focal_file: FOCAL_FILE, focal_calls: state.calls, tests: [...state.tests].sort(),
-    ancestors: sorted(state.ancestors), descendants: sorted(state.descendants), async_window: state.asyncWindow,
+    ancestors: sorted(state.ancestors), chains: sorted(state.chains), descendants: sorted(state.descendants), async_window: state.asyncWindow,
     raw_stack: state.rawStack, source_mapping: { mapped: state.mapping.mapped, unmapped: state.mapping.unmapped,
       generated_getters: state.mapping.generated,
       files: sorted(state.mapping.files) },

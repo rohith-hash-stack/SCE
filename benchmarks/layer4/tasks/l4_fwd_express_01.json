@@ -1,0 +1,93 @@
+{
+ "schema_version": "layer4.task.v1",
+ "task_id": "l4_fwd_express_01",
+ "family": "forward_blast",
+ "corpus": "express",
+ "pinned_commit": "7e562c6d8daddff4604f8efaaf9db2cf98c6dcff",
+ "focal": {
+  "qname": "lib.response.send",
+  "file": "lib/response.js",
+  "line": 111,
+  "index_file": "lib/response.js",
+  "language": "javascript",
+  "signature": "function send(body)",
+  "is_async": false,
+  "definition_sha256": "9ba41bc49f69b73d2d46f24e115d6b8f63d9e2bc39ed12dcb1083732d825439b"
+ },
+ "prompt": "In the express repository, `lib.response.send` (in `lib/response.js`) is about to change: res.send() no longer returns the response object (it returns undefined), so it can no longer be chained or returned as `this`. Which functions and methods of the repository are affected - the code that calls `send` at runtime, directly or through at most 2 calls in between counting the direct call as one, and would have to be reviewed or adapted?",
+ "provenance": {
+  "tracer": "trace_node",
+  "sce_commit": "0bd9b82",
+  "authored_at": "2026-10-17"
+ },
+ "change": {
+  "kind": "return_contract",
+  "description": "res.send() no longer returns the response object (it returns undefined), so it can no longer be chained or returned as `this`."
+ },
+ "answer_contract": "forward_json_v1",
+ "arm_view": {
+  "seed_symbol": "lib.response.send",
+  "task_type": "blast",
+  "oracle_symbols": [
+   "lib.response.send",
+   "lib.router.layer.handle",
+   "lib.router.handle",
+   "lib.response.json",
+   "lib.router.layer.handle_error",
+   "lib.response.format",
+   "lib.response.jsonp",
+   "lib.response.sendStatus",
+   "lib.response.render",
+   "lib.router.restore",
+   "lib.response.sendFile",
+   "lib.response.sendfile",
+   "lib.router.sendOptionsResponse"
+  ],
+  "oracle_required_context": [],
+  "root_imports": [],
+  "mask": {
+   "symbols": [],
+   "mode": "none"
+  },
+  "exclude_paths": []
+ },
+ "gold": {
+  "source": "runtime_trace",
+  "direction": "upstream",
+  "affected_symbols": [
+   "lib.router.layer.handle",
+   "lib.router.handle",
+   "lib.response.json",
+   "lib.router.layer.handle_error",
+   "lib.response.format",
+   "lib.response.jsonp",
+   "lib.response.sendStatus",
+   "lib.response.render",
+   "lib.router.restore",
+   "lib.response.sendFile",
+   "lib.response.sendfile",
+   "lib.router.sendOptionsResponse"
+  ],
+  "side_effects": null,
+  "tables": null,
+  "trace_manifest": "benchmarks/layer4/manifests/l4_fwd_express_01.json",
+  "trace_command": [
+   "node_modules/.bin/mocha",
+   "--reporter",
+   "dot",
+   "--check-leaks",
+   "test/*.js"
+  ],
+  "min_count": 1,
+  "max_depth": 2
+ },
+ "validity": {
+  "trace_exit_code": 0,
+  "async_window": false,
+  "contamination": {
+   "arm0_score": null,
+   "flagged": null,
+   "seeds": []
+  }
+ }
+}

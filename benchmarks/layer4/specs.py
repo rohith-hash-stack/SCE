@@ -1,0 +1,115 @@
+"""Hand-authored part of the Layer 4 tasks: focal function, the change
+(forward) or the adaptation (backward), the test commands and the depth of
+the blast radius. Everything else - gold, oracle callers, gates, hashes - is
+derived by `harness/experiments/layer4/author.py` from runtime traces and
+test runs, never from Prism.
+
+Commands: `{python}` is the corpus's own interpreter (see ENVIRONMENT.md),
+`{runtime}` the Node tracer runtime; `cwd` is the clone root.
+"""
+from __future__ import annotations
+
+# FastAPI's suite minus the two tests that fail at the pinned environment for
+# reasons unrelated to any focal (CLI help text, one tutorial's handler body),
+# and one websocket tutorial that deadlocks under the profiler (it passes
+# untraced; the other websocket tests still register websocket routes).
+FASTAPI_DESELECT = ["--deselect", "tests/test_fastapi_cli.py::test_fastapi_cli",
+                    "--deselect", "tests/test_tutorial/test_custom_request_and_route/test_tutorial002.py"
+                                  "::test_exception_handler_body_access",
+                    "--ignore", "tests/test_tutorial/test_websockets/test_tutorial003.py"]
+# The websocket tests (the test client's portal thread) deadlock under the
+# profiler intermittently; a task whose focal never runs on the websocket path
+# leaves them out of its trace (get_openapi_path: 3 of 3 attempts hung).
+FASTAPI_NO_WEBSOCKETS = [arg for f in (
+    "tests/test_http_connection_injection.py", "tests/test_route_scope.py", "tests/test_ws_dependencies.py",
+    "tests/test_ws_router.py", "tests/test_tutorial/test_websockets") for arg in ("--ignore", f)]
+PYTEST = ["{python}", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+MOCHA = ["node_modules/.bin/mocha", "--reporter", "dot", "--check-leaks"]
+EXPRESS_UNIT = "test/*.js"  # expanded by the author: the unit suite (test/acceptance drives examples/)
+
+SPECS = [
+    # ------------------------------------------------------------- FastAPI
+    {
+        "task_id": "l4_fwd_fastapi_01", "corpus": "fastapi", "family": "forward_blast",
+        "qname": "fastapi.dependencies.utils.get_dependant",
+        "change": {"kind": "return_contract",
+                   "description": "get_dependant() stops resolving sub-dependencies: the Dependant it returns always has "
+                                  "dependencies=[], and the Depends() parameters of the endpoint are left for the caller "
+                                  "to resolve."},
+        "trace": PYTEST + ["tests", *FASTAPI_DESELECT], "max_depth": 2,
+    },
+    {
+        "task_id": "l4_fwd_fastapi_02", "corpus": "fastapi", "family": "forward_blast",
+        "qname": "fastapi.openapi.utils.get_openapi_path",
+        "change": {"kind": "return_contract",
+                   "description": "get_openapi_path() returns only the path item dict instead of the (path, "
+                                  "security_schemes, definitions) tuple, so security schemes and definitions must be "
+                                  "collected elsewhere."},
+        "trace": PYTEST + ["tests", *FASTAPI_DESELECT, *FASTAPI_NO_WEBSOCKETS], "max_depth": 4,
+    },
+    {
+        "task_id": "l4_bwd_fastapi_01", "corpus": "fastapi", "family": "backward_adaptation",
+        "qname": "fastapi.utils.deep_dict_update",
+        "tests": PYTEST + ["-x", "tests/test_openapi_route_extensions.py", "tests/test_openapi_query_parameter_extension.py"],
+    },
+    {
+        "task_id": "l4_bwd_fastapi_02", "corpus": "fastapi", "family": "backward_adaptation",
+        "qname": "fastapi.dependencies.utils.get_flat_dependant",
+        "tests": PYTEST + ["-x", "tests/test_dependency_cache.py", "tests/test_dependency_duplicates.py",
+                           "tests/test_dependency_class.py", "tests/test_security_oauth2.py"],
+    },
+    # ------------------------------------------------------------- Django
+    {
+        "task_id": "l4_fwd_django_01", "corpus": "django", "family": "forward_blast",
+        "qname": "django.contrib.sessions.backends.db.SessionStore.save",
+        "change": {"kind": "signature",
+                   "description": "SessionStore.save() gains a required keyword-only argument `using` (the database "
+                                  "alias to write the session row to); calls without it raise TypeError."},
+        "trace_labels": ["sessions_tests"], "max_depth": 2,
+    },
+    {
+        "task_id": "l4_fwd_django_02", "corpus": "django", "family": "forward_blast",
+        "qname": "django.db.migrations.recorder.MigrationRecorder.record_applied",
+        "change": {"kind": "signature",
+                   "description": "MigrationRecorder.record_applied(app, name) becomes record_applied(migration), "
+                                  "taking the Migration instance and reading app_label and name from it."},
+        "trace_labels": ["migrations.test_executor", "migrations.test_loader"], "max_depth": 3,
+    },
+    {
+        "task_id": "l4_bwd_django_01", "corpus": "django", "family": "backward_adaptation",
+        "qname": "django.db.models.query.QuerySet.update",
+        "test_labels": ["update"],
+    },
+    {
+        "task_id": "l4_bwd_django_02", "corpus": "django", "family": "backward_adaptation",
+        "qname": "django.core.cache.backends.locmem.LocMemCache.incr",
+        "test_labels": ["cache.tests.LocMemCacheTests"],
+    },
+    # ------------------------------------------------------------- Express
+    {
+        "task_id": "l4_fwd_express_01", "corpus": "express", "family": "forward_blast",
+        "qname": "lib.response.send",
+        "change": {"kind": "return_contract",
+                   "description": "res.send() no longer returns the response object (it returns undefined), so it can "
+                                  "no longer be chained or returned as `this`."},
+        "trace": MOCHA + [EXPRESS_UNIT], "max_depth": 2,
+    },
+    {
+        "task_id": "l4_fwd_express_02", "corpus": "express", "family": "forward_blast",
+        "qname": "lib.response.header",
+        "change": {"kind": "signature",
+                   "description": "res.set() / res.header() no longer accepts an object of header fields; only "
+                                  "(field, value) pairs, and an object argument throws a TypeError."},
+        "trace": MOCHA + [EXPRESS_UNIT], "max_depth": 1,
+    },
+    {
+        "task_id": "l4_bwd_express_01", "corpus": "express", "family": "backward_adaptation",
+        "qname": "lib.response.location",
+        "tests": MOCHA + ["test/res.location.js", "test/res.redirect.js"],
+    },
+    {
+        "task_id": "l4_bwd_express_02", "corpus": "express", "family": "backward_adaptation",
+        "qname": "lib.response.format",
+        "tests": MOCHA + ["test/res.format.js"],
+    },
+]

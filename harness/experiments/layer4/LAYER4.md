@@ -265,6 +265,45 @@ trace manifests before any model runs.
 | score | set P / R / F1 over affected symbols (`score_forward`: names resolved to index names exactly or by a unique >= 2-component suffix; unknown names count against precision; answers past 15 truncated); exact set match of tags and of tables where gold is non-null | binary pass (`score_backward` over `splice.evaluate`), with tokens per pass and passes per 1k tokens |
 | contamination | `arm0_no_retrieval` mean F1 >= 0.5 -> flagged (reported, not dropped) | `arm0_no_retrieval` pass rate >= 0.5 over the seeds -> flagged |
 
+### Authoring (`author.py`, `benchmarks/layer4/`)
+
+`benchmarks/layer4/specs.py` holds the hand-written part of each task (focal,
+change, test commands, depth); `author.py` derives the rest and writes
+`tasks/`, `manifests/` and `gates/`; `ENVIRONMENT.md` pins the corpus
+environments. Decisions taken while authoring the first 12 tasks:
+
+- **Blast radius by call depth.** All ancestors are too many and mostly
+  the same for every focal (Express's routing pipeline sits under every
+  response method: 28 ancestors for `res.send`). Both tracers record each
+  ancestor's smallest call distance (`ancestor_depth`: Python from the
+  shadow stack, Node from per-call caller chains, `chains`, mapped in
+  `map_manifest`). Every frame counts - a test or library frame too, so a
+  repo function reaching the focal only through a test callback is two
+  hops away - and consecutive frames of one function (recursion, folded
+  callbacks) count once. Forward gold = ancestors within the task's
+  `max_depth`, at most 15.
+- **Backward oracle = callers + callees.** One hop of callers can be empty
+  (`res.format` is called from test route handlers only); what an
+  implementer needs is also what the function uses. Python records
+  `descendant_depth` (direct callees = 1); Node coverage has no call
+  order, so every repo function run while the focal was on the stack.
+- **Tested behaviour only (Django).** `trace_django --in-tests-only`
+  ignores focal calls outside a test's `run` (test-database migrations,
+  post-migrate signals, `setUpClass`).
+- **Answerable tables only (Django).** Test-app tables (`tests/<app>/`
+  models) and `sqlite_master` are dropped from gold tables; focal
+  functions are chosen so their tables belong to the repository
+  (`django_session`, `django_migrations`), since no arm sees test apps.
+- **Application code only.** Gold and oracle names exclude test files and
+  the example zone (`docs_src/`, `examples/`: the rule the breadcrumbs
+  keep).
+- **Assigned JS methods.** Express defines `res.format = function(obj)`;
+  the signature names the assignment and the splice grader accepts a reply
+  that restates it (`strip_js_assignment`).
+- **Stub seen anywhere.** `stub_seen` is checked on the whole output, not
+  its tail (a long Mocha failure list pushed it out of the last 3,000
+  characters).
+
 ### Arm compatibility (all 7 Stage 2 arms, unchanged)
 
 `to_evaluation_task(task)` builds the `EvaluationTask` every arm already

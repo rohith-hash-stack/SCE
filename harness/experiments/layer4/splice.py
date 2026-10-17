@@ -70,12 +70,14 @@ def _run(task: SpliceTask) -> dict:
     t = time.perf_counter()
     try:
         proc = subprocess.run(task.command, cwd=os.path.join(task.root, task.cwd),
-                              env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1", **task.env),
+                              env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **task.env},
                               capture_output=True, text=True, timeout=task.timeout)
-        code, tail = proc.returncode, (proc.stdout + proc.stderr)[-3000:]
+        full = proc.stdout + proc.stderr
+        code, tail, stub_seen = proc.returncode, full[-3000:], STUB_MESSAGE in full
     except subprocess.TimeoutExpired:
-        code, tail = None, f"timed out after {task.timeout}s"
-    return {"passed": code == 0, "exit_code": code, "seconds": round(time.perf_counter() - t, 1), "output_tail": tail}
+        code, tail, stub_seen = None, f"timed out after {task.timeout}s", False
+    return {"passed": code == 0, "exit_code": code, "seconds": round(time.perf_counter() - t, 1), "output_tail": tail,
+            "stub_seen": stub_seen}
 
 
 def extract_code(reply: str) -> str:
@@ -95,7 +97,20 @@ def is_full_definition(code: str, language: str, name: str) -> bool:
                    for n in tree.body)
     pattern = rf"^(export\s+)?(async\s+)?(function\s*\*?\s*{re.escape(name)}\b|{re.escape(name)}\s*\(|(static\s+)?(get|set)\s+{re.escape(name)}\b)" \
         if name else r"^(export\s+)?(async\s+)?function\b"
+    stripped = strip_js_assignment(text, name)
+    if stripped is not text:  # `obj.name = function(...)`: the assignment names it, the function may be anonymous
+        return re.match(r"^(async\s+)?function\b", stripped) is not None
     return re.match(pattern, text) is not None
+
+
+def strip_js_assignment(code: str, name: str) -> str:
+    """`res.format = function(obj) {...};` -> `function(obj) {...}`: the
+    function expression an assigned method's span covers (Express defines
+    its methods this way)."""
+    m = re.match(rf"^\s*[\w$]+(?:\.[\w$]+)*\.{re.escape(name)}\s*=\s*(?=(?:async\s+)?function\b)", code) if name else None
+    if not m:
+        return code
+    return re.sub(r";\s*$", "", code[m.end():].rstrip())
 
 
 def textwrap_dedent(code: str) -> str:
@@ -114,13 +129,14 @@ def _python_syntax_ok(path: str) -> str | None:
 def gates(task: SpliceTask) -> dict:
     """Positive (original passes) and negative (stub fails) gates. The stub
     throws `STUB_IMPLEMENTATION`; `negative["stub_seen"]` records whether
-    that message reached the output tail (informational: runners truncate
-    or reformat errors, so validity rests on the exit code)."""
+    that message appears anywhere in the run's output (validity rests on
+    the exit code; task validation also requires the stub to be seen, so a
+    suite failing for another reason is not mistaken for a valid gate)."""
     positive = _run(task)
     with edited(task.path):
         stub(locate(task.path, task.line))
         negative = _run(task)
-    negative["stub_seen"] = STUB_MESSAGE in negative["output_tail"]
+
     return {"positive": positive, "negative": negative,
             "valid": positive["passed"] and negative["exit_code"] is not None and not negative["passed"]}
 
@@ -131,6 +147,8 @@ def evaluate(task: SpliceTask, reply: str) -> dict:
     code = extract_code(reply)
     span = locate(task.path, task.line)
     full = is_full_definition(code, span.language, task.name)
+    if full and span.language != "python":
+        code = strip_js_assignment(code.lstrip(), task.name)
     with edited(task.path):
         if full:
             replace_function(span, code)

@@ -8,8 +8,14 @@ the focal function runs.
 For each call of a focal function the plugin records:
 - **ancestors** - repo functions below it on the stack (who called it, at
   any depth): the upstream blast radius of changing it;
+- **ancestor_depth** - each ancestor's smallest call distance from it
+  (1 = direct caller). Every frame counts, test and library frames too,
+  so a repo function that reaches it only through a test callback is at
+  depth 2; consecutive frames of one function (recursion, folded
+  closures) count once;
 - **descendants** - repo functions entered while it is on the stack (what
-  it runs, at any depth);
+  it runs, at any depth), with **descendant_depth** (1 = called by it
+  directly; library frames in between count);
 - **tests** - the test ids during which it ran;
 - **sql** - statements Django executed while it was on the stack, by table
   and verb (when Django is importable), the database side effects.
@@ -61,17 +67,22 @@ def is_test_path(relpath: str) -> bool:
 
 
 class Tracer:
-    def __init__(self, root: str, focal: set[str]):
+    def __init__(self, root: str, focal: set[str], in_tests_only: bool = False):
         self.root = os.path.realpath(root) + os.sep
         self.focal = focal
         self.names: dict[object, str | None] = {}  # code object -> repo qualified name (None = not repo code)
         self.local = threading.local()
         self.ancestors: Counter = Counter()
+        self.ancestor_depth: dict[str, int] = {}
+        self.descendant_depth: dict[str, int] = {}
         self.descendants: Counter = Counter()
         self.focal_calls: Counter = Counter()
         self.tests: set[str] = set()
         self.sql: dict[str, Counter] = {}
         self.current_test: str | None = None
+        #: count focal calls only while a test runs (not test-database setup
+        #: or class-level fixtures); the trace_django adapter's --in-tests-only
+        self.in_tests_only = in_tests_only
 
     def _name(self, code) -> str | None:
         if code not in self.names:
@@ -96,14 +107,29 @@ class Tracer:
             stack.append(name)
             if self.local.depth > 0 and name is not None and name not in self.focal:
                 self.descendants[name] += 1
-            if name in self.focal:
+                hops = len(stack) - 1 - self.local.focal_at  # frames above the outermost focal call
+                if hops < self.descendant_depth.get(name, 1 << 30):
+                    self.descendant_depth[name] = hops
+            if name in self.focal and (self.current_test or not self.in_tests_only):
                 self.focal_calls[name] += 1
                 if self.current_test:
                     self.tests.add(self.current_test)
                 for below in stack[:-1]:
                     if below is not None and below not in self.focal:
                         self.ancestors[below] += 1
+                depth, previous = 0, name
+                for below in reversed(stack[:-1]):
+                    if below is not None and below == previous:
+                        continue  # the same function again: one hop
+                    depth += 1
+                    previous = below
+                    if below is not None and below not in self.focal and depth < self.ancestor_depth.get(below, 1 << 30):
+                        self.ancestor_depth[below] = depth
+                if self.local.depth == 0:
+                    self.local.focal_at = len(stack) - 1
                 self.local.depth += 1
+            elif name in self.focal:
+                stack[-1] = None  # an untraced focal call: neither a focal frame nor an ancestor
         elif event == "return":
             stack = self._stack()
             if stack:
@@ -130,7 +156,9 @@ class Tracer:
             "focal_calls": dict(sorted(self.focal_calls.items())),
             "tests": sorted(self.tests),
             "ancestors": dict(sorted(self.ancestors.items())),
+            "ancestor_depth": dict(sorted(self.ancestor_depth.items())),
             "descendants": dict(sorted(self.descendants.items())),
+            "descendant_depth": dict(sorted(self.descendant_depth.items())),
             "sql": {t: dict(sorted(v.items())) for t, v in sorted(self.sql.items())},
         }
 
