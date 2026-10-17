@@ -182,7 +182,17 @@ print(f"[ok] SCE HEAD {HEAD}", flush=True)
 
 print("\n[setup 3/6] Python package (Prism index for name mapping)", flush=True)
 run([sys.executable, "-m", "pip", "install", "-q", "-e", "."], cwd=SCE_DIR, check=True)
-sys.path.insert(0, SCE_DIR)
+# the running kernel never reads the .pth file `pip install -e .` just wrote: put the
+# packages on sys.path directly (prism lives in src/, harness and benchmarks at the root)
+for path in (os.path.join(SCE_DIR, "src"), SCE_DIR):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+import importlib.util  # noqa: E402
+
+importlib.invalidate_caches()
+for mod in ("prism", "harness", "benchmarks"):
+    if importlib.util.find_spec(mod) is None:
+        abort(f"`{mod}` is not importable from {SCE_DIR}")
 
 print(f"\n[setup 4/6] Node {NODE_VERSION} + pnpm {PNPM_VERSION}", flush=True)
 node_bin = os.path.join(NODE_DIR, "bin")
