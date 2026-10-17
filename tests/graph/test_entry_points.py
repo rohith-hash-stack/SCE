@@ -377,3 +377,28 @@ def test_django_and_flask_registrations(entries):
 def test_entry_index_uses_the_same_entries(repo, entries):
     builder, site = repo
     assert EntryIndex(builder, dependency_paths=[site]).entries == entries
+
+
+def test_route_handlers_defined_in_test_files_are_not_entries(tmp_path):
+    """FastAPI's own tests define apps (`tests/test_dependency_cache.py:
+    @app.get("/") def get2()`); those routes are test scaffolding."""
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("")
+    (tmp_path / "pkg" / "deps.py").write_text("def Depends(x=None):\n    return x\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_cache.py").write_text(textwrap.dedent('''
+        from pkg.deps import Depends
+        app = object()
+
+
+        @app.get("/")
+        def get2():
+            return Depends()
+
+
+        def test_it():
+            assert get2() is None
+    '''))
+    builder, _ = build_pipeline(str(tmp_path))
+    assert find_entry_points(builder) == {}
+    assert EntryIndex(builder).context("pkg.deps.Depends") == []

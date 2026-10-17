@@ -164,11 +164,14 @@ def _callers(graph, qname: str, funcs: set[str], definite: bool = False) -> list
 
 
 def _application_functions(builder: ConcreteGraphBuilder) -> set[str]:
-    """Functions and methods outside test code (`SymbolRole.VERIFICATION`):
-    a test fixture is registered by decorator too, but is not an entrance."""
+    """Functions and methods outside test code: neither classified as tests
+    (`SymbolRole.VERIFICATION`) nor defined in a test file. A route handler
+    a test defines (`tests/test_dependency_cache.py: @app.get("/")`) is
+    registered like a real one but is the test's scaffolding, not an
+    entrance to the code."""
     return {
         s.qualified_name for s in builder.symbol_table
-        if s.kind in ("function", "method") and s.role != SymbolRole.VERIFICATION
+        if s.kind in ("function", "method") and s.role != SymbolRole.VERIFICATION and not builder._in_test_file(s.file)
     }
 
 
