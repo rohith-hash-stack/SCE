@@ -46,6 +46,7 @@ import shutil
 import subprocess
 import sys
 import time
+import traceback
 
 # ---------- Config ----------
 BRANCH = "eval/held-out-benchmark"
@@ -256,21 +257,26 @@ print(f"[ok] vitest {VITEST_VERSION} ({VITEST_BIN})", flush=True)
 # ============================================================
 # Validation
 # ============================================================
-from harness.experiments.layer4 import splice as S  # noqa: E402
-from harness.experiments.layer4.source_edit import locate  # noqa: E402
-from harness.experiments.layer4.trace_node import RUNTIME, LineMap, map_manifest, rebase, run_traced  # noqa: E402
-from prism.engine import PrismEngine  # noqa: E402
-
 OUT = os.path.join(SCE_DIR, PUSH_PATH)
 os.makedirs(os.path.join(OUT, "manifests"), exist_ok=True)
 WORK = "/kaggle/working/l4_trpc"
 os.makedirs(WORK, exist_ok=True)
+CRASH = None  # any exception below is written to the report and pushed, never lost
 
-print("\n[index] Prism index of packages/server/src", flush=True)
-t = time.time()
-builder = PrismEngine.from_repo(index_root).builder
-LINES = LineMap(builder)
-print(f"[ok] {len(builder.symbol_table)} symbols ({time.time() - t:.0f}s)", flush=True)
+try:
+    from harness.experiments.layer4 import splice as S
+    from harness.experiments.layer4.source_edit import locate
+    from harness.experiments.layer4.trace_node import RUNTIME, LineMap, map_manifest, rebase, run_traced
+    from prism.engine import PrismEngine
+
+    print("\n[index] Prism index of packages/server/src", flush=True)
+    t = time.time()
+    builder = PrismEngine.from_repo(index_root).builder
+    LINES = LineMap(builder)
+    print(f"[ok] {len(builder.symbol_table)} symbols ({time.time() - t:.0f}s)", flush=True)
+except (Exception, SystemExit):
+    CRASH = traceback.format_exc()
+    print(f"[CRASH] imports / index:\n{CRASH}", flush=True)
 
 
 def vitest_cmd(test, report):
@@ -312,7 +318,7 @@ report = {"sce_head": HEAD, "trpc_commit": trpc_head, "node": node_version, "pnp
           "vitest": VITEST_VERSION, "install_s": install_s, "server_dist_built": built, "build_s": build_s,
           "targets": {}}
 
-for target in TARGETS:
+def validate_target(target):
     tid = target["id"]
     print(f"\n{'=' * 64}\n[target {tid}] {target['name']}  {target['file']}:{target['line']}\n{'=' * 64}", flush=True)
     results = []
@@ -323,7 +329,7 @@ for target in TARGETS:
     if tid == "cross_package" and not built:
         check(results, "server dist built (needed by this target)", False)
         report["targets"][tid] = {"results": results, "valid": False}
-        continue
+        return
 
     # -- baseline (untraced) --
     base_json = f"{WORK}/{tid}_baseline.json"
@@ -438,9 +444,22 @@ for target in TARGETS:
                                              "outside_ancestors", "outside_descendants")},
     }
 
+report["crash"] = CRASH
+for target in TARGETS if CRASH is None else []:
+    try:
+        validate_target(target)
+    except (Exception, SystemExit):
+        tb = traceback.format_exc()
+        print(f"[CRASH] target {target['id']}:\n{tb}", flush=True)
+        report["targets"][target["id"]] = {"target": target, "valid": False, "crash": tb, "results": [
+            {"check": "target ran to completion", "ok": False, "detail": tb.strip().splitlines()[-1]}]}
+    finally:  # whatever happened, the focal file goes back
+        run(["git", "checkout", "--", target["file"]], cwd=TRPC, check=False)
+
 dirty = run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=TRPC, capture=True).stdout.strip()
 report["trpc_clean_after"] = not dirty
-report["valid"] = all(t["valid"] for t in report["targets"].values()) and not dirty
+report["valid"] = (CRASH is None and len(report["targets"]) == len(TARGETS)
+                   and all(t["valid"] for t in report["targets"].values()) and not dirty)
 report["elapsed_s"] = round(time.time() - START)
 
 # ============================================================
@@ -451,6 +470,8 @@ md = [f"# Layer 4 tRPC / Vitest validation: {'PASS' if report['valid'] else 'FAI
       f"SCE `{HEAD[:10]}`, tRPC `{trpc_head[:10]}`, Node {node_version}, pnpm {pnpm_version}, Vitest {VITEST_VERSION}; "
       f"install {install_s}s, server build {build_s}s ({'ok' if built else 'missing'}); "
       f"tRPC checkout clean afterwards: {report['trpc_clean_after']}.", ""]
+if report["crash"]:
+    md += ["## Crash before the targets ran", "", "```", report["crash"].strip()[-3000:], "```", ""]
 for tid, t in report["targets"].items():
     tg = t.get("target", {})
     md += [f"## {tid}: `{tg.get('name')}` ({tg.get('file')}:{tg.get('line')}) - {'valid' if t['valid'] else 'INVALID'}", "",
@@ -458,6 +479,8 @@ for tid, t in report["targets"].items():
     for r in t["results"]:
         res = "info" if r["ok"] is None else ("pass" if r["ok"] else "**FAIL**")
         md.append(f"| {r['check']} | {res} | {str(r['detail']).replace('|', '/')[:220]} |")
+    if t.get("crash"):
+        md += ["", "```", t["crash"].strip()[-3000:], "```"]
     if t.get("mapped"):
         md += ["", f"Descendants (Prism names): {', '.join(sorted(t['mapped']['descendants'] or {})) or '-'}",
                f"Resolved by name from dist/: {t['mapped'].get('resolved_by_name') or '-'}", ""]
