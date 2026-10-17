@@ -50,7 +50,7 @@ let debuggerOn = false;
 const state = {
   calls: 0, depth: 0, ancestors: {}, descendants: {}, tests: new Set(), rawStack: null,
   asyncWindow: process.env.L4_FOCAL_ASYNC === "1", currentTest: null,
-  mapping: { mapped: 0, unmapped: 0, files: {} },
+  mapping: { mapped: 0, unmapped: 0, generated: 0, files: {} },
 };
 
 function toPath(file) { return file && file.startsWith("file://") ? fileURLToPath(file) : file; }
@@ -130,6 +130,7 @@ function loadMap(scriptId, file) {
     } catch (e) { json = null; }
     const base = json ? path.resolve(path.dirname(file), json.sourceRoot || "") : null;
     entry = {
+      text,
       starts: lineStarts(text),
       lines: json ? decodeMappings(json.mappings || "") : null,
       sources: json ? json.sources.map(s => (s.startsWith("file://") ? fileURLToPath(s) : path.resolve(base, s))) : null,
@@ -137,6 +138,18 @@ function loadMap(scriptId, file) {
   }
   maps.set(key, entry);
   return entry;
+}
+// vite-node's SSR transform turns every `export` into a generated live-binding
+// getter, `Object.defineProperty(__vi_ssr_exports__, "f", { ..., get(){ return f }})`,
+// appended after the declaration: it runs whenever an importer reads `f` and is
+// no function of the repository (mapped, it would land on the line after the
+// declaration and fold into whatever function holds it).
+const SSR_EXPORT_GETTER = /get\s*\(\s*\)\s*\{\s*return\s+[\w$.]+\s*;?\s*\}/y;
+function generatedGetter(scriptId, file, offset) {
+  const map = loadMap(scriptId, file);
+  if (!map || !map.text) return false;
+  SSR_EXPORT_GETTER.lastIndex = offset;
+  return SSR_EXPORT_GETTER.test(map.text) && /__vi_ssr_exports__|__vite_ssr_exports__/.test(map.text);
 }
 function original(scriptId, file, offset) {  // -> {file, line (1-based)}
   const map = loadMap(scriptId, file);
@@ -199,6 +212,7 @@ globalThis.__l4 = {
       for (const fn of script.functions) {
         const count = fn.ranges.length ? fn.ranges[0].count : 0;
         if (count <= 0) continue;
+        if (generatedGetter(script.scriptId, file, fn.ranges[0].startOffset)) { state.mapping.generated++; continue; }
         const loc = original(script.scriptId, file, fn.ranges[0].startOffset);
         const rel = repoRelative(loc.file);
         if (!rel) continue;
@@ -219,6 +233,7 @@ function write() {
     focal_file: FOCAL_FILE, focal_calls: state.calls, tests: [...state.tests].sort(),
     ancestors: sorted(state.ancestors), descendants: sorted(state.descendants), async_window: state.asyncWindow,
     raw_stack: state.rawStack, source_mapping: { mapped: state.mapping.mapped, unmapped: state.mapping.unmapped,
+      generated_getters: state.mapping.generated,
       files: sorted(state.mapping.files) },
   }, null, 1));
 }

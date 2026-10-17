@@ -214,6 +214,27 @@ and fork handling is covered by `tests/test_layer4_harness.py`.
   message); positive gate (0 failures); splice grader (original
   definition passes, a wrong body fails); files restored and the checkout
   clean. A run without `--enable-source-maps` is reported as a diagnostic.
+- **Kaggle result (`bf0d573`, `reports/layer4/trpc_validation/`)**: 40 of
+  41 checks passed on Node 20.18.1 / pnpm 8.5.1 / Vitest 0.32.0 (install
+  58 s, server build 51 s): baseline and traced runs identical (15/15 and
+  2/2 tests), focal calls in a forked worker, 7 and 2 tests attributed,
+  `.ts` focal and caller frames (`TRPCError.test.ts:57`,
+  `createChain.test.ts:7`), callees `getCauseFromUnknown` and the
+  `TRPCError` constructor, `observable` resolved from
+  `dist/observable-ade1bad8.mjs` to `observable.observable.observable`,
+  both gates valid with `STUB_IMPLEMENTATION` in the failures (7/15 and
+  2/2 tests fail stubbed), splices graded correctly, checkout clean. The
+  one failure was a tracer bug: vite-node's SSR transform turns each
+  `export` into a generated live-binding getter
+  (`Object.defineProperty(__vi_ssr_exports__, "f", { ..., get(){ return f }})`)
+  appended after the declaration; it runs whenever an importer reads `f`,
+  so coverage recorded a callee `get` on the `}` line after
+  `getCauseFromUnknown`. Harmless here (it folded into the same function),
+  but in general it would fold into whatever function holds that line - a
+  false callee. The runtime now drops these getters by their text in the
+  executed source (`source_mapping.generated_getters` counts them). V8's
+  synthetic `<instance_members_initializer>` (class fields) maps to the
+  class line and stays under `descendants_unmapped` for review.
 - **Splicing**: TypeScript type errors do not fail Vitest (esbuild strips
   types), so a candidate is graded on behaviour only - acceptable, and
   stated in the task.

@@ -197,6 +197,24 @@ def test_node_tracer_maps_coverage_through_source_maps(tmp_path):
 
 
 @needs_node
+def test_node_tracer_drops_vite_node_export_getters(tmp_path):
+    # what vite-node's SSR transform runs: the export as a generated live-binding getter
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib" / "dep.js").write_text(
+        "const __vi_ssr_exports__ = {};\nfunction helper(x) { return x + 1; }\n"
+        'Object.defineProperty(__vi_ssr_exports__, "helper", { enumerable: true, configurable: true, get(){ return helper }});\n'
+        "module.exports = __vi_ssr_exports__;\n")
+    (tmp_path / "lib" / "core.js").write_text(
+        "const dep = require('./dep');\nfunction focal(x) {\n  return dep.helper(x);\n}\nmodule.exports = { focal };\n")
+    (tmp_path / "main.js").write_text("require('./lib/core').focal(1);\n")
+    raw = run_traced(str(tmp_path), "lib/core.js", 2, ["node", "--require", str(RUNTIME), "main.js"],
+                     str(tmp_path / "raw.json"))
+    assert raw["exit_code"] == 0
+    assert raw["descendants"] == {"lib/dep.js:2:helper": 1}  # the getter itself is not a callee
+    assert raw["source_mapping"]["generated_getters"] == 1
+
+
+@needs_node
 def test_node_tracer_merges_forked_processes(tmp_path):
     (tmp_path / "lib").mkdir()
     (tmp_path / "lib" / "core.js").write_text(

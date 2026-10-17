@@ -29,7 +29,7 @@ def merge(parts: list[dict]) -> dict:
     """One raw manifest from per-process ones: counts summed, tests united,
     the first raw stack kept."""
     out = {"focal_calls": 0, "tests": set(), "ancestors": {}, "descendants": {}, "async_window": False,
-           "raw_stack": None, "source_mapping": {"mapped": 0, "unmapped": 0, "files": {}}, "processes": len(parts)}
+           "raw_stack": None, "source_mapping": {"mapped": 0, "unmapped": 0, "generated_getters": 0, "files": {}}, "processes": len(parts)}
     for part in parts:
         out["focal_file"] = part.get("focal_file", "")
         out["focal_calls"] += part.get("focal_calls", 0)
@@ -42,6 +42,7 @@ def merge(parts: list[dict]) -> dict:
         sm = part.get("source_mapping", {})
         out["source_mapping"]["mapped"] += sm.get("mapped", 0)
         out["source_mapping"]["unmapped"] += sm.get("unmapped", 0)
+        out["source_mapping"]["generated_getters"] += sm.get("generated_getters", 0)
         for f, n in sm.get("files", {}).items():
             out["source_mapping"]["files"][f] = out["source_mapping"]["files"].get(f, 0) + n
     out["tests"] = sorted(out["tests"])
