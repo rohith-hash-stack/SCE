@@ -36,6 +36,7 @@ _SQL_TABLE = re.compile(
     r"""\b(?:FROM|INTO|UPDATE|JOIN|TABLE)\s+["'`]?([A-Za-z_][\w.]*)["'`]?""", re.I)
 _SQL_VERB = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SAVEPOINT|RELEASE|ROLLBACK|BEGIN|COMMIT)\b", re.I)
 _TEST_PARTS = ("tests", "test", "testing")
+_TRANSACTION = ("SAVEPOINT", "RELEASE", "ROLLBACK", "BEGIN", "COMMIT")
 
 
 def module_name(relpath: str) -> str:
@@ -111,10 +112,16 @@ class Tracer:
                     self.local.depth -= 1
 
     def on_sql(self, sql: str) -> None:
+        """Count one statement by table and verb while a focal call is on
+        this thread's stack. Transaction control (savepoints, BEGIN/COMMIT)
+        goes under `_transaction`."""
         if getattr(self.local, "depth", 0) <= 0 or not isinstance(sql, str):
             return
         verb = (_SQL_VERB.match(sql) or [None, "OTHER"])[1].upper()
-        for table in _SQL_TABLE.findall(sql) or ["?"]:
+        if verb in _TRANSACTION:
+            self.sql.setdefault("_transaction", Counter())[verb] += 1
+            return
+        for table in dict.fromkeys(_SQL_TABLE.findall(sql)) or ["?"]:
             self.sql.setdefault(table, Counter())[verb] += 1
 
     def manifest(self) -> dict:
@@ -129,23 +136,33 @@ class Tracer:
 
 
 def _patch_django(tracer: Tracer) -> None:
+    """Count every statement Django sends to the database. Both cursor
+    wrappers (`CursorWrapper`, and `CursorDebugWrapper`, which
+    `assertNumQueries` switches on and which calls the former) funnel into
+    `CursorWrapper._execute_with_wrappers`, so that one method is patched -
+    patching both `execute`s would count debug-cursor statements twice."""
     try:
         from django.db.backends import utils
     except Exception:
         return
-    for cls in (utils.CursorWrapper, getattr(utils, "CursorDebugWrapper", None)):
-        if cls is None or getattr(cls, "_l4_patched", False):
-            continue
+    cls = utils.CursorWrapper
+    if getattr(cls, "_l4_patched", False):
+        return
+    original = cls.__dict__.get("_execute_with_wrappers")
+    if original is not None:
+        def wrapped(self, sql, *args, __orig=original, **kwargs):
+            tracer.on_sql(sql)
+            return __orig(self, sql, *args, **kwargs)
+        cls._execute_with_wrappers = wrapped
+    else:  # Django < 2.0: no single choke point
         for meth in ("execute", "executemany"):
-            original = cls.__dict__.get(meth)
-            if original is None:
-                continue
-
-            def wrapped(self, sql, *args, __orig=original, **kwargs):
-                tracer.on_sql(sql)
-                return __orig(self, sql, *args, **kwargs)
-            setattr(cls, meth, wrapped)
-        cls._l4_patched = True
+            orig = cls.__dict__.get(meth)
+            if orig is not None:
+                def wrapped_m(self, sql, *args, __orig=orig, **kwargs):
+                    tracer.on_sql(sql)
+                    return __orig(self, sql, *args, **kwargs)
+                setattr(cls, meth, wrapped_m)
+    cls._l4_patched = True
 
 
 _TRACER: Tracer | None = None

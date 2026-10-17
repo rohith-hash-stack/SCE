@@ -54,6 +54,37 @@ Limit: a coroutine resumed by the event loop sees the loop below it, not
 its logical caller, so ancestors across `asyncio` task boundaries are
 partial (same-task `await` chains are complete).
 
+### Django: `trace_django.py`
+
+Django tests run through `tests/runtests.py`, not pytest. The adapter
+installs the same `Tracer`, hooks `unittest.TestCase.run` for test ids,
+puts `tests/` on `sys.path` (as running the script would), and runs
+`runtests.py <labels> --parallel=1` in-process - parallel workers would
+escape the profiler. Labels are runtests labels: an app (`queries`), a
+module or a single test. A crash is reported as `exit_code: 1`, never as a
+pass.
+
+SQL is captured at `CursorWrapper._execute_with_wrappers`, the one method
+both cursor wrappers reach (`assertNumQueries` switches on
+`CursorDebugWrapper`, whose `execute` calls the plain one - patching both
+`execute`s would count those statements twice). Statements are grouped by
+table and verb; transaction control (savepoints, BEGIN/COMMIT) goes under
+`_transaction`.
+
+Validated on the pinned Django (4.2.30):
+
+- `Model.save_base` over `basic update` (88 tests, 1.5 s): 140 calls in 46
+  tests; ancestors `Model.save` (140), `QuerySet.create` (100); SQL e.g.
+  `basic_article` INSERT 50 / UPDATE 13 / SELECT 3, `basic_selfref` INSERT
+  10 / UPDATE 3. Manager methods Django generates as closures
+  (`objects.create`) fold into their factory,
+  `BaseManager._get_queryset_methods` - consistent with the closure rule,
+  noted for task authors.
+- `SQLCompiler.execute_sql` over `update delete`: 1,112 calls in 73 tests;
+  720 SELECT, 243 DELETE, 210 UPDATE, per table (`delete_a` SELECT 123 /
+  UPDATE 151 / DELETE 32, ...). No INSERT: `SQLInsertCompiler` overrides
+  `execute_sql` without calling the base one - correct for this focal.
+
 ### Node (Express, tRPC): `trace_node.py` + `trace_node_runtime.cjs`
 
 Node has no `settrace`, and tRPC is TypeScript ES modules whose exports
@@ -101,15 +132,20 @@ source, so a no-context pass may be recall, not adaptation. Flagged tasks
 are dropped or perturbed (consistent identifier renames in X and its
 callers) before the run.
 
-Validated on the real Express suite: `res.json` with `test/res.json.js` -
-positive passes (0.5 s), stubbed fails -> valid.
+Validated:
+
+| corpus | target | test subset | original | stubbed | valid |
+|---|---|---|---|---|---|
+| Express | `res.json` (`lib/response.js:250`) | `test/res.json.js` | passes (0.5 s) | fails | yes |
+| Django | `QuerySet.update` (`django/db/models/query.py:1180`) | `update` (27 tests) | passes (0.6 s) | 26 errors | yes |
+| Django | `LocMemCache.incr` (`django/core/cache/backends/locmem.py:65`) | `cache.tests.LocMemCacheTests` (60 tests) | passes (13.7 s) | 11 errors | yes |
 
 ## Per-corpus environment constraints
 
 | corpus | test runner | what it needs | status |
 |---|---|---|---|
 | FastAPI | pytest | an isolated venv with the checkout installed editable plus its test pins; **pin `anyio` to the commit's era** (`anyio==4.6.2`): the repo turns warnings into errors and current anyio deprecates an import the pinned Starlette uses | validated here |
-| Django | `tests/runtests.py <labels> --parallel=1` (its own runner, not pytest) | the checkout installed editable; SQLite default settings; SQL capture works through the runner because the tracer patches `CursorWrapper` at import. `trace_py` is a pytest plugin, so for Django it runs through a small runner shim that installs the same profiler before `runtests.py` (next step) | to build |
+| Django | `tests/runtests.py <labels> --parallel=1` (its own runner, not pytest) | a venv with the checkout installed editable plus `tblib`; the default SQLite settings (`tests/test_sqlite.py`) need nothing else for the model/ORM/cache apps. `trace_django.py` runs `runtests.py` in-process under the same profiler | validated here (Django 4.2.30) |
 | Express | Mocha | `npm install` **with dev dependencies** (the Stage 2 cell installs `--omit=dev`) | validated here |
 | tRPC | Vitest in a pnpm monorepo | see below | see below |
 
@@ -147,11 +183,9 @@ several minutes, with `--ignore-scripts` to skip engine downloads.
 
 ## Next steps
 
-1. Django runner shim for `trace_py` and a validated Django manifest
-   (SQL tables included).
-2. tRPC: Node 20 + pnpm install + `vitest --pool=forks` with the runtime as
+1. tRPC: Node 20 + pnpm install + `vitest --pool=forks` with the runtime as
    a setup file, validated on one focal function.
-3. Task authoring: 16 tasks (2 per family per corpus), each passing the
+2. Task authoring: 16 tasks (2 per family per corpus), each passing the
    gates, with the trace manifest and the test subset frozen before any
    model runs, and the contamination check applied.
-4. Kaggle cell for the Layer 4 run.
+3. Kaggle cell for the Layer 4 run.
