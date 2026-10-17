@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rohith-hash-stack/SCE/harness/experiments/layer4/task.schema.json",
+  "title": "Layer 4 task (layer4.task.v1)",
+  "description": "One Layer 4 task: a focal function, the arm-facing view every Stage 2 arm consumes (harness/experiments/layer4/tasks.py to_evaluation_task), and gold that never comes from Prism: a runtime trace (forward_blast) or the corpus's own tests (backward_adaptation). Semantic rules JSON Schema cannot state are enforced by tasks.validate_task / validate_suite.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "family", "corpus", "pinned_commit", "focal", "prompt", "answer_contract",
+               "arm_view", "gold", "validity", "provenance"],
+  "properties": {
+    "schema_version": {"const": "layer4.task.v1"},
+    "task_id": {"type": "string", "pattern": "^l4_(fwd|bwd)_(fastapi|django|express|trpc)_[0-9]{2}$"},
+    "family": {"enum": ["forward_blast", "backward_adaptation"]},
+    "corpus": {"enum": ["fastapi", "django", "express", "trpc"]},
+    "pinned_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "focal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qname", "file", "line", "index_file", "language", "signature"],
+      "properties": {
+        "qname": {"type": "string", "minLength": 1, "description": "Prism qualified name of the focal function or method"},
+        "file": {"type": "string", "description": "path relative to the clone root (what the tracer and splice harness edit)"},
+        "line": {"type": "integer", "minimum": 1, "description": "first line of the definition (decorators excluded)"},
+        "index_file": {"type": "string", "description": "path relative to Prism's index root (tRPC: packages/server/src)"},
+        "language": {"enum": ["python", "javascript", "typescript"]},
+        "signature": {"type": "string", "minLength": 1},
+        "is_async": {"type": "boolean", "default": false},
+        "definition_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "hash of the original definition text, checked before every run"}
+      }
+    },
+    "change": {
+      "type": "object",
+      "description": "forward_blast only: the hypothetical change whose blast radius is asked for",
+      "additionalProperties": false,
+      "required": ["kind", "description"],
+      "properties": {
+        "kind": {"enum": ["signature", "return_contract", "raise_contract", "side_effect", "semantics"]},
+        "description": {"type": "string", "minLength": 10}
+      }
+    },
+    "prompt": {"type": "string", "minLength": 20, "description": "the task text every arm receives (and the query of the retrieval arms); the answer contract is appended by the harness"},
+    "answer_contract": {"enum": ["forward_json_v1", "backward_code_v1"]},
+    "arm_view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed_symbol", "task_type", "oracle_symbols", "oracle_required_context", "root_imports", "mask", "exclude_paths"],
+      "properties": {
+        "seed_symbol": {"type": "string", "description": "the focal qname: prism_full's taxonomy anchor; BFS seed"},
+        "task_type": {"enum": ["blast", "debug"], "description": "EvaluationTask.task_type: blast for forward, debug for backward"},
+        "oracle_symbols": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true,
+                           "description": "normal_oracle / prism_oracle context (pipeline_symbols). forward: focal + gold affected symbols (sanity ceiling); backward: the focal (body masked) + its callers"},
+        "oracle_required_context": {"type": "array", "items": {"type": "string"}, "uniqueItems": true,
+                                    "description": "types and helpers the oracle may add (required_context)"},
+        "root_imports": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "mask": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["symbols", "mode"],
+          "properties": {
+            "symbols": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+            "mode": {"enum": ["none", "body"]}
+          }
+        },
+        "exclude_paths": {"type": "array", "items": {"type": "string"}, "uniqueItems": true,
+                          "description": "clone-relative files no arm may show (the gating tests); all test files are excluded anyway"}
+      }
+    },
+    "gold": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "direction", "affected_symbols", "side_effects", "tables", "trace_manifest", "min_count"],
+          "properties": {
+            "source": {"const": "runtime_trace"},
+            "direction": {"enum": ["upstream", "downstream", "both"],
+                          "description": "upstream = trace ancestors (who is affected by X's contract change); downstream = descendants"},
+            "affected_symbols": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 15, "uniqueItems": true},
+            "side_effects": {"oneOf": [{"type": "null"},
+                                       {"type": "array", "uniqueItems": true,
+                                        "items": {"enum": ["DB_READ", "DB_WRITE", "DB_SCHEMA", "DB_TRANSACTION"]}}],
+                             "description": "null = not scored (no runtime source for this corpus); [] = runtime-confirmed none"},
+            "tables": {"oneOf": [{"type": "null"}, {"type": "array", "items": {"type": "string"}, "uniqueItems": true}],
+                       "description": "Django only (SQL logger); null elsewhere"},
+            "trace_manifest": {"type": "string", "description": "committed mapped manifest the gold was derived from"},
+            "trace_command": {"type": "array", "items": {"type": "string"}},
+            "min_count": {"type": "integer", "minimum": 1, "description": "a traced symbol enters the gold at >= this many calls"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "test_command", "cwd", "timeout_s", "stub_message"],
+          "properties": {
+            "source": {"const": "test_execution"},
+            "test_command": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "cwd": {"type": "string", "default": "."},
+            "timeout_s": {"type": "integer", "minimum": 10},
+            "stub_message": {"const": "STUB_IMPLEMENTATION"},
+            "env": {"type": "object", "additionalProperties": {"type": "string"}},
+            "tests": {"type": "array", "items": {"type": "string"}, "description": "test ids the trace saw calling the focal (informational)"}
+          }
+        }
+      ]
+    },
+    "validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trace_exit_code", "async_window", "contamination"],
+      "properties": {
+        "trace_exit_code": {"type": "integer"},
+        "async_window": {"type": "boolean"},
+        "positive_gate": {"type": "object", "required": ["passed"], "properties": {"passed": {"const": true}}},
+        "negative_gate": {"type": "object", "required": ["passed"], "properties": {"passed": {"const": false}, "stub_seen": {"type": "boolean"}}},
+        "contamination": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["arm0_score", "flagged", "seeds"],
+          "properties": {
+            "arm0_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1,
+                           "description": "arm0_no_retrieval pass rate (backward) or mean F1 (forward) over the seeds; null until measured"},
+            "flagged": {"type": ["boolean", "null"]},
+            "seeds": {"type": "array", "items": {"type": "integer"}}
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["tracer", "sce_commit", "authored_at"],
+      "properties": {
+        "tracer": {"enum": ["trace_py", "trace_django", "trace_node"]},
+        "sce_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+        "authored_at": {"type": "string", "format": "date"},
+        "notes": {"type": "string"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"family": {"const": "forward_blast"}}},
+      "then": {
+        "required": ["change"],
+        "properties": {
+          "task_id": {"pattern": "^l4_fwd_"},
+          "answer_contract": {"const": "forward_json_v1"},
+          "arm_view": {"properties": {"task_type": {"const": "blast"}, "mask": {"properties": {"mode": {"const": "none"}}}}},
+          "gold": {"required": ["affected_symbols"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"family": {"const": "backward_adaptation"}}},
+      "then": {
+        "properties": {
+          "task_id": {"pattern": "^l4_bwd_"},
+          "answer_contract": {"const": "backward_code_v1"},
+          "arm_view": {"properties": {"task_type": {"const": "debug"}, "mask": {"properties": {"mode": {"const": "body"}}}}},
+          "gold": {"required": ["test_command"]},
+          "validity": {"required": ["positive_gate", "negative_gate"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"corpus": {"not": {"const": "django"}}}},
+      "then": {"properties": {"gold": {"properties": {"tables": {"type": "null"}}}}}
+    }
+  ]
+}

@@ -13,7 +13,7 @@ import pytest
 
 from harness.experiments.layer4 import splice as S
 from harness.experiments.layer4.source_edit import edited, instrument_js, locate, stub
-from harness.experiments.layer4.trace_node import RUNTIME, run_traced
+from harness.experiments.layer4.trace_node import RUNTIME, map_manifest, merge, rebase, run_traced
 
 PY_LIB = '''
 def helper(x):
@@ -108,7 +108,8 @@ def test_contamination_flag(py_task):
 @needs_node
 def test_javascript_gates_and_candidates(js_task):
     original = Path(js_task.path).read_bytes()
-    assert S.gates(js_task)["valid"]
+    g = S.gates(js_task)
+    assert g["valid"] and g["negative"]["stub_seen"]  # the failure is the stub's STUB_IMPLEMENTATION
     assert S.evaluate(js_task, "```js\nfunction total(items) {\n  let s = 0;\n  for (const i of items) s += i.price * i.qty;\n  return s;\n}\n```")["passed"]
     assert S.evaluate(js_task, "return items.length;")["passed"] is False
     assert Path(js_task.path).read_bytes() == original
@@ -146,6 +147,110 @@ def test_node_tracer_records_callers_and_callees(tmp_path):
     assert "leaf" in names and "unrelated" not in names and "focal" not in names
     assert "focal(x) {\n  return" in (tmp_path / "lib" / "core.js").read_text()  # restored
     assert json.loads(out.read_text())["focal_file"] == "lib/core.js"
+
+
+_B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+
+def _vlq(*values: int) -> str:
+    out = ""
+    for n in values:
+        v = (-n << 1) | 1 if n < 0 else n << 1
+        while True:
+            digit, v = v & 31, v >> 5
+            out += _B64[digit | (32 if v else 0)]
+            if not v:
+                break
+    return out
+
+
+def _compiled(tmp_path, name: str, inline: bool) -> None:
+    """dist/<name>.js as a bundler would emit it: `helper` on generated line
+    2, mapped to src/<name>.ts line 7 by an inline or external source map."""
+    import base64
+    smap = json.dumps({"version": 3, "sources": [f"../src/{name}.ts"], "names": [],
+                       "mappings": ";" + _vlq(0, 0, 6, 0) + ";"})
+    ref = "data:application/json;base64," + base64.b64encode(smap.encode()).decode() if inline else f"{name}.js.map"
+    (tmp_path / "dist").mkdir(exist_ok=True)
+    (tmp_path / "dist" / f"{name}.js").write_text(
+        f'"use strict";\nfunction helper(x) {{ return x * 2; }}\nexports.helper = helper;\n//# sourceMappingURL={ref}\n')
+    if not inline:
+        (tmp_path / "dist" / f"{name}.js.map").write_text(smap)
+
+
+@needs_node
+def test_node_tracer_maps_coverage_through_source_maps(tmp_path):
+    _compiled(tmp_path, "inl", inline=True)
+    _compiled(tmp_path, "ext", inline=False)
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib" / "core.js").write_text(
+        "const a = require('../dist/inl');\nconst b = require('../dist/ext');\n"
+        "function focal(x) {\n  return a.helper(x) + b.helper(x);\n}\nmodule.exports = { focal };\n")
+    (tmp_path / "main.js").write_text("require('./lib/core').focal(1);\n")
+    raw = run_traced(str(tmp_path), "lib/core.js", 3, ["node", "--require", str(RUNTIME), "main.js"],
+                     str(tmp_path / "raw.json"))
+    assert raw["exit_code"] == 0 and raw["focal_calls"] == 1
+    # the original .ts line, not dist/*.js line 2
+    assert set(raw["descendants"]) == {"src/inl.ts:7:helper", "src/ext.ts:7:helper"}
+    assert raw["source_mapping"]["mapped"] >= 2
+    assert raw["raw_stack"] and raw["raw_stack"][0].endswith("lib/core.js:3:focal")
+
+
+@needs_node
+def test_node_tracer_merges_forked_processes(tmp_path):
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "lib" / "core.js").write_text(
+        "function leaf(x) { return x; }\nfunction focal(x) {\n  return leaf(x);\n}\nmodule.exports = { focal };\n")
+    (tmp_path / "child.js").write_text("require('./lib/core').focal(1);\n")
+    (tmp_path / "main.js").write_text(  # the parent never runs the focal function: no file from it
+        "const { fork } = require('node:child_process');\n"
+        "for (let i = 0; i < 2; i++) fork('./child.js').on('exit', (c) => { if (c) process.exit(c); });\n")
+    env = {"NODE_OPTIONS": f"--require {RUNTIME}"}
+    raw = run_traced(str(tmp_path), "lib/core.js", 2, ["node", "main.js"], str(tmp_path / "raw.json"), env=env, multi=True)
+    assert raw["exit_code"] == 0 and raw["processes"] == 2 and raw["focal_calls"] == 2
+    assert raw["descendants"] == {"lib/core.js:1:leaf": 2}
+    assert merge([])["focal_calls"] == 0
+
+
+def test_unmapped_build_output_resolves_by_name_to_the_package_source():
+    from types import SimpleNamespace as NS
+    fn = lambda q, f, a, b: NS(qualified_name=q, kind="function", file=f, line_range=(a, b))  # noqa: E731
+    builder = NS(repo_root="/r", symbol_table=[
+        fn("server.observable.observable.observable", "packages/server/src/observable/observable.ts", 10, 40),
+        fn("server.observable.operators.map", "packages/server/src/observable/operators.ts", 1, 9),
+        fn("client.operators.map", "packages/client/src/operators.ts", 1, 9),
+        fn("client.links.createChain", "packages/client/src/links/createChain.ts", 10, 40)])
+    raw = {"focal_calls": 1, "ancestors": {}, "descendants": {
+        "packages/server/dist/observable/index.mjs:4:observable": 1,
+        "packages/server/dist/observable/index.mjs:30:map": 2,  # one `map` in server/src: resolved
+        "packages/server/dist/observable/index.mjs:50:<anonymous>": 1,
+        "packages/client/src/links/createChain.ts:19:execute": 1}}  # nested: folds into the focal
+    m = map_manifest(raw, builder, "client.links.createChain")
+    assert m["descendants"] == {"server.observable.observable.observable": 1, "server.observable.operators.map": 2}
+    assert m["descendants_unmapped"] == {"packages/server/dist/observable/index.mjs:50:<anonymous>": 1}
+    assert set(m["resolved_by_name"]) == {"packages/server/dist/observable/index.mjs:4:observable",
+                                          "packages/server/dist/observable/index.mjs:30:map"}
+
+
+def test_rebase_to_a_corpus_indexed_below_the_clone_root():
+    raw = {"ancestors": {"packages/server/src/a.ts:3:f": 1, "packages/client/src/b.ts:4:g": 2},
+           "descendants": {"packages/server/dist/observable/index.mjs:9:observable": 1}}
+    r = rebase(raw, "packages/server/src")
+    assert r["ancestors"] == {"a.ts:3:f": 1} and r["outside_ancestors"] == {"packages/client/src/b.ts:4:g": 2}
+    assert r["descendants"] == {"dist/observable/index.mjs:9:observable": 1}
+
+
+def test_stub_message_is_stub_implementation(tmp_path):
+    f = tmp_path / "a.ts"
+    f.write_text("export function f(x: number): number {\n  return x + 1;\n}\n")
+    with edited(str(f)):
+        stub(locate(str(f), 1))
+        assert 'throw new Error("STUB_IMPLEMENTATION");' in f.read_text()
+    p = tmp_path / "m.py"
+    p.write_text("def f():\n    return 1\n")
+    with edited(str(p)):
+        stub(locate(str(p), 1))
+        assert "raise NotImplementedError('STUB_IMPLEMENTATION')" in p.read_text()
 
 
 def test_instrumentation_keeps_line_numbers(tmp_path):

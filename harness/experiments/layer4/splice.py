@@ -18,6 +18,7 @@ files or labels. Run sequentially: edits are in place.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import os
 import re
 import subprocess
@@ -27,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from harness.experiments.layer4.source_edit import edited, locate, replace_body, replace_function, stub
+from harness.experiments.layer4.source_edit import STUB_MESSAGE, edited, locate, replace_body, replace_function, stub
 
 TEST_COMMANDS = {
     "fastapi": [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider"],
@@ -56,10 +57,20 @@ class SpliceTask:
         return os.path.join(self.root, self.file)
 
 
+def _drop_bytecode(path: str) -> None:
+    """Python checks a .pyc against the source's mtime in whole seconds and
+    its size, so a candidate written in the same second as an equal-sized
+    earlier version (the stub, another candidate) would run stale bytecode."""
+    if path.endswith(".py"):
+        Path(importlib.util.cache_from_source(path)).unlink(missing_ok=True)
+
+
 def _run(task: SpliceTask) -> dict:
+    _drop_bytecode(task.path)
     t = time.perf_counter()
     try:
-        proc = subprocess.run(task.command, cwd=os.path.join(task.root, task.cwd), env=dict(os.environ, **task.env),
+        proc = subprocess.run(task.command, cwd=os.path.join(task.root, task.cwd),
+                              env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1", **task.env),
                               capture_output=True, text=True, timeout=task.timeout)
         code, tail = proc.returncode, (proc.stdout + proc.stderr)[-3000:]
     except subprocess.TimeoutExpired:
@@ -101,11 +112,15 @@ def _python_syntax_ok(path: str) -> str | None:
 
 
 def gates(task: SpliceTask) -> dict:
-    """Positive (original passes) and negative (stub fails) gates."""
+    """Positive (original passes) and negative (stub fails) gates. The stub
+    throws `STUB_IMPLEMENTATION`; `negative["stub_seen"]` records whether
+    that message reached the output tail (informational: runners truncate
+    or reformat errors, so validity rests on the exit code)."""
     positive = _run(task)
     with edited(task.path):
         stub(locate(task.path, task.line))
         negative = _run(task)
+    negative["stub_seen"] = STUB_MESSAGE in negative["output_tail"]
     return {"positive": positive, "negative": negative,
             "valid": positive["passed"] and negative["exit_code"] is not None and not negative["passed"]}
 

@@ -15,8 +15,8 @@ Every Layer 4 tool edits one function on disk and puts the file back
 byte-for-byte (`edited`, verified by hash). Functions are located by file +
 line with Prism's tree-sitter grammars, so the same code covers Python,
 JavaScript and TypeScript: replace the whole definition (Python decorators
-kept), replace the body, stub the body (`raise NotImplementedError` /
-`throw new Error`), or wrap the body in enter/exit hooks (JS/TS tracing).
+kept), replace the body, stub the body (`raise NotImplementedError("STUB_IMPLEMENTATION")` /
+`throw new Error("STUB_IMPLEMENTATION")`), or wrap the body in enter/exit hooks (JS/TS tracing).
 Instrumentation keeps line numbers unchanged, so stack frames and coverage
 offsets still map to the original source.
 
@@ -96,7 +96,7 @@ and a runtime is loaded into the test process:
 - `descendants` from V8 **precise coverage** with call counts, reset at
   entry and read at exit through a same-thread inspector session
   (synchronous), so only functions run while X is on the stack count;
-- `tests` from Mocha root hooks.
+- `tests` from Mocha root hooks, or Vitest's `expect.getState()`.
 
 Locations are `relpath:line:name`; `map_manifest` maps them to Prism
 qualified names by line (innermost function or method), so anonymous
@@ -151,41 +151,177 @@ Validated:
 
 ### tRPC / Vitest on Kaggle
 
-**Not yet validated end to end.** In the development container the install
-fails: the lockfile pins 48 tarballs to `registry.npmjs.com`, which that
-container's network policy blocks (`registry.npmjs.org` is allowed, which is
-why Express installed). Rewriting the host in the lockfile makes pnpm 8.5.1
-reject it as outdated, and `--filter` installs hit the same check; forcing a
-re-resolve (`--no-frozen-lockfile`) would drift versions, so it was not used.
-Kaggle has open internet, so the first Layer 4 cell must install and run one
-traced Vitest file before any tRPC task is authored. The workspace also pulls
-every example app (Next.js, Prisma, Playwright): expect a few hundred MB and
-several minutes, with `--ignore-scripts` to skip engine downloads.
+**Validation cell: `kaggle/trpc_layer4_validation_cell.py`** (CPU, Internet
+on, ~15-25 min; writes `reports/layer4/trpc_validation/`). It cannot run in
+the development container: the lockfile pins 48 tarballs to
+`registry.npmjs.com`, which that container's network policy blocks
+(`registry.npmjs.org` is allowed, which is why Express installed), and
+rewriting the host makes pnpm 8.5.1 reject the lockfile. Kaggle has open
+internet. The cell's analysis and report code was exercised locally against
+the real checkout with mocked Vitest runs; the tracer runtime's source-map
+and fork handling is covered by `tests/test_layer4_harness.py`.
 
-- **Package manager**: the repo pins `pnpm@8.5.1` and `node ^20.10`;
-  install with `npx pnpm@8.5.1 install --frozen-lockfile --ignore-scripts`
-  (newer pnpm rejects or rewrites the lockfile). Kaggle's image does not
-  guarantee Node 20 - install it explicitly (NodeSource or a static
-  tarball) before pnpm; Node 22 only warns.
-- **Build**: tests import workspace packages; Vitest resolves sources
-  through the workspace aliases, so no full `tsup` build is needed for the
-  server/client packages, but the install itself is the heavy step
-  (minutes, hundreds of MB).
-- **Tracing**: Vitest runs test files in worker threads by default; the
-  same-thread inspector session needs `--pool=forks` (one process per
-  file). The runtime goes in as a `setupFiles` entry. Stack frames point
-  at transformed code; Vitest's inline source maps plus
-  `--enable-source-maps` map them back to `.ts` lines, which
-  `instrument_js` keeps unchanged.
+- **Environment**: Node 20 from the static nodejs.org tarball (the repo
+  pins `node ^20.10`), `pnpm@8.5.1` (its `packageManager`),
+  `pnpm install --frozen-lockfile --ignore-scripts` (no unfrozen fallback:
+  it would drift versions), `pnpm rebuild esbuild @swc/core` for the
+  native binaries only, then `pnpm --filter @trpc/server build`: client
+  code imports `@trpc/server/observable`, whose `exports` point at
+  `dist/`. Vitest resolves `@trpc/*/src/` through its aliases, so only the
+  server needs building.
+- **Runner**: Vitest 0.32 has no `--pool`; `--run --no-threads` runs each
+  test file in a `child_process` fork. The runtime goes in through
+  `NODE_OPTIONS="--require trace_node_runtime.cjs --enable-source-maps"`,
+  which every fork inherits; with `L4_MULTI=1` each process that ran the
+  focal function writes `<out>.<pid>.json` and `run_traced(multi=True)`
+  merges them (`merge`). Vitest's root is `packages/` (`root: '../'` in
+  `packages/tests/vitest.config.ts`), so test filters are
+  `server/TRPCError.test.ts`, run from `packages/tests`; the cell calls
+  `node node_modules/vitest/<bin>` directly so pnpm itself is not traced.
+- **Tests attribution**: Vitest has no Mocha root hooks; the runtime reads
+  `expect.getState().currentTestName` (globals are on).
+- **TypeScript source maps**: stack frames are rewritten by vite-node's
+  own source-map support. Coverage offsets are not, and esbuild does not
+  keep lines, so the runtime maps every covered function's start offset
+  through the script's source map: it fetches the executed source with
+  `Debugger.getScriptSource`, takes the last `sourceMappingURL` (vite-node
+  appends an inline one) or an external `.map` file, and decodes the VLQ
+  mappings itself (no dependencies). `source_mapping` in the manifest
+  counts mapped / unmapped positions. tRPC's rollup build emits **no
+  source maps**, so a cross-package callee in `packages/server/dist/` keeps
+  its dist location; `map_manifest` resolves it by name to the one
+  same-named function under that package's `src/` (`LineMap.dist_name`,
+  listed under `resolved_by_name` for review).
+- **Index root**: Prism indexes tRPC at `packages/server/src`
+  (`pinned_commits.json` `subdir`); the tracer records clone-relative
+  paths. `rebase(raw, "packages/server/src")` strips the prefix, keeps
+  the server's `dist/` for name resolution and moves other packages'
+  locations to `outside_*`. tRPC tasks therefore target functions under
+  `packages/server/src`: client functions are not retrievable by any arm.
+- **Targets validated by the cell**: `getTRPCErrorFromUnknown`
+  (`packages/server/src/error/TRPCError.ts:4`, in the index) over
+  `server/TRPCError.test.ts` (callees `TRPCError` constructor,
+  `getCauseFromUnknown`), and `createChain`
+  (`packages/client/src/links/internals/createChain.ts:10`) over its own
+  test for the cross-package `dist/` path (`observable`). Checks per
+  target: baseline passes; traced run exits 0 with the baseline's test
+  counts (runner not corrupted); focal calls in a forked worker; tests
+  attributed; the focal frame is the `.ts` file inside the definition; the
+  caller frame in the test file points at a line that calls the target;
+  no transpiled `.js` frames or callees for repo sources; expected callees
+  at lines holding their definitions; Prism names; negative gate (the
+  `STUB_IMPLEMENTATION` stub fails the file, and the failures carry the
+  message); positive gate (0 failures); splice grader (original
+  definition passes, a wrong body fails); files restored and the checkout
+  clean. A run without `--enable-source-maps` is reported as a diagnostic.
 - **Splicing**: TypeScript type errors do not fail Vitest (esbuild strips
   types), so a candidate is graded on behaviour only - acceptable, and
   stated in the task.
 
-## Next steps
+Splice note (all corpora): Python validates a `.pyc` against the source's
+mtime in whole seconds and its size, so a candidate written in the same
+second as an equal-sized earlier version (the stub, another candidate)
+could run stale bytecode. `splice._run` deletes the edited file's cached
+bytecode before every run and sets `PYTHONDONTWRITEBYTECODE=1`.
 
-1. tRPC: Node 20 + pnpm install + `vitest --pool=forks` with the runtime as
-   a setup file, validated on one focal function.
-2. Task authoring: 16 tasks (2 per family per corpus), each passing the
-   gates, with the trace manifest and the test subset frozen before any
-   model runs, and the contamination check applied.
-3. Kaggle cell for the Layer 4 run.
+## Layer 4 run: tasks, arms, scoring
+
+### Task contract
+
+`task.schema.json` (`layer4.task.v1`) defines one task; `tasks.py`
+validates it (`validate_task`: schema + semantic rules, optionally against
+the corpus's Prism names) and the suite (`validate_suite`). Tasks live in
+`benchmarks/layer4/tasks/l4_<fwd|bwd>_<corpus>_<nn>.json`, frozen with their
+trace manifests before any model runs.
+
+| | forward blast radius (`l4_fwd_*`) | backward adaptation (`l4_bwd_*`) |
+|---|---|---|
+| count | 8: 2 per corpus | 8: 2 per corpus |
+| question | the focal function changes as `change` says (signature, return / raise contract, side effect, semantics): which functions are affected, which side effects and tables are involved? | implement the focal function's body so its callers' expectations hold |
+| gold source | runtime trace of the corpus's tests (`trace_py`, `trace_django`, `trace_node`); `gold_from_manifest` takes ancestors (`direction: upstream`, the default), descendants or both at >= `min_count` calls, restricted to names in the Prism index, at most 15 | the corpus's own tests through `splice` (gates passed and frozen) |
+| side effects / tables | Django: `side_effects_from_sql` (`SELECT` -> `DB_READ`, `INSERT/UPDATE/DELETE` -> `DB_WRITE`, DDL -> `DB_SCHEMA`, savepoints/`BEGIN`/`COMMIT` -> `DB_TRANSACTION`) and `tables_from_sql`; other corpora `null` (no runtime source: not scored, and not invented) | - |
+| answer | `forward_json_v1`: one JSON object `{affected_symbols (<= 15), side_effects, tables}` | `backward_code_v1`: one fenced code block (whole definition or body) |
+| score | set P / R / F1 over affected symbols (`score_forward`: names resolved to index names exactly or by a unique >= 2-component suffix; unknown names count against precision; answers past 15 truncated); exact set match of tags and of tables where gold is non-null | binary pass (`score_backward` over `splice.evaluate`), with tokens per pass and passes per 1k tokens |
+| contamination | `arm0_no_retrieval` mean F1 >= 0.5 -> flagged (reported, not dropped) | `arm0_no_retrieval` pass rate >= 0.5 over the seeds -> flagged |
+
+### Arm compatibility (all 7 Stage 2 arms, unchanged)
+
+`to_evaluation_task(task)` builds the `EvaluationTask` every arm already
+consumes: `seed_symbol` = the focal qname (prism_full's taxonomy anchor and
+the BFS seed), `prompt` (the retrieval arms' query: prism_ask, hybrid RAG,
+repo map), `task_type` (`blast` / `debug`), and the oracle slice as
+`pipeline_symbols` / `required_context`:
+
+| arm | context | Layer 4 specifics |
+|---|---|---|
+| `normal_oracle` (`pragmatic_oracle`) | `oracle_symbols` | forward: focal + gold affected symbols - a sanity ceiling (it contains the answer); backward: focal (masked) + its callers + types |
+| `prism_oracle` | the same + breadcrumbs | as above |
+| `prism_full` | two-pass from the seed (Turn 1 selection + final; 2 LLM calls) | its extra call is counted in `tokens.prompt` / `llm_calls` |
+| `prism_ask` | `NLQIndex.search(prompt)` + breadcrumbs | - |
+| `arm1_hybrid_rag` | BM25 + dense + reranker over symbol chunks | the cached Django embeddings are reused (the bodies are masked at render time, not re-indexed) |
+| `repomap_pagerank` | PageRank repo map, 4,000 tokens | - |
+| `arm0_no_retrieval` | none | the contamination probe |
+
+Leak control for backward tasks (the answer must not be in any context):
+
+1. **Mask**: every rendered context passes through
+   `mask_context(rendered, definition, masked_definition(...))`, which
+   replaces the focal definition with its signature, docstring and a
+   placeholder. Arms render indexed bodies verbatim, so this is exact.
+   Retrieval rankings were computed on the unmasked corpus - the ranking
+   may favour the focal, the content shown never has its body (stated).
+2. **Exclude**: the runner drops test-file nodes from every arm's package
+   before rendering (Prism's index already treats them as non-application
+   code; the hybrid-RAG chunks and the repo map are filtered the same
+   way), and the gating test files are listed in
+   `arm_view.exclude_paths` and checked.
+3. **Check**: `leak_check` counts distinctive original body lines (>= 20
+   characters, not the signature, not comments) and gating-test paths in
+   the final context; a non-zero result makes the cell `status: "leak"`,
+   excluded and counted per arm.
+
+Forward tasks are not masked: the focal body is legitimately needed to
+reason about the change.
+
+### Cells
+
+`cell.schema.json` (`layer4.cell.v1`): one record per task x arm x seed,
+appended to `cells.jsonl` - status (`ok`, `error`, `timeout`, `leak`),
+tokens (context, prompt and completion over every LLM call, number of
+calls), the leak check, the selected symbols, the raw reply and the
+score. 16 tasks x 7 arms x 10 seeds = **1,120 cells**, same model,
+quantization, context window, temperature and seeds as Stage 2.
+
+### Execution plan
+
+1. **tRPC tooling**: run `kaggle/trpc_layer4_validation_cell.py`; any
+   failed check blocks tRPC task authoring.
+2. **Runner** (to build): `benchmarks/layer4/runner.py` reusing the Stage 2
+   arm code - per cell: `to_evaluation_task` -> the arm's package ->
+   test-file filter -> render -> `mask_context` + `leak_check` (backward)
+   -> prompt + `answer_contract` -> model -> `score_forward` against the
+   corpus's index names, or `splice.evaluate` + `score_backward` (cells of
+   one corpus run sequentially: splices edit the checkout in place) ->
+   one `layer4.cell.v1` record.
+3. **Authoring** (per corpus, 2 + 2 tasks): pick focal functions inside
+   the Prism index that the corpus's tests exercise; trace them (Django
+   with the SQL logger); derive forward gold with `gold_from_manifest`
+   and review `*_unmapped` / `resolved_by_name`; prefer
+   `async_window: false` for descendant-based gold; run the gates for
+   backward tasks (`stub_seen` required); write the task JSON;
+   `validate_task(task, known=<index names>)` and `validate_suite`.
+4. **Freeze**: commit tasks, manifests and gate results before any model
+   runs.
+5. **Contamination pass**: `arm0_no_retrieval` x 16 tasks x 10 seeds
+   first; flagged backward tasks are perturbed (consistent renames of the
+   focal function and its callers, re-gated) or kept and reported
+   separately - decided before the other arms run.
+6. **Main run**: the other 6 arms x 16 tasks x 10 seeds, resumable cell
+   by cell like Stage 2 (`cells.jsonl`, periodic pushes).
+7. **Analysis**: `summarize(cells, tasks)` - per family and arm, over all
+   tasks and over unflagged tasks: forward mean P / R / F1 and tag /
+   table exact-match rates; backward pass rate, mean context tokens,
+   tokens per pass, passes per 1k tokens; leak / error cells per arm.
+   Pre-registered comparisons as in Stage 2 (prism_ask and prism_full
+   against hybrid RAG and the repo map; the oracles as ceilings;
+   arm0 as the floor).

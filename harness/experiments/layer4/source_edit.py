@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import json
 import os
 import textwrap
 from dataclasses import dataclass
@@ -118,12 +119,15 @@ def replace_body(span: FunctionSpan, new_body: str) -> None:
         _write(span.path, source[:span.body_start] + text.encode() + source[span.body_end:])
 
 
-def stub(span: FunctionSpan) -> None:
-    """Replace the body with one that always raises."""
+STUB_MESSAGE = "STUB_IMPLEMENTATION"
+
+
+def stub(span: FunctionSpan, message: str = STUB_MESSAGE) -> None:
+    """Replace the body with one that always raises `message`."""
     if span.language == "python":
-        replace_body(span, 'raise NotImplementedError("layer4 stub")')
+        replace_body(span, f'raise NotImplementedError({message!r})')
     else:
-        replace_body(span, 'throw new Error("layer4 stub");')
+        replace_body(span, f'throw new Error({json.dumps(message)});')
 
 
 def instrument_js(span: FunctionSpan, enter: str, exit_: str) -> None:
