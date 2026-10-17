@@ -13,6 +13,7 @@ from benchmarks.final_sweep import config as C
 from benchmarks.final_sweep.arms import CorpusState, hybrid_ranking, render_breadcrumbs
 from benchmarks.final_sweep.runner import NO_CONTEXT_TEXT, SweepConfig, run_sweep, validate_record
 from benchmarks.final_sweep.summary import summarize
+from prism.graph.render_breadcrumbs import strip
 from tests.test_final_sweep_8arms import FIXTURE_REPO, PIPELINE, FakeClient, _task
 
 STAGE2 = list(C.STAGE2_ARMS.values())
@@ -69,11 +70,15 @@ def test_hybrid_ranking_fuses_reranks_and_is_deterministic(corpus):
     assert corpus._reranker.calls >= 1
 
 
-def test_breadcrumbs_block(corpus):
-    block, n = render_breadcrumbs(corpus, PIPELINE)
-    assert (block == "") == (n == 0)
-    if block:
-        assert block.startswith("\n<entry_context>\n") and block.rstrip().endswith("</entry_context>")
+def test_breadcrumbs_are_inlined_and_strip_exactly(corpus):
+    from benchmarks.final_sweep.arms import build_oracle
+    from benchmarks.final_sweep.context_ops import render_context
+    from prism.graph.render_breadcrumbs import strip
+
+    rendered = render_context(build_oracle(corpus, _task(), 4000, False, "pragmatic_oracle").pkg)
+    out, placed = render_breadcrumbs(corpus, PIPELINE, rendered)
+    assert out.count("<entry_context>") == len(placed)
+    assert strip(out) == rendered
 
 
 def test_end_to_end_stage2_arms(tmp_path, corpus):
@@ -93,8 +98,7 @@ def test_end_to_end_stage2_arms(tmp_path, corpus):
     assert by_arm["prism_oracle"]["selected_symbols"] == by_arm["pragmatic_oracle"]["selected_symbols"]
     with_block = answer_users["prism_oracle"]
     assert "<entry_context>" in with_block and by_arm["prism_oracle"]["n_breadcrumb_symbols"] >= 1
-    stripped = re.sub(r"\n<entry_context>\n.*?</entry_context>\n", "", with_block, count=1, flags=re.S)
-    assert stripped == answer_users["pragmatic_oracle"]  # nothing else differs
+    assert strip(with_block) == answer_users["pragmatic_oracle"]  # nothing else differs
     assert by_arm["prism_oracle"]["breadcrumb_tokens"] > 0
     assert by_arm["pragmatic_oracle"]["breadcrumb_tokens"] == 0
     assert by_arm["prism_ask"]["selected_symbols"] and by_arm["arm1_hybrid_rag"]["selected_symbols"]

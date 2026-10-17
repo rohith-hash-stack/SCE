@@ -109,10 +109,10 @@ def test_decorator_parsing_is_framework_agnostic():
     assert _parse_decorator("@login_required") == ("login_required", None, None)
 
 
-def test_entry_points_are_registered_never_called_functions(built):
+def test_entry_points_are_registered_functions(built):
     builder, _ = built
     entries = find_entry_points(builder)
-    assert set(entries) == {"app.routes.register_user"}  # `route`/`wrap` are called; @property is builtin
+    assert set(entries) == {"app.routes.register_user"}  # `route` + path literal; @property is builtin; login_required has no route evidence
     assert entries["app.routes.register_user"].label() == "POST /users"
 
 
@@ -136,8 +136,8 @@ def test_entry_context_on_hits_is_display_only(built):
     hits = ix.hits("insert user rows", "NB", 5)
     assert [h["qname"] for h in hits] == ix.ranked("insert user rows", "NB")[:5]  # order untouched
     insert = next(h for h in hits if h["qname"] == "app.repo.UserRepository.insert_user")
-    assert insert["entry_context"] == ["[Entry: POST /users] -> register_user() -> create_account() -> UserRepository.insert_user()"]
+    assert insert["entry_context"] == ["[Entry: POST /users] -> register_user() -> create_account() => enters at UserRepository.insert_user()"]
     assert insert["location"] == "app/repo.py:5"
     entries = find_entry_points(builder)
     chain = entry_paths(builder, "app.routes.register_user", entries)
-    assert chain == [["app.routes.register_user"]] and format_entry_context(chain[0], entries) == "[Entry: POST /users] -> register_user()"
+    assert chain == [["app.routes.register_user"]] and format_entry_context(chain[0], entries) == "[Entry: POST /users] => enters at register_user()"

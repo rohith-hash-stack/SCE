@@ -88,7 +88,7 @@ def test_search_payload(index):
     assert set(top) == {"rank", "qname", "kind", "location", "score", "legs", "entry_context"}
     assert top["location"] == "app/repo.py:8" and top["kind"] == "method"
     assert top["legs"]["capability_source"] == "capability" and top["legs"]["capability"] > 0  # sqlite3 is L2 DB I/O
-    assert top["entry_context"] == ["[Entry: POST /users] -> register_user() -> create_account() -> UserRepository.insert_user()"]
+    assert top["entry_context"] == ["[Entry: POST /users] -> register_user() -> create_account() => enters at UserRepository.insert_user()"]
 
 
 def test_priors_are_on_in_the_product(index):

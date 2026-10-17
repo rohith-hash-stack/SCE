@@ -24,9 +24,11 @@ The pipeline, end to end:
 4. **Priors**: a class never outranks its own best-matching method;
    candidates under `migrations/`, `alembic/` or `migrate/` go below every
    other hit unless the question is about migrations.
-5. **Entry context** (`prism.graph.entry_points`, display only): each hit's
-   upstream public entrances, e.g.
-   `[Entry: POST /follow/<username>] -> follow() -> User.follow()`.
+5. **Entry context** (`prism.graph.entry_points`, display only): how a
+   registered entry point (a route, command, task - never a wrapper
+   decorator) reaches the hit, at most one validated path
+   (`prism.graph.render_breadcrumbs`), e.g.
+   `[Entry: POST /follow/<username>] -> follow() => enters at User.follow()`.
 
 The ranking was measured on two frozen held-out question sets
 (`harness/experiments/heldout_retrieval/`).
@@ -289,7 +291,7 @@ class NLQIndex:
              "source": "rule" | "caller" | None},
              "hits": [{"rank", "qname", "kind", "location", "score",
                        "legs": {"stems", "capability", "action", "capability_source"},
-                       "entry_context": ["[Entry: POST /x] -> f() -> g()", ...]}, ...]}
+                       "entry_context": ["[Entry: POST /x] -> f() => enters at g()"]}, ...]}
         """
         if top_k < 1:
             raise ValueError("top_k must be >= 1")

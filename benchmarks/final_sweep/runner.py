@@ -506,10 +506,9 @@ def _run_cell_inner(corpus, client, spec, task, seed, cfg, turn1_cache, record: 
     if spec.kind == "none":
         rendered = NO_CONTEXT_TEXT
     if spec.breadcrumbs:
-        block, record.n_breadcrumb_symbols = render_breadcrumbs(corpus, [n.id for n in pkg.nodes])
-        from prism.slicer.tokenizer import count_tokens
-        record.breadcrumb_tokens = count_tokens(block) if block else 0
-        rendered += block
+        rendered, placed = render_breadcrumbs(corpus, [n.id for n in pkg.nodes], rendered)
+        record.n_breadcrumb_symbols = len(placed)
+        record.breadcrumb_tokens = sum(c.tokens for c in placed)
 
     if spec.kind == "pagerank":
         # A repo map has no anchor; record whether the task seed survived

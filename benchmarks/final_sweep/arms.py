@@ -404,23 +404,17 @@ def build_ask(corpus: CorpusState, task: EvaluationTask, budget: int, engine_id:
     return _pack_ranked(corpus, task, [h["qname"] for h in hits], budget, engine_id)
 
 
-def render_breadcrumbs(corpus: CorpusState, symbols: list[str]) -> tuple[str, int]:
-    """`(block, n_symbols_with_paths)`: each symbol's upstream entry-point
-    paths as an `<entry_context>` block appended after the context - empty
-    when no symbol has one."""
+def render_breadcrumbs(corpus: CorpusState, symbols: list[str], rendered: str) -> tuple[str, list]:
+    """`(rendered with breadcrumbs, the breadcrumbs placed)`: the slice's
+    validated entry paths (`prism.graph.render_breadcrumbs`) inlined as an
+    `<entry_context>` line under each entered root's `<node>` tag;
+    `prism.graph.render_breadcrumbs.strip` restores `rendered` exactly."""
+    from prism.graph.render_breadcrumbs import inline
+
     index = nlq_index(corpus)
-    lines = []
     with corpus.lock:
-        for qname in symbols:
-            symbol = corpus.builder.symbol_table.get(qname)
-            if symbol is None or symbol.kind == "class":
-                continue
-            for path in index.entries.context(qname):
-                lines.append(f"{qname}: {path}")
-    n = len({ln.split(": ", 1)[0] for ln in lines})
-    if not lines:
-        return "", 0
-    return "\n<entry_context>\n" + "\n".join(lines) + "\n</entry_context>\n", n
+        crumbs = index.entries.breadcrumbs(symbols)
+    return inline(rendered, crumbs)
 
 
 def distractor_nodes(corpus: CorpusState, names: list[str]) -> list[NodeEntry]:

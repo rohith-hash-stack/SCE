@@ -5,6 +5,10 @@ import pytest
 
 from prism.cli import build_pipeline
 
+#: Breadcrumb invariant violations raise in tests instead of being dropped
+#: (`prism.graph.render_breadcrumbs`).
+os.environ.setdefault("PRISM_BREADCRUMB_STRICT", "1")
+
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 PYTHON_REPO = os.path.join(FIXTURES_DIR, "python_repo")
 

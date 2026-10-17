@@ -63,8 +63,8 @@ class ArmSpec:
     anchor: AnchorMode = "taxonomy"
     axes: AxisPolicy = "all"
     distractor_k: int = 0
-    #: Append each packed symbol's upstream entry-point paths
-    #: (`prism.graph.entry_points`) after the rendered context.
+    #: Inline the slice's validated entry-point breadcrumbs
+    #: (`prism.graph.render_breadcrumbs`) under each entered root's node.
     breadcrumbs: bool = False
     description: str = ""
 
@@ -133,11 +133,11 @@ EXPERIMENTAL_ARMS: dict[str, ArmSpec] = {
         ArmSpec(
             "prism_ask", "ask", breadcrumbs=True,
             description="prism.query.nlq.NLQIndex.search(task prompt): ranked hits' full bodies packed to the "
-            "budget, plus each hit's entry-point breadcrumbs.",
+            "budget, plus the slice's entry-point breadcrumbs.",
         ),
         ArmSpec(
             "prism_oracle", "oracle", breadcrumbs=True,
-            description="pragmatic_oracle's exact context plus entry-point breadcrumbs for its symbols: "
+            description="pragmatic_oracle's exact context plus the slice's entry-point breadcrumbs: "
             "isolates the value of architectural provenance over raw code.",
         ),
     )
