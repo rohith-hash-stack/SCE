@@ -13,7 +13,9 @@ Invariants (`validate`), enforced on every breadcrumb:
 
 1. every hop but the last lies outside `S`; the last is the root;
 2. the root is a root of `S` (no other member of `S` calls it);
-3. the head is a registered entry point and each hop calls the next
+3. the head is a registered entry point - one in an example, tutorial or
+   docs app only for a root inside that same app (`EntryIndex.entries_for`)
+   - and each hop calls the next
    through a call the code makes (never an override fan-out or callback
    guess - `prism.graph.entry_points._definite`);
 4. one path per root, no duplicate text, and the slice's breadcrumbs fit
@@ -85,6 +87,8 @@ def validate(crumb: Breadcrumb, members: set[str], index, max_tokens: int = MAX_
         problems.append("the path enters the slice mid-chain (the root has a caller in the slice)")
     if not chain or chain[0] not in index.entries:
         problems.append("the head is not a registered entry point")
+    elif hasattr(index, "entries_for") and chain[0] not in index.entries_for(crumb.root):
+        problems.append("the head is an example/tutorial app's route and the root is not in that app")
     for a, b in zip(chain, chain[1:]):
         if a not in graph or not any(v == b and _definite(d) for _, v, d in graph.out_edges(a, data=True)):
             problems.append(f"no resolved call edge {a} -> {b}")

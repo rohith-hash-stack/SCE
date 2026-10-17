@@ -273,3 +273,50 @@ def test_breadcrumbs_never_rest_on_override_fan_out(tmp_path_factory):
     assert fan_out and all("dispatch_of" in d for d in fan_out)  # the speculative edge exists
     assert slice_breadcrumbs(index, ["app.db.BaseWrapper.cursor"], strict=True) == []
     assert index.context("app.db.BaseWrapper.ensure_timezone") == ["[Entry: /tz] -> tz_changed() => enters at BaseWrapper.ensure_timezone()"]
+
+
+EXAMPLE_LIB = '''
+function json(res, body) { return send(res, JSON.stringify(body)); }
+function send(res, text) { return text; }
+module.exports = { json, send };
+'''
+
+EXAMPLE_APP = '''
+const { json } = require('../../lib/response');
+const express = require('express');
+const app = express();
+
+function showUser(req, res) { return render(res); }
+function render(res) { return json(res, {}); }
+
+app.put('/user/:id/edit', showUser);
+module.exports = app;
+'''
+
+LIB_ROUTES = '''
+const { send } = require('./response');
+const express = require('express');
+const app = express();
+
+function health(req, res) { return send(res, 'ok'); }
+
+app.get('/health', health);
+module.exports = app;
+'''
+
+
+def test_example_app_routes_only_reach_code_inside_that_app(tmp_path_factory):
+    """express_t02_006: a route in examples/ described how library code is
+    reached; it now counts only for roots inside the same example app."""
+    index = _build(tmp_path_factory, "examples", {
+        "lib/response.js": EXAMPLE_LIB, "lib/routes.js": LIB_ROUTES, "examples/users/index.js": EXAMPLE_APP})
+    assert index.entries["examples.users.showUser"].label() == "PUT /user/:id/edit"
+    assert index.zone("examples.users.render") == "examples/users"
+    # library code: the example route is not offered; the library's own route still is
+    assert index.context("lib.response.json") == []
+    assert index.context("lib.response.send") == ["[Entry: GET /health] -> health() => enters at send()"]
+    # code inside the example app keeps its own route
+    assert index.context("examples.users.render") == ["[Entry: PUT /user/:id/edit] -> showUser() => enters at render()"]
+    forged = Breadcrumb("lib.response.json", ("examples.users.showUser", "examples.users.render", "lib.response.json"),
+                        "x", 5)
+    assert any("example" in p for p in validate(forged, {"lib.response.json"}, index))

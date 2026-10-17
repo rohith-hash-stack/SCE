@@ -337,6 +337,24 @@ def format_entry_context(chain: list[str], entries: dict[str, EntryPoint]) -> st
     return f"{head} => enters at {short_name(chain[-1])}()"
 
 
+#: Directories holding example, tutorial or documentation apps. Their
+#: routes describe how a *user* of the code calls it, not how the code
+#: itself is reached, so they only count for code inside the same app.
+EXAMPLE_DIRS = ("examples", "example", "docs", "docs_src", "tutorials")
+
+
+def example_zone(relpath: str) -> str | None:
+    """The example app `relpath` belongs to: the path through the first
+    `EXAMPLE_DIRS` segment plus the app directory after it
+    (`examples/auth/index.js` -> `examples/auth`; `docs_src/app.py` ->
+    `docs_src`), or `None` outside example directories."""
+    parts = relpath.replace("\\", "/").split("/")
+    for i, part in enumerate(parts[:-1]):
+        if part in EXAMPLE_DIRS:
+            return "/".join(parts[: i + 2] if i + 2 < len(parts) else parts[: i + 1])
+    return None
+
+
 class EntryIndex:
     """Entry points and application functions of one index, computed once;
     `paths`/`context`/`breadcrumbs` per symbol or slice reuse them."""
@@ -346,10 +364,27 @@ class EntryIndex:
         self.builder, self.max_hops, self.limit = builder, max_hops, limit
         self.functions = _application_functions(builder)
         self.entries = find_entry_points(builder, self.functions, dependency_paths)
+        self._zones = {q: self.zone(q) for q in self.entries}
+        self._by_zone: dict[str | None, dict[str, EntryPoint]] = {}
+
+    def zone(self, qname: str) -> str | None:
+        symbol = self.builder.symbol_table.get(qname)
+        if symbol is None:
+            return None
+        rel = os.path.relpath(symbol.file, self.builder.repo_root) if os.path.isabs(symbol.file) else symbol.file
+        return example_zone(rel)
+
+    def entries_for(self, qname: str) -> dict[str, EntryPoint]:
+        """The entries a path to `qname` may start from: all entries outside
+        example directories, plus those in `qname`'s own example app."""
+        zone = self.zone(qname)
+        if zone not in self._by_zone:
+            self._by_zone[zone] = {q: e for q, e in self.entries.items() if self._zones[q] in (None, zone)}
+        return self._by_zone[zone]
 
     def paths(self, qname: str, blocked: "frozenset[str] | set[str]" = frozenset()) -> list[list[str]]:
-        return entry_paths(self.builder, qname, self.entries, self.max_hops, self.limit, funcs=self.functions,
-                           blocked=blocked)
+        return entry_paths(self.builder, qname, self.entries_for(qname), self.max_hops, self.limit,
+                           funcs=self.functions, blocked=blocked)
 
     def breadcrumbs(self, symbols: list[str], **kwargs):
         """Validated breadcrumbs for a slice - see
