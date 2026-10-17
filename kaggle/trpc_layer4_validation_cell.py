@@ -42,6 +42,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -194,9 +195,12 @@ NODE = os.path.join(node_bin, "node")
 node_version = run([NODE, "--version"], capture=True).stdout.strip()
 if not node_version.startswith("v20."):
     abort(f"node is {node_version}")
-if run(["pnpm", "--version"], check=False, capture=True).stdout.strip() != PNPM_VERSION:
-    run(["npm", "install", "-g", "--silent", f"pnpm@{PNPM_VERSION}"], check=True)
-pnpm_version = run(["pnpm", "--version"], capture=True).stdout.strip()
+PNPM = os.path.join(node_bin, "pnpm")  # installed next to this node, never a system pnpm
+if not os.path.exists(PNPM) or run([PNPM, "--version"], check=False, capture=True).stdout.strip() != PNPM_VERSION:
+    run([os.path.join(node_bin, "npm"), "install", "-g", "--silent", f"pnpm@{PNPM_VERSION}"], check=True)
+if not os.path.exists(PNPM):
+    abort(f"npm install -g pnpm@{PNPM_VERSION} left no {PNPM} (PATH: {shutil.which('pnpm')})")
+pnpm_version = run([PNPM, "--version"], capture=True).stdout.strip()
 if pnpm_version != PNPM_VERSION:
     abort(f"pnpm is {pnpm_version}")
 print(f"[ok] node {node_version}, pnpm {pnpm_version}", flush=True)
@@ -217,21 +221,21 @@ if dirty:
 install_env = dict(os.environ, CI="1", HUSKY="0", PUPPETEER_SKIP_DOWNLOAD="1", PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD="1",
                    PRISMA_SKIP_POSTINSTALL_GENERATE="1", NEXT_TELEMETRY_DISABLED="1", TURBO_TELEMETRY_DISABLED="1")
 t = time.time()
-install = run(["pnpm", "install", "--frozen-lockfile", "--ignore-scripts", "--reporter=append-only"], cwd=TRPC,
+install = run([PNPM, "install", "--frozen-lockfile", "--ignore-scripts", "--reporter=append-only"], cwd=TRPC,
               check=False, env=install_env, timeout=3600)
 install_s = round(time.time() - t)
 if install.returncode != 0:
     abort("pnpm install --frozen-lockfile failed (no unfrozen fallback: it would drift versions)")
-run(["pnpm", "rebuild", "esbuild", "@swc/core"], cwd=TRPC, check=False, env=install_env)  # native postinstalls only
+run([PNPM, "rebuild", "esbuild", "@swc/core"], cwd=TRPC, check=False, env=install_env)  # native postinstalls only
 print(f"[ok] installed in {install_s}s", flush=True)
 
 print("\n[setup 6/6] Build @trpc/server (client tests import its dist/)", flush=True)
 t = time.time()
 built = False
-run(["pnpm", "--filter", "@trpc/server", "codegen-entrypoints"], cwd=TRPC, check=False, env=install_env)
-if run(["pnpm", "--filter", "@trpc/server", "build"], cwd=TRPC, check=False, env=install_env).returncode == 0:
+run([PNPM, "--filter", "@trpc/server", "codegen-entrypoints"], cwd=TRPC, check=False, env=install_env)
+if run([PNPM, "--filter", "@trpc/server", "build"], cwd=TRPC, check=False, env=install_env).returncode == 0:
     built = True
-elif run(["pnpm", "exec", "turbo", "--filter", "@trpc/server", "build"], cwd=TRPC, check=False,
+elif run([PNPM, "exec", "turbo", "--filter", "@trpc/server", "build"], cwd=TRPC, check=False,
          env=install_env).returncode == 0:
     built = True
 built = built and os.path.exists(os.path.join(TRPC, "packages/server/dist/observable/index.mjs"))
