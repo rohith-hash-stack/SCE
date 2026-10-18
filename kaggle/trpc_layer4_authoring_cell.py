@@ -15,7 +15,7 @@
 # changes, test files and depths, are in benchmarks/layer4/specs.py.
 #
 # Steps: the environment of the validated tRPC cell (Node 20.18.1, pnpm
-# 8.5.1, frozen install, @trpc/server built), then
+# 8.5.1, frozen install, @trpc/server and @trpc/client built), then
 #   python -m harness.experiments.layer4.author --corpus trpc --node <node20>
 # which for each task traces the focal with Vitest 0.32 in fork mode
 # (`--run --no-threads`, the runtime in NODE_OPTIONS), derives the forward
@@ -210,7 +210,7 @@ if install.returncode != 0:
 run([PNPM, "rebuild", "esbuild", "@swc/core"], cwd=TRPC, check=False, env=install_env)  # native postinstalls only
 print(f"[ok] installed in {install_s}s", flush=True)
 
-print("\n[setup 6/6] Build @trpc/server (client tests import its dist/)", flush=True)
+print("\n[setup 6/6] Build @trpc/server and @trpc/client (the tests import their dist/)", flush=True)
 t = time.time()
 built = False
 run([PNPM, "--filter", "@trpc/server", "codegen-entrypoints"], cwd=TRPC, check=False, env=install_env)
@@ -220,12 +220,24 @@ elif run([PNPM, "exec", "turbo", "--filter", "@trpc/server", "build"], cwd=TRPC,
          env=install_env).returncode == 0:
     built = True
 built = built and os.path.exists(os.path.join(TRPC, "packages/server/dist/observable/index.mjs"))
+# the tRPC tests also import `@trpc/client` by its package entry (dist/), which is
+# built against the server's dist/: build it second (the first authoring run failed
+# every test file except TRPCError.test.ts with "Failed to resolve entry for package
+# @trpc/client")
+if built:
+    run([PNPM, "--filter", "@trpc/client", "codegen-entrypoints"], cwd=TRPC, check=False, env=install_env)
+    if run([PNPM, "--filter", "@trpc/client", "build"], cwd=TRPC, check=False, env=install_env).returncode != 0:
+        run([PNPM, "exec", "turbo", "--filter", "@trpc/client", "build"], cwd=TRPC, check=False, env=install_env)
+client_built = os.path.exists(os.path.join(TRPC, "packages/client/dist/index.mjs"))
 build_s = round(time.time() - t)
 codegen_diff = run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=TRPC, capture=True).stdout.strip()
 if codegen_diff:  # codegen rewrote tracked files: keep dist/, restore the sources
     print(f"[note] build touched tracked files, restoring:\n{codegen_diff}", flush=True)
     run(["git", "checkout", "--", "."], cwd=TRPC, check=True)
-print(f"[{'ok' if built else 'warn'}] @trpc/server dist {'built' if built else 'MISSING'} ({build_s}s)", flush=True)
+print(f"[{'ok' if built else 'warn'}] @trpc/server dist {'built' if built else 'MISSING'}, @trpc/client dist "
+      f"{'built' if client_built else 'MISSING'} ({build_s}s)", flush=True)
+if not (built and client_built):
+    abort("the tRPC tests need @trpc/server and @trpc/client built (dist/)")
 
 TESTS_DIR = os.path.join(TRPC, "packages/tests")
 vitest_pkg = json.load(open(os.path.join(TESTS_DIR, "node_modules/vitest/package.json")))
