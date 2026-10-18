@@ -318,6 +318,7 @@ json.dump(suite, open(os.path.join(OUT, "suite.json"), "w"), indent=1, sort_keys
 # ============================================================
 # Report + push
 # ============================================================
+rejected_files = sorted(f for f in (os.listdir(REJECTED) if os.path.isdir(REJECTED) else []) if "_trpc_" in f)
 md = [f"# Layer 4 tRPC task authoring: {'PASS' if suite_ok else 'FAIL'}", "",
       f"SCE `{HEAD[:10]}`, tRPC `{trpc_head[:10]}`, Node {node_version}, pnpm {pnpm_version}, Vitest {VITEST_VERSION}; "
       f"install {install_s}s, server build {build_s}s, authoring {author_s}s (exit {author_code}).", "",
@@ -357,7 +358,6 @@ open(os.path.join(OUT, "AUTHORING.md"), "w").write("\n".join(md) + "\n")
 print("\n" + "\n".join(md), flush=True)
 
 paths = [PUSH_PATH]
-rejected_files = sorted(f for f in (os.listdir(REJECTED) if os.path.isdir(REJECTED) else []) if "_trpc_" in f)
 paths += [os.path.join("benchmarks", "layer4", "rejected", f) for f in rejected_files]  # diagnostics, pass or fail
 if suite_ok:
     for sub in ("tasks", "manifests", "gates"):
