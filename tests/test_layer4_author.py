@@ -50,7 +50,8 @@ def test_trpc_specs_target_the_index_root():
     assert len(trpc) == 4 and {s["family"] for s in trpc} == {"forward_blast", "backward_adaptation"}
     for spec in trpc:
         for cand in [spec, *spec.get("alternatives", [])]:
-            assert "." in cand["qname"] and not cand["qname"].startswith(("packages", "client"))
+            qname = cand.get("qname", spec["qname"])  # a trace-only alternative keeps the focal
+            assert "." in qname and not qname.startswith(("packages", "client"))
 
 
 def test_oracle_callees_python_direct_only_node_all():

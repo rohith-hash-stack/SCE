@@ -255,6 +255,10 @@ for tid in TRPC_IDS:  # a rerun authors from scratch
         p = os.path.join(SCE_DIR, "benchmarks", "layer4", sub, f"{tid}.json")
         if os.path.exists(p):
             os.remove(p)
+REJECTED = os.path.join(SCE_DIR, "benchmarks", "layer4", "rejected")
+for name in (os.listdir(REJECTED) if os.path.isdir(REJECTED) else []):
+    if "_trpc_" in name:
+        os.remove(os.path.join(REJECTED, name))
 
 print("\n[author] python -m harness.experiments.layer4.author --corpus trpc", flush=True)
 t = time.time()
@@ -298,7 +302,9 @@ try:
 except Exception:
     suite = {"n_tasks": 0, "suite_errors": [f"validation crashed: {(check.stderr or check.stdout)[-1500:]}"],
              "task_errors": {}, "missing_artifacts": [], "tasks": {}}
-pytest = run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *LAYER4_TESTS], cwd=SCE_DIR,
+# --noconftest: tests/conftest.py's autouse fixture imports benchmarks.runner (the bench
+# extras, not installed here); the Layer 4 tests need none of it
+pytest = run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--noconftest", *LAYER4_TESTS], cwd=SCE_DIR,
              env=child_env, check=False, capture=True)
 suite["layer4_tests"] = {"exit_code": pytest.returncode, "tail": (pytest.stdout + pytest.stderr)[-1500:]}
 authored = [tid for tid in TRPC_IDS if os.path.exists(os.path.join(SCE_DIR, "benchmarks", "layer4", "tasks", f"{tid}.json"))]
@@ -338,10 +344,21 @@ for tid in TRPC_IDS:
         md += [f"Gates: positive {v['positive_gate']}, negative {v['negative_gate']}.",
                "Oracle: " + ", ".join(f"`{q}`" for q in task["arm_view"]["oracle_symbols"]),
                f"Excluded from every arm: {task['arm_view']['exclude_paths']}.", ""]
+if rejected_files:
+    md += ["## Rejected candidates (traces in benchmarks/layer4/rejected/)", ""]
+    for f in rejected_files:
+        r = json.load(open(os.path.join(REJECTED, f)))
+        tr = r.get("trace") or {}
+        md += [f"- `{r['qname']}` for {r['task_id']}: {r['reason'].splitlines()[0][:200]} "
+               f"(exit {tr.get('exit_code')}, focal calls {tr.get('focal_calls')}, tests {tr.get('n_tests')}, "
+               f"depths {dict(list((tr.get('ancestor_depth') or {}).items())[:6])})"]
+    md.append("")
 open(os.path.join(OUT, "AUTHORING.md"), "w").write("\n".join(md) + "\n")
 print("\n" + "\n".join(md), flush=True)
 
 paths = [PUSH_PATH]
+rejected_files = sorted(f for f in (os.listdir(REJECTED) if os.path.isdir(REJECTED) else []) if "_trpc_" in f)
+paths += [os.path.join("benchmarks", "layer4", "rejected", f) for f in rejected_files]  # diagnostics, pass or fail
 if suite_ok:
     for sub in ("tasks", "manifests", "gates"):
         paths += [os.path.join("benchmarks", "layer4", sub, f"{tid}.json") for tid in TRPC_IDS

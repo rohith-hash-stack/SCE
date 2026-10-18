@@ -249,6 +249,31 @@ def prompt_for(spec: dict, short: str, file: str, signature: str) -> str:
             f"before. Keep its signature: `{signature}`.")
 
 
+LAST_TRACE: dict[str, dict] = {}  # task id -> the latest trace, saved with a rejected candidate
+
+
+def check_trace(tid: str, m: dict) -> None:
+    """A trace is usable only if the run passed and the focal function ran."""
+    calls = m.get("focal_calls", 0)
+    calls = sum(calls.values()) if isinstance(calls, dict) else calls
+    if m.get("exit_code") != 0:
+        raise SystemExit(f"{tid}: trace exited {m.get('exit_code')}\n{m.get('output_tail', '')[-2500:]}")
+    if not calls:
+        raise SystemExit(f"{tid}: the focal function never ran in the traced tests\n{m.get('output_tail', '')[-1500:]}")
+
+
+def diagnostics(m: dict | None) -> dict:
+    """What a rejected candidate's trace showed (saved under rejected/)."""
+    if not m:
+        return {}
+    chains = sorted((m.get("raw") or {}).get("chains", m.get("chains", {})).items(), key=lambda kv: -kv[1])[:8]
+    return {"exit_code": m.get("exit_code"), "focal_calls": m.get("focal_calls"), "n_tests": len(m.get("tests", [])),
+            "tests_sample": m.get("tests", [])[:5], "ancestors": m.get("ancestors"),
+            "ancestors_unmapped": m.get("ancestors_unmapped"), "ancestor_depth": m.get("ancestor_depth"),
+            "outside_ancestors": m.get("outside_ancestors"), "top_chains": chains,
+            "descendants": m.get("descendants"), "output_tail": (m.get("output_tail") or "")[-3000:]}
+
+
 def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce_commit: str) -> dict:
     corpus, qname, family = spec["corpus"], spec["qname"], spec["family"]
     root = clone_root(corpus)
@@ -292,10 +317,19 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
     gates_record = None
     if family == "forward_blast":
         m = trace(spec.get("trace_labels") or spec["trace"])
-        gold = T.gold_from_manifest(m, "upstream", min_count=spec.get("min_count", 1), known=known, focal=qname,
-                                    max_depth=spec["max_depth"])
+        LAST_TRACE[tid] = m
+        check_trace(tid, m)
+        # the shallowest depth from max_depth up to max_depth_limit that yields gold
+        depth = spec["max_depth"]
+        while True:
+            gold = T.gold_from_manifest(m, "upstream", min_count=spec.get("min_count", 1), known=known, focal=qname,
+                                        max_depth=depth)
+            if gold or depth >= spec.get("max_depth_limit", spec["max_depth"]):
+                break
+            depth += 1
         if not gold:
-            raise SystemExit(f"{tid}: empty gold")
+            raise SystemExit(f"{tid}: empty gold within {depth} call hops ({len(m.get('ancestors', {}))} traced "
+                             f"ancestor locations, {len(m.get('ancestor_depth', {}))} with a depth)")
         if len(gold) > MAX_GOLD:
             raise SystemExit(f"{tid}: {len(gold)} gold symbols > {MAX_GOLD}; lower max_depth")
         side_effects = tables = None
@@ -311,7 +345,7 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
         task["gold"] = {"source": "runtime_trace", "direction": "upstream", "affected_symbols": gold,
                         "side_effects": side_effects, "tables": tables,
                         "trace_manifest": f"benchmarks/layer4/manifests/{tid}.json", "trace_command": m["command"],
-                        "min_count": spec.get("min_count", 1), "max_depth": spec["max_depth"]}
+                        "min_count": spec.get("min_count", 1), "max_depth": depth}
     else:
         if corpus == "django":
             cmd = ["{python}", "tests/runtests.py", "--parallel=1", *spec["test_labels"]]
@@ -328,6 +362,8 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
             raise SystemExit(f"{tid}: gates invalid: positive {g['positive']['passed']} "
                              f"negative {g['negative']['passed']}\n{g['positive']['output_tail'][-800:]}")
         m = trace(spec["test_labels"] if corpus == "django" else spec["tests"])
+        LAST_TRACE[tid] = m
+        check_trace(tid, m)
         callers = T.gold_from_manifest(m, "upstream", known=known, focal=qname, max_depth=BACKWARD_ORACLE_DEPTH)
         callees = oracle_callees(m, known, qname)
         m["oracle_callers"], m["oracle_callees"] = callers, callees
@@ -361,17 +397,25 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
 
 
 def author_with_fallbacks(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce_commit: str) -> dict:
-    """A spec may list `alternatives` (other focal functions, each with its own
-    tests or trace): the first that yields a valid task is kept; the rejected
-    ones and why are recorded in the task's manifest."""
+    """A spec may list `alternatives` (overrides of the spec: another focal
+    function with its own tests or trace, or the same focal with another
+    trace): the first that yields a valid task is kept; the rejected ones and
+    why are recorded in the task's manifest, with their traces under
+    rejected/."""
     rejected = []
-    for candidate in [spec, *({**spec, **alt} for alt in spec.get("alternatives", []))]:
+    for n, candidate in enumerate([spec, *({**spec, **alt} for alt in spec.get("alternatives", []))]):
         candidate = {k: v for k, v in candidate.items() if k != "alternatives"}
+        LAST_TRACE.pop(spec["task_id"], None)
         try:
             task = author(candidate, pythons, names_dir, builders, sce_commit)
         except SystemExit as exc:
-            print(f"[reject] {spec['task_id']}: {candidate['qname']}: {str(exc).splitlines()[0][:300]}", flush=True)
-            rejected.append({"qname": candidate["qname"], "reason": str(exc)[:2000]})
+            print(f"[reject] {spec['task_id']}: {candidate['qname']}: {str(exc)[:1500]}", flush=True)
+            rejected.append({"qname": candidate["qname"], "candidate": n, "reason": str(exc)[:2000]})
+            diag = OUT / "rejected" / f"{spec['task_id']}__{n}__{candidate['qname']}.json"
+            diag.parent.mkdir(parents=True, exist_ok=True)
+            diag.write_text(json.dumps({"task_id": spec["task_id"], "qname": candidate["qname"], "reason": str(exc),
+                                        "trace": diagnostics(LAST_TRACE.get(spec["task_id"]))},
+                                       indent=1, sort_keys=True, default=str) + "\n")
             continue
         if rejected:
             path = OUT / "manifests" / f"{task['task_id']}.json"
@@ -397,18 +441,26 @@ def main(argv=None) -> int:
     sce_commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=SCE, capture_output=True,
                                 text=True).stdout.strip()
     builders = {}
+    failed: list[str] = []
     for spec in SPECS:
         if (wanted and spec["task_id"] not in wanted) or (args.corpus and spec["corpus"] != args.corpus):
             continue
         if spec["corpus"] in ("express", "trpc") and spec["corpus"] not in builders:
             from prism.engine import PrismEngine
             builders[spec["corpus"]] = PrismEngine.from_repo(corpus_root(spec["corpus"])).builder
-        t = author_with_fallbacks(spec, pythons, args.names_dir, builders, sce_commit)
+        try:
+            t = author_with_fallbacks(spec, pythons, args.names_dir, builders, sce_commit)
+        except SystemExit as exc:  # report it and go on with the other tasks
+            print(f"[fail] {exc}", flush=True)
+            failed.append(spec["task_id"])
+            continue
         gold = t["gold"].get("affected_symbols") or t["arm_view"]["oracle_symbols"][1:]
         print(f"[ok] {t['task_id']}: {len(gold)} {'gold' if t['family'] == 'forward_blast' else 'oracle symbols'}"
               f"{', tables ' + str(t['gold']['tables']) if t['gold'].get('tables') else ''}"
               f"{', effects ' + str(t['gold']['side_effects']) if t['gold'].get('side_effects') else ''}", flush=True)
-    return 0
+    if failed:
+        print(f"[fail] not authored: {failed}", flush=True)
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -32,6 +32,8 @@ VITEST = ["{node}", "{vitest}", "--run", "--no-threads"]
 TRPC_ERROR_PATHS = ["tests/server/errors.test.ts", "tests/server/errorFormatting.test.ts",
                     "tests/server/middlewares.test.ts", "tests/server/websockets.test.ts",
                     "tests/server/TRPCError.test.ts", "tests/server/caller.test.ts", "tests/server/createCaller.test.ts"]
+# the same without the websocket tests, which may time out under the tracer's slowdown
+TRPC_ERROR_PATHS_NO_WS = [p for p in TRPC_ERROR_PATHS if "websockets" not in p]
 
 SPECS = [
     # ------------------------------------------------------------- FastAPI
@@ -121,15 +123,18 @@ SPECS = [
     # ------------------------------------------------------------- tRPC
     # Authored on Kaggle (kaggle/trpc_layer4_authoring_cell.py): the workspace
     # install needs registry.npmjs.com. Every focal is in packages/server/src;
-    # `alternatives` are tried in order if a candidate yields no valid task.
+    # `alternatives` are tried in order if a candidate yields no valid task;
+    # forward gold widens one hop at a time up to max_depth_limit if no caller
+    # sits within max_depth (test helpers and library frames add hops).
     {
         "task_id": "l4_fwd_trpc_01", "corpus": "trpc", "family": "forward_blast",
         "qname": "error.TRPCError.getTRPCErrorFromUnknown",
         "change": {"kind": "return_contract",
                    "description": "getTRPCErrorFromUnknown() returns undefined for causes that are not already a "
                                   "TRPCError, instead of wrapping them in an INTERNAL_SERVER_ERROR TRPCError."},
-        "trace": VITEST + TRPC_ERROR_PATHS, "max_depth": 2,
+        "trace": VITEST + TRPC_ERROR_PATHS, "max_depth": 2, "max_depth_limit": 4,
         "alternatives": [
+            {"trace": VITEST + TRPC_ERROR_PATHS_NO_WS},
             {"qname": "shared.transformTRPCResponse.transformTRPCResponse",
              "change": {"kind": "signature",
                         "description": "transformTRPCResponse(config, itemOrItems) becomes "
@@ -143,8 +148,9 @@ SPECS = [
         "change": {"kind": "signature",
                    "description": "getErrorShape(opts) no longer receives `config` inside opts: the error formatter "
                                   "must be passed as a second argument, getErrorShape(opts, errorFormatter)."},
-        "trace": VITEST + TRPC_ERROR_PATHS, "max_depth": 2,
+        "trace": VITEST + TRPC_ERROR_PATHS, "max_depth": 2, "max_depth_limit": 4,
         "alternatives": [
+            {"trace": VITEST + TRPC_ERROR_PATHS_NO_WS},
             {"qname": "core.router.callProcedure",
              "change": {"kind": "return_contract",
                         "description": "callProcedure() resolves to a { ok, data, error } result object instead of "
