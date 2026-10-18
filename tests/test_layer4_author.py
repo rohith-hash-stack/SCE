@@ -31,6 +31,28 @@ def test_commands_and_gating_paths(tmp_path):
     assert A.django_label_paths(["cache.tests.LocMemCacheTests", "update"]) == ["tests/cache/", "tests/update/"]
 
 
+def test_trpc_paths_and_vitest_filters(monkeypatch):
+    # Vitest filters are relative to its root (packages/): the gating file is packages/<filter>
+    cmd = ["{node}", "{vitest}", "--run", "--no-threads", "tests/server/index.test.ts",
+           "server/src/observable/operators/share.test.ts"]
+    assert A.test_files(cmd, "trpc") == ["packages/tests/server/index.test.ts",
+                                         "packages/server/src/observable/operators/share.test.ts"]
+    monkeypatch.setattr(A, "corpus_root", lambda corpus: "/c/trpc/packages/server/src")
+    assert A.clone_root("trpc") == "/c/trpc"
+    monkeypatch.setattr(A, "vitest_bin", lambda clone: "/c/trpc/packages/tests/node_modules/vitest/vitest.mjs")
+    A.NODE["bin"] = "/opt/node20/bin/node"
+    assert A.expand(cmd[:3], "/c/trpc", None) == ["/opt/node20/bin/node", "/c/trpc/packages/tests/node_modules/vitest/vitest.mjs", "--run"]
+
+
+def test_trpc_specs_target_the_index_root():
+    from benchmarks.layer4.specs import SPECS
+    trpc = [s for s in SPECS if s["corpus"] == "trpc"]
+    assert len(trpc) == 4 and {s["family"] for s in trpc} == {"forward_blast", "backward_adaptation"}
+    for spec in trpc:
+        for cand in [spec, *spec.get("alternatives", [])]:
+            assert "." in cand["qname"] and not cand["qname"].startswith(("packages", "client"))
+
+
 def test_oracle_callees_python_direct_only_node_all():
     m = {"descendants": {"a.f": 5, "a.g": 9, "a.deep": 20, "x.unknown": 3}, "descendant_depth": {"a.f": 1, "a.g": 1, "a.deep": 3}}
     assert A.oracle_callees(m, {"a.f", "a.g", "a.deep"}, "a.focal") == ["a.g", "a.f"]

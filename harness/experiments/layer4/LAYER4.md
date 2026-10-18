@@ -304,6 +304,19 @@ environments. Decisions taken while authoring the first 12 tasks:
   its tail (a long Mocha failure list pushed it out of the last 3,000
   characters).
 
+**tRPC** (authored on Kaggle, `kaggle/trpc_layer4_authoring_cell.py`: the
+workspace install needs `registry.npmjs.com`). Focal functions are in
+`packages/server/src`, Prism's tRPC index root; task files are
+clone-relative (`focal.file`) with `index_file` relative to the index;
+traces run Vitest 0.32 in fork mode from `packages/tests` with the runtime
+in `NODE_OPTIONS`, are rebased to the index root and mapped like Express.
+Specs may list `alternatives`: the author keeps the first candidate that
+yields a valid task and records the rejected ones in the manifest. Primary
+picks: forward `getTRPCErrorFromUnknown` and `getErrorShape` (callers in the
+HTTP resolver, procedure/middleware code, the ws adapter), backward
+`mergeRouters` (formatter/transformer conflict rules) and the `share`
+operator (ref-counted multicast).
+
 ### Arm compatibility (all 7 Stage 2 arms, unchanged)
 
 `to_evaluation_task(task)` builds the `EvaluationTask` every arm already

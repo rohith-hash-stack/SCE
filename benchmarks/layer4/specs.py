@@ -26,6 +26,12 @@ FASTAPI_NO_WEBSOCKETS = [arg for f in (
 PYTEST = ["{python}", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
 MOCHA = ["node_modules/.bin/mocha", "--reporter", "dot", "--check-leaks"]
 EXPRESS_UNIT = "test/*.js"  # expanded by the author: the unit suite (test/acceptance drives examples/)
+# tRPC: Vitest 0.32 in fork mode from packages/tests; filters are paths relative
+# to Vitest's root (packages/), so `packages/<filter>` is the gating file.
+VITEST = ["{node}", "{vitest}", "--run", "--no-threads"]
+TRPC_ERROR_PATHS = ["tests/server/errors.test.ts", "tests/server/errorFormatting.test.ts",
+                    "tests/server/middlewares.test.ts", "tests/server/websockets.test.ts",
+                    "tests/server/TRPCError.test.ts", "tests/server/caller.test.ts", "tests/server/createCaller.test.ts"]
 
 SPECS = [
     # ------------------------------------------------------------- FastAPI
@@ -111,5 +117,56 @@ SPECS = [
         "task_id": "l4_bwd_express_02", "corpus": "express", "family": "backward_adaptation",
         "qname": "lib.response.format",
         "tests": MOCHA + ["test/res.format.js"],
+    },
+    # ------------------------------------------------------------- tRPC
+    # Authored on Kaggle (kaggle/trpc_layer4_authoring_cell.py): the workspace
+    # install needs registry.npmjs.com. Every focal is in packages/server/src;
+    # `alternatives` are tried in order if a candidate yields no valid task.
+    {
+        "task_id": "l4_fwd_trpc_01", "corpus": "trpc", "family": "forward_blast",
+        "qname": "error.TRPCError.getTRPCErrorFromUnknown",
+        "change": {"kind": "return_contract",
+                   "description": "getTRPCErrorFromUnknown() returns undefined for causes that are not already a "
+                                  "TRPCError, instead of wrapping them in an INTERNAL_SERVER_ERROR TRPCError."},
+        "trace": VITEST + TRPC_ERROR_PATHS, "max_depth": 2,
+        "alternatives": [
+            {"qname": "shared.transformTRPCResponse.transformTRPCResponse",
+             "change": {"kind": "signature",
+                        "description": "transformTRPCResponse(config, itemOrItems) becomes "
+                                       "transformTRPCResponse(itemOrItems, transformer), taking the data transformer "
+                                       "instead of the router config."}},
+        ],
+    },
+    {
+        "task_id": "l4_fwd_trpc_02", "corpus": "trpc", "family": "forward_blast",
+        "qname": "shared.getErrorShape.getErrorShape",
+        "change": {"kind": "signature",
+                   "description": "getErrorShape(opts) no longer receives `config` inside opts: the error formatter "
+                                  "must be passed as a second argument, getErrorShape(opts, errorFormatter)."},
+        "trace": VITEST + TRPC_ERROR_PATHS, "max_depth": 2,
+        "alternatives": [
+            {"qname": "core.router.callProcedure",
+             "change": {"kind": "return_contract",
+                        "description": "callProcedure() resolves to a { ok, data, error } result object instead of "
+                                       "the procedure's output, and no longer throws on procedure errors."}},
+        ],
+    },
+    {
+        "task_id": "l4_bwd_trpc_01", "corpus": "trpc", "family": "backward_adaptation",
+        "qname": "core.internals.mergeRouters.mergeRouters",
+        "tests": VITEST + ["tests/server/index.test.ts", "tests/server/smoke.test.ts"],
+        "alternatives": [
+            {"qname": "shared.getCauseFromUnknown.getCauseFromUnknown",
+             "tests": VITEST + ["tests/server/TRPCError.test.ts"]},
+        ],
+    },
+    {
+        "task_id": "l4_bwd_trpc_02", "corpus": "trpc", "family": "backward_adaptation",
+        "qname": "observable.operators.share.share",
+        "tests": VITEST + ["server/src/observable/operators/share.test.ts", "server/src/observable/observable.test.ts"],
+        "alternatives": [
+            {"qname": "observable.operators.tap.tap",
+             "tests": VITEST + ["server/src/observable/observable.test.ts"]},
+        ],
     },
 ]

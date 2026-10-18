@@ -3,7 +3,7 @@ gold, run gates, validate, write.
 
     PYTHONPATH=. python -m harness.experiments.layer4.author \\
         --python fastapi=<venv>/bin/python --python django=<venv>/bin/python \\
-        [--names-dir <dir>] [--only l4_fwd_django_01,...]
+        [--node <node20>] [--names-dir <dir>] [--only l4_fwd_django_01,...] [--corpus trpc]
 
 Writes, per task, under `benchmarks/layer4/`:
 - `tasks/<task_id>.json` - the `layer4.task.v1` record (validated);
@@ -45,7 +45,7 @@ from pathlib import Path
 from harness.experiments.layer4 import splice as S
 from harness.experiments.layer4 import tasks as T
 from harness.experiments.layer4.source_edit import locate
-from harness.experiments.layer4.trace_node import RUNTIME, map_manifest, run_traced
+from harness.experiments.layer4.trace_node import RUNTIME, map_manifest, rebase, run_traced
 
 SCE = Path(__file__).resolve().parents[3]
 OUT = SCE / "benchmarks" / "layer4"
@@ -55,6 +55,10 @@ BACKWARD_ORACLE_DEPTH = 1
 #: under the profiler now and then, so a stuck run is killed and rerun
 TRACE_TIMEOUT_S = 600
 TRACE_ATTEMPTS = 3
+#: tRPC: Prism indexes packages/server/src; tests run from packages/tests (Vitest root: packages/)
+TRPC_PREFIX = "packages/server/src"
+TRPC_CWD = "packages/tests"
+NODE = {"bin": "node"}  # --node: the Node 20 the tRPC workspace needs
 MAX_GOLD = T.MAX_ANSWER_SYMBOLS
 
 
@@ -80,10 +84,26 @@ def load_names(corpus: str, names_dir: str | None) -> list[list]:
     return rows
 
 
+def clone_root(corpus: str) -> str:
+    """The clone's top level (tRPC is indexed below it, at TRPC_PREFIX)."""
+    root = corpus_root(corpus)
+    return root[: -len(TRPC_PREFIX) - 1] if corpus == "trpc" and root.endswith(TRPC_PREFIX) else root
+
+
+def vitest_bin(clone: str) -> str:
+    pkg = json.loads(Path(clone, TRPC_CWD, "node_modules", "vitest", "package.json").read_text())
+    rel = pkg["bin"]["vitest"] if isinstance(pkg["bin"], dict) else pkg["bin"]
+    return str(Path(clone, TRPC_CWD, "node_modules", "vitest", rel).resolve())
+
+
 def expand(cmd: list[str], root: str, python: str | None) -> list[str]:
     out = []
     for part in cmd:
         part = part.replace("{runtime}", str(RUNTIME))
+        if "{node}" in part:
+            part = part.replace("{node}", NODE["bin"])
+        if "{vitest}" in part:
+            part = part.replace("{vitest}", vitest_bin(root))
         if python:
             part = part.replace("{python}", python)
         if "*" in part:
@@ -97,6 +117,8 @@ def test_files(cmd: list[str], corpus: str) -> list[str]:
     """The gating test files a command names (excluded from every arm)."""
     if corpus == "django":
         return []  # labels; set from the label's directory below
+    if corpus == "trpc":  # Vitest filters are relative to its root, packages/
+        return ["packages/" + p for p in cmd if p.endswith((".test.ts", ".test.tsx"))]
     return [p for p in cmd if p.startswith(("tests/", "test/")) and p.endswith((".py", ".js"))]
 
 
@@ -110,7 +132,8 @@ def signature_of(root: str, file: str, line: int) -> tuple[str, str, int, str]:
     source = Path(span.path).read_bytes()
     line_start = source.rfind(b"\n", 0, span.start) + 1
     prefix = source[line_start:span.start].decode()
-    if span.language != "python" and "=" in prefix:  # `res.format = function(obj)`: name the assignment too
+    if span.language != "python" and ("=" in prefix or prefix.strip() in ("export", "export default")):
+        # `res.format = function(obj)` / `export function f()`: keep what precedes the function on its line
         head_start = line_start + len(prefix) - len(prefix.lstrip())
     else:
         head_start = span.start
@@ -167,6 +190,26 @@ def trace_django(root: str, python: str, focal: str, labels: list[str], out: Pat
     return m
 
 
+def trace_trpc(clone: str, file: str, line: int, focal: str, cmd: list[str], out: Path, builder) -> dict:
+    """Vitest 0.32 in fork mode (`--no-threads`), the runtime in NODE_OPTIONS,
+    one output per process merged; locations rebased to the index root."""
+    full = expand(cmd, clone, None)
+    for attempt in range(1, TRACE_ATTEMPTS + 1):
+        try:
+            raw = run_traced(clone, file, line, full, str(out), cwd=TRPC_CWD, multi=True, timeout=TRACE_TIMEOUT_S,
+                             env={"NODE_OPTIONS": f"--require {RUNTIME} --enable-source-maps"})
+            break
+        except subprocess.TimeoutExpired:
+            print(f"[retry] traced run timed out after {TRACE_TIMEOUT_S}s (attempt {attempt})", flush=True)
+    else:
+        raise SystemExit(f"traced run timed out {TRACE_ATTEMPTS} times: {' '.join(cmd)}")
+    m = map_manifest(rebase(raw, TRPC_PREFIX), builder, focal)
+    m["command"], m["trace_attempts"] = cmd, attempt
+    m["raw"] = {k: raw.get(k) for k in ("ancestors", "chains", "descendants", "source_mapping", "processes")}
+    m["output_tail"] = raw.get("output_tail", "")
+    return m
+
+
 def trace_express(root: str, file: str, line: int, focal: str, cmd: list[str], out: Path, builder) -> dict:
     full = expand(cmd, root, None)
     full = full[:1] + ["--require", str(RUNTIME)] + full[1:]
@@ -208,7 +251,8 @@ def prompt_for(spec: dict, short: str, file: str, signature: str) -> str:
 
 def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce_commit: str) -> dict:
     corpus, qname, family = spec["corpus"], spec["qname"], spec["family"]
-    root = corpus_root(corpus)
+    root = clone_root(corpus)
+    prefix = TRPC_PREFIX + "/" if corpus == "trpc" else ""
     names = load_names(corpus, names_dir)
     from prism.graph.entry_points import example_zone
     # gold and oracle names: application functions - not test files, not the
@@ -217,7 +261,8 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
     row = next((r for r in names if r[0] == qname), None)
     if row is None or row[0] not in known:
         raise SystemExit(f"{spec['task_id']}: {qname} is not an indexed application function")
-    file = row[1].replace(os.sep, "/")
+    index_file = row[1].replace(os.sep, "/")
+    file = prefix + index_file  # relative to the clone root
     signature, definition, line, language = signature_of(root, file, row[2])
     short = qname.rsplit(".", 1)[-1]
     tid = spec["task_id"]
@@ -229,16 +274,19 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
             return trace_django(root, python, qname, cmd_or_labels, tmp / "m.json")
         if corpus == "fastapi":
             return trace_python(root, python, qname, cmd_or_labels, tmp / "m.json")
+        if corpus == "trpc":
+            return trace_trpc(root, file, line, qname, cmd_or_labels, tmp / "raw.json", builders[corpus])
         return trace_express(root, file, line, qname, cmd_or_labels, tmp / "raw.json", builders[corpus])
 
     task = {
         "schema_version": "layer4.task.v1", "task_id": tid, "family": family, "corpus": corpus,
         "pinned_commit": PINNED[corpus]["pinned_commit"],
-        "focal": {"qname": qname, "file": file, "line": line, "index_file": file, "language": language,
+        "focal": {"qname": qname, "file": file, "line": line, "index_file": index_file, "language": language,
                   "signature": signature, "is_async": signature.startswith("async "),
                   "definition_sha256": hashlib.sha256(definition.encode()).hexdigest()},
         "prompt": prompt_for(spec, short, file, signature),
-        "provenance": {"tracer": {"django": "trace_django", "fastapi": "trace_py", "express": "trace_node"}[corpus],
+        "provenance": {"tracer": {"django": "trace_django", "fastapi": "trace_py", "express": "trace_node",
+                                   "trpc": "trace_node"}[corpus],
                        "sce_commit": sce_commit, "authored_at": datetime.date.today().isoformat()},
     }
     gates_record = None
@@ -272,7 +320,8 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
             cmd = spec["tests"]
             excluded = test_files(expand(cmd, root, None), corpus)
         run_cmd = expand(cmd, root, python)
-        g = S.gates(S.SpliceTask(tid, root, file, line, run_cmd, name=short, timeout=1800,
+        cwd = TRPC_CWD if corpus == "trpc" else "."
+        g = S.gates(S.SpliceTask(tid, root, file, line, run_cmd, cwd=cwd, name=short, timeout=1800,
                                  env={"PYTHONDONTWRITEBYTECODE": "1"}))
         gates_record = g
         if not g["valid"]:
@@ -286,7 +335,7 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
         task["arm_view"] = {"seed_symbol": qname, "task_type": "debug", "oracle_symbols": list(dict.fromkeys([qname, *callers, *callees]))[:MAX_GOLD],
                             "oracle_required_context": [], "root_imports": [],
                             "mask": {"symbols": [qname], "mode": "body"}, "exclude_paths": excluded}
-        task["gold"] = {"source": "test_execution", "test_command": cmd, "cwd": ".", "timeout_s": 1800,
+        task["gold"] = {"source": "test_execution", "test_command": cmd, "cwd": cwd, "timeout_s": 1800,
                         "stub_message": "STUB_IMPLEMENTATION", "tests": m.get("tests", [])}
     task["validity"] = {"trace_exit_code": m["exit_code"], "async_window": bool(m.get("async_window")),
                         "contamination": {"arm0_score": None, "flagged": None, "seeds": []}}
@@ -311,25 +360,50 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
     return task
 
 
+def author_with_fallbacks(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce_commit: str) -> dict:
+    """A spec may list `alternatives` (other focal functions, each with its own
+    tests or trace): the first that yields a valid task is kept; the rejected
+    ones and why are recorded in the task's manifest."""
+    rejected = []
+    for candidate in [spec, *({**spec, **alt} for alt in spec.get("alternatives", []))]:
+        candidate = {k: v for k, v in candidate.items() if k != "alternatives"}
+        try:
+            task = author(candidate, pythons, names_dir, builders, sce_commit)
+        except SystemExit as exc:
+            print(f"[reject] {spec['task_id']}: {candidate['qname']}: {str(exc).splitlines()[0][:300]}", flush=True)
+            rejected.append({"qname": candidate["qname"], "reason": str(exc)[:2000]})
+            continue
+        if rejected:
+            path = OUT / "manifests" / f"{task['task_id']}.json"
+            m = json.loads(path.read_text())
+            m["rejected_candidates"] = rejected
+            path.write_text(json.dumps(m, indent=1, sort_keys=True) + "\n")
+        return task
+    raise SystemExit(f"{spec['task_id']}: every candidate rejected: {[r['qname'] for r in rejected]}")
+
+
 def main(argv=None) -> int:
     from benchmarks.layer4.specs import SPECS
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--python", action="append", default=[], help="corpus=interpreter (fastapi, django)")
     p.add_argument("--names-dir", help="cache of the corpora's indexed names (<corpus>_names.json)")
     p.add_argument("--only", help="comma-separated task ids")
+    p.add_argument("--corpus", help="only this corpus's specs")
+    p.add_argument("--node", default="node", help="Node binary for tRPC (Node 20)")
     args = p.parse_args(argv)
+    NODE["bin"] = args.node
     pythons = dict(x.split("=", 1) for x in args.python)
     wanted = set(args.only.split(",")) if args.only else None
     sce_commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=SCE, capture_output=True,
                                 text=True).stdout.strip()
     builders = {}
     for spec in SPECS:
-        if wanted and spec["task_id"] not in wanted:
+        if (wanted and spec["task_id"] not in wanted) or (args.corpus and spec["corpus"] != args.corpus):
             continue
-        if spec["corpus"] == "express" and "express" not in builders:
+        if spec["corpus"] in ("express", "trpc") and spec["corpus"] not in builders:
             from prism.engine import PrismEngine
-            builders["express"] = PrismEngine.from_repo(corpus_root("express")).builder
-        t = author(spec, pythons, args.names_dir, builders, sce_commit)
+            builders[spec["corpus"]] = PrismEngine.from_repo(corpus_root(spec["corpus"])).builder
+        t = author_with_fallbacks(spec, pythons, args.names_dir, builders, sce_commit)
         gold = t["gold"].get("affected_symbols") or t["arm_view"]["oracle_symbols"][1:]
         print(f"[ok] {t['task_id']}: {len(gold)} {'gold' if t['family'] == 'forward_blast' else 'oracle symbols'}"
               f"{', tables ' + str(t['gold']['tables']) if t['gold'].get('tables') else ''}"
