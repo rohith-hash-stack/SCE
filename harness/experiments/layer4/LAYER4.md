@@ -441,6 +441,16 @@ reason about the change.
    them for real reasons (`deep_dict_update` without its list branch), but
    the replies themselves may be cut short, so v1 backward cells are run
    again rather than re-scored.
+
+   Splice v2 (`runner.BACKWARD_SPLICE_VERSION`, `detail.backward_splice`):
+   a full-definition reply drops what the file keeps outside the span
+   (`splice.drop_kept_prefix`: the `export` / `export default` before a
+   JS/TS function on its line, decorator lines above a Python one). tRPC's
+   spans start after `export`, so v1 spliced 115 of its 140 replies to
+   `export export function ...`; none parsed. Cells whose reply v2 may
+   splice differently (`splice.PREFIX_SENSITIVE`) are re-scored from the
+   stored reply (`runner.reevaluate_cell`, `detail.rescored_from_stored_reply`):
+   same context, answer and tokens, no model call.
 7. **Score** - below. The record is validated against `cell.schema.json`
    (an invalid record is kept with status `error`).
 

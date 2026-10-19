@@ -508,3 +508,51 @@ def test_client_stop_default_is_stage2s_and_none_sends_none(monkeypatch):
         with pytest.raises(Exception):
             c.complete("m", "s", "u", **kw)
     assert sent == [list(C.STOP_SEQUENCES), None]
+
+
+def test_a_full_definition_reply_does_not_repeat_the_export_or_decorators_kept_outside_the_span(tmp_path):
+    import sys
+    from harness.experiments.layer4.source_edit import locate
+    ts = tmp_path / "share.ts"
+    ts.write_text("import { x } from './x';\n\nexport function share(a: number): number {\n  return a + 1;\n}\n")
+    task = S.SpliceTask("t", str(tmp_path), "share.ts", 3, [sys.executable, "-c", "pass"], name="share", timeout=30)
+    result = S.evaluate(task, "```typescript\nexport function share(a: number): number {\n  return a + 2;\n}\n```")
+    assert result["mode"] == "function" and result["syntax_ok"] is True  # v1: `export export function share`
+    span = locate(str(ts), 3)
+    assert S.drop_kept_prefix("export default function share() {}", span, b"export function share() {}") == \
+        "export default function share() {}"  # only the prefix the file itself keeps is dropped
+    py = tmp_path / "m.py"
+    py.write_text("class C:\n    @property\n    @cached\n    def total(self):\n        return 1\n")
+    pspan = locate(str(py), 4)
+    reply = "@property\n@cached\ndef total(self):\n    return 2"
+    assert S.drop_kept_prefix(reply, pspan, py.read_bytes()) == "def total(self):\n    return 2"
+    assert S.drop_kept_prefix("@other\ndef total(self):\n    return 2", pspan, py.read_bytes()).startswith("@other")
+    assert S.PREFIX_SENSITIVE.search("```ts\nexport function share() {}") and not S.PREFIX_SENSITIVE.search("```js\nreturn 1")
+
+
+def test_cells_of_the_old_splice_are_rescored_from_their_stored_reply_without_a_model_call(tmp_path):
+    task = TASKS["l4_bwd_express_01"]
+    old = R.run_cell(corpus_for(task), task, "arm0_no_retrieval", 1, Cfg(), Client("```js\nexport function x() {}\n```"),
+                     {}, "node", evaluate=lambda t, r: {"passed": False, "exit_code": 1, "seconds": 0, "mode": "body",
+                                                         "syntax_ok": False}, build=fake_build())
+    old["detail"]["backward_splice"] = 1
+    assert R.needs_resplice(old) and not R.is_done(old)
+    (tmp_path / "cells.jsonl").write_text(json.dumps(old) + "\n")
+
+    class NoModel(Client):
+        def complete(self, *a, **k):
+            raise AssertionError("re-scoring must not call the model")
+    original = R.reevaluate_cell
+    R.reevaluate_cell = lambda corpus, t, rec, py, node: original(
+        corpus, t, rec, py, node, evaluate=lambda st, reply: {"passed": True, "exit_code": 0, "seconds": 0, "mode": "function",
+                                                              "syntax_ok": True})
+    try:
+        written = R.run({task["task_id"]: task}, ["arm0_no_retrieval"], [1], tmp_path, Cfg(), NoModel(""), {}, "node",
+                        load_corpus=lambda name: corpus_for(task))
+    finally:
+        R.reevaluate_cell = original
+    rec = written[0]
+    assert rec["score"]["passed"] and rec["reply"] == old["reply"] and rec["tokens"] == old["tokens"]
+    assert rec["detail"]["backward_splice"] == 2 and rec["detail"]["rescored_from_stored_reply"] and R.is_done(rec)
+    plain = dict(old, reply="```js\nreturn 1\n```")
+    assert not R.needs_resplice(plain) and R.is_done(plain)  # a reply v2 splices the same way is kept as it is

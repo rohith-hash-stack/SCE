@@ -135,6 +135,34 @@ def strip_js_assignment(code: str, name: str) -> str:
     return re.sub(r";\s*$", "", code[m.end():].rstrip())
 
 
+def drop_kept_prefix(code: str, span, source: bytes) -> str:
+    """A full definition without what the file keeps outside the span: the
+    `export` / `export default` before a JS/TS function on its line, the
+    decorator lines above a Python one. A reply that repeats them would
+    otherwise splice to `export export function ...` or decorate twice."""
+    text = code.lstrip()
+    if span.language == "python":
+        line_start = source.rfind(b"\n", 0, span.start) + 1  # the definition's own line, indentation included
+        above = source[:line_start].decode(errors="replace").splitlines()
+        kept = []
+        while above and above[-1].strip().startswith("@"):
+            kept.insert(0, above.pop().strip())
+        lines = text.splitlines()
+        n = 0
+        while n < len(lines) and n < len(kept) and lines[n].strip() == kept[n]:
+            n += 1
+        return "\n".join(lines[n:]) if n else code
+    line_start = source.rfind(b"\n", 0, span.start) + 1
+    prefix = source[line_start:span.start].decode(errors="replace").strip()
+    if prefix and re.match(rf"{re.escape(prefix)}\s", text) and re.fullmatch(r"(export(\s+default)?|declare)", prefix):
+        return text[len(prefix):].lstrip()
+    return code
+
+
+#: a reply `drop_kept_prefix` may change: a block opening with `export` or a decorator
+PREFIX_SENSITIVE = re.compile(r"```[a-zA-Z0-9_+-]*[ \t]*\n\s*(export\b|@)")
+
+
 def textwrap_dedent(code: str) -> str:
     import textwrap
     return textwrap.dedent(code)
@@ -169,6 +197,8 @@ def evaluate(task: SpliceTask, reply: str) -> dict:
     span = locate(task.path, task.line)
     code = extract_code(reply, span.language, task.name)
     full = is_full_definition(code, span.language, task.name)
+    if full:
+        code = drop_kept_prefix(code, span, Path(task.path).read_bytes())
     if full and span.language != "python":
         code = strip_js_assignment(code.lstrip(), task.name)
     with edited(task.path):

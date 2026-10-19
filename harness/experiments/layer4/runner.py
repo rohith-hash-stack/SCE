@@ -55,6 +55,12 @@ TASKS_DIR = SCE / "benchmarks" / "layer4" / "tasks"
 #: own closing fence: every reply came back unterminated, the opening fence
 #: was spliced in with the code and no candidate parsed. v2 sends none.
 BACKWARD_ANSWER_VERSION = 2
+#: version of the backward splice (`detail.backward_splice`). v1 kept the
+#: `export` a full-definition reply repeats (the span starts after it), so
+#: tRPC candidates spliced to `export export function ...` and never parsed.
+#: A v2-answer cell whose reply v2 could splice differently is re-evaluated
+#: from its stored reply - the same answer, no model call.
+BACKWARD_SPLICE_VERSION = 2
 DONE = {"ok", "leak"}  # a rerun skips these (a leak only if the current check said so); errors are retried
 
 
@@ -129,6 +135,7 @@ def run_cell(corpus, task: dict, arm: str, seed: int, cfg, client, pythons: dict
         rec["detail"]["leak_check"] = ctx.get("leak_check", X.LEAK_CHECK_VERSION)
         if task["family"] == "backward_adaptation":
             rec["detail"]["backward_answer"] = BACKWARD_ANSWER_VERSION
+            rec["detail"]["backward_splice"] = BACKWARD_SPLICE_VERSION
         if ctx["leaked"] or prompt_leaks:
             rec["status"] = "leak"
         elif client is None:
@@ -169,6 +176,37 @@ def T_hash(text: str) -> str:
 
 
 # ---------------------------------------------------------------- the run
+def needs_resplice(rec: dict) -> bool:
+    """An ok backward cell of the current answer protocol scored by an older
+    splice that its reply could splice differently under (conservative: any
+    block opening with `export` or a decorator)."""
+    return (rec["status"] == "ok" and rec.get("family") == "backward_adaptation"
+            and (rec.get("detail") or {}).get("backward_answer") == BACKWARD_ANSWER_VERSION
+            and (rec.get("detail") or {}).get("backward_splice") != BACKWARD_SPLICE_VERSION
+            and S.PREFIX_SENSITIVE.search(rec.get("reply") or "") is not None)
+
+
+def reevaluate_cell(corpus, task: dict, rec: dict, pythons: dict, node: str, evaluate=S.evaluate) -> dict:
+    """`rec` scored again from its stored reply by the current splice: same
+    context, prompt, answer and tokens; new score."""
+    out = json.loads(json.dumps(rec, default=str))
+    started = time.monotonic()
+    try:
+        out["score"] = T.score_backward(evaluate(splice_task(task, corpus, pythons, node, timeout=EVAL_TIMEOUT_S), out["reply"]))
+        out["status"], out["error"] = "ok", None
+    except Exception as exc:
+        out["status"] = "error"
+        out["error"] = f"{type(exc).__name__}: {exc}\n{traceback.format_exc(limit=4)}"[:4000]
+    out["detail"]["backward_splice"] = BACKWARD_SPLICE_VERSION
+    out["detail"]["rescored_from_stored_reply"] = True
+    out["wall_time_s"] = round(rec.get("wall_time_s", 0) + time.monotonic() - started, 3)
+    out["finished_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    errors = T.schema_errors(out, T.CELL_SCHEMA)
+    if errors:
+        out["status"], out["error"] = "error", f"cell record invalid: {errors}"
+    return out
+
+
 def is_done(rec: dict, dry_run: bool = False) -> bool:
     """A finished cell a rerun skips: ok, or a leak the current leak check
     found (one from an older check is re-evaluated: the check only gates
@@ -178,7 +216,7 @@ def is_done(rec: dict, dry_run: bool = False) -> bool:
     if rec["status"] == "leak":
         return detail.get("leak_check") == X.LEAK_CHECK_VERSION
     if rec["status"] == "ok" and rec.get("family") == "backward_adaptation":
-        return detail.get("backward_answer") == BACKWARD_ANSWER_VERSION
+        return detail.get("backward_answer") == BACKWARD_ANSWER_VERSION and not needs_resplice(rec)
     return rec["status"] in ({"dry_run"} | DONE if dry_run else DONE)
 
 
@@ -186,7 +224,8 @@ def run(tasks: dict[str, dict], arms: list[str], seeds: list[int], out: Path, cf
         load_corpus=X.Corpus.load) -> list[dict]:
     out.mkdir(parents=True, exist_ok=True)
     cells_path = out / "cells.jsonl"
-    done = {k for k, r in load_cells(cells_path).items() if is_done(r, dry_run=client is None)}
+    existing = load_cells(cells_path)
+    done = {k for k, r in existing.items() if is_done(r, dry_run=client is None)}
     by_corpus: dict[str, list[dict]] = {}
     for t in tasks.values():
         by_corpus.setdefault(t["corpus"], []).append(t)
@@ -203,7 +242,11 @@ def run(tasks: dict[str, dict], arms: list[str], seeds: list[int], out: Path, cf
             print(f"[corpus] {corpus_name}: {len(todo)} cells", flush=True)
             corpus = load_corpus(corpus_name)
             for task, arm, seed in todo:
-                rec = run_cell(corpus, task, arm, seed, cfg, client, pythons, node)
+                old = existing.get(cell_key(task["task_id"], arm, seed))
+                if old is not None and client is not None and needs_resplice(old):
+                    rec = reevaluate_cell(corpus, task, old, pythons, node)
+                else:
+                    rec = run_cell(corpus, task, arm, seed, cfg, client, pythons, node)
                 fh.write(json.dumps(rec, default=str) + "\n")
                 fh.flush()
                 written.append(rec)
