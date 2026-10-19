@@ -154,11 +154,25 @@ def evaluate(task: SpliceTask, reply: str) -> dict:
             replace_function(span, code)
         else:
             replace_body(span, code)
+        syntax_ok = _parses(task.path)
         if span.language == "python" and (err := _python_syntax_ok(task.path)):
-            return {"passed": False, "exit_code": None, "seconds": 0.0, "output_tail": err, "mode": "function" if full else "body"}
-        result = _run(task)
+            return {"passed": False, "exit_code": None, "seconds": 0.0, "output_tail": err, "syntax_ok": False,
+                    "mode": "function" if full else "body"}
+        result = _run(task)  # JS/TS: the runner decides (tree-sitter is error-tolerant), syntax_ok is recorded
     result["mode"] = "function" if full else "body"
+    result["syntax_ok"] = syntax_ok
     return result
+
+
+def _parses(path: str) -> bool | None:
+    """Whether the spliced file parses without error (tree-sitter, every
+    language Prism indexes); None when no grammar is available."""
+    try:
+        from prism.parser.tree_sitter_loader import parse_source
+        parsed = parse_source(path, Path(path).read_bytes())
+    except Exception:
+        return None
+    return None if parsed is None else not parsed.root_node.has_error
 
 
 def contamination(task: SpliceTask, generate: Callable[[int], str], seeds: list[int],

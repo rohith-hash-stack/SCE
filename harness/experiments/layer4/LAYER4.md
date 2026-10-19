@@ -345,10 +345,11 @@ repo map), `task_type` (`blast` / `debug`), and the oracle slice as
 
 Leak control for backward tasks (the answer must not be in any context):
 
-1. **Mask**: every rendered context passes through
-   `mask_context(rendered, definition, masked_definition(...))`, which
-   replaces the focal definition with its signature, docstring and a
-   placeholder. Arms render indexed bodies verbatim, so this is exact.
+1. **Mask**: the runner masks every arm's package before it is rendered
+   (`context.mask_package`): the focal node's body, and any node that
+   embeds the definition, become its signature, docstring and a
+   `raise NotImplementedError` / `throw new Error` body (details under
+   "Runner" below).
    Retrieval rankings were computed on the unmasked corpus - the ranking
    may favour the focal, the content shown never has its body (stated).
 2. **Exclude**: the runner drops test-file nodes from every arm's package
@@ -364,26 +365,104 @@ Leak control for backward tasks (the answer must not be in any context):
 Forward tasks are not masked: the focal body is legitimately needed to
 reason about the change.
 
+### Runner (`runner.py`, `context.py`)
+
+    PYTHONPATH=.:src python -m harness.experiments.layer4.runner contamination --seeds 42,...,51 --out reports/layer4/contamination ...
+    PYTHONPATH=.:src python -m harness.experiments.layer4.runner run --arms all --seeds 42,...,51 --out reports/layer4/run \
+        --python fastapi=<venv>/bin/python --python django=<venv>/bin/python --node <node20> --model ... --base-url ...
+    PYTHONPATH=.:src python -m harness.experiments.layer4.runner summarize --out reports/layer4/run --contamination reports/layer4/contamination
+
+`--dry-run` builds every context and prompt without a model call (status
+`dry_run`). Per cell (task, arm, seed):
+
+1. **Context** - the arm's package from the Stage 2 builders, unchanged
+   (`build_oracle`, `build_ask`, `build_hybrid`, `build_pagerank`,
+   `build_none`, prism_full's two-pass `_two_pass_context`, whose Turn 1
+   call is counted in the cell's tokens), from `to_evaluation_task(task)`.
+2. **Filter** - nodes from test files (Prism's `_in_test_file`) and from the
+   task's gating files are dropped, with their edges (`dropped_test_nodes`).
+3. **Mask** (backward) - the focal node's body becomes its masked
+   definition: signature, Python docstring, `raise NotImplementedError(
+   "body withheld: implement it")` / `throw new Error("...")`; any other
+   node embedding the definition verbatim gets the same replacement
+   (`masked_nodes`). The definition is read from the checkout and checked
+   against the task's `definition_sha256` first.
+4. Token ceiling, rendering and breadcrumbs as in Stage 2.
+5. **Leak checks** - on the final rendered text (HTML-unescaped):
+   distinctive original body lines, gating file paths, trace-manifest keys
+   (`ancestor_depth`, `focal_calls`, `STUB_IMPLEMENTATION`, ...); on the
+   prompt: no gold symbol named (whole qualified names) and no trace key.
+   A leaking cell gets status `leak` and is never sent. Forward tasks are
+   not masked - the focal body is needed to reason about the change - but
+   are filtered and checked the same way.
+6. **Prompt** - the family's system prompt (`FORWARD_SYSTEM` /
+   `BACKWARD_SYSTEM`), the context, `Task:` and the task prompt with its
+   answer contract (`tasks.FORWARD_CONTRACT`: one JSON object;
+   `tasks.BACKWARD_CONTRACT`: one fenced code block). Forward calls use
+   JSON mode; backward calls never do.
+7. **Score** - below. The record is validated against `cell.schema.json`
+   (an invalid record is kept with status `error`).
+
+Cells of one corpus run sequentially (splices edit the checkout in
+place); `cells.jsonl` is appended per cell and a rerun skips `ok` and
+`leak` cells (errors are retried). `summary.json` is `tasks.summarize`
+over the cells, with the contamination flags of the arm0 run.
+
+Verified here: a dry run over the 4 Express tasks x 6 arms (all but
+hybrid RAG, whose embedding model cannot be downloaded in this container)
+masked the focal function in every backward cell whose arm retrieved it,
+dropped 5-13 test-file nodes from `prism_ask` and the repo map, and leaked
+nothing; with masking disabled the leak check flags the same oracle
+context (`tests/test_layer4_runner.py`).
+
+### Scoring
+
+**Forward blast radius** (`tasks.score_forward`):
+
+| quantity | definition |
+|---|---|
+| answer | the last JSON object in the reply; `affected_symbols` capped at 15 (`truncated` records a longer list) |
+| name resolution | exact index name, else separators normalised (`::`, `/`, `#`, `:` -> `.`), else a unique dotted suffix of >= 2 components; unresolvable names are `unknown_names` |
+| precision | correct names / (resolved names + unknown names) |
+| recall | correct names / gold callers (the runtime ancestors within the task's `max_depth`) |
+| F1 | harmonic mean; an unparseable reply scores 0 |
+| Django tables | `tables_exact` (set equality) and `tables_prf` (P/R/F1) against the SQL logger's tables (test-app tables and `sqlite_master` excluded) |
+| Django side effects | `side_effects_exact` and `side_effects_prf` against the tags derived from the logged verbs (`DB_READ`, `DB_WRITE`, `DB_SCHEMA`, `DB_TRANSACTION`) |
+| other corpora | tables / side effects `null`: not scored (no runtime source) |
+
+**Backward contract adaptation** (`tasks.score_backward` over
+`splice.evaluate`):
+
+| quantity | definition |
+|---|---|
+| passed | the reply's last fenced block spliced in (a full definition replaces the function, anything else its body; `res.m = function` forms accepted) and the task's gating tests exit 0 |
+| syntax_ok | the spliced file parses (tree-sitter, all three languages); Python with a syntax error fails without running |
+| failure | the output lines that say why (errors, assertions, FAIL lines), at most 6 |
+| mode, exit_code, seconds | how it was spliced and how the run ended |
+| tokens | per cell: context, prompt and completion tokens over every call, number of calls; aggregated as tokens per pass and passes per 1k tokens |
+
+**Contamination** (`runner contamination`, `tasks.contamination`):
+`arm0_no_retrieval` alone over the 16 tasks and the seeds, first; a task
+is flagged when arm0's pass rate (backward) or mean F1 (forward) is
+>= 0.5. `contamination.json` lists every task's arm0 score and the
+flagged tasks; summaries report every arm over all tasks and over the
+unflagged ones.
+
 ### Cells
 
 `cell.schema.json` (`layer4.cell.v1`): one record per task x arm x seed,
-appended to `cells.jsonl` - status (`ok`, `error`, `timeout`, `leak`),
-tokens (context, prompt and completion over every LLM call, number of
-calls), the leak check, the selected symbols, the raw reply and the
-score. 16 tasks x 7 arms x 10 seeds = **1,120 cells**, same model,
+appended to `cells.jsonl` - status (`ok`, `error`, `timeout`, `leak`,
+`dry_run`), tokens (context, prompt and completion over every LLM call,
+number of calls), the leak check, the selected symbols, the raw reply,
+the score, `detail` (context stats, masking, prompt leaks) and the call
+log. 16 tasks x 7 arms x 10 seeds = **1,120 cells**, same model,
 quantization, context window, temperature and seeds as Stage 2.
 
 ### Execution plan
 
 1. **tRPC tooling**: run `kaggle/trpc_layer4_validation_cell.py`; any
    failed check blocks tRPC task authoring.
-2. **Runner** (to build): `benchmarks/layer4/runner.py` reusing the Stage 2
-   arm code - per cell: `to_evaluation_task` -> the arm's package ->
-   test-file filter -> render -> `mask_context` + `leak_check` (backward)
-   -> prompt + `answer_contract` -> model -> `score_forward` against the
-   corpus's index names, or `splice.evaluate` + `score_backward` (cells of
-   one corpus run sequentially: splices edit the checkout in place) ->
-   one `layer4.cell.v1` record.
+2. **Runner**: built (`runner.py`, `context.py`, above).
 3. **Authoring** (per corpus, 2 + 2 tasks): pick focal functions inside
    the Prism index that the corpus's tests exercise; trace them (Django
    with the SQL logger); derive forward gold with `gold_from_manifest`

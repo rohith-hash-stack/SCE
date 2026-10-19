@@ -5,68 +5,270 @@
   "description": "One (task, arm, seed) run, appended to cells.jsonl. Scores come from harness/experiments/layer4/tasks.py score_forward / score_backward.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "task_id", "family", "corpus", "arm", "engine_id", "seed", "model", "status",
-               "tokens", "leak", "score"],
+  "required": [
+    "schema_version",
+    "task_id",
+    "family",
+    "corpus",
+    "arm",
+    "engine_id",
+    "seed",
+    "model",
+    "status",
+    "tokens",
+    "leak",
+    "score"
+  ],
   "properties": {
-    "schema_version": {"const": "layer4.cell.v1"},
-    "task_id": {"type": "string"},
-    "family": {"enum": ["forward_blast", "backward_adaptation"]},
-    "corpus": {"enum": ["fastapi", "django", "express", "trpc"]},
-    "arm": {"enum": ["prism_full", "normal_oracle", "prism_oracle", "prism_ask", "arm1_hybrid_rag", "repomap_pagerank", "arm0_no_retrieval"]},
-    "engine_id": {"type": "string"},
-    "seed": {"type": "integer"},
-    "model": {"type": "string"},
-    "status": {"enum": ["ok", "error", "timeout", "leak"],
-               "description": "leak: the rendered context showed the masked body or a gating test file; the cell is excluded"},
-    "error": {"type": ["string", "null"]},
+    "schema_version": {
+      "const": "layer4.cell.v1"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "family": {
+      "enum": [
+        "forward_blast",
+        "backward_adaptation"
+      ]
+    },
+    "corpus": {
+      "enum": [
+        "fastapi",
+        "django",
+        "express",
+        "trpc"
+      ]
+    },
+    "arm": {
+      "enum": [
+        "prism_full",
+        "normal_oracle",
+        "prism_oracle",
+        "prism_ask",
+        "arm1_hybrid_rag",
+        "repomap_pagerank",
+        "arm0_no_retrieval"
+      ]
+    },
+    "engine_id": {
+      "type": "string"
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "model": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error",
+        "timeout",
+        "leak",
+        "dry_run"
+      ],
+      "description": "leak: the rendered context showed the masked body, a gating test file or a trace key, or the prompt named a gold symbol; the cell is excluded. dry_run: context and prompt built, no model call"
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "tokens": {
       "type": "object",
-      "required": ["context", "prompt", "completion", "llm_calls"],
+      "required": [
+        "context",
+        "prompt",
+        "completion",
+        "llm_calls"
+      ],
       "properties": {
-        "context": {"type": "integer", "minimum": 0, "description": "tokens of the rendered repository context"},
-        "prompt": {"type": "integer", "minimum": 0, "description": "prompt tokens over every LLM call (prism_full: Turn 1 + final)"},
-        "completion": {"type": "integer", "minimum": 0},
-        "llm_calls": {"type": "integer", "minimum": 0}
+        "context": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "tokens of the rendered repository context"
+        },
+        "prompt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "prompt tokens over every LLM call (prism_full: Turn 1 + final)"
+        },
+        "completion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "llm_calls": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "leak": {
       "type": "object",
-      "required": ["focal_body_lines", "test_files"],
+      "required": [
+        "focal_body_lines",
+        "test_files"
+      ],
       "properties": {
-        "focal_body_lines": {"type": "integer", "minimum": 0, "description": "distinctive original body lines found in the context"},
-        "test_files": {"type": "array", "items": {"type": "string"}}
+        "focal_body_lines": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "distinctive original body lines found in the context"
+        },
+        "test_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "trace_markers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
-    "selected_symbols": {"type": "array", "items": {"type": "string"}},
-    "reply": {"type": "string"},
+    "selected_symbols": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reply": {
+      "type": "string"
+    },
     "score": {
       "oneOf": [
         {
           "type": "object",
-          "required": ["kind", "parsed", "precision", "recall", "f1"],
+          "required": [
+            "kind",
+            "parsed",
+            "precision",
+            "recall",
+            "f1"
+          ],
           "properties": {
-            "kind": {"const": "forward"},
-            "parsed": {"type": "boolean"},
-            "precision": {"type": "number"}, "recall": {"type": "number"}, "f1": {"type": "number"},
-            "unknown_names": {"type": "array", "items": {"type": "string"}},
-            "truncated": {"type": "boolean"},
-            "side_effects_exact": {"type": ["boolean", "null"]},
-            "tables_exact": {"type": ["boolean", "null"]}
+            "kind": {
+              "const": "forward"
+            },
+            "parsed": {
+              "type": "boolean"
+            },
+            "precision": {
+              "type": "number"
+            },
+            "recall": {
+              "type": "number"
+            },
+            "f1": {
+              "type": "number"
+            },
+            "unknown_names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "side_effects_exact": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "tables_exact": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "side_effects_prf": {
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "tables_prf": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
           }
         },
         {
           "type": "object",
-          "required": ["kind", "passed"],
+          "required": [
+            "kind",
+            "passed"
+          ],
           "properties": {
-            "kind": {"const": "backward"},
-            "passed": {"type": "boolean"},
-            "exit_code": {"type": ["integer", "null"]},
-            "mode": {"enum": ["function", "body", null]},
-            "seconds": {"type": "number"}
+            "kind": {
+              "const": "backward"
+            },
+            "passed": {
+              "type": "boolean"
+            },
+            "exit_code": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "mode": {
+              "enum": [
+                "function",
+                "body",
+                null
+              ]
+            },
+            "seconds": {
+              "type": "number"
+            },
+            "syntax_ok": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "failure": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         },
-        {"type": "null"}
+        {
+          "type": "null"
+        }
       ]
+    },
+    "detail": {
+      "type": "object",
+      "description": "context stats (tokens before the ceiling, ceiling drops, dropped test nodes, masked nodes, focal in context), prompt leaks, backward failure lines"
+    },
+    "calls": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "every LLM call (Stage 2 _CallLog rows)"
+    },
+    "context_hash": {
+      "type": "string"
+    },
+    "wall_time_s": {
+      "type": "number"
+    },
+    "finished_at": {
+      "type": "string"
     }
   }
 }

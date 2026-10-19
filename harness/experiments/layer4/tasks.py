@@ -39,8 +39,12 @@ STAGE2_ARMS = ("prism_full", "normal_oracle", "prism_oracle", "prism_ask", "arm1
                "arm0_no_retrieval")
 SQL_TAGS = {"SELECT": "DB_READ", "INSERT": "DB_WRITE", "UPDATE": "DB_WRITE", "DELETE": "DB_WRITE",
             "CREATE": "DB_SCHEMA", "DROP": "DB_SCHEMA", "ALTER": "DB_SCHEMA"}
-_MASK_PLACEHOLDER = {"python": "...  # body withheld: implement it", "javascript": "/* body withheld: implement it */",
-                     "typescript": "/* body withheld: implement it */"}
+#: what a masked focal function's body becomes in every arm's context: it raises,
+#: like the gate's stub, with a message that says what is asked
+MASK_MESSAGE = "body withheld: implement it"
+_MASK_PLACEHOLDER = {"python": f'raise NotImplementedError("{MASK_MESSAGE}")',
+                     "javascript": f'throw new Error("{MASK_MESSAGE}");',
+                     "typescript": f'throw new Error("{MASK_MESSAGE}");'}
 
 FORWARD_CONTRACT = """
 
@@ -291,9 +295,12 @@ def score_forward(reply: str, gold: dict, known: set[str]) -> dict:
     and tables where the gold has them (None = not scored)."""
     parsed = parse_forward(reply)
     if parsed is None:
+        zero = {"precision": 0.0, "recall": 0.0, "f1": 0.0}
         return {"kind": "forward", "parsed": False, "precision": 0.0, "recall": 0.0, "f1": 0.0, "unknown_names": [],
                 "truncated": False, "side_effects_exact": None if gold["side_effects"] is None else False,
-                "tables_exact": None if gold["tables"] is None else False}
+                "tables_exact": None if gold["tables"] is None else False,
+                "side_effects_prf": None if gold["side_effects"] is None else zero,
+                "tables_prf": None if gold["tables"] is None else zero}
     names = [str(n) for n in parsed.get("affected_symbols") or [] if isinstance(n, (str, int))]
     truncated = len(names) > MAX_ANSWER_SYMBOLS
     names = names[:MAX_ANSWER_SYMBOLS]
@@ -309,21 +316,49 @@ def score_forward(reply: str, gold: dict, known: set[str]) -> dict:
     recall = tp / len(gold_set) if gold_set else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
 
-    def exact(field):
-        if gold[field] is None:
-            return None
+    def predicted(field):
         got = parsed.get(field) or []
-        got = {str(x).strip().upper() if field == "side_effects" else str(x).strip().strip('"`') for x in got}
-        return got == set(gold[field])
+        got = got if isinstance(got, list) else [got]
+        return {str(x).strip().upper() if field == "side_effects" else str(x).strip().strip('"`') for x in got}
+
+    def exact(field):
+        return None if gold[field] is None else predicted(field) == set(gold[field])
+
+    def field_prf(field):
+        return None if gold[field] is None else set_prf(predicted(field), set(gold[field]))
     return {"kind": "forward", "parsed": True, "precision": round(precision, 4), "recall": round(recall, 4),
             "f1": round(f1, 4), "unknown_names": unknown, "truncated": truncated,
-            "side_effects_exact": exact("side_effects"), "tables_exact": exact("tables")}
+            "side_effects_exact": exact("side_effects"), "tables_exact": exact("tables"),
+            "side_effects_prf": field_prf("side_effects"), "tables_prf": field_prf("tables")}
+
+
+def set_prf(pred: set, gold: set) -> dict:
+    """Precision / recall / F1 of a predicted set; both empty is a perfect
+    answer (a runtime-confirmed "no tables")."""
+    if not pred and not gold:
+        return {"precision": 1.0, "recall": 1.0, "f1": 1.0}
+    tp = len(pred & gold)
+    p = tp / len(pred) if pred else 0.0
+    r = tp / len(gold) if gold else 0.0
+    return {"precision": round(p, 4), "recall": round(r, 4), "f1": round(2 * p * r / (p + r), 4) if p + r else 0.0}
 
 
 def score_backward(result: dict) -> dict:
-    """`splice.evaluate`'s result as a cell score: binary pass."""
+    """`splice.evaluate`'s result as a cell score: binary pass, with the
+    syntax check of the spliced file and the first failure lines."""
     return {"kind": "backward", "passed": bool(result.get("passed")), "exit_code": result.get("exit_code"),
-            "mode": result.get("mode"), "seconds": result.get("seconds", 0.0)}
+            "mode": result.get("mode"), "seconds": result.get("seconds", 0.0),
+            "syntax_ok": result.get("syntax_ok"), "failure": None if result.get("passed") else failure_lines(result)}
+
+
+_FAILURE = re.compile(r"(Error|Exception|assert|AssertionError|FAIL|Expected|expected|Traceback|✗|×|not ok)")
+
+
+def failure_lines(result: dict, n: int = 6) -> str:
+    """The lines of a failed run's output that say why (or its last lines)."""
+    lines = [ln.rstrip() for ln in (result.get("output_tail") or "").splitlines() if ln.strip()]
+    hits = [ln for ln in lines if _FAILURE.search(ln)]
+    return "\n".join((hits or lines)[:n])[:1500]
 
 
 # ---------------------------------------------------------------- aggregation
