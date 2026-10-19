@@ -40,6 +40,7 @@
 
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -113,8 +114,20 @@ AMENDMENTS.append({
     "to": {"src": "e0f7d295eca7a95d3c0f3763f63257e174b012b6", "harness": "278f625914c9f8b4f320ca112f8de7c650f71f1c",
            "benchmarks": "6db2b9c871ec74d3b19748a225e7e2a064604cc0"},
 })
+AMENDMENTS.append({
+    "name": "backward splice v2 and stored-reply re-evaluation",
+    "reason": "the splice kept the `export` a full-definition reply repeats (tRPC spans start after it): 115 tRPC "
+              "candidates became `export export function ...` and never parsed. They are re-scored from their stored "
+              "replies (no model call). Also: 51 backward cells a dying runner left on the v1 answer protocol are "
+              "generated now (the lane retries while cells are pending, not only on errors).",
+    "from": AMENDMENTS[1]["to"],
+    "to": {"src": "e0f7d295eca7a95d3c0f3763f63257e174b012b6", "harness": "2f24055247c2f38488aa90584168fdc22af5c30e",
+           "benchmarks": "6db2b9c871ec74d3b19748a225e7e2a064604cc0"},
+})
 LEAK_CHECK_VERSION = 2                      # = harness.experiments.layer4.context.LEAK_CHECK_VERSION (checked at setup 10)
 BACKWARD_ANSWER_VERSION = 2                 # = harness.experiments.layer4.runner.BACKWARD_ANSWER_VERSION (same)
+BACKWARD_SPLICE_VERSION = 2                 # = harness.experiments.layer4.runner.BACKWARD_SPLICE_VERSION (same)
+PREFIX_SENSITIVE = r"```[a-zA-Z0-9_+-]*[ \t]*\n\s*(export\b|@)"  # = harness.experiments.layer4.splice.PREFIX_SENSITIVE
 MAX_PUSH_FILE_MB = 90
 START = time.time()
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
@@ -237,7 +250,9 @@ def cell_done(r):
     if r.get("status") == "leak":
         return detail.get("leak_check") == LEAK_CHECK_VERSION
     if r.get("status") == "ok" and r.get("family") == "backward_adaptation":
-        return detail.get("backward_answer") == BACKWARD_ANSWER_VERSION
+        if detail.get("backward_answer") != BACKWARD_ANSWER_VERSION:
+            return False
+        return detail.get("backward_splice") == BACKWARD_SPLICE_VERSION or not re.search(PREFIX_SENSITIVE, r.get("reply") or "")
     return r.get("status") == "ok"
 
 
@@ -631,11 +646,12 @@ if os.path.exists(manifest_path):
 else:
     amendments = []
 check = run([sys.executable, "-c", "from harness.experiments.layer4.context import LEAK_CHECK_VERSION as a; "
-             "from harness.experiments.layer4.runner import BACKWARD_ANSWER_VERSION as b; print(a, b)"],
-            cwd=SCE_DIR, env=child_env, capture=True).stdout.strip().splitlines()[-1]
-if check != f"{LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION}":
-    abort(f"the cell's LEAK_CHECK_VERSION / BACKWARD_ANSWER_VERSION {LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION} "
-          f"!= the harness's {check}")
+             "from harness.experiments.layer4.runner import BACKWARD_ANSWER_VERSION as b, BACKWARD_SPLICE_VERSION as c; "
+             "from harness.experiments.layer4.splice import PREFIX_SENSITIVE as d; print(a, b, c, d.pattern == "
+             f"{PREFIX_SENSITIVE!r})"], cwd=SCE_DIR, env=child_env, capture=True).stdout.strip().splitlines()[-1]
+if check != f"{LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION} {BACKWARD_SPLICE_VERSION} True":
+    abort(f"the cell's version rules ({LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION} {BACKWARD_SPLICE_VERSION}, "
+          f"PREFIX_SENSITIVE) differ from the harness's: {check}")
 json.dump({"head": HEAD, "code": CODE, "amendments": amendments, "model": MODEL, "num_ctx": NUM_CTX, "seeds": SEEDS, "lanes": LANES,
            "transformers": installed_pin, "node": node_version, "pnpm": PNPM_VERSION, "corpus_python": CORPUS_PYTHON,
            "fastapi_pins": FASTAPI_PINS, "django_pins": DJANGO_PINS}, open(manifest_path, "w"), indent=1)
@@ -700,14 +716,19 @@ def lane_worker(corpora, command, status, procs):
                 if line.startswith(("  [", "[corpus]", "Traceback", "[ABORT]")) or "Error" in line[:60]:
                     print(f"[{corpus}] {line}", end="", flush=True)
             code = proc.wait()
+            log.write(f"=== exit {code} ===\n")
             log.close()
             n = counts(corpus)
-            print(f"[{corpus}] {command} pass {attempt}: exit {code}, cells {n}", flush=True)
-            status[corpus] = f"exit {code}, {n}"
+            left = pending(corpus, command)
+            print(f"[{corpus}] {command} pass {attempt}: exit {code}, cells {n}, pending {left}", flush=True)
+            status[corpus] = f"exit {code}, {n}, pending {left}"
             if STOP.is_set():  # stopped mid-pass: the cell it was in left no record and runs again on resume
                 status[corpus] = f"stopped, {n}"
                 return
-            if not n.get("error"):
+            if code != 0:  # a runner that dies (killed, out of memory) leaves cells undone and no error record
+                print(f"[{corpus}] [warn] runner exited {code} with {left} cells pending - running the corpus again",
+                      flush=True)
+            if not left:
                 break
         merge_and_push(f"{command} {corpus} done")
 
@@ -730,10 +751,19 @@ def resume_status(command):
         for corpus in lane:
             mine = [r for r in cells_of(corpus) if not arms or r["arm"] in arms]
             done = sum(1 for r in mine if cell_done(r))
-            recheck = sum(1 for r in mine if r["status"] in ("leak", "ok") and not cell_done(r))
+            recheck = sum(1 for r in mine if r["status"] in ("leak", "ok") and not cell_done(r))  # stale versions
             print(f"[resume] {corpus}: {done}/{total} cells finished"
                   f"{' - skipped, the rest run now' if done else ''}"
                   f"{f' ({recheck} cells from an older leak check or backward answer protocol are run again)' if recheck else ''}", flush=True)
+
+
+def pending(corpus, command):
+    """Cells of `corpus` this step still has to run (errors, missing, or
+    stale by the version rules of `cell_done`)."""
+    arms = 1 if command == "contamination" else 7
+    total = TASKS_PER_CORPUS * arms * len(SEEDS.split(","))
+    mine = [r for r in cells_of(corpus) if command != "contamination" or r["arm"] == "arm0_no_retrieval"]
+    return total - sum(1 for r in mine if cell_done(r))
 
 
 def cells_of(corpus):
