@@ -124,9 +124,20 @@ AMENDMENTS.append({
     "to": {"src": "e0f7d295eca7a95d3c0f3763f63257e174b012b6", "harness": "2f24055247c2f38488aa90584168fdc22af5c30e",
            "benchmarks": "6db2b9c871ec74d3b19748a225e7e2a064604cc0"},
 })
+AMENDMENTS.append({
+    "name": "forward context v2 (prism_full)",
+    "reason": "blast tasks get the blast-radius manifest and the static index gains JS method aliases, closures, "
+              "constructor callers, class values and undefined-hook dispatch; prism_full's 80 forward cells are run "
+              "again on it. Every other cell - the other arms' forward cells and every backward cell - is kept.",
+    "from": AMENDMENTS[2]["to"],
+    "to": {"src": "7c0f604d64f870a857f23fb3d5caa31dfc833446", "harness": "ce37988115e116dd2b6ae2eb29dd2ab020405034",
+           "benchmarks": "8af18d67179b44e4016e037ababdbfd1782c6268"},
+})
 LEAK_CHECK_VERSION = 2                      # = harness.experiments.layer4.context.LEAK_CHECK_VERSION (checked at setup 10)
 BACKWARD_ANSWER_VERSION = 2                 # = harness.experiments.layer4.runner.BACKWARD_ANSWER_VERSION (same)
 BACKWARD_SPLICE_VERSION = 2                 # = harness.experiments.layer4.runner.BACKWARD_SPLICE_VERSION (same)
+FORWARD_CONTEXT_VERSION = 2                 # = harness.experiments.layer4.runner.FORWARD_CONTEXT_VERSION (same)
+FORWARD_CONTEXT_ARMS = ("prism_full",)      # = harness.experiments.layer4.runner.FORWARD_CONTEXT_ARMS
 PREFIX_SENSITIVE = r"```[a-zA-Z0-9_+-]*[ \t]*\n\s*(export\b|@)"  # = harness.experiments.layer4.splice.PREFIX_SENSITIVE
 MAX_PUSH_FILE_MB = 90
 START = time.time()
@@ -247,6 +258,9 @@ def cell_done(r):
     """As the runner's is_done: ok (a backward one of the current answer
     protocol), or a leak the current leak check found."""
     detail = r.get("detail") or {}
+    if r.get("family") == "forward_blast" and r.get("arm") in FORWARD_CONTEXT_ARMS and r.get("status") in ("ok", "leak") \
+            and detail.get("forward_context") != FORWARD_CONTEXT_VERSION:
+        return False
     if r.get("status") == "leak":
         return detail.get("leak_check") == LEAK_CHECK_VERSION
     if r.get("status") == "ok" and r.get("family") == "backward_adaptation":
@@ -646,10 +660,12 @@ if os.path.exists(manifest_path):
 else:
     amendments = []
 check = run([sys.executable, "-c", "from harness.experiments.layer4.context import LEAK_CHECK_VERSION as a; "
-             "from harness.experiments.layer4.runner import BACKWARD_ANSWER_VERSION as b, BACKWARD_SPLICE_VERSION as c; "
-             "from harness.experiments.layer4.splice import PREFIX_SENSITIVE as d; print(a, b, c, d.pattern == "
+             "from harness.experiments.layer4.runner import BACKWARD_ANSWER_VERSION as b, BACKWARD_SPLICE_VERSION as c, "
+             "FORWARD_CONTEXT_VERSION as e, FORWARD_CONTEXT_ARMS as f; "
+             "from harness.experiments.layer4.splice import PREFIX_SENSITIVE as d; print(a, b, c, e, list(f), d.pattern == "
              f"{PREFIX_SENSITIVE!r})"], cwd=SCE_DIR, env=child_env, capture=True).stdout.strip().splitlines()[-1]
-if check != f"{LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION} {BACKWARD_SPLICE_VERSION} True":
+if check != f"{LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION} {BACKWARD_SPLICE_VERSION} {FORWARD_CONTEXT_VERSION} " \
+        f"{list(FORWARD_CONTEXT_ARMS)} True":
     abort(f"the cell's version rules ({LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION} {BACKWARD_SPLICE_VERSION}, "
           f"PREFIX_SENSITIVE) differ from the harness's: {check}")
 json.dump({"head": HEAD, "code": CODE, "amendments": amendments, "model": MODEL, "num_ctx": NUM_CTX, "seeds": SEEDS, "lanes": LANES,
