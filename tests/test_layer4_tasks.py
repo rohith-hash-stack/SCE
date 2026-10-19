@@ -130,9 +130,11 @@ def test_masking_and_leak_check():
     assert "Sum of price" in masked and "subtotal" not in masked and masked.startswith("def total(items):")
     task = backward()
     task["focal"]["signature"] = "def total(items):"
+    task["focal"]["language"] = "python"
     ctx = f"<node>\n{DEF}</node>\nsee packages/tests/server/TRPCError.test.ts"
     leak = T.leak_check(ctx, task, DEF)
-    assert leak == {"focal_body_lines": 2, "test_files": ["packages/tests/server/TRPCError.test.ts"]}
+    assert leak == {"focal_body_lines": 2, "test_files": ["packages/tests/server/TRPCError.test.ts"],
+                    "focal_body_hits": ['subtotal = sum(i["price"] * i["qty"] for i in items)', "return round(subtotal, 2)"]}
     clean = T.mask_context(ctx, DEF, masked)
     assert T.leak_check(clean, task, DEF)["focal_body_lines"] == 0
 
@@ -210,3 +212,37 @@ def test_summary_and_contamination():
     assert ask["all"]["tokens_per_pass"] == 1500.0
     pf = out["by_family"]["forward_blast"]["prism_full"]["unflagged"]
     assert pf["f1"] == 0.8 and pf["side_effects_exact"] == 1.0 and pf["tables_exact"] == 0.0
+
+
+LONG_DEF = '''def flatten(
+    dependant: Dependant,
+    skip_repeats: bool = False,
+):
+    """Update all elements in the current QuerySet, setting all the given
+    fields to the appropriate values."""
+    if self.query.is_sliced:
+        raise TypeError("Cannot flatten a sliced query, it was taken.")
+    return flat_dependant_of_this_one
+'''
+
+
+def test_leak_check_ignores_what_the_mask_keeps_and_lines_common_elsewhere():
+    task = backward()
+    task["focal"]["signature"] = "def flatten("
+    task["focal"]["language"] = "python"
+    masked = T.masked_definition(LONG_DEF, "python")
+    assert "skip_repeats: bool = False," in masked and "fields to the appropriate values." in masked
+    assert T.leak_check(masked, task, LONG_DEF)["focal_body_lines"] == 0  # v1 counted 4 here
+    leak = T.leak_check(LONG_DEF, task, LONG_DEF, common=frozenset({"if self.query.is_sliced:"}))
+    assert leak["focal_body_hits"] == ['raise TypeError("Cannot flatten a sliced query, it was taken.")',
+                                       "return flat_dependant_of_this_one"]
+
+
+def test_gating_paths_match_as_whole_paths_never_by_leaf_name():
+    task = backward()
+    task["arm_view"]["exclude_paths"] = ["tests/update/", "tests/test_dependency_cache.py"]
+    text = "def update(self): ...  # cache the update; see django/tests/update_only/x.py and test_dependency_cache.py"
+    assert T.leak_check(text, task, None)["test_files"] == []
+    assert T.leak_check("from tests/update/models.py", task, None)["test_files"] == ["tests/update/"]
+    assert T.leak_check("tests/test_dependency_cache.py:12", task, None)["test_files"] == ["tests/test_dependency_cache.py"]
+    assert T.leak_check("tests/test_dependency_cache.pyc", task, None)["test_files"] == []

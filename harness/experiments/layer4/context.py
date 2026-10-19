@@ -10,9 +10,10 @@ then made safe for Layer 4:
    `throw new Error`); any other node that embeds the definition (a class
    or module chunk) gets the same replacement;
 3. the token ceiling, rendering and breadcrumbs as in Stage 2;
-4. **leak check** on the final text: distinctive original body lines,
-   gating file paths, trace-manifest keys; and on the prompt: no gold
-   symbol named. A leaking cell is never sent to the model.
+4. **leak check** on the final text: lines of the excised body found
+   nowhere else in the repository, gating files named by their full path,
+   trace-manifest keys; and on the prompt: no gold symbol named. A leaking
+   cell is never sent to the model.
 
 The retrieval itself (rankings, Turn 1 of prism_full) sees the unmasked
 corpus: what an arm *shows* never contains the body, what it *ranks* may
@@ -38,6 +39,12 @@ ARMS = ("arm0_no_retrieval", "arm1_hybrid_rag", "repomap_pagerank", "prism_full"
 TRACE_MARKERS = ("ancestor_depth", "descendant_depth", "focal_calls", "oracle_callers", "sql_dropped_tables",
                  "STUB_IMPLEMENTATION")
 TRPC_PREFIX = "packages/server/src"
+#: version of the leak check stamped on every cell (`detail.leak_check`): a
+#: "leak" cell from an older check is re-evaluated on resume. v1 counted the
+#: lines the mask keeps (docstring, multi-line signature) and lines common
+#: across the repository as body leaks, and matched a gating directory by its
+#: leaf name ("update" for tests/update/); v2 does none of that.
+LEAK_CHECK_VERSION = 2
 
 FORWARD_SYSTEM = (
     "You are a senior software engineer assessing the impact of a planned change in a codebase. Use the repository "
@@ -68,6 +75,7 @@ class Corpus:
     index_root: str
     clone_root: str
     known: set[str] = field(default_factory=set)  # gold-eligible names: application functions/methods
+    common: dict[str, frozenset[str]] = field(default_factory=dict)  # task id -> body lines found elsewhere
     lock: threading.RLock = field(default_factory=threading.RLock)
 
     @classmethod
@@ -101,6 +109,29 @@ def focal_definition(task: dict, clone: str) -> str:
     return text
 
 
+def common_body_lines(task: dict, clone: str, definition: str) -> frozenset[str]:
+    """The focal body's candidate leak lines that the repository also
+    carries outside the focal definition (any tracked file, the focal file
+    included): seeing one in a context says nothing about the body."""
+    import subprocess
+    masked = T.masked_definition(definition, task["focal"]["language"])
+    out = set()
+    for line in T.distinctive_lines(definition, task["focal"]["signature"], masked=masked):
+        r = subprocess.run(["git", "grep", "-F", "-c", "-e", line], cwd=clone, capture_output=True, text=True)
+        if r.returncode not in (0, 1):
+            raise RuntimeError(f"{task['task_id']}: git grep failed in {clone}: {r.stderr.strip()[:200]}")
+        total = sum(int(x.rsplit(":", 1)[1]) for x in r.stdout.split())
+        if total > sum(1 for d in definition.splitlines() if line in d):
+            out.add(line)
+    return frozenset(out)
+
+
+def corpus_common(corpus: "Corpus", task: dict, definition: str) -> frozenset[str]:
+    if task["task_id"] not in corpus.common:  # once per task, on the clean checkout (splices come later)
+        corpus.common[task["task_id"]] = common_body_lines(task, corpus.clone_root, definition)
+    return corpus.common[task["task_id"]]
+
+
 # ---------------------------------------------------------------- filter + mask
 def is_excluded(node_file: str, task: dict, in_test_file) -> bool:
     """A node from a test file (Prism's rule, index-relative path) or from
@@ -112,16 +143,37 @@ def is_excluded(node_file: str, task: dict, in_test_file) -> bool:
     return any(clone_rel == p or clone_rel.startswith(p.rstrip("/") + "/") for p in task["arm_view"]["exclude_paths"])
 
 
-def mask_package(pkg, task: dict, definition: str | None, in_test_file):
+def inside(node, span) -> bool:
+    """The node's lines lie within the focal definition's (a skeleton or
+    compressed rendering of an inner function is not its source text)."""
+    line, end = getattr(node, "line", None), getattr(node, "end_line", None)
+    return bool(span and line and end) and span[0] < line and end <= span[1]
+
+
+def focal_span(task: dict, clone: str, definition: str) -> tuple[int, int]:
+    """First and last line of the focal definition in its file."""
+    text = Path(os.path.join(clone, task["focal"]["file"])).read_text()
+    start = text[:text.index(definition)].count("\n") + 1
+    return start, start + definition.rstrip("\n").count("\n")
+
+
+def mask_package(pkg, task: dict, definition: str | None, in_test_file, span: tuple[int, int] | None = None):
     """The package with test/gating-file nodes dropped and, for a backward
-    task, the focal definition masked everywhere it appears verbatim.
+    task, the focal definition masked everywhere it appears verbatim and
+    the nodes nested inside it (inner functions, methods of an object
+    literal: their bodies are part of the withheld body) dropped.
     Returns (package, report)."""
     focal = task["focal"]["qname"]
     masked = T.masked_definition(definition, task["focal"]["language"]) if definition else None
-    keep, dropped, masked_ids = [], [], []
+    focal_file = task["focal"].get("index_file", task["focal"]["file"])
+    keep, dropped, masked_ids, nested = [], [], [], []
     for node in pkg.nodes:
         if is_excluded(node.file, task, in_test_file):
             dropped.append(node.id)
+            continue
+        if masked is not None and node.id != focal and node.file.replace(os.sep, "/") == focal_file and (
+                inside(node, span) or (node.body.strip() and node.body.strip() in definition)):
+            nested.append(node.id)
             continue
         if masked is not None:
             if node.id == focal:
@@ -137,15 +189,16 @@ def mask_package(pkg, task: dict, definition: str | None, in_test_file):
     ids = {n.id for n in keep}
     edges = [e for e in pkg.edges if e.from_node in ids and e.to_node in ids]
     return pkg.model_copy(update={"nodes": keep, "edges": edges}), {"dropped_test_nodes": dropped,
-                                                                    "masked_nodes": masked_ids}
+                                                                    "masked_nodes": masked_ids,
+                                                                    "dropped_nested_nodes": nested}
 
 
 # ---------------------------------------------------------------- leak checks
-def context_leaks(rendered: str, task: dict, definition: str | None) -> dict:
-    """What the final context shows that it must not: distinctive focal
-    body lines (backward), gating files, trace-manifest keys."""
+def context_leaks(rendered: str, task: dict, definition: str | None, common: frozenset[str] = frozenset()) -> dict:
+    """What the final context shows that it must not: excised focal body
+    lines found nowhere else (backward), gating files, trace-manifest keys."""
     text = html.unescape(rendered)
-    leak = T.leak_check(text, task, definition)
+    leak = T.leak_check(text, task, definition, common)
     leak["trace_markers"] = [m for m in TRACE_MARKERS if m in text]
     return leak
 
@@ -184,6 +237,7 @@ def build_context(corpus: Corpus, arm: str, task: dict, seed: int | None, cfg, c
     et = T.to_evaluation_task(task)
     definition = focal_definition(task, corpus.clone_root) if task["family"] == "backward_adaptation" else None
     with corpus.lock:
+        common = corpus_common(corpus, task, definition) if definition else frozenset()
         if spec.kind == "oracle":
             base = ("scaffolded_oracle" if spec.scaffolded else "pragmatic_oracle") if spec.breadcrumbs else spec.engine_id
             built = build_oracle(state, et, cfg.budget, spec.scaffolded, base)
@@ -199,7 +253,8 @@ def build_context(corpus: Corpus, arm: str, task: dict, seed: int | None, cfg, c
             built, _distractors = _two_pass_context(state, client, spec, et, seed, cfg, record, log, {})
         else:
             raise ValueError(f"arm {arm}: unsupported kind {spec.kind}")
-        pkg, mask_report = mask_package(built.pkg, task, definition, state.builder._in_test_file)
+        span = focal_span(task, corpus.clone_root, definition) if definition else None
+        pkg, mask_report = mask_package(built.pkg, task, definition, state.builder._in_test_file, span)
         pkg = redact_package_axes(pkg, spec.axes if spec.kind == "two_pass" else "all")
         pkg, ceiling_dropped, tokens_before, tokens_after = enforce_token_ceiling(pkg, cfg.token_ceiling, set())
         rendered = render_context(pkg)
@@ -208,8 +263,8 @@ def build_context(corpus: Corpus, arm: str, task: dict, seed: int | None, cfg, c
             rendered, packed = NO_CONTEXT_TEXT, []
         if spec.breadcrumbs:
             rendered, _placed = render_breadcrumbs(state, [n.id for n in pkg.nodes], rendered)
-    leak = context_leaks(rendered, task, definition)
-    return {"rendered": rendered, "selected_symbols": packed, "context_tokens": count_tokens(rendered),
+    leak = context_leaks(rendered, task, definition, common)
+    return {"rendered": rendered, "leak_check": LEAK_CHECK_VERSION, "selected_symbols": packed, "context_tokens": count_tokens(rendered),
             "context_tokens_pre_ceiling": tokens_before, "n_ceiling_dropped": len(ceiling_dropped),
             "leak": leak, "leaked": leaked(leak), "engine_id": spec.engine_id, **mask_report,
             "focal_in_context": task["focal"]["qname"] in packed}

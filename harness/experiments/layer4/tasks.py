@@ -185,14 +185,22 @@ def masked_definition(definition: str, language: str) -> str:
     return textwrap.indent(masked, indent) if indent else masked
 
 
-def distinctive_lines(definition: str, signature: str, min_len: int = 20) -> list[str]:
-    """Body lines long and specific enough that finding one in a context
-    means the body leaked."""
+def distinctive_lines(definition: str, signature: str, min_len: int = 20, masked: str | None = None,
+                      common: frozenset[str] = frozenset()) -> list[str]:
+    """Lines of the excised body - what the mask removed - long and specific
+    enough that finding one in a context means the body leaked. Not lines
+    the masked definition still shows (the signature, however many lines it
+    spans; a kept Python docstring), not comments or delimiters, and not
+    `common`: lines the repository also carries outside the focal
+    definition (`var next = req.next;`), which a context can show without
+    showing the body."""
     sig = {s.strip() for s in signature.splitlines()}
+    kept = {s.strip() for s in masked.splitlines()} if masked is not None else set()
     out = []
     for line in definition.splitlines()[1:]:
         s = line.strip()
-        if len(s) >= min_len and s not in sig and not s.startswith(("#", "//", "*", "/*", '"""', "'''")):
+        if (len(s) >= min_len and s not in sig and s not in kept and s not in common
+                and not s.startswith(("#", "//", "*", "/*", '"""', "'''")) and re.search(r"\w", s)):
             out.append(s)
     return out
 
@@ -203,14 +211,26 @@ def mask_context(rendered: str, definition: str, masked: str) -> str:
     return rendered.replace(definition, masked) if definition in rendered else rendered
 
 
-def leak_check(rendered: str, task: dict, definition: str | None) -> dict:
-    """What of the answer a context shows: distinctive focal body lines
-    (backward) and gating test files (any reference to their path)."""
-    found = 0
+def mentions_path(rendered: str, path: str) -> bool:
+    """`path` (clone-relative; a directory ends in "/") named as a whole
+    path in `rendered`: a file exactly, a directory as the prefix of a path
+    under it. Never a bare leaf name - `tests/update/` is not "update"."""
+    path = path.replace("\\", "/")
+    tail = "" if path.endswith("/") else r"(?![\w.-])"
+    return re.search(rf"(?<![\w./-]){re.escape(path)}{tail}", rendered) is not None
+
+
+def leak_check(rendered: str, task: dict, definition: str | None, common: frozenset[str] = frozenset()) -> dict:
+    """What of the answer a context shows: excised focal body lines
+    (backward; see `distinctive_lines`) and gating test files (their full
+    path, see `mentions_path`)."""
+    hits = []
     if definition is not None and task["family"] == "backward_adaptation":
-        found = sum(1 for line in distinctive_lines(definition, task["focal"]["signature"]) if line in rendered)
-    files = [p for p in task["arm_view"]["exclude_paths"] if p in rendered or Path(p).name in rendered]
-    return {"focal_body_lines": found, "test_files": files}
+        masked = masked_definition(definition, task["focal"]["language"])
+        hits = [line for line in distinctive_lines(definition, task["focal"]["signature"], masked=masked, common=common)
+                if line in rendered]
+    files = [p for p in task["arm_view"]["exclude_paths"] if mentions_path(rendered, p)]
+    return {"focal_body_lines": len(hits), "focal_body_hits": hits[:5], "test_files": files}
 
 
 # ---------------------------------------------------------------- gold

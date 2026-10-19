@@ -357,10 +357,29 @@ Leak control for backward tasks (the answer must not be in any context):
    code; the hybrid-RAG chunks and the repo map are filtered the same
    way), and the gating test files are listed in
    `arm_view.exclude_paths` and checked.
-3. **Check**: `leak_check` counts distinctive original body lines (>= 20
-   characters, not the signature, not comments) and gating-test paths in
-   the final context; a non-zero result makes the cell `status: "leak"`,
-   excluded and counted per arm.
+3. **Check** (leak check v2, `context.LEAK_CHECK_VERSION`, stamped on
+   every cell as `detail.leak_check`): `leak_check` counts lines of the
+   excised body (>= 20 characters, not comments or delimiters) that the
+   masked definition does not show - so not the signature however many
+   lines it spans, not a kept Python docstring - and that the repository
+   carries nowhere else (`context.common_body_lines`, `git grep` over the
+   checkout, once per task: `var next = req.next;` is in other Express
+   functions too, so seeing it says nothing about the body). Gating test
+   files count only as whole paths (`tasks.mentions_path`: a file exactly,
+   a directory as the prefix of a path under it). The lines found are
+   kept as `leak.focal_body_hits`. A non-zero result makes the cell
+   `status: "leak"`, excluded and listed per task and arm in
+   TOURNAMENT.md. Every backward task keeps 3-25 such lines; the unmasked
+   body trips the check on all of them and the masked definition on none
+   (`test_leak_check_v2_controls_on_the_real_focal_definitions`).
+
+   v1 counted the masked definition's own docstring and signature lines
+   and lines common across the repository, and matched a gating directory
+   by its leaf name ("update" for `tests/update/`, "cache" for
+   `tests/cache/`): the first tournament held back 310 cells - every
+   retrieval arm on five of the eight backward tasks - none of which
+   showed the body. The check only gates sending; contexts and prompts
+   are the same under both versions.
 
 Forward tasks are not masked: the focal body is legitimately needed to
 reason about the change.
@@ -385,7 +404,13 @@ reason about the change.
    definition: signature, Python docstring, `raise NotImplementedError(
    "body withheld: implement it")` / `throw new Error("...")`; any other
    node embedding the definition verbatim gets the same replacement
-   (`masked_nodes`). The definition is read from the checkout and checked
+   (`masked_nodes`), and nodes nested inside it - inner functions, methods
+   of an object literal, in any rendering (the repo map shows them as
+   skeletons) - are dropped: their bodies are part of the withheld body
+   (`dropped_nested_nodes`; by line span in the focal's file, or by being
+   verbatim text of the definition). Of the eight backward tasks only
+   `l4_bwd_trpc_02` (`share`, with `startIfNeeded` / `resetIfNeeded` and
+   an observer literal inside) has any. The definition is read from the checkout and checked
    against the task's `definition_sha256` first.
 4. Token ceiling, rendering and breadcrumbs as in Stage 2.
 5. **Leak checks** - on the final rendered text (HTML-unescaped):
@@ -404,8 +429,9 @@ reason about the change.
    (an invalid record is kept with status `error`).
 
 Cells of one corpus run sequentially (splices edit the checkout in
-place); `cells.jsonl` is appended per cell and a rerun skips `ok` and
-`leak` cells (errors are retried). One backward evaluation is capped at
+place); `cells.jsonl` is appended per cell and a rerun skips `ok` cells
+and `leak` cells of the current leak check (errors, and leaks found by
+an older check, are run again). One backward evaluation is capped at
 `--eval-timeout` (300 s; the tasks' own 1,800 s is the gates'): a wrong
 candidate can hang a corpus's tests, and a timeout scores as a fail
 (`exit_code: null`). SIGTERM (Kaggle's time limit, the tournament cell's
@@ -422,7 +448,11 @@ Stage 2's model and context window, a preflight that every backward
 task's tests pass on the original code, then `contamination`, `run` and
 `report` (`report.py`: `TOURNAMENT.md`, `summary.json`,
 `contamination.json`) with two corpus lanes side by side, pushed to the
-branch every 30 min and resumable across sessions. `summary.json` is `tasks.summarize`
+branch every 10 min and after each corpus, and resumable across sessions
+(the code on the branch must match the run's, or be a change declared in
+the cell's `AMENDMENTS` by its tree hashes before and after: "leak check
+v2" lets the first tournament resume, its 810 ok cells kept and its 310
+v1 leak cells re-evaluated). `summary.json` is `tasks.summarize`
 over the cells, with the contamination flags of the arm0 run.
 
 Verified here: a dry run over the 4 Express tasks x 6 arms (all but

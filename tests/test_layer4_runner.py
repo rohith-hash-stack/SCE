@@ -403,3 +403,62 @@ def test_a_seed_stopped_mid_cell_reruns_alone_and_finished_seeds_are_skipped(tmp
     assert ran == [3, 4]  # seeds 1 and 2 are not run again; the stopped seed 3 is
     cells = R.load_cells(tmp_path / "cells.jsonl")
     assert sorted(c["seed"] for c in cells.values()) == [1, 2, 3, 4] and all(c["status"] == "ok" for c in cells.values())
+
+
+def test_leak_cells_from_an_older_check_are_rerun_ok_cells_kept():
+    v = X.LEAK_CHECK_VERSION
+    assert R.is_done({"status": "ok", "detail": {}})
+    assert not R.is_done({"status": "leak", "detail": {}})  # v1 leaks: re-evaluated on resume
+    assert not R.is_done({"status": "leak", "detail": {"leak_check": v - 1}})
+    assert R.is_done({"status": "leak", "detail": {"leak_check": v}})
+    assert not R.is_done({"status": "error", "detail": {"leak_check": v}})
+    assert R.is_done({"status": "dry_run", "detail": {}}, dry_run=True) and not R.is_done({"status": "dry_run"})
+
+
+def test_common_body_lines_are_those_the_repository_carries_elsewhere(tmp_path):
+    import subprocess
+    definition = "def f(x):\n    unique_line_of_the_focal_body = x\n    shared_line_used_elsewhere_too = 1\n"
+    (tmp_path / "m.py").write_text(definition + "\n\ndef g():\n    shared_line_used_elsewhere_too = 1\n")
+    (tmp_path / "n.py").write_text("unrelated = True\n")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    task = {"task_id": "t", "focal": {"language": "python", "signature": "def f(x):"}}
+    assert X.common_body_lines(task, str(tmp_path), definition) == frozenset({"shared_line_used_elsewhere_too = 1"})
+
+
+@pytest.mark.parametrize("task_id", sorted(k for k in TASKS if k.startswith("l4_bwd_")))
+def test_leak_check_v2_controls_on_the_real_focal_definitions(task_id):
+    """The masked definition never leaks (v1 flagged docstrings and
+    multi-line signatures); the unmasked body always does, on enough lines
+    unique to it."""
+    task = TASKS[task_id]
+    try:
+        from benchmarks.corpora.resolver import resolve
+        root = X.clone_root(task["corpus"], str(resolve(task["corpus"])))
+        definition = X.focal_definition(task, root)
+    except Exception as exc:  # corpus not checked out here
+        pytest.skip(f"{task['corpus']}: {exc}")
+    common = X.common_body_lines(task, root, definition)
+    masked = T.masked_definition(definition, task["focal"]["language"])
+    assert not X.leaked(X.context_leaks(f"<node>{masked}</node>", task, definition, common))
+    unmasked = X.context_leaks(f"<node>{definition}</node>", task, definition, common)
+    assert X.leaked(unmasked) and unmasked["focal_body_lines"] >= 3
+
+
+def test_nodes_nested_in_the_focal_are_dropped_with_its_body():
+    task = bwd_task()
+    task["focal"]["index_file"] = "pkg/cart.py"
+    inner = "def helper(i):\n        return i['price'] * i['qty'] * 1.2"
+    definition = f"def total(items):\n    {inner}\n    return round(sum(map(helper, items)), 2)\n"
+    pkg = Pkg([Node("pkg.cart.total", "pkg/cart.py", definition), Node("pkg.cart.helper", "pkg/cart.py", inner),
+               Node("pkg.other.helper", "pkg/other.py", inner)], [Edge("pkg.cart.total", "pkg.cart.helper")])
+    out, report = X.mask_package(pkg, task, definition, lambda f: False)
+    assert report["dropped_nested_nodes"] == ["pkg.cart.helper"]  # same text in another file is not part of the body
+    assert [n.id for n in out.nodes] == ["pkg.cart.total", "pkg.other.helper"] and out.edges == []
+    assert "1.2" not in out.nodes[0].body
+    skeleton = dataclasses.make_dataclass("Located", [("line", int), ("end_line", int)], bases=(Node,), frozen=True)
+    pkg = Pkg([Node("pkg.cart.total", "pkg/cart.py", definition),
+               skeleton("pkg.cart.helper", "pkg/cart.py", "def helper(i):\n    ...", 11, 12),  # compressed: not source text
+               skeleton("pkg.cart.after", "pkg/cart.py", "def after():\n    ...", 14, 15)], [])
+    out, report = X.mask_package(pkg, task, definition, lambda f: False, span=(10, 12))
+    assert report["dropped_nested_nodes"] == ["pkg.cart.helper"] and [n.id for n in out.nodes] == ["pkg.cart.total", "pkg.cart.after"]

@@ -49,7 +49,7 @@ from harness.experiments.layer4 import tasks as T
 
 SCE = Path(__file__).resolve().parents[3]
 TASKS_DIR = SCE / "benchmarks" / "layer4" / "tasks"
-DONE = {"ok", "leak"}  # a rerun skips these; errors are retried
+DONE = {"ok", "leak"}  # a rerun skips these (a leak only if the current check said so); errors are retried
 
 
 # ---------------------------------------------------------------- tasks / cells
@@ -118,8 +118,9 @@ def run_cell(corpus, task: dict, arm: str, seed: int, cfg, client, pythons: dict
                    context_hash=T_hash(ctx["rendered"]))
         rec["tokens"]["context"] = ctx["context_tokens"]
         rec["detail"] = {k: ctx[k] for k in ("context_tokens_pre_ceiling", "n_ceiling_dropped", "dropped_test_nodes",
-                                             "masked_nodes", "focal_in_context") if k in ctx}
+                                             "masked_nodes", "dropped_nested_nodes", "focal_in_context") if k in ctx}
         rec["detail"]["prompt_leaks"] = prompt_leaks
+        rec["detail"]["leak_check"] = ctx.get("leak_check", X.LEAK_CHECK_VERSION)
         if ctx["leaked"] or prompt_leaks:
             rec["status"] = "leak"
         elif client is None:
@@ -159,11 +160,20 @@ def T_hash(text: str) -> str:
 
 
 # ---------------------------------------------------------------- the run
+def is_done(rec: dict, dry_run: bool = False) -> bool:
+    """A finished cell a rerun skips: ok, or a leak the current leak check
+    found (one from an older check is re-evaluated: the check only gates
+    sending, so an ok cell stays valid across versions)."""
+    if rec["status"] == "leak":
+        return (rec.get("detail") or {}).get("leak_check") == X.LEAK_CHECK_VERSION
+    return rec["status"] in ({"dry_run"} | DONE if dry_run else DONE)
+
+
 def run(tasks: dict[str, dict], arms: list[str], seeds: list[int], out: Path, cfg, client, pythons: dict, node: str,
         load_corpus=X.Corpus.load) -> list[dict]:
     out.mkdir(parents=True, exist_ok=True)
     cells_path = out / "cells.jsonl"
-    done = {k for k, r in load_cells(cells_path).items() if r["status"] in (DONE if client else {"dry_run"} | DONE)}
+    done = {k for k, r in load_cells(cells_path).items() if is_done(r, dry_run=client is None)}
     by_corpus: dict[str, list[dict]] = {}
     for t in tasks.values():
         by_corpus.setdefault(t["corpus"], []).append(t)

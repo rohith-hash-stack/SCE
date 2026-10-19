@@ -109,6 +109,22 @@ def render(cells: list[dict], tasks: dict[str, dict], summary: dict, contaminati
     for arm in ARMS:
         st = t["status"].get(arm, {})
         lines.append(f"| {arm} | " + " | ".join(str(st.get(s, 0)) for s in ("ok", "leak", "error", "timeout", "dry_run")) + " |")
+    leaks = defaultdict(list)
+    for c in cells:
+        if c["status"] == "leak":
+            leaks[(c["task_id"], c["arm"])].append(c)
+    if leaks:
+        lines += ["", "## Leak cells (held back, never sent to the model)", "",
+                  "| task | arm | cells | leak check | body lines | test files | trace keys | prompt | first body line |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for (tid, arm), cs in sorted(leaks.items()):
+            c = cs[0]
+            hits = c["leak"].get("focal_body_hits") or []
+            lines.append(f"| {tid} | {arm} | {len(cs)} | v{(c.get('detail') or {}).get('leak_check', 1)} | "
+                         f"{c['leak']['focal_body_lines']} | {', '.join(c['leak']['test_files']) or '-'} | "
+                         f"{', '.join(c['leak'].get('trace_markers') or []) or '-'} | "
+                         f"{', '.join((c.get('detail') or {}).get('prompt_leaks') or []) or '-'} | "
+                         f"{('`' + hits[0][:60].replace('|', '/') + '`') if hits else '-'} |")
     lines += ["", "## Forward blast radius (callers within each task's max_depth)", "",
               "| arm | view | n | precision | recall | F1 | parsed | Django tables exact | tables F1 | effects exact | effects F1 | context tok |",
               "|---|---|---|---|---|---|---|---|---|---|---|---|"]
