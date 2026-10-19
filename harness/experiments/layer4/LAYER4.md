@@ -424,7 +424,23 @@ reason about the change.
    `BACKWARD_SYSTEM`), the context, `Task:` and the task prompt with its
    answer contract (`tasks.FORWARD_CONTRACT`: one JSON object;
    `tasks.BACKWARD_CONTRACT`: one fenced code block). Forward calls use
-   JSON mode; backward calls never do.
+   JSON mode; backward calls never do. Forward calls send Stage 2's stop
+   sequences (`benchmarks.tsr.client.STOP_SEQUENCES`); backward calls send
+   none (`runner.BACKWARD_ANSWER_VERSION` 2, stamped as
+   `detail.backward_answer`). Those sequences fit Stage 2's JSON answers,
+   not code: `"\n```"` is the answer block's own closing fence - and its
+   opening one after a sentence of prose - and `"]}\n"` / `"\n\n\n"`
+   occur in ordinary code. Under v1 every one of the first tournament's 540
+   backward replies came back without its closing fence; the splice took
+   the opening fence line for code and no candidate parsed (pass rate and
+   syntax validity 0 for every arm, oracles included); 5 were cut down to
+   their opening sentence. `splice.extract_code` now also reads an
+   unterminated last block and prefers the block that defines the
+   function (a usage example after it is not the answer). Re-splicing the
+   v1 replies with it parses every candidate, and the real tests fail
+   them for real reasons (`deep_dict_update` without its list branch), but
+   the replies themselves may be cut short, so v1 backward cells are run
+   again rather than re-scored.
 7. **Score** - below. The record is validated against `cell.schema.json`
    (an invalid record is kept with status `error`).
 

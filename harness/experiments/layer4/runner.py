@@ -49,6 +49,12 @@ from harness.experiments.layer4 import tasks as T
 
 SCE = Path(__file__).resolve().parents[3]
 TASKS_DIR = SCE / "benchmarks" / "layer4" / "tasks"
+#: version of the backward answer protocol stamped on backward cells
+#: (`detail.backward_answer`); an ok backward cell of an older one is run
+#: again. v1 sent Stage 2's stop sequences, whose "\n```" is the answer's
+#: own closing fence: every reply came back unterminated, the opening fence
+#: was spliced in with the code and no candidate parsed. v2 sends none.
+BACKWARD_ANSWER_VERSION = 2
 DONE = {"ok", "leak"}  # a rerun skips these (a leak only if the current check said so); errors are retried
 
 
@@ -121,6 +127,8 @@ def run_cell(corpus, task: dict, arm: str, seed: int, cfg, client, pythons: dict
                                              "masked_nodes", "dropped_nested_nodes", "focal_in_context") if k in ctx}
         rec["detail"]["prompt_leaks"] = prompt_leaks
         rec["detail"]["leak_check"] = ctx.get("leak_check", X.LEAK_CHECK_VERSION)
+        if task["family"] == "backward_adaptation":
+            rec["detail"]["backward_answer"] = BACKWARD_ANSWER_VERSION
         if ctx["leaked"] or prompt_leaks:
             rec["status"] = "leak"
         elif client is None:
@@ -131,6 +139,7 @@ def run_cell(corpus, task: dict, arm: str, seed: int, cfg, client, pythons: dict
             call = client.complete(cfg.model, system, user, temperature=cfg.temperature, max_tokens=cfg.max_tokens,
                                    seed=seed, task_id=task["task_id"], engine=f"{ctx['engine_id']}/answer",
                                    response_format={"type": "json_object"} if forward else None,
+                                   **({} if forward else {"stop": None}),  # forward: Stage 2's stop sequences
                                    **sampler_kwargs(cfg, "answer"))
             log.add("answer", call)
             rec["reply"] = call.content or ""
@@ -163,9 +172,13 @@ def T_hash(text: str) -> str:
 def is_done(rec: dict, dry_run: bool = False) -> bool:
     """A finished cell a rerun skips: ok, or a leak the current leak check
     found (one from an older check is re-evaluated: the check only gates
-    sending, so an ok cell stays valid across versions)."""
+    sending, so an ok cell stays valid across versions). An ok backward
+    cell also needs the current backward answer protocol."""
+    detail = rec.get("detail") or {}
     if rec["status"] == "leak":
-        return (rec.get("detail") or {}).get("leak_check") == X.LEAK_CHECK_VERSION
+        return detail.get("leak_check") == X.LEAK_CHECK_VERSION
+    if rec["status"] == "ok" and rec.get("family") == "backward_adaptation":
+        return detail.get("backward_answer") == BACKWARD_ANSWER_VERSION
     return rec["status"] in ({"dry_run"} | DONE if dry_run else DONE)
 
 

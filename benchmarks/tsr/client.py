@@ -274,6 +274,7 @@ class OpenAICompatibleClient:
         engine: str | None = None,
         extra_body: dict | None = None,
         response_format: dict | None = {"type": "json_object"},  # noqa: B006 - never mutated
+        stop: tuple[str, ...] | None = STOP_SEQUENCES,
     ) -> CallResult:
         """One chat-completions call, retrying on HTTP 429
         (`openai.RateLimitError`) per `RATE_LIMIT_BACKOFF_SECONDS`
@@ -303,6 +304,12 @@ class OpenAICompatibleClient:
         so this relies on it being a standard parameter rather than an
         independently verified DeepSeek doc check).
 
+        `stop` (default `STOP_SEQUENCES`, every existing caller unaffected):
+        the stop sequences sent; `None` sends none. They fit the JSON
+        contracts they were chosen for, not code: `"\n```"` is a fenced
+        block's own closing fence and `"]}\n"` / `"\n\n\n"` occur inside
+        ordinary code (Layer 4's backward answers pass `None`).
+
         `extra_body` (optional, `None` by default - every existing
         caller unaffected): passed straight through to the underlying
         `openai` SDK call's own `extra_body` kwarg, merged into the raw
@@ -326,7 +333,7 @@ class OpenAICompatibleClient:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     **({"response_format": response_format} if response_format is not None else {}),
-                    stop=list(STOP_SEQUENCES),
+                    **({"stop": list(stop)} if stop else {}),
                     **({"seed": seed} if seed is not None else {}),
                     **({"extra_body": extra_body} if extra_body is not None else {}),
                 )

@@ -80,10 +80,32 @@ def _run(task: SpliceTask) -> dict:
             "stub_seen": stub_seen}
 
 
-def extract_code(reply: str) -> str:
-    """The code in a model reply: the last fenced block, else the text."""
-    blocks = _FENCE.findall(reply)
-    return (blocks[-1] if blocks else reply).strip("\n")
+_OPEN_FENCE = re.compile(r"```[a-zA-Z0-9_+-]*[ \t]*\n(.*)\Z", re.S)
+
+
+def code_blocks(reply: str) -> list[str]:
+    """The fenced blocks of a reply, the last one also when its closing
+    fence is missing (a stop sequence, a length cut)."""
+    blocks, end = [], 0
+    for m in _FENCE.finditer(reply):
+        blocks.append(m.group(1))
+        end = m.end()
+    if m := _OPEN_FENCE.search(reply[end:]):
+        blocks.append(m.group(1))
+    return blocks
+
+
+def extract_code(reply: str, language: str | None = None, name: str = "") -> str:
+    """The code in a model reply: of its fenced blocks the last that
+    defines `name` (when given), else the last; with no fence, the text."""
+    blocks = code_blocks(reply)
+    if not blocks:
+        return reply.strip("\n")
+    if language and name:
+        defining = [b for b in blocks if is_full_definition(b, language, name)]
+        if defining:
+            return defining[-1].strip("\n")
+    return blocks[-1].strip("\n")
 
 
 def is_full_definition(code: str, language: str, name: str) -> bool:
@@ -144,8 +166,8 @@ def gates(task: SpliceTask) -> dict:
 def evaluate(task: SpliceTask, reply: str) -> dict:
     """Splice the candidate in `reply` and run the tests. A full definition
     replaces the function (decorators kept); anything else replaces the body."""
-    code = extract_code(reply)
     span = locate(task.path, task.line)
+    code = extract_code(reply, span.language, task.name)
     full = is_full_definition(code, span.language, task.name)
     if full and span.language != "python":
         code = strip_js_assignment(code.lstrip(), task.name)

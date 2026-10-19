@@ -462,3 +462,49 @@ def test_nodes_nested_in_the_focal_are_dropped_with_its_body():
                skeleton("pkg.cart.after", "pkg/cart.py", "def after():\n    ...", 14, 15)], [])
     out, report = X.mask_package(pkg, task, definition, lambda f: False, span=(10, 12))
     assert report["dropped_nested_nodes"] == ["pkg.cart.helper"] and [n.id for n in out.nodes] == ["pkg.cart.total", "pkg.cart.after"]
+
+
+def test_backward_code_is_extracted_from_unterminated_and_multi_block_replies():
+    fn = "res.location = function location(url) {\n  return this.set('Location', url);\n};"
+    assert S.extract_code(f"```javascript\n{fn}") == fn  # closing fence eaten by a stop sequence
+    assert S.extract_code(f"```javascript\n{fn}\n```\nUse it like:\n```js\nres.location('/x')\n```",
+                          "javascript", "location") == fn  # the defining block, not the usage example
+    assert S.extract_code(f"```js\n{fn}\n```\nthen\n```js\nres.location('/x')") == "res.location('/x')"
+    assert S.extract_code("```python\nreturn 1\n```\n\nDone.") == "return 1"
+    assert S.extract_code("return 1") == "return 1"
+
+
+def test_backward_answers_send_no_stop_sequences_forward_keep_stage2s():
+    seen = []
+
+    class Recording(Client):
+        def complete(self, *a, **k):
+            seen.append(k.get("stop", "default"))
+            return super().complete(*a, **k)
+    R.run_cell(corpus_for(TASKS["l4_bwd_express_01"]), TASKS["l4_bwd_express_01"], "arm0_no_retrieval", 1, Cfg(),
+               Recording("```js\nreturn 1\n```"), {}, "node",
+               evaluate=lambda t, r: {"passed": False, "exit_code": 1, "seconds": 0, "mode": "body", "syntax_ok": True},
+               build=fake_build())
+    rec = R.run_cell(corpus_for(TASKS["l4_fwd_express_01"]), TASKS["l4_fwd_express_01"], "arm0_no_retrieval", 1, Cfg(),
+                     Recording('{"affected_symbols": []}'), {}, "node", build=fake_build())
+    assert seen == [None, "default"] and rec["status"] == "ok" and "backward_answer" not in rec["detail"]
+    assert not R.is_done({"status": "ok", "family": "backward_adaptation", "detail": {}})  # v1 backward: rerun
+    assert R.is_done({"status": "ok", "family": "backward_adaptation", "detail": {"backward_answer": 2}})
+    assert R.is_done({"status": "ok", "family": "forward_blast", "detail": {}})
+
+
+def test_client_stop_default_is_stage2s_and_none_sends_none(monkeypatch):
+    from benchmarks.tsr import client as C
+    sent = []
+
+    class Completions:
+        def create(self, **kw):
+            sent.append(kw.get("stop"))
+            raise RuntimeError("stop here")
+    c = C.OpenAICompatibleClient.__new__(C.OpenAICompatibleClient)
+    c._client = NS(chat=NS(completions=Completions()))
+    c.model = "m"
+    for kw in ({}, {"stop": None}):
+        with pytest.raises(Exception):
+            c.complete("m", "s", "u", **kw)
+    assert sent == [list(C.STOP_SEQUENCES), None]
