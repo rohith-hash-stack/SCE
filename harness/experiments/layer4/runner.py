@@ -130,7 +130,8 @@ def run_cell(corpus, task: dict, arm: str, seed: int, cfg, client, pythons: dict
                    context_hash=T_hash(ctx["rendered"]))
         rec["tokens"]["context"] = ctx["context_tokens"]
         rec["detail"] = {k: ctx[k] for k in ("context_tokens_pre_ceiling", "n_ceiling_dropped", "dropped_test_nodes",
-                                             "masked_nodes", "dropped_nested_nodes", "focal_in_context") if k in ctx}
+                                             "masked_nodes", "dropped_nested_nodes", "focal_in_context", "manifest_direction")
+                         if k in ctx and ctx[k] is not None}
         rec["detail"]["prompt_leaks"] = prompt_leaks
         rec["detail"]["leak_check"] = ctx.get("leak_check", X.LEAK_CHECK_VERSION)
         if task["family"] == "backward_adaptation":

@@ -264,7 +264,8 @@ def build_context(corpus: Corpus, arm: str, task: dict, seed: int | None, cfg, c
         if spec.breadcrumbs:
             rendered, _placed = render_breadcrumbs(state, [n.id for n in pkg.nodes], rendered)
     leak = context_leaks(rendered, task, definition, common)
-    return {"rendered": rendered, "leak_check": LEAK_CHECK_VERSION, "selected_symbols": packed, "context_tokens": count_tokens(rendered),
+    return {"rendered": rendered, "leak_check": LEAK_CHECK_VERSION,
+            "manifest_direction": ("both" if et.task_type == "blast" else "downstream") if spec.kind == "two_pass" else None, "selected_symbols": packed, "context_tokens": count_tokens(rendered),
             "context_tokens_pre_ceiling": tokens_before, "n_ceiling_dropped": len(ceiling_dropped),
             "leak": leak, "leaked": leaked(leak), "engine_id": spec.engine_id, **mask_report,
             "focal_in_context": task["focal"]["qname"] in packed}

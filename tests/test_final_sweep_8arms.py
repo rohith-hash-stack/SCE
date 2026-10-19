@@ -397,3 +397,24 @@ def test_pagerank_arm_end_to_end_stays_within_its_rendered_budget(tmp_path, corp
     assert validate_record(row) == [] and row["status"] == "ok"
     assert row["context_tokens"] <= REPOMAP_BUDGET_TOKENS and row["n_llm_calls"] == 1
     assert row["n_ceiling_dropped"] == 0
+
+
+def test_blast_tasks_get_the_blast_radius_manifest_and_debug_tasks_the_downstream_one(corpus, monkeypatch):
+    """`_two_pass_context` routes `task_type == "blast"` to `direction="both"`
+    under the cell's budget (as `prism.blast_radius` builds it); every other
+    task type keeps the default downstream manifest, call for call."""
+    from benchmarks.final_sweep.runner import CellRecord, _CallLog, _two_pass_context
+    seen = []
+    original = corpus.prism.build_candidate_manifest
+
+    def recording(anchor, **kw):
+        seen.append(kw)
+        return original(anchor, **kw)
+    monkeypatch.setattr(corpus.prism, "build_candidate_manifest", recording)
+    cfg = SweepConfig(dry_run=True)
+    for task_type in ("debug", "blast"):
+        task = _task().model_copy(update={"task_type": task_type})
+        rec = CellRecord(repo="django", task_id=task.task_id, engine_id="prism_full", seed=1, budget=cfg.budget,
+                         token_ceiling=cfg.token_ceiling, model_requested="m", temperature=0.0)
+        _two_pass_context(corpus, FakeClient(), C.resolve_arm("prism_full"), task, 1, cfg, rec, _CallLog(), {})
+    assert seen == [{}, {"direction": "both", "budget_tokens": cfg.budget}]

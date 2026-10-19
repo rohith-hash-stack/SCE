@@ -375,8 +375,14 @@ def _two_pass_context(
     record.anchor_symbol = anchor
     record.anchor_matches_task_seed = anchor == task.seed_symbol
 
+    # A blast-radius task asks who is affected - the seed's transitive callers -
+    # so its manifest is blast-radius mode (Design C), as `prism.blast_radius`
+    # builds it; every other task type keeps the downstream manifest (the
+    # Stage 2 sweep runs debug tasks only, so its cells are unchanged).
+    blast = task.task_type == "blast"
     with corpus.lock:
-        manifest_text, universe = corpus.prism.build_candidate_manifest(anchor)
+        manifest_text, universe = corpus.prism.build_candidate_manifest(
+            anchor, **({"direction": "both", "budget_tokens": cfg.budget} if blast else {}))
     manifest = annotate_manifest_axes(manifest_text, corpus.feature_masks, spec.axes)
     record.manifest_hash = sha256_text(manifest)
     record.manifest_candidate_count = len(universe)

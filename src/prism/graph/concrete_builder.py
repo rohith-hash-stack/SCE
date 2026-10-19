@@ -726,6 +726,7 @@ class ConcreteGraphBuilder:
             enclosing_class=enclosing_class,
             role=role,
             nested_in_function=nested_in_function,
+            aliases=tuple(n for n in _assigned_property_names(node, parsed) if n != name),
         )
         # `key` is `qualified_name` unchanged unless `add()` just detected
         # a genuine in-module collision (Option C, `reports/symbol_table_
@@ -3334,6 +3335,47 @@ class ConcreteGraphBuilder:
                 return None
         return root.qualified_name
 
+    def _same_object_method(
+        self, caller_qname: str, segments: list[str], parsed: ParsedFile, module: str, lang: str | None
+    ) -> str | None:
+        """`this.m()` inside a JS/TS function assigned to `obj.f`: `this` is
+        `obj` when it runs as `obj.f()`, so the target is what the same
+        module assigns to `obj.m` (`res.json = function` calling
+        `this.set(...)`, with `res.set = res.header = function header`,
+        is `lib.response.header`). The object expression and the property
+        must both match - it is chosen over a same-named method elsewhere
+        by that, not by a name score - but linked as a tentative call. None
+        when the caller is not property-assigned or the module assigns no
+        `obj.m`."""
+        if lang not in (LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX) or len(segments) != 2:
+            return None
+        if segments[0] not in SELF_TOKEN_TEXT.get(lang, ()):
+            return None
+        caller_node = self._def_nodes.get(caller_qname)
+        if caller_node is None:
+            return None
+        index = self._object_method_index(parsed, module)
+        for obj, _prop in _assigned_properties(caller_node, parsed):
+            target = index.get((obj, segments[1]))
+            if target is not None:
+                return target
+        return None
+
+    def _object_method_index(self, parsed: ParsedFile, module: str) -> dict[tuple[str, str], str]:
+        """`{(object, property): qualified_name}` for the property-assigned
+        functions of one module (aliases included), built once per module."""
+        cache = self.__dict__.setdefault("_object_methods_by_module", {})
+        if module not in cache:
+            index: dict[tuple[str, str], str] = {}
+            for qname, node in self._def_nodes.items():
+                info = self.symbol_table.get(qname)
+                if info is None or info.module != module or info.file != parsed.path:
+                    continue
+                for obj, prop in _assigned_properties(node, parsed):
+                    index.setdefault((obj, prop), qname)
+            cache[module] = index
+        return cache[module]
+
     def _resolve_ambiguous_call(
         self,
         caller_qname: str,
@@ -3403,7 +3445,7 @@ class ConcreteGraphBuilder:
             # possible builtin, so a unique candidate still links there.
             # Typed receivers (builtins included) are resolved before this
             # fallback and are unaffected.
-            self._emit_polymorphic_sentinel(caller_qname, call_node, parsed, simple_name, candidates)
+            self._same_object_or_sentinel(caller_qname, call_node, parsed, module, lang, segments, candidates)
             return
         if len(segments) >= 2 and len(candidates) >= 2:
             family_root = self._single_family_root(candidates, simple_name)
@@ -3514,7 +3556,25 @@ class ConcreteGraphBuilder:
             self.graph.add_edge(caller_qname, target, relation="CALLS")
             return
 
-        self._emit_polymorphic_sentinel(caller_qname, call_node, parsed, simple_name, candidates)
+        self._same_object_or_sentinel(caller_qname, call_node, parsed, module, lang, segments, candidates)
+
+    def _same_object_or_sentinel(
+        self, caller_qname: str, call_node: Node, parsed: ParsedFile, module: str, lang: str | None,
+        segments: list[str], candidates: list[SymbolInfo],
+    ) -> None:
+        """Where the name rules give up on `this.m()`, the JS/TS same-object
+        rule (`_same_object_method`) can still name the target; else the
+        UnresolvedPolymorphic sentinel. Only here, so every call the name
+        rules already resolve keeps its link and its confidence. Tentative:
+        `this` is `obj` only when the function runs as `obj.f()`, and an
+        object made from it (`Object.create(res)`) may override `m`."""
+        target = self._same_object_method(caller_qname, segments, parsed, module, lang)
+        if target is None:
+            self._emit_polymorphic_sentinel(caller_qname, call_node, parsed, segments[-1], candidates)
+            return
+        if target not in self.graph:
+            self.graph.add_node(target, external=False)
+        self.graph.add_edge(caller_qname, target, relation="CALLS", kind="TENTATIVE_CALL")
 
     def _emit_polymorphic_sentinel(
         self, caller_qname: str, call_node: Node, parsed: ParsedFile, simple_name: str, candidates: list[SymbolInfo]
@@ -4111,6 +4171,40 @@ def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | N
     if left is None or left.type != ATTRIBUTE_NODE_TYPE.get(lang):
         return None
     return left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
+
+
+def _assigned_property_names(node: Node, parsed: ParsedFile) -> list[str]:
+    """Every dotted property a function node is bound to by assignment,
+    innermost first: `res.set = res.header = function header() {}` parses
+    as `assignment(res.set, assignment(res.header, function))`, and both
+    `header` and `set` name the same function at runtime. Empty unless the
+    node is the `right:` side of a dotted-property assignment (a computed
+    `app[method] = ...` property is a runtime value - excluded, as in
+    `_property_assigned_function_name`)."""
+    return [prop for _obj, prop in _assigned_properties(node, parsed)]
+
+
+def _assigned_properties(node: Node, parsed: ParsedFile) -> list[tuple[str, str]]:
+    """`(object, property)` for each assignment in that chain:
+    `[("res", "header"), ("res", "set")]` for the example above."""
+    lang = parsed.language_id
+    assign_type = ASSIGNMENT_NODE_TYPE.get(lang)
+    attr_type = ATTRIBUTE_NODE_TYPE.get(lang)
+    names: list[tuple[str, str]] = []
+    child, parent = node, node.parent
+    while assign_type is not None and parent is not None and parent.type == assign_type:
+        if parent.child_by_field_name("right") != child:
+            break
+        left = parent.child_by_field_name("left")
+        if left is None or left.type != attr_type:
+            break
+        prop = left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
+        obj = left.child_by_field_name("object")
+        if prop is None or obj is None:
+            break
+        names.append((node_text(obj, parsed.source), node_text(prop, parsed.source)))
+        child, parent = parent, parent.parent
+    return names
 
 
 def _enclosing_function_own_name(func_node: Node, parsed: ParsedFile) -> str | None:

@@ -13,10 +13,11 @@ Stages, per forward task (gold = the task's traced callers within its
    INSTANTIATES in-edges within `max_depth` (`_upstream_walk`, tests
    excluded): the graph's own upper bound;
 3. **in V_cand** - in the Turn 1 candidate manifest exactly as `prism_full`
-   builds it (`build_candidate_manifest(anchor)`, default
-   `direction="downstream"`: every downstream candidate, but upstream only
-   the top `UPSTREAM_FRONTIER_CAP` direct callers by `W_upstream` within
-   `DEFAULT_UPSTREAM_MAX_HOPS`); a missing gold caller gets its reason;
+   builds it: for a `blast` task `direction="both"` under the cell budget
+   (the transitive caller walk); before that routing, the default
+   `direction="downstream"` admitted upstream only the top
+   `UPSTREAM_FRONTIER_CAP` direct callers. A missing gold caller gets its
+   reason;
 4. **in packed context** - in the cell's recorded `selected_symbols` (after
    Turn 1, Turn 2's render budget, filtering and the token ceiling), per
    seed;
@@ -102,8 +103,10 @@ def diagnose_task(corpus, task, cells: list[dict], all_cells: list[dict]) -> dic
     in_graph = [g for g in gold if g in walk]
 
     # 3: V_cand as prism_full builds it, and why a gold caller is not in it
+    blast = task["arm_view"]["task_type"] == "blast"  # as benchmarks.final_sweep.runner._two_pass_context routes it
     with corpus.lock:
-        manifest, universe = corpus.state.prism.build_candidate_manifest(seed)
+        manifest, universe = corpus.state.prism.build_candidate_manifest(
+            seed, **({"direction": "both", "budget_tokens": cfg.budget} if blast else {}))
     axes = {}
     for line in annotate_manifest_axes(manifest, corpus.state.feature_masks, "all").splitlines():
         if "|" in line:

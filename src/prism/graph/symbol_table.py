@@ -112,6 +112,13 @@ class SymbolInfo:
     #: registered as `Class.inner`). Such a definition is not a class
     #: member, so it stays visible to Rule D's bare-name lookup.
     nested_in_function: bool = False
+    #: Other names the same definition is reachable by in its module: the
+    #: properties a JS/TS chained assignment binds it to (`res.set =
+    #: res.header = function header(...)` is `header` with alias `set`),
+    #: or the property a named function expression is assigned to (`res.type
+    #: = function contentType(...)`: `contentType`, alias `type`). Indexed
+    #: for bare-name and simple-name lookup to the definition's own key.
+    aliases: tuple[str, ...] = ()
 
 
 class GlobalSymbolTable:
@@ -225,6 +232,7 @@ class GlobalSymbolTable:
                 self._module_index.setdefault(symbol.module, {})[local_name] = key
             if symbol.kind in ("function", "method"):
                 self._simple_name_index.setdefault(simple_name, []).append(key)
+            self._index_aliases(symbol, key)
             return key
 
         # Genuine collision: two real, different definitions share
@@ -286,6 +294,19 @@ class GlobalSymbolTable:
             # functions colliding in the *same* module too.
             self._simple_name_index.setdefault(simple_name, []).append(sibling_key)
         return sibling_key
+
+    def _index_aliases(self, symbol: SymbolInfo, key: str) -> None:
+        """`symbol.aliases` as extra names for `key`: in its module's
+        bare-name index unless a definition of that name already holds the
+        slot (a real `res.set = function set` would win; one registered
+        later overwrites the alias), and among the repo-wide simple-name
+        candidates."""
+        for alias in symbol.aliases:
+            if alias == key.rsplit(".", 1)[-1]:
+                continue
+            self._module_index.setdefault(symbol.module, {}).setdefault(alias, key)
+            if symbol.kind in ("function", "method") and key not in self._simple_name_index.get(alias, []):
+                self._simple_name_index.setdefault(alias, []).append(key)
 
     def get(self, qualified_name: str) -> SymbolInfo | None:
         return self._symbols.get(qualified_name)
