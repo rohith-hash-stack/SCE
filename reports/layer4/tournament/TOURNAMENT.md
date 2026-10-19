@@ -1,6 +1,6 @@
 # Layer 4 tournament
 
-Code `c4c9da477c`, model `qwen2.5-coder:14b-instruct-q8_0` (Ollama 0.34.0, num_ctx 24576), seeds 42,43,44,45,46,47,48,49,50,51. Resumed across the declared code change 'leak check v2' (fe7ed62603 -> 22e1c63f93). Resumed across the declared code change 'backward answers without stop sequences' (22e1c63f93 -> c4c9da477c). Complete.
+Step 1 (contamination) - code `a341dec389`, model `qwen2.5-coder:14b-instruct-q8_0`.
 
 16 tasks, 7 arms, seeds [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]; 1120 cells. Contamination-flagged tasks (arm0 >= threshold): none.
 
@@ -46,8 +46,8 @@ Code `c4c9da477c`, model `qwen2.5-coder:14b-instruct-q8_0` (Ollama 0.34.0, num_c
 
 | arm | view | n | pass rate | syntax ok | context tok | tokens / pass | passes / 1k tok |
 |---|---|---|---|---|---|---|---|
-| arm0_no_retrieval | all | 80 | 0.000 | 0.963 | 17.000 | - | 0.000 |
-| arm0_no_retrieval | unflagged | 80 | 0.000 | 0.963 | 17.000 | - | 0.000 |
+| arm0_no_retrieval | all | 80 | 0.000 | 0.988 | 17.000 | - | 0.000 |
+| arm0_no_retrieval | unflagged | 80 | 0.000 | 0.988 | 17.000 | - | 0.000 |
 | arm1_hybrid_rag | all | 80 | 0.013 | 0.762 | 7041 | 601973 | 0.002 |
 | arm1_hybrid_rag | unflagged | 80 | 0.013 | 0.762 | 7041 | 601973 | 0.002 |
 | repomap_pagerank | all | 80 | 0.000 | 0.725 | 3422 | - | 0.000 |
