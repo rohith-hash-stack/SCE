@@ -103,7 +103,18 @@ AMENDMENTS = [{
     "to": {"src": "e0f7d295eca7a95d3c0f3763f63257e174b012b6", "harness": "c7f4d9b42a7d4e13fba80174f82f34b5db2f5eab",
            "benchmarks": "ad66927ad7d1bb95d4f3552bb4c2e2e1491508fa"},
 }]
+AMENDMENTS.append({
+    "name": "backward answers without stop sequences",
+    "reason": "v1 sent Stage 2's stop sequences with backward answers; their \"\\n```\" is the answer's own "
+              "closing fence, so every backward reply came back unterminated, the splice took the opening fence "
+              "for code and no candidate parsed (pass rate 0 for every arm, oracles included). Forward cells, "
+              "leak cells and the leak check are unchanged and kept; backward ok cells are generated again.",
+    "from": AMENDMENTS[0]["to"],
+    "to": {"src": "e0f7d295eca7a95d3c0f3763f63257e174b012b6", "harness": "278f625914c9f8b4f320ca112f8de7c650f71f1c",
+           "benchmarks": "6db2b9c871ec74d3b19748a225e7e2a064604cc0"},
+})
 LEAK_CHECK_VERSION = 2                      # = harness.experiments.layer4.context.LEAK_CHECK_VERSION (checked at setup 10)
+BACKWARD_ANSWER_VERSION = 2                 # = harness.experiments.layer4.runner.BACKWARD_ANSWER_VERSION (same)
 MAX_PUSH_FILE_MB = 90
 START = time.time()
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
@@ -220,9 +231,13 @@ def stop_stale_runners():
 
 
 def cell_done(r):
-    """As the runner's is_done: ok, or a leak the current leak check found."""
+    """As the runner's is_done: ok (a backward one of the current answer
+    protocol), or a leak the current leak check found."""
+    detail = r.get("detail") or {}
     if r.get("status") == "leak":
-        return (r.get("detail") or {}).get("leak_check") == LEAK_CHECK_VERSION
+        return detail.get("leak_check") == LEAK_CHECK_VERSION
+    if r.get("status") == "ok" and r.get("family") == "backward_adaptation":
+        return detail.get("backward_answer") == BACKWARD_ANSWER_VERSION
     return r.get("status") == "ok"
 
 
@@ -615,10 +630,12 @@ if os.path.exists(manifest_path):
     print(f"[ok] resuming {PUSH_PATH} from {m.get('head', '')[:10]}", flush=True)
 else:
     amendments = []
-check = run([sys.executable, "-c", "from harness.experiments.layer4.context import LEAK_CHECK_VERSION as v; print(v)"],
+check = run([sys.executable, "-c", "from harness.experiments.layer4.context import LEAK_CHECK_VERSION as a; "
+             "from harness.experiments.layer4.runner import BACKWARD_ANSWER_VERSION as b; print(a, b)"],
             cwd=SCE_DIR, env=child_env, capture=True).stdout.strip().splitlines()[-1]
-if check != str(LEAK_CHECK_VERSION):
-    abort(f"the cell's LEAK_CHECK_VERSION {LEAK_CHECK_VERSION} != the harness's {check}")
+if check != f"{LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION}":
+    abort(f"the cell's LEAK_CHECK_VERSION / BACKWARD_ANSWER_VERSION {LEAK_CHECK_VERSION} {BACKWARD_ANSWER_VERSION} "
+          f"!= the harness's {check}")
 json.dump({"head": HEAD, "code": CODE, "amendments": amendments, "model": MODEL, "num_ctx": NUM_CTX, "seeds": SEEDS, "lanes": LANES,
            "transformers": installed_pin, "node": node_version, "pnpm": PNPM_VERSION, "corpus_python": CORPUS_PYTHON,
            "fastapi_pins": FASTAPI_PINS, "django_pins": DJANGO_PINS}, open(manifest_path, "w"), indent=1)
@@ -713,10 +730,10 @@ def resume_status(command):
         for corpus in lane:
             mine = [r for r in cells_of(corpus) if not arms or r["arm"] in arms]
             done = sum(1 for r in mine if cell_done(r))
-            recheck = sum(1 for r in mine if r["status"] == "leak" and not cell_done(r))
+            recheck = sum(1 for r in mine if r["status"] in ("leak", "ok") and not cell_done(r))
             print(f"[resume] {corpus}: {done}/{total} cells finished"
                   f"{' - skipped, the rest run now' if done else ''}"
-                  f"{f' ({recheck} leak cells from an older leak check are re-evaluated)' if recheck else ''}", flush=True)
+                  f"{f' ({recheck} cells from an older leak check or backward answer protocol are run again)' if recheck else ''}", flush=True)
 
 
 def cells_of(corpus):
@@ -783,7 +800,7 @@ if not stopped:
 
 print("\n[step 3/3] summarize", flush=True)
 amended = "".join(f" Resumed across the declared code change '{a['name']}' ({a['from_head'][:10]} -> "
-                  f"{a['to_head'][:10]}): leak cells from the older check were re-evaluated, ok cells kept."
+                  f"{a['to_head'][:10]})."
                   for a in amendments)
 header = (f"Code `{HEAD[:10]}`, model `{MODEL}` (Ollama {OLLAMA_VERSION}, num_ctx {NUM_CTX}), seeds {SEEDS}.{amended} "
           + ("**INCOMPLETE** - the session stopped before the time limit; re-run this cell to resume."
