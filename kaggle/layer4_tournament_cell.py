@@ -87,6 +87,23 @@ FASTAPI_PINS = ["anyio[trio]==4.6.2", "pydantic==2.11.7", "bcrypt==4.0.1", "pyth
 DJANGO_PINS = ["tblib"]
 CORPUS_PYTHON = "3.11"                      # the version the tasks were authored and gated with
 CODE_PATHS = ("src", "harness", "benchmarks")
+# Code changes a run may resume across (setup 10). Each names the tree
+# hashes of CODE_PATHS before and after: anything else still aborts. The
+# change must leave every finished cell valid; what it invalidates is redone.
+AMENDMENTS = [{
+    "name": "leak check v2",
+    "reason": "v1 counted what the mask keeps (docstring, multi-line signature) and lines common across the "
+              "repository as body leaks, and matched gating directories by leaf name; 310 cells were wrongly "
+              "held back as leaks. The check gates sending, never the context or the prompt; the one context "
+              "change - nodes nested inside the focal (only l4_bwd_trpc_02 has any) are dropped with its body - "
+              "touches no ok cell (that task's retrieval cells were all leaks). So ok cells stay, leak cells "
+              "from v1 are re-evaluated.",
+    "from": {"src": "e0f7d295eca7a95d3c0f3763f63257e174b012b6", "harness": "798fa2501140427f418f3a329dc4a060c50fd4ba",
+             "benchmarks": "ad66927ad7d1bb95d4f3552bb4c2e2e1491508fa"},
+    "to": {"src": "e0f7d295eca7a95d3c0f3763f63257e174b012b6", "harness": "c7f4d9b42a7d4e13fba80174f82f34b5db2f5eab",
+           "benchmarks": "ad66927ad7d1bb95d4f3552bb4c2e2e1491508fa"},
+}]
+LEAK_CHECK_VERSION = 2                      # = harness.experiments.layer4.context.LEAK_CHECK_VERSION (checked at setup 10)
 MAX_PUSH_FILE_MB = 90
 START = time.time()
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
@@ -202,9 +219,16 @@ def stop_stale_runners():
     return pids
 
 
+def cell_done(r):
+    """As the runner's is_done: ok, or a leak the current leak check found."""
+    if r.get("status") == "leak":
+        return (r.get("detail") or {}).get("leak_check") == LEAK_CHECK_VERSION
+    return r.get("status") == "ok"
+
+
 def cell_rank(r):
     """Which of two records of one cell to keep: a finished one, then the latest."""
-    return (r.get("status") in ("ok", "leak"), r.get("finished_at") or "")
+    return (cell_done(r), r.get("finished_at") or "")
 
 
 def merge_cell_files(target, *sources):
@@ -570,20 +594,32 @@ if len(gates) != 8 or not all(g["passed"] for g in gates.values()):
     abort("a backward task's gating tests fail on the original code: "
           + json.dumps({k: v["tail"] for k, v in gates.items() if not v["passed"]})[-3000:])
 
-print("\n[setup 10/10] Restore pushed progress (identical code only)", flush=True)
+print("\n[setup 10/10] Restore pushed progress (identical code, or a declared AMENDMENTS change)", flush=True)
 OUT = os.path.join(SCE_DIR, PUSH_PATH)
 CORPORA = os.path.join(SCE_DIR, CORPORA_DIR)
 os.makedirs(CORPORA, exist_ok=True)
 manifest_path = os.path.join(OUT, "tournament_manifest.json")
 if os.path.exists(manifest_path):
     m = json.load(open(manifest_path))
+    amendments = list(m.get("amendments", []))
     if m.get("code") != CODE:
-        abort(f"{PUSH_PATH} on {BRANCH} was produced by other code ({m.get('code')} != {CODE}); "
-              "move it aside or set PUSH_PATH to a new directory")
+        step = next((a for a in AMENDMENTS if a["from"] == m.get("code") and a["to"] == CODE), None)
+        if step is None:
+            abort(f"{PUSH_PATH} on {BRANCH} was produced by other code ({m.get('code')} != {CODE}) and no "
+                  "AMENDMENTS entry covers the change; move it aside or set PUSH_PATH to a new directory")
+        print(f"[ok] resuming across the declared code change '{step['name']}': {step['reason']}", flush=True)
+        amendments.append({"name": step["name"], "from": step["from"], "to": step["to"], "from_head": m.get("head"),
+                           "to_head": HEAD, "at": time.strftime("%Y-%m-%d %H:%M:%S")})
     if m.get("model") != MODEL or m.get("seeds") != SEEDS:
         abort(f"{PUSH_PATH} holds a run with model {m.get('model')} / seeds {m.get('seeds')}")
     print(f"[ok] resuming {PUSH_PATH} from {m.get('head', '')[:10]}", flush=True)
-json.dump({"head": HEAD, "code": CODE, "model": MODEL, "num_ctx": NUM_CTX, "seeds": SEEDS, "lanes": LANES,
+else:
+    amendments = []
+check = run([sys.executable, "-c", "from harness.experiments.layer4.context import LEAK_CHECK_VERSION as v; print(v)"],
+            cwd=SCE_DIR, env=child_env, capture=True).stdout.strip().splitlines()[-1]
+if check != str(LEAK_CHECK_VERSION):
+    abort(f"the cell's LEAK_CHECK_VERSION {LEAK_CHECK_VERSION} != the harness's {check}")
+json.dump({"head": HEAD, "code": CODE, "amendments": amendments, "model": MODEL, "num_ctx": NUM_CTX, "seeds": SEEDS, "lanes": LANES,
            "transformers": installed_pin, "node": node_version, "pnpm": PNPM_VERSION, "corpus_python": CORPUS_PYTHON,
            "fastapi_pins": FASTAPI_PINS, "django_pins": DJANGO_PINS}, open(manifest_path, "w"), indent=1)
 
@@ -675,9 +711,12 @@ def resume_status(command):
     total = TASKS_PER_CORPUS * (1 if arms else 7) * len(SEEDS.split(","))
     for lane in LANES:
         for corpus in lane:
-            done = sum(1 for r in cells_of(corpus) if r["status"] in ("ok", "leak") and (not arms or r["arm"] in arms))
+            mine = [r for r in cells_of(corpus) if not arms or r["arm"] in arms]
+            done = sum(1 for r in mine if cell_done(r))
+            recheck = sum(1 for r in mine if r["status"] == "leak" and not cell_done(r))
             print(f"[resume] {corpus}: {done}/{total} cells finished"
-                  f"{' - skipped, the rest run now' if done else ''}", flush=True)
+                  f"{' - skipped, the rest run now' if done else ''}"
+                  f"{f' ({recheck} leak cells from an older leak check are re-evaluated)' if recheck else ''}", flush=True)
 
 
 def cells_of(corpus):
@@ -743,7 +782,10 @@ if not stopped:
     print(f"[step 2] {(time.time() - t0) / 60:.0f} min, lanes {status2}", flush=True)
 
 print("\n[step 3/3] summarize", flush=True)
-header = (f"Code `{HEAD[:10]}`, model `{MODEL}` (Ollama {OLLAMA_VERSION}, num_ctx {NUM_CTX}), seeds {SEEDS}. "
+amended = "".join(f" Resumed across the declared code change '{a['name']}' ({a['from_head'][:10]} -> "
+                  f"{a['to_head'][:10]}): leak cells from the older check were re-evaluated, ok cells kept."
+                  for a in amendments)
+header = (f"Code `{HEAD[:10]}`, model `{MODEL}` (Ollama {OLLAMA_VERSION}, num_ctx {NUM_CTX}), seeds {SEEDS}.{amended} "
           + ("**INCOMPLETE** - the session stopped before the time limit; re-run this cell to resume."
              if stopped else "Complete."))
 report(header)
