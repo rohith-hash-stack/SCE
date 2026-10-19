@@ -75,6 +75,12 @@ UPSTREAM_WALK_MAX_HOPS = 6
 #: literally invokes, language-agnostically, never a synthetic/inferred
 #: coupling.
 _CALL_RELATIONS = ("CALLS", "INSTANTIATES")
+#: The upstream (blast-radius) walk also climbs from a closure to the
+#: function that defines it (`ENCLOSES`, Fix C).
+_UPSTREAM_RELATIONS = (*_CALL_RELATIONS, "ENCLOSES")
+#: Constructor method names: `C(...)` is linked to the class `C`
+#: (`INSTANTIATES`), and runs `C.__init__` (Fix D).
+_CONSTRUCTOR_NAMES = frozenset({"__init__", "__new__", "constructor"})
 
 #: Caps one symbol's own `calls=[...]` list - a real hub symbol (e.g.
 #: `HttpRequest`) can have dozens of real outgoing calls; capping keeps
@@ -232,28 +238,48 @@ def _upstream_walk(
     through, unless the seed itself is test code or `include_tests`."""
     seed_info = builder.symbol_table.get(seed_id)
     allow_tests = include_tests or (seed_info is not None and seed_info.role == SymbolRole.VERIFICATION)
+    # 0-1 breadth-first: a closure's enclosing function (`ENCLOSES`) sits
+    # at the closure's own hop - at run time the closure's frame is the
+    # enclosing function's behaviour, one call deep, not two (Fix C).
     hops = {seed_id: 0}
     queue = deque([seed_id])
     while queue:
         node = queue.popleft()
         depth = hops[node]
-        if depth >= max_hops or node not in builder.graph:
+        if node not in builder.graph:
             continue
-        for pred in sorted(builder.graph.predecessors(node)):
-            if pred in hops:
+        for pred, via in sorted(_upstream_predecessors(builder, node)):
+            edge = builder.graph.get_edge_data(pred, via) or {}
+            relation = edge.get("relation")
+            if relation not in _UPSTREAM_RELATIONS:
                 continue
-            edge = builder.graph.get_edge_data(pred, node) or {}
-            if edge.get("relation") not in _CALL_RELATIONS:
+            step = 0 if relation == "ENCLOSES" else 1
+            if depth + step > max_hops or hops.get(pred, max_hops + 1) <= depth + step:
                 continue
             info = builder.symbol_table.get(pred)
             if info is None or info.kind not in ("function", "method"):
                 continue
             if info.role == SymbolRole.VERIFICATION and not allow_tests:
                 continue
-            hops[pred] = depth + 1
-            queue.append(pred)
-    hops.pop(seed_id)
+            hops[pred] = depth + step
+            (queue.appendleft if step == 0 else queue.append)(pred)
+    hops.pop(seed_id, None)
     return hops
+
+
+def _upstream_predecessors(builder: ConcreteGraphBuilder, node: str) -> list[tuple[str, str]]:
+    """`(predecessor, via)` pairs one upstream hop from `node`: its own
+    graph predecessors, and for a constructor (`C.__init__`) also the
+    predecessors of its class `C` - `C(...)` is an `INSTANTIATES` edge to
+    the class node, while what runs is the constructor (Fix D)."""
+    pairs = [(pred, node) for pred in builder.graph.predecessors(node)]
+    info = builder.symbol_table.get(node)
+    if info is not None and info.enclosing_class and node.rsplit(".", 1)[-1] in _CONSTRUCTOR_NAMES:
+        cls = info.enclosing_class
+        if cls in builder.graph:
+            pairs += [(pred, cls) for pred in builder.graph.predecessors(cls)
+                      if (builder.graph.get_edge_data(pred, cls) or {}).get("relation") == "INSTANTIATES"]
+    return pairs
 
 
 def upstream_callers_by_hop(

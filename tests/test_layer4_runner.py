@@ -556,3 +556,15 @@ def test_cells_of_the_old_splice_are_rescored_from_their_stored_reply_without_a_
     assert rec["detail"]["backward_splice"] == 2 and rec["detail"]["rescored_from_stored_reply"] and R.is_done(rec)
     plain = dict(old, reply="```js\nreturn 1\n```")
     assert not R.needs_resplice(plain) and R.is_done(plain)  # a reply v2 splices the same way is kept as it is
+
+
+def test_forward_cells_of_the_refreshed_arms_rerun_on_a_new_forward_context_and_nothing_else():
+    v = R.FORWARD_CONTEXT_VERSION
+    old = {"status": "ok", "family": "forward_blast", "arm": "prism_full", "detail": {}}
+    assert not R.is_done(old) and R.is_done({**old, "detail": {"forward_context": v}})
+    assert R.is_done({**old, "arm": "prism_ask"})  # other arms keep their cells
+    assert R.is_done({"status": "ok", "family": "backward_adaptation", "arm": "prism_full",
+                      "detail": {"backward_answer": R.BACKWARD_ANSWER_VERSION, "backward_splice": R.BACKWARD_SPLICE_VERSION}})
+    rec = R.run_cell(corpus_for(TASKS["l4_fwd_express_01"]), TASKS["l4_fwd_express_01"], "prism_full", 1, Cfg(),
+                     Client('{"affected_symbols": []}'), {}, "node", build=fake_build())
+    assert rec["detail"]["forward_context"] == v and R.is_done(rec)

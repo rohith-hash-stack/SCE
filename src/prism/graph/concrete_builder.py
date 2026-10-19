@@ -202,6 +202,9 @@ class ConcreteGraphBuilder:
         self.graph = nx.DiGraph()
         self._parsed_files: dict[str, ParsedFile] = {}
         self._def_nodes: dict[str, Node] = {}
+        #: `(file, start_byte, end_byte)` of a registered definition node ->
+        #: its key: the enclosing function of a nested definition (Fix C).
+        self._def_key_by_span: dict[tuple[str, int, int], str] = {}
         self._methods_by_class: dict[str, list[str]] = {}
         #: JS/TS test-runner blocks (`prism.graph.js_test_blocks`): each
         #: test/hook/fixture symbol's destructured fixture parameters
@@ -654,6 +657,7 @@ class ConcreteGraphBuilder:
 
         enclosing_class: str | None = None
         nested_in_function = False
+        enclosing_function: str | None = None  # the nearest registered function this one is defined in
         if lang == LanguageID.GO and node.type == "method_declaration":
             # Issue B1: a Go method has no enclosing class *node* to walk
             # up to at all - `func (c *Context) JSON(...)` is a top-level
@@ -673,6 +677,8 @@ class ConcreteGraphBuilder:
             cursor = node.parent
             passed_object_literal = False
             while cursor is not None:
+                if enclosing_function is None and lang in _CLOSURE_SCOPED_LANGUAGES:
+                    enclosing_function = self._def_key_by_span.get((parsed.path, cursor.start_byte, cursor.end_byte))
                 if cursor.type in function_types:
                     nested_in_function = True
                 if cursor.type in class_types:
@@ -738,6 +744,7 @@ class ConcreteGraphBuilder:
         # overwriting the primary's own `_def_nodes`/graph-node entry.
         key = self.symbol_table.add(symbol)
         self._def_nodes[key] = node
+        self._def_key_by_span[(parsed.path, node.start_byte, node.end_byte)] = key
         self.graph.add_node(
             key,
             kind=kind,
@@ -750,6 +757,17 @@ class ConcreteGraphBuilder:
         )
         if enclosing_class is not None and kind == "method":
             self._methods_by_class.setdefault(enclosing_class, []).append(key)
+        if enclosing_class is None and enclosing_function is not None:
+            # Fix C: a closure belongs to the function that defines it
+            # (`app` inside `fastapi.routing.get_request_handler`): whoever
+            # calls that function gets - and runs - the closure, and a
+            # runtime trace attributes the closure's frames to it. Not a
+            # call, so a relation of its own, which only the blast-radius
+            # caller walk follows (at no extra hop). The closure keeps its
+            # flat name (`fastapi.routing.app`, `app#2` on a collision):
+            # renaming it would change the identity of symbols that frozen
+            # ground truth and recorded fixtures already name.
+            self.graph.add_edge(enclosing_function, key, relation="ENCLOSES")
 
     # -- Attribute definitions (module/class/instance-level assignments) - #
     def _collect_attribute_definitions(self, parsed: ParsedFile, module: str) -> None:
@@ -2157,6 +2175,25 @@ class ConcreteGraphBuilder:
         self.graph.add_edge(source, target, relation=relation)
 
     # -- OVERRIDES + Python C3-ish MRO (Issue #9) ------------------------- #
+    def _subclass_definitions(self, class_qname: str, method: str) -> list[str]:
+        """`Sub.<method>` for every transitive subclass of `class_qname`
+        (over `EXTENDS` edges) that defines `method` itself."""
+        found: list[str] = []
+        seen = {class_qname}
+        stack = [class_qname]
+        while stack:
+            cls = stack.pop()
+            if cls not in self.graph:
+                continue
+            for sub_cls in self.graph.predecessors(cls):
+                if sub_cls in seen or (self.graph.get_edge_data(sub_cls, cls) or {}).get("relation") != "EXTENDS":
+                    continue
+                seen.add(sub_cls)
+                stack.append(sub_cls)
+                if f"{sub_cls}.{method}" in self.symbol_table:
+                    found.append(f"{sub_cls}.{method}")
+        return sorted(found)
+
     def _mro_ancestors(self, class_qname: str) -> list[str]:
         """`class_qname`'s own ancestor chain via its `EXTENDS` edges,
         nearest-first, depth-first, each visited at most once - a
@@ -2690,6 +2727,16 @@ class ConcreteGraphBuilder:
             target = self._resolve_segments(
                 segments, module, enclosing_class, import_map, class_instance_map, func_instance_map, self_tokens, lang
             )
+            if lang == LanguageID.PYTHON and (target is None or getattr(self.symbol_table.get(target), "kind", None) == "attribute"):
+                # Fix D: `route_class(...)` / `self.route_class(...)` on a value
+                # holding a class (a `Type[C]` parameter, a class default, a
+                # local or attribute assigned from one) constructs `C`.
+                constructed = self._python_class_value(segments, def_node, parsed.source, module, import_map, enclosing_class)
+                if constructed is not None:
+                    if constructed not in self.graph:
+                        self.graph.add_node(constructed, external=False)
+                    self.graph.add_edge(caller_qname, constructed, relation="INSTANTIATES", via="class_value")
+                    continue
             if target is None:
                 # Builtin-Receiver Exclusion fix: a receiver definitively
                 # known to be a Python builtin container/primitive is not
@@ -2741,6 +2788,16 @@ class ConcreteGraphBuilder:
                 elif self._last_resolution_was_ambiguous:
                     edge_kwargs["kind"] = "TENTATIVE_CALL"
             self.graph.add_edge(caller_qname, target, **edge_kwargs)
+            if relation == "CALLS" and target_symbol is None and len(segments) == 2 and segments[0] in self_tokens \
+                    and enclosing_class is not None:
+                # Fix E: `self.m()` where no class up the hierarchy defines
+                # `m` (a hook the base checks with `hasattr`, as Django's
+                # `MiddlewareMixin.__call__` does with `process_response`):
+                # whatever runs is a subclass's `m`. Each subclass definition
+                # is a possible target - tentative, as for virtual dispatch.
+                for hook in self._subclass_definitions(enclosing_class, segments[1]):
+                    if hook != caller_qname and not self.graph.has_edge(caller_qname, hook):
+                        self.graph.add_edge(caller_qname, hook, relation="CALLS", kind="TENTATIVE_CALL", dispatch_of=target)
             if relation == "CALLS" and self._last_resolution_was_dispatch:
                 self._dispatch_sites.append((caller_qname, target))
             if relation == "CALLS":
@@ -2992,6 +3049,176 @@ class ConcreteGraphBuilder:
         # A user generic (`Repo[Model]`) is still an instance of its own class.
         resolved = self._resolve_reference_chain(head_segments, module, import_map)
         return _AnnotationType(classes=(resolved,)) if self._is_known_class(resolved) else None
+
+    # -- Fix D: values that hold a class ------------------------------- #
+    def _python_class_value(
+        self, segments: list[str], func_node: Node, source: bytes, module: str, import_map: LocalImportMap,
+        enclosing_class: str | None,
+    ) -> str | None:
+        """The one class a called value holds, when its call is a
+        construction: a bare local/parameter (`route_class(...)`) or a
+        `self`/`cls` attribute (`self.route_class(...)`). Sources: a
+        `Type[C]` / `type[C]` annotation (through `Optional`/`Union`/`|`),
+        a default or assigned value that names a class, `a or b` and
+        `x if c else y` over those, and `self.attr` assigned in the class's
+        own methods. `None` unless every source names the same class."""
+        ctx = (source, module, import_map, enclosing_class)
+        if len(segments) == 1:
+            found = self._class_values_of_local(segments[0], func_node, ctx, 0)
+        elif len(segments) == 2 and segments[0] in ("self", "cls") and enclosing_class is not None:
+            found = self._class_values_of_attr(enclosing_class, segments[1], ctx, 0)
+        else:
+            return None
+        return next(iter(found)) if found is not None and len(found) == 1 else None
+
+    def _class_values_of_local(self, name: str, func_node: Node, ctx, depth: int) -> set[str] | None:
+        """Classes `name` can hold inside `func_node`: its parameter's
+        annotation/default and every assignment to it. `None` = unknown
+        (some source says nothing), which vetoes the whole value."""
+        if depth > _CLASS_VALUE_MAX_DEPTH:
+            return None
+        source = ctx[0]
+        found: set[str] = set()
+        sources = 0
+        params = func_node.child_by_field_name("parameters")
+        for param in params.named_children if params is not None else ():
+            pname = param.child_by_field_name("name") if param.type != "typed_parameter" else next(
+                (c for c in param.named_children if c.type == "identifier"), None)
+            if param.type == "identifier":
+                pname = param
+            if pname is None or node_text(pname, source) != name:
+                continue
+            ann, default = param.child_by_field_name("type"), param.child_by_field_name("value")
+            if ann is None and default is None:
+                return None
+            if ann is not None:
+                classes = self._class_values_of_annotation(ann, ctx, source, 0)
+                if classes is None:
+                    return None
+                found |= classes
+                sources += 1
+            if default is not None and default.type != "none":
+                classes = self._class_values_of_expr(default, func_node, ctx, depth + 1)
+                if classes is None:
+                    return None
+                found |= classes
+                sources += 1
+        for assign in _own_assignments(func_node):
+            left = assign.child_by_field_name("left")
+            if left is None or left.type != "identifier" or node_text(left, source) != name:
+                continue
+            right = assign.child_by_field_name("right")
+            classes = self._class_values_of_expr(right, func_node, ctx, depth + 1) if right is not None else None
+            if classes is None:
+                return None
+            found |= classes
+            sources += 1
+        return found if sources else None
+
+    def _class_values_of_attr(self, cls: str, attr: str, ctx, depth: int) -> set[str] | None:
+        """Classes `self.<attr>` can hold: every `self.<attr> = ...` in the
+        class's own methods (and a class-body annotation/default)."""
+        if depth > _CLASS_VALUE_MAX_DEPTH:
+            return None
+        found: set[str] = set()
+        sources = 0
+        for method in self._methods_by_class.get(cls, ()):
+            node = self._def_nodes.get(method)
+            info = self.symbol_table.get(method)
+            if node is None or info is None:
+                continue
+            parsed_method = self.parsed_file(info.file)
+            mctx = (parsed_method.source if parsed_method is not None else None, info.module,
+                    ctx[2] if info.module == ctx[1] else self.import_map(info.file), cls)
+            if mctx[0] is None or mctx[2] is None:
+                continue
+            for assign in _own_assignments(node):
+                left = assign.child_by_field_name("left")
+                if left is None or left.type != "attribute":
+                    continue
+                obj, prop = left.child_by_field_name("object"), left.child_by_field_name("attribute")
+                if obj is None or prop is None or node_text(obj, mctx[0]) not in ("self", "cls") or node_text(prop, mctx[0]) != attr:
+                    continue
+                right = assign.child_by_field_name("right")
+                classes = self._class_values_of_expr(right, node, mctx, depth + 1) if right is not None else None
+                if classes is None:
+                    return None
+                found |= classes
+                sources += 1
+        return found if sources else None
+
+    def _class_values_of_expr(self, expr: Node, func_node: Node, ctx, depth: int) -> set[str] | None:
+        source, module, import_map, cls = ctx
+        if expr.type == "parenthesized_expression" and expr.named_children:
+            return self._class_values_of_expr(expr.named_children[0], func_node, ctx, depth)
+        if expr.type == "none":
+            return set()
+        if expr.type in ("identifier", "attribute"):
+            segments = flatten_reference_chain(expr, source, LanguageID.PYTHON) or []
+            if len(segments) == 2 and segments[0] in ("self", "cls") and cls is not None:
+                return self._class_values_of_attr(cls, segments[1], ctx, depth + 1)
+            resolved = self._resolve_reference_chain(segments, module, import_map) if segments else None
+            if resolved is not None and self._is_known_class(resolved):
+                return {resolved}
+            if len(segments) == 1:
+                return self._class_values_of_local(segments[0], func_node, ctx, depth + 1)
+            return None
+        if expr.type == "boolean_operator":
+            parts = [expr.child_by_field_name("left"), expr.child_by_field_name("right")]
+        elif expr.type == "conditional_expression":
+            parts = [c for i, c in enumerate(expr.named_children) if i != 1]  # `a if cond else b`
+        else:
+            return None
+        found: set[str] = set()
+        for part in parts:
+            classes = self._class_values_of_expr(part, func_node, ctx, depth + 1) if part is not None else None
+            if classes is None:
+                return None
+            found |= classes
+        return found
+
+    def _class_values_of_annotation(self, node: Node, ctx, source: bytes, depth: int) -> set[str] | None:
+        """`Type[C]` / `type[C]` -> {C}, through `Optional`, `Union`, `|`
+        and string forward references; `None` for anything else."""
+        _source, module, import_map, _cls = ctx
+        if node is None or depth > _ANNOTATION_MAX_DEPTH:
+            return None
+        if node.type in ("type", "parenthesized_expression") and len(node.named_children) == 1:
+            return self._class_values_of_annotation(node.named_children[0], ctx, source, depth + 1)
+        if node.type == "none":
+            return set()
+        if node.type == "string":
+            inner = _parse_python_annotation_string(node, source)
+            return self._class_values_of_annotation(inner[0], ctx, inner[1], depth + 1) if inner else None
+        if node.type == "binary_operator":
+            parts = [node.child_by_field_name("left"), node.child_by_field_name("right")]
+        else:
+            if node.type == "generic_type":
+                head = node.named_children[0] if node.named_children else None
+                params = next((c for c in node.named_children if c.type == "type_parameter"), None)
+                parts = list(params.named_children) if params is not None else []
+            elif node.type == "subscript":
+                head = node.child_by_field_name("value")
+                parts = node.children_by_field_name("subscript")
+            else:
+                return None
+            head_name = (flatten_reference_chain(head, source, LanguageID.PYTHON) or [""])[-1] if head is not None else ""
+            if head_name in ("Type", "type"):
+                ann = self._python_annotation_type(parts[0], module, import_map, source, depth + 1) if parts else None
+                return set(ann.classes) if ann is not None and ann.classes and not ann.container else None
+            if head_name == "Optional":
+                parts = [*parts, None]
+            elif head_name != "Union":
+                return None
+        found: set[str] = set()
+        for part in parts:
+            if part is None:
+                continue
+            classes = self._class_values_of_annotation(part, ctx, source, depth + 1)
+            if classes is None:
+                return None
+            found |= classes
+        return found
 
     def _python_annotation_union(
         self, members: list, module: str, import_map: LocalImportMap, source: bytes, depth: int
@@ -3268,13 +3495,26 @@ class ConcreteGraphBuilder:
         if len(classes) != 1:
             return None
         cls = classes[0]
-        for owner in [cls, *self._mro_ancestors(cls)]:
+        mro = [cls, *self._mro_ancestors(cls)]
+        for owner in mro:
             target = f"{owner}.{method}"
             if target in self.symbol_table:
+                if owner != cls and self._defined_outside(method, mro):
+                    # Fix F: the name only says "a `Session`", and `Session`
+                    # merely inherits `save` (from `Model`) while other class
+                    # families define their own: `request.session.save()` is
+                    # as likely a session store's - left to the ambiguity
+                    # handling (scored, or an UnresolvedPolymorphic sentinel).
+                    return None
                 self._last_resolution_was_tentative = True
                 self._last_resolution_was_dispatch = True
                 return target
         return None
+
+    def _defined_outside(self, method: str, mro: list[str]) -> bool:
+        """Some function/method named `method` lives outside the classes of `mro`."""
+        owners = set(mro)
+        return any(c.enclosing_class not in owners for c in self.symbol_table.candidates_for_simple_name(method))
 
     def _path_partition(self, path: str) -> str:
         """`"vendor"`, `"test"` or `"first_party"` for a repo file, judged
@@ -4171,6 +4411,29 @@ def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | N
     if left is None or left.type != ATTRIBUTE_NODE_TYPE.get(lang):
         return None
     return left.child_by_field_name(ATTR_PROPERTY_FIELD.get(lang))
+
+
+#: Languages whose nested function definitions are qualified under their
+#: enclosing function (Fix C).
+_CLOSURE_SCOPED_LANGUAGES = frozenset({LanguageID.PYTHON, LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX})
+
+
+#: Bound on name/attribute hops when tracing which class a value holds (Fix D).
+_CLASS_VALUE_MAX_DEPTH = 10
+
+
+def _own_assignments(func_node: Node):
+    """Assignment nodes in a function's own body (not in nested functions,
+    classes or lambdas)."""
+    body = func_node.child_by_field_name("body")
+    stack = list(body.named_children) if body is not None else []
+    while stack:
+        node = stack.pop()
+        if node.type in ("function_definition", "class_definition", "lambda", "decorated_definition"):
+            continue
+        if node.type == "assignment":
+            yield node
+        stack.extend(node.named_children)
 
 
 def _assigned_property_names(node: Node, parsed: ParsedFile) -> list[str]:

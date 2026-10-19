@@ -558,3 +558,39 @@ quantization, context window, temperature and seeds as Stage 2.
    Pre-registered comparisons as in Stage 2 (prism_ask and prism_full
    against hybrid RAG and the repo map; the oracles as ceilings;
    arm0 as the floor).
+
+
+### Forward context v2 (`prism_full`)
+
+`runner.FORWARD_CONTEXT_VERSION` 2 (`detail.forward_context`, on the forward
+cells of `runner.FORWARD_CONTEXT_ARMS` = `prism_full`): a forward cell of
+those arms from an older version is run again; every other cell is kept.
+What changed behind those contexts:
+
+- **Blast routing** (`benchmarks/final_sweep/runner._two_pass_context`): a
+  `blast` task's Turn 1 manifest is `direction="both"` under the cell budget
+  (the transitive caller walk), as `prism.blast_radius` builds it; other
+  task types, and the Stage 2 sweep (debug tasks only), are unchanged.
+- **Static index**, deterministic language rules only:
+  A) JS/TS chained-assignment method aliases (`res.set = res.header =
+  function header`) and same-object `this.m()` resolution where the name
+  rules give up; C) an `ENCLOSES` edge from a function to each closure it
+  defines, which the blast-radius walk climbs at no extra hop (closure names
+  are unchanged - frozen gold names them flat); D) a constructor's callers
+  include its class's `INSTANTIATES` callers, and calling a value that holds
+  a class (`Type[C]` parameter, class default, `a or b`, `self.attr`)
+  instantiates it; E) `self.m()` with no `m` up the hierarchy (a `hasattr`
+  hook) reaches subclass definitions, tentatively; F) a receiver named after
+  a class that only inherits the method, while other families define their
+  own, is left ambiguous instead of guessed (`request.session.save()` was
+  `Model.save`).
+
+Measured on the Layer 4 traces (`scripts/layer4_static_coverage.py`,
+`reports/layer4/diagnostics/static_coverage_*_cf.json`): forward gold
+callers in the static graph 35 -> 48 of 63 (A: +10 Express, C-E: +3
+FastAPI), in `prism_full`'s candidate manifest 17 -> 49; across all 16
+tasks, direct-caller edge recall unchanged (41/44) and callee coverage
+unchanged (55/120). Left unreachable on purpose: callers reached only
+through callbacks the tests pass in (Express `format`, `Layer.handle`;
+tRPC `observer.error`, `callProcedure`) and `request.session.save()`, whose
+class Django picks by configuration.

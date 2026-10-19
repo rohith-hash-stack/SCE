@@ -61,6 +61,15 @@ BACKWARD_ANSWER_VERSION = 2
 #: A v2-answer cell whose reply v2 could splice differently is re-evaluated
 #: from its stored reply - the same answer, no model call.
 BACKWARD_SPLICE_VERSION = 2
+#: version of the static index + manifest routing behind the forward
+#: contexts of FORWARD_CONTEXT_ARMS (`detail.forward_context`); a forward
+#: cell of those arms from an older version is run again. v2: blast tasks
+#: get the blast-radius manifest (`direction="both"`) and the index gains
+#: JS method aliases, closures, constructor callers, class values and
+#: undefined-hook dispatch (Layer 4 forward gold callers in the static graph
+#: 35 -> 48 of 63, in prism_full's candidate manifest 17 -> 49).
+FORWARD_CONTEXT_VERSION = 2
+FORWARD_CONTEXT_ARMS = ("prism_full",)
 DONE = {"ok", "leak"}  # a rerun skips these (a leak only if the current check said so); errors are retried
 
 
@@ -134,6 +143,8 @@ def run_cell(corpus, task: dict, arm: str, seed: int, cfg, client, pythons: dict
                          if k in ctx and ctx[k] is not None}
         rec["detail"]["prompt_leaks"] = prompt_leaks
         rec["detail"]["leak_check"] = ctx.get("leak_check", X.LEAK_CHECK_VERSION)
+        if task["family"] == "forward_blast" and arm in FORWARD_CONTEXT_ARMS:
+            rec["detail"]["forward_context"] = FORWARD_CONTEXT_VERSION
         if task["family"] == "backward_adaptation":
             rec["detail"]["backward_answer"] = BACKWARD_ANSWER_VERSION
             rec["detail"]["backward_splice"] = BACKWARD_SPLICE_VERSION
@@ -214,6 +225,9 @@ def is_done(rec: dict, dry_run: bool = False) -> bool:
     sending, so an ok cell stays valid across versions). An ok backward
     cell also needs the current backward answer protocol."""
     detail = rec.get("detail") or {}
+    if rec.get("family") == "forward_blast" and rec.get("arm") in FORWARD_CONTEXT_ARMS \
+            and rec["status"] in DONE and detail.get("forward_context") != FORWARD_CONTEXT_VERSION:
+        return False
     if rec["status"] == "leak":
         return detail.get("leak_check") == X.LEAK_CHECK_VERSION
     if rec["status"] == "ok" and rec.get("family") == "backward_adaptation":
