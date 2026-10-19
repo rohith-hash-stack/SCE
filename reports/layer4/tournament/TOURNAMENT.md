@@ -1,6 +1,6 @@
 # Layer 4 tournament
 
-Step 1 (contamination) - code `c4c9da477c`, model `qwen2.5-coder:14b-instruct-q8_0`.
+Code `c4c9da477c`, model `qwen2.5-coder:14b-instruct-q8_0` (Ollama 0.34.0, num_ctx 24576), seeds 42,43,44,45,46,47,48,49,50,51. Resumed across the declared code change 'leak check v2' (fe7ed62603 -> 22e1c63f93). Resumed across the declared code change 'backward answers without stop sequences' (22e1c63f93 -> c4c9da477c). Complete.
 
 16 tasks, 7 arms, seeds [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]; 1120 cells. Contamination-flagged tasks (arm0 >= threshold): none.
 
@@ -48,18 +48,18 @@ Step 1 (contamination) - code `c4c9da477c`, model `qwen2.5-coder:14b-instruct-q8
 |---|---|---|---|---|---|---|---|
 | arm0_no_retrieval | all | 80 | 0.000 | 0.963 | 17.000 | - | 0.000 |
 | arm0_no_retrieval | unflagged | 80 | 0.000 | 0.963 | 17.000 | - | 0.000 |
-| arm1_hybrid_rag | all | 80 | 0.000 | 0.000 | 7041 | - | 0.000 |
-| arm1_hybrid_rag | unflagged | 80 | 0.000 | 0.000 | 7041 | - | 0.000 |
-| repomap_pagerank | all | 80 | 0.000 | 0.000 | 3422 | - | 0.000 |
-| repomap_pagerank | unflagged | 80 | 0.000 | 0.000 | 3422 | - | 0.000 |
-| prism_full | all | 60 | 0.000 | 0.000 | 2426 | - | 0.000 |
-| prism_full | unflagged | 60 | 0.000 | 0.000 | 2426 | - | 0.000 |
-| prism_ask | all | 80 | 0.000 | 0.000 | 8514 | - | 0.000 |
-| prism_ask | unflagged | 80 | 0.000 | 0.000 | 8514 | - | 0.000 |
-| normal_oracle | all | 80 | 0.000 | 0.000 | 3154 | - | 0.000 |
-| normal_oracle | unflagged | 80 | 0.000 | 0.000 | 3154 | - | 0.000 |
-| prism_oracle | all | 80 | 0.000 | 0.000 | 3154 | - | 0.000 |
-| prism_oracle | unflagged | 80 | 0.000 | 0.000 | 3154 | - | 0.000 |
+| arm1_hybrid_rag | all | 80 | 0.013 | 0.762 | 7041 | 601973 | 0.002 |
+| arm1_hybrid_rag | unflagged | 80 | 0.013 | 0.762 | 7041 | 601973 | 0.002 |
+| repomap_pagerank | all | 80 | 0.000 | 0.725 | 3422 | - | 0.000 |
+| repomap_pagerank | unflagged | 80 | 0.000 | 0.725 | 3422 | - | 0.000 |
+| prism_full | all | 60 | 0.000 | 0.517 | 2495 | - | 0.000 |
+| prism_full | unflagged | 60 | 0.000 | 0.517 | 2495 | - | 0.000 |
+| prism_ask | all | 80 | 0.000 | 0.650 | 8514 | - | 0.000 |
+| prism_ask | unflagged | 80 | 0.000 | 0.650 | 8514 | - | 0.000 |
+| normal_oracle | all | 80 | 0.000 | 0.637 | 3154 | - | 0.000 |
+| normal_oracle | unflagged | 80 | 0.000 | 0.637 | 3154 | - | 0.000 |
+| prism_oracle | all | 80 | 0.000 | 0.537 | 3154 | - | 0.000 |
+| prism_oracle | unflagged | 80 | 0.000 | 0.537 | 3154 | - | 0.000 |
 
 ## Contamination (arm0_no_retrieval)
 
@@ -89,7 +89,7 @@ Flagged at backward pass rate >= 0.5 or forward mean F1 >= 0.5.
 | task | arm0_no_retrieval | arm1_hybrid_rag | repomap_pagerank | prism_full | prism_ask | normal_oracle | prism_oracle |
 |---|---|---|---|---|---|---|---|
 | l4_bwd_django_01 | 0.000 | 0.000 | 0.000 | - | 0.000 | 0.000 | 0.000 |
-| l4_bwd_django_02 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| l4_bwd_django_02 | 0.000 | 0.100 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | l4_bwd_express_01 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | l4_bwd_express_02 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | l4_bwd_fastapi_01 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
