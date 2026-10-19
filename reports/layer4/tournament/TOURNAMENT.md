@@ -1,6 +1,6 @@
 # Layer 4 tournament
 
-Code `fe7ed62603`, model `qwen2.5-coder:14b-instruct-q8_0` (Ollama 0.34.0, num_ctx 24576), seeds 42,43,44,45,46,47,48,49,50,51. Complete.
+Step 1 (contamination) - code `22e1c63f93`, model `qwen2.5-coder:14b-instruct-q8_0`.
 
 16 tasks, 7 arms, seeds [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]; 1120 cells. Contamination-flagged tasks (arm0 >= threshold): none.
 
@@ -15,6 +15,42 @@ Code `fe7ed62603`, model `qwen2.5-coder:14b-instruct-q8_0` (Ollama 0.34.0, num_c
 | prism_ask | 100 | 60 | 0 | 0 | 0 |
 | normal_oracle | 110 | 50 | 0 | 0 | 0 |
 | prism_oracle | 110 | 50 | 0 | 0 | 0 |
+
+## Leak cells (held back, never sent to the model)
+
+| task | arm | cells | leak check | body lines | test files | trace keys | prompt | first body line |
+|---|---|---|---|---|---|---|---|---|
+| l4_bwd_django_01 | arm1_hybrid_rag | 10 | v1 | 8 | tests/update/ | - | - | - |
+| l4_bwd_django_01 | normal_oracle | 10 | v1 | 2 | tests/update/ | - | - | - |
+| l4_bwd_django_01 | prism_ask | 10 | v1 | 8 | tests/update/ | - | - | - |
+| l4_bwd_django_01 | prism_full | 10 | v1 | 3 | tests/update/ | - | - | - |
+| l4_bwd_django_01 | prism_oracle | 10 | v1 | 2 | tests/update/ | - | - | - |
+| l4_bwd_django_01 | repomap_pagerank | 10 | v1 | 0 | tests/update/ | - | - | - |
+| l4_bwd_django_02 | arm1_hybrid_rag | 10 | v1 | 6 | tests/cache/ | - | - | - |
+| l4_bwd_django_02 | normal_oracle | 10 | v1 | 0 | tests/cache/ | - | - | - |
+| l4_bwd_django_02 | prism_ask | 10 | v1 | 6 | tests/cache/ | - | - | - |
+| l4_bwd_django_02 | prism_full | 10 | v1 | 6 | tests/cache/ | - | - | - |
+| l4_bwd_django_02 | prism_oracle | 10 | v1 | 0 | tests/cache/ | - | - | - |
+| l4_bwd_django_02 | repomap_pagerank | 10 | v1 | 0 | tests/cache/ | - | - | - |
+| l4_bwd_express_02 | prism_ask | 10 | v1 | 2 | - | - | - | - |
+| l4_bwd_fastapi_02 | arm1_hybrid_rag | 10 | v1 | 4 | - | - | - | - |
+| l4_bwd_fastapi_02 | normal_oracle | 10 | v1 | 3 | - | - | - | - |
+| l4_bwd_fastapi_02 | prism_ask | 10 | v1 | 4 | - | - | - | - |
+| l4_bwd_fastapi_02 | prism_full | 10 | v1 | 4 | - | - | - | - |
+| l4_bwd_fastapi_02 | prism_oracle | 10 | v1 | 3 | - | - | - | - |
+| l4_bwd_fastapi_02 | repomap_pagerank | 10 | v1 | 3 | - | - | - | - |
+| l4_bwd_trpc_01 | arm1_hybrid_rag | 10 | v1 | 2 | - | - | - | - |
+| l4_bwd_trpc_01 | normal_oracle | 10 | v1 | 3 | - | - | - | - |
+| l4_bwd_trpc_01 | prism_ask | 10 | v1 | 3 | - | - | - | - |
+| l4_bwd_trpc_01 | prism_full | 10 | v1 | 3 | - | - | - | - |
+| l4_bwd_trpc_01 | prism_oracle | 10 | v1 | 3 | - | - | - | - |
+| l4_bwd_trpc_01 | repomap_pagerank | 10 | v1 | 2 | - | - | - | - |
+| l4_bwd_trpc_02 | arm1_hybrid_rag | 10 | v1 | 5 | - | - | - | - |
+| l4_bwd_trpc_02 | normal_oracle | 10 | v1 | 2 | - | - | - | - |
+| l4_bwd_trpc_02 | prism_ask | 10 | v1 | 2 | - | - | - | - |
+| l4_bwd_trpc_02 | prism_full | 10 | v1 | 2 | - | - | - | - |
+| l4_bwd_trpc_02 | prism_oracle | 10 | v1 | 2 | - | - | - | - |
+| l4_bwd_trpc_02 | repomap_pagerank | 10 | v1 | 3 | - | - | - | - |
 
 ## Forward blast radius (callers within each task's max_depth)
 
