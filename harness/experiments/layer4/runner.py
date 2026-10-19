@@ -35,6 +35,7 @@ import argparse
 import dataclasses
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -78,7 +79,12 @@ def load_cells(path: Path) -> dict[str, dict]:
 
 
 # ---------------------------------------------------------------- backward evaluation
-def splice_task(task: dict, corpus, pythons: dict, node: str) -> S.SpliceTask:
+#: cap on one backward evaluation (the task's own timeout_s is the gates' 1800 s):
+#: a wrong candidate can hang the corpus's tests, and a timeout scores as a fail
+EVAL_TIMEOUT_S = 300
+
+
+def splice_task(task: dict, corpus, pythons: dict, node: str, timeout: int | None = None) -> S.SpliceTask:
     from harness.experiments.layer4 import author as A
     A.NODE["bin"] = node
     g = task["gold"]
@@ -86,7 +92,8 @@ def splice_task(task: dict, corpus, pythons: dict, node: str) -> S.SpliceTask:
     if any("{" in part for part in cmd):
         raise RuntimeError(f"{task['task_id']}: unresolved placeholder in {cmd} (pass --python / --node)")
     return S.SpliceTask(task["task_id"], corpus.clone_root, task["focal"]["file"], task["focal"]["line"], cmd,
-                        cwd=g.get("cwd", "."), timeout=g.get("timeout_s", 900), name=task["focal"]["qname"].rsplit(".", 1)[-1],
+                        cwd=g.get("cwd", "."), timeout=min(g.get("timeout_s", 900), timeout or 10**9),
+                        name=task["focal"]["qname"].rsplit(".", 1)[-1],
                         env={k: str(v) for k, v in (g.get("env") or {}).items()})
 
 
@@ -129,7 +136,7 @@ def run_cell(corpus, task: dict, arm: str, seed: int, cfg, client, pythons: dict
             if forward:
                 rec["score"] = T.score_forward(rec["reply"], task["gold"], corpus.known)
             else:
-                result = evaluate(splice_task(task, corpus, pythons, node), rec["reply"])
+                result = evaluate(splice_task(task, corpus, pythons, node, timeout=EVAL_TIMEOUT_S), rec["reply"])
                 rec["score"] = T.score_backward(result)
             rec["status"] = "ok"
     except Exception as exc:  # one broken cell never stops the run
@@ -239,11 +246,23 @@ def build_parser() -> argparse.ArgumentParser:
         s.add_argument("--token-ceiling", type=int, default=C.DEFAULT_TOKEN_CEILING)
         s.add_argument("--num-ctx", type=int, default=24_576)
         s.add_argument("--dry-run", action="store_true", help="build contexts and prompts, no model calls")
+        s.add_argument("--eval-timeout", type=int, default=EVAL_TIMEOUT_S,
+                       help="seconds one backward evaluation may take (a timeout is a fail)")
     return p
 
 
+def install_sigterm_exit() -> None:
+    """A terminated runner (Kaggle's time limit, the cell's lane stop) must
+    still restore a spliced file: SIGTERM becomes SystemExit, so `edited`'s
+    finally runs. Python's default SIGTERM ends the process without it."""
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
+
+
 def main(argv=None) -> int:
+    global EVAL_TIMEOUT_S
+    install_sigterm_exit()
     args = build_parser().parse_args(argv)
+    EVAL_TIMEOUT_S = getattr(args, "eval_timeout", EVAL_TIMEOUT_S)
     tasks = load_tasks(args.tasks_dir)
     if args.command == "summarize":
         s = summarize(args.out, tasks, args.contamination)
@@ -263,6 +282,7 @@ def main(argv=None) -> int:
     cfg = SweepConfig(model=args.model, temperature=args.temperature, budget=args.budget,
                       token_ceiling=args.token_ceiling, max_tokens=args.max_tokens, base_url=args.base_url,
                       api_key_env=args.api_key_env, dry_run=args.dry_run, num_ctx=args.num_ctx)
+    cfg.tpm_limit = None if cfg.local else cfg.tpm_limit  # as Stage 2: no client throttle on a local server
     client = build_client(cfg)
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
     pythons = dict(x.split("=", 1) for x in args.python)

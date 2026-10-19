@@ -311,3 +311,61 @@ def test_real_retrieval_context_drops_test_files(express):
     cfg, log, rec = stage2_args()
     ctx = X.build_context(express, "prism_ask", task, 42, cfg, None, log, rec)
     assert not ctx["leaked"] and all(not s.startswith("test.") for s in ctx["selected_symbols"])
+
+
+# ---------------------------------------------------------------- tournament report
+def test_report_merges_corpora_and_renders_the_tables(tmp_path):
+    from harness.experiments.layer4 import report as P
+    tasks = R.load_tasks()
+
+    def cell(tid, arm, seed, score, status="ok", ctx=100):
+        t = tasks[tid]
+        return {"schema_version": "layer4.cell.v1", "task_id": tid, "family": t["family"], "corpus": t["corpus"],
+                "arm": arm, "engine_id": arm, "seed": seed, "model": "m", "status": status,
+                "tokens": {"context": ctx, "prompt": ctx + 50, "completion": 50, "llm_calls": 1},
+                "leak": {"focal_body_lines": 0, "test_files": []}, "score": score}
+    fwd = lambda f, te=None: {"kind": "forward", "parsed": True, "precision": f, "recall": f, "f1": f,  # noqa: E731
+                              "tables_exact": te, "side_effects_exact": te,
+                              "tables_prf": {"f1": 1.0} if te else None, "side_effects_prf": None}
+    bwd = lambda p: {"kind": "backward", "passed": p, "syntax_ok": True}  # noqa: E731
+    lanes = {"express": [cell("l4_bwd_express_01", "arm0_no_retrieval", s, bwd(True)) for s in (1, 2)]
+             + [cell("l4_bwd_express_01", "prism_ask", 1, bwd(True)), cell("l4_fwd_express_01", "prism_ask", 1, fwd(0.5))],
+             "django": [cell("l4_fwd_django_01", "normal_oracle", 1, fwd(0.8, True)),
+                        cell("l4_fwd_django_01", "prism_full", 1, None, status="leak")]}
+    for corpus, rows in lanes.items():
+        (tmp_path / "corpora" / corpus).mkdir(parents=True)
+        (tmp_path / "corpora" / corpus / "cells.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    out = tmp_path / "tournament"
+    assert P.merge(tmp_path / "corpora", out) == 6
+    md = P.write(out, tasks, "header line")
+    assert (out / "summary.json").exists() and (out / "contamination.json").exists()
+    assert json.loads((out / "contamination.json").read_text())["flagged"] == ["l4_bwd_express_01"]
+    assert "| prism_full | 0 | 1 | 0 | 0 | 0 |" in md  # the leak cell is counted, not scored
+    assert "| normal_oracle | all | 1 | 0.800 | 0.800 | 0.800 | 1.000 | 1.000 | 1.000 |" in md
+    assert "| prism_ask | all | 1 | 1.000 | 1.000 | 100 | 200 | 5.000 |" in md and "| prism_ask | unflagged |" not in md.split("## Backward")[1].split("## Contamination")[0]
+    assert "| l4_bwd_express_01 | `lib.response.location` | 1.000 | 2 | **yes** |" in md
+
+
+def test_sigterm_mid_splice_restores_the_file(tmp_path):
+    import os
+    import signal
+    import sys
+    import threading
+    (tmp_path / "m.py").write_text("def f(x):\n    return x + 1\n")
+    (tmp_path / "slow_test.py").write_text("import time\ntime.sleep(30)\n")
+    task = S.SpliceTask("t", str(tmp_path), "m.py", 1, [sys.executable, "slow_test.py"], name="f", timeout=60)
+    previous = signal.getsignal(signal.SIGTERM)
+    R.install_sigterm_exit()
+    threading.Timer(1.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+    try:
+        with pytest.raises(SystemExit):
+            S.evaluate(task, "```python\nreturn 0\n```")
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+    assert (tmp_path / "m.py").read_text() == "def f(x):\n    return x + 1\n"
+
+
+def test_eval_timeout_caps_the_task_timeout():
+    t = TASKS["l4_bwd_express_02"]
+    st = R.splice_task(t, NS(clone_root="/c"), {}, "node", timeout=300)
+    assert t["gold"]["timeout_s"] == 1800 and st.timeout == 300 and "--exit" in st.command

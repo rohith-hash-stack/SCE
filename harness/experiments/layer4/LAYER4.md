@@ -405,7 +405,24 @@ reason about the change.
 
 Cells of one corpus run sequentially (splices edit the checkout in
 place); `cells.jsonl` is appended per cell and a rerun skips `ok` and
-`leak` cells (errors are retried). `summary.json` is `tasks.summarize`
+`leak` cells (errors are retried). One backward evaluation is capped at
+`--eval-timeout` (300 s; the tasks' own 1,800 s is the gates'): a wrong
+candidate can hang a corpus's tests, and a timeout scores as a fail
+(`exit_code: null`). SIGTERM (Kaggle's time limit, the tournament cell's
+lane stop) becomes `SystemExit`, so a terminated runner still restores
+the file it spliced - Python's default SIGTERM would leave it edited.
+Express's Mocha commands carry `--exit`: a `res.format` candidate that
+never responds leaves sockets open and Mocha would otherwise wait forever
+(with `--exit` it fails in ~76 s); the four Express tasks were re-authored
+with it, gold, oracles and gates unchanged.
+
+The tournament runs on Kaggle with `kaggle/layer4_tournament_cell.py`: the
+corpus environments (`benchmarks/layer4/ENVIRONMENT.md`), Ollama with
+Stage 2's model and context window, a preflight that every backward
+task's tests pass on the original code, then `contamination`, `run` and
+`report` (`report.py`: `TOURNAMENT.md`, `summary.json`,
+`contamination.json`) with two corpus lanes side by side, pushed to the
+branch every 30 min and resumable across sessions. `summary.json` is `tasks.summarize`
 over the cells, with the contamination flags of the arm0 run.
 
 Verified here: a dry run over the 4 Express tasks x 6 arms (all but

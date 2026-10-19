@@ -7,12 +7,13 @@ Corpus checkouts are the pinned commits (`benchmarks/corpora/pinned_commits.json
 
 ## FastAPI 0.116.1 (`313723494b`)
 
-A venv with the checkout installed editable plus the test requirements of
-the commit era. Current releases break the suite (FastAPI turns warnings
+A Python 3.11 venv with the checkout installed editable with its `[all]`
+extras (as its `requirements-tests.txt` does: httpx for the test client,
+jinja2, ...) plus the test requirements of the commit era. Current releases break the suite (FastAPI turns warnings
 into errors), so pin:
 
 ```
-pip install -e . "anyio[trio]==4.6.2" "pydantic==2.11.7" "bcrypt==4.0.1" "python-multipart==0.0.20" \
+pip install -e ".[all]" "anyio[trio]==4.6.2" "pydantic==2.11.7" "bcrypt==4.0.1" "python-multipart==0.0.20" \
     pydantic-settings fastapi-cli email-validator "flask>=1.1.2,<4.0.0" orjson ujson "sqlmodel==0.0.24" \
     "PyJWT==2.8.0" "passlib[bcrypt]>=1.7.2,<2.0.0" "inline-snapshot>=0.21.1" "dirty-equals==0.9.0" \
     "pyyaml>=5.3.1,<7.0.0" pytest
@@ -41,7 +42,9 @@ counted - they are not the tested behaviour.
 
 ## Express 4.21.0 (`7e562c6d8d`)
 
-`npm install` **with dev dependencies** (Mocha), Node 20 or 22. Traces
+`npm install` **with dev dependencies** (Mocha), Node 20 or 22. Mocha
+runs with `--exit` (a candidate that never answers a request would keep it
+waiting on open sockets). Traces
 and gates use the unit suite (`test/*.js`); `test/acceptance/` drives the
 `examples/` apps (the example zone) and is not used.
 

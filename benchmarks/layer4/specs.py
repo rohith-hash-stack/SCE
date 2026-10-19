@@ -24,7 +24,9 @@ FASTAPI_NO_WEBSOCKETS = [arg for f in (
     "tests/test_http_connection_injection.py", "tests/test_route_scope.py", "tests/test_ws_dependencies.py",
     "tests/test_ws_router.py", "tests/test_tutorial/test_websockets") for arg in ("--ignore", f)]
 PYTEST = ["{python}", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
-MOCHA = ["node_modules/.bin/mocha", "--reporter", "dot", "--check-leaks"]
+# --exit: a wrong res.format candidate that never responds leaves sockets open and
+# Mocha would wait for them forever; with --exit it fails after the per-test timeouts
+MOCHA = ["node_modules/.bin/mocha", "--exit", "--reporter", "dot", "--check-leaks"]
 EXPRESS_UNIT = "test/*.js"  # expanded by the author: the unit suite (test/acceptance drives examples/)
 # tRPC: Vitest 0.32 in fork mode from packages/tests; filters are paths relative
 # to Vitest's root (packages/), so `packages/<filter>` is the gating file.
