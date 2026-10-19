@@ -2,7 +2,7 @@
 each task's gold callers are lost between the static graph and the
 model's answer.
 
-    PYTHONPATH=.:src python -m harness.experiments.layer4.diagnose_recall \\
+    PYTHONPATH=.:src python scripts/layer4_diagnose_recall.py \\
         --cells reports/layer4/tournament/cells.jsonl --out reports/layer4/diagnostics
 
 Stages, per forward task (gold = the task's traced callers within its
