@@ -1,6 +1,6 @@
 # Layer 4 tournament
 
-Step 1 (contamination) - code `22e1c63f93`, model `qwen2.5-coder:14b-instruct-q8_0`.
+Code `22e1c63f93`, model `qwen2.5-coder:14b-instruct-q8_0` (Ollama 0.34.0, num_ctx 24576), seeds 42,43,44,45,46,47,48,49,50,51. Resumed across the declared code change 'leak check v2' (fe7ed62603 -> 22e1c63f93): leak cells from the older check were re-evaluated, ok cells kept. Complete.
 
 16 tasks, 7 arms, seeds [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]; 1120 cells. Contamination-flagged tasks (arm0 >= threshold): none.
 
@@ -9,48 +9,19 @@ Step 1 (contamination) - code `22e1c63f93`, model `qwen2.5-coder:14b-instruct-q8
 | arm | ok | leak | error | timeout | dry_run |
 |---|---|---|---|---|---|
 | arm0_no_retrieval | 160 | 0 | 0 | 0 | 0 |
-| arm1_hybrid_rag | 110 | 50 | 0 | 0 | 0 |
-| repomap_pagerank | 110 | 50 | 0 | 0 | 0 |
-| prism_full | 110 | 50 | 0 | 0 | 0 |
-| prism_ask | 100 | 60 | 0 | 0 | 0 |
-| normal_oracle | 110 | 50 | 0 | 0 | 0 |
-| prism_oracle | 110 | 50 | 0 | 0 | 0 |
+| arm1_hybrid_rag | 160 | 0 | 0 | 0 | 0 |
+| repomap_pagerank | 160 | 0 | 0 | 0 | 0 |
+| prism_full | 140 | 20 | 0 | 0 | 0 |
+| prism_ask | 160 | 0 | 0 | 0 | 0 |
+| normal_oracle | 160 | 0 | 0 | 0 | 0 |
+| prism_oracle | 160 | 0 | 0 | 0 | 0 |
 
 ## Leak cells (held back, never sent to the model)
 
 | task | arm | cells | leak check | body lines | test files | trace keys | prompt | first body line |
 |---|---|---|---|---|---|---|---|---|
-| l4_bwd_django_01 | arm1_hybrid_rag | 10 | v1 | 8 | tests/update/ | - | - | - |
-| l4_bwd_django_01 | normal_oracle | 10 | v1 | 2 | tests/update/ | - | - | - |
-| l4_bwd_django_01 | prism_ask | 10 | v1 | 8 | tests/update/ | - | - | - |
-| l4_bwd_django_01 | prism_full | 10 | v1 | 3 | tests/update/ | - | - | - |
-| l4_bwd_django_01 | prism_oracle | 10 | v1 | 2 | tests/update/ | - | - | - |
-| l4_bwd_django_01 | repomap_pagerank | 10 | v1 | 0 | tests/update/ | - | - | - |
-| l4_bwd_django_02 | arm1_hybrid_rag | 10 | v1 | 6 | tests/cache/ | - | - | - |
-| l4_bwd_django_02 | normal_oracle | 10 | v1 | 0 | tests/cache/ | - | - | - |
-| l4_bwd_django_02 | prism_ask | 10 | v1 | 6 | tests/cache/ | - | - | - |
-| l4_bwd_django_02 | prism_full | 10 | v1 | 6 | tests/cache/ | - | - | - |
-| l4_bwd_django_02 | prism_oracle | 10 | v1 | 0 | tests/cache/ | - | - | - |
-| l4_bwd_django_02 | repomap_pagerank | 10 | v1 | 0 | tests/cache/ | - | - | - |
-| l4_bwd_express_02 | prism_ask | 10 | v1 | 2 | - | - | - | - |
-| l4_bwd_fastapi_02 | arm1_hybrid_rag | 10 | v1 | 4 | - | - | - | - |
-| l4_bwd_fastapi_02 | normal_oracle | 10 | v1 | 3 | - | - | - | - |
-| l4_bwd_fastapi_02 | prism_ask | 10 | v1 | 4 | - | - | - | - |
-| l4_bwd_fastapi_02 | prism_full | 10 | v1 | 4 | - | - | - | - |
-| l4_bwd_fastapi_02 | prism_oracle | 10 | v1 | 3 | - | - | - | - |
-| l4_bwd_fastapi_02 | repomap_pagerank | 10 | v1 | 3 | - | - | - | - |
-| l4_bwd_trpc_01 | arm1_hybrid_rag | 10 | v1 | 2 | - | - | - | - |
-| l4_bwd_trpc_01 | normal_oracle | 10 | v1 | 3 | - | - | - | - |
-| l4_bwd_trpc_01 | prism_ask | 10 | v1 | 3 | - | - | - | - |
-| l4_bwd_trpc_01 | prism_full | 10 | v1 | 3 | - | - | - | - |
-| l4_bwd_trpc_01 | prism_oracle | 10 | v1 | 3 | - | - | - | - |
-| l4_bwd_trpc_01 | repomap_pagerank | 10 | v1 | 2 | - | - | - | - |
-| l4_bwd_trpc_02 | arm1_hybrid_rag | 10 | v1 | 5 | - | - | - | - |
-| l4_bwd_trpc_02 | normal_oracle | 10 | v1 | 2 | - | - | - | - |
-| l4_bwd_trpc_02 | prism_ask | 10 | v1 | 2 | - | - | - | - |
-| l4_bwd_trpc_02 | prism_full | 10 | v1 | 2 | - | - | - | - |
-| l4_bwd_trpc_02 | prism_oracle | 10 | v1 | 2 | - | - | - | - |
-| l4_bwd_trpc_02 | repomap_pagerank | 10 | v1 | 3 | - | - | - | - |
+| l4_bwd_django_01 | prism_full | 10 | v2 | 1 | - | - | - | `f"Cannot update when ordering by an aggregate: {annotation}"` |
+| l4_bwd_fastapi_02 | prism_full | 10 | v2 | 1 | - | - | - | `path_params=dependant.path_params.copy(),` |
 
 ## Forward blast radius (callers within each task's max_depth)
 
@@ -77,18 +48,18 @@ Step 1 (contamination) - code `22e1c63f93`, model `qwen2.5-coder:14b-instruct-q8
 |---|---|---|---|---|---|---|---|
 | arm0_no_retrieval | all | 80 | 0.000 | 0.000 | 17.000 | - | 0.000 |
 | arm0_no_retrieval | unflagged | 80 | 0.000 | 0.000 | 17.000 | - | 0.000 |
-| arm1_hybrid_rag | all | 30 | 0.000 | 0.000 | 4544 | - | 0.000 |
-| arm1_hybrid_rag | unflagged | 30 | 0.000 | 0.000 | 4544 | - | 0.000 |
-| repomap_pagerank | all | 30 | 0.000 | 0.000 | 3561 | - | 0.000 |
-| repomap_pagerank | unflagged | 30 | 0.000 | 0.000 | 3561 | - | 0.000 |
-| prism_full | all | 30 | 0.000 | 0.000 | 1555 | - | 0.000 |
-| prism_full | unflagged | 30 | 0.000 | 0.000 | 1555 | - | 0.000 |
-| prism_ask | all | 20 | 0.000 | 0.000 | 8382 | - | 0.000 |
-| prism_ask | unflagged | 20 | 0.000 | 0.000 | 8382 | - | 0.000 |
-| normal_oracle | all | 30 | 0.000 | 0.000 | 3427 | - | 0.000 |
-| normal_oracle | unflagged | 30 | 0.000 | 0.000 | 3427 | - | 0.000 |
-| prism_oracle | all | 30 | 0.000 | 0.000 | 3427 | - | 0.000 |
-| prism_oracle | unflagged | 30 | 0.000 | 0.000 | 3427 | - | 0.000 |
+| arm1_hybrid_rag | all | 80 | 0.000 | 0.000 | 7041 | - | 0.000 |
+| arm1_hybrid_rag | unflagged | 80 | 0.000 | 0.000 | 7041 | - | 0.000 |
+| repomap_pagerank | all | 80 | 0.000 | 0.000 | 3422 | - | 0.000 |
+| repomap_pagerank | unflagged | 80 | 0.000 | 0.000 | 3422 | - | 0.000 |
+| prism_full | all | 60 | 0.000 | 0.000 | 2426 | - | 0.000 |
+| prism_full | unflagged | 60 | 0.000 | 0.000 | 2426 | - | 0.000 |
+| prism_ask | all | 80 | 0.000 | 0.000 | 8514 | - | 0.000 |
+| prism_ask | unflagged | 80 | 0.000 | 0.000 | 8514 | - | 0.000 |
+| normal_oracle | all | 80 | 0.000 | 0.000 | 3154 | - | 0.000 |
+| normal_oracle | unflagged | 80 | 0.000 | 0.000 | 3154 | - | 0.000 |
+| prism_oracle | all | 80 | 0.000 | 0.000 | 3154 | - | 0.000 |
+| prism_oracle | unflagged | 80 | 0.000 | 0.000 | 3154 | - | 0.000 |
 
 ## Contamination (arm0_no_retrieval)
 
@@ -117,14 +88,14 @@ Flagged at backward pass rate >= 0.5 or forward mean F1 >= 0.5.
 
 | task | arm0_no_retrieval | arm1_hybrid_rag | repomap_pagerank | prism_full | prism_ask | normal_oracle | prism_oracle |
 |---|---|---|---|---|---|---|---|
-| l4_bwd_django_01 | 0.000 | - | - | - | - | - | - |
-| l4_bwd_django_02 | 0.000 | - | - | - | - | - | - |
+| l4_bwd_django_01 | 0.000 | 0.000 | 0.000 | - | 0.000 | 0.000 | 0.000 |
+| l4_bwd_django_02 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | l4_bwd_express_01 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
-| l4_bwd_express_02 | 0.000 | 0.000 | 0.000 | 0.000 | - | 0.000 | 0.000 |
+| l4_bwd_express_02 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | l4_bwd_fastapi_01 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
-| l4_bwd_fastapi_02 | 0.000 | - | - | - | - | - | - |
-| l4_bwd_trpc_01 | 0.000 | - | - | - | - | - | - |
-| l4_bwd_trpc_02 | 0.000 | - | - | - | - | - | - |
+| l4_bwd_fastapi_02 | 0.000 | 0.000 | 0.000 | - | 0.000 | 0.000 | 0.000 |
+| l4_bwd_trpc_01 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| l4_bwd_trpc_02 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | l4_fwd_django_01 | 0.196 | 0.447 | 0.150 | 0.250 | 0.192 | 0.660 | 0.660 |
 | l4_fwd_django_02 | 0.080 | 0.247 | 0.020 | 0.581 | 0.384 | 0.982 | 0.982 |
 | l4_fwd_express_01 | 0.104 | 0.370 | 0.000 | 0.372 | 0.484 | 0.652 | 0.652 |
