@@ -45,6 +45,20 @@ counted - they are not the tested behaviour.
 and gates use the unit suite (`test/*.js`); `test/acceptance/` drives the
 `examples/` apps (the example zone) and is not used.
 
+## tRPC v10.45.4 (`2ec29bfa2e`)
+
+Authored on Kaggle (`kaggle/trpc_layer4_authoring_cell.py`, report in
+`reports/layer4/trpc_authoring/`): the workspace install needs
+`registry.npmjs.com`. Node 20.18.1, `pnpm@8.5.1 install --frozen-lockfile
+--ignore-scripts`, then **every** `@trpc/*` package built (`pnpm run
+build`: server, client, react-query, next) - the tests import
+`@trpc/client` and, through shared helpers, `@trpc/react-query` by their
+package entries, which point at `dist/`. Tests run with Vitest 0.32
+`--run --no-threads` from `packages/tests` (Vitest root `packages/`); traces
+load the runtime through `NODE_OPTIONS="--require trace_node_runtime.cjs
+--enable-source-maps"`. Prism indexes `packages/server/src`, so focal
+functions live there.
+
 ## Gold and oracle names
 
 Only functions and methods Prism indexes outside test files and outside

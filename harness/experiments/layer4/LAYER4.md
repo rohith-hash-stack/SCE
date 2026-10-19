@@ -311,11 +311,19 @@ clone-relative (`focal.file`) with `index_file` relative to the index;
 traces run Vitest 0.32 in fork mode from `packages/tests` with the runtime
 in `NODE_OPTIONS`, are rebased to the index root and mapped like Express.
 Specs may list `alternatives`: the author keeps the first candidate that
-yields a valid task and records the rejected ones in the manifest. Primary
-picks: forward `getTRPCErrorFromUnknown` and `getErrorShape` (callers in the
-HTTP resolver, procedure/middleware code, the ws adapter), backward
-`mergeRouters` (formatter/transformer conflict rules) and the `share`
-operator (ref-counted multicast).
+yields a valid task and records the rejected ones in the manifest. All four primary
+candidates were authored (`24447dd`, 16-task suite valid): forward
+`getTRPCErrorFromUnknown` (10 callers within 2 hops: the HTTP resolver,
+`createProcedureCaller`, `callProcedure`, `createCallerFactory`, the ws
+adapter) and `getErrorShape` (7), backward `mergeRouters` (gates valid;
+oracle with `createRouterFactory`, `mergeWithoutOverrides`, ...) and the
+`share` operator (gates valid; its oracle is the masked function alone -
+its callers are test files and nothing of the repo runs while it is on the
+stack, `share()` only returns a closure). Getting there took building every
+`@trpc/*` package: each authoring run that built too few failed every
+test file importing the missing package's `dist/` entry, which the
+rejection diagnostics (`benchmarks/layer4/rejected/`, written on failure)
+made visible.
 
 ### Arm compatibility (all 7 Stage 2 arms, unchanged)
 
