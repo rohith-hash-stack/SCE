@@ -369,3 +369,37 @@ def test_eval_timeout_caps_the_task_timeout():
     t = TASKS["l4_bwd_express_02"]
     st = R.splice_task(t, NS(clone_root="/c"), {}, "node", timeout=300)
     assert t["gold"]["timeout_s"] == 1800 and st.timeout == 300 and "--exit" in st.command
+
+
+def test_a_seed_stopped_mid_cell_reruns_alone_and_finished_seeds_are_skipped(tmp_path):
+    tasks = {"l4_bwd_express_01": TASKS["l4_bwd_express_01"]}
+    ran = []
+
+    def evaluate(splice_task, reply):
+        if len(ran) == 2 and stop["armed"]:  # the third seed is killed during its evaluation
+            raise SystemExit(143)
+        return {"passed": True, "exit_code": 0, "seconds": 0.1, "mode": "body", "syntax_ok": True}
+    stop = {"armed": True}
+    original = R.run_cell
+
+    def cell(corpus, task, arm, seed, *a, **k):
+        rec = original(corpus, task, arm, seed, *a, evaluate=evaluate, build=fake_build(), **k)
+        ran.append(seed)
+        return rec
+    R.run_cell = cell
+    load = lambda name: corpus_for(TASKS["l4_bwd_express_01"])
+    try:
+        with pytest.raises(SystemExit):
+            R.run(tasks, ["arm0_no_retrieval"], [1, 2, 3, 4], tmp_path, Cfg(), Client("```js\nreturn 1\n```"), {},
+                  "node", load_corpus=load)
+        assert sorted(c["seed"] for c in R.load_cells(tmp_path / "cells.jsonl").values()) == [1, 2]
+        with (tmp_path / "cells.jsonl").open("a") as fh:  # and a kill mid-append cut a line short
+            fh.write('{"task_id": "l4_bwd_express_01", "arm": "arm0_no')
+        stop["armed"], ran[:] = False, []
+        R.run(tasks, ["arm0_no_retrieval"], [1, 2, 3, 4], tmp_path, Cfg(), Client("```js\nreturn 1\n```"), {},
+              "node", load_corpus=load)
+    finally:
+        R.run_cell = original
+    assert ran == [3, 4]  # seeds 1 and 2 are not run again; the stopped seed 3 is
+    cells = R.load_cells(tmp_path / "cells.jsonl")
+    assert sorted(c["seed"] for c in cells.values()) == [1, 2, 3, 4] and all(c["status"] == "ok" for c in cells.values())

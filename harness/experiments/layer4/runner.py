@@ -168,6 +168,9 @@ def run(tasks: dict[str, dict], arms: list[str], seeds: list[int], out: Path, cf
     for t in tasks.values():
         by_corpus.setdefault(t["corpus"], []).append(t)
     written = []
+    if cells_path.exists() and cells_path.stat().st_size and not cells_path.read_bytes().endswith(b"\n"):
+        with cells_path.open("a") as fh:  # a kill mid-append left a partial line: never glue the next record to it
+            fh.write("\n")
     with cells_path.open("a") as fh:
         for corpus_name in sorted(by_corpus):
             todo = [(t, a, s) for t in sorted(by_corpus[corpus_name], key=lambda t: t["task_id"]) for a in arms

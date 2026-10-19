@@ -27,7 +27,12 @@
 # once; everything under PUSH_PATH is pushed to BRANCH every PUSH_EVERY_S
 # and after each step. The cell stops itself before Kaggle's 12 h limit;
 # re-run it in a new session and it restores the pushed cells and goes on
-# (the runner skips finished cells and retries failed ones). Pushed results
+# (the runner skips finished cells and retries failed ones). A cell
+# (task x arm x seed) stopped half-way leaves no record and is the one that
+# runs again; every finished seed is skipped. Re-running in the same session
+# after the interrupt button works too: the interrupted lanes are stopped
+# cleanly and pushed, leftover runners are stopped at setup 0, and cells
+# not yet pushed are merged back after the branch reset. Pushed results
 # are only accepted if they were produced by identical code (tree hashes of
 # src/, harness/, benchmarks/). The hybrid-RAG embedding cache is shared
 # with the two-stage run (eval/two-stage-rag-cache).
@@ -36,6 +41,7 @@
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -65,7 +71,7 @@ NODE_DIR = "/kaggle/working/node20"
 VENV_DIR = "/kaggle/working/venvs"
 PUSH_PATH = "reports/layer4/tournament"
 CORPORA_DIR = f"{PUSH_PATH}/corpora"        # per-corpus cells.jsonl + logs, merged into PUSH_PATH/cells.jsonl
-PUSH_EVERY_S = 1800
+PUSH_EVERY_S = 600                          # a hard kill loses at most this much finished work
 MAX_RUNTIME_HOURS = 11.3
 TRANSFORMERS_PINS = [
     ("transformers==4.45.2", "sentence-transformers>=3.0,<4.0"),
@@ -149,9 +155,86 @@ def push(paths, message, max_attempts=4):
         return False
 
 
+RUNNER_PATTERN = r"-m harness\.experiments\.layer4\.(runner|report)( |$)"  # as lane_worker starts them
+
+
+def stop_runner(pid, grace_s=120):
+    """SIGTERM the runner alone (it restores its spliced file and writes no
+    record for the cell it was in), then SIGKILL its process group: a test
+    process killed first would grade the reply as a fail and the cell would
+    be recorded - and skipped on resume - with a wrong score."""
+    try:
+        pgid = os.getpgid(pid)  # before it exits: a gone leader's group can no longer be looked up
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    deadline = time.time() + grace_s
+    while time.time() < deadline:
+        try:
+            if open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[0] == "Z":
+                break  # exited, not yet reaped by its parent
+        except (OSError, IndexError):
+            break
+        time.sleep(1)
+    try:
+        if pgid != os.getpgid(0):  # a runner from this cell has its own group; never the kernel's
+            os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def stop_stale_runners():
+    """A previous run of this cell in the same kernel (stopped with the
+    interrupt button) leaves its lane runners going; they would splice the
+    same checkouts and append the same cells as this run."""
+    found = run(["pgrep", "-f", "--", RUNNER_PATTERN], check=False, capture=True).stdout.split()
+    mine, pid = set(), os.getpid()
+    while pid > 1:  # never this kernel or what started it
+        mine.add(pid)
+        try:
+            pid = int(open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+    pids = [int(p) for p in found if int(p) not in mine]
+    for pid in pids:
+        print(f"[resume] stopping runner {pid} left by an interrupted run", flush=True)
+        stop_runner(pid)
+    return pids
+
+
+def cell_rank(r):
+    """Which of two records of one cell to keep: a finished one, then the latest."""
+    return (r.get("status") in ("ok", "leak"), r.get("finished_at") or "")
+
+
+def merge_cell_files(target, *sources):
+    """Union of cells.jsonl files into `target`, one record per cell key."""
+    best = {}
+    for path in (target, *sources):
+        if not os.path.exists(path):
+            continue
+        for line in open(path):
+            try:
+                r = json.loads(line)
+                key = (r["task_id"], r["arm"], r["seed"])
+            except (json.JSONDecodeError, KeyError, TypeError):
+                continue  # a line cut off by a kill: that cell runs again
+            if key not in best or cell_rank(r) >= cell_rank(best[key]):
+                best[key] = r
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target + ".tmp", "w") as fh:
+        for key in sorted(best, key=str):
+            fh.write(json.dumps(best[key], default=str) + "\n")
+    os.replace(target + ".tmp", target)
+    return len(best)
+
+
 # ============================================================
 # Setup
 # ============================================================
+print("\n[setup 0/10] Stop runners left by an interrupted run of this cell", flush=True)
+print(f"[ok] stopped {len(stop_stale_runners())}", flush=True)
+
 print("\n[setup 1/10] GitHub token", flush=True)
 github_token = os.environ.get("GITHUB_TOKEN")
 if not github_token:
@@ -215,8 +298,26 @@ probe = run(["git", "push", "--dry-run", "origin", f"origin/{BRANCH}:refs/heads/
 if probe.returncode != 0:
     abort(f"this GITHUB_TOKEN cannot push to {BRANCH} - results would be lost:\n"
           f"{mask(probe.stderr or probe.stdout).strip()[-1500:]}")
+# a rerun in the same session: keep the cells written since the last push
+# (the reset and clean below would discard them) and merge them back after
+UNPUSHED = "/kaggle/working/l4_unpushed"
+local_out = os.path.join(SCE_DIR, PUSH_PATH)
+shutil.rmtree(UNPUSHED, ignore_errors=True)
+if os.path.isdir(local_out):
+    shutil.copytree(local_out, UNPUSHED)
 run(["git", "checkout", "-B", BRANCH, f"origin/{BRANCH}"], cwd=SCE_DIR, check=True)
 run(["git", "clean", "-fdx", "-e", ".benchmarks"], cwd=SCE_DIR, check=True)
+if os.path.isdir(UNPUSHED):
+    for root, _dirs, files in os.walk(UNPUSHED):
+        for name in files:
+            src = os.path.join(root, name)
+            dst = os.path.join(local_out, os.path.relpath(src, UNPUSHED))
+            if name == "cells.jsonl":
+                print(f"[resume] {os.path.relpath(dst, SCE_DIR)}: {merge_cell_files(dst, src)} cells "
+                      "(pushed + this session's)", flush=True)
+            elif name.endswith(".log") and (not os.path.exists(dst) or os.path.getsize(src) > os.path.getsize(dst)):
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
 HEAD = run(["git", "rev-parse", "HEAD"], cwd=SCE_DIR, capture=True).stdout.strip()
 CODE = code_identity()
 for f in ("harness/experiments/layer4/runner.py", "harness/experiments/layer4/report.py",
@@ -505,7 +606,17 @@ def counts(corpus):
     return n
 
 
+REPORT_LOCK = threading.Lock()
+STOP = threading.Event()  # set on the time limit or the interrupt button: lanes start nothing new
+TASKS_PER_CORPUS = 4
+
+
 def merge_and_push(tag):
+    with REPORT_LOCK:  # lanes push when a corpus finishes, the monitor every PUSH_EVERY_S
+        _merge_and_push(tag)
+
+
+def _merge_and_push(tag):
     run([sys.executable, "-c", f"from pathlib import Path; from harness.experiments.layer4.report import merge; "
          f"print('[merge]', merge(Path({CORPORA!r}), Path({OUT!r})), 'cells')"], cwd=SCE_DIR, env=child_env, check=False)
     push([PUSH_PATH], f"Layer 4 tournament: {tag} @ {HEAD[:7]}")
@@ -517,8 +628,8 @@ def lane_worker(corpora, command, status, procs):
         out_dir = os.path.join(CORPORA, corpus)
         os.makedirs(out_dir, exist_ok=True)
         for attempt in range(1, RETRY_PASSES + 1):
-            if out_of_time():
-                status[corpus] = "stopped (time)"
+            if STOP.is_set() or out_of_time():
+                status[corpus] = "stopped"
                 return
             cmd = [sys.executable, "-u", "-m", "harness.experiments.layer4.runner", command, "--corpus", corpus,
                    "--seeds", SEEDS, "--out", out_dir, *PYTHON_ARGS, "--node", NODE, "--model", MODEL,
@@ -528,7 +639,7 @@ def lane_worker(corpora, command, status, procs):
             log = open(os.path.join(out_dir, f"{command}.log"), "a")
             log.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} {command} pass {attempt} ===\n")
             proc = subprocess.Popen(cmd, cwd=SCE_DIR, env=child_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    text=True)
+                                    text=True, start_new_session=True)  # own group: its test processes die with it
             procs[corpus] = proc
             for line in proc.stdout:
                 log.write(line)
@@ -540,33 +651,70 @@ def lane_worker(corpora, command, status, procs):
             n = counts(corpus)
             print(f"[{corpus}] {command} pass {attempt}: exit {code}, cells {n}", flush=True)
             status[corpus] = f"exit {code}, {n}"
-            if code != 0 and proc.returncode < 0:  # terminated (time limit)
+            if STOP.is_set():  # stopped mid-pass: the cell it was in left no record and runs again on resume
+                status[corpus] = f"stopped, {n}"
                 return
             if not n.get("error"):
                 break
+        merge_and_push(f"{command} {corpus} done")
+
+
+def stop_lanes(threads, procs, tag):
+    STOP.set()
+    for p in list(procs.values()):
+        if p.poll() is None:
+            stop_runner(p.pid)
+    for t in threads:
+        t.join(timeout=180)
+    merge_and_push(f"{tag} (stopped early)")
+
+
+def resume_status(command):
+    """Finished cells per corpus before this step starts (the runner skips them)."""
+    arms = None if command == "run" else {"arm0_no_retrieval"}  # step 2 reuses step 1's arm0 cells
+    total = TASKS_PER_CORPUS * (1 if arms else 7) * len(SEEDS.split(","))
+    for lane in LANES:
+        for corpus in lane:
+            done = sum(1 for r in cells_of(corpus) if r["status"] in ("ok", "leak") and (not arms or r["arm"] in arms))
+            print(f"[resume] {corpus}: {done}/{total} cells finished"
+                  f"{' - skipped, the rest run now' if done else ''}", flush=True)
+
+
+def cells_of(corpus):
+    path = os.path.join(CORPORA, corpus, "cells.jsonl")
+    out = {}
+    if os.path.exists(path):
+        for line in open(path):
+            try:
+                r = json.loads(line)
+                out[(r["task_id"], r["arm"], r["seed"])] = r
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return list(out.values())
 
 
 def run_step(command, tag):
+    resume_status(command)
     status, procs = {}, {}
     threads = [threading.Thread(target=lane_worker, args=(lane, command, status, procs), daemon=True) for lane in LANES]
     for t in threads:
         t.start()
     last = time.time()
-    while any(t.is_alive() for t in threads):
-        time.sleep(30)
-        if out_of_time():
-            print("[warn] approaching Kaggle's time limit - stopping; re-run this cell to resume", flush=True)
-            for p in procs.values():
-                if p.poll() is None:
-                    p.terminate()
-            for t in threads:
-                t.join(timeout=180)
-            merge_and_push(f"{tag} (stopped early)")
-            return status, True
-        if time.time() - last >= PUSH_EVERY_S:
-            merge_and_push(f"{tag} (periodic)")
-            save_rag_cache()
-            last = time.time()
+    try:
+        while any(t.is_alive() for t in threads):
+            time.sleep(30)
+            if out_of_time():
+                print("[warn] approaching Kaggle's time limit - stopping; re-run this cell to resume", flush=True)
+                stop_lanes(threads, procs, tag)
+                return status, True
+            if time.time() - last >= PUSH_EVERY_S:
+                merge_and_push(f"{tag} (periodic)")
+                save_rag_cache()
+                last = time.time()
+    except KeyboardInterrupt:  # the interrupt button: stop cleanly, push, re-run the cell to resume
+        print("\n[interrupted] stopping the lanes and pushing finished cells; re-run this cell to resume", flush=True)
+        stop_lanes(threads, procs, tag)
+        raise
     merge_and_push(tag)
     save_rag_cache()
     return status, False
