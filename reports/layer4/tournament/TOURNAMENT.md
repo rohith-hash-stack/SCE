@@ -1,6 +1,6 @@
 # Layer 4 tournament
 
-Code `a341dec389`, model `qwen2.5-coder:14b-instruct-q8_0` (Ollama 0.34.0, num_ctx 24576), seeds 42,43,44,45,46,47,48,49,50,51. Resumed across the declared code change 'leak check v2' (fe7ed62603 -> 22e1c63f93). Resumed across the declared code change 'backward answers without stop sequences' (22e1c63f93 -> c4c9da477c). Resumed across the declared code change 'backward splice v2 and stored-reply re-evaluation' (c4c9da477c -> a341dec389). Complete.
+Step 1 (contamination) - code `78277fe735`, model `qwen2.5-coder:14b-instruct-q8_0`.
 
 16 tasks, 7 arms, seeds [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]; 1120 cells. Contamination-flagged tasks (arm0 >= threshold): none.
 
