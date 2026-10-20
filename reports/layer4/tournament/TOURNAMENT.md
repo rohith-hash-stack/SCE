@@ -1,6 +1,6 @@
 # Layer 4 tournament
 
-Step 1 (contamination) - code `78277fe735`, model `qwen2.5-coder:14b-instruct-q8_0`.
+Code `78277fe735`, model `qwen2.5-coder:14b-instruct-q8_0` (Ollama 0.34.0, num_ctx 24576), seeds 42,43,44,45,46,47,48,49,50,51. Resumed across the declared code change 'leak check v2' (fe7ed62603 -> 22e1c63f93). Resumed across the declared code change 'backward answers without stop sequences' (22e1c63f93 -> c4c9da477c). Resumed across the declared code change 'backward splice v2 and stored-reply re-evaluation' (c4c9da477c -> a341dec389). Resumed across the declared code change 'forward context v2 (prism_full)' (a341dec389 -> 78277fe735). Complete.
 
 16 tasks, 7 arms, seeds [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]; 1120 cells. Contamination-flagged tasks (arm0 >= threshold): none.
 
@@ -33,8 +33,8 @@ Step 1 (contamination) - code `78277fe735`, model `qwen2.5-coder:14b-instruct-q8
 | arm1_hybrid_rag | unflagged | 80 | 0.359 | 0.296 | 0.296 | 1.000 | 1.000 | 1.000 | 0.350 | 0.835 | 6752 |
 | repomap_pagerank | all | 80 | 0.099 | 0.135 | 0.096 | 1.000 | 1.000 | 1.000 | 0.250 | 0.702 | 3580 |
 | repomap_pagerank | unflagged | 80 | 0.099 | 0.135 | 0.096 | 1.000 | 1.000 | 1.000 | 0.250 | 0.702 | 3580 |
-| prism_full | all | 80 | 0.540 | 0.259 | 0.321 | 1.000 | 0.950 | 0.950 | 0.150 | 0.752 | 4973 |
-| prism_full | unflagged | 80 | 0.540 | 0.259 | 0.321 | 1.000 | 0.950 | 0.950 | 0.150 | 0.752 | 4973 |
+| prism_full | all | 80 | 0.595 | 0.462 | 0.496 | 1.000 | 0.750 | 0.750 | 0.200 | 0.770 | 7149 |
+| prism_full | unflagged | 80 | 0.595 | 0.462 | 0.496 | 1.000 | 0.750 | 0.750 | 0.200 | 0.770 | 7149 |
 | prism_ask | all | 80 | 0.432 | 0.317 | 0.329 | 1.000 | 0.500 | 0.500 | 0.250 | 0.757 | 7746 |
 | prism_ask | unflagged | 80 | 0.432 | 0.317 | 0.329 | 1.000 | 0.500 | 0.500 | 0.250 | 0.757 | 7746 |
 | normal_oracle | all | 80 | 0.918 | 0.724 | 0.783 | 1.000 | 1.000 | 1.000 | 0.300 | 0.833 | 5479 |
@@ -96,11 +96,11 @@ Flagged at backward pass rate >= 0.5 or forward mean F1 >= 0.5.
 | l4_bwd_fastapi_02 | 0.000 | 0.000 | 0.000 | - | 0.000 | 0.000 | 0.000 |
 | l4_bwd_trpc_01 | 0.000 | 0.000 | 0.000 | 0.100 | 0.000 | 0.000 | 0.000 |
 | l4_bwd_trpc_02 | 0.000 | 0.000 | 0.000 | 0.100 | 0.000 | 0.000 | 0.000 |
-| l4_fwd_django_01 | 0.196 | 0.447 | 0.150 | 0.250 | 0.192 | 0.660 | 0.660 |
-| l4_fwd_django_02 | 0.080 | 0.247 | 0.020 | 0.581 | 0.384 | 0.982 | 0.982 |
-| l4_fwd_express_01 | 0.104 | 0.370 | 0.000 | 0.372 | 0.484 | 0.652 | 0.652 |
-| l4_fwd_express_02 | 0.054 | 0.157 | 0.000 | 0.000 | 0.506 | 0.811 | 0.811 |
-| l4_fwd_fastapi_01 | 0.024 | 0.000 | 0.000 | 0.326 | 0.154 | 0.510 | 0.510 |
-| l4_fwd_fastapi_02 | 0.111 | 0.113 | 0.249 | 0.244 | 0.142 | 0.867 | 0.867 |
-| l4_fwd_trpc_01 | 0.000 | 0.452 | 0.159 | 0.436 | 0.413 | 0.865 | 0.865 |
-| l4_fwd_trpc_02 | 0.000 | 0.582 | 0.187 | 0.359 | 0.358 | 0.914 | 0.914 |
+| l4_fwd_django_01 | 0.196 | 0.447 | 0.150 | 0.225 | 0.192 | 0.660 | 0.660 |
+| l4_fwd_django_02 | 0.080 | 0.247 | 0.020 | 0.654 | 0.384 | 0.982 | 0.982 |
+| l4_fwd_express_01 | 0.104 | 0.370 | 0.000 | 0.517 | 0.484 | 0.652 | 0.652 |
+| l4_fwd_express_02 | 0.054 | 0.157 | 0.000 | 0.711 | 0.506 | 0.811 | 0.811 |
+| l4_fwd_fastapi_01 | 0.024 | 0.000 | 0.000 | 0.241 | 0.154 | 0.510 | 0.510 |
+| l4_fwd_fastapi_02 | 0.111 | 0.113 | 0.249 | 0.569 | 0.142 | 0.867 | 0.867 |
+| l4_fwd_trpc_01 | 0.000 | 0.452 | 0.159 | 0.526 | 0.413 | 0.865 | 0.865 |
+| l4_fwd_trpc_02 | 0.000 | 0.582 | 0.187 | 0.525 | 0.358 | 0.914 | 0.914 |
