@@ -66,6 +66,12 @@ class ArmSpec:
     #: Inline the slice's validated entry-point breadcrumbs
     #: (`prism.graph.render_breadcrumbs`) under each entered root's node.
     breadcrumbs: bool = False
+    #: two-pass arms only (Turn-1 micro-ablation): append each row's atomic
+    #: capability primitives (`|caps=[...]`) and tell Turn 1 to use them.
+    atomic_caps: bool = False
+    #: two-pass arms only (config R0): Turn 1 requests every `caller` row of
+    #: the manifest by rule, with no model call.
+    turn1_rule_callers: bool = False
     description: str = ""
 
 
@@ -139,6 +145,16 @@ EXPERIMENTAL_ARMS: dict[str, ArmSpec] = {
             "prism_oracle", "oracle", breadcrumbs=True,
             description="pragmatic_oracle's exact context plus the slice's entry-point breadcrumbs: "
             "isolates the value of architectural provenance over raw code.",
+        ),
+        # Turn-1 atomic-capability micro-ablation (harness/experiments/layer4/atomic_caps_ablation.py).
+        ArmSpec(
+            "prism_atomic_caps", "two_pass", anchor="taxonomy", axes="all", atomic_caps=True,
+            description="prism_full's manifest plus each row's atomic capability primitives (`caps=[...]`, "
+            "prism.semantics.capabilities) and a Turn-1 instruction to use them with the call hierarchy.",
+        ),
+        ArmSpec(
+            "prism_r0_rule_callers", "two_pass", anchor="taxonomy", axes="all", turn1_rule_callers=True,
+            description="prism_full with Turn 1 replaced by the rule 'request every caller row' (config R0).",
         ),
     )
 }

@@ -136,6 +136,57 @@ def turn1_row_format(policy: AxisPolicy) -> str:
     return f"{base}, followed by |axes=... giving each symbol's statically extracted semantic axes ({listing})"
 
 
+#: Atomic primitive bit -> its `caps=[...]` name (`prism.semantics.bitmask`
+#: PRIM_* bits, derived per sink entry by `prism.semantics.primitives`).
+_CAP_NAMES = (
+    (FeatureBit.PRIM_NET_CONNECT, "network.connect"), (FeatureBit.PRIM_NET_LISTEN, "network.listen"),
+    (FeatureBit.PRIM_NET_DNS, "network.dns"), (FeatureBit.PRIM_NET_TLS, "network.tls"),
+    (FeatureBit.PRIM_FS_READ, "filesystem.read"), (FeatureBit.PRIM_FS_WRITE, "filesystem.write"),
+    (FeatureBit.PRIM_FS_DELETE, "filesystem.delete"), (FeatureBit.PRIM_DB_CONNECT, "database.connect"),
+    (FeatureBit.PRIM_DB_READ, "database.read"), (FeatureBit.PRIM_DB_WRITE, "database.write"),
+    (FeatureBit.PRIM_PROC_SPAWN, "process.spawn"), (FeatureBit.PRIM_PROC_SIGNAL, "process.signal"),
+    (FeatureBit.PRIM_TIME_CLOCK, "time.clock"), (FeatureBit.PRIM_TIME_WAIT, "time.wait"),
+    (FeatureBit.PRIM_RAND_PRNG, "random.prng"), (FeatureBit.PRIM_RAND_CSPRNG, "random.csprng"),
+)
+
+TURN1_CAPS_ROW_FORMAT = (
+    ", followed by |caps=[...]: the atomic I/O capabilities the symbol performs or reaches through its callees, "
+    "each written name@hop (hop 0 = its own body, 1-2 = a callee that many calls away), e.g. "
+    "caps=[database.write@0,network.connect@2]; caps=[] when none was detected"
+)
+TURN1_CAPS_GUIDANCE = (
+    " Use both the AST call hierarchy and the capability tags (caps) to identify which upstream/downstream "
+    "functions are causally relevant to the query."
+)
+
+
+def caps_field(profile) -> str:
+    """`caps=[name@hop,...]` for one capability profile: every primitive the
+    profile reaches within its hop bound, at the first hop it appears
+    (`CapabilityProfile.by_hop`), in `_CAP_NAMES` order."""
+    items = []
+    by_hop = profile.by_hop if profile is not None else ()
+    for bit, name in _CAP_NAMES:
+        hop = next((h for h, bits in enumerate(by_hop) if bits & int(bit)), None)
+        if hop is not None:
+            items.append(f"{name}@{hop}")
+    return "caps=[" + ",".join(items) + "]"
+
+
+def annotate_manifest_atomic_capabilities(manifest_text: str, profiles: dict) -> str:
+    """Appends each candidate row's `|caps=[...]` field (`caps_field` of its
+    `prism.semantics.capabilities.CapabilityProfile`); the `<candidate_index>`
+    wrapper lines pass through untouched. Applied after
+    `annotate_manifest_axes`, so the rows keep every field they had."""
+    out = []
+    for line in manifest_text.splitlines():
+        if not line or line.startswith("<"):
+            out.append(line)
+            continue
+        out.append(f"{line}|{caps_field(profiles.get(line.split('|', 1)[0]))}")
+    return "\n".join(out)
+
+
 def redact_package_axes(pkg: ContextPackage, policy: AxisPolicy) -> ContextPackage:
     """Applies the same axis policy to the Turn-2 context the manifest got,
     so an ablation can't leak the suppressed axis back in through the
