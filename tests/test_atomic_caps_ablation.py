@@ -52,3 +52,22 @@ def test_ablation_arms_differ_from_prism_full_only_in_their_flag():
         assert getattr(spec, flag) and not getattr(full, flag)
         assert (spec.kind, spec.anchor, spec.axes, spec.distractor_k, spec.breadcrumbs) == (
             full.kind, full.anchor, full.axes, full.distractor_k, full.breadcrumbs)
+
+
+def test_per_seed_recall_and_contract_selection_delta():
+    from harness.experiments.layer4.atomic_caps_ablation import contract_selection, per_seed_recall
+
+    static = {"seed": "s", "gold": ["g1", "g2"], "gold_in_manifest": ["g1", "g2"],
+              "contracts": {"s": "contract=[state=READ_ONLY]", "g1": "contract=[state=MUTATES_ARGS]",
+                            "g2": "contract=[state=READ_ONLY]", "n1": "contract=[state=MUTATES_SELF]",
+                            "n2": "contract=[state=READ_ONLY]"}}
+    cell = lambda req: {"corpus": "django", "detail": {"turn1": {"requested": req}}}
+    cells = {("prism_contract", "t", 42): cell(["s", "g1", "n1"]), ("prism_contract", "t", 43): cell(["g1", "g2"])}
+    seeds = per_seed_recall(cells, {"t": static})["prism_contract"]
+    assert seeds["seeds"]["42"]["gold_picked"] == 1 and seeds["seeds"]["43"]["gold_picked"] == 2
+    assert seeds["gold_picked_mean"] == 1.5 and seeds["requested_per_task_mean"] == 2
+    sel = contract_selection(cells, {"t": static})["prism_contract"]
+    # MUTATES rows g1, n1 over 2 seeds: 3 of 4 requested; READ_ONLY g2, n2: 1 of 4
+    assert sel["all_rows"]["all"]["delta"] == 0.5 and sel["all_rows"]["django"]["rows_mutates"] == 4
+    # non-gold only: n1 requested 1 of 2, n2 0 of 2
+    assert sel["non_gold_rows"]["all"]["delta"] == 0.5

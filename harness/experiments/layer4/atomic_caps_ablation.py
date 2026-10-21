@@ -150,6 +150,62 @@ def mean(xs):
     return st.mean(xs) if xs else None
 
 
+def _requested(c: dict, static: dict) -> set:
+    return set(c["detail"]["turn1"].get("requested") or []) - {static["seed"]}
+
+
+def per_seed_recall(cell: dict, statics: dict) -> dict:
+    """Per arm and seed: Turn-1 gold picked summed over the tasks (out of the
+    manifest's gold rows, 49 on the 8 forward tasks) and requested rows per
+    task; then mean and sample stdev over the seeds."""
+    out = defaultdict(dict)
+    for (arm, tid, seed), c in cell.items():
+        s = statics[tid]
+        row = out[arm].setdefault(seed, {"gold_picked": 0, "gold": 0, "requested": 0, "tasks": 0})
+        req = _requested(c, s)
+        row["gold_picked"] += len(req & set(s["gold_in_manifest"]))
+        row["gold"] += len(s["gold_in_manifest"])
+        row["requested"] += len(req)
+        row["tasks"] += 1
+    res = {}
+    for arm, seeds in sorted(out.items()):
+        picked = [v["gold_picked"] for v in seeds.values()]
+        per_task = [v["requested"] / v["tasks"] for v in seeds.values()]
+        res[arm] = {"seeds": {str(k): v for k, v in sorted(seeds.items())},
+                    "gold_picked_mean": mean(picked), "gold_picked_sd": st.stdev(picked) if len(picked) > 1 else None,
+                    "requested_per_task_mean": mean(per_task),
+                    "requested_per_task_sd": st.stdev(per_task) if len(per_task) > 1 else None}
+    return res
+
+
+def contract_selection(cell: dict, statics: dict) -> dict:
+    """Selection delta: the share of manifest rows each arm requests among
+    rows whose contract says MUTATES_* versus READ_ONLY (seed excluded),
+    overall and per corpus, plus the same split restricted to non-gold rows
+    (a model that only follows gold would show no delta there)."""
+    acc = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0]))  # mut req, mut rows, ro req, ro rows
+    acc_ng = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0]))
+    for (arm, tid, seed), c in cell.items():
+        s = statics[tid]
+        req, gold = _requested(c, s), set(s["gold"])
+        corpus = c.get("corpus") or tid.split("_")[2]
+        for q, field_ in s.get("contracts", {}).items():
+            if q == s["seed"]:
+                continue
+            i = 0 if "MUTATES" in field_ else 2
+            for bucket in (acc[arm][corpus], acc[arm]["all"]) + (
+                    (acc_ng[arm][corpus], acc_ng[arm]["all"]) if q not in gold else ()):
+                bucket[i] += q in req
+                bucket[i + 1] += 1
+    rate = lambda a, b: a / b if b else None
+
+    def pack(d):
+        return {k: {"p_req_mutates": rate(v[0], v[1]), "p_req_read_only": rate(v[2], v[3]),
+                    "delta": (rate(v[0], v[1]) - rate(v[2], v[3])) if v[1] and v[3] else None,
+                    "rows_mutates": v[1], "rows_read_only": v[3]} for k, v in sorted(d.items())}
+    return {arm: {"all_rows": pack(acc[arm]), "non_gold_rows": pack(acc_ng[arm])} for arm in sorted(acc)}
+
+
 def summarize(cells: list[dict], statics: dict) -> dict:
     by = defaultdict(list)
     for c in cells:
@@ -202,6 +258,8 @@ def summarize(cells: list[dict], statics: dict) -> dict:
     tokens = {arm: mean([s["manifest_tokens"][arm] for s in statics.values() if "manifest_tokens" in s])
               for arm in (CONTROL, CAPS, CONTRACT, "no_axes")}
     return {"arms": arms,
+            "per_seed": per_seed_recall(cell, statics),
+            "selection": contract_selection(cell, statics),
             "jaccard": {other: {"pairs": len(p), "turn1": mean([x["turn1"] for x in p.values()]),
                                 "packed": mean([x["packed"] for x in p.values()])} for other, p in pairs.items()},
             "turn1_control_across_seeds": mean(within),
@@ -223,6 +281,21 @@ def render(s: dict) -> str:
                  f"{f(j['turn1'])}, packed symbols {f(j['packed'])}." for other, j in s["jaccard"].items()]
     L += [f"Control vs itself across seeds (noise floor): {f(s['turn1_control_across_seeds'])}.", "",
           "Mean Turn-1 manifest tokens: " + ", ".join(f"{k} {v:.0f}" for k, v in s["manifest_tokens_mean"].items() if v),
+          "", "## Turn-1 gold picked per seed (summed over tasks) and requested rows per task", "",
+          "| arm | per seed (gold picked / gold) | mean ± sd | requested / task, mean ± sd |", "|---|---|---|---|"]
+    sd = lambda x: "-" if x is None else f"{x:.2f}"
+    for arm, p in s.get("per_seed", {}).items():
+        seeds = ", ".join(f"{k}: {v['gold_picked']}/{v['gold']}" for k, v in p["seeds"].items())
+        L.append(f"| `{arm}` | {seeds} | {sd(p['gold_picked_mean'])} ± {sd(p['gold_picked_sd'])} | "
+                 f"{sd(p['requested_per_task_mean'])} ± {sd(p['requested_per_task_sd'])} |")
+    L += ["", "## Selection delta: P(requested | MUTATES_* row) - P(requested | READ_ONLY row)", "",
+          "| arm | rows | corpus | P(req, MUTATES) | P(req, READ_ONLY) | delta |", "|---|---|---|---|---|---|"]
+    for arm, sel in s.get("selection", {}).items():
+        for which, d in sel.items():
+            for corpus, v in d.items():
+                L.append(f"| `{arm}` | {which} | {corpus} | {f(v['p_req_mutates'])} | {f(v['p_req_read_only'])} | "
+                         f"{f(v['delta'])} |")
+    L += [
           "", "## caps coverage of the manifest rows", "", "| task | rows | rows with caps | gold rows | gold rows with caps | distinct caps |",
           "|---|---|---|---|---|---|"]
     for tid, c in sorted(s["caps_coverage"].items()):
