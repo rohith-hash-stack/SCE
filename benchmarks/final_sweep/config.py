@@ -72,6 +72,9 @@ class ArmSpec:
     #: two-pass arms only (config R0): Turn 1 requests every `caller` row of
     #: the manifest by rule, with no model call.
     turn1_rule_callers: bool = False
+    #: two-pass arms only (Turn-1 contract-axis arm): append each row's
+    #: Option 3 contract (`|contract=[...]`) and tell Turn 1 to use it.
+    contract_axis: bool = False
     description: str = ""
 
 
@@ -155,6 +158,11 @@ EXPERIMENTAL_ARMS: dict[str, ArmSpec] = {
         ArmSpec(
             "prism_r0_rule_callers", "two_pass", anchor="taxonomy", axes="all", turn1_rule_callers=True,
             description="prism_full with Turn 1 replaced by the rule 'request every caller row' (config R0).",
+        ),
+        ArmSpec(
+            "prism_contract", "two_pass", anchor="taxonomy", axes="no_substance", contract_axis=True,
+            description="prism_full's manifest with the Substance axis replaced by each row's Option 3 contract "
+            "(`contract=[state throws ret entry]`, prism.semantics.contract_axis) and a Turn-1 instruction to use it.",
         ),
     )
 }

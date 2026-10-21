@@ -96,6 +96,9 @@ class CorpusState:
         #: `prism.semantics.capabilities` profiles, built on first use
         #: (only the Turn-1 atomic-capability arm reads them).
         self._capability_profiles = None
+        #: `prism.semantics.contract_axis` contracts, built on first use
+        #: (only the Turn-1 contract-axis arm reads them).
+        self._node_contracts = None
 
     def capability_profiles(self) -> dict:
         with self.lock:
@@ -103,6 +106,13 @@ class CorpusState:
                 from prism.semantics.profile_cache import cached_capability_profiles
                 self._capability_profiles = cached_capability_profiles(self.builder, self.repo_path)
             return self._capability_profiles
+
+    def node_contracts(self) -> dict:
+        with self.lock:
+            if self._node_contracts is None:
+                from prism.semantics.contract_axis import compute_node_contracts
+                self._node_contracts = compute_node_contracts(self.builder)
+            return self._node_contracts
 
     def distances(self, seed: str) -> dict[str, float]:
         with self.lock:

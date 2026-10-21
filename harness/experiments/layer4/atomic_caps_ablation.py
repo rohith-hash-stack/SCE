@@ -9,7 +9,11 @@ Three arms on the 8 Layer 4 forward (blast-radius) tasks, same manifest
                            `prism.semantics.capabilities`, and a Turn-1
                            instruction to use the call hierarchy and the caps;
 - `prism_r0_rule_callers`  reference: Turn 1 requests every `caller` row by
-                           rule (config R0), no model call.
+                           rule (config R0), no model call;
+- `prism_contract`         the manifest with the Substance axis replaced by each
+                           row's Option 3 contract (`|contract=[state throws ret
+                           entry]`, `prism.semantics.contract_axis`) and a Turn-1
+                           instruction to use the call hierarchy and the contracts.
 
 Per cell it records the Turn-1 request, and per task the deterministic
 candidate list, so it reports:
@@ -20,7 +24,8 @@ a) Turn-1 gold recall: gold candidates requested / gold candidates in the
 b) Turn-1 precision: requested gold / requested (the seed excluded);
 c) end-to-end forward F1 (`tasks.score_forward`, as the tournament);
 d) Jaccard of the Turn-1 requests and of the packed symbols, control vs
-   caps, per (task, seed).
+   caps and control vs contract, per (task, seed);
+e) the Turn-1 manifest's token count per arm (deterministic, per task).
 
     # model arms (an OpenAI-compatible endpoint, e.g. Ollama on Kaggle)
     PYTHONPATH=.:src python -m harness.experiments.layer4.atomic_caps_ablation --out OUT --seeds 42,43,44
@@ -40,8 +45,9 @@ from harness.experiments.layer4 import context as X
 from harness.experiments.layer4 import runner as R
 from harness.experiments.layer4 import tasks as T
 
-CONTROL, CAPS, RULE = "prism_full", "prism_atomic_caps", "prism_r0_rule_callers"
-ARMS = (CONTROL, CAPS, RULE)
+CONTROL, CAPS, RULE, CONTRACT = "prism_full", "prism_atomic_caps", "prism_r0_rule_callers", "prism_contract"
+ARMS = (CONTROL, CAPS, CONTRACT, RULE)
+EXPERIMENTAL = (CAPS, RULE, CONTRACT)
 
 
 def register_arms(out: Path) -> None:
@@ -49,11 +55,11 @@ def register_arms(out: Path) -> None:
     a copy of the cell schema whose `arm` enum also lists them (the
     tournament's own schema file is left alone)."""
     from benchmarks.final_sweep import config as C
-    C.STAGE2_ARMS.setdefault(CAPS, CAPS)
-    C.STAGE2_ARMS.setdefault(RULE, RULE)
+    for arm in EXPERIMENTAL:
+        C.STAGE2_ARMS.setdefault(arm, arm)
     schema = json.loads(Path(T.CELL_SCHEMA).read_text())
     enum = schema["properties"]["arm"]["enum"]
-    enum += [a for a in (CAPS, RULE) if a not in enum]
+    enum += [a for a in EXPERIMENTAL if a not in enum]
     path = out / "cell.schema.ablation.json"
     path.write_text(json.dumps(schema, indent=1) + "\n")
     T.CELL_SCHEMA = path
@@ -71,16 +77,41 @@ def manifest_rows(state, task: dict, cfg) -> dict[str, str]:
     return rows
 
 
+def manifest_tokens(state, task: dict, cfg) -> dict[str, int]:
+    """Token count of each arm's Turn-1 manifest text, built as `_two_pass_context` builds it."""
+    from benchmarks.final_sweep import config as C
+    from benchmarks.final_sweep.context_ops import (
+        annotate_manifest_atomic_capabilities, annotate_manifest_axes, annotate_manifest_contracts)
+    from prism.slicer.tokenizer import count_tokens
+    et = T.to_evaluation_task(task)
+    with state.lock:
+        text, _universe = state.prism.build_candidate_manifest(et.seed_symbol, direction="both", budget_tokens=cfg.budget)
+    out = {}
+    for arm in (CONTROL, CAPS, CONTRACT):
+        spec = C.resolve_arm(arm)
+        m = annotate_manifest_axes(text, state.feature_masks, spec.axes)
+        if spec.atomic_caps:
+            m = annotate_manifest_atomic_capabilities(m, state.capability_profiles())
+        if spec.contract_axis:
+            m = annotate_manifest_contracts(m, state.node_contracts())
+        out[arm] = count_tokens(m)
+    out["no_axes"] = count_tokens(text)
+    return out
+
+
 def task_static(corpus, task: dict, cfg) -> dict:
     from benchmarks.final_sweep.context_ops import caps_field
+    from prism.semantics.contract_axis import contract_field
     state = corpus.state
     seed = T.to_evaluation_task(task).seed_symbol
     rows = manifest_rows(state, task, cfg)
     gold = set(task["gold"]["affected_symbols"]) - {seed}
     profiles = state.capability_profiles()
     caps = {q: caps_field(profiles.get(q)) for q in rows}
+    contracts = state.node_contracts()
     return {"seed": seed, "rows": rows, "gold": sorted(gold), "gold_in_manifest": sorted(gold & set(rows)),
-            "caps": caps}
+            "caps": caps, "contracts": {q: contract_field(contracts.get(q)) for q in rows},
+            "manifest_tokens": manifest_tokens(state, task, cfg)}
 
 
 def run_arm_cell(corpus, task, arm, seed, cfg, client, pythons, node) -> dict:
@@ -140,15 +171,18 @@ def summarize(cells: list[dict], statics: dict) -> dict:
                      "recall": mean([x["recall"] for x in m]),
                      "per_task": {t: {"turn1_recall": mean([x["turn1_recall"] for x, c in zip(m, cs) if c["task_id"] == t]),
                                       "f1": mean([x["f1"] for x, c in zip(m, cs) if c["task_id"] == t])} for t in tasks}}
-    pairs = {}
     cell = {(c["arm"], c["task_id"], c["seed"]): c for c in cells if c["status"] in ("ok", "dry_run")}
+    pairs = {other: {} for other in (CAPS, CONTRACT)}
     for (arm, tid, seed), c in cell.items():
-        if arm != CONTROL or (CAPS, tid, seed) not in cell:
+        if arm != CONTROL:
             continue
-        o = cell[(CAPS, tid, seed)]
-        pairs[(tid, seed)] = {
-            "turn1": jaccard(set(c["detail"]["turn1"].get("requested") or []), set(o["detail"]["turn1"].get("requested") or [])),
-            "packed": jaccard(set(c["selected_symbols"]), set(o["selected_symbols"]))}
+        for other in (CAPS, CONTRACT):
+            if (other, tid, seed) not in cell:
+                continue
+            o = cell[(other, tid, seed)]
+            pairs[other][(tid, seed)] = {
+                "turn1": jaccard(set(c["detail"]["turn1"].get("requested") or []), set(o["detail"]["turn1"].get("requested") or [])),
+                "packed": jaccard(set(c["selected_symbols"]), set(o["selected_symbols"]))}
     within = []  # noise floor: the control against itself across seeds
     ctl = defaultdict(dict)
     for (arm, tid, seed), c in cell.items():
@@ -165,10 +199,13 @@ def summarize(cells: list[dict], statics: dict) -> dict:
                          "gold_rows": len(s["gold_in_manifest"]),
                          "gold_rows_with_caps": sum(s["caps"][q] != "caps=[]" for q in s["gold_in_manifest"]),
                          "distinct_caps": sorted({s["caps"][q] for q in with_caps})}
+    tokens = {arm: mean([s["manifest_tokens"][arm] for s in statics.values() if "manifest_tokens" in s])
+              for arm in (CONTROL, CAPS, CONTRACT, "no_axes")}
     return {"arms": arms,
-            "jaccard_control_vs_caps": {"pairs": len(pairs), "turn1": mean([p["turn1"] for p in pairs.values()]),
-                                        "packed": mean([p["packed"] for p in pairs.values()]),
-                                        "turn1_control_across_seeds": mean(within)},
+            "jaccard": {other: {"pairs": len(p), "turn1": mean([x["turn1"] for x in p.values()]),
+                                "packed": mean([x["packed"] for x in p.values()])} for other, p in pairs.items()},
+            "turn1_control_across_seeds": mean(within),
+            "manifest_tokens_mean": tokens,
             "caps_coverage": coverage,
             "caps_coverage_total": {k: sum(v[k] for v in coverage.values())
                                     for k in ("rows", "rows_with_caps", "gold_rows", "gold_rows_with_caps")}}
@@ -182,9 +219,10 @@ def render(s: dict) -> str:
     for arm, a in s["arms"].items():
         L.append(f"| `{arm}` | {a['cells']} | {f(a['turn1_gold_recall'])} | {f(a['turn1_lost_gold_per_cell_summed_over_tasks'])} | "
                  f"{f(a['turn1_precision'])} | {f(a['requested_per_cell'])} | {f(a['f1'])} | {f(a['precision'])} | {f(a['recall'])} |")
-    j = s["jaccard_control_vs_caps"]
-    L += ["", f"Jaccard, control vs caps (same task and seed, {j['pairs']} pairs): Turn-1 requests {f(j['turn1'])}, "
-          f"packed symbols {f(j['packed'])}; control vs itself across seeds (noise floor): {f(j['turn1_control_across_seeds'])}.",
+    L += [""] + [f"Jaccard, control vs {other} (same task and seed, {j['pairs']} pairs): Turn-1 requests "
+                 f"{f(j['turn1'])}, packed symbols {f(j['packed'])}." for other, j in s["jaccard"].items()]
+    L += [f"Control vs itself across seeds (noise floor): {f(s['turn1_control_across_seeds'])}.", "",
+          "Mean Turn-1 manifest tokens: " + ", ".join(f"{k} {v:.0f}" for k, v in s["manifest_tokens_mean"].items() if v),
           "", "## caps coverage of the manifest rows", "", "| task | rows | rows with caps | gold rows | gold rows with caps | distinct caps |",
           "|---|---|---|---|---|---|"]
     for tid, c in sorted(s["caps_coverage"].items()):

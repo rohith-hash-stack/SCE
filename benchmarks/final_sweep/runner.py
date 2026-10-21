@@ -55,7 +55,10 @@ from benchmarks.final_sweep.arms import (
 from benchmarks.final_sweep.context_ops import (
     TURN1_CAPS_GUIDANCE,
     TURN1_CAPS_ROW_FORMAT,
+    TURN1_CONTRACT_GUIDANCE,
+    TURN1_CONTRACT_ROW_FORMAT,
     annotate_manifest_atomic_capabilities,
+    annotate_manifest_contracts,
     annotate_manifest_axes,
     enforce_token_ceiling,
     inject_distractors,
@@ -84,13 +87,15 @@ from benchmarks.tsr.client import OpenAICompatibleClient, build_prompt
 from benchmarks.tsr.scorer_debug import ParseError, extract_flat_symbols, score_debug_causal
 
 
-def turn1_system_prompt(axes: C.AxisPolicy, atomic_caps: bool = False) -> str:
+def turn1_system_prompt(axes: C.AxisPolicy, atomic_caps: bool = False, contract_axis: bool = False) -> str:
     """`benchmarks.run_two_pass_benchmark.TURN1_SYSTEM_PROMPT` with its
     row-format sentence describing exactly the fields this arm's
     manifest carries. For `axes="none"` it is that prompt verbatim.
     `atomic_caps` (the Turn-1 micro-ablation arm) also describes the
-    `|caps=[...]` field and adds the instruction to use it."""
-    row_format = turn1_row_format(axes) + (TURN1_CAPS_ROW_FORMAT if atomic_caps else "")
+    `|caps=[...]` field and adds the instruction to use it; `contract_axis`
+    does the same for the `|contract=[...]` field."""
+    row_format = (turn1_row_format(axes) + (TURN1_CAPS_ROW_FORMAT if atomic_caps else "")
+                  + (TURN1_CONTRACT_ROW_FORMAT if contract_axis else ""))
     return (
         "You are a senior software engineer investigating a codebase. You will be given a compact "
         f"<candidate_index> - every symbol reachable from a seed function, one per line as {row_format}"
@@ -98,6 +103,7 @@ def turn1_system_prompt(axes: C.AxisPolicy, atomic_caps: bool = False) -> str:
         "complete causal execution path from the seed to termination. Request all necessary intermediate and "
         "helper symbols required to form an unbroken execution chain."
         + (TURN1_CAPS_GUIDANCE if atomic_caps else "")
+        + (TURN1_CONTRACT_GUIDANCE if contract_axis else "")
         + " Only name symbols that appear in the index - never invent one."
     )
 
@@ -393,6 +399,8 @@ def _two_pass_context(
     manifest = annotate_manifest_axes(manifest_text, corpus.feature_masks, spec.axes)
     if spec.atomic_caps:
         manifest = annotate_manifest_atomic_capabilities(manifest, corpus.capability_profiles())
+    if spec.contract_axis:
+        manifest = annotate_manifest_contracts(manifest, corpus.node_contracts())
     record.manifest_hash = sha256_text(manifest)
     record.manifest_candidate_count = len(universe)
 
@@ -413,7 +421,7 @@ def _two_pass_context(
         record.turn1_reused_from = "prism_full"
     else:
         call = client.complete(
-            cfg.model, turn1_system_prompt(spec.axes, spec.atomic_caps), _turn1_user_prompt(manifest, task.prompt),
+            cfg.model, turn1_system_prompt(spec.axes, spec.atomic_caps, spec.contract_axis), _turn1_user_prompt(manifest, task.prompt),
             temperature=cfg.temperature, max_tokens=cfg.max_tokens, seed=seed,
             task_id=task.task_id, engine=f"{spec.engine_id}/turn1", **sampler_kwargs(cfg, "turn1"),
         )

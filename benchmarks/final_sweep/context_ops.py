@@ -187,6 +187,35 @@ def annotate_manifest_atomic_capabilities(manifest_text: str, profiles: dict) ->
     return "\n".join(out)
 
 
+TURN1_CONTRACT_ROW_FORMAT = (
+    ", followed by |contract=[state=... throws=... ret=... entry=...]: the symbol's own statically extracted "
+    "contract - state is READ_ONLY or what its body (or a callee it forwards a parameter to) mutates: "
+    "MUTATES_SELF (its own object), MUTATES_ARGS (an object passed in as a parameter), MUTATES_GLOBAL (a "
+    "module-level object); throws lists the exceptions it raises with HTTP status codes in brackets, or NOTHROW; "
+    "ret is the kind of value it returns (NONE, BOOL, COLLECTION, OBJECT); entry=ROUTE marks a registered "
+    "request handler"
+)
+TURN1_CONTRACT_GUIDANCE = (
+    " Use both the AST call hierarchy and the contracts (contract) to identify which upstream/downstream "
+    "functions are causally relevant to the query."
+)
+
+
+def annotate_manifest_contracts(manifest_text: str, contracts: dict) -> str:
+    """Appends each candidate row's `|contract=[...]` field
+    (`prism.semantics.contract_axis.contract_field`); the
+    `<candidate_index>` wrapper lines pass through untouched."""
+    from prism.semantics.contract_axis import contract_field
+
+    out = []
+    for line in manifest_text.splitlines():
+        if not line or line.startswith("<"):
+            out.append(line)
+            continue
+        out.append(f"{line}|{contract_field(contracts.get(line.split('|', 1)[0]))}")
+    return "\n".join(out)
+
+
 def redact_package_axes(pkg: ContextPackage, policy: AxisPolicy) -> ContextPackage:
     """Applies the same axis policy to the Turn-2 context the manifest got,
     so an ablation can't leak the suppressed axis back in through the
