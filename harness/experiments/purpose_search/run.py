@@ -21,6 +21,9 @@ Usage:
       [--scope full|top:300] [--no-llm]
 REPO: fastapi | django (Q2E unseeded behavioural questions q09-q14)
       fastapi_template | styleguide (held-out set 2, 60 questions)
+      express | trpc (held-out set 3, 50 questions, JavaScript/TypeScript)
+FIELD w=... arms (--field-weights, default 0.5,1.0) score BM25(code) + w * BM25(summary)
+with the summary as an independent field.
 """
 from __future__ import annotations
 
@@ -45,7 +48,8 @@ from prism.query.nlq import BM25, NLQIndex, tokenize
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 Q2E = REPO_ROOT / "harness/experiments/query_to_evidence/dataset"
-SET2 = REPO_ROOT / "harness/experiments/heldout_retrieval/set2/dataset.json"
+HELD_OUT_SETS = tuple(REPO_ROOT / f"harness/experiments/heldout_retrieval/{s}/dataset.json" for s in ("set2", "set3"))
+HELD_OUT_REPOS = ("fastapi_template", "styleguide", "express", "trpc")
 POOL_TOP, POOL_EXPAND = 20, 8  # candidate pool: top-20 hits + resolved callees of the top-8
 
 SUMMARY_PROMPT = (
@@ -139,10 +143,12 @@ def load_repo(repo: str, apps_dir: str | None, sites_dir: str | None, out_dir: P
     else:
         from harness.experiments.heldout_retrieval.run import Corpus
         from prism.semantics.extractor import compute_feature_masks_cached
-        ds = json.loads(SET2.read_text())
+        ds = next(d for d in (json.loads(p.read_text()) for p in HELD_OUT_SETS) if repo in d["repos"])
         root = os.path.join(apps_dir, repo, ds["repos"][repo]["root"])
         store = out_dir / f"deps_summaries_{repo}.sqlite"
-        corpus = Corpus(repo, root, os.path.join(sites_dir, repo), str(store))
+        site = os.path.join(sites_dir, repo)
+        os.makedirs(site, exist_ok=True)  # JS/TS: dependency summaries are Python-only, the site stays empty
+        corpus = Corpus(repo, root, site, str(store))
         builder = corpus.builder
         masks = compute_feature_masks_cached(builder, root)
         questions = [{"id": q["id"], "question": q["question"], "gold": q["gold"], "subject": q["gold"][0]}
@@ -160,6 +166,30 @@ def augmented(nlq: NLQIndex, base_docs: list[list[str]], extra: dict[str, str] |
     v = NLQIndex.__new__(NLQIndex)
     v.__dict__.update(nlq.__dict__)
     v.bm25 = BM25([d + tokenize(extra.get(n, "")) for d, n in zip(base_docs, nlq.names)])
+    return v
+
+
+class FieldedBM25:
+    """`BM25.scores` over two independent fields: code + w * summary."""
+
+    def __init__(self, code: BM25, summary: BM25, weight: float):
+        self.code, self.summary, self.weight = code, summary, weight
+
+    def scores(self, query: list[str]) -> dict[int, float]:
+        out = dict(self.code.scores(query))
+        if not self.weight:  # w = 0 must not add summary-only matches at score 0
+            return out
+        for i, s in self.summary.scores(query).items():
+            out[i] = out.get(i, 0.0) + self.weight * s
+        return out
+
+
+def fielded(nlq: NLQIndex, summaries: dict[str, str], weight: float) -> NLQIndex:
+    """A copy of `nlq` scoring `BM25(code) + weight * BM25(summary)`; the
+    summary field has its own index (its own IDF and length norm)."""
+    v = NLQIndex.__new__(NLQIndex)
+    v.__dict__.update(nlq.__dict__)
+    v.bm25 = FieldedBM25(nlq.bm25, BM25([tokenize(summaries.get(n, "")) for n in nlq.names]), weight)
     return v
 
 
@@ -187,7 +217,9 @@ METRICS = ("recall@5", "recall@20", "pool_recall", "mrr")
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--repo", required=True, choices=("fastapi", "django", "fastapi_template", "styleguide"))
+    ap.add_argument("--repo", required=True, choices=("fastapi", "django") + HELD_OUT_REPOS)
+    ap.add_argument("--field-weights", default="0.5,1.0", type=lambda s: [float(x) for x in s.split(",") if x],
+                    help="summary-field weights w for FIELD arms: BM25(code) + w * BM25(summary)")
     ap.add_argument("--out-dir", required=True, type=Path)
     ap.add_argument("--backend", default="ollama", choices=("ollama", "gemini"))
     ap.add_argument("--model", default="qwen2.5-coder:7b-instruct-q8_0")
@@ -258,13 +290,15 @@ def main(argv=None) -> int:
                  + tokenize("\n".join(nlq._source(s.file)[s.line_range[0] - 1:s.line_range[1]])) for s in nlq.pool]
     variants = {"BASE": None, "+RES": {q: " ".join(r) for q, r in res.items()}, "+SUM": summ,
                 "+SUM+RES": {q: summ.get(q, "") + " " + " ".join(res.get(q, [])) for q in fns}}
+    indexes = {name: augmented(nlq, base_docs, extra) for name, extra in variants.items()}
+    for w in args.field_weights:  # frozen before the run
+        indexes[f"FIELD w={w}"] = fielded(nlq, summ, w)
     search = {}
-    for name, extra in variants.items():
-        idx = augmented(nlq, base_docs, extra)
-        rows = [{"id": q["id"], **score(builder, base_rank[q["id"]] if extra is None else idx.ranked(q["question"]), q["gold"]),
-                 "subject": q["subject"]} for q in questions]
+    for name, idx in indexes.items():
+        rows = [{"id": q["id"], **score(builder, base_rank[q["id"]] if name == "BASE" else idx.ranked(q["question"]),
+                                        q["gold"]), "subject": q["subject"]} for q in questions]
         search[name] = {"per_question": rows, **{m: round(st.mean(r[m] for r in rows), 3) for m in METRICS}}
-        print(f"[{args.repo}] {name:9} " + " ".join(f"{m} {search[name][m]:.3f}" for m in METRICS), flush=True)
+        print(f"[{args.repo}] {name:13} " + " ".join(f"{m} {search[name][m]:.3f}" for m in METRICS), flush=True)
 
     # ---- direct metric: query matching on the summaries alone -------------
     names = [q for q in fns if q in summ]
