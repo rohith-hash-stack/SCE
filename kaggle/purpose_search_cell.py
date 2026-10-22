@@ -1,5 +1,8 @@
 # ============================================================
 # PRISM purpose-enriched search - Kaggle, self-contained cell
+# This configuration: OUT-OF-SAMPLE validation on held-out set 3 (express +
+# trpc, 50 JavaScript/TypeScript questions) with the summary-field weights
+# frozen at FIELD_WEIGHTS (read off set 2 and Q2E before set 3 was run).
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
 #
@@ -18,8 +21,8 @@
 # Checks out CODE_COMMIT of BRANCH and verifies its tree hashes. Results and
 # the summary caches are pushed to RESULTS_PATH on BRANCH after each repo
 # from a separate clean worktree; re-running resumes from the pushed caches.
-# Expected time on T4 x2: about 2-2.5 h, almost all of it Django's ~14.9k
-# functions.
+# Expected time on T4 x2: set 3 (~1.4k functions) about 15-25 min plus
+# setup; the full set-2 + Q2E run was about 2-2.5 h (Django ~14.9k).
 # ============================================================
 
 import json
@@ -32,9 +35,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "d7e9d60426f70a1ebb61b9868a296e9fb1b66e53"
+CODE_COMMIT = "b5707b9795e72e6c450d64c7c38ab1e17e2c663e"
 CODE_TREES = {"src": "36c9fb5fb938051c6ddea3e8ddad272459f8bf27",
-              "harness": "6bdcd4d8cd695c7c9bb1b3edfa3c304f504d9edd",
+              "harness": "d84ee5be63be86a617f24ae2dfbeb0efe467f8b0",
               "benchmarks": "293edfba1be06149afde2250d3d91a26386598cf"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
@@ -42,14 +45,15 @@ SUMMARIZER = "qwen2.5-coder:7b-instruct-q8_0"
 OLLAMA_VERSION = "0.34.0"
 PORTS = (11434, 11435)          # one Ollama server per T4
 PARALLEL_PER_SERVER = 2
-REPOS = ("fastapi_template", "styleguide", "fastapi", "django")  # cheapest first
+REPOS = ("express", "trpc")     # set 3; the set-2 / Q2E run used ("fastapi_template", "styleguide", "fastapi", "django")
+FIELD_WEIGHTS = "0.5,1.0"       # frozen: never tuned on set 3
 SCOPE = {"django": "full"}      # e.g. {"django": "top:300"} for the cheaper re-rank design
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
 APPS_DIR = f"{WORK}/apps"
 SITES_DIR = f"{WORK}/sites"
-RESULTS_PATH = "reports/purpose_search"
+RESULTS_PATH = "reports/purpose_search_set3"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 
@@ -196,15 +200,17 @@ child_env.pop("GITHUB_TOKEN", None)
 run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_purpose_search.py"],
     cwd=SCE_DIR, env=child_env, check=True)
 
-print("\n[setup 6/8] Q2E corpora (fastapi, django)", flush=True)
-for c in ("fastapi", "django"):
+print("\n[setup 6/8] Q2E corpora", flush=True)
+for c in [r for r in REPOS if r in ("fastapi", "django")]:
     root = run([sys.executable, "-c", f"from benchmarks.corpora.resolver import resolve; print(resolve({c!r}))"],
                cwd=SCE_DIR, env=child_env, capture=True, check=True).stdout.strip().splitlines()[-1]
     print(f"[ok] {c}: {root}", flush=True)
 
-print("\n[setup 7/8] Held-out set 2 repos at their pinned commits + pinned dependencies", flush=True)
-ds = json.load(open(f"{SCE_DIR}/harness/experiments/heldout_retrieval/set2/dataset.json"))
-for repo, spec in ds["repos"].items():
+print("\n[setup 7/8] Held-out repos at their pinned commits + pinned dependencies", flush=True)
+HELD_OUT = {}
+for s in ("set2", "set3"):
+    HELD_OUT.update(json.load(open(f"{SCE_DIR}/harness/experiments/heldout_retrieval/{s}/dataset.json"))["repos"])
+for repo, spec in [(r, HELD_OUT[r]) for r in REPOS if r in HELD_OUT]:
     dst = os.path.join(APPS_DIR, repo)
     if not os.path.isdir(f"{dst}/.git"):
         run(["git", "clone", "-q", spec["url"], dst], check=True, env=GIT_ENV)
@@ -213,8 +219,10 @@ for repo, spec in ds["repos"].items():
     if head != spec["commit"]:
         abort(f"{repo} at {head}, expected {spec['commit']}")
     site = os.path.join(SITES_DIR, repo)
-    if not os.path.isdir(site):
-        lock = f"{SCE_DIR}/harness/experiments/purpose_search/locks/{repo}.txt"
+    lock = f"{SCE_DIR}/harness/experiments/purpose_search/locks/{repo}.txt"
+    if not os.path.exists(lock):  # JS/TS: dependency summaries are Python-only, the site stays empty
+        os.makedirs(site, exist_ok=True)
+    elif not os.path.isdir(site):
         r = run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "--target", site, "-r", lock], check=False)
         if r.returncode != 0:  # install what can be installed; a missing package only thins dependency summaries
             for line in open(lock).read().split():
@@ -232,8 +240,9 @@ START = time.time()
 for repo in REPOS:
     cmd = [sys.executable, "-m", "harness.experiments.purpose_search.run", "--repo", repo, "--out-dir", OUT,
            "--backend", "ollama", "--model", SUMMARIZER, "--base-urls", BASE_URLS,
-           "--threads", str(len(PORTS) * PARALLEL_PER_SERVER), "--scope", SCOPE.get(repo, "full")]
-    if repo in ds["repos"]:
+           "--threads", str(len(PORTS) * PARALLEL_PER_SERVER), "--scope", SCOPE.get(repo, "full"),
+           "--field-weights", FIELD_WEIGHTS]
+    if repo in HELD_OUT:
         cmd += ["--apps-dir", APPS_DIR, "--sites-dir", SITES_DIR]
     print(f"\n[run] {repo}", flush=True)
     r = run(cmd, cwd=SCE_DIR, env=child_env, check=False)
