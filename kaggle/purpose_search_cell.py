@@ -157,9 +157,16 @@ for port in PORTS:
     else:
         abort(f"ollama on port {port} not responding (see {WORK}/ollama_{port}.log)")
 first = dict(os.environ, OLLAMA_HOST=f"127.0.0.1:{PORTS[0]}")
-if SUMMARIZER not in (run(["ollama", "list"], capture=True, env=first).stdout or ""):
-    if run(["ollama", "pull", SUMMARIZER], check=False, env=first).returncode != 0:
-        abort(f"could not pull {SUMMARIZER}")
+for attempt in range(8):  # the registry can return transient 503s / connection timeouts
+    if SUMMARIZER in (run(["ollama", "list"], capture=True, env=first).stdout or ""):
+        break
+    if run(["ollama", "pull", SUMMARIZER], check=False, env=first).returncode == 0:
+        break
+    wait = min(15 * 2 ** attempt, 240)
+    print(f"[retry] pull failed (attempt {attempt + 1}/8), waiting {wait}s", flush=True)
+    time.sleep(wait)
+else:
+    abort(f"could not pull {SUMMARIZER} after 8 attempts")
 BASE_URLS = ",".join(f"http://127.0.0.1:{p}" for p in PORTS)
 for port in PORTS:  # warm both servers (loads the model onto each GPU)
     req = urllib.request.Request(f"http://127.0.0.1:{port}/api/chat", data=json.dumps({
