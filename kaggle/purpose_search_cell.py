@@ -3,9 +3,10 @@
 # This configuration: held-out set 3 (express + trpc, 50 JavaScript/TypeScript
 # questions), 14B summarizer, card/prompt VARIANT v2 (no axes line in the
 # card, plain-English prompt that forbids identifiers, callee lists, axis
-# labels and filler). First a lint gate: the 43 worst v1 offenders
+# labels and filler), plus a lint-repair pass (a flagged summary is rewritten
+# with its problems named). First a lint gate: the 43 worst v1 offenders
 # (purpose_search/lint_sample.json) are summarized and the run stops if any
-# lint rate exceeds LINT_GATE. FIELD_WEIGHTS stay frozen at 0.5,1.0. Set 3
+# post-repair lint rate exceeds LINT_GATE. FIELD_WEIGHTS stay frozen at 0.5,1.0. Set 3
 # was already seen twice (7B, 14B v1): a diagnostic, not a fresh validation.
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
@@ -40,9 +41,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "630f8ce065f18470faee01bdd99c1f8f82303aed"
+CODE_COMMIT = "7da2113d5c6f5a072606d274ca1afc32e283ff79"
 CODE_TREES = {"src": "36c9fb5fb938051c6ddea3e8ddad272459f8bf27",
-              "harness": "3cd485606dd780957d7474b95a1e31c0e3aa6cd3",
+              "harness": "997d6fb74613e84f2f1b2d18b799162d35c5a49f",
               "benchmarks": "293edfba1be06149afde2250d3d91a26386598cf"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
@@ -267,9 +268,13 @@ gate = {}
 for repo in [r for r in REPOS if r in sample]:
     run(run_args(repo) + ["--only", ",".join(sample[repo])], cwd=SCE_DIR, env=child_env, check=True)
     gate[repo] = json.load(open(os.path.join(OUT, f"{repo}_only.json")))
-    print(f"[gate] {repo}: {gate[repo]['lint']}", flush=True)
+    print(f"[gate] {repo}: first pass {gate[repo]['lint_first_pass']}, repaired {gate[repo]['repaired']}, "
+          f"final {gate[repo]['lint']}", flush=True)
     for q, v in list(gate[repo]["summaries"].items())[:5]:
         print(f"    {q.rsplit('.', 1)[-1]}: {v['summary']}", flush=True)
+    for q, v in gate[repo]["summaries"].items():
+        if v.get("first_pass") and v["first_pass"] != v["summary"]:
+            print(f"    repaired {q.rsplit('.', 1)[-1]}: {v['first_pass']!r} -> {v['summary']!r}", flush=True)
 bad = {f"{r}.{k}": v for r, g in gate.items() for k, v in g["lint"].items() if k not in ("any", "n") and v > LINT_GATE}
 if bad:
     push_results(f"Purpose-enriched search: lint gate FAILED {bad} @ {CODE_COMMIT[:7]} ({SUMMARIZER}, {VARIANT})")
