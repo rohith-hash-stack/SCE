@@ -1,13 +1,15 @@
 # ============================================================
 # PRISM purpose-enriched search - Kaggle, self-contained cell
-# This configuration: held-out set 3 (express + trpc, 50 JavaScript/TypeScript
-# questions), 14B summarizer, card/prompt VARIANT v2 (no axes line in the
-# card, plain-English prompt that forbids identifiers, callee lists, axis
-# labels and filler), plus a lint-repair pass (a flagged summary is rewritten
-# with its problems named). First a lint gate: the 43 worst v1 offenders
+# This configuration: Python regression of the LOCKED candidate
+# (harness/experiments/purpose_search/CANDIDATE.md: 14B summarizer, card/prompt
+# VARIANT v2, lint-repair pass, FIELD_WEIGHTS 0.5 + 1.0) on held-out set 2
+# (fastapi_template, styleguide: 60 questions) and the Q2E unseeded questions
+# (fastapi, django: q09-q14; q11 and q13 are the ones to read). Django is the
+# full index (~14.9k functions); the summary cache is pushed every
+# CHECKPOINT_MIN minutes, so a re-run resumes where a lost session stopped.
+# First a lint gate: the worst earlier offenders per repo
 # (purpose_search/lint_sample.json) are summarized and the run stops if any
-# post-repair lint rate exceeds LINT_GATE. FIELD_WEIGHTS stay frozen at 0.5,1.0. Set 3
-# was already seen twice (7B, 14B v1): a diagnostic, not a fresh validation.
+# post-repair lint rate exceeds LINT_GATE.
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
 #
@@ -26,9 +28,8 @@
 # Checks out CODE_COMMIT of BRANCH and verifies its tree hashes. Results and
 # the summary caches are pushed to RESULTS_PATH on BRANCH after each repo
 # from a separate clean worktree; re-running resumes from the pushed caches.
-# Expected time on T4 x2: set 3 (~1.4k functions) with the 14B about 35-45 min
-# plus setup (the 7B took ~10 min of LLM time); the full set-2 + Q2E run with
-# the 7B was about 2-2.5 h (Django ~14.9k).
+# Expected time on T4 x2 with the 14B: about 3 h (Django ~2.3 h at the ~1.8
+# functions/s measured on set 3, plus FastAPI, set 2, index loads and the gate).
 # ============================================================
 
 import json
@@ -41,9 +42,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "7da2113d5c6f5a072606d274ca1afc32e283ff79"
+CODE_COMMIT = "51e230b4ce97be35e1d8aa70fcca05e54946e747"
 CODE_TREES = {"src": "36c9fb5fb938051c6ddea3e8ddad272459f8bf27",
-              "harness": "997d6fb74613e84f2f1b2d18b799162d35c5a49f",
+              "harness": "a7af4cc65172b199bf443a86a70f8d9f148fe3b2",
               "benchmarks": "293edfba1be06149afde2250d3d91a26386598cf"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
@@ -54,8 +55,9 @@ OLLAMA_VERSION = "0.34.0"
 PORTS = (11434,)
 GPU_GROUPS = ("0,1",)
 PARALLEL_PER_SERVER = 2
-REPOS = ("express", "trpc")     # set 3; the set-2 / Q2E run used ("fastapi_template", "styleguide", "fastapi", "django")
-FIELD_WEIGHTS = "0.5,1.0"       # frozen: never tuned on set 3
+REPOS = ("fastapi_template", "styleguide", "fastapi", "django")  # Python regression; set 3 used ("express", "trpc")
+FIELD_WEIGHTS = "0.5,1.0"       # locked: 0.5 primary, 1.0 high-MRR (harness/experiments/purpose_search/CANDIDATE.md)
+CHECKPOINT_MIN = 20             # push the summary cache this often while a repo runs (resume point)
 VARIANT = "v2"                  # card + prompt version; the earlier runs were v1
 LINT_GATE = 0.05                # max share of gate-sample summaries per lint flag
 SCOPE = {"django": "full"}      # e.g. {"django": "top:300"} for the cheaper re-rank design
@@ -64,7 +66,7 @@ SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
 APPS_DIR = f"{WORK}/apps"
 SITES_DIR = f"{WORK}/sites"
-RESULTS_PATH = "reports/purpose_search_set3_14b_v2"
+RESULTS_PATH = "reports/purpose_search_py_14b_v2"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 
@@ -285,8 +287,14 @@ START = time.time()
 for repo in REPOS:
     cmd = run_args(repo)
     print(f"\n[run] {repo}", flush=True)
-    r = run(cmd, cwd=SCE_DIR, env=child_env, check=False)
-    print(f"[run] {repo} exit {r.returncode} after {(time.time() - START) / 60:.0f} min", flush=True)
+    proc = subprocess.Popen(cmd, cwd=SCE_DIR, env=child_env)
+    last_push = time.time()
+    while proc.poll() is None:  # long repos (Django): checkpoint the summary cache while it runs
+        time.sleep(30)
+        if time.time() - last_push > CHECKPOINT_MIN * 60:
+            push_results(f"Purpose-enriched search: {repo} checkpoint @ {CODE_COMMIT[:7]} ({SUMMARIZER}, {VARIANT})")
+            last_push = time.time()
+    print(f"[run] {repo} exit {proc.returncode} after {(time.time() - START) / 60:.0f} min", flush=True)
     run([sys.executable, "-m", "harness.experiments.purpose_search.summarize", OUT], cwd=SCE_DIR, env=child_env,
         check=False, capture=True)
     push_results(f"Purpose-enriched search: {repo} @ {CODE_COMMIT[:7]} ({SUMMARIZER}, {VARIANT})")
