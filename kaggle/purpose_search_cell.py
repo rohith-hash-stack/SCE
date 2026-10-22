@@ -9,7 +9,8 @@
 # CHECKPOINT_MIN minutes, so a re-run resumes where a lost session stopped.
 # First a lint gate: the worst earlier offenders per repo
 # (purpose_search/lint_sample.json) are summarized and the run stops if any
-# post-repair lint rate exceeds LINT_GATE.
+# post-repair lint rate exceeds LINT_GATE pooled over the repos (or
+# LINT_GATE_REPO in any one repo).
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
 #
@@ -59,7 +60,8 @@ REPOS = ("fastapi_template", "styleguide", "fastapi", "django")  # Python regres
 FIELD_WEIGHTS = "0.5,1.0"       # locked: 0.5 primary, 1.0 high-MRR (harness/experiments/purpose_search/CANDIDATE.md)
 CHECKPOINT_MIN = 20             # push the summary cache this often while a repo runs (resume point)
 VARIANT = "v2"                  # card + prompt version; the earlier runs were v1
-LINT_GATE = 0.05                # max share of gate-sample summaries per lint flag
+LINT_GATE = 0.05                # max share of all gate-sample summaries (pooled over repos) per lint flag
+LINT_GATE_REPO = 0.15           # max share in any one repo's gate sample (~15 cards: 1 miss = 6.7%)
 SCOPE = {"django": "full"}      # e.g. {"django": "top:300"} for the cheaper re-rank design
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
@@ -277,11 +279,16 @@ for repo in [r for r in REPOS if r in sample]:
     for q, v in gate[repo]["summaries"].items():
         if v.get("first_pass") and v["first_pass"] != v["summary"]:
             print(f"    repaired {q.rsplit('.', 1)[-1]}: {v['first_pass']!r} -> {v['summary']!r}", flush=True)
-bad = {f"{r}.{k}": v for r, g in gate.items() for k, v in g["lint"].items() if k not in ("any", "n") and v > LINT_GATE}
+flags = ("axis_label", "filler", "identifier", "callee_list")
+total = sum(g["lint"]["n"] for g in gate.values()) or 1
+pooled = {k: round(sum(g["lint"][k] * g["lint"]["n"] for g in gate.values()) / total, 3) for k in flags}
+print(f"[gate] pooled over {total} summaries: {pooled}", flush=True)
+bad = {f"pooled.{k}": v for k, v in pooled.items() if v > LINT_GATE}
+bad.update({f"{r}.{k}": g["lint"][k] for r, g in gate.items() for k in flags if g["lint"][k] > LINT_GATE_REPO})
 if bad:
     push_results(f"Purpose-enriched search: lint gate FAILED {bad} @ {CODE_COMMIT[:7]} ({SUMMARIZER}, {VARIANT})")
-    abort(f"lint gate failed (> {LINT_GATE}): {bad} - see {RESULTS_PATH}/<repo>_only.json")
-print(f"[gate] passed (every lint rate <= {LINT_GATE})", flush=True)
+    abort(f"lint gate failed (pooled > {LINT_GATE} or a repo > {LINT_GATE_REPO}): {bad} - see {RESULTS_PATH}/<repo>_only.json")
+print(f"[gate] passed (pooled <= {LINT_GATE}, every repo <= {LINT_GATE_REPO})", flush=True)
 
 START = time.time()
 for repo in REPOS:
