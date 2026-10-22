@@ -12,7 +12,7 @@ after it is frozen, and nothing in the candidate changes after seeing it.
 | `fastify/fastify` | JavaScript | v5.6.1 (`91414fe`) | `.` | 922 | fy01-fy12 |
 | `colinhacks/zod` | TypeScript | v3.23.8 (`ca42965`) | `src` | 373 | zd01-zd12 |
 
-Categories: 31 feature_logic, 9 io_sink, 8 routing (zod is all feature_logic:
+Categories: 33 feature_logic, 9 io_sink, 6 routing (zod is all feature_logic:
 it has no I/O or routing).
 
 ## How it was written
