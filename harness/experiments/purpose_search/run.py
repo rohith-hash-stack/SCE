@@ -223,6 +223,13 @@ def fielded(nlq: NLQIndex, summaries: dict[str, str], weight: float) -> NLQIndex
     return v
 
 
+def _atomic_write(path: Path, text: str) -> None:
+    """Write via a temp file + rename, so a checkpoint copy never sees half a cache."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
 def candidate_pool(builder, ranked: list[str]) -> list[str]:
     fn = lambda q: (s := builder.symbol_table.get(q)) is not None and s.kind in ("function", "method")
     pool = [h for h in ranked[:POOL_TOP] if fn(h)]
@@ -315,7 +322,7 @@ def main(argv=None) -> int:
                 for q, s in got.items():
                     cache[q] = {"key": key(q), "summary": s}
                 if i % 25 == 0 or i == len(batches):
-                    cache_path.write_text(json.dumps(cache))
+                    _atomic_write(cache_path, json.dumps(cache))
                     print(f"[{args.repo}] summarized {i}/{len(batches)} batches, {time.time() - synth_t:.0f}s, "
                           f"usage {llm.usage}", flush=True)
     synth_s = time.time() - synth_t
@@ -347,7 +354,7 @@ def main(argv=None) -> int:
                     cache[q] = {"key": key(q), "summary": new, "raw": cache[q].get("raw", summ[q])}
                     summ[q] = new
                     repaired += 1
-        cache_path.write_text(json.dumps(cache))
+        _atomic_write(cache_path, json.dumps(cache))
     lint = lint_rates((summ[q], cards[q]["card"]) for q in summ)
     print(f"[{args.repo}] summaries {len(summ)}/{len(cards)}; lint first pass {lint_first}; repaired {repaired}; "
           f"lint final {lint}", flush=True)

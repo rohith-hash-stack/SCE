@@ -49,7 +49,25 @@ def render(results: dict[str, dict]) -> str:
                 pools = [per[a][q["id"]]["pool_recall"] for a in shown]
                 L.append(f"| {q['id']} | `{q['subject']}` | {' / '.join(str(x) if x else '-' for x in ranks)} | "
                          f"{' / '.join(f'{p:.2f}' for p in pools)} |")
-        L += ["", "Full gold ranks per arm are in `<repo>.json` (`search.<arm>.per_question[].ranks`).", ""]
+        L += ["", "Every gold symbol's rank per arm (`-` = not ranked):", "",
+              f"| question | gold symbol | {' | '.join(shown)} |", "|---|---|" + "---|" * len(shown)]
+        for r in q2e:
+            per = {arm: {q["id"]: q for q in r["search"][arm]["per_question"]} for arm in arms}
+            for q in r["questions"]:
+                for g in q["gold"]:
+                    L.append(f"| {q['id']} | `{g}` | " + " | ".join(
+                        str(per[a][q["id"]]["ranks"].get(g) or "-") for a in shown) + " |")
+        L.append("")
+    lints = {r["repo"]: r for r in results.values() if r.get("lint")}
+    if lints:
+        L += ["## Summary lint (share of summaries flagged)", "",
+              "| repo | first pass: axis / filler / identifier / callee list / any | repaired | final: any |",
+              "|---|---|---|---|"]
+        for name, r in lints.items():
+            fp, fin = r.get("lint_first_pass") or r["lint"], r["lint"]
+            L.append(f"| {name} | {' / '.join(f(fp.get(k)) for k in ('axis_label', 'filler', 'identifier', 'callee_list', 'any'))}"
+                     f" | {r.get('repaired', 0)} | {f(fin.get('any'))} |")
+        L.append("")
     L += ["## Direct metrics (summaries alone)", "",
           "| repo | functions summarized | identifiability (summary / docstring on its subset / chance) | "
           "query matching hit@1 / hit@5 / hit@20 / mrr |", "|---|---|---|---|"]
