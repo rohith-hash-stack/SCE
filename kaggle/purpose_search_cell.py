@@ -1,13 +1,15 @@
 # ============================================================
 # PRISM purpose-enriched search - Kaggle, self-contained cell
-# This configuration: OUT-OF-SAMPLE validation on held-out set 3 (express +
-# trpc, 50 JavaScript/TypeScript questions) with the summary-field weights
-# frozen at FIELD_WEIGHTS (read off set 2 and Q2E before set 3 was run).
+# This configuration: held-out set 3 (express + trpc, 50 JavaScript/TypeScript
+# questions) re-summarized with the 14B model. Only the summarizer changes
+# from the 7B set-3 run (reports/purpose_search_set3): same cards, prompt,
+# code commit and frozen FIELD_WEIGHTS. Set 3 was already seen once, so this
+# is a diagnostic of summarizer quality, not a fresh validation.
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
 #
 # Summarizer: a local open-weight model (SUMMARIZER, Ollama), one server per
-# T4, no API quota. For every function/method in NLQIndex's candidate pool a
+# GPU group (GPU_GROUPS), no API quota. For every function/method in NLQIndex's candidate pool a
 # context card (harness/experiments/purpose_search/cards.py) is summarized in
 # batches of 12 with the same prompt as the earlier Gemini run; then
 #   held-out set 2 (60 questions): fastapi_template + styleguide
@@ -21,8 +23,9 @@
 # Checks out CODE_COMMIT of BRANCH and verifies its tree hashes. Results and
 # the summary caches are pushed to RESULTS_PATH on BRANCH after each repo
 # from a separate clean worktree; re-running resumes from the pushed caches.
-# Expected time on T4 x2: set 3 (~1.4k functions) about 15-25 min plus
-# setup; the full set-2 + Q2E run was about 2-2.5 h (Django ~14.9k).
+# Expected time on T4 x2: set 3 (~1.4k functions) with the 14B about 35-45 min
+# plus setup (the 7B took ~10 min of LLM time); the full set-2 + Q2E run with
+# the 7B was about 2-2.5 h (Django ~14.9k).
 # ============================================================
 
 import json
@@ -41,9 +44,12 @@ CODE_TREES = {"src": "36c9fb5fb938051c6ddea3e8ddad272459f8bf27",
               "benchmarks": "293edfba1be06149afde2250d3d91a26386598cf"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
-SUMMARIZER = "qwen2.5-coder:7b-instruct-q8_0"
+SUMMARIZER = "qwen2.5-coder:14b-instruct-q8_0"   # the 7B set-3 run used qwen2.5-coder:7b-instruct-q8_0
 OLLAMA_VERSION = "0.34.0"
-PORTS = (11434, 11435)          # one Ollama server per T4
+# 14B q8_0 (~15.7 GB) does not fit one 16 GB T4: one server across both GPUs.
+# The 7B runs used PORTS = (11434, 11435), GPU_GROUPS = ("0", "1") - one server per T4.
+PORTS = (11434,)
+GPU_GROUPS = ("0,1",)
 PARALLEL_PER_SERVER = 2
 REPOS = ("express", "trpc")     # set 3; the set-2 / Q2E run used ("fastapi_template", "styleguide", "fastapi", "django")
 FIELD_WEIGHTS = "0.5,1.0"       # frozen: never tuned on set 3
@@ -53,7 +59,7 @@ SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
 APPS_DIR = f"{WORK}/apps"
 SITES_DIR = f"{WORK}/sites"
-RESULTS_PATH = "reports/purpose_search_set3"
+RESULTS_PATH = "reports/purpose_search_set3_14b"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 
@@ -136,8 +142,8 @@ if subprocess.run(["which", "ollama"], capture_output=True).returncode != 0:
         "-o /tmp/ollama.tar.zst", check=True)
     run("tar -I zstd -xf /tmp/ollama.tar.zst -C /usr/local", check=True)
     run("chmod 755 /usr/local/bin/ollama", check=True)
-for gpu_index, port in enumerate(PORTS):
-    env = dict(os.environ, OLLAMA_HOST=f"127.0.0.1:{port}", CUDA_VISIBLE_DEVICES=str(gpu_index), OLLAMA_KEEP_ALIVE="4h",
+for port, gpus in zip(PORTS, GPU_GROUPS):
+    env = dict(os.environ, OLLAMA_HOST=f"127.0.0.1:{port}", CUDA_VISIBLE_DEVICES=gpus, OLLAMA_KEEP_ALIVE="4h",
                OLLAMA_NUM_PARALLEL=str(PARALLEL_PER_SERVER), OLLAMA_FLASH_ATTENTION="1", OLLAMA_KV_CACHE_TYPE="q8_0",
                OLLAMA_MAX_LOADED_MODELS="1", OLLAMA_CONTEXT_LENGTH="8192")
     try:  # already serving (a re-run of this cell)?
