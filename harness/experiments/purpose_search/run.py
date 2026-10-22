@@ -44,6 +44,7 @@ import urllib.request
 from pathlib import Path
 
 from harness.experiments.purpose_search.cards import build_card, resources
+from harness.experiments.purpose_search.lint import rates as lint_rates
 from prism.query.nlq import BM25, NLQIndex, tokenize
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -52,7 +53,8 @@ HELD_OUT_SETS = tuple(REPO_ROOT / f"harness/experiments/heldout_retrieval/{s}/da
 HELD_OUT_REPOS = ("fastapi_template", "styleguide", "express", "trpc")
 POOL_TOP, POOL_EXPAND = 20, 8  # candidate pool: top-20 hits + resolved callees of the top-8
 
-SUMMARY_PROMPT = (
+#: v1: the card with the Architectural Axes line + this prompt (the set-2 / Q2E / set-3 runs).
+SUMMARY_PROMPT_V1 = (
     "You are an expert software architect analyzing a code context graph.\n"
     "Below are the structural profiles and neighborhoods of {n} functions, separated by '---'.\n\n{cards}\n\n"
     "Task: For EACH function, write a precise, high-density behavioral summary in 8 to 14 words.\n"
@@ -62,6 +64,25 @@ SUMMARY_PROMPT = (
     "Only reference entities, protocols, and mechanisms explicitly present in the context card or signature; do not "
     "assume specific business domains.\n"
     "Respond with a JSON object mapping each Qualified Name exactly as given to its summary.")
+#: v2: the card without the axes line + this prompt. v1's summaries copied axis labels and code
+#: identifiers, and dumped callee names (`lint.py`); v2 asks for plain-English behaviour in the
+#: words a developer would use when asking about it.
+SUMMARY_PROMPT_V2 = (
+    "You are an expert software architect describing functions for a code search index.\n"
+    "Below are the structural profiles of {n} functions, separated by '---'.\n\n{cards}\n\n"
+    "For EACH function write one plain-English sentence of 8 to 14 words saying what it does and how, in the words "
+    "a developer would use when asking about this behaviour.\n"
+    "Rules:\n"
+    "1. No code identifiers: no function, method, class, variable, module or file names, and no backticks, dots, "
+    "underscores, camelCase or parentheses.\n"
+    "2. Do not list the functions it calls; say in ordinary words what they achieve together.\n"
+    "3. Do not simply restate the function's name; describe its behaviour.\n"
+    "4. No internal analysis labels or filler, such as 'pure compute', 'no effect', 'leaf utility' or 'no return'.\n"
+    "5. Only describe behaviour, protocols and data present in the profile; do not assume business domains.\n"
+    "Example - bad: \"Loads config via os.environ.get, json.loads, no effect.\" "
+    "good: \"Reads settings from environment variables and parses them as JSON.\"\n"
+    "Respond with a JSON object mapping each Qualified Name exactly as given to its sentence.")
+VARIANTS = {"v1": (True, SUMMARY_PROMPT_V1), "v2": (False, SUMMARY_PROMPT_V2)}  # variant -> (card axes, prompt)
 IDENT_PROMPT = (
     "Below is a one-line {what} of exactly one of the listed functions. Which function does it describe?\n"
     "{what_cap}: {text}\n\nCandidates (same class or module):\n{cands}\n\n"
@@ -230,6 +251,9 @@ def main(argv=None) -> int:
     ap.add_argument("--batch", type=int, default=12)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--identify-sample", type=int, default=40)
+    ap.add_argument("--variant", default="v2", choices=sorted(VARIANTS),
+                    help="card + summary prompt version (v1: the earlier runs; v2: no axes line, plain-English prompt)")
+    ap.add_argument("--only", help="comma-separated qualified names: summarize and lint just these, skip evaluation")
     ap.add_argument("--no-llm", action="store_true")
     args = ap.parse_args(argv)
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -250,21 +274,25 @@ def main(argv=None) -> int:
     print(f"[{args.repo}] pool {len(nlq.pool)}, functions {len(fns)}, in scope ({args.scope}) {len(scope_fns)}, "
           f"questions {len(questions)}, loaded in {load_s:.0f}s", flush=True)
 
-    cards = {q: c for q in scope_fns if (c := build_card(builder, masks, entries, q))}
+    with_axes, prompt = VARIANTS[args.variant]
+    if args.only:
+        scope_fns = [q for q in args.only.split(",") if q]
+    cards = {q: c for q in scope_fns if (c := build_card(builder, masks, entries, q, axes=with_axes))}
     res = {q: resources(builder, q) for q in fns}
     cache_path = args.out_dir / f"summary_cache_{args.repo}.json"
     cache = json.loads(cache_path.read_text()) if cache_path.exists() else {}
-    key = lambda q: hashlib.sha1((args.model + "\n" + cards[q]["card"]).encode()).hexdigest()[:16]
+    key = lambda q: hashlib.sha1(((args.model + "\n" + cards[q]["card"]) if args.variant == "v1" else  # v1 keys unchanged
+                                  (args.model + "\n" + args.variant + "\n" + prompt + "\n" + cards[q]["card"])).encode()).hexdigest()[:16]
     todo = [q for q in cards if cache.get(q, {}).get("key") != key(q)]
     print(f"[{args.repo}] cards {len(cards)}; to summarize {len(todo)} (cached {len(cards) - len(todo)})", flush=True)
 
     def summarize(batch):
-        got = llm.json(SUMMARY_PROMPT.format(n=len(batch), cards="\n---\n".join(cards[q]["card"] for q in batch)),
+        got = llm.json(prompt.format(n=len(batch), cards="\n---\n".join(cards[q]["card"] for q in batch)),
                        max_out=60 * len(batch) + 200) or {}
         out = {q: re.sub(r"\s+", " ", str(got[q])).strip() for q in batch if isinstance(got, dict) and got.get(q)}
         for q in batch:  # a card the batch reply left out is retried on its own
             if q not in out:
-                one = llm.json(SUMMARY_PROMPT.format(n=1, cards=cards[q]["card"]), max_out=200) or {}
+                one = llm.json(prompt.format(n=1, cards=cards[q]["card"]), max_out=200) or {}
                 v = one.get(q) or (next(iter(one.values())) if isinstance(one, dict) and len(one) == 1 else None)
                 if v:
                     out[q] = re.sub(r"\s+", " ", str(v)).strip()
@@ -283,7 +311,13 @@ def main(argv=None) -> int:
                           f"usage {llm.usage}", flush=True)
     synth_s = time.time() - synth_t
     summ = {q: cache[q]["summary"] for q in cards if cache.get(q, {}).get("key") == key(q)}
-    print(f"[{args.repo}] summaries {len(summ)}/{len(cards)}", flush=True)
+    lint = lint_rates((summ[q], cards[q]["card"]) for q in summ)
+    print(f"[{args.repo}] summaries {len(summ)}/{len(cards)}; lint {lint}", flush=True)
+    if args.only:
+        (args.out_dir / f"{args.repo}_only.json").write_text(json.dumps(
+            {"variant": args.variant, "model": args.model, "lint": lint,
+             "summaries": {q: {"summary": summ.get(q), "card": cards[q]["card"]} for q in cards}}, indent=1) + "\n")
+        return 0
 
     # ---- search coverage -------------------------------------------------
     base_docs = [tokenize(s.qualified_name) + tokenize(nlq._relative(s.file))
@@ -350,6 +384,7 @@ def main(argv=None) -> int:
           f"identifiability {identifiability}", flush=True)
 
     out = {"repo": args.repo, "backend": args.backend, "model": args.model, "scope": args.scope,
+           "variant": args.variant, "lint": lint,
            "pool": len(nlq.pool), "functions": len(fns), "cards": len(cards), "summaries": len(summ),
            "load_seconds": round(load_s, 1), "synth_seconds": round(synth_s, 1), "llm_usage": llm.usage,
            "summary_words_mean": round(st.mean(len(s.split()) for s in summ.values()), 1) if summ else None,

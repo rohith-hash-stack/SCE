@@ -106,3 +106,25 @@ def test_summary_renders_held_out_and_q2e_tables():
     assert "## Held-out set 2 (1 questions: styleguide)" in md and "## Held-out set 3 (1 questions: express)" in md
     assert "subject rank BASE / +SUM / FIELD w=0.5" in md and "| x | `g` | 30 / 30 / 30 |" in md
     assert "| FIELD w=0.5 | 1.000 | 1.000 | 1.000 | 0.333 |" in md
+
+
+def test_card_v2_leaves_out_the_axes_line(repo):
+    builder, entries, _ = repo
+    v1 = build_card(builder, {}, entries, "app.crud.create_item")["card"]
+    v2 = build_card(builder, {}, entries, "app.crud.create_item", axes=False)["card"]
+    assert "Architectural Axes:" in v1 and "Architectural Axes:" not in v2
+    assert [l for l in v1.splitlines() if not l.startswith("Architectural Axes:")] == v2.splitlines()
+
+
+def test_lint_flags_copied_labels_identifiers_and_callee_lists_but_not_plain_english():
+    from harness.experiments.purpose_search.lint import lint, rates
+    card = "Direct Callees: lib.response.deprecate, lib.response.get, lib.response.header, lib.response.send"
+    flagged = lambda s: {k for k, v in lint(s, card).items() if v}
+    assert flagged("Attempt to reconnect via pure compute, no effect.") == {"axis_label"}
+    assert flagged("Delays execution via TIME_IO.") == {"axis_label"}
+    assert flagged("Restrict access via redirection command, no return.") == {"filler"}
+    assert flagged("Handles rendering options during testing without returning any particular value.") == {"filler"}
+    assert flagged("Fetch users via db.map, send HTML response.") == {"identifier"}
+    assert flagged("Send JSON via deprecate, get, header and send.") == {"callee_list"}
+    assert flagged("Authenticate a user by comparing password hashes, returning the query result.") == set()
+    assert rates([("Serializes an object to JSON and sends it with the content type.", card)])["any"] == 0.0

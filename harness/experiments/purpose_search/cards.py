@@ -91,9 +91,11 @@ def _capped(items, cap: int) -> str:
     return ", ".join(items[:cap]) + (f", ... (+{len(items) - cap} more)" if len(items) > cap else "")
 
 
-def build_card(builder, masks: dict, entries, qname: str) -> dict | None:
+def build_card(builder, masks: dict, entries, qname: str, axes: bool = True) -> dict | None:
     """`{"card", "docstring", "unresolved", "n_callers", "n_callees"}`, or
-    None when the symbol has no definition node."""
+    None when the symbol has no definition node. `axes=False` (card v2)
+    leaves out the Architectural Axes line: summarizers copied its raw
+    labels ("pure compute", "no effect") into the summaries."""
     sym = builder.symbol_table.get(qname)
     node = builder.def_node(qname)
     parsed = builder.parsed_file(sym.file) if sym is not None else None
@@ -129,16 +131,19 @@ def build_card(builder, masks: dict, entries, qname: str) -> dict | None:
             _capped(unresolved, CAP_UNRESOLVED)
     local = _local_contract(builder, qname, {})
     raises = ", ".join(f"{n}({', '.join(sorted(c))})" if c else n for n, c in sorted(local.throws.items())) if local else ""
-    axes = axes_field(masks.get(qname, 0), "all") or "axes=none"
-    ax = dict(p.split(":", 1) for p in axes[len("axes="):].split(";") if ":" in p)
     doc = docstring(node, src, lang)
-    card = "\n".join([
+    lines = [
         f"Qualified Name: {qname}",
         f"Enclosing Scope: {scope}",
         f"Decorators / Route: {decorators}",
         f"Signature & Type Hints: {sig}",
-        f"Architectural Axes: Role={ax.get('R', 'NONE')}, Form={ax.get('F', 'NONE')}, Output={ax.get('O', 'NONE')}, "
-        f"Substance={ax.get('S', 'NONE')}",
+    ]
+    if axes:
+        field = axes_field(masks.get(qname, 0), "all") or "axes=none"
+        ax = dict(p.split(":", 1) for p in field[len("axes="):].split(";") if ":" in p)
+        lines.append(f"Architectural Axes: Role={ax.get('R', 'NONE')}, Form={ax.get('F', 'NONE')}, "
+                     f"Output={ax.get('O', 'NONE')}, Substance={ax.get('S', 'NONE')}")
+    card = "\n".join(lines + [
         f"Direct Callees: {callee_txt or 'none'}",
         f"Direct Callers: {_capped(callers, CAP) or 'none'}",
         f"Explicit Raises / Status: {raises or 'none'}",
