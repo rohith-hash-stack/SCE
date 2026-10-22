@@ -1,0 +1,672 @@
+{
+ "version": 0,
+ "status": "DRAFT - not frozen; review, then set status to frozen and record the freezing commit before any engine runs on it",
+ "repos": {
+  "flask": {
+   "url": "https://github.com/pallets/flask",
+   "tag": "3.1.2",
+   "commit": "2c1b30d0503cfb064f1cb252e6614a06915a362a",
+   "root": "src",
+   "language": "python"
+  },
+  "httpie": {
+   "url": "https://github.com/httpie/cli",
+   "tag": "3.2.4",
+   "commit": "2105caa49bae87c5809c274e407619a0de2639d1",
+   "root": ".",
+   "language": "python"
+  },
+  "fastify": {
+   "url": "https://github.com/fastify/fastify",
+   "tag": "v5.6.1",
+   "commit": "91414fecaa0ad383c7f97c91f86bee87bf4f06c0",
+   "root": ".",
+   "language": "javascript"
+  },
+  "zod": {
+   "url": "https://github.com/colinhacks/zod",
+   "tag": "v3.23.8",
+   "commit": "ca42965df46b2f7e2747db29c40a26bcb32a51d5",
+   "root": "src",
+   "language": "typescript"
+  }
+ },
+ "authoring_rules": [
+  "Fourth held-out set (Python + JavaScript/TypeScript), for the go/no-go of the locked purpose-search candidate (harness/experiments/purpose_search/CANDIDATE.md).",
+  "Repos chosen because no earlier set, corpus or tuning run used them; four domains (web framework, CLI HTTP client, web framework, schema validation).",
+  "Written from each repo's source at the pinned commit before any engine, search or summarizer ran on it. Only a name-only index (candidate pool names) was built, to check that gold and decoys are candidates.",
+  "Same rules as sets 1-3: developer phrasing; gold = the function(s) that directly answer; decoys = plausible wrong functions (same stems, the inverse operation, the caller or the helper).",
+  "No question contains its gold symbol's name or that name's distinctive verb (set 3's paraphrase rule, e.g. 'work out which application object' not 'find').",
+  "Gold and decoys are library code, never test or example files (fastify's and zod's test files are in the candidate pool)."
+ ],
+ "questions": [
+  {
+   "id": "fl01",
+   "repo": "flask",
+   "category": "io_sink",
+   "question": "How is the signed data a visitor carries between requests written back into a cookie on the reply, and when is that cookie deleted instead?",
+   "gold": [
+    "flask.sessions.SecureCookieSessionInterface.save_session"
+   ],
+   "decoys": [
+    "flask.sessions.SecureCookieSessionInterface.open_session",
+    "flask.sessions.SessionInterface.get_cookie_domain"
+   ]
+  },
+  {
+   "id": "fl02",
+   "repo": "flask",
+   "category": "feature_logic",
+   "question": "When a request arrives carrying a signed cookie that was tampered with or is too old, what state does the app start that visitor with?",
+   "gold": [
+    "flask.sessions.SecureCookieSessionInterface.open_session"
+   ],
+   "decoys": [
+    "flask.sessions.SecureCookieSessionInterface.save_session",
+    "flask.sessions.SecureCookieSessionInterface.get_signing_serializer"
+   ]
+  },
+  {
+   "id": "fl03",
+   "repo": "flask",
+   "category": "feature_logic",
+   "question": "How does the app choose which registered function deals with a raised exception, checking blueprint-level registrations before app-wide ones and walking up the exception's class hierarchy?",
+   "gold": [
+    "flask.sansio.app.App._find_error_handler"
+   ],
+   "decoys": [
+    "flask.app.Flask.handle_exception",
+    "flask.sansio.scaffold.Scaffold.register_error_handler"
+   ]
+  },
+  {
+   "id": "fl04",
+   "repo": "flask",
+   "category": "routing",
+   "question": "Where do the functions registered to run before every view get called, and how can one of them stop the view from running at all?",
+   "gold": [
+    "flask.app.Flask.preprocess_request"
+   ],
+   "decoys": [
+    "flask.app.Flask.full_dispatch_request",
+    "flask.app.Flask.dispatch_request"
+   ]
+  },
+  {
+   "id": "fl05",
+   "repo": "flask",
+   "category": "feature_logic",
+   "question": "How are the hooks that may modify the outgoing reply applied, in which order, and where is the visitor's stored state persisted afterwards?",
+   "gold": [
+    "flask.app.Flask.process_response"
+   ],
+   "decoys": [
+    "flask.app.Flask.preprocess_request",
+    "flask.app.Flask.do_teardown_request"
+   ]
+  },
+  {
+   "id": "fl06",
+   "repo": "flask",
+   "category": "feature_logic",
+   "question": "How does whatever a view returns - a string, a dict, or a tuple carrying a status and headers - get converted into a proper reply object?",
+   "gold": [
+    "flask.app.Flask.make_response"
+   ],
+   "decoys": [
+    "flask.helpers.make_response",
+    "flask.json.provider.DefaultJSONProvider.response"
+   ]
+  },
+  {
+   "id": "fl07",
+   "repo": "flask",
+   "category": "feature_logic",
+   "question": "How are settings loaded from environment variables that all start with a common name, with double underscores creating nested keys and values parsed as JSON where possible?",
+   "gold": [
+    "flask.config.Config.from_prefixed_env"
+   ],
+   "decoys": [
+    "flask.config.Config.from_pyfile",
+    "flask.config.Config.from_mapping"
+   ]
+  },
+  {
+   "id": "fl08",
+   "repo": "flask",
+   "category": "routing",
+   "question": "When the command-line tool is pointed at a module without naming the application object, how does it work out which object to use, falling back to calling a factory?",
+   "gold": [
+    "flask.cli.find_best_app"
+   ],
+   "decoys": [
+    "flask.cli.locate_app",
+    "flask.cli.prepare_import"
+   ]
+  },
+  {
+   "id": "fl09",
+   "repo": "flask",
+   "category": "routing",
+   "question": "When a group of views is mounted under a URL prefix, how are each view's path and endpoint name rewritten before they reach the app?",
+   "gold": [
+    "flask.sansio.blueprints.BlueprintSetupState.add_url_rule"
+   ],
+   "decoys": [
+    "flask.sansio.blueprints.Blueprint.register",
+    "flask.sansio.app.App.add_url_rule"
+   ]
+  },
+  {
+   "id": "fl10",
+   "repo": "flask",
+   "category": "io_sink",
+   "question": "How is an object serialized into a JSON body for the client, indented in debug mode but compact otherwise?",
+   "gold": [
+    "flask.json.provider.DefaultJSONProvider.response"
+   ],
+   "decoys": [
+    "flask.json.provider.DefaultJSONProvider.dumps",
+    "flask.json.provider.JSONProvider.response"
+   ]
+  },
+  {
+   "id": "fl11",
+   "repo": "flask",
+   "category": "io_sink",
+   "question": "How long may browsers cache files served from the static folder, and how is that setting converted when it is given as a time span?",
+   "gold": [
+    "flask.app.Flask.get_send_file_max_age"
+   ],
+   "decoys": [
+    "flask.app.Flask.send_static_file",
+    "flask.helpers.send_file"
+   ]
+  },
+  {
+   "id": "fl12",
+   "repo": "flask",
+   "category": "feature_logic",
+   "question": "What happens when a template is turned into HTML: how is its context filled in, and which notifications fire before and after?",
+   "gold": [
+    "flask.templating._render"
+   ],
+   "decoys": [
+    "flask.templating.render_template",
+    "flask.templating.DispatchingJinjaLoader.get_source"
+   ]
+  },
+  {
+   "id": "hp01",
+   "repo": "httpie",
+   "category": "feature_logic",
+   "question": "When no HTTP method is typed on the command line, how does the tool decide between a plain read and a request that submits data?",
+   "gold": [
+    "httpie.cli.argparser.HTTPieArgumentParser._guess_method"
+   ],
+   "decoys": [
+    "httpie.cli.argparser.HTTPieArgumentParser._parse_items",
+    "httpie.cli.argparser.HTTPieArgumentParser._body_from_input"
+   ]
+  },
+  {
+   "id": "hp02",
+   "repo": "httpie",
+   "category": "io_sink",
+   "question": "How does an interrupted download carry on where it stopped, asking the server only for the bytes not yet on disk?",
+   "gold": [
+    "httpie.downloads.Downloader.pre_request"
+   ],
+   "decoys": [
+    "httpie.downloads.Downloader.start",
+    "httpie.downloads.parse_content_range"
+   ]
+  },
+  {
+   "id": "hp03",
+   "repo": "httpie",
+   "category": "feature_logic",
+   "question": "How is the server's answer to a partial-content request checked, so that the returned bytes line up exactly with what was already downloaded?",
+   "gold": [
+    "httpie.downloads.parse_content_range"
+   ],
+   "decoys": [
+    "httpie.downloads.Downloader.start",
+    "httpie.downloads.Downloader.pre_request"
+   ]
+  },
+  {
+   "id": "hp04",
+   "repo": "httpie",
+   "category": "io_sink",
+   "question": "When saving a download, how is a new file name picked so an existing file on disk is never overwritten?",
+   "gold": [
+    "httpie.downloads.get_unique_filename"
+   ],
+   "decoys": [
+    "httpie.downloads.trim_filename_if_needed",
+    "httpie.downloads.filename_from_url"
+   ]
+  },
+  {
+   "id": "hp05",
+   "repo": "httpie",
+   "category": "feature_logic",
+   "question": "How is the file name suggested in the server's attachment header cleaned up so it cannot point outside the current directory or become a hidden file?",
+   "gold": [
+    "httpie.downloads.filename_from_content_disposition"
+   ],
+   "decoys": [
+    "httpie.downloads.filename_from_url",
+    "httpie.downloads.Downloader._get_output_file_from_response"
+   ]
+  },
+  {
+   "id": "hp06",
+   "repo": "httpie",
+   "category": "feature_logic",
+   "question": "How does the program turn the server's status into its own process exit code, treating 3xx answers differently when redirects are being followed?",
+   "gold": [
+    "httpie.status.http_status_to_exit_status"
+   ],
+   "decoys": [
+    "httpie.core.program",
+    "httpie.core.main"
+   ]
+  },
+  {
+   "id": "hp07",
+   "repo": "httpie",
+   "category": "io_sink",
+   "question": "How is a request body squeezed with deflate before sending, and when is the smaller version not used because it would not save space?",
+   "gold": [
+    "httpie.uploads.compress_request"
+   ],
+   "decoys": [
+    "httpie.uploads.ChunkedUploadStream.__iter__",
+    "httpie.uploads._prepare_file_for_upload"
+   ]
+  },
+  {
+   "id": "hp08",
+   "repo": "httpie",
+   "category": "feature_logic",
+   "question": "Which headers does the client send automatically on every request, and how does it choose between JSON and form content types?",
+   "gold": [
+    "httpie.client.make_default_headers"
+   ],
+   "decoys": [
+    "httpie.client.finalize_headers",
+    "httpie.client.transform_headers"
+   ]
+  },
+  {
+   "id": "hp09",
+   "repo": "httpie",
+   "category": "feature_logic",
+   "question": "Just before a request goes out, how are header values trimmed and turned into bytes, and how are headers the user deliberately emptied kept from being sent?",
+   "gold": [
+    "httpie.client.finalize_headers"
+   ],
+   "decoys": [
+    "httpie.client.make_default_headers",
+    "httpie.client.transform_headers"
+   ]
+  },
+  {
+   "id": "hp10",
+   "repo": "httpie",
+   "category": "feature_logic",
+   "question": "How does a stored login session work out which cookies are no longer valid because their expiry time or max-age has passed, so they can be dropped?",
+   "gold": [
+    "httpie.utils.get_expired_cookies"
+   ],
+   "decoys": [
+    "httpie.utils.split_cookies",
+    "httpie.sessions.Session._add_cookies"
+   ]
+  },
+  {
+   "id": "hp11",
+   "repo": "httpie",
+   "category": "io_sink",
+   "question": "How is a raw byte count shown as a short readable size such as 1.5 MB in the progress display?",
+   "gold": [
+    "httpie.utils.humanize_bytes"
+   ],
+   "decoys": [
+    "httpie.downloads.DownloadStatus.chunk_downloaded",
+    "httpie.downloads.DownloadStatus.start_display"
+   ]
+  },
+  {
+   "id": "hp12",
+   "repo": "httpie",
+   "category": "feature_logic",
+   "question": "When a response does not declare its character set, how does the tool guess the text encoding before printing the body?",
+   "gold": [
+    "httpie.encoding.detect_encoding"
+   ],
+   "decoys": [
+    "httpie.encoding.smart_encode",
+    "httpie.output.streams.EncodedStream.decode_chunk"
+   ]
+  },
+  {
+   "id": "fy01",
+   "repo": "fastify",
+   "category": "feature_logic",
+   "question": "How is the body parser for an incoming content type chosen, matching the media type before any parameters and falling back to pattern-based parsers?",
+   "gold": [
+    "lib.contentTypeParser.getParser"
+   ],
+   "decoys": [
+    "lib.contentTypeParser.hasParser",
+    "lib.contentTypeParser.existingParser"
+   ]
+  },
+  {
+   "id": "fy02",
+   "repo": "fastify",
+   "category": "io_sink",
+   "question": "How is a request body read from the socket while enforcing the maximum allowed size, rejecting it up front when the declared length is already too large?",
+   "gold": [
+    "lib.contentTypeParser.rawBody"
+   ],
+   "decoys": [
+    "lib.contentTypeParser.run",
+    "lib.contentTypeParser.defaultPlainTextParser"
+   ]
+  },
+  {
+   "id": "fy03",
+   "repo": "fastify",
+   "category": "feature_logic",
+   "question": "How are JSON request bodies decoded, rejecting empty bodies and protecting the result against prototype-poisoning keys?",
+   "gold": [
+    "lib.contentTypeParser.defaultJsonParser",
+    "lib.contentTypeParser.getDefaultJsonParser"
+   ],
+   "decoys": [
+    "lib.contentTypeParser.defaultPlainTextParser",
+    "lib.contentTypeParser.rawBody"
+   ]
+  },
+  {
+   "id": "fy04",
+   "repo": "fastify",
+   "category": "feature_logic",
+   "question": "When a route throws and nobody registered a custom handler, how is the status chosen and at what log level is the failure recorded?",
+   "gold": [
+    "lib.error-handler.defaultErrorHandler"
+   ],
+   "decoys": [
+    "lib.error-handler.handleError",
+    "lib.error-handler.fallbackErrorHandler"
+   ]
+  },
+  {
+   "id": "fy05",
+   "repo": "fastify",
+   "category": "feature_logic",
+   "question": "How does each incoming request get its identifier, either taken from a configured header or produced from an increasing counter?",
+   "gold": [
+    "lib.reqIdGenFactory.buildOptionalHeaderReqId",
+    "lib.reqIdGenFactory.buildDefaultGenReqId"
+   ],
+   "decoys": [
+    "lib.reqIdGenFactory.getGenReqId",
+    "lib.reqIdGenFactory.reqIdGenFactory"
+   ]
+  },
+  {
+   "id": "fy06",
+   "repo": "fastify",
+   "category": "routing",
+   "question": "For the automatically created HEAD routes, how is the body thrown away while still reporting the size the GET answer would have had?",
+   "gold": [
+    "lib.headRoute.headRouteOnSendHandler"
+   ],
+   "decoys": [
+    "lib.headRoute.parseHeadOnSendHandlers",
+    "lib.route.prepareRoute"
+   ]
+  },
+  {
+   "id": "fy07",
+   "repo": "fastify",
+   "category": "feature_logic",
+   "question": "How does the framework decide which forwarding hops in front of the server are believed when working out the client's real address, accepting a hop count, a list of addresses or a custom function?",
+   "gold": [
+    "lib.request.getTrustProxyFn"
+   ],
+   "decoys": [
+    "lib.request.buildRequestWithTrustProxy",
+    "lib.request.getLastEntryInMultiHeaderValue"
+   ]
+  },
+  {
+   "id": "fy08",
+   "repo": "fastify",
+   "category": "io_sink",
+   "question": "When the server listens on a host name that resolves to several addresses, such as both IPv4 and IPv6 for localhost, how are the extra addresses bound?",
+   "gold": [
+    "lib.server.multipleBindings"
+   ],
+   "decoys": [
+    "lib.server.listen",
+    "lib.server.getAddresses"
+   ]
+  },
+  {
+   "id": "fy09",
+   "repo": "fastify",
+   "category": "feature_logic",
+   "question": "How is the numeric HTTP status of a reply set, rejecting numbers outside 100 to 599?",
+   "gold": [
+    "lib.reply.code"
+   ],
+   "decoys": [
+    "lib.reply.header",
+    "lib.reply.redirect"
+   ]
+  },
+  {
+   "id": "fy10",
+   "repo": "fastify",
+   "category": "routing",
+   "question": "How does a reply send the client to another URL, keeping a status that was already chosen or otherwise using 302?",
+   "gold": [
+    "lib.reply.redirect"
+   ],
+   "decoys": [
+    "lib.reply.header",
+    "lib.reply.code"
+   ]
+  },
+  {
+   "id": "fy11",
+   "repo": "fastify",
+   "category": "feature_logic",
+   "question": "In what order are a request's path parameters, body, query string and headers checked against their schemas, and how is the body schema picked by content type?",
+   "gold": [
+    "lib.validation.validate"
+   ],
+   "decoys": [
+    "lib.validation.validateParam",
+    "lib.validation.wrapValidationError"
+   ]
+  },
+  {
+   "id": "fy12",
+   "repo": "fastify",
+   "category": "routing",
+   "question": "What does the framework answer when no route matches the method and URL, and is that logged?",
+   "gold": [
+    "lib.fourOhFour.basic404"
+   ],
+   "decoys": [
+    "lib.fourOhFour.fourOhFour",
+    "lib.fourOhFour.setNotFoundHandler"
+   ]
+  },
+  {
+   "id": "zd01",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "When an object is checked against a shape, what happens to keys the shape does not declare: are they kept, rejected with an issue, or silently dropped?",
+   "gold": [
+    "types.ZodObject._parse"
+   ],
+   "decoys": [
+    "types.ZodObject.strict",
+    "types.ZodObject.passthrough"
+   ]
+  },
+  {
+   "id": "zd02",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "How does a choice between several alternative shapes pick its result, preferring a clean match, then a partly failed one, and otherwise reporting every alternative's problems?",
+   "gold": [
+    "types.ZodUnion._parse"
+   ],
+   "decoys": [
+    "types.ZodDiscriminatedUnion._parse",
+    "types.ZodIntersection._parse"
+   ]
+  },
+  {
+   "id": "zd03",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "When building a tagged choice of object shapes keyed by one field, how is the lookup table from tag value to shape built, and what makes construction fail?",
+   "gold": [
+    "types.ZodDiscriminatedUnion.create"
+   ],
+   "decoys": [
+    "types.ZodDiscriminatedUnion._parse",
+    "types.ZodUnion._parse"
+   ]
+  },
+  {
+   "id": "zd04",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "When two schemas must both hold, how are their two parsed outputs combined into one value, and when are they judged incompatible?",
+   "gold": [
+    "types.mergeValues",
+    "types.ZodIntersection._parse"
+   ],
+   "decoys": [
+    "types.ZodObject.merge",
+    "types.ZodObject.extend"
+   ]
+  },
+  {
+   "id": "zd05",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "How is a divisibility check done on decimal numbers without floating-point rounding errors?",
+   "gold": [
+    "types.floatSafeRemainder"
+   ],
+   "decoys": [
+    "types.ZodNumber.multipleOf",
+    "types.ZodNumber._parse"
+   ]
+  },
+  {
+   "id": "zd06",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "How is the pattern for ISO date-and-time strings assembled, depending on the allowed fractional-second precision, time-zone offsets and local times?",
+   "gold": [
+    "types.datetimeRegex"
+   ],
+   "decoys": [
+    "types.timeRegex",
+    "types.timeRegexSource"
+   ]
+  },
+  {
+   "id": "zd07",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "How is a value that was not provided replaced by a fallback before the inner schema checks it?",
+   "gold": [
+    "types.ZodDefault._parse"
+   ],
+   "decoys": [
+    "types.ZodCatch._parse",
+    "types.ZodDefault.removeDefault"
+   ]
+  },
+  {
+   "id": "zd08",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "When parsing fails, how can a schema substitute a replacement value instead of reporting the failure, while still exposing the original problems to the function that computes the replacement?",
+   "gold": [
+    "types.ZodCatch._parse"
+   ],
+   "decoys": [
+    "types.ZodDefault._parse",
+    "types.ZodEffects._parse"
+   ]
+  },
+  {
+   "id": "zd09",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "How are validation problems grouped into top-level messages and per-field lists keyed by the first segment of their path?",
+   "gold": [
+    "ZodError.ZodError.flatten"
+   ],
+   "decoys": [
+    "ZodError.ZodError.format",
+    "ZodError.ZodError.formErrors"
+   ]
+  },
+  {
+   "id": "zd10",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "How is an object schema made optional all the way down, including nested objects, arrays and tuples?",
+   "gold": [
+    "types.deepPartialify",
+    "types.ZodObject.deepPartial"
+   ],
+   "decoys": [
+    "types.ZodObject.partial",
+    "types.ZodObject.required"
+   ]
+  },
+  {
+   "id": "zd11",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "For a schema with a pre-step, where is that step run on the raw input before the result is validated?",
+   "gold": [
+    "types.ZodEffects._parse"
+   ],
+   "decoys": [
+    "types.refine",
+    "types.superRefine"
+   ]
+  },
+  {
+   "id": "zd12",
+   "repo": "zod",
+   "category": "feature_logic",
+   "question": "How is a string checked to be a valid IPv4 or IPv6 address, optionally restricted to one version?",
+   "gold": [
+    "types.isValidIP"
+   ],
+   "decoys": [
+    "types.ZodString._parse",
+    "types.ZodString._addCheck"
+   ]
+  }
+ ]
+}
