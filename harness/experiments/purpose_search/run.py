@@ -44,7 +44,7 @@ import urllib.request
 from pathlib import Path
 
 from harness.experiments.purpose_search.cards import build_card, resources
-from harness.experiments.purpose_search.lint import rates as lint_rates
+from harness.experiments.purpose_search.lint import lint as lint_one, problems, rates as lint_rates
 from prism.query.nlq import BM25, NLQIndex, tokenize
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -83,6 +83,15 @@ SUMMARY_PROMPT_V2 = (
     "good: \"Reads settings from environment variables and parses them as JSON.\"\n"
     "Respond with a JSON object mapping each Qualified Name exactly as given to its sentence.")
 VARIANTS = {"v1": (True, SUMMARY_PROMPT_V1), "v2": (False, SUMMARY_PROMPT_V2)}  # variant -> (card axes, prompt)
+#: v2 repair pass: a summary that fails the lint is sent back with its problems named.
+REPAIR_PROMPT = (
+    "The sentence below describes the function profiled after it, but breaks the rules: {problems}.\n"
+    "Rewrite it as one plain-English sentence of 8 to 14 words that keeps its meaning, with no code identifiers "
+    "(no function, method, class, variable, module or file names; no dots, underscores, camelCase or parentheses), "
+    "no list of the functions it calls, and no internal labels or filler.\n"
+    "Sentence: {summary}\n\nProfile:\n{card}\n\n"
+    "Respond with a JSON object {{\"summary\": \"<the rewritten sentence>\"}}.")
+REPAIR_ATTEMPTS = 2
 IDENT_PROMPT = (
     "Below is a one-line {what} of exactly one of the listed functions. Which function does it describe?\n"
     "{what_cap}: {text}\n\nCandidates (same class or module):\n{cands}\n\n"
@@ -311,12 +320,43 @@ def main(argv=None) -> int:
                           f"usage {llm.usage}", flush=True)
     synth_s = time.time() - synth_t
     summ = {q: cache[q]["summary"] for q in cards if cache.get(q, {}).get("key") == key(q)}
+    first_pass = {q: cache[q].get("raw", summ[q]) for q in summ}
+    lint_first = lint_rates((first_pass[q], cards[q]["card"]) for q in summ)
+
+    def repair(q):
+        """Up to REPAIR_ATTEMPTS rewrites of a summary that fails the lint;
+        keeps the candidate with the fewest flags (the original on a tie)."""
+        best, best_n = summ[q], sum(lint_one(summ[q], cards[q]["card"]).values())
+        for _ in range(REPAIR_ATTEMPTS):
+            if not best_n:
+                break
+            got = llm.json(REPAIR_PROMPT.format(problems="; ".join(problems(best, cards[q]["card"])), summary=best,
+                                                card=cards[q]["card"]), max_out=200) or {}
+            cand = re.sub(r"\s+", " ", str(got.get("summary") or "")).strip()
+            n = sum(lint_one(cand, cards[q]["card"]).values()) if cand else best_n
+            if cand and n < best_n:
+                best, best_n = cand, n
+        return q, best
+
+    repaired = 0
+    if args.variant != "v1" and not args.no_llm:
+        flagged = [q for q in summ if any(lint_one(summ[q], cards[q]["card"]).values())]
+        with cf.ThreadPoolExecutor(args.threads) as ex:
+            for q, new in ex.map(repair, flagged):
+                if new != summ[q]:
+                    cache[q] = {"key": key(q), "summary": new, "raw": cache[q].get("raw", summ[q])}
+                    summ[q] = new
+                    repaired += 1
+        cache_path.write_text(json.dumps(cache))
     lint = lint_rates((summ[q], cards[q]["card"]) for q in summ)
-    print(f"[{args.repo}] summaries {len(summ)}/{len(cards)}; lint {lint}", flush=True)
+    print(f"[{args.repo}] summaries {len(summ)}/{len(cards)}; lint first pass {lint_first}; repaired {repaired}; "
+          f"lint final {lint}", flush=True)
     if args.only:
         (args.out_dir / f"{args.repo}_only.json").write_text(json.dumps(
-            {"variant": args.variant, "model": args.model, "lint": lint,
-             "summaries": {q: {"summary": summ.get(q), "card": cards[q]["card"]} for q in cards}}, indent=1) + "\n")
+            {"variant": args.variant, "model": args.model, "lint": lint, "lint_first_pass": lint_first,
+             "repaired": repaired,
+             "summaries": {q: {"summary": summ.get(q), "first_pass": first_pass.get(q), "card": cards[q]["card"]}
+                           for q in cards}}, indent=1) + "\n")
         return 0
 
     # ---- search coverage -------------------------------------------------
@@ -384,7 +424,7 @@ def main(argv=None) -> int:
           f"identifiability {identifiability}", flush=True)
 
     out = {"repo": args.repo, "backend": args.backend, "model": args.model, "scope": args.scope,
-           "variant": args.variant, "lint": lint,
+           "variant": args.variant, "lint": lint, "lint_first_pass": lint_first, "repaired": repaired,
            "pool": len(nlq.pool), "functions": len(fns), "cards": len(cards), "summaries": len(summ),
            "load_seconds": round(load_s, 1), "synth_seconds": round(synth_s, 1), "llm_usage": llm.usage,
            "summary_words_mean": round(st.mean(len(s.split()) for s in summ.values()), 1) if summ else None,

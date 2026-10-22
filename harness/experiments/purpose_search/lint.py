@@ -27,7 +27,8 @@ _RAW_RE = re.compile(  # raw label tokens, case-sensitive: "TIME_IO", "ORCHESTRA
 _FILLER_RE = re.compile(
     r"\bno return( value)?\b|\breturns? nothing\b|\bno output\b|\bwithout returning( any(thing| particular value| value)?)?\b",
     re.I)
-_IDENT_RE = re.compile(r"`[^`]+`|\b\w+\.\w+\b|\b[a-z0-9]+_[a-z0-9_]+\b|\b[a-z]+[A-Z]\w*\b|\b\w+\(\)")
+_IDENT_RE = re.compile(  # product names such as Node.js / Next.js and numbers like 1.1 are not identifiers
+    r"`[^`]+`|\b(?!\w+\.js\b)[A-Za-z_]\w*\.[A-Za-z_]\w*\b|\b[a-z0-9]+_[a-z0-9_]+\b|\b[a-z]+[A-Z]\w*\b|\b\w+\(\)")
 
 
 def card_callees(card: str) -> set[str]:
@@ -44,6 +45,21 @@ def lint(summary: str, card: str) -> dict[str, bool]:
         "identifier": bool(_IDENT_RE.search(summary)),
         "callee_list": len(card_callees(card) & words) >= 3,
     }
+
+
+def problems(summary: str, card: str) -> list[str]:
+    """What a summary breaks, in words the repair prompt can quote back."""
+    f = lint(summary, card)
+    out = []
+    if f["identifier"]:
+        out.append("it contains code identifiers (" + ", ".join(dict.fromkeys(_IDENT_RE.findall(summary))) + ")")
+    if f["callee_list"]:
+        out.append("it lists the names of functions it calls")
+    if f["axis_label"]:
+        out.append("it uses internal analysis labels such as 'pure compute' or 'no effect'")
+    if f["filler"]:
+        out.append("it ends with filler such as 'no return'")
+    return out
 
 
 def rates(pairs) -> dict:

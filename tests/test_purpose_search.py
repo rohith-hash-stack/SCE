@@ -128,3 +128,12 @@ def test_lint_flags_copied_labels_identifiers_and_callee_lists_but_not_plain_eng
     assert flagged("Send JSON via deprecate, get, header and send.") == {"callee_list"}
     assert flagged("Authenticate a user by comparing password hashes, returning the query result.") == set()
     assert rates([("Serializes an object to JSON and sends it with the content type.", card)])["any"] == 0.0
+    assert flagged("Creates a client for the Next.js app directory on Node.js 18.1.") == set()  # product names, numbers
+    assert flagged("Deletes the file from disk using Node.js fs.promises.unlink.") == {"identifier"}
+
+
+def test_problems_quote_the_offending_identifiers():
+    from harness.experiments.purpose_search.lint import problems
+    card = "Direct Callees: none"
+    assert problems("Uses useEffect to manage component side effects.", card) == ["it contains code identifiers (useEffect)"]
+    assert problems("Reads settings from environment variables and parses them as JSON.", card) == []
