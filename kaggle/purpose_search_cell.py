@@ -1,10 +1,12 @@
 # ============================================================
 # PRISM purpose-enriched search - Kaggle, self-contained cell
 # This configuration: held-out set 3 (express + trpc, 50 JavaScript/TypeScript
-# questions) re-summarized with the 14B model. Only the summarizer changes
-# from the 7B set-3 run (reports/purpose_search_set3): same cards, prompt,
-# code commit and frozen FIELD_WEIGHTS. Set 3 was already seen once, so this
-# is a diagnostic of summarizer quality, not a fresh validation.
+# questions), 14B summarizer, card/prompt VARIANT v2 (no axes line in the
+# card, plain-English prompt that forbids identifiers, callee lists, axis
+# labels and filler). First a lint gate: the 43 worst v1 offenders
+# (purpose_search/lint_sample.json) are summarized and the run stops if any
+# lint rate exceeds LINT_GATE. FIELD_WEIGHTS stay frozen at 0.5,1.0. Set 3
+# was already seen twice (7B, 14B v1): a diagnostic, not a fresh validation.
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
 #
@@ -38,9 +40,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "b5707b9795e72e6c450d64c7c38ab1e17e2c663e"
+CODE_COMMIT = "630f8ce065f18470faee01bdd99c1f8f82303aed"
 CODE_TREES = {"src": "36c9fb5fb938051c6ddea3e8ddad272459f8bf27",
-              "harness": "d84ee5be63be86a617f24ae2dfbeb0efe467f8b0",
+              "harness": "3cd485606dd780957d7474b95a1e31c0e3aa6cd3",
               "benchmarks": "293edfba1be06149afde2250d3d91a26386598cf"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
@@ -53,13 +55,15 @@ GPU_GROUPS = ("0,1",)
 PARALLEL_PER_SERVER = 2
 REPOS = ("express", "trpc")     # set 3; the set-2 / Q2E run used ("fastapi_template", "styleguide", "fastapi", "django")
 FIELD_WEIGHTS = "0.5,1.0"       # frozen: never tuned on set 3
+VARIANT = "v2"                  # card + prompt version; the earlier runs were v1
+LINT_GATE = 0.05                # max share of gate-sample summaries per lint flag
 SCOPE = {"django": "full"}      # e.g. {"django": "top:300"} for the cheaper re-rank design
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
 APPS_DIR = f"{WORK}/apps"
 SITES_DIR = f"{WORK}/sites"
-RESULTS_PATH = "reports/purpose_search_set3_14b"
+RESULTS_PATH = "reports/purpose_search_set3_14b_v2"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 
@@ -244,25 +248,43 @@ for repo, spec in [(r, HELD_OUT[r]) for r in REPOS if r in HELD_OUT]:
 
 print("\n[setup 8/8] Summarizer smoke test (one card)", flush=True)
 run([sys.executable, "-c",
-     "from harness.experiments.purpose_search.run import LLM, SUMMARY_PROMPT; "
-     f"print(LLM('ollama', {SUMMARIZER!r}, {BASE_URLS!r}.split(',')).json(SUMMARY_PROMPT.format(n=1, cards="
+     "from harness.experiments.purpose_search.run import LLM, VARIANTS; "
+     f"print(LLM('ollama', {SUMMARIZER!r}, {BASE_URLS!r}.split(',')).json(VARIANTS[{VARIANT!r}][1].format(n=1, cards="
      "'Qualified Name: app.crud.create_item\\nDirect Callees: unresolved calls on parameters/self: session.add, "
      "session.commit\\nDocstring: Create new item.'), 200))"], cwd=SCE_DIR, env=child_env, check=True)
 
-START = time.time()
-for repo in REPOS:
+def run_args(repo):
     cmd = [sys.executable, "-m", "harness.experiments.purpose_search.run", "--repo", repo, "--out-dir", OUT,
            "--backend", "ollama", "--model", SUMMARIZER, "--base-urls", BASE_URLS,
            "--threads", str(len(PORTS) * PARALLEL_PER_SERVER), "--scope", SCOPE.get(repo, "full"),
-           "--field-weights", FIELD_WEIGHTS]
-    if repo in HELD_OUT:
-        cmd += ["--apps-dir", APPS_DIR, "--sites-dir", SITES_DIR]
+           "--field-weights", FIELD_WEIGHTS, "--variant", VARIANT]
+    return cmd + (["--apps-dir", APPS_DIR, "--sites-dir", SITES_DIR] if repo in HELD_OUT else [])
+
+
+print("\n[gate] lint the worst v1 offenders under the configured variant", flush=True)
+sample = json.load(open(f"{SCE_DIR}/harness/experiments/purpose_search/lint_sample.json"))
+gate = {}
+for repo in [r for r in REPOS if r in sample]:
+    run(run_args(repo) + ["--only", ",".join(sample[repo])], cwd=SCE_DIR, env=child_env, check=True)
+    gate[repo] = json.load(open(os.path.join(OUT, f"{repo}_only.json")))
+    print(f"[gate] {repo}: {gate[repo]['lint']}", flush=True)
+    for q, v in list(gate[repo]["summaries"].items())[:5]:
+        print(f"    {q.rsplit('.', 1)[-1]}: {v['summary']}", flush=True)
+bad = {f"{r}.{k}": v for r, g in gate.items() for k, v in g["lint"].items() if k not in ("any", "n") and v > LINT_GATE}
+if bad:
+    push_results(f"Purpose-enriched search: lint gate FAILED {bad} @ {CODE_COMMIT[:7]} ({SUMMARIZER}, {VARIANT})")
+    abort(f"lint gate failed (> {LINT_GATE}): {bad} - see {RESULTS_PATH}/<repo>_only.json")
+print(f"[gate] passed (every lint rate <= {LINT_GATE})", flush=True)
+
+START = time.time()
+for repo in REPOS:
+    cmd = run_args(repo)
     print(f"\n[run] {repo}", flush=True)
     r = run(cmd, cwd=SCE_DIR, env=child_env, check=False)
     print(f"[run] {repo} exit {r.returncode} after {(time.time() - START) / 60:.0f} min", flush=True)
     run([sys.executable, "-m", "harness.experiments.purpose_search.summarize", OUT], cwd=SCE_DIR, env=child_env,
         check=False, capture=True)
-    push_results(f"Purpose-enriched search: {repo} @ {CODE_COMMIT[:7]} ({SUMMARIZER})")
+    push_results(f"Purpose-enriched search: {repo} @ {CODE_COMMIT[:7]} ({SUMMARIZER}, {VARIANT})")
 
 print("\n=== DONE ===")
 print(open(os.path.join(OUT, "SUMMARY.md")).read() if os.path.exists(os.path.join(OUT, "SUMMARY.md")) else "(no summary)")
