@@ -3,6 +3,9 @@
 **Status: implemented, unvalidated. v2 stays locked and shipped** until the
 plan below says otherwise. A v3 index is used by `prism.ask` at weight 0.
 
+**Plan approved** (Stage 1 gates, set 6 repositories and the set 6 rule below,
+as written) before any Stage 1-3 result existed.
+
 ## Why
 
 Set 5 (Hono) did not confirm the summary field (C vs B 6 better / 6 worse,
@@ -55,8 +58,12 @@ over, so a locked v2 index never holds text a candidate's repair wrote.
 
 Convert all ten indexes (the eight sets 2-4 caches via `--from-cache`, click
 and Hono from their live indexes) to v3 and to v3-name with the production
-command, `prism summarize --candidate <c>`. Proposed gates, per candidate,
-pooled over the ten repos after repair:
+command, `prism summarize --candidate <c>` - `stage1.py run`, on Kaggle with
+`kaggle/summary_candidates_cell.py`. On the current engine the sets 2-4 caches
+install 38-97% of their entries (their cards were built with dependency
+summaries, and the const-binding fix changed JS/TS call edges), so the v2 step
+first summarizes the rest (~512 functions) with the locked v2. Approved gates
+(`stage1.py gate`), per candidate, pooled over the ten repos after repair:
 
 - its new flags: `restates_name` <= 10%, `too_short` <= 15% (repair must fix
   most of what it flags - some functions are genuinely trivial);
@@ -82,7 +89,7 @@ summarizer runs on its repositories (set 5's protocol and `check.py`):
 - 60 questions over 4-5 repositories none of sets 1-5 used, Python and
   TypeScript mixed, each with >= 300 library functions; chosen by these
   criteria before any is indexed (proposal: `encode/httpx`,
-  `Textualize/rich`, `koajs/koa`, `sindresorhus/ky` - to be approved). click
+  `Textualize/rich`, `koajs/koa`, `sindresorhus/ky` - approved). click
   is excluded: the first live run printed searches on it.
 - 60 rather than 48: candidates differ from v2 only on repaired functions, so
   most questions will tie (set 5: 18 of 30 tied C vs B).
@@ -91,7 +98,7 @@ summarizer runs on its repositories (set 5's protocol and `check.py`):
 
 Arms, at w = 0.5 except BASE: **BASE**, **V2**, **V3**, **V3N**.
 
-> **Proposed rule (to be approved before set 6 is frozen).** A candidate X
+> **Approved rule (fixed before set 6 is written).** A candidate X
 > (v3 or v3-name) qualifies if (1) X beats V2: more questions better than
 > worse with a two-sided sign test p < 0.025 (0.05 split over the two
 > candidates), and recall@5 at most 0.02 below V2; and (2) X beats BASE
