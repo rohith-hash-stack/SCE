@@ -13,7 +13,8 @@ The pipeline, end to end:
    No model is called. A caller with a better interpretation (an LLM's)
    passes `intent=` explicitly; the same dict shape is accepted.
 2. **Stems** (BM25): every candidate - each indexed non-test function,
-   method and class - is a document of its qualified name, its
+   method and class outside test files (`candidate_pool`) - is a document
+   of its qualified name, its
    repository-relative path and its source lines (`tokenize`: identifier
    split, one-suffix stemming).
 3. **Triad** (`prism.semantics.triad.triad_rerank`) over the top
@@ -211,10 +212,33 @@ def apply_priors(
 TRIAD_WINDOW = 200
 
 
-def candidate_pool(builder: ConcreteGraphBuilder) -> list:
+#: Type-test files (`expectTypeOf` assertions, tsd): test code the generic
+#: test-file rule (`prism.scanner.entrypoint_gate.is_test_file`) does not name.
+_TYPE_TEST_FILE = re.compile(r"\.test-d\.(ts|tsx|mts|cts)$")
+
+
+def is_search_excluded_file(builder: ConcreteGraphBuilder, path: str) -> bool:
+    """Whether a file's symbols stay out of natural-language search: test
+    files (`tests/`, `__tests__/`, `*.test.ts`, `test_*.py`, ...) and type
+    tests (`*.test-d.ts`). Search only - the graph, `prism.slice` and
+    `prism.blast_radius` index and traverse test code as before."""
+    if builder._in_test_file(path):
+        return True
+    rel = os.path.relpath(path, builder.repo_root) if os.path.isabs(path) and builder.repo_root else path
+    return bool(_TYPE_TEST_FILE.search(rel.replace(os.sep, "/")))
+
+
+def candidate_pool(builder: ConcreteGraphBuilder, exclude_test_files: bool = True) -> list:
     """Every symbol search ranks: functions, methods and classes, no
-    attributes, no test (VERIFICATION) code."""
-    return [s for s in builder.symbol_table if s.kind != "attribute" and s.role != SymbolRole.VERIFICATION]
+    attributes, no test (VERIFICATION) code and - by default - nothing
+    defined in a test file. A helper in a test file is not a test by role
+    (`_classify_symbol_role` needs a test name or an assertion body), but it
+    is never an answer to a question about the code under test; with
+    arrow-style JS/TS test helpers indexed they crowded library code out of
+    the ranking (`docs/capabilities_and_routing.md`)."""
+    excluded: dict[str, bool] = {}
+    return [s for s in builder.symbol_table if s.kind != "attribute" and s.role != SymbolRole.VERIFICATION
+            and not (exclude_test_files and excluded.setdefault(s.file, is_search_excluded_file(builder, s.file)))]
 
 
 def read_lines(root: str, path: str) -> list[str]:
@@ -234,14 +258,16 @@ class NLQIndex:
         self, builder: ConcreteGraphBuilder, repo_root: str, *, member_over_class: bool = True,
         demote_migrations: bool = True, unknown_to_action: bool = False, hop_gamma: float | None = None,
         summaries: "dict[str, str] | str | None" = None, summary_weight: float | None = None,
+        exclude_test_files: bool = True,
     ):
         """`summaries`: `None` (off), `"auto"` (the shipped rule over
         `.prism/summaries.json`) or a `{qualified name: sentence}` dict, used
-        at `summary_weight` (default `SUMMARY_WEIGHT`)."""
+        at `summary_weight` (default `SUMMARY_WEIGHT`). `exclude_test_files`:
+        keep symbols defined in test files out of the pool (`candidate_pool`)."""
         from prism.graph.entry_points import EntryIndex
         from prism.semantics.profile_cache import cached_capability_profiles
         self.builder, self.root = builder, os.path.abspath(repo_root)
-        self.pool = candidate_pool(builder)
+        self.pool = candidate_pool(builder, exclude_test_files)
         self.names = [s.qualified_name for s in self.pool]
         self._lines: dict[str, list[str]] = {}
         docs = [
