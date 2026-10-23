@@ -94,9 +94,16 @@ ESCALATION_PROMPT = (
 #: that also sees the function's source (CANDIDATE_V4.md).
 CANDIDATES = {"v2": {"lint_flags": ()}, "v3": {"lint_flags": ("restates_name", "too_short")},
               "v3-name": {"lint_flags": ("restates_name",)},
-              "v4": {"lint_flags": (), "escalate": ("restates_name",)}}
+              "v4": {"lint_flags": (), "escalate": ("restates_name",)},
+              "v5": {"lint_flags": (), "escalate": ("restates_name",), "long_short": (20, 10), "index_effects": True,
+                     "extends": "v4"}}
+#: v5 (CANDIDATE_V5.md) = v4 + two changes: a function of at least
+#: `long_short[0]` lines whose summary has fewer than `long_short[1]` words is
+#: also escalated, and an escalated function's `effects` is indexed with its
+#: summary (`prism.summaries.index.search_text`). "extends": a v4 index's
+#: escalations (same prompt) are reused when converting it to v5.
 #: Pipeline-record keys that belong to a candidate, not to the v2 summarizer.
-_CANDIDATE_KEYS = ("lint", "escalation_sha", "body_cap")
+_CANDIDATE_KEYS = ("lint", "escalation_sha", "body_cap", "long_short", "index_effects")
 
 
 def _generation(pipeline: dict) -> dict:
@@ -111,9 +118,19 @@ def candidate_pipeline(candidate: str, model: str = None) -> dict:
     p = {**locked_pipeline(), **({"model": model} if model else {})}
     if candidate != "v2":
         p["lint"] = candidate
-    if CANDIDATES[candidate].get("escalate"):
+    c = CANDIDATES[candidate]
+    if c.get("escalate"):
         p |= {"escalation_sha": hashlib.sha1(ESCALATION_PROMPT.encode()).hexdigest()[:16], "body_cap": BODY_CAP}
+    if c.get("long_short"):
+        p["long_short"] = list(c["long_short"])
+    if c.get("index_effects"):
+        p["index_effects"] = True
     return p
+
+
+def long_short(summary: str, line_range: tuple[int, int], rule) -> bool:
+    """v5's size trigger: a body of at least rule[0] lines, a summary under rule[1] words."""
+    return bool(rule) and line_range[1] - line_range[0] + 1 >= rule[0] and len(summary.split()) < rule[1]
 
 
 def function_body(lines: list[str], line_range: tuple[int, int], cap: int = BODY_CAP) -> str:
@@ -198,14 +215,15 @@ def repair(llm, summary: str, card: str, extra: "tuple[str, ...]" = ()) -> str:
     return best
 
 
-def escalate(llm, summary: str, card: str, body: str, flags: "tuple[str, ...]") -> tuple[str | None, str]:
-    """Pass 2 (candidate v4): `(new summary or None, effects)`. The new
+def escalate(llm, summary: str, card: str, body: str, flags: "tuple[str, ...]",
+             line_range: "tuple[int, int] | None" = None, size_rule=None) -> tuple[str | None, str]:
+    """Pass 2 (candidates v4, v5): `(new summary or None, effects)`. The new
     summary is kept only if it has no v2 lint flag and fewer flags (v2 plus
-    `flags`) than the pass-1 summary - escalation never makes a summary worse
-    by the lint's measure."""
+    `flags`, plus v5's size trigger) than the pass-1 summary - escalation
+    never makes a summary worse by the lint's measure."""
     got = llm.json(ESCALATION_PROMPT.format(card=card, body=body), max_out=320) or {}
     cand, effects = _clean(got.get("summary") or ""), _clean(got.get("effects") or "")
-    score = lambda s: sum(lint(s, card, flags).values())
+    score = lambda s: sum(lint(s, card, flags).values()) + (long_short(s, line_range, size_rule) if size_rule else 0)
     if cand and not any(lint(cand, card).values()) and score(cand) < score(summary):
         return cand, effects
     return None, effects
@@ -234,6 +252,7 @@ def build_index(
     cards = {s.qualified_name: c["card"] for s in fns if (c := build_card(builder, {}, entries, s.qualified_name, axes=False))}
     keys = {q: card_key(model, c) for q, c in cards.items()}
     escalate_flags = CANDIDATES[candidate].get("escalate", ())
+    size_rule = CANDIDATES[candidate].get("long_short")
     pipeline = candidate_pipeline(candidate, model)
     path = index_path(repo_root)
     old = read_index(path) or {}
@@ -245,7 +264,11 @@ def build_index(
     old_lint = old_pipeline.get("lint", "v2")
     same_generation = _generation(old_pipeline) == _generation(pipeline)
     same_lint = old_lint == candidate and old_pipeline == pipeline
-    previous = (old.get("functions") or {}) if same_generation and (same_lint or old_lint == "v2") else {}
+    # A candidate that extends another (v4 -> v5) keeps its escalations when the
+    # escalation itself (prompt, body cap) is unchanged; its own triggers re-run.
+    parent = CANDIDATES[candidate].get("extends")
+    from_parent = (old_lint == parent and parent is not None and candidate_pipeline(parent, model) == old_pipeline)
+    previous = (old.get("functions") or {}) if same_generation and (same_lint or from_parent or old_lint == "v2") else {}
     by_name = {s.qualified_name: s for s in fns}
     current_sha = lambda q: source_sha(nlq._source(by_name[q].file), by_name[q].line_range)
     done: dict[str, dict] = {}
@@ -254,9 +277,9 @@ def build_index(
         if e.get("key") != keys[q] or not e.get("summary"):
             continue
         entry = {"key": keys[q], "summary": e["summary"], "checked": bool(e.get("checked")) and same_lint}
-        if escalate_flags and ((same_lint and e.get("v2_checked")) or (old_lint == "v2" and e.get("checked"))):
+        if escalate_flags and (((same_lint or from_parent) and e.get("v2_checked")) or (old_lint == "v2" and e.get("checked"))):
             entry["v2_checked"] = True  # v2's lint and repair already saw it: only the escalation is left
-        if same_lint and e.get("escalation_tried"):
+        if (same_lint or from_parent) and e.get("escalation_tried"):
             if e.get("source_sha") == current_sha(q):  # escalated from this very body
                 entry |= {k: e[k] for k in ("escalation_tried", "escalated", "pass1", "effects") if k in e}
             else:  # the body changed: back to the pass-1 summary, escalate again
@@ -269,6 +292,10 @@ def build_index(
                        **({"v2_checked": True} if escalate_flags and not extra else {})}
             imported += 1
     todo = [q for q in cards if q not in done]
+
+    def wants_escalation(q: str) -> bool:
+        return any(lint(done[q]["summary"], cards[q], escalate_flags).values()) or \
+            long_short(done[q]["summary"], by_name[q].line_range, size_rule)
     counts = {"functions": len(fns), "cards": len(cards), "kept": len(done) - imported, "imported": imported,
               "to_summarize": len(todo), "summarized": 0, "repaired": 0, "failed": 0, "checkpoints": 0}
     unchecked = [q for q in cards if q in done and not done[q]["checked"]]
@@ -278,8 +305,7 @@ def build_index(
     if dry_run:
         counts["to_repair"] = sum(1 for q in unchecked if any(lint(done[q]["summary"], cards[q], extra).values()))
         if escalate_flags:
-            counts["to_escalate"] = sum(1 for q in unchecked if not done[q].get("escalation_tried")
-                                        and any(lint(done[q]["summary"], cards[q], escalate_flags).values()))
+            counts["to_escalate"] = sum(1 for q in unchecked if not done[q].get("escalation_tried") and wants_escalation(q))
         return counts
 
     def save() -> None:
@@ -328,8 +354,7 @@ def build_index(
                 if j % step == 0 and j < len(flagged):
                     checkpoint(f"repair {j}/{len(flagged)}")
         if escalate_flags:
-            esc = [q for q in to_check if not done[q].get("escalation_tried")
-                   and any(lint(done[q]["summary"], cards[q], escalate_flags).values())]
+            esc = [q for q in to_check if not done[q].get("escalation_tried") and wants_escalation(q)]
             counts["escalation_tried"] = len(esc)
             counts.setdefault("escalated", 0)
             if esc:
@@ -337,7 +362,7 @@ def build_index(
 
             def run(q):
                 body = function_body(nlq._source(by_name[q].file), by_name[q].line_range)
-                return escalate(llm, done[q]["summary"], cards[q], body, escalate_flags)
+                return escalate(llm, done[q]["summary"], cards[q], body, escalate_flags, by_name[q].line_range, size_rule)
             with cf.ThreadPoolExecutor(threads) as ex:
                 for j, (q, (new, effects)) in enumerate(zip(esc, ex.map(run, esc)), 1):
                     done[q]["escalation_tried"] = True

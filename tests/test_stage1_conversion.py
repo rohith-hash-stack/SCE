@@ -109,3 +109,18 @@ def test_v4_is_built_from_the_kept_v2_index_by_escalation_and_gated_on_restates_
     r = stage1.gate(manifest, out, steps=("v2", "v4"))
     assert list(r["verdict"]) == ["v4"] and r["verdict"]["v4"]["passes"]
     assert "restates_name <= 0.1" in r["verdict"]["v4"]["checks"] and r["pooled"]["v4"]["first_pass_flagged"] == 4
+
+
+def test_v5_is_built_from_v4_and_reuses_its_escalations(setup):
+    manifest, out, root = setup
+    srv = FakeOllama()
+    try:
+        status = stage1.run(manifest, out, srv.url, 1, 1, log=lambda m: None, steps=("v2", "v4", "v5"))
+        assert status == {"repo/v2": "done (kept)", "repo/v4": "done", "repo/v5": "done"}
+        assert srv.calls == 4  # v4's four escalations; v5 adds none (no long function here)
+    finally:
+        srv.release()
+    v5 = S.read_index(out / "repo" / "v5.json")
+    assert v5["pipeline"]["lint"] == "v5" and v5["pipeline"]["index_effects"]
+    assert sum(bool(e.get("escalated")) for e in v5["functions"].values()) == 4
+    assert stage1.gate(manifest, out, steps=("v2", "v5"))["verdict"]["v5"]["passes"]

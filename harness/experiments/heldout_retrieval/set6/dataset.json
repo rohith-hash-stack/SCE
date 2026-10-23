@@ -1,6 +1,6 @@
 {
  "version": 1,
- "status": "draft",
+ "status": "frozen",
  "repos": {
   "httpx": {
    "url": "https://github.com/encode/httpx",
@@ -15,14 +15,29 @@
    "commit": "6ac483cbea39cab124dfd3483bba70ffafb71050",
    "root": "rich",
    "language": "python"
+  },
+  "elysia": {
+   "url": "https://github.com/elysiajs/elysia",
+   "tag": "1.4.9",
+   "commit": "668c7a147d14d0df0d7f7ffb273c74651463711d",
+   "root": "src",
+   "language": "typescript"
+  },
+  "oclif": {
+   "url": "https://github.com/oclif/core",
+   "tag": "4.5.4",
+   "commit": "cbd713577069520816641ec38f2ff54ce164f8c0",
+   "root": "src",
+   "language": "typescript"
   }
  },
  "authoring_rules": [
-  "Sixth held-out set, for the summarizer-candidate decision of CANDIDATE_V4.md (arms BASE, V2, V4).",
+  "Sixth held-out set, for the summarizer-candidate decision of CANDIDATE_V5.md (arms BASE, V2, V4 diagnostic, V5).",
   "Written from the source at the pinned commits before any engine, search, ranking or summarizer ran on these repositories. Only a name-only index (candidate pool names, check.py) was built.",
   "Same rules as sets 1-5: developer phrasing; gold = the function(s) that directly answer; decoys = plausible wrong functions (same stems, the caller or the helper, a sibling).",
   "No question contains its gold symbol's name or every word of it (check.py).",
-  "Gold and decoys are library code, never test files; no property setter (#2) is gold or decoy."
+  "Gold and decoys are library code, never test files; no property setter (#2) is gold or decoy.",
+  "Selection: 4 repositories none of sets 1-5 used, Python and TypeScript, each with >= 300 library functions (check.py). koajs/koa (103) and sindresorhus/ky (105) failed it and were replaced by elysiajs/elysia and oclif/core (approved)."
  ],
  "questions": [
   {
@@ -414,6 +429,1179 @@
     "logging.RichHandler.render",
     "logging.RichHandler.render_message"
    ]
+  },
+  {
+   "id": "hx16",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How is one stored cookie value looked up by name, optionally narrowed by domain and path, and what error is raised when two match?",
+   "gold": [
+    "_models.Cookies.get"
+   ],
+   "decoys": [
+    "_models.Cookies.set",
+    "_models.Cookies.delete"
+   ]
+  },
+  {
+   "id": "hx17",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How is the boundary token pulled out of a multipart/form-data Content-Type value that the caller supplied?",
+   "gold": [
+    "_multipart.get_multipart_boundary_from_content_type"
+   ],
+   "decoys": [
+    "_multipart.MultipartStream.get_headers",
+    "_multipart._format_form_param"
+   ]
+  },
+  {
+   "id": "hx18",
+   "repo": "httpx",
+   "category": "routing",
+   "question": "How is a relative address joined onto a client's base address so that a subpath in the base is preserved?",
+   "gold": [
+    "_client.BaseClient._merge_url"
+   ],
+   "decoys": [
+    "_client.BaseClient._enforce_trailing_slash",
+    "_client.BaseClient._redirect_url"
+   ]
+  },
+  {
+   "id": "hx19",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "When parsing an address, why is :443 on https or :80 on http dropped, and what happens to a non-numeric port?",
+   "gold": [
+    "_urlparse.normalize_port"
+   ],
+   "decoys": [
+    "_client._port_or_default",
+    "_urlparse.encode_host"
+   ]
+  },
+  {
+   "id": "hx20",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How is a pagination Link value with <uri>; rel=next entries split into a list of dicts?",
+   "gold": [
+    "_models._parse_header_links"
+   ],
+   "decoys": [
+    "_models.Response.links",
+    "_models._parse_content_type_charset"
+   ]
+  },
+  {
+   "id": "hx21",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How is a hostname validated and encoded, checking IPv4 and bracketed IPv6 literals and converting international names with IDNA?",
+   "gold": [
+    "_urlparse.encode_host"
+   ],
+   "decoys": [
+    "_urlparse.normalize_port",
+    "_utils.is_ipv6_hostname"
+   ]
+  },
+  {
+   "id": "hx22",
+   "repo": "httpx",
+   "category": "io_sink",
+   "question": "When a response is iterated in fixed-size chunks, how are incoming byte pieces re-sliced and the remainder buffered?",
+   "gold": [
+    "_decoders.ByteChunker.decode"
+   ],
+   "decoys": [
+    "_decoders.TextChunker.decode",
+    "_models.Response.iter_bytes"
+   ]
+  },
+  {
+   "id": "hx23",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How is the media type of an uploaded file guessed from its filename, defaulting to application/octet-stream?",
+   "gold": [
+    "_multipart._guess_content_type"
+   ],
+   "decoys": [
+    "_multipart.FileField.render_headers",
+    "_multipart.DataField.render_headers"
+   ]
+  },
+  {
+   "id": "hx24",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How are booleans and None converted into form or query values, using JSON-style true/false and an empty string?",
+   "gold": [
+    "_utils.primitive_value_to_str"
+   ],
+   "decoys": [
+    "_content.encode_urlencoded_data",
+    "_utils.to_str"
+   ]
+  },
+  {
+   "id": "hx25",
+   "repo": "httpx",
+   "category": "io_sink",
+   "question": "How is the total byte size of a multipart upload computed in advance, giving up when any file's size is unknown?",
+   "gold": [
+    "_multipart.MultipartStream.get_content_length"
+   ],
+   "decoys": [
+    "_utils.peek_filelike_length",
+    "_multipart.FileField.get_length"
+   ]
+  },
+  {
+   "id": "hx26",
+   "repo": "httpx",
+   "category": "io_sink",
+   "question": "When calling a WSGI app in-process, how are empty byte strings at the start of its body iterator skipped?",
+   "gold": [
+    "_transports.wsgi._skip_leading_empty_chunks"
+   ],
+   "decoys": [
+    "_transports.wsgi.WSGITransport.handle_request",
+    "_transports.wsgi.WSGIByteStream.__iter__"
+   ]
+  },
+  {
+   "id": "hx27",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How is the originating request attached to network errors raised inside a block of code?",
+   "gold": [
+    "_exceptions.request_context"
+   ],
+   "decoys": [
+    "_transports.default.map_httpcore_exceptions",
+    "_exceptions.RequestError.__init__"
+   ]
+  },
+  {
+   "id": "hx28",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How does a response choose the text decoding to use: an explicit setting, then the charset in Content-Type, then a default or an autodetect callable?",
+   "gold": [
+    "_models.Response.encoding"
+   ],
+   "decoys": [
+    "_models.Response.charset_encoding",
+    "_models.Headers.encoding"
+   ]
+  },
+  {
+   "id": "hx29",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How does digest authentication react to a 401 challenge, building the credential header and replaying the request with any cookies set?",
+   "gold": [
+    "_auth.DigestAuth.auth_flow"
+   ],
+   "decoys": [
+    "_auth.BasicAuth.auth_flow",
+    "_auth.DigestAuth._parse_challenge"
+   ]
+  },
+  {
+   "id": "hx30",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How are credentials for a host looked up in the user's .netrc file and sent as basic authorization when found?",
+   "gold": [
+    "_auth.NetRCAuth.auth_flow"
+   ],
+   "decoys": [
+    "_auth.BasicAuth._build_auth_header",
+    "_auth.DigestAuth.auth_flow"
+   ]
+  },
+  {
+   "id": "rc16",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is a colour description like 'red', 'color(123)', '#ff0000' or 'rgb(1,2,3)' interpreted, rejecting numbers above 255?",
+   "gold": [
+    "color.Color.parse"
+   ],
+   "decoys": [
+    "color.parse_rgb_hex",
+    "style.Style.parse"
+   ]
+  },
+  {
+   "id": "rc17",
+   "repo": "rich",
+   "category": "io_sink",
+   "question": "How is a set of named styles loaded from an INI-style configuration file on disk?",
+   "gold": [
+    "theme.Theme.read"
+   ],
+   "decoys": [
+    "theme.Theme.from_file",
+    "theme.ThemeStack.push_theme"
+   ]
+  },
+  {
+   "id": "rc18",
+   "repo": "rich",
+   "category": "routing",
+   "question": "Given a file path and optionally its contents, how is the highlighter language picked, falling back to the file extension?",
+   "gold": [
+    "syntax.Syntax.guess_lexer"
+   ],
+   "decoys": [
+    "traceback.Traceback._guess_lexer",
+    "syntax.Syntax.from_path"
+   ]
+  },
+  {
+   "id": "rc19",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is one rendered line forced to an exact cell width, cropping the overflowing piece or padding with styled spaces?",
+   "gold": [
+    "segment.Segment.adjust_line_length"
+   ],
+   "decoys": [
+    "segment.Segment.split_and_crop_lines",
+    "segment.Segment.set_shape"
+   ]
+  },
+  {
+   "id": "rc20",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How are tab characters in styled text replaced by the right number of spaces to reach the next tab stop, keeping styles?",
+   "gold": [
+    "text.Text.expand_tabs"
+   ],
+   "decoys": [
+    "text.Text.detect_indentation",
+    "text.Text.with_indent_guides"
+   ]
+  },
+  {
+   "id": "rc21",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is one RGB value faded towards another by a cross-fade fraction?",
+   "gold": [
+    "color.blend_rgb"
+   ],
+   "decoys": [
+    "color.parse_rgb_hex",
+    "color.Color.downgrade"
+   ]
+  },
+  {
+   "id": "rc22",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How are :shortcode: names in text swapped for their emoji characters, with an optional text or emoji presentation variant?",
+   "gold": [
+    "_emoji_replace._emoji_replace"
+   ],
+   "decoys": [
+    "emoji.Emoji.replace",
+    "markup.render"
+   ]
+  },
+  {
+   "id": "rc23",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How are wrapped lines aligned left, centre, right or fully justified to a width by distributing extra spaces between words?",
+   "gold": [
+    "containers.Lines.justify"
+   ],
+   "decoys": [
+    "text.Text.align",
+    "text.Text.pad"
+   ]
+  },
+  {
+   "id": "rc24",
+   "repo": "rich",
+   "category": "io_sink",
+   "question": "How is a border style swapped for one that can actually be drawn on legacy Windows consoles or ASCII-only terminals?",
+   "gold": [
+    "box.Box.substitute"
+   ],
+   "decoys": [
+    "box.Box.get_plain_headed_box",
+    "panel.Panel.fit"
+   ]
+  },
+  {
+   "id": "rc25",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "Given text and an available width, where are the line breaks placed, folding words that are longer than a whole line?",
+   "gold": [
+    "_wrap.divide_line"
+   ],
+   "decoys": [
+    "cells.chop_cells",
+    "text.Text.wrap"
+   ]
+  },
+  {
+   "id": "rc26",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is a CSS-style spacing shorthand of one, two or four numbers expanded into top, right, bottom and left?",
+   "gold": [
+    "padding.Padding.unpack"
+   ],
+   "decoys": [
+    "padding.Padding.indent",
+    "table.Table.get_padding"
+   ]
+  },
+  {
+   "id": "rc27",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How does the pretty printer decide whether an object can be broken out over several lines, such as containers, dataclasses and attrs objects but not classes?",
+   "gold": [
+    "pretty.is_expandable"
+   ],
+   "decoys": [
+    "pretty.traverse",
+    "pretty._Line.expand"
+   ]
+  },
+  {
+   "id": "rc28",
+   "repo": "rich",
+   "category": "io_sink",
+   "question": "How is reading an already open binary file tracked as a task, recovering the total byte count from the task when it was not given?",
+   "gold": [
+    "progress.Progress.wrap_file"
+   ],
+   "decoys": [
+    "progress.wrap_file",
+    "progress.Progress.open"
+   ]
+  },
+  {
+   "id": "rc29",
+   "repo": "rich",
+   "category": "io_sink",
+   "question": "What happens when output is piped to a program that exits early, so further writes fail with a closed pipe?",
+   "gold": [
+    "console.Console.on_broken_pipe"
+   ],
+   "decoys": [
+    "console.Console._check_buffer",
+    "console.Console._write_buffer"
+   ]
+  },
+  {
+   "id": "rc30",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How are several text styles merged into one, with later ones taking precedence?",
+   "gold": [
+    "style.Style.combine"
+   ],
+   "decoys": [
+    "style.Style.chain",
+    "style.StyleStack.push"
+   ]
+  },
+  {
+   "id": "el01",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How is a value given an HMAC-SHA256 signature with a secret, base64-encoded with the padding stripped and appended after a dot?",
+   "gold": [
+    "utils.signCookie"
+   ],
+   "decoys": [
+    "utils.unsignCookie",
+    "utils.removeTrailingEquals"
+   ]
+  },
+  {
+   "id": "el02",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How is a signed value checked against a secret by recomputing the signature over the part before the last dot, returning false on a mismatch?",
+   "gold": [
+    "utils.unsignCookie"
+   ],
+   "decoys": [
+    "utils.signCookie",
+    "cookies.parseCookie"
+   ]
+  },
+  {
+   "id": "el03",
+   "repo": "elysia",
+   "category": "io_sink",
+   "question": "How is the incoming Cookie request header turned into a jar of values, decoding JSON-looking values and rejecting entries whose signature does not verify?",
+   "gold": [
+    "cookies.parseCookie"
+   ],
+   "decoys": [
+    "cookies.createCookieJar",
+    "utils.unsignCookie"
+   ]
+  },
+  {
+   "id": "el04",
+   "repo": "elysia",
+   "category": "io_sink",
+   "question": "When a handler has set several cookies, how are they rendered into one or more Set-Cookie strings for the reply, skipping empty values?",
+   "gold": [
+    "cookies.serializeCookie"
+   ],
+   "decoys": [
+    "adapter.utils.parseSetCookies",
+    "compose.encodeCookie"
+   ]
+  },
+  {
+   "id": "el05",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How does the framework decide whether a text value is a safe integer, rejecting blanks and values longer than 16 digits?",
+   "gold": [
+    "utils.parseNumericString"
+   ],
+   "decoys": [
+    "formats.validateInt64",
+    "type-system.utils.tryParse"
+   ]
+  },
+  {
+   "id": "el06",
+   "repo": "elysia",
+   "category": "routing",
+   "question": "How is the alternate form of a route with or without its trailing slash computed so both variants can be registered?",
+   "gold": [
+    "utils.getLoosePath"
+   ],
+   "decoys": [
+    "utils.encodePath",
+    "utils.replaceUrlPath"
+   ]
+  },
+  {
+   "id": "el07",
+   "repo": "elysia",
+   "category": "routing",
+   "question": "How is a route percent-encoded while keeping slashes, and colons and question marks for dynamic parameters?",
+   "gold": [
+    "utils.encodePath"
+   ],
+   "decoys": [
+    "utils.getLoosePath",
+    "utils.replaceUrlPath"
+   ]
+  },
+  {
+   "id": "el08",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How is a fast 32-bit hash of a string computed to identify plugins and hooks?",
+   "gold": [
+    "utils.checksum"
+   ],
+   "decoys": [
+    "utils.injectChecksum",
+    "utils.deduplicateChecksum"
+   ]
+  },
+  {
+   "id": "el09",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How are repeated lifecycle hooks with the same hash removed from a hook list when the same plugin is applied twice?",
+   "gold": [
+    "utils.deduplicateChecksum"
+   ],
+   "decoys": [
+    "utils.checksum",
+    "utils.mergeLifeCycle"
+   ]
+  },
+  {
+   "id": "el10",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How are two nested configuration objects combined recursively, with options to skip keys, keep existing values or concatenate arrays, without touching frozen objects or class instances?",
+   "gold": [
+    "utils.mergeDeep"
+   ],
+   "decoys": [
+    "utils.mergeCookie",
+    "utils.deepClone"
+   ]
+  },
+  {
+   "id": "el11",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How is a nested object or array copied including symbol keys, guarding against circular references?",
+   "gold": [
+    "utils.deepClone"
+   ],
+   "decoys": [
+    "utils.mergeDeep",
+    "utils.mergeObjectArray"
+   ]
+  },
+  {
+   "id": "el12",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How does the framework tell an instance built from a constructor, such as a module namespace or a Date, apart from a plain object literal, so deep merges leave it intact?",
+   "gold": [
+    "utils.isClass"
+   ],
+   "decoys": [
+    "utils.isNotEmpty",
+    "utils.mergeDeep"
+   ]
+  },
+  {
+   "id": "el13",
+   "repo": "elysia",
+   "category": "io_sink",
+   "question": "How is the size in bytes of a reply body measured by reading its stream to the end?",
+   "gold": [
+    "utils.getResponseLength"
+   ],
+   "decoys": [
+    "universal.request.readableStreamToString",
+    "adapter.utils.handleFile"
+   ]
+  },
+  {
+   "id": "el14",
+   "repo": "elysia",
+   "category": "io_sink",
+   "question": "How is a server-sent event written as text with id, event, retry and data lines, JSON-encoding object data?",
+   "gold": [
+    "utils.toSSE"
+   ],
+   "decoys": [
+    "utils.sse",
+    "adapter.utils.createStreamHandler"
+   ]
+  },
+  {
+   "id": "el15",
+   "repo": "elysia",
+   "category": "io_sink",
+   "question": "When a handler returns a Blob, which range and transfer headers are attached to the reply, and why are they left off for 206, 304, 412 or 416 statuses?",
+   "gold": [
+    "adapter.utils.handleFile"
+   ],
+   "decoys": [
+    "adapter.web-standard.handler.handleElysiaFile",
+    "adapter.utils.responseToSetHeaders"
+   ]
+  },
+  {
+   "id": "el16",
+   "repo": "elysia",
+   "category": "io_sink",
+   "question": "When a handler returns a ready-made reply object, how are its fields and status copied into the context's pending reply settings, dropping content-encoding so streaming still works?",
+   "gold": [
+    "adapter.utils.responseToSetHeaders"
+   ],
+   "decoys": [
+    "adapter.utils.parseSetCookies",
+    "adapter.utils.handleFile"
+   ]
+  },
+  {
+   "id": "el17",
+   "repo": "elysia",
+   "category": "io_sink",
+   "question": "How are the cookie entries of a reply rewritten one by one into the outgoing header collection after removing the existing ones?",
+   "gold": [
+    "adapter.utils.parseSetCookies"
+   ],
+   "decoys": [
+    "cookies.serializeCookie",
+    "adapter.utils.responseToSetHeaders"
+   ]
+  },
+  {
+   "id": "el18",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How is a plain object of fields and files converted into a multipart body, appending each array element separately and remembering the original values?",
+   "gold": [
+    "utils.form"
+   ],
+   "decoys": [
+    "adapter.web-standard.formData",
+    "universal.request.ElysiaRequest.formData"
+   ]
+  },
+  {
+   "id": "el19",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "In the dynamic, non-compiled request path, how are missing fields filled in from the defaults declared on a validation schema?",
+   "gold": [
+    "dynamic-handle.injectDefaultValues"
+   ],
+   "decoys": [
+    "dynamic-handle.createDynamicHandler",
+    "schema.hasTransform"
+   ]
+  },
+  {
+   "id": "el20",
+   "repo": "elysia",
+   "category": "io_sink",
+   "question": "How is an incoming socket frame coerced from text into JSON, a number, a boolean or null before custom parse hooks run?",
+   "gold": [
+    "ws.createWSMessageParser"
+   ],
+   "decoys": [
+    "ws.handleWSResponse",
+    "ws.ElysiaWS.send"
+   ]
+  },
+  {
+   "id": "el21",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How does the compiler decide whether a handler needs to be awaited, using its constructor name and its source text, and cache the answer on the hook?",
+   "gold": [
+    "compose.isAsync"
+   ],
+   "decoys": [
+    "compose.hasReturn",
+    "compose.isGenerator"
+   ]
+  },
+  {
+   "id": "el22",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How does the compiler detect from its source text whether a lifecycle hook produces a value, such as a concise arrow function body?",
+   "gold": [
+    "compose.hasReturn"
+   ],
+   "decoys": [
+    "compose.isAsync",
+    "compose.isAsyncName"
+   ]
+  },
+  {
+   "id": "el23",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How are cached handler-inference results discarded after an idle delay, and why is this skipped on Cloudflare Workers?",
+   "gold": [
+    "sucrose.clearSucroseCache"
+   ],
+   "decoys": [
+    "sucrose.sucrose",
+    "adapter.cloudflare-worker.isCloudflareWorker"
+   ]
+  },
+  {
+   "id": "el24",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "When the handler's whole context is handed to another function, how does static inference give up and assume every request part (body, headers, cookie, query) is used?",
+   "gold": [
+    "sucrose.isContextPassToFunction"
+   ],
+   "decoys": [
+    "sucrose.inferBodyReference",
+    "sucrose.findAlias"
+   ]
+  },
+  {
+   "id": "el25",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How does the framework detect that it runs on an edge platform, by looking for a default cache store or a socket-pair global?",
+   "gold": [
+    "adapter.cloudflare-worker.isCloudflareWorker"
+   ],
+   "decoys": [
+    "adapter.cloudflare-worker.listen",
+    "sucrose.clearSucroseCache"
+   ]
+  },
+  {
+   "id": "el26",
+   "repo": "elysia",
+   "category": "routing",
+   "question": "How is a route with optional parameters like /a/:b?/:c? expanded into every concrete route the native router must register?",
+   "gold": [
+    "adapter.bun.getPossibleParams"
+   ],
+   "decoys": [
+    "adapter.bun.mapRoutes",
+    "adapter.bun.mergeRoutes"
+   ]
+  },
+  {
+   "id": "el27",
+   "repo": "elysia",
+   "category": "routing",
+   "question": "When two route tables for the native server are combined, how are per-method handlers joined while a plain handler or a Response is overwritten?",
+   "gold": [
+    "adapter.bun.mergeRoutes"
+   ],
+   "decoys": [
+    "adapter.bun.mapRoutes",
+    "adapter.bun.getPossibleParams"
+   ]
+  },
+  {
+   "id": "el28",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How are size limits like '5m' or '20k' in an upload schema turned into byte counts?",
+   "gold": [
+    "type-system.utils.parseFileUnit"
+   ],
+   "decoys": [
+    "type-system.utils.validateFile",
+    "type-system.utils.checkFileExtension"
+   ]
+  },
+  {
+   "id": "el29",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How is an uploaded part's MIME type compared against an allowed type pattern, including wildcards like image/*?",
+   "gold": [
+    "type-system.utils.checkFileExtension"
+   ],
+   "decoys": [
+    "type-system.utils.validateFile",
+    "universal.file.getFileExtension"
+   ]
+  },
+  {
+   "id": "el30",
+   "repo": "elysia",
+   "category": "feature_logic",
+   "question": "How is an uploaded blob accepted or rejected by minimum and maximum size and the allowed list of types?",
+   "gold": [
+    "type-system.utils.validateFile"
+   ],
+   "decoys": [
+    "type-system.utils.fileType",
+    "type-system.utils.parseFileUnit"
+   ]
+  },
+  {
+   "id": "oc01",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is the release track like beta or next worked out from a version string's prerelease tag, falling back to stable?",
+   "gold": [
+    "config.config.channelFromVersion"
+   ],
+   "decoys": [
+    "config.config.Config.versionDetails",
+    "config.config.Config.s3Key"
+   ]
+  },
+  {
+   "id": "oc02",
+   "repo": "oclif",
+   "category": "routing",
+   "question": "With flexible topic ordering, how is every reordering of a command's name parts generated so they can be typed in any order?",
+   "gold": [
+    "config.util.getPermutations"
+   ],
+   "decoys": [
+    "config.config.Permutations.add",
+    "config.config.Config.findMatches"
+   ]
+  },
+  {
+   "id": "oc03",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is the CLI's binary name turned into an uppercase environment variable prefix, replacing @, slashes and dashes?",
+   "gold": [
+    "config.config.Config.scopedEnvVarKey"
+   ],
+   "decoys": [
+    "config.config.Config.scopedEnvVarTrue",
+    "config.config.Config.scopedEnvVarKeys"
+   ]
+  },
+  {
+   "id": "oc04",
+   "repo": "oclif",
+   "category": "routing",
+   "question": "When a partial command id is typed in some order, how are candidate commands narrowed to those that accept every flag on the command line?",
+   "gold": [
+    "config.config.Config.findMatches"
+   ],
+   "decoys": [
+    "config.config.Config.findCommand",
+    "config.util.getPermutations"
+   ]
+  },
+  {
+   "id": "oc05",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is a lifecycle hook given a deadline, rejecting with a timed-out error if it takes too long?",
+   "gold": [
+    "config.config.Config.withTimeout"
+   ],
+   "decoys": [
+    "flush.timeout",
+    "config.config.Config.runHook"
+   ]
+  },
+  {
+   "id": "oc06",
+   "repo": "oclif",
+   "category": "routing",
+   "question": "When a command declares alternate names, how is each one registered, choosing between colliding commands by plugin priority and adding all its word orderings?",
+   "gold": [
+    "config.config.Config.handleAlias"
+   ],
+   "decoys": [
+    "util.determine-priority.determinePriority",
+    "config.config.Config.loadCommands"
+   ]
+  },
+  {
+   "id": "oc07",
+   "repo": "oclif",
+   "category": "io_sink",
+   "question": "How is the usable width of the terminal determined, defaulting to 80 when not interactive and never going below 40?",
+   "gold": [
+    "screen.termwidth"
+   ],
+   "decoys": [
+    "ux.list.linewrap",
+    "help.formatter.HelpFormatter.renderMultiline"
+   ]
+  },
+  {
+   "id": "oc08",
+   "repo": "oclif",
+   "category": "routing",
+   "question": "When topics are separated by spaces, how are the leading words of argv joined into a command id, stopping at a flag or once a command expects positional arguments?",
+   "gold": [
+    "help.util.collateSpacedCmdIDFromArgs",
+    "help.util.findId"
+   ],
+   "decoys": [
+    "help.util.standardizeIDFromArgv",
+    "util.ids.toConfiguredId"
+   ]
+  },
+  {
+   "id": "oc09",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is the process exit status attached to an error, defaulting to the configured or standard code 2?",
+   "gold": [
+    "errors.errors.cli.addOclifExitCode"
+   ],
+   "decoys": [
+    "errors.handle.handle",
+    "errors.errors.cli.CLIError.constructor"
+   ]
+  },
+  {
+   "id": "oc10",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How are the remedy hints shown after an error message laid out, as one line or an indented bullet list after 'Try this:'?",
+   "gold": [
+    "errors.errors.pretty-print.formatSuggestions"
+   ],
+   "decoys": [
+    "errors.errors.pretty-print.prettyPrint",
+    "errors.errors.pretty-print.applyPrettyPrintOptions"
+   ]
+  },
+  {
+   "id": "oc11",
+   "repo": "oclif",
+   "category": "routing",
+   "question": "When two installed plugins provide a command with the same id, which one wins, with core plugins ordered by the package.json list and just-in-time plugins last?",
+   "gold": [
+    "util.determine-priority.determinePriority"
+   ],
+   "decoys": [
+    "config.config.Config.handleAlias",
+    "config.config.Config.isJitPluginCommand"
+   ]
+  },
+  {
+   "id": "oc12",
+   "repo": "oclif",
+   "category": "io_sink",
+   "question": "How does the command-line parser read piped input without hanging when nothing is piped, using a short abort timer and caching the result globally?",
+   "gold": [
+    "parser.parse.readStdin"
+   ],
+   "decoys": [
+    "parser.parse.Parser.parse",
+    "flush.timeout"
+   ]
+  },
+  {
+   "id": "oc13",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is a double-dash option on the command line resolved to its declared name, including aliases and the --no- negation of a boolean?",
+   "gold": [
+    "parser.parse.Parser.findLongFlag"
+   ],
+   "decoys": [
+    "parser.parse.Parser.findShortFlag",
+    "parser.parse.Parser.findFlag"
+   ]
+  },
+  {
+   "id": "oc14",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is a single-letter option like -v matched to the option it abbreviates, honouring character aliases?",
+   "gold": [
+    "parser.parse.Parser.findShortFlag"
+   ],
+   "decoys": [
+    "parser.parse.Parser.findLongFlag",
+    "parser.parse.Parser.findFlag"
+   ]
+  },
+  {
+   "id": "oc15",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is it enforced that two mutually incompatible options are not both given, ignoring options that only got their default value?",
+   "gold": [
+    "parser.validate.validateExclusive"
+   ],
+   "decoys": [
+    "parser.validate.validateExactlyOne",
+    "parser.validate.validateDependsOn"
+   ]
+  },
+  {
+   "id": "oc16",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is it checked that every option another option requires has also been supplied, listing the missing ones in the error?",
+   "gold": [
+    "parser.validate.validateDependsOn"
+   ],
+   "decoys": [
+    "parser.validate.validateExclusive",
+    "parser.validate.validateSome"
+   ]
+  },
+  {
+   "id": "oc17",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is the message for missing positional arguments built, listing each argument with its description and warning when a multi-value option swallowed them?",
+   "gold": [
+    "parser.errors.RequiredArgsError.constructor"
+   ],
+   "decoys": [
+    "parser.validate.validateArgs",
+    "parser.errors.UnexpectedArgsError.constructor"
+   ]
+  },
+  {
+   "id": "oc18",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "When writing the command manifest, how is an option's default captured, preferring its help-friendly default and swallowing errors from default functions?",
+   "gold": [
+    "util.cache-default-value.cacheDefaultValue"
+   ],
+   "decoys": [
+    "util.cache-command.cacheFlags",
+    "util.cache-command.cacheArgs"
+   ]
+  },
+  {
+   "id": "oc19",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How are two sort keys ordered against each other, including element-by-element ordering of arrays and treating undefined as zero?",
+   "gold": [
+    "util.util.compare"
+   ],
+   "decoys": [
+    "util.util.maxBy",
+    "util.util.uniqBy"
+   ]
+  },
+  {
+   "id": "oc20",
+   "repo": "oclif",
+   "category": "io_sink",
+   "question": "How does the loader walk up parent directories while a predicate fails, stopping at the first one that passes, such as the nearest TypeScript configuration?",
+   "gold": [
+    "util.read-tsconfig.upUntil"
+   ],
+   "decoys": [
+    "util.read-tsconfig.readTSConfig",
+    "util.find-root.findRootLegacy"
+   ]
+  },
+  {
+   "id": "oc21",
+   "repo": "oclif",
+   "category": "io_sink",
+   "question": "How is a plugin's root directory found the old way, by walking up looking for its package under node_modules or a matching package.json name?",
+   "gold": [
+    "util.find-root.findRootLegacy"
+   ],
+   "decoys": [
+    "util.find-root.findPnpRoot",
+    "util.find-root.findPluginRoot"
+   ]
+  },
+  {
+   "id": "oc22",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How does the loader decide whether a file must be imported as an ES module, based on its extension and the nearest package type?",
+   "gold": [
+    "module-loader.isPathModule"
+   ],
+   "decoys": [
+    "module-loader.resolvePath",
+    "module-loader.load"
+   ]
+  },
+  {
+   "id": "oc23",
+   "repo": "oclif",
+   "category": "io_sink",
+   "question": "How are name and description pairs laid out in two aligned columns with the right column wrapped to the terminal?",
+   "gold": [
+    "ux.list.renderList"
+   ],
+   "decoys": [
+    "ux.list.linewrap",
+    "help.formatter.HelpFormatter.renderList"
+   ]
+  },
+  {
+   "id": "oc24",
+   "repo": "oclif",
+   "category": "io_sink",
+   "question": "How is text painted with a theme colour given as a named ANSI colour, a hex code or an rgb() triple, leaving it plain when the terminal has no colour support?",
+   "gold": [
+    "ux.theme.colorize"
+   ],
+   "decoys": [
+    "ux.theme.parseTheme",
+    "ux.colorize-json.colorizeJson"
+   ]
+  },
+  {
+   "id": "oc25",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is the notice for a retired option written, mentioning the version it disappears in and its replacement?",
+   "gold": [
+    "help.util.formatFlagDeprecationWarning"
+   ],
+   "decoys": [
+    "help.util.formatCommandDeprecationWarning",
+    "command.warnIfFlagDeprecated"
+   ]
+  },
+  {
+   "id": "oc26",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "When a command runs, how are users warned about options they used that are deprecated, including old aliases that point to a preferred spelling?",
+   "gold": [
+    "command.warnIfFlagDeprecated"
+   ],
+   "decoys": [
+    "help.util.formatFlagDeprecationWarning",
+    "command.warnIfCommandDeprecated"
+   ]
+  },
+  {
+   "id": "oc27",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How is the name of the user's command interpreter worked out, from its environment variable, the OS user record, or on Windows from the process title or COMSPEC?",
+   "gold": [
+    "config.config.Config._shell"
+   ],
+   "decoys": [
+    "config.config.Config.versionDetails",
+    "config.config.Config.dir"
+   ]
+  },
+  {
+   "id": "oc28",
+   "repo": "oclif",
+   "category": "io_sink",
+   "question": "When does a command switch to machine-readable output, from the content type environment variable or a --json option placed before the -- separator?",
+   "gold": [
+    "command.jsonEnabled"
+   ],
+   "decoys": [
+    "command.logToStderr",
+    "command.log"
+   ]
+  },
+  {
+   "id": "oc29",
+   "repo": "oclif",
+   "category": "io_sink",
+   "question": "How is an uncaught error printed with its pretty message, followed by the command help when required, logged and turned into the process exit status?",
+   "gold": [
+    "errors.handle.handle"
+   ],
+   "decoys": [
+    "errors.errors.pretty-print.prettyPrint",
+    "errors.handle.exit"
+   ]
+  },
+  {
+   "id": "oc30",
+   "repo": "oclif",
+   "category": "feature_logic",
+   "question": "How does the library warn when the running Node.js release does not satisfy its engines requirement, unless that warning is disabled by an environment variable?",
+   "gold": [
+    ".checkNodeVersion"
+   ],
+   "decoys": [
+    ".checkCWD",
+    "config.config.Config.versionDetails"
+   ]
   }
- ]
+ ],
+ "frozen_note": "Frozen before any engine, search, ranking or summarizer ran on these repositories (only check.py's name-only pool index). 120 questions, 30 per repository; questions_sha256 below. Scored once with score.py, under the rule in README.md; never edited after the run.",
+ "questions_sha256": "66905f750a3bbbced82739c03c3aceca442dfd8883309cb2457276b411786fd3"
 }

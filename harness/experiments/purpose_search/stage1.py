@@ -10,7 +10,10 @@ default v2, v3-name, v3), each built from a copy of v2 -
   v3-name  `prism summarize --candidate v3-name` (repair only);
   v3       `prism summarize --candidate v3` (repair only);
   v4       `prism summarize --candidate v4` (escalation only: name-restating
-           summaries rewritten from the function's source).
+           summaries rewritten from the function's source);
+  v5       `prism summarize --candidate v5` from a copy of v4 when the step list
+           has it (v4's escalations reused; long functions with short summaries
+           escalated too).
 Each step's index is copied to OUT/<repo>/<step>.json; while a step runs its
 index is snapshotted to OUT/<repo>/<step>.partial.json, so a new session
 resumes (a finished step is skipped, a partial one continues).
@@ -73,9 +76,12 @@ def run_step(repo: str, spec: dict, step: str, out: Path, base_urls: str, thread
         if spec.get("live"):
             shutil.copy(spec["live"], live_index)
     else:
-        if not _complete(_read(out / repo / "v2.json"), "v2"):
-            raise SystemExit(f"{repo}: v2 index missing - run v2 first")
-        shutil.copy(out / repo / "v2.json", live_index)
+        from prism.summaries.pipeline import CANDIDATES
+        parent = CANDIDATES[step].get("extends")
+        base = parent if parent and _complete(_read(out / repo / f"{parent}.json"), parent) else "v2"
+        if not _complete(_read(out / repo / f"{base}.json"), base):
+            raise SystemExit(f"{repo}: {base} index missing - run {base} first")
+        shutil.copy(out / repo / f"{base}.json", live_index)
     cmd = prism + ["summarize", "--repo", root, "--base-urls", base_urls, "--threads", str(threads),
                    "--checkpoint-every", str(checkpoint_every)]
     if step != "v2":
@@ -133,6 +139,7 @@ def gate(manifest: dict, out: Path, sample: int = 6, steps=STEPS) -> dict:
     from prism.graph.entry_points import find_entry_points
     from prism.summaries.cards import build_card
     from prism.summaries.lint import FLAGS, lint
+    from prism.summaries.pipeline import CANDIDATES, long_short
     cands = [s for s in steps if s != "v2"]
     per_repo, pooled = {}, {c: {"n": 0, "first_pass_flagged": 0, "repaired": 0, "lost": 0, "unchecked": 0,
                                 "flags": {}, "samples": []} for c in cands}
@@ -144,6 +151,7 @@ def gate(manifest: dict, out: Path, sample: int = 6, steps=STEPS) -> dict:
         builder = build_pipeline(spec["root"], use_cache=False)[0]
         entries = find_entry_points(builder)
         cards = {q: c["card"] for q in v2["functions"] if (c := build_card(builder, {}, entries, q, axes=False))}
+        ranges = {q: sym.line_range for q in cards if (sym := builder.symbol_table.get(q)) is not None}
         per_repo[repo] = {}
         for cand in cands:
             extra = candidate_flags(cand)
@@ -152,12 +160,17 @@ def gate(manifest: dict, out: Path, sample: int = 6, steps=STEPS) -> dict:
                 raise SystemExit(f"{repo}: no {cand} index")
             f2, fc = v2["functions"], idx["functions"]
             names = [q for q in fc if q in cards]
+            rule = CANDIDATES[cand].get("long_short")
             flags = {q: lint(fc[q]["summary"], cards[q], extra) for q in names}
-            first = sum(1 for q in names if q in f2 and any(lint(f2[q]["summary"], cards[q], extra).values()))
+            if rule:  # v5's size trigger, reported as a flag
+                for q in names:
+                    flags[q]["long_short"] = q in ranges and long_short(fc[q]["summary"], ranges[q], rule)
+            first = sum(1 for q in names if q in f2 and (any(lint(f2[q]["summary"], cards[q], extra).values())
+                                                          or (rule and q in ranges and long_short(f2[q]["summary"], ranges[q], rule))))
             changed = [q for q in names if q in f2 and fc[q]["summary"] != f2[q]["summary"]]
             row = {"n": len(names), "first_pass_flagged": first, "repaired": len(changed),
                    "lost": len(set(f2) - set(fc)), "unchecked": sum(1 for e in fc.values() if not e.get("checked")),
-                   "flags": {k: sum(f[k] for f in flags.values()) for k in FLAGS + extra}}
+                   "flags": {k: sum(f.get(k, 0) for f in flags.values()) for k in FLAGS + extra + (("long_short",) if rule else ())}}
             per_repo[repo][cand] = {**row, "rates": {k: round(v / max(1, row["n"]), 3) for k, v in row["flags"].items()}}
             p = pooled[cand]
             for k in ("n", "first_pass_flagged", "repaired", "lost", "unchecked"):

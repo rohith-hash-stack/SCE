@@ -91,6 +91,16 @@ def read_index(path: "str | Path") -> dict | None:
     return data if isinstance(data, dict) and data.get("format") == INDEX_FORMAT else None
 
 
+def search_text(entry: dict, pipeline: dict) -> str:
+    """The text a summary entry contributes to search: its summary, plus - for
+    an index whose pipeline sets `index_effects` (candidate v5) - the
+    `effects` the escalation pass wrote."""
+    text = str(entry.get("summary") or "")
+    if pipeline.get("index_effects") and entry.get("escalation_tried") and entry.get("effects"):
+        text += " " + str(entry["effects"])
+    return text
+
+
 def load_state(pool, source_of, path: "str | Path") -> SummaryState:
     """Validate the index at `path` against the current symbols. `pool`:
     NLQIndex's candidate symbols; `source_of(file) -> lines`."""
@@ -109,7 +119,7 @@ def load_state(pool, source_of, path: "str | Path") -> SummaryState:
         if e.get("source_sha") != source_sha(source_of(s.file), s.line_range):
             state.stale += 1
             continue
-        state.summaries[s.qualified_name] = str(e["summary"])
+        state.summaries[s.qualified_name] = search_text(e, data.get("pipeline") or {})
     state.valid = len(state.summaries)
     if not state.locked:
         state.reason = "index not built by the locked pipeline"
