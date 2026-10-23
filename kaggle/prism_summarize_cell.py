@@ -220,7 +220,7 @@ if run(["git", "cat-file", "-e", f"origin/{BRANCH}:{RESULTS_PATH}"], cwd=SCE_DIR
     print(f"[resume] restored {sorted(os.listdir(OUT))}", flush=True)
 
 print("\n[setup 5/6] Install prism + checkpoint tests", flush=True)
-run([sys.executable, "-m", "pip", "install", "-q", "-e", ".[dev]"], cwd=SCE_DIR, check=True)
+run([sys.executable, "-m", "pip", "install", "-q", "-e", ".[dev,bench]", "jsonschema"], cwd=SCE_DIR, check=True)  # tests/conftest.py imports benchmarks.runner (rank_bm25)
 child_env = dict(os.environ, PYTHONPATH=os.pathsep.join([SCE_DIR, os.path.join(SCE_DIR, "src")]),
                  CUDA_VISIBLE_DEVICES="", PYTHONDONTWRITEBYTECODE="1")
 child_env.pop("GITHUB_TOKEN", None)
