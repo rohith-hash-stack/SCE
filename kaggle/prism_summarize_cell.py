@@ -23,7 +23,7 @@
 #
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
-# Expected time on T4 x2: about 10 min for click (502 cards) after setup.
+# Expected time on T4 x2: about 10 min for Hono (~555 library functions) after setup.
 # Rehearsed end to end against a local fake Ollama server (kill at >= 120
 # checkpointed entries, resume keeps all of them, live_check passes).
 # ============================================================
@@ -39,9 +39,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "571a5f911a74cac4252f27d825bd9b7cf961737a"
-CODE_TREES = {"src": "bc60c4b234d638d81dd31b03fd6a79fbb7ec5d13",
-              "harness": "0c04d1768948505bf3bb85644b97e20e782ab9fa"}
+CODE_COMMIT = "90ce565b016cfafd7593487e9e380acd8f827590"
+CODE_TREES = {"src": "377fac8a252cff27869577e7082eb0e08a933c76",
+              "harness": "11bcb376d6d0e5b4d55dc5bd92e2e410ed1cd82c"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 SUMMARIZER = "qwen2.5-coder:14b-instruct-q8_0"   # the locked model; another model's index is used at weight 0
@@ -49,15 +49,17 @@ OLLAMA_VERSION = "0.34.0"
 PORTS = (11434,)          # 14B q8_0 (~15.7 GB) needs both T4s: one server across them
 GPU_GROUPS = ("0,1",)
 PARALLEL_PER_SERVER = 2
-#: Repositories to summarize: never summarized by an earlier run. Hono is next,
-#: once JS/TS const-bound functions are indexed (most of its API is
-#: `export const f = () => {}`, invisible to the index today).
+#: Repositories to summarize: never summarized by an earlier run. click (512
+#: functions) was summarized by the first live run (reports/prism_summarize_live).
+#: Hono: needs the const-binding parser fix (3cd55ed) and the test-file search
+#: exclusion (4f76eb1). No sample questions: held-out set 5 is asked of Hono,
+#: so no ranking on it is printed before that set is frozen and scored.
 TARGETS = {
-    "click": {"url": "https://github.com/pallets/click", "commit": "934813e4d421071a1b3db3973c02fe2721359a6e",
-              "root": "src", "questions": ["how are command line options parsed from argv",
-                                           "where is the help text formatted", "click.echo"]},
-    # "hono": {"url": "https://github.com/honojs/hono", "commit": "16eb88269ffb0ae68590ad55ac9ac58807850f26",
-    #          "root": "src", "questions": ["where are cors headers added to the response"]},
+    "hono": {"url": "https://github.com/honojs/hono", "commit": "16eb88269ffb0ae68590ad55ac9ac58807850f26",
+             "root": "src", "questions": []},
+    # "click": {"url": "https://github.com/pallets/click", "commit": "934813e4d421071a1b3db3973c02fe2721359a6e",
+    #           "root": "src", "questions": ["how are command line options parsed from argv",
+    #                                        "where is the help text formatted", "click.echo"]},
 }
 KILL_TEST = True                # SIGKILL the first run once KILL_AFTER_ENTRIES are checkpointed
 KILL_CHECKPOINT_EVERY = 2       # batches between checkpoints during the kill test (12 functions per batch)
@@ -225,7 +227,8 @@ child_env = dict(os.environ, PYTHONPATH=os.pathsep.join([SCE_DIR, os.path.join(S
                  CUDA_VISIBLE_DEVICES="", PYTHONDONTWRITEBYTECODE="1")
 child_env.pop("GITHUB_TOKEN", None)
 run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_summarize_checkpoints.py",
-     "tests/test_query_routing.py"], cwd=SCE_DIR, env=child_env, check=True)
+     "tests/test_query_routing.py", "tests/test_search_excludes_test_files.py", "tests/test_js_const_bound_functions.py"],
+    cwd=SCE_DIR, env=child_env, check=True)
 PRISM = [sys.executable, "-m", "prism.cli"]
 
 print("\n[setup 6/6] Target repositories at their pinned commits", flush=True)
