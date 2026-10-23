@@ -1,0 +1,415 @@
+{
+ "version": 1,
+ "status": "draft",
+ "repos": {
+  "hono": {
+   "url": "https://github.com/honojs/hono",
+   "tag": "v4.9.9",
+   "commit": "16eb88269ffb0ae68590ad55ac9ac58807850f26",
+   "root": "src",
+   "language": "typescript"
+  }
+ },
+ "authoring_rules": [
+  "Fifth held-out set (TypeScript, one repository), for two pre-registered checks: the test-file exclusion from natural-language search, and the shipped summary field (w = 0.5) on a repository whose API is written as `export const f = () => {}`.",
+  "honojs/hono was dropped from set 4 because PRISM did not index const-bound functions; written after that parser fix (3cd55ed), against its candidate pool with test files excluded.",
+  "Written from the source at the pinned commit before any engine, search, ranking or summarizer ran on it. Only a name-only index (candidate pool names) was built, to check that gold and decoys are candidates.",
+  "Same rules as sets 1-4: developer phrasing; gold = the function(s) that directly answer; decoys = plausible wrong functions (same stems, the inverse operation, the caller or the helper).",
+  "No question contains its gold symbol's name or every word of it (checked by check.py).",
+  "Gold and decoys are library code, never test or type-test files. 27 of the 32 gold symbols are const-bound functions that had no symbol before the parser fix."
+ ],
+ "questions": [
+  {
+   "id": "hn01",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How is the path portion pulled out of an incoming request's address without building a full URL object, and when are percent escapes decoded?",
+   "gold": [
+    "utils.url.getPath"
+   ],
+   "decoys": [
+    "utils.url.getPathNoStrict",
+    "utils.url.getQueryStrings"
+   ]
+  },
+  {
+   "id": "hn02",
+   "repo": "hono",
+   "category": "routing",
+   "question": "How is a route that ends in an optional parameter, like /animals/:type?, expanded into the concrete routes it stands for?",
+   "gold": [
+    "utils.url.checkOptionalParameter"
+   ],
+   "decoys": [
+    "utils.url.splitRoutingPath",
+    "utils.url.getPattern"
+   ]
+  },
+  {
+   "id": "hn03",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How are a base path and a sub path joined so that exactly one slash separates them?",
+   "gold": [
+    "utils.url.mergePath"
+   ],
+   "decoys": [
+    "utils.url.splitPath",
+    "hono-base.Hono.basePath"
+   ]
+  },
+  {
+   "id": "hn04",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How is one value looked up in the query string without parsing all of it, and what comes back when the key is present without an '='?",
+   "gold": [
+    "utils.url._getQueryParam"
+   ],
+   "decoys": [
+    "utils.url.getQueryParams",
+    "request.HonoRequest.query"
+   ]
+  },
+  {
+   "id": "hn05",
+   "repo": "hono",
+   "category": "routing",
+   "question": "When a GET for an address ending in a slash finds nothing, how is the client redirected to the same address without the slash?",
+   "gold": [
+    "middleware.trailing-slash.trimTrailingSlash"
+   ],
+   "decoys": [
+    "middleware.trailing-slash.appendTrailingSlash",
+    "hono-base.notFoundHandler"
+   ]
+  },
+  {
+   "id": "hn06",
+   "repo": "hono",
+   "category": "io_sink",
+   "question": "Which response headers let a browser on another site call this API, and how is the allowed origin chosen when a list or a callback is configured?",
+   "gold": [
+    "middleware.cors.cors"
+   ],
+   "decoys": [
+    "middleware.cors.set",
+    "middleware.csrf.csrf"
+   ]
+  },
+  {
+   "id": "hn07",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How are form submissions coming from other sites rejected, using the Sec-Fetch-Site header first and the Origin header otherwise?",
+   "gold": [
+    "middleware.csrf.csrf"
+   ],
+   "decoys": [
+    "middleware.csrf.isSecFetchSite",
+    "middleware.cors.cors"
+   ]
+  },
+  {
+   "id": "hn08",
+   "repo": "hono",
+   "category": "io_sink",
+   "question": "How is an upload larger than allowed refused, both when its size is declared up front and when it arrives in chunks?",
+   "gold": [
+    "middleware.body-limit.bodyLimit"
+   ],
+   "decoys": [
+    "middleware.body-limit.BodyLimitError.constructor",
+    "utils.body.parseBody"
+   ]
+  },
+  {
+   "id": "hn09",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How does the server answer 304 Not Modified when the client already holds the current version of a response, and which headers survive on that reply?",
+   "gold": [
+    "middleware.etag.etag"
+   ],
+   "decoys": [
+    "middleware.etag.digest.generateDigest",
+    "middleware.cache.cache"
+   ]
+  },
+  {
+   "id": "hn10",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How are allow and deny rules written as address ranges in CIDR notation turned into a fast check of the caller's IP?",
+   "gold": [
+    "middleware.ip-restriction.buildMatcher"
+   ],
+   "decoys": [
+    "middleware.ip-restriction.ipRestriction",
+    "utils.ipaddr.convertIPv4ToBinary"
+   ]
+  },
+  {
+   "id": "hn11",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How is a shortened IPv6 address with '::', or one ending in an IPv4 part, written out as eight full groups?",
+   "gold": [
+    "utils.ipaddr.expandIPv6"
+   ],
+   "decoys": [
+    "utils.ipaddr.convertIPv6BinaryToString",
+    "utils.ipaddr.distinctRemoteAddr"
+   ]
+  },
+  {
+   "id": "hn12",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How are the username and password recovered from the credentials header a client sends with the Basic scheme?",
+   "gold": [
+    "utils.basic-auth.auth"
+   ],
+   "decoys": [
+    "middleware.basic-auth.basicAuth",
+    "middleware.bearer-auth.bearerAuth"
+   ]
+  },
+  {
+   "id": "hn13",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How does the token check answer a missing header, a malformed header and a wrong token differently, and what does it put in WWW-Authenticate?",
+   "gold": [
+    "middleware.bearer-auth.bearerAuth"
+   ],
+   "decoys": [
+    "middleware.bearer-auth.throwHTTPException",
+    "middleware.jwk.jwk.jwk"
+   ]
+  },
+  {
+   "id": "hn14",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How is a handler cut off with an error when it runs longer than a configured number of milliseconds?",
+   "gold": [
+    "middleware.timeout.timeout"
+   ],
+   "decoys": [
+    "middleware.timing.timing.timing",
+    "middleware.timing.timing.endTime"
+   ]
+  },
+  {
+   "id": "hn15",
+   "repo": "hono",
+   "category": "routing",
+   "question": "How can an HTML form that only sends POST be turned into a PUT or DELETE, using a hidden field, a header or a query parameter?",
+   "gold": [
+    "middleware.method-override.methodOverride"
+   ],
+   "decoys": [
+    "middleware.method-override.getExecutionCtx",
+    "hono-base.Hono.on"
+   ]
+  },
+  {
+   "id": "hn16",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "Which naming rules must a Set-Cookie value satisfy for the __Secure- and __Host- prefixes, and how long may it live before it is refused?",
+   "gold": [
+    "utils.cookie._serialize"
+   ],
+   "decoys": [
+    "utils.cookie.parse",
+    "helper.cookie.setCookie"
+   ]
+  },
+  {
+   "id": "hn17",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How are tamper-proof cookies read back, keeping only values whose HMAC matches and marking the others as invalid?",
+   "gold": [
+    "utils.cookie.parseSigned",
+    "utils.cookie.verifySignature"
+   ],
+   "decoys": [
+    "utils.cookie.makeSignature",
+    "helper.cookie.getSignedCookie"
+   ]
+  },
+  {
+   "id": "hn18",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "When a token is checked, how are its not-before, expiry, issued-at and issuer claims enforced before the signature is tested?",
+   "gold": [
+    "utils.jwt.jwt.verify"
+   ],
+   "decoys": [
+    "utils.jwt.jwt.decode",
+    "utils.jwt.jws.verifying"
+   ]
+  },
+  {
+   "id": "hn19",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How are two secrets compared without leaking how many characters matched through the time it takes?",
+   "gold": [
+    "utils.buffer.timingSafeEqual"
+   ],
+   "decoys": [
+    "utils.buffer.equal",
+    "utils.crypto.sha256"
+   ]
+  },
+  {
+   "id": "hn20",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How are form fields with dotted names like user.address.city turned into nested objects in the parsed request body?",
+   "gold": [
+    "utils.body.handleParsingNestedValues"
+   ],
+   "decoys": [
+    "utils.body.handleParsingAllValues",
+    "utils.body.convertFormDataToBodyData"
+   ]
+  },
+  {
+   "id": "hn21",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "When several entries of an Accept-style header carry the same weight, in which order are they returned?",
+   "gold": [
+    "utils.accept.sortByQualityAndIndex"
+   ],
+   "decoys": [
+    "utils.accept.parseQuality",
+    "utils.accept.parseAccept"
+   ]
+  },
+  {
+   "id": "hn22",
+   "repo": "hono",
+   "category": "routing",
+   "question": "When several router implementations are configured, how is the first one able to take every registered route picked, and how do later requests skip that choice?",
+   "gold": [
+    "router.smart-router.router.SmartRouter.match"
+   ],
+   "decoys": [
+    "router.smart-router.router.SmartRouter.add",
+    "router.reg-exp-router.router.RegExpRouter.match"
+   ]
+  },
+  {
+   "id": "hn23",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How does the middleware chain run each handler in order, send thrown errors to the error handler, and stop a handler from advancing twice?",
+   "gold": [
+    "compose.compose",
+    "compose.dispatch"
+   ],
+   "decoys": [
+    "hono-base.errorHandler",
+    "hono-base.Hono.use"
+   ]
+  },
+  {
+   "id": "hn24",
+   "repo": "hono",
+   "category": "routing",
+   "question": "How is a separate application's fetch handler attached under a path prefix, with the prefix stripped before the request is passed on?",
+   "gold": [
+    "hono-base.Hono.mount"
+   ],
+   "decoys": [
+    "hono-base.Hono.route",
+    "hono-base.Hono.basePath"
+   ]
+  },
+  {
+   "id": "hn25",
+   "repo": "hono",
+   "category": "io_sink",
+   "question": "How is one server-sent event put on the wire, including the event name, id and retry fields and data spanning several lines?",
+   "gold": [
+    "helper.streaming.sse.SSEStreamingApi.writeSSE"
+   ],
+   "decoys": [
+    "helper.streaming.sse.streamSSE",
+    "helper.streaming.sse.run"
+   ]
+  },
+  {
+   "id": "hn26",
+   "repo": "hono",
+   "category": "io_sink",
+   "question": "Which conditions stop a response from being gzip-encoded, and how is the encoding picked from what the client accepts?",
+   "gold": [
+    "middleware.compress.compress"
+   ],
+   "decoys": [
+    "middleware.compress.shouldCompress",
+    "middleware.compress.shouldTransform"
+   ]
+  },
+  {
+   "id": "hn27",
+   "repo": "hono",
+   "category": "io_sink",
+   "question": "When a request is forwarded to another server, which connection-specific headers are dropped from the copy that is sent?",
+   "gold": [
+    "helper.proxy.buildRequestInitFromRequest"
+   ],
+   "decoys": [
+    "helper.proxy.preprocessRequestInit",
+    "helper.proxy.proxy"
+   ]
+  },
+  {
+   "id": "hn28",
+   "repo": "hono",
+   "category": "io_sink",
+   "question": "How is a named duration added to the Server-Timing header, with or without a description and a precision?",
+   "gold": [
+    "middleware.timing.timing.setMetric"
+   ],
+   "decoys": [
+    "middleware.timing.timing.startTime",
+    "middleware.timing.timing.timing"
+   ]
+  },
+  {
+   "id": "hn29",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How are the characters that are special in HTML replaced while text is appended to the output buffer?",
+   "gold": [
+    "utils.html.escapeToBuffer"
+   ],
+   "decoys": [
+    "utils.html.raw",
+    "utils.html.stringBufferToString"
+   ]
+  },
+  {
+   "id": "hn30",
+   "repo": "hono",
+   "category": "feature_logic",
+   "question": "How is the visitor's preferred language taken from the Accept-Language header, falling through the listed languages until a supported one is found?",
+   "gold": [
+    "middleware.language.language.detectFromHeader"
+   ],
+   "decoys": [
+    "middleware.language.language.detectFromCookie",
+    "middleware.language.language.parseAcceptLanguage"
+   ]
+  }
+ ]
+}
