@@ -1,0 +1,419 @@
+{
+ "version": 1,
+ "status": "draft",
+ "repos": {
+  "httpx": {
+   "url": "https://github.com/encode/httpx",
+   "tag": "0.28.1",
+   "commit": "26d48e0634e6ee9cdc0533996db289ce4b430177",
+   "root": "httpx",
+   "language": "python"
+  },
+  "rich": {
+   "url": "https://github.com/Textualize/rich",
+   "tag": "v15.0.0",
+   "commit": "6ac483cbea39cab124dfd3483bba70ffafb71050",
+   "root": "rich",
+   "language": "python"
+  }
+ },
+ "authoring_rules": [
+  "Sixth held-out set, for the summarizer-candidate decision of CANDIDATE_V4.md (arms BASE, V2, V4).",
+  "Written from the source at the pinned commits before any engine, search, ranking or summarizer ran on these repositories. Only a name-only index (candidate pool names, check.py) was built.",
+  "Same rules as sets 1-5: developer phrasing; gold = the function(s) that directly answer; decoys = plausible wrong functions (same stems, the caller or the helper, a sibling).",
+  "No question contains its gold symbol's name or every word of it (check.py).",
+  "Gold and decoys are library code, never test files; no property setter (#2) is gold or decoy."
+ ],
+ "questions": [
+  {
+   "id": "hx01",
+   "repo": "httpx",
+   "category": "routing",
+   "question": "When the client follows a 3xx to another host, which fields are stripped from the next outgoing request, and why does a plain http-to-https upgrade keep the credentials?",
+   "gold": [
+    "_client.BaseClient._redirect_headers"
+   ],
+   "decoys": [
+    "_client._is_https_redirect",
+    "_client._same_origin"
+   ]
+  },
+  {
+   "id": "hx02",
+   "repo": "httpx",
+   "category": "routing",
+   "question": "After a 302 or 303 response, when does the follow-up request switch from POST to GET, and why is HEAD left alone?",
+   "gold": [
+    "_client.BaseClient._redirect_method"
+   ],
+   "decoys": [
+    "_client.BaseClient._redirect_stream",
+    "_client.BaseClient._redirect_url"
+   ]
+  },
+  {
+   "id": "hx03",
+   "repo": "httpx",
+   "category": "routing",
+   "question": "How is the Location value of a 3xx turned into the next address to visit, including relative paths and a missing host or fragment?",
+   "gold": [
+    "_client.BaseClient._redirect_url"
+   ],
+   "decoys": [
+    "_client.BaseClient._redirect_headers",
+    "_client.BaseClient._merge_url"
+   ]
+  },
+  {
+   "id": "hx04",
+   "repo": "httpx",
+   "category": "routing",
+   "question": "How are HTTP_PROXY, HTTPS_PROXY and NO_PROXY variables turned into mount patterns, and what does a wildcard in the bypass list do?",
+   "gold": [
+    "_utils.get_environment_proxies"
+   ],
+   "decoys": [
+    "_client.BaseClient._get_proxy_map",
+    "_utils.is_ipv4_hostname"
+   ]
+  },
+  {
+   "id": "hx05",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How does the library find out how many bytes an uploaded file object holds without reading it, falling back to seeking to the end?",
+   "gold": [
+    "_utils.peek_filelike_length"
+   ],
+   "decoys": [
+    "_multipart.FileField.get_length",
+    "_multipart.MultipartStream.get_content_length"
+   ]
+  },
+  {
+   "id": "hx06",
+   "repo": "httpx",
+   "category": "routing",
+   "question": "When several mount patterns could match an address, how are they ordered so that ones with a port and longer hostnames win?",
+   "gold": [
+    "_utils.URLPattern.priority"
+   ],
+   "decoys": [
+    "_utils.URLPattern.matches",
+    "_client.Client._transport_for_url"
+   ]
+  },
+  {
+   "id": "hx07",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "Where are credential-bearing fields like Authorization masked as [secure] when a request or its header collection is printed?",
+   "gold": [
+    "_models._obfuscate_sensitive_headers"
+   ],
+   "decoys": [
+    "_models.Headers.__repr__",
+    "_models._normalize_header_value"
+   ]
+  },
+  {
+   "id": "hx08",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "Which character set is used to decode raw header bytes, trying ascii, then utf-8, and finally latin-1?",
+   "gold": [
+    "_models.Headers.encoding"
+   ],
+   "decoys": [
+    "_models.Response.encoding",
+    "_models._normalize_header_value"
+   ]
+  },
+  {
+   "id": "hx09",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "Which quality-of-protection option is chosen from a digest challenge, and when does auth-int raise a not-implemented error?",
+   "gold": [
+    "_auth.DigestAuth._resolve_qop"
+   ],
+   "decoys": [
+    "_auth.DigestAuth._parse_challenge",
+    "_auth.DigestAuth._build_auth_header"
+   ]
+  },
+  {
+   "id": "hx10",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How are dot and dot-dot segments removed from the route component of an address, following RFC 3986?",
+   "gold": [
+    "_urlparse.normalize_path"
+   ],
+   "decoys": [
+    "_urlparse.validate_path",
+    "_urlparse.normalize_port"
+   ]
+  },
+  {
+   "id": "hx11",
+   "repo": "httpx",
+   "category": "io_sink",
+   "question": "When streaming a body line by line, how are partial lines buffered across chunks and a trailing carriage return carried into the next piece?",
+   "gold": [
+    "_decoders.LineDecoder.decode"
+   ],
+   "decoys": [
+    "_models.Response.iter_lines",
+    "_decoders.TextChunker.decode"
+   ]
+  },
+  {
+   "id": "hx12",
+   "repo": "httpx",
+   "category": "io_sink",
+   "question": "How does a response pick how to decompress its body from the Content-Encoding values, chaining several when gzip and br are both listed?",
+   "gold": [
+    "_models.Response._get_content_decoder"
+   ],
+   "decoys": [
+    "_decoders.MultiDecoder.decode",
+    "_decoders.GZipDecoder.decode"
+   ]
+  },
+  {
+   "id": "hx13",
+   "repo": "httpx",
+   "category": "feature_logic",
+   "question": "How does a response throw an error on 4xx and 5xx codes, with a message naming the error class and the Location when it is a 3xx?",
+   "gold": [
+    "_models.Response.raise_for_status"
+   ],
+   "decoys": [
+    "_models.Response.is_error",
+    "_models.Response.has_redirect_location"
+   ]
+  },
+  {
+   "id": "hx14",
+   "repo": "httpx",
+   "category": "io_sink",
+   "question": "How does the library decide whether an outgoing body becomes raw bytes, a multipart form, a url-encoded form or JSON, and warn when bytes are passed as form data?",
+   "gold": [
+    "_content.encode_request"
+   ],
+   "decoys": [
+    "_content.encode_urlencoded_data",
+    "_content.encode_content"
+   ]
+  },
+  {
+   "id": "hx15",
+   "repo": "httpx",
+   "category": "io_sink",
+   "question": "How are low-level connection-pool errors translated into the library's own exception types, picking the most specific match?",
+   "gold": [
+    "_transports.default.map_httpcore_exceptions"
+   ],
+   "decoys": [
+    "_transports.default._load_httpcore_exceptions",
+    "_exceptions.request_context"
+   ]
+  },
+  {
+   "id": "rc01",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is an integer total split into parts proportional to integer weights, honouring per-slot minimums so the parts add up exactly?",
+   "gold": [
+    "_ratio.ratio_distribute"
+   ],
+   "decoys": [
+    "_ratio.ratio_resolve",
+    "_ratio.ratio_reduce"
+   ]
+  },
+  {
+   "id": "rc02",
+   "repo": "rich",
+   "category": "io_sink",
+   "question": "How does the terminal printer decide between truecolor, 256 and 16 colours from COLORTERM and TERM, and when does it turn colour off entirely?",
+   "gold": [
+    "console.Console._detect_color_system"
+   ],
+   "decoys": [
+    "console.get_windows_console_features",
+    "console.Console.color_system"
+   ]
+  },
+  {
+   "id": "rc03",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is a 24-bit RGB value reduced to the nearest index of the 256-colour cube, treating low-saturation values as grey?",
+   "gold": [
+    "color.Color.downgrade"
+   ],
+   "decoys": [
+    "palette.Palette.match",
+    "color.Color.get_truecolor"
+   ]
+  },
+  {
+   "id": "rc04",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is the closest entry in a fixed colour table found for an RGB triple using a weighted redmean distance?",
+   "gold": [
+    "palette.Palette.match"
+   ],
+   "decoys": [
+    "color.Color.downgrade",
+    "color.blend_rgb"
+   ]
+  },
+  {
+   "id": "rc05",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "Given a byte count, how is the right power of 1000 or 1024 and its label like kB or MiB chosen?",
+   "gold": [
+    "filesize.pick_unit_and_suffix"
+   ],
+   "decoys": [
+    "filesize.decimal",
+    "filesize._to_str"
+   ]
+  },
+  {
+   "id": "rc06",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is user text made safe to embed among square-bracket style tags so it is not treated as formatting, including trailing backslashes?",
+   "gold": [
+    "markup.escape"
+   ],
+   "decoys": [
+    "markup.render",
+    "control.escape_control_codes"
+   ]
+  },
+  {
+   "id": "rc07",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is the number of spaces per indent level of a code snippet worked out from the greatest common divisor of the even leading-space widths?",
+   "gold": [
+    "text.Text.detect_indentation"
+   ],
+   "decoys": [
+    "text.Text.with_indent_guides",
+    "text.Text.expand_tabs"
+   ]
+  },
+  {
+   "id": "rc08",
+   "repo": "rich",
+   "category": "io_sink",
+   "question": "How are adjacent rendered pieces that share the same style merged into one to reduce the output written to the terminal?",
+   "gold": [
+    "segment.Segment.simplify"
+   ],
+   "decoys": [
+    "segment.Segment.divide",
+    "segment.Segment.strip_styles"
+   ]
+  },
+  {
+   "id": "rc09",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is a string broken into lines that each fit a given terminal column width when it contains double-width characters?",
+   "gold": [
+    "cells.chop_cells"
+   ],
+   "decoys": [
+    "cells.set_cell_size",
+    "cells.split_text"
+   ]
+  },
+  {
+   "id": "rc10",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is styled text shortened to a maximum width, adding an ellipsis character or padding with spaces when asked?",
+   "gold": [
+    "text.Text.truncate"
+   ],
+   "decoys": [
+    "text.Text.set_length",
+    "text.Text.right_crop"
+   ]
+  },
+  {
+   "id": "rc11",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is the rate of a running task in steps per second estimated from its recent samples?",
+   "gold": [
+    "progress.Task.speed"
+   ],
+   "decoys": [
+    "progress.Task.time_remaining",
+    "progress.TaskProgressColumn.render_speed"
+   ]
+  },
+  {
+   "id": "rc12",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "How is the estimated time left for a task shown as h:mm:ss or a compact mm:ss, with dashes when it is unknown?",
+   "gold": [
+    "progress.TimeRemainingColumn.render"
+   ],
+   "decoys": [
+    "progress.TimeElapsedColumn.render",
+    "progress.Task.time_remaining"
+   ]
+  },
+  {
+   "id": "rc13",
+   "repo": "rich",
+   "category": "routing",
+   "question": "When printing an exception's stack frames, how is the highlighting language for each source file chosen, including files with no extension that start with a python shebang?",
+   "gold": [
+    "traceback.Traceback._guess_lexer"
+   ],
+   "decoys": [
+    "syntax.Syntax.guess_lexer",
+    "traceback._iter_syntax_lines"
+   ]
+  },
+  {
+   "id": "rc14",
+   "repo": "rich",
+   "category": "feature_logic",
+   "question": "When a grid's columns are too wide for the screen, how are the widest wrappable columns shrunk step by step until everything fits?",
+   "gold": [
+    "table.Table._collapse_widths"
+   ],
+   "decoys": [
+    "table.Table._calculate_column_widths",
+    "_ratio.ratio_reduce"
+   ]
+  },
+  {
+   "id": "rc15",
+   "repo": "rich",
+   "category": "io_sink",
+   "question": "How is a log record's severity name padded and styled before it is shown in the left column of the logging handler's output?",
+   "gold": [
+    "logging.RichHandler.get_level_text"
+   ],
+   "decoys": [
+    "logging.RichHandler.render",
+    "logging.RichHandler.render_message"
+   ]
+  }
+ ]
+}

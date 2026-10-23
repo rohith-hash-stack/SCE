@@ -7,7 +7,17 @@ is not the locked pipeline).
 **Stage 1: PASS** (`reports/summary_candidate_v4_stage1/STAGE1.md`, NOTES.md):
 restates_name 24.8% -> 5.8% pooled, 676 of 886 escalations kept, v2 flags
 <= 0.1%, nothing lost. The Stage 1 gates were the proposal below (the cell ran
-before explicit approval); the set 6 rule below still awaits approval.
+before explicit approval; approved afterwards). The set 6 rule below is approved.
+
+**Stage 2: CONTINUE** (`reports/summary_candidate_v4_stage2/STAGE2.md`): pooled over sets 2-5
+V4 vs V2 18 better / 17 worse / 153 ties (sign p = 1.0, recall@5 +0.003, MRR +0.007), so the
+stop rule (more worse than better) does not fire. V4 and V2 both beat BASE (74/20 and 73/25).
+Only 31 of the 188 questions have an escalated gold symbol; 35 questions move between V2 and V4
+(12 of them with escalated gold: 7 better / 5 worse). Sanity check: set 5 V2 vs BASE reproduces the
+recorded set 5 C vs B (6 / 6 / 18, recall@5 0.683 -> 0.767).
+
+**Power note for set 6.** At this rate about 1 in 5 set 6 questions moves (about 11 of 60); a
+two-sided sign test with 11 moved questions needs 10 / 1 to reach p < 0.05.
 
 ## Why
 
