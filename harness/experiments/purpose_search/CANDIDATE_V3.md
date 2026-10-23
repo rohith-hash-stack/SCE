@@ -6,6 +6,13 @@ plan below says otherwise. A v3 index is used by `prism.ask` at weight 0.
 **Plan approved** (Stage 1 gates, set 6 repositories and the set 6 rule below,
 as written) before any Stage 1-3 result existed.
 
+**Outcome: both candidates failed Stage 1 and are dropped; v2 stays locked.**
+`reports/summary_candidates_stage1/STAGE1.md`: after repair v3-name leaves
+restates_name at 10.3% (gate 10%), v3 at 12.3% with too_short at 20.7% (gate
+15%); nothing lost, v2 flags clean. Repair rephrases more than it adds
+(`reports/summary_candidates_stage1/NOTES.md`). Stages 2 and 3 do not run
+for these candidates; set 6 is not written.
+
 ## Why
 
 Set 5 (Hono) did not confirm the summary field (C vs B 6 better / 6 worse,
