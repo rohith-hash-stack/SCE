@@ -19,6 +19,20 @@ def test_rule1_keeps_the_exclusion_unless_it_is_inferior_and_rule2_needs_a_win()
     assert d["rule1"]["recall5_delta"] == -0.033 and d["rule1"]["verdict"].startswith("REVERT")
 
 
-def test_scoring_refuses_a_draft_set(tmp_path):
+def test_scoring_refuses_a_draft_set(tmp_path, monkeypatch):
+    import json
+    from harness.experiments.heldout_retrieval.set5 import score
+    frozen = json.loads((score.HERE / "dataset.json").read_text())
+    (tmp_path / "dataset.json").write_text(json.dumps({**frozen, "status": "draft"}))
+    monkeypatch.setattr(score, "HERE", tmp_path)
     with pytest.raises(SystemExit, match="not frozen"):
         main([str(tmp_path), str(tmp_path / "out")])
+
+
+def test_the_committed_set_is_frozen_with_its_questions_hash():
+    import hashlib
+    import json
+    from harness.experiments.heldout_retrieval.set5 import score
+    ds = json.loads((score.HERE / "dataset.json").read_text())
+    assert ds["status"] == "frozen" and len(ds["questions"]) == 30
+    assert hashlib.sha256(json.dumps(ds["questions"], sort_keys=True).encode()).hexdigest() == ds["questions_sha256"]
