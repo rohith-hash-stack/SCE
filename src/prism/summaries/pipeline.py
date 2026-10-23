@@ -71,6 +71,21 @@ REPAIR_PROMPT = (
 REPAIR_ATTEMPTS = 2
 
 
+#: Summarizer candidates. "v2" is locked and shipped. The others are unvalidated:
+#: v2 plus a stricter lint whose flagged summaries go to the same repair pass -
+#: "v3" flags summaries that restate the function's name or fall under the
+#: prompt's 8-word floor, "v3-name" only the first (an ablation of the length
+#: rule). harness/experiments/purpose_search/CANDIDATE_V3.md.
+CANDIDATES = {"v2": {"lint_flags": ()}, "v3": {"lint_flags": ("restates_name", "too_short")},
+              "v3-name": {"lint_flags": ("restates_name",)}}
+
+
+def _generation(pipeline: dict) -> dict:
+    """The part of a pipeline record that decides the summaries themselves
+    (model, prompt, card, repair prompt) - everything but the lint version."""
+    return {k: v for k, v in pipeline.items() if k != "lint"}
+
+
 def card_key(model: str, card: str) -> str:
     """Identical to the harness's v2 summary-cache key."""
     return hashlib.sha1((model + "\n" + VARIANT + "\n" + SUMMARY_PROMPT + "\n" + card).encode()).hexdigest()[:16]
@@ -129,17 +144,18 @@ def summarize_batch(llm, cards: dict[str, str], batch: list[str]) -> dict[str, s
     return out
 
 
-def repair(llm, summary: str, card: str) -> str:
-    """Up to REPAIR_ATTEMPTS rewrites of a summary that fails the lint;
-    the candidate with the fewest flags (the original on a tie)."""
-    best, best_n = summary, sum(lint(summary, card).values())
+def repair(llm, summary: str, card: str, extra: "tuple[str, ...]" = ()) -> str:
+    """Up to REPAIR_ATTEMPTS rewrites of a summary that fails the lint
+    (`extra`: a candidate's additional checks); the candidate with the fewest
+    flags (the original on a tie)."""
+    best, best_n = summary, sum(lint(summary, card, extra).values())
     for _ in range(REPAIR_ATTEMPTS):
         if not best_n:
             break
-        got = llm.json(REPAIR_PROMPT.format(problems="; ".join(problems(best, card)), summary=best, card=card),
+        got = llm.json(REPAIR_PROMPT.format(problems="; ".join(problems(best, card, extra)), summary=best, card=card),
                        max_out=200) or {}
         cand = _clean(got.get("summary") or "")
-        n = sum(lint(cand, card).values()) if cand else best_n
+        n = sum(lint(cand, card, extra).values()) if cand else best_n
         if cand and n < best_n:
             best, best_n = cand, n
     return best
@@ -148,12 +164,18 @@ def repair(llm, summary: str, card: str) -> str:
 def build_index(
     builder, repo_root: str, *, model: str = LOCKED_MODEL, llm=None, base_urls: "list[str] | None" = None,
     batch: int = BATCH, threads: int = 4, from_cache: "dict | None" = None, dry_run: bool = False,
-    checkpoint_every: int = CHECKPOINT_BATCHES, log: Callable[[str], None] = lambda _m: None,
+    checkpoint_every: int = CHECKPOINT_BATCHES, candidate: str = "v2", log: Callable[[str], None] = lambda _m: None,
 ) -> dict:
     """Bring `.prism/summaries.json` up to date for `builder`'s functions.
-    Returns counts; `dry_run` only counts what would be summarized.
+    Returns counts; `dry_run` only counts what would be summarized (and, for
+    a candidate with a stricter lint, how many kept summaries it flags).
     `checkpoint_every`: batches (and, in the repair pass, that many times
-    `batch` repairs) between atomic checkpoint writes."""
+    `batch` repairs) between atomic checkpoint writes. `candidate`: `"v2"`
+    (locked) or an unvalidated `CANDIDATES` entry, whose index search uses at
+    weight 0 until it is validated and locked."""
+    if candidate not in CANDIDATES:
+        raise ValueError(f"unknown candidate {candidate!r}; one of {sorted(CANDIDATES)}")
+    extra = CANDIDATES[candidate]["lint_flags"]
     from prism.graph.entry_points import find_entry_points
     from prism.query.nlq import NLQIndex
     nlq = NLQIndex(builder, repo_root)
@@ -161,22 +183,35 @@ def build_index(
     fns = function_symbols(nlq.pool)
     cards = {s.qualified_name: c["card"] for s in fns if (c := build_card(builder, {}, entries, s.qualified_name, axes=False))}
     keys = {q: card_key(model, c) for q, c in cards.items()}
-    pipeline = {**locked_pipeline(), "model": model}
+    pipeline = {**locked_pipeline(), "model": model, **({"lint": candidate} if candidate != "v2" else {})}
     path = index_path(repo_root)
     old = read_index(path) or {}
-    previous = (old.get("functions") or {}) if old.get("pipeline") == pipeline else {}
-    done: dict[str, dict] = {q: {"key": keys[q], "summary": previous[q]["summary"], "checked": bool(previous[q].get("checked"))}
+    old_pipeline = old.get("pipeline") or {}
+    # Same summarizer (model, prompt, card): summaries carry over. From the
+    # locked v2 lint to a candidate's (v2 -> v3) they are re-linted and repaired
+    # (`checked` reset); any other lint change (v3 -> v2) starts over, so a
+    # locked v2 index never holds summaries a candidate's repair rewrote.
+    old_lint = old_pipeline.get("lint", "v2")
+    same_generation = _generation(old_pipeline) == _generation(pipeline)
+    same_lint = old_lint == candidate
+    previous = (old.get("functions") or {}) if same_generation and (same_lint or old_lint == "v2") else {}
+    done: dict[str, dict] = {q: {"key": keys[q], "summary": previous[q]["summary"],
+                                 "checked": bool(previous[q].get("checked")) and same_lint}
                              for q in cards if previous.get(q, {}).get("key") == keys[q] and previous[q].get("summary")}
     imported = 0
-    for q, e in (from_cache or {}).items():  # harness cache: {qname: {"key", "summary", "raw"?}}, already repaired
+    for q, e in (from_cache or {}).items():  # harness cache: {qname: {"key", "summary", "raw"?}}, repaired under v2
         if q in cards and q not in done and isinstance(e, dict) and e.get("key") == keys[q] and e.get("summary"):
-            done[q] = {"key": keys[q], "summary": _clean(e["summary"]), "checked": True}
+            done[q] = {"key": keys[q], "summary": _clean(e["summary"]), "checked": not extra}
             imported += 1
     todo = [q for q in cards if q not in done]
     counts = {"functions": len(fns), "cards": len(cards), "kept": len(done) - imported, "imported": imported,
               "to_summarize": len(todo), "summarized": 0, "repaired": 0, "failed": 0, "checkpoints": 0}
-    log(f"{len(fns)} functions, {len(cards)} cards: kept {counts['kept']}, imported {imported}, to summarize {len(todo)}")
+    unchecked = [q for q in cards if q in done and not done[q]["checked"]]
+    counts["to_check"] = len(unchecked)
+    log(f"{len(fns)} functions, {len(cards)} cards: kept {counts['kept']}, imported {imported}, to summarize {len(todo)}, "
+        f"to re-lint {len(unchecked)} (candidate {candidate})")
     if dry_run:
+        counts["to_repair"] = sum(1 for q in unchecked if any(lint(done[q]["summary"], cards[q], extra).values()))
         return counts
     by_name = {s.qualified_name: s for s in fns}
 
@@ -206,7 +241,7 @@ def build_index(
         counts["failed"] = len([q for q in todo if q not in done])
         to_check = [q for q in cards if q in done and not done[q]["checked"]]
     if to_check:
-        clean = [q for q in to_check if not any(lint(done[q]["summary"], cards[q]).values())]
+        clean = [q for q in to_check if not any(lint(done[q]["summary"], cards[q], extra).values())]
         for q in clean:
             done[q]["checked"] = True
         flagged = [q for q in to_check if not done[q]["checked"]]
@@ -214,7 +249,7 @@ def build_index(
             checkpoint("summaries done, repairing")
         step = every * batch
         with cf.ThreadPoolExecutor(threads) as ex:
-            for j, (q, new) in enumerate(zip(flagged, ex.map(lambda q: repair(llm, done[q]["summary"], cards[q]), flagged)), 1):
+            for j, (q, new) in enumerate(zip(flagged, ex.map(lambda q: repair(llm, done[q]["summary"], cards[q], extra), flagged)), 1):
                 if new != done[q]["summary"]:
                     done[q]["summary"] = new
                     counts["repaired"] += 1

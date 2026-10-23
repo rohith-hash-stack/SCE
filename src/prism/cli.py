@@ -689,8 +689,11 @@ def ask(question: str, repo_path: str, top_k: int, as_json: bool, deps: bool) ->
 @click.option("--dry-run", is_flag=True, help="Count what would be summarized; call no model, write nothing.")
 @click.option("--checkpoint-every", "checkpoint_every", default=25, show_default=True, type=click.IntRange(1),
               help="Write the index every N batches; an interrupted run resumes from the last checkpoint.")
+@click.option("--candidate", default="v2", show_default=True, type=click.Choice(["v2", "v3", "v3-name"]),
+              help="v2: the locked summarizer. v3 / v3-name: unvalidated - a stricter lint sends name-restating (and, "
+                   "for v3, short) summaries to repair; reuses v2 summaries; the index is used at weight 0 until validated.")
 def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, from_cache: str | None, dry_run: bool,
-              checkpoint_every: int) -> None:
+              checkpoint_every: int, candidate: str) -> None:
     """Build or refresh the offline summary index (.prism/summaries.json)
     that `prism ask` / `prism.ask` use as a second search field.
 
@@ -708,7 +711,8 @@ def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, f
     cache = json.loads(open(from_cache, encoding="utf-8").read()) if from_cache else None
     counts = build_index(builder, repo_root, model=model or LOCKED_MODEL,
                          base_urls=[u for u in base_urls.split(",") if u], threads=threads, from_cache=cache,
-                         dry_run=dry_run, checkpoint_every=checkpoint_every, log=lambda m: click.echo(m, err=True))
+                         dry_run=dry_run, checkpoint_every=checkpoint_every, candidate=candidate,
+                         log=lambda m: click.echo(m, err=True))
     if dry_run:
         click.echo(json.dumps(counts, indent=2))
         return
