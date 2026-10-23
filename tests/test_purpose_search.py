@@ -137,3 +137,44 @@ def test_problems_quote_the_offending_identifiers():
     card = "Direct Callees: none"
     assert problems("Uses useEffect to manage component side effects.", card) == ["it contains code identifiers (useEffect)"]
     assert problems("Reads settings from environment variables and parses them as JSON.", card) == []
+
+
+def _set4_results(arm_ranks: dict[str, list[int]], base_rank: int = 10):
+    """Synthetic set-4 results: 12 questions per repo, one gold each."""
+    def row(i, r):
+        return {"id": f"q{i}", "ranks": {"g": r}, "recall@5": 1.0 if r and r <= 5 else 0.0, "mrr": 1 / r if r else 0.0}
+    out = {}
+    for repo in ("flask", "httpie", "fastify", "zod"):
+        search = {"BASE": {"per_question": [row(i, base_rank) for i in range(12)]}}
+        for arm, ranks in arm_ranks.items():
+            search[arm] = {"per_question": [row(i, ranks[i]) for i in range(12)]}
+        out[repo] = {"search": search}
+    return out
+
+
+def test_decision_rule_ships_falls_back_or_halts():
+    from harness.experiments.purpose_search.decide import decide, sign_test
+    assert round(sign_test(9, 1), 4) == 0.0215 and sign_test(0, 0) == 1.0
+    better, same = [3] * 12, [10] * 12
+    # w=0.5 beats BASE on every question with no recall@5 loss -> ship w=0.5
+    d = decide(_set4_results({"FIELD w=0.5": better, "FIELD w=1.0": same}))
+    assert d["verdict"] == "SHIP FIELD w=0.5" and d["tests"][0]["better"] == 48
+    # w=0.5 ties everywhere -> not significant -> fall back to w=1.0 if it passes
+    d = decide(_set4_results({"FIELD w=0.5": same, "FIELD w=1.0": better}))
+    assert d["verdict"] == "FALL BACK: ship FIELD w=1.0" and not d["tests"][0]["beats_base"]
+    # w=0.5 improves ranks but loses recall@5 (BASE rank 4 -> 6..8 elsewhere): fails the 0.02 limit
+    base4 = _set4_results({"FIELD w=0.5": [3] * 6 + [6] * 6, "FIELD w=1.0": [4] * 12}, base_rank=4)
+    d = decide(base4)
+    assert d["tests"][0]["recall5_delta"] == -0.5 and not d["tests"][0]["recall5_ok"] and d["verdict"] == "HALT: do not ship"
+
+
+def test_decision_rule_recall_drop_of_exactly_two_points_is_allowed():
+    from harness.experiments.purpose_search.decide import evaluate
+    res = _set4_results({"FIELD w=0.5": [3] * 12}, base_rank=10)
+    t = evaluate(res, "FIELD w=0.5")
+    assert t["recall5_ok"] and t["passes"]
+    # 48 questions: one question losing recall@5 = -0.0208 > 0.02 drop
+    res = _set4_results({"FIELD w=0.5": [3] * 12}, base_rank=4)
+    res["flask"]["search"]["FIELD w=0.5"]["per_question"][0] = {"id": "q0", "ranks": {"g": 6}, "recall@5": 0.0, "mrr": 1 / 6}
+    t = evaluate(res, "FIELD w=0.5")
+    assert t["recall5_delta"] == -0.021 and not t["recall5_ok"]

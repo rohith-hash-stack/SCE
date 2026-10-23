@@ -8,7 +8,8 @@ import sys
 from pathlib import Path
 
 METRICS = ("recall@5", "recall@20", "pool_recall", "mrr")
-HELD_OUT = {"set 2": ("fastapi_template", "styleguide"), "set 3": ("express", "trpc")}
+HELD_OUT = {"set 2": ("fastapi_template", "styleguide"), "set 3": ("express", "trpc"),
+            "set 4": ("flask", "httpie", "fastify", "zod")}
 Q2E = ("fastapi", "django")
 
 

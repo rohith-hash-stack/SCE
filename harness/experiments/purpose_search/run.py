@@ -22,6 +22,7 @@ Usage:
 REPO: fastapi | django (Q2E unseeded behavioural questions q09-q14)
       fastapi_template | styleguide (held-out set 2, 60 questions)
       express | trpc (held-out set 3, 50 questions, JavaScript/TypeScript)
+      flask | httpie | fastify | zod (held-out set 4, 48 questions, Python + JavaScript/TypeScript)
 FIELD w=... arms (--field-weights, default 0.5,1.0) score BM25(code) + w * BM25(summary)
 with the summary as an independent field.
 """
@@ -49,8 +50,8 @@ from prism.query.nlq import BM25, NLQIndex, tokenize
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 Q2E = REPO_ROOT / "harness/experiments/query_to_evidence/dataset"
-HELD_OUT_SETS = tuple(REPO_ROOT / f"harness/experiments/heldout_retrieval/{s}/dataset.json" for s in ("set2", "set3"))
-HELD_OUT_REPOS = ("fastapi_template", "styleguide", "express", "trpc")
+HELD_OUT_SETS = tuple(REPO_ROOT / f"harness/experiments/heldout_retrieval/{s}/dataset.json" for s in ("set2", "set3", "set4"))
+HELD_OUT_REPOS = ("fastapi_template", "styleguide", "express", "trpc", "flask", "httpie", "fastify", "zod")
 POOL_TOP, POOL_EXPAND = 20, 8  # candidate pool: top-20 hits + resolved callees of the top-8
 
 #: v1: the card with the Architectural Axes line + this prompt (the set-2 / Q2E / set-3 runs).
