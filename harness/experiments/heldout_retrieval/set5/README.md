@@ -1,4 +1,4 @@
-# Held-out set 5 (DRAFT, version 1)
+# Held-out set 5 (frozen, version 1)
 
 30 questions on one repository that no earlier set, corpus or tuning run
 scored: Hono, which set 4 dropped because PRISM did not index its
@@ -29,7 +29,7 @@ its `dispatch`).
   of it - `check.py`, 0 violations.
 - Gold and decoys are library code, never test or type-test files.
 
-## Pre-registered rules (DRAFT - to be approved before freezing)
+## Pre-registered rules (final, approved before the freeze)
 
 Arms, all through the shipped `NLQIndex` (`score.py`):
 
@@ -59,8 +59,8 @@ not to win. Rule 2 is a superiority test, as on set 4.
 
 ## Order
 
-1. Review this draft; approve or edit the questions and the rules.
-2. Freeze: `"status": "frozen"` in `dataset.json`, rules final in this file.
+1. Review the draft; approve or edit the questions and the rules - done, approved unchanged.
+2. Freeze: `"status": "frozen"` in `dataset.json`, rules final in this file - done.
 3. Summarize Hono on Kaggle (`kaggle/prism_summarize_cell.py`, target `hono`,
    no sample questions) - `.prism/summaries.json` must reach >= 95% coverage.
 4. Score once: `python -m harness.experiments.heldout_retrieval.set5.score
@@ -68,4 +68,7 @@ not to win. Rule 2 is a superiority test, as on set 4.
 
 ## Status
 
-Draft. Not frozen; `score.py` refuses to run until it is.
+Frozen (`dataset.json`: `"status": "frozen"`, `"version": 1`) after review, before any engine,
+search, ranking or summarizer ran on Hono. The questions, gold and decoys are the reviewed draft of
+commit `90ce565` unchanged (`questions_sha256` = `0b27992136c197a1...`). Scored once, with `score.py`;
+never edited after that run.
