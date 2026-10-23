@@ -1,16 +1,14 @@
 # ============================================================
 # PRISM purpose-enriched search - Kaggle, self-contained cell
-# This configuration: Python regression of the LOCKED candidate
+# This configuration: the SET 4 go/no-go of the LOCKED candidate
 # (harness/experiments/purpose_search/CANDIDATE.md: 14B summarizer, card/prompt
-# VARIANT v2, lint-repair pass, FIELD_WEIGHTS 0.5 + 1.0) on held-out set 2
-# (fastapi_template, styleguide: 60 questions) and the Q2E unseeded questions
-# (fastapi, django: q09-q14; q11 and q13 are the ones to read). Django is the
-# full index (~14.9k functions); the summary cache is pushed every
-# CHECKPOINT_MIN minutes, so a re-run resumes where a lost session stopped.
-# First a lint gate: the worst earlier offenders per repo
-# (purpose_search/lint_sample.json) are summarized and the run stops if any
-# post-repair lint rate exceeds LINT_GATE pooled over the repos (or
-# LINT_GATE_REPO in any one repo).
+# VARIANT v2, lint-repair pass, FIELD_WEIGHTS 0.5 + 1.0) on held-out set 4
+# (flask, httpie, fastify, zod: 48 questions, frozen before any engine ran on
+# these repos). The last step applies the pre-registered decision rule
+# (purpose_search/decide.py) and pushes DECISION.md: ship w=0.5, fall back to
+# w=1.0, or halt. First a lint gate on 15 random library functions per repo;
+# the run stops if a post-repair lint rate exceeds LINT_GATE pooled over the
+# repos (or LINT_GATE_REPO in any one repo).
 # Paste this whole file into ONE Kaggle notebook cell and Run.
 # Settings: Accelerator GPU T4 x2, Internet ON, secret GITHUB_TOKEN.
 #
@@ -29,8 +27,8 @@
 # Checks out CODE_COMMIT of BRANCH and verifies its tree hashes. Results and
 # the summary caches are pushed to RESULTS_PATH on BRANCH after each repo
 # from a separate clean worktree; re-running resumes from the pushed caches.
-# Expected time on T4 x2 with the 14B: about 3 h (Django ~2.3 h at the ~1.8
-# functions/s measured on set 3, plus FastAPI, set 2, index loads and the gate).
+# Expected time on T4 x2 with the 14B: about 45 min (2,058 functions at the ~1.8
+# functions/s measured on set 3, plus repairs, index loads and the gate).
 # ============================================================
 
 import json
@@ -43,9 +41,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "51e230b4ce97be35e1d8aa70fcca05e54946e747"
+CODE_COMMIT = "a62e86665786f7f60ce12d052cb432aa3ca87a45"
 CODE_TREES = {"src": "36c9fb5fb938051c6ddea3e8ddad272459f8bf27",
-              "harness": "a7af4cc65172b199bf443a86a70f8d9f148fe3b2",
+              "harness": "0aadd63789773bda5c5fbf9486ccf7704e017cf3",
               "benchmarks": "293edfba1be06149afde2250d3d91a26386598cf"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
@@ -56,7 +54,7 @@ OLLAMA_VERSION = "0.34.0"
 PORTS = (11434,)
 GPU_GROUPS = ("0,1",)
 PARALLEL_PER_SERVER = 2
-REPOS = ("fastapi_template", "styleguide", "fastapi", "django")  # Python regression; set 3 used ("express", "trpc")
+REPOS = ("flask", "httpie", "fastify", "zod")  # set 4; the Python regression used ("fastapi_template", "styleguide", "fastapi", "django")
 FIELD_WEIGHTS = "0.5,1.0"       # locked: 0.5 primary, 1.0 high-MRR (harness/experiments/purpose_search/CANDIDATE.md)
 CHECKPOINT_MIN = 20             # push the summary cache this often while a repo runs (resume point)
 VARIANT = "v2"                  # card + prompt version; the earlier runs were v1
@@ -68,7 +66,7 @@ SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
 APPS_DIR = f"{WORK}/apps"
 SITES_DIR = f"{WORK}/sites"
-RESULTS_PATH = "reports/purpose_search_py_14b_v2"
+RESULTS_PATH = "reports/purpose_search_set4"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 
@@ -230,7 +228,7 @@ for c in [r for r in REPOS if r in ("fastapi", "django")]:
 
 print("\n[setup 7/8] Held-out repos at their pinned commits + pinned dependencies", flush=True)
 HELD_OUT = {}
-for s in ("set2", "set3"):
+for s in ("set2", "set3", "set4"):
     HELD_OUT.update(json.load(open(f"{SCE_DIR}/harness/experiments/heldout_retrieval/{s}/dataset.json"))["repos"])
 for repo, spec in [(r, HELD_OUT[r]) for r in REPOS if r in HELD_OUT]:
     dst = os.path.join(APPS_DIR, repo)
@@ -305,6 +303,12 @@ for repo in REPOS:
     run([sys.executable, "-m", "harness.experiments.purpose_search.summarize", OUT], cwd=SCE_DIR, env=child_env,
         check=False, capture=True)
     push_results(f"Purpose-enriched search: {repo} @ {CODE_COMMIT[:7]} ({SUMMARIZER}, {VARIANT})")
+
+print("\n[decision] pre-registered rule (CANDIDATE.md, purpose_search/decide.py)", flush=True)
+r = run([sys.executable, "-m", "harness.experiments.purpose_search.decide", OUT], cwd=SCE_DIR, env=child_env,
+        check=False, capture=True)
+print(r.stdout or "", r.stderr[-2000:] if r.returncode else "", flush=True)
+push_results(f"Purpose-enriched search: set-4 decision @ {CODE_COMMIT[:7]} ({SUMMARIZER}, {VARIANT})")
 
 print("\n=== DONE ===")
 print(open(os.path.join(OUT, "SUMMARY.md")).read() if os.path.exists(os.path.join(OUT, "SUMMARY.md")) else "(no summary)")
