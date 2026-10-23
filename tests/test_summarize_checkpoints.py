@@ -107,7 +107,6 @@ def test_sigkill_mid_run_leaves_the_last_checkpoint_and_the_rerun_resumes(tmp_pa
     assert data is not None and data["pipeline"] == S.locked_pipeline()
     assert len(data["functions"]) == 2 * BATCH
     assert all(e["summary"] == GOOD and e["key"] and e["source_sha"] for e in data["functions"].values())
-    assert not list(S.index_path(str(repo)).parent.glob("*.tmp"))
     builder = build_pipeline(str(repo), use_cache=False)[0]
     partial = S.state_for(builder, str(repo))
     assert partial.valid == 2 * BATCH and partial.weight == 0.0  # 60% coverage: search ignores it
@@ -121,6 +120,17 @@ def test_sigkill_mid_run_leaves_the_last_checkpoint_and_the_rerun_resumes(tmp_pa
     assert server.calls == 2  # only the two missing batches: 12 + 4 functions
     final = S.state_for(builder, str(repo))
     assert final.valid == N_FUNCTIONS and final.weight == S.SUMMARY_WEIGHT
+    assert not list(S.index_path(str(repo)).parent.glob("*.tmp"))  # any temp file the kill left is swept
+
+
+def test_a_temp_file_left_by_a_killed_writer_is_swept_by_the_next_write(tmp_path):
+    path = S.index_path(str(tmp_path))
+    S.write_index(path, S.locked_pipeline(), {})
+    orphan = path.parent / (path.name + ".x1y2z3.tmp")
+    orphan.write_text('{"format": 1, "functi')  # what a SIGKILL mid-write leaves
+    assert S.read_index(path) is not None  # readers never look at it
+    S.write_index(path, S.locked_pipeline(), {})
+    assert not orphan.exists() and S.read_index(path) is not None
 
 
 class _LLM:
