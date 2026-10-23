@@ -4,8 +4,10 @@
 is used by `prism.ask` at weight 0 (its pipeline records `"lint": "v4"`, so it
 is not the locked pipeline).
 
-**Gates and the set 6 rule below are proposals awaiting approval** - nothing
-has run on Kaggle yet.
+**Stage 1: PASS** (`reports/summary_candidate_v4_stage1/STAGE1.md`, NOTES.md):
+restates_name 24.8% -> 5.8% pooled, 676 of 886 escalations kept, v2 flags
+<= 0.1%, nothing lost. The Stage 1 gates were the proposal below (the cell ran
+before explicit approval); the set 6 rule below still awaits approval.
 
 ## Why
 
