@@ -398,6 +398,11 @@ def _rehydrate_def_nodes(builder: ConcreteGraphBuilder, parsed: ParsedFile, symb
     one line, since the Nth capture on a given line is always matched to
     the Nth symbol registered on that line.
     """
+    # Attributes never come from the definitions query (their own pass,
+    # `_rehydrate_attribute_def_nodes`, restores them); left in, one sharing a
+    # start line with a function (`const a = 1, f = () => {}`) could take the
+    # function's node.
+    symbols = [s for s in symbols if s.kind != "attribute"]
     if not symbols:
         return
     lang = parsed.language_id

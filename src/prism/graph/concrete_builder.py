@@ -646,7 +646,7 @@ class ConcreteGraphBuilder:
     def _register_definition(
         self, node: Node, is_class: bool, parsed: ParsedFile, module: str, force_kind: str | None = None
     ) -> None:
-        name_node = node.child_by_field_name("name")
+        name_node = _declarator_bound_function_name(node, parsed) or node.child_by_field_name("name")
         if name_node is None:
             name_node = _property_assigned_function_name(node, parsed)
             if name_node is None:
@@ -856,6 +856,9 @@ class ConcreteGraphBuilder:
                 name_node = declarator.child_by_field_name("name")
                 if name_node is None or name_node.type != "identifier":
                     continue
+                value = declarator.child_by_field_name("value")
+                if value is not None and value.type in JS_BOUND_FUNCTION_TYPES:
+                    continue  # `const f = () => {}`: registered as a function by the definitions query
                 name = node_text(name_node, parsed.source)
                 self._register_attribute(f"{module}.{name}", declarator, parsed, module, enclosing_class=None)
 
@@ -4374,7 +4377,41 @@ def outer_definition_node(node: Node, lang: str) -> Node:
         and parent.child_by_field_name("right") == node
     ):
         return parent
+    if lang in _JS_LANGUAGES and parent is not None and parent.type == "variable_declarator" \
+            and parent.child_by_field_name("value") == node:
+        # `export const f = () => {}`: the statement, export included, so the
+        # line range (and every slice and card made from it) starts where the
+        # declaration does and the JSDoc above it is adjacent. A statement
+        # declaring several names (`const a = 1, f = () => {}`) reports the
+        # declarator alone - the statement is not this function's.
+        stmt = parent.parent
+        if stmt is None or stmt.type not in ("lexical_declaration", "variable_declaration") \
+                or sum(1 for c in stmt.named_children if c.type == "variable_declarator") != 1:
+            return parent
+        if stmt.parent is not None and stmt.parent.type == "export_statement":
+            return stmt.parent
+        return stmt
     return node
+
+
+#: Function node types a JS/TS `const`/`let`/`var` declarator can bind
+#: (`_JS_CONST_BOUND_FUNCTION_DEFINITION` in `prism.parser.queries`).
+JS_BOUND_FUNCTION_TYPES = frozenset({"arrow_function", "function_expression", "generator_function"})
+_JS_LANGUAGES = frozenset({LanguageID.JAVASCRIPT, LanguageID.TYPESCRIPT, LanguageID.TSX})
+
+
+def _declarator_bound_function_name(node: Node, parsed: ParsedFile) -> Node | None:
+    """The binding name of a function bound by declaration (`const f = () =>
+    {}`, `export const f = function g() {}` -> `f`), or `None`. It wins over a
+    function expression's own internal name: callers and importers use the
+    binding; `g` is only visible inside its own body."""
+    if parsed.language_id not in _JS_LANGUAGES or node.type not in JS_BOUND_FUNCTION_TYPES:
+        return None
+    parent = node.parent
+    if parent is None or parent.type != "variable_declarator" or parent.child_by_field_name("value") != node:
+        return None
+    name = parent.child_by_field_name("name")
+    return name if name is not None and name.type == "identifier" else None
 
 
 def _property_assigned_function_name(node: Node, parsed: ParsedFile) -> Node | None:
