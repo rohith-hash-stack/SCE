@@ -162,6 +162,12 @@ names one symbol.
     prism ask "where are notifications saved?" --repo .
     prism ask "Router.include_router" --repo .  # pinned exact name first
 
-`prism summarize` is incremental: unchanged functions keep their summary.
+`prism summarize` is incremental and resumable: unchanged functions keep
+their summary, and the index is checkpointed atomically every
+`--checkpoint-every` batches (default 25), so a crash, a SIGKILL or a
+notebook timeout loses at most that much work - rerunning the same command
+continues from the last checkpoint. A partial index is below 95% coverage,
+so search ignores it until the run completes. `kaggle/prism_summarize_cell.py`
+runs it on GPU and pushes each checkpoint.
 After it runs, a live MCP server uses the new index on the next
 `prism.ask` (its cache is keyed on the index file's mtime).
