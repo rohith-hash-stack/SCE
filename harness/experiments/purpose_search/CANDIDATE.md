@@ -12,7 +12,7 @@ new fresh validation set.
 | repair | `run.REPAIR_PROMPT`, `REPAIR_ATTEMPTS = 2`; lint = `lint.py` |
 | scoring | `BM25(code) + w * BM25(summary)`, summary as an independent field (`run.fielded`) |
 | weights | **w = 0.5** primary (balanced: best recall@5 and pool recall on set 3); **w = 1.0** tracked (highest MRR) |
-| shipped default | `summary_weight = 0.0` (off) until set 4 passes |
+| shipped | set 4 passed (SHIP w=0.5): `prism.ask` applies w = 0.5 automatically when a locked-pipeline index covers >= 95% of functions, else 0 (`prism.summaries.index`, `docs/capabilities_and_routing.md`) |
 
 ## Evidence so far
 

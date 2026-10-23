@@ -82,10 +82,12 @@ def test_rule_intent_is_deterministic_and_minimal():
 
 def test_search_payload(index):
     result = index.search(QUESTION, top_k=3)
-    assert result["intent"] == {"action": "MUTATE", "capability": "DATABASE_IO", "source": "rule"}
+    assert result["intent"] == {"action": "MUTATE", "capability": "DATABASE_IO", "source": "rule",
+                                "route": "natural_language", "summary_weight": 0.0}
     top = result["hits"][0]
     assert top["qname"] == "app.repo.UserRepository.insert_user"
-    assert set(top) == {"rank", "qname", "kind", "location", "score", "legs", "entry_context"}
+    assert set(top) == {"rank", "qname", "kind", "location", "score", "pinned", "legs", "entry_context"}
+    assert not top["pinned"]
     assert top["location"] == "app/repo.py:8" and top["kind"] == "method"
     assert top["legs"]["capability_source"] == "capability" and top["legs"]["capability"] > 0  # sqlite3 is L2 DB I/O
     assert top["entry_context"] == ["[Entry: POST /users] -> register_user() -> create_account() => enters at UserRepository.insert_user()"]
@@ -100,9 +102,10 @@ def test_priors_are_on_in_the_product(index):
 
 def test_caller_supplied_intent_and_stems_only(index):
     result = index.search(QUESTION, top_k=2, intent={"action": "MUTATE"})
-    assert result["intent"] == {"action": "MUTATE", "source": "caller"}
+    assert result["intent"] == {"action": "MUTATE", "source": "caller", "route": "natural_language", "summary_weight": 0.0}
     plain = index.search(QUESTION, top_k=2, intent=None)
-    assert plain["intent"] == {"source": None} and all(h["legs"]["action"] == 0.0 for h in plain["hits"])
+    assert plain["intent"] == {"source": None, "route": "natural_language", "summary_weight": 0.0}
+    assert all(h["legs"]["action"] == 0.0 for h in plain["hits"])
     with pytest.raises(ValueError):
         index.search(QUESTION, top_k=0)
 
@@ -140,7 +143,7 @@ def test_mcp_prism_ask(repo):
     result = mcp_server.prism_ask(QUESTION, repo_path=str(repo), top_k=2)
     assert result["hits"][0]["qname"] == "app.repo.UserRepository.insert_user"
     override = mcp_server.prism_ask(QUESTION, repo_path=str(repo), top_k=1, action="READ")
-    assert override["intent"] == {"action": "READ", "source": "caller"}
+    assert override["intent"] == {"action": "READ", "source": "caller", "route": "natural_language", "summary_weight": 0.0}
     for bad in ({"top_k": 0}, {"action": "FLY"}, {"capability": "SOMETHING"}):
         with pytest.raises(MCPError):
             mcp_server.prism_ask(QUESTION, repo_path=str(repo), **bad)

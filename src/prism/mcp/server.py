@@ -283,12 +283,16 @@ def get_graph_status(repo_path: str | None = None) -> dict[str, Any]:
     symbols, total call edges, how many of those edges a runtime trace
     has confirmed (`CONFIRMED_RUNTIME`) vs. how many the static resolver
     never found at all until a trace revealed them (`RUNTIME_DISCOVERED`),
-    and a per-tag symbol count.
+    and a per-tag symbol count. `summary_index` reports the offline
+    summaries `prism.ask` uses (`prism summarize`): coverage of the
+    functions, whether the locked pipeline built them, and the summary
+    weight that follows (0.5 at >= 95% coverage, else 0).
 
     Args:
         repo_path: Absolute path to the repository root. Defaults to the
             server's current working directory.
     """
+    from prism.summaries.index import state_for
     ctx = _repo_context(repo_path)
     g = ctx.builder.graph
 
@@ -314,6 +318,7 @@ def get_graph_status(repo_path: str | None = None) -> dict[str, Any]:
         "tag_counts": dict(sorted(tag_counts.items())),
         "trace_files_ingested": len(ctx.runtime_state.get("trace_files", [])),
         "indexed_at": ctx.indexed_at,
+        "summary_index": state_for(ctx.builder, ctx.repo_root).status(),
     }
 
 
@@ -322,12 +327,14 @@ def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
     """Drop the cached graph for a repository (if any) and rebuild it
     from source, re-merging `.prism/runtime_state.json` if present. Call
     this after editing source files or after a new `prism trace` run, since
-    nothing here watches the filesystem automatically.
+    nothing here watches the filesystem automatically. Returns the same
+    statistics as `get_graph_status`.
 
     Args:
         repo_path: Absolute path to the repository root. Defaults to the
             server's current working directory.
     """
+    from prism.summaries.index import state_for
     try:
         ctx = _cache.reindex(repo_path)
     except (RepoNotFoundError, SecurityError) as exc:
@@ -338,6 +345,7 @@ def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
         "total_edges": ctx.builder.graph.number_of_edges(),
         "trace_files_ingested": len(ctx.runtime_state.get("trace_files", [])),
         "indexed_at": ctx.indexed_at,
+        "summary_index": state_for(ctx.builder, ctx.repo_root).status(),
     }
 
 
@@ -749,9 +757,10 @@ def prism_blast_radius(
 #: Bounds on `prism.ask` arguments.
 ASK_MAX_QUESTION_CHARS = 2000
 ASK_MAX_TOP_K = 50
-#: One `NLQIndex` per indexed repository (keyed by the cached builder, so a
-#: `reindex_repo` - a new builder - gets a fresh one).
-_nlq_indexes: dict[int, Any] = {}
+#: One `NLQIndex` per indexed repository, keyed by the cached builder (a
+#: `reindex_repo` - a new builder - gets a fresh one) and the summary
+#: index's mtime (a new `prism summarize` run does too).
+_nlq_indexes: dict[tuple, Any] = {}
 
 
 @server.tool(name="prism.ask")
@@ -771,6 +780,17 @@ def prism_ask(
     for. Each hit carries its upstream entry points as display-only
     breadcrumbs, e.g. `[Entry: POST /follow/<username>] -> follow()`.
 
+    Routing is automatic and deterministic (no model is called):
+    - the query is classified `identifier` ("Router.include_router"),
+      `mixed` (a question naming `user_id`) or `natural_language`; for the
+      first two, symbols whose qualified name the query names are pinned
+      first (`pinned: true`), the ranked hits follow;
+    - when the repository has an offline summary index (`prism summarize`)
+      built by the locked pipeline and covering >= 95% of its functions,
+      each function's one-line summary is scored as a second field at
+      weight 0.5; otherwise the weight is 0.
+    Both are reported in `intent.route` and `intent.summary_weight`.
+
     Args:
         question: The question, e.g. "Where are notifications saved to the
             database?" (1-2000 characters).
@@ -783,14 +803,15 @@ def prism_ask(
             such as `PRIM_NET_CONNECT`. Give either to use your own reading
             of the question; omit both for the built-in rule.
 
-    Returns `{question, intent: {action?, capability?, source}, hits: [{rank,
-    qname, kind, location, score, legs: {stems, capability, action,
-    capability_source}, entry_context}]}`. Feed a hit's `qname` to
+    Returns `{question, intent: {action?, capability?, source, route,
+    summary_weight}, hits: [{rank, qname, kind, location, score, pinned,
+    legs: {stems, capability, action, capability_source}, entry_context}]}`. Feed a hit's `qname` to
     `prism.slice` or `prism.blast_radius` for its context.
     """
     from prism.query.nlq import NLQIndex
     from prism.semantics.bitmask import FeatureBit
     from prism.semantics.triad import DATABASE_IO, PHYSICAL_ACTIONS
+    from prism.summaries.index import index_path
     if not isinstance(question, str) or not question.strip() or len(question) > ASK_MAX_QUESTION_CHARS:
         raise MCPError(code=-32602, message=f"question must be 1-{ASK_MAX_QUESTION_CHARS} characters")
     if not (1 <= top_k <= ASK_MAX_TOP_K):
@@ -803,10 +824,12 @@ def prism_ask(
         raise MCPError(code=-32602, message=f"capability must be DATABASE_IO or a PRIM_* primitive - got {capability!r}")
     enforce_auth(_authorization_header(ctx), api_key)
     repo_ctx = _repo_context_for_surface(repo_path)
-    key = id(repo_ctx.builder)
+    summaries = index_path(repo_ctx.repo_root)
+    # a new `prism summarize` run (a changed summaries.json) rebuilds the index
+    key = (id(repo_ctx.builder), summaries.stat().st_mtime_ns if summaries.exists() else None)
     if key not in _nlq_indexes:
         _nlq_indexes.clear()  # one live index: the builder it was made for may be gone
-        _nlq_indexes[key] = NLQIndex(repo_ctx.builder, repo_ctx.repo_root)
+        _nlq_indexes[key] = NLQIndex(repo_ctx.builder, repo_ctx.repo_root, summaries="auto")
     intent: Any = "rule"
     if action is not None or capability is not None:
         intent = {k: v for k, v in (("action", action), ("capability", capability)) if v is not None}

@@ -47,6 +47,7 @@ from pathlib import Path
 from harness.experiments.purpose_search.cards import build_card, resources
 from harness.experiments.purpose_search.lint import lint as lint_one, problems, rates as lint_rates
 from prism.query.nlq import BM25, NLQIndex, tokenize
+from prism.summaries.pipeline import REPAIR_ATTEMPTS, REPAIR_PROMPT, SUMMARY_PROMPT as SUMMARY_PROMPT_V2
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 Q2E = REPO_ROOT / "harness/experiments/query_to_evidence/dataset"
@@ -65,34 +66,11 @@ SUMMARY_PROMPT_V1 = (
     "Only reference entities, protocols, and mechanisms explicitly present in the context card or signature; do not "
     "assume specific business domains.\n"
     "Respond with a JSON object mapping each Qualified Name exactly as given to its summary.")
-#: v2: the card without the axes line + this prompt. v1's summaries copied axis labels and code
-#: identifiers, and dumped callee names (`lint.py`); v2 asks for plain-English behaviour in the
-#: words a developer would use when asking about it.
-SUMMARY_PROMPT_V2 = (
-    "You are an expert software architect describing functions for a code search index.\n"
-    "Below are the structural profiles of {n} functions, separated by '---'.\n\n{cards}\n\n"
-    "For EACH function write one plain-English sentence of 8 to 14 words saying what it does and how, in the words "
-    "a developer would use when asking about this behaviour.\n"
-    "Rules:\n"
-    "1. No code identifiers: no function, method, class, variable, module or file names, and no backticks, dots, "
-    "underscores, camelCase or parentheses.\n"
-    "2. Do not list the functions it calls; say in ordinary words what they achieve together.\n"
-    "3. Do not simply restate the function's name; describe its behaviour.\n"
-    "4. No internal analysis labels or filler, such as 'pure compute', 'no effect', 'leaf utility' or 'no return'.\n"
-    "5. Only describe behaviour, protocols and data present in the profile; do not assume business domains.\n"
-    "Example - bad: \"Loads config via os.environ.get, json.loads, no effect.\" "
-    "good: \"Reads settings from environment variables and parses them as JSON.\"\n"
-    "Respond with a JSON object mapping each Qualified Name exactly as given to its sentence.")
+#: v2 (the shipped, locked candidate): the card without the axes line + `SUMMARY_PROMPT_V2`, and the
+#: repair pass (`REPAIR_PROMPT`, `REPAIR_ATTEMPTS`) for a summary that fails the lint - all imported
+#: from `prism.summaries.pipeline`, so the evaluated and the shipped pipeline are one.
+#: v1's summaries copied axis labels and code identifiers, and dumped callee names (`lint.py`).
 VARIANTS = {"v1": (True, SUMMARY_PROMPT_V1), "v2": (False, SUMMARY_PROMPT_V2)}  # variant -> (card axes, prompt)
-#: v2 repair pass: a summary that fails the lint is sent back with its problems named.
-REPAIR_PROMPT = (
-    "The sentence below describes the function profiled after it, but breaks the rules: {problems}.\n"
-    "Rewrite it as one plain-English sentence of 8 to 14 words that keeps its meaning, with no code identifiers "
-    "(no function, method, class, variable, module or file names; no dots, underscores, camelCase or parentheses), "
-    "no list of the functions it calls, and no internal labels or filler.\n"
-    "Sentence: {summary}\n\nProfile:\n{card}\n\n"
-    "Respond with a JSON object {{\"summary\": \"<the rewritten sentence>\"}}.")
-REPAIR_ATTEMPTS = 2
 IDENT_PROMPT = (
     "Below is a one-line {what} of exactly one of the listed functions. Which function does it describe?\n"
     "{what_cap}: {text}\n\nCandidates (same class or module):\n{cands}\n\n"

@@ -651,7 +651,9 @@ def status(repo_path: str) -> None:
 )
 def ask(question: str, repo_path: str, top_k: int, as_json: bool, deps: bool) -> None:
     """Answer a natural-language QUESTION about the code with ranked symbols
-    and their upstream entry points (see prism.query.nlq)."""
+    and their upstream entry points (see prism.query.nlq). An exact name in
+    the query is pinned first; offline summaries (`prism summarize`) are
+    used automatically when they cover >= 95% of the functions."""
     from prism.query.nlq import NLQIndex
     repo_root = os.path.abspath(repo_path)
     dependencies = None
@@ -659,19 +661,57 @@ def ask(question: str, repo_path: str, top_k: int, as_json: bool, deps: bool) ->
         from prism.deps.index import DependencyIndex
         dependencies = DependencyIndex()
     builder, _tags = build_pipeline(repo_root, dependencies=dependencies)
-    result = NLQIndex(builder, repo_root).search(question, top_k=top_k)
+    result = NLQIndex(builder, repo_root, summaries="auto").search(question, top_k=top_k)
     if as_json:
         click.echo(json.dumps(result, indent=2))
         return
-    intent = {k: v for k, v in result["intent"].items() if k != "source"}
+    routing = ("route", "summary_weight")
+    intent = {k: v for k, v in result["intent"].items() if k not in ("source",) + routing}
     described = ", ".join(f"{k}={v}" for k, v in intent.items()) or "none (stems only)"
     click.echo(f"Intent: {described}")
+    click.echo(f"Route: {result['intent']['route']}, summary weight {result['intent']['summary_weight']}")
     if not result["hits"]:
         click.echo("No matching symbols.")
     for hit in result["hits"]:
-        click.echo(f"{hit['rank']:>3}. {hit['qname']}  ({hit['location']})  score {hit['score']:.2f}")
+        pin = "  [exact name]" if hit["pinned"] else ""
+        click.echo(f"{hit['rank']:>3}. {hit['qname']}  ({hit['location']})  score {hit['score']:.2f}{pin}")
         for line in hit["entry_context"]:
             click.echo(f"       {line}")
+
+
+@main.command()
+@click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
+@click.option("--model", default=None, help="Ollama model (default: the locked summarizer). Another model's index is used at weight 0.")
+@click.option("--base-urls", default="http://127.0.0.1:11434", show_default=True, help="Comma-separated Ollama servers, used round-robin.")
+@click.option("--threads", default=4, show_default=True, type=click.IntRange(1, 64), help="Concurrent requests.")
+@click.option("--from-cache", "from_cache", type=click.Path(exists=True, dir_okay=False),
+              help="Install summaries from a purpose-search harness cache (summary_cache_<repo>.json); each entry is checked against its card key.")
+@click.option("--dry-run", is_flag=True, help="Count what would be summarized; call no model, write nothing.")
+def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, from_cache: str | None, dry_run: bool) -> None:
+    """Build or refresh the offline summary index (.prism/summaries.json)
+    that `prism ask` / `prism.ask` use as a second search field.
+
+    The locked pipeline (prism.summaries.pipeline): a context card per
+    function, one plain-English sentence from a local Ollama model, a lint
+    + repair pass. Incremental: unchanged functions keep their summary.
+    Serving never calls a model; with >= 95% coverage search applies the
+    summaries at weight 0.5, otherwise not at all."""
+    from prism.summaries.index import MIN_COVERAGE, SUMMARY_WEIGHT
+    from prism.summaries.pipeline import LOCKED_MODEL, build_index
+    repo_root = os.path.abspath(repo_path)
+    builder, _tags = build_pipeline(repo_root)
+    cache = json.loads(open(from_cache, encoding="utf-8").read()) if from_cache else None
+    counts = build_index(builder, repo_root, model=model or LOCKED_MODEL,
+                         base_urls=[u for u in base_urls.split(",") if u], threads=threads, from_cache=cache,
+                         dry_run=dry_run, log=lambda m: click.echo(m, err=True))
+    if dry_run:
+        click.echo(json.dumps(counts, indent=2))
+        return
+    weight = SUMMARY_WEIGHT if counts["locked_pipeline"] and counts["coverage"] >= MIN_COVERAGE else 0.0
+    click.echo(f"Wrote {counts['path']}: coverage {counts['coverage']:.1%} of {counts['functions']} functions "
+               f"(summarized {counts['summarized']}, repaired {counts['repaired']}, failed {counts['failed']}, "
+               f"kept {counts['kept']}, imported {counts['imported']}).")
+    click.echo(f"Search summary weight: {weight}" + ("" if counts["locked_pipeline"] else " (not the locked pipeline)"))
 
 
 @main.command(name="mcp")

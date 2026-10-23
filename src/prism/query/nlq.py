@@ -24,7 +24,18 @@ The pipeline, end to end:
 4. **Priors**: a class never outranks its own best-matching method;
    candidates under `migrations/`, `alembic/` or `migrate/` go below every
    other hit unless the question is about migrations.
-5. **Entry context** (`prism.graph.entry_points`, display only): how a
+5. **Summary field** (optional, `summaries=`): `BM25(code) + w *
+   BM25(summary)`, the offline one-sentence summaries
+   (`prism summarize`, `prism.summaries`) as an independent field with its
+   own IDF and length norm. `summaries="auto"` (what `prism.ask` uses)
+   applies the shipped rule - w = 0.5 when `.prism/summaries.json` was built
+   by the locked pipeline and covers >= 95% of the functions, else 0 (see
+   `prism.summaries.index`). At w = 0 the field is not consulted at all.
+6. **Route and exact-name pin** (`prism.query.route`, `search` only): an
+   identifier or mixed query puts the symbols its names denote
+   (`qualified_name_matches`) first, best-scored first; the ranked hits
+   follow. A natural-language query is not pinned.
+7. **Entry context** (`prism.graph.entry_points`, display only): how a
    registered entry point (a route, command, task - never a wrapper
    decorator) reaches the hit, at most one validated path
    (`prism.graph.render_breadcrumbs`), e.g.
@@ -200,6 +211,21 @@ def apply_priors(
 TRIAD_WINDOW = 200
 
 
+def candidate_pool(builder: ConcreteGraphBuilder) -> list:
+    """Every symbol search ranks: functions, methods and classes, no
+    attributes, no test (VERIFICATION) code."""
+    return [s for s in builder.symbol_table if s.kind != "attribute" and s.role != SymbolRole.VERIFICATION]
+
+
+def read_lines(root: str, path: str) -> list[str]:
+    p = path if os.path.isabs(path) else os.path.join(root, path)
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            return fh.read().splitlines()
+    except OSError:
+        return []
+
+
 class NLQIndex:
     """Natural-language search over one indexed repository (see module
     docstring). Built once per index; `search` is cheap."""
@@ -207,11 +233,15 @@ class NLQIndex:
     def __init__(
         self, builder: ConcreteGraphBuilder, repo_root: str, *, member_over_class: bool = True,
         demote_migrations: bool = True, unknown_to_action: bool = False, hop_gamma: float | None = None,
+        summaries: "dict[str, str] | str | None" = None, summary_weight: float | None = None,
     ):
+        """`summaries`: `None` (off), `"auto"` (the shipped rule over
+        `.prism/summaries.json`) or a `{qualified name: sentence}` dict, used
+        at `summary_weight` (default `SUMMARY_WEIGHT`)."""
         from prism.graph.entry_points import EntryIndex
         from prism.semantics.profile_cache import cached_capability_profiles
         self.builder, self.root = builder, os.path.abspath(repo_root)
-        self.pool = [s for s in builder.symbol_table if s.kind != "attribute" and s.role != SymbolRole.VERIFICATION]
+        self.pool = candidate_pool(builder)
         self.names = [s.qualified_name for s in self.pool]
         self._lines: dict[str, list[str]] = {}
         docs = [
@@ -232,6 +262,20 @@ class NLQIndex:
         self.migration = {s.qualified_name for s in self.pool if is_migration_path(self._relative(s.file))} \
             if demote_migrations else set()
         self.entries = EntryIndex(builder)
+        self._init_summaries(summaries, summary_weight)
+
+    def _init_summaries(self, summaries: "dict[str, str] | str | None", weight: float | None) -> None:
+        from prism.summaries.index import SUMMARY_WEIGHT, SummaryState, index_path, load_state
+        if summaries == "auto":
+            self.summary_state = load_state(self.pool, self._source, index_path(self.root))
+            weight = self.summary_state.weight if weight is None else weight
+        else:
+            self.summary_state = SummaryState(summaries=dict(summaries or {}), present=summaries is not None,
+                                              reason="caller-supplied" if summaries is not None else "off")
+            weight = (SUMMARY_WEIGHT if summaries else 0.0) if weight is None else weight
+        self.summary_weight = float(weight)
+        self.summary_bm25 = BM25([tokenize(self.summary_state.summaries.get(n, "")) for n in self.names]) \
+            if self.summary_weight else None
 
     # -- helpers -------------------------------------------------------- #
     def _relative(self, path: str) -> str:
@@ -239,12 +283,7 @@ class NLQIndex:
 
     def _source(self, path: str) -> list[str]:
         if path not in self._lines:
-            p = path if os.path.isabs(path) else os.path.join(self.root, path)
-            try:
-                with open(p, encoding="utf-8", errors="replace") as fh:
-                    self._lines[path] = fh.read().splitlines()
-            except OSError:
-                self._lines[path] = []
+            self._lines[path] = read_lines(self.root, path)
         return self._lines[path]
 
     def action_tokens(self, qname: str) -> frozenset[str]:
@@ -259,7 +298,12 @@ class NLQIndex:
         match, re-ranked by the triad within `TRIAD_WINDOW` when `intent`
         has an action or a capability."""
         from prism.semantics.triad import ACTION_WEIGHT, CAPABILITY_WEIGHT, TriadScore, triad_rerank
-        sc = self.bm25.scores(tokenize(question))
+        query = tokenize(question)
+        sc = self.bm25.scores(query)
+        if self.summary_bm25 is not None:  # BM25(code) + w * BM25(summary); never consulted at w = 0
+            sc = dict(sc)
+            for i, s in self.summary_bm25.scores(query).items():
+                sc[i] = sc.get(i, 0.0) + self.summary_weight * s
         order = sorted(sc, key=lambda i: (-sc[i], i))
         action, capability = intent_legs(intent)
         if action is None and capability is None:
@@ -284,34 +328,66 @@ class NLQIndex:
         rows = self.scored(question, intent)
         return apply_priors([(r.qname, r.score) for r in rows], question, self.members, self.migration)
 
+    def pinned(self, question: str, route: str, order: list[str]) -> list[str]:
+        """Exact-name pin: pool symbols the query's names denote
+        (`qualified_name_matches`), in `order` (best-scored first), then any
+        the ranking missed, by name. Empty for natural-language queries."""
+        from prism.query.locate import qualified_name_matches
+        from prism.query.route import name_candidates
+        pool = set(self.names)
+        matches = {m for name in name_candidates(question, route)
+                   for m in qualified_name_matches(self.builder, name) if m in pool}
+        position = {n: i for i, n in enumerate(order)}
+        return sorted(matches, key=lambda n: (position.get(n, len(position)), n))
+
+    def served(self, question: str, intent: dict | None) -> tuple[str, list[str], list[str], dict]:
+        """`(route, pinned names, full served order, TriadScore rows by
+        name)`: `ranked()` with the exact-name pin applied in front."""
+        from prism.query.route import classify
+        route = classify(question)
+        rows = {r.qname: r for r in self.scored(question, intent)}
+        order = apply_priors([(n, r.score) for n, r in rows.items()], question, self.members, self.migration)
+        pins = self.pinned(question, route, order)
+        pin_set = set(pins)
+        return route, pins, pins + [n for n in order if n not in pin_set], rows
+
     def search(self, question: str, top_k: int = 10, intent: "dict | None | str" = "rule") -> dict[str, Any]:
         """The query result payload:
 
-            {"question": ..., "intent": {"action": ..., "capability": ...,
-             "source": "rule" | "caller" | None},
-             "hits": [{"rank", "qname", "kind", "location", "score",
+            {"question": ...,
+             "intent": {"action": ..., "capability": ..., "source": "rule" | "caller" | None,
+                        "route": "identifier" | "mixed" | "natural_language", "summary_weight": w},
+             "hits": [{"rank", "qname", "kind", "location", "score", "pinned",
                        "legs": {"stems", "capability", "action", "capability_source"},
                        "entry_context": ["[Entry: POST /x] -> f() => enters at g()"]}, ...]}
-        """
+
+        `pinned` hits are the exact name matches an identifier or mixed
+        query placed first (`pinned()`)."""
+        from prism.semantics.triad import TriadScore
         if top_k < 1:
             raise ValueError("top_k must be >= 1")
         source = "rule" if intent == "rule" else ("caller" if intent else None)
         resolved = rule_intent(question) if intent == "rule" else intent
-        rows = {r.qname: r for r in self.scored(question, resolved)}
-        order = apply_priors([(n, r.score) for n, r in rows.items()], question, self.members, self.migration)
+        route, pins, order, rows = self.served(question, resolved)
+        pin_set = set(pins)
         hits = []
         for rank, name in enumerate(order[:top_k], start=1):
-            row, symbol = rows[name], self.builder.symbol_table.get(name)
+            row = rows.get(name) or TriadScore(name, 0.0, 0.0, 0.0, 0.0, "none")
+            symbol = self.builder.symbol_table.get(name)
             hits.append({
                 "rank": rank,
                 "qname": name,
                 "kind": symbol.kind,
                 "location": f"{self._relative(symbol.file)}:{symbol.line_range[0]}",
                 "score": round(row.score, 4),
+                "pinned": name in pin_set,
                 "legs": {
                     "stems": round(row.stems, 4), "capability": round(row.capability, 4),
                     "action": round(row.action, 4), "capability_source": row.capability_source,
                 },
                 "entry_context": self.entries.context(name) if symbol.kind != "class" else [],
             })
-        return {"question": question, "intent": {**(resolved or {}), "source": source if resolved else None}, "hits": hits}
+        return {"question": question,
+                "intent": {**(resolved or {}), "source": source if resolved else None,
+                           "route": route, "summary_weight": self.summary_weight},
+                "hits": hits}
