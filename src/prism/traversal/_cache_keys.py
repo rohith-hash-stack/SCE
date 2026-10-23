@@ -17,6 +17,7 @@ import importlib.metadata
 import os
 import subprocess
 import time
+import weakref
 from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -364,6 +365,37 @@ def snapshot_file_hash_set(repo_root: str):
         _snapshot_override.reset(token)
 
 
+def snapshot_signature(builder) -> str:
+    """The signature of what `builder` actually holds: every file it
+    parsed, by the bytes it parsed (`ParsedFile.source`, normalized the
+    same way `_compute_file_hash_set` normalizes disk content), plus the
+    runtime trace state merged into its graph, if any
+    (`builder.runtime_state_digest`, set by
+    `prism.runtime.reconciler.apply_runtime_state`).
+
+    Derived caches (feature masks, capability profiles, the causal graph
+    and distance caches) are functions of the builder, so they are keyed
+    on this, never on the disk (`target_repo_file_signature`): in a live
+    MCP session the disk moves ahead of a cached builder until
+    `reindex_repo`, and a disk-keyed entry computed from the old builder
+    would be served to the rebuilt one.
+
+    The source part is computed once per builder and memoized on it (a
+    built builder's parsed files never change); code that re-parses files
+    in place must reset `builder._source_signature`."""
+    sources = getattr(builder, "_source_signature", None)
+    if sources is None:
+        root = str(Path(builder.repo_root).resolve()) if getattr(builder, "repo_root", None) else ""
+        hasher = hashlib.sha256()
+        for path, parsed in sorted(builder._parsed_files.items()):
+            hasher.update((os.path.relpath(path, root) if root and os.path.isabs(path) else path).encode())
+            hasher.update(hashlib.sha256(_normalize_content(parsed.source)).hexdigest().encode())
+        sources = f"parsed:{hasher.hexdigest()}"
+        builder._source_signature = sources
+    runtime = getattr(builder, "runtime_state_digest", None)
+    return f"{sources}|runtime:{runtime}" if runtime else sources
+
+
 @dataclass(frozen=True)
 class GraphCacheKey:
     """`(repo_path, engine_commit_hash, grammar_version, tag_rule_version,
@@ -397,7 +429,22 @@ class GraphCacheKey:
         return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def graph_cache_key_for(builder) -> GraphCacheKey:
+    """`graph_cache_key` for a built graph: `file_hash_set` is the
+    builder's own `snapshot_signature`, not the disk's."""
+    commit_hash = engine_commit_hash()
+    return GraphCacheKey(
+        repo_path=str(Path(builder.repo_root).resolve()),
+        engine_commit_hash=commit_hash,
+        grammar_version=grammar_version(),
+        tag_rule_version=commit_hash,
+        file_hash_set=snapshot_signature(builder),
+    )
+
+
 def graph_cache_key(repo_root: str) -> GraphCacheKey:
+    """The disk-state key (the repository as it is now). Derived caches use
+    `graph_cache_key_for(builder)` instead."""
     repo_path = str(Path(repo_root).resolve())
     commit_hash = engine_commit_hash()
     return GraphCacheKey(
@@ -407,6 +454,24 @@ def graph_cache_key(repo_root: str) -> GraphCacheKey:
         tag_rule_version=commit_hash,
         file_hash_set=target_repo_file_signature(repo_path),
     )
+
+
+#: Every `_LRUCache` instance, so a rebuild can drop them all
+#: (`evict_derived_caches`); weak, so a cache that goes away is not kept alive.
+_DERIVED_CACHES: "weakref.WeakSet[_LRUCache]" = weakref.WeakSet()
+
+
+def evict_derived_caches() -> int:
+    """Clear every in-process derived cache (`_LRUCache`). Called on a
+    rebuild (`GraphCache.reindex` / `invalidate` / `clear`): snapshot keys
+    already keep a rebuilt builder from reading an old entry, and this
+    frees the old snapshot's entries at once rather than leaving them to
+    LRU eviction. Returns how many entries were dropped."""
+    dropped = 0
+    for cache in list(_DERIVED_CACHES):
+        dropped += len(cache)
+        cache.clear()
+    return dropped
 
 
 class _LRUCache(Generic[_V]):
@@ -430,6 +495,7 @@ class _LRUCache(Generic[_V]):
     def __init__(self, maxsize: int) -> None:
         self._maxsize = maxsize
         self._data: OrderedDict[str, _V] = OrderedDict()
+        _DERIVED_CACHES.add(self)
 
     def get(self, key: str, default: _V | None = None) -> _V | None:
         if key not in self._data:

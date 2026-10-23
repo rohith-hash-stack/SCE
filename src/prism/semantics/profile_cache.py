@@ -7,7 +7,9 @@ from `.prism/cache/capability_profiles.db` (next to the index cache,
 `prism.runtime.index_cache`), and computes and stores them only on a miss.
 
 The key covers everything the profiles depend on: the engine's own code
-(`engine_commit_hash`), the repository's files (`target_repo_file_signature`),
+(`engine_commit_hash`), the files and runtime state the builder holds
+(`snapshot_signature` - the builder's own parse, not the disk, which may
+have moved on since it was built),
 the profile parameters, and - for a build given dependency summaries - every
 boundary node's package version and evidence plus the stub shadow, so a build
 with summaries never reads a build without them (or with other versions).
@@ -22,7 +24,7 @@ from pathlib import Path
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.semantics.capabilities import MAX_HOPS, CapabilityProfile, compute_capability_profiles
-from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, target_repo_file_signature
+from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, snapshot_signature
 
 #: Bump when `CapabilityProfile` or its derivation changes shape.
 PROFILE_CACHE_VERSION = 3
@@ -46,7 +48,7 @@ def _dependency_digest(builder: ConcreteGraphBuilder) -> list:
 def profile_cache_key(builder: ConcreteGraphBuilder, repo_root: str, max_hops: int, include_l3_stubs: bool) -> str:
     raw = json.dumps([
         PROFILE_CACHE_VERSION, engine_commit_hash(), str(Path(repo_root).resolve()),
-        target_repo_file_signature(repo_root), max_hops, include_l3_stubs, _dependency_digest(builder),
+        snapshot_signature(builder), max_hops, include_l3_stubs, _dependency_digest(builder),
     ])
     return hashlib.sha256(raw.encode()).hexdigest()
 

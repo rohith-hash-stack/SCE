@@ -24,6 +24,7 @@ from prism.mcp.security import assert_path_in_repo
 from prism.runtime.contract_cache import compute_or_load_contracts
 from prism.runtime.reconciler import heal_and_apply_runtime_state, load_runtime_state
 from prism.slicer.distance import DistanceConfig, DistanceEngine
+from prism.traversal._cache_keys import evict_derived_caches, snapshot_signature
 
 
 class RepoNotFoundError(Exception):
@@ -51,6 +52,10 @@ class RepoContext:
     contracts: dict[str, BehavioralContract] = field(default_factory=dict)
     hierarchy: HierarchicalIntentProfile | None = None
     indexed_at: float = field(default_factory=time.time)
+    #: `snapshot_signature(builder)` taken when this context was built: the
+    #: parsed sources plus merged runtime state every derived cache is keyed
+    #: on (`prism.traversal._cache_keys`). The disk may move on; this does not.
+    snapshot_signature: str = ""
 
     @property
     def symbol_table(self):
@@ -67,7 +72,9 @@ class GraphCache:
     `reindex`/`invalidate` are the only ways to force a rebuild (source
     files or `.prism/runtime_state.json` changing on disk are not watched -
     a caller must explicitly ask for a refresh, matching the `reindex_repo`
-    MCP tool this class backs).
+    MCP tool this class backs). Each also evicts the in-process derived
+    caches, which are keyed on the builder's snapshot (`RepoContext.
+    snapshot_signature`), never on the disk.
     """
 
     def __init__(self) -> None:
@@ -120,15 +127,19 @@ class GraphCache:
 
     def reindex(self, repo_path: str | None) -> RepoContext:
         key = self.canonical_path(repo_path)
+        self._entries.pop(key, None)
+        evict_derived_caches()  # the old snapshot's masks, profiles, graphs and distances
         entry = self._index(key)
         self._entries[key] = entry
         return entry
 
     def invalidate(self, repo_path: str | None) -> None:
         self._entries.pop(self.canonical_path(repo_path), None)
+        evict_derived_caches()
 
     def clear(self) -> None:
         self._entries.clear()
+        evict_derived_caches()
 
     def _index(self, repo_root: str) -> RepoContext:
         if not os.path.isdir(repo_root):
@@ -157,4 +168,5 @@ class GraphCache:
             runtime_state=runtime_state,
             contracts=contracts,
             hierarchy=hierarchy,
+            snapshot_signature=snapshot_signature(builder),
         )

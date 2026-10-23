@@ -31,7 +31,7 @@ from prism.parser.lang_config import CALL_NODE_TYPE, iter_scoped_nodes
 from prism.parser.tree_sitter_loader import LanguageID, ParsedFile, node_text
 from prism.slicer.distance import RELATION_TENTATIVE_CALL_WEIGHT, RELATION_TENTATIVE_DYNAMIC_CALL_WEIGHT
 from prism.semantics._ast_utils import conditional_nodes, top_level_statements, try_nodes
-from prism.traversal._cache_keys import _LRUCache, graph_cache_key
+from prism.traversal._cache_keys import _LRUCache, graph_cache_key_for
 from prism.traversal._data_flow_common import _node_key, _resolve_call_sites
 from prism.traversal.data_flow_go import compute_go_data_flow_edges
 from prism.traversal.data_flow_py import compute_python_data_flow_edges
@@ -42,7 +42,7 @@ from prism.traversal.data_flow_ts import compute_ts_data_flow_edges
 #: seed/budget-independent (pure functions of `builder` alone, same as
 #: `continuous_dijkstra.build_causal_graph`) and, per the cache-key
 #: matrix, share that function's exact key shape ("Same as
-#: build_causal_graph"). `prism.traversal._cache_keys.graph_cache_key`
+#: build_causal_graph"). `prism.traversal._cache_keys.graph_cache_key_for`
 #: is imported directly (not `continuous_dijkstra`'s own re-export) -
 #: `continuous_dijkstra.py` imports *this* module (`compute_causal_
 #: edges`, `edge_cost`), so importing back from it here would be
@@ -229,7 +229,7 @@ def compute_guard_indicator_edges(builder: ConcreteGraphBuilder) -> dict[tuple[s
     internal call) and across retrieves on the same or a different
     engine instance.
     """
-    key = graph_cache_key(builder.repo_root).digest()
+    key = graph_cache_key_for(builder).digest()
     cached = _GUARD_INDICATOR_EDGES_CACHE.get(key)
     if cached is not None:
         return cached
@@ -258,7 +258,7 @@ def compute_all_data_flow_edges(builder: ConcreteGraphBuilder) -> dict[tuple[str
     is the other half of "Same as build_causal_graph" in the cache-key
     matrix).
     """
-    key = graph_cache_key(builder.repo_root).digest()
+    key = graph_cache_key_for(builder).digest()
     cached = _DATA_FLOW_EDGES_CACHE.get(key)
     if cached is not None:
         return cached
@@ -337,7 +337,7 @@ def compute_causal_edges(
     so a cold call here still only pays the real cost once even though
     it fans out into two more cached functions.
     """
-    key = graph_cache_key(builder.repo_root).digest()
+    key = graph_cache_key_for(builder).digest()
     cached = _CAUSAL_EDGES_CACHE.get(key)
     if cached is not None:
         return cached

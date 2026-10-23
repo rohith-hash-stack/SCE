@@ -28,7 +28,7 @@ from prism.semantics.substance import (
     calls_opaque_boundary,
     compute_substance_bits,
 )
-from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, target_repo_file_signature
+from prism.traversal._cache_keys import _LRUCache, engine_commit_hash, snapshot_signature
 
 _SUBSTANCE_MASK = compose_mask(*SUBSTANCE_BITS)
 
@@ -40,7 +40,7 @@ _SUBSTANCE_MASK = compose_mask(*SUBSTANCE_BITS)
 #: function body entirely on a repeat call within the same process, the
 #: same in-memory treatment Steps 2/4 already gave `build_causal_graph`/
 #: `compute_topological_distances`/the causal-edge functions.
-#: `digest(repo_path, engine_commit_hash, file_hash_set) -> masks`.
+#: `digest(repo_path, engine_commit_hash, snapshot_signature(builder)) -> masks`.
 #:
 #: Bookmark 1 Item 3: bounded at 10 entries (LRU-evicted) - the
 #: slowest-growing of the five caches, one entry per repo (not per
@@ -48,14 +48,14 @@ _SUBSTANCE_MASK = compose_mask(*SUBSTANCE_BITS)
 _FEATURE_MASKS_CACHE: _LRUCache[dict[str, int]] = _LRUCache(maxsize=10)
 
 
-def _feature_masks_cache_key(repo_root: str, shadow: "dict[str, str] | None" = None) -> str:
-    """`file_hash_set` here is `target_repo_file_signature(repo_root)` -
-    not itself session-cached (no `@lru_cache`), but measured directly
-    against the real Django corpus at ~2-3ms/call (a single `git
-    rev-parse HEAD` for a git-tracked repo, not a full per-file rehash)
-    - cheap enough to call fresh on every `compute_feature_masks_cached`
-    invocation without threatening the <100ms warm-call target."""
-    raw = "|".join((str(Path(repo_root).resolve()), engine_commit_hash(), target_repo_file_signature(repo_root)))
+def _feature_masks_cache_key(
+    builder: ConcreteGraphBuilder, repo_root: str, shadow: "dict[str, str] | None" = None,
+) -> str:
+    """Keyed on the snapshot `builder` holds (`snapshot_signature`: the
+    bytes it parsed and the runtime state merged into it), not on the
+    disk: the masks are computed from the builder, so an entry must never
+    outlive the builder state it was computed from."""
+    raw = "|".join((str(Path(repo_root).resolve()), engine_commit_hash(), snapshot_signature(builder)))
     if shadow:
         # Dependency summaries change which stub entries match.
         raw += "|" + "|".join(f"{k}={v}" for k, v in sorted(shadow.items()))
@@ -88,14 +88,6 @@ def compute_feature_masks(builder: ConcreteGraphBuilder) -> dict[str, int]:
     return masks
 
 
-def _file_content_hash(path: str) -> str | None:
-    try:
-        with open(path, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
-    except OSError:
-        return None
-
-
 def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) -> dict[str, int]:
     """Same result as `compute_feature_masks`, but the file-local portion
     of each axis (Substance's *direct* sinks, all of Form, all of Output)
@@ -111,7 +103,7 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
     function body below - see `_FEATURE_MASKS_CACHE`'s own docstring.
     """
     shadow = getattr(builder, "stub_shadow", {})
-    cache_key = _feature_masks_cache_key(repo_root, shadow)
+    cache_key = _feature_masks_cache_key(builder, repo_root, shadow)
     cached_masks = _FEATURE_MASKS_CACHE.get(cache_key)
     if cached_masks is not None:
         return cached_masks
@@ -130,7 +122,10 @@ def compute_feature_masks_cached(builder: ConcreteGraphBuilder, repo_root: str) 
         parsed = builder.parsed_file(file_path)
         if parsed is None:
             continue
-        content_hash = _file_content_hash(file_path)
+        # The bytes this builder parsed, never the file on disk now: an entry
+        # keyed on newer disk content but computed from an older parse would
+        # be read back by every later build of that content.
+        content_hash = hashlib.sha256(parsed.source).hexdigest()
         relative_path = symbols[0].module  # stable, file-derived identifier for this cache's own key
         # The per-file cache holds direct bits for the default stub table; a
         # build whose dependency summaries shadow stub entries computes fresh.

@@ -283,7 +283,10 @@ def get_graph_status(repo_path: str | None = None) -> dict[str, Any]:
     symbols, total call edges, how many of those edges a runtime trace
     has confirmed (`CONFIRMED_RUNTIME`) vs. how many the static resolver
     never found at all until a trace revealed them (`RUNTIME_DISCOVERED`),
-    and a per-tag symbol count. `summary_index` reports the offline
+    and a per-tag symbol count. `snapshot_signature` identifies what the
+    served index was built from (its parsed sources and merged runtime
+    state); it changes only on `reindex_repo`, never with the disk.
+    `summary_index` reports the offline
     summaries `prism.ask` uses (`prism summarize`): coverage of the
     functions, whether the locked pipeline built them, and the summary
     weight that follows (0.5 at >= 95% coverage, else 0).
@@ -318,6 +321,7 @@ def get_graph_status(repo_path: str | None = None) -> dict[str, Any]:
         "tag_counts": dict(sorted(tag_counts.items())),
         "trace_files_ingested": len(ctx.runtime_state.get("trace_files", [])),
         "indexed_at": ctx.indexed_at,
+        "snapshot_signature": ctx.snapshot_signature,
         "summary_index": state_for(ctx.builder, ctx.repo_root).status(),
     }
 
@@ -345,6 +349,7 @@ def reindex_repo(repo_path: str | None = None) -> dict[str, Any]:
         "total_edges": ctx.builder.graph.number_of_edges(),
         "trace_files_ingested": len(ctx.runtime_state.get("trace_files", [])),
         "indexed_at": ctx.indexed_at,
+        "snapshot_signature": ctx.snapshot_signature,
         "summary_index": state_for(ctx.builder, ctx.repo_root).status(),
     }
 

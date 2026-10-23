@@ -32,7 +32,7 @@ from dataclasses import dataclass
 import networkx as nx
 
 from prism.graph.concrete_builder import ConcreteGraphBuilder
-from prism.traversal._cache_keys import GraphCacheKey, _LRUCache, engine_commit_hash, graph_cache_key
+from prism.traversal._cache_keys import GraphCacheKey, _LRUCache, engine_commit_hash, graph_cache_key_for
 from prism.traversal.causal_weights import LAMBDA_DATA_FLOW, LAMBDA_GUARD, compute_causal_edges, edge_cost, tentative_factor
 
 #: Backward-compatible aliases - this module's own cache-key logic
@@ -46,7 +46,7 @@ _engine_commit_hash = engine_commit_hash
 
 
 def _graph_cache_key(builder: ConcreteGraphBuilder) -> GraphCacheKey:
-    return graph_cache_key(builder.repo_root)
+    return graph_cache_key_for(builder)
 
 
 #: Blocker 1 performance work, Step 2/4: a correctly-keyed cache for
