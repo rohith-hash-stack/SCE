@@ -25,9 +25,34 @@ new fresh validation set.
 Set 3 was used three times (7B v1, 14B v1, 14B v2) and the v2 card/prompt were
 designed from its v1 failures, so these numbers are optimistic. Remaining gates:
 
-1. Python regression (set 2 + Q2E fastapi/django) with this exact configuration:
-   no loss against the v1 results; q13 stays in the pool; q11 is reported.
+1. Python regression (set 2 + Q2E fastapi/django) with this exact configuration: done
+   (`reports/purpose_search_py_14b_v2`), no loss against v1 on set 2.
 2. Set 4 (`heldout_retrieval/set4`), written and frozen before any run, scored once.
+
+## Pre-registered set-4 decision rule
+
+Recorded before set 4 was summarized or scored; applied mechanically by
+`decide.py` (written to `DECISION.md` / `decision.json` in the run's results):
+
+> Evaluate w=0.5 first on Set 4. If it beats BASE (sign test p < 0.05) without
+> dropping Top-5 Recall by more than 0.02, ship w=0.5. Otherwise, fall back to
+> w=1.0 under the exact same criteria. If neither passes, do not ship.
+
+Operational definitions (the same measures as every earlier run):
+
+- *beats BASE*: over the 48 set-4 questions, compare each question's
+  best-ranked gold symbol under the arm and under BASE (unranked = worst); more
+  questions improve than worsen, and the two-sided exact sign test on
+  improved vs. worsened (ties dropped) gives p < 0.05;
+- *Top-5 Recall drop*: mean recall@5 over the 48 questions, arm minus BASE;
+  passes if >= -0.02;
+- the configuration is the locked candidate above, unchanged: code commit,
+  cards, prompts, repair, weights and summarizer fixed before the run.
+
+Results of the earlier gates for context (not part of the rule):
+Python regression (set 2: w=0.5 22 better / 2 worse, MRR 0.678 -> 0.748;
+w=1.0 recall@5 0.833 -> 0.950, MRR -> 0.763; Q2E q13 back in the pool at
+w=1.0, q11 not recovered).
 
 Forward blast-radius retrieval (`prism.blast_radius`) is not affected: it stays
 on the R0 caller rule.

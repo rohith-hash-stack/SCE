@@ -1,4 +1,4 @@
-# Held-out set 4 (DRAFT - not frozen)
+# Held-out set 4 (frozen, version 1)
 
 48 questions across four repositories that no earlier set, corpus or tuning
 run has used. It is the go/no-go set for the locked purpose-search candidate
@@ -38,13 +38,9 @@ functions assigned to constants (`utils/url.ts:getPath`, `middleware/cors`'s
 `cors` have no symbol). Hono would have measured that indexing gap rather than
 retrieval, so zod (classes and function declarations) replaced it.
 
-## Review checklist (before freezing)
+## Status
 
-1. Does each question read like something a developer would ask?
-2. Is the gold the function you would want returned? Should any question have
-   another gold symbol?
-3. Are the decoys plausible but wrong?
-4. Does any question give away its answer through a too-specific term?
-
-To freeze: set `"status": "frozen"` and `"version": 1` in `dataset.json`,
-commit, and record that commit in the set-4 run before any engine runs.
+Frozen (`dataset.json`: `"status": "frozen"`, `"version": 1`) after review,
+before any engine ran on these repos. It is scored once, for the pre-registered
+ship decision in `harness/experiments/purpose_search/CANDIDATE.md`, and never
+edited after that run.
