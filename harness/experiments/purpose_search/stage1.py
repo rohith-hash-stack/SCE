@@ -1,23 +1,29 @@
-"""Stage 1 of the v3 validation (CANDIDATE_V3.md): convert v2 indexes to the
-unvalidated candidates on the production path, then apply the approved gates.
+"""Stage 1 of a summarizer-candidate validation (CANDIDATE_V3.md,
+CANDIDATE_V4.md): convert v2 indexes to the unvalidated candidates on the
+production path, then apply the approved gates.
 
-`run`: per repository, three indexes that differ only in the lint -
+`run`: per repository, the v2 index and one index per candidate (`--steps`;
+default v2, v3-name, v3), each built from a copy of v2 -
   v2       `prism summarize` (locked): the cached / live v2 summaries whose card
-           keys still match are installed, the rest summarized with v2;
-  v3-name  `prism summarize --candidate v3-name` from a copy of v2 (repair only);
-  v3       `prism summarize --candidate v3` from a copy of v2 (repair only).
+           keys still match are installed, the rest summarized with v2 (a v2
+           index already in OUT is kept);
+  v3-name  `prism summarize --candidate v3-name` (repair only);
+  v3       `prism summarize --candidate v3` (repair only);
+  v4       `prism summarize --candidate v4` (escalation only: name-restating
+           summaries rewritten from the function's source).
 Each step's index is copied to OUT/<repo>/<step>.json; while a step runs its
 index is snapshotted to OUT/<repo>/<step>.partial.json, so a new session
 resumes (a finished step is skipped, a partial one continues).
 
-`gate`: per candidate, pooled over the repositories, after repair -
-  restates_name <= 0.10, too_short <= 0.15 (v3 only), every v2 flag <= 0.05,
-  no summary lost against v2, every entry checked - plus first-pass counts and
-  before/after samples. Writes OUT/STAGE1.md and OUT/stage1.json.
+`gate`: per candidate, pooled over the repositories, on its own flags (the
+lint flags it adds or escalates on) - restates_name <= 0.10, too_short <= 0.15
+(v3 only), every v2 flag <= 0.05, no summary lost against v2, every entry
+checked - plus first-pass counts and before/after samples. Writes
+OUT/STAGE1.md and OUT/stage1.json.
 
 Usage:
-  python -m harness.experiments.purpose_search.stage1 run  MANIFEST OUT --base-urls URLS [--threads N]
-  python -m harness.experiments.purpose_search.stage1 gate MANIFEST OUT
+  python -m harness.experiments.purpose_search.stage1 run  MANIFEST OUT --base-urls URLS [--threads N] [--steps v2,v4]
+  python -m harness.experiments.purpose_search.stage1 gate MANIFEST OUT [--steps v2,v4]
 MANIFEST: {"<repo>": {"root": path, "cache": harness summary cache or null, "live": live index or null}}
 """
 from __future__ import annotations
@@ -101,26 +107,35 @@ def run_step(repo: str, spec: dict, step: str, out: Path, base_urls: str, thread
     return "done"
 
 
-def run(manifest: dict, out: Path, base_urls: str, threads: int, checkpoint_every: int, prism=None, log=print) -> dict:
+def candidate_flags(cand: str) -> tuple[str, ...]:
+    """The lint flags a candidate adds to v2's, whether it repairs or escalates on them."""
+    from prism.summaries.pipeline import CANDIDATES
+    c = CANDIDATES[cand]
+    return tuple(dict.fromkeys(c["lint_flags"] + c.get("escalate", ())))
+
+
+def run(manifest: dict, out: Path, base_urls: str, threads: int, checkpoint_every: int, prism=None, log=print,
+        steps=STEPS) -> dict:
     prism = prism or [sys.executable, "-m", "prism.cli"]
+    steps = ("v2",) + tuple(s for s in steps if s != "v2")
     status = {}
     for repo, spec in manifest.items():
         (out / repo).mkdir(parents=True, exist_ok=True)
-        for step in STEPS:
+        for step in steps:
             t = time.time()
             status[f"{repo}/{step}"] = run_step(repo, spec, step, out, base_urls, threads, checkpoint_every, prism, log)
             log(f"[{repo} {step}] {status[f'{repo}/{step}']} in {time.time() - t:.0f}s")
     return status
 
 
-def gate(manifest: dict, out: Path, sample: int = 6) -> dict:
+def gate(manifest: dict, out: Path, sample: int = 6, steps=STEPS) -> dict:
     from prism.cli import build_pipeline
     from prism.graph.entry_points import find_entry_points
     from prism.summaries.cards import build_card
     from prism.summaries.lint import FLAGS, lint
-    from prism.summaries.pipeline import CANDIDATES
+    cands = [s for s in steps if s != "v2"]
     per_repo, pooled = {}, {c: {"n": 0, "first_pass_flagged": 0, "repaired": 0, "lost": 0, "unchecked": 0,
-                                "flags": {}, "samples": []} for c in STEPS[1:]}
+                                "flags": {}, "samples": []} for c in cands}
     rng = random.Random(0)
     for repo, spec in manifest.items():
         v2 = _read(out / repo / "v2.json")
@@ -130,8 +145,8 @@ def gate(manifest: dict, out: Path, sample: int = 6) -> dict:
         entries = find_entry_points(builder)
         cards = {q: c["card"] for q in v2["functions"] if (c := build_card(builder, {}, entries, q, axes=False))}
         per_repo[repo] = {}
-        for cand in STEPS[1:]:
-            extra = CANDIDATES[cand]["lint_flags"]
+        for cand in cands:
+            extra = candidate_flags(cand)
             idx = _read(out / repo / f"{cand}.json")
             if not idx:
                 raise SystemExit(f"{repo}: no {cand} index")
@@ -165,12 +180,12 @@ def gate(manifest: dict, out: Path, sample: int = 6) -> dict:
 
 
 def render(r: dict) -> str:
-    L = ["# Stage 1: candidate conversion gates (CANDIDATE_V3.md)", ""]
+    L = ["# Stage 1: candidate conversion gates (CANDIDATE_V3.md, CANDIDATE_V4.md)", ""]
     for cand, v in r["verdict"].items():
         p = r["pooled"][cand]
         L += [f"## {cand}: **{'PASS' if v['passes'] else 'FAIL'}**", "",
               f"{p['n']} summaries over {len(r['per_repo'])} repositories; first pass flagged {p['first_pass_flagged']} "
-              f"({p['first_pass_flagged'] / max(1, p['n']):.0%}), rewritten by repair {p['repaired']}, lost {p['lost']}, "
+              f"({p['first_pass_flagged'] / max(1, p['n']):.0%}), rewritten {p['repaired']}, lost {p['lost']}, "
               f"unchecked {p['unchecked']}.", "", "| check | pooled rate | result |", "|---|---|---|"]
         for check, ok in v["checks"].items():
             flag = check.split(" <= ")[0]
@@ -196,13 +211,15 @@ def main(argv=None) -> int:
     ap.add_argument("--base-urls", default="http://127.0.0.1:11434")
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--checkpoint-every", type=int, default=25)
+    ap.add_argument("--steps", default=",".join(STEPS), help="comma-separated: v2 and the candidates")
     args = ap.parse_args(argv)
+    steps = tuple(args.steps.split(","))
     manifest = json.loads(args.manifest.read_text())
     args.out.mkdir(parents=True, exist_ok=True)
     if args.command == "run":
-        print(json.dumps(run(manifest, args.out, args.base_urls, args.threads, args.checkpoint_every), indent=1))
+        print(json.dumps(run(manifest, args.out, args.base_urls, args.threads, args.checkpoint_every, steps=steps), indent=1))
         return 0
-    r = gate(manifest, args.out)
+    r = gate(manifest, args.out, steps=steps)
     print(render(r))
     return 0 if all(v["passes"] for v in r["verdict"].values()) else 1
 

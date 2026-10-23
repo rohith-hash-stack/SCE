@@ -689,9 +689,10 @@ def ask(question: str, repo_path: str, top_k: int, as_json: bool, deps: bool) ->
 @click.option("--dry-run", is_flag=True, help="Count what would be summarized; call no model, write nothing.")
 @click.option("--checkpoint-every", "checkpoint_every", default=25, show_default=True, type=click.IntRange(1),
               help="Write the index every N batches; an interrupted run resumes from the last checkpoint.")
-@click.option("--candidate", default="v2", show_default=True, type=click.Choice(["v2", "v3", "v3-name"]),
-              help="v2: the locked summarizer. v3 / v3-name: unvalidated - a stricter lint sends name-restating (and, "
-                   "for v3, short) summaries to repair; reuses v2 summaries; the index is used at weight 0 until validated.")
+@click.option("--candidate", default="v2", show_default=True, type=click.Choice(["v2", "v3", "v3-name", "v4"]),
+              help="v2: the locked summarizer. Unvalidated (the index is used at weight 0 until validated; v2 summaries "
+                   "are reused): v3 / v3-name - a stricter lint sends name-restating (and, for v3, short) summaries to "
+                   "repair; v4 - name-restating summaries are rewritten from the function's source.")
 def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, from_cache: str | None, dry_run: bool,
               checkpoint_every: int, candidate: str) -> None:
     """Build or refresh the offline summary index (.prism/summaries.json)

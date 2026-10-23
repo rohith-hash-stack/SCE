@@ -92,3 +92,20 @@ def test_the_gate_passes_a_clean_conversion_and_fails_thin_or_lost_summaries(set
     assert not v["passes"] and not v["checks"]["no summary lost"]
     assert not v["checks"]["restates_name <= 0.1"]  # 1 of 7 = 14%
     assert json.loads((out / "stage1.json").read_text())["verdict"]["v3"]["passes"] is False
+
+
+def test_v4_is_built_from_the_kept_v2_index_by_escalation_and_gated_on_restates_name(setup):
+    manifest, out, root = setup
+    srv = FakeOllama()
+    try:
+        status = stage1.run(manifest, out, srv.url, 1, 1, log=lambda m: None, steps=("v2", "v4"))
+        assert status == {"repo/v2": "done (kept)", "repo/v4": "done"}
+        assert srv.calls == 4  # one escalation per thin summary, nothing else
+    finally:
+        srv.release()
+    v4 = S.read_index(out / "repo" / "v4.json")
+    assert v4["pipeline"]["lint"] == "v4"
+    assert sorted(q for q, e in v4["functions"].items() if e.get("escalated")) == [f"app.ops.op{i}" for i in range(4)]
+    r = stage1.gate(manifest, out, steps=("v2", "v4"))
+    assert list(r["verdict"]) == ["v4"] and r["verdict"]["v4"]["passes"]
+    assert "restates_name <= 0.1" in r["verdict"]["v4"]["checks"] and r["pooled"]["v4"]["first_pass_flagged"] == 4

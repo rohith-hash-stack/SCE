@@ -111,4 +111,4 @@ def test_v3_name_repairs_only_name_restating_summaries(repo):
     build_index(builder, str(root), llm=LLM())
     assert build_index(builder, str(root), candidate="v3-name", dry_run=True)["to_repair"] == 3
     with pytest.raises(ValueError, match="unknown candidate"):
-        build_index(builder, str(root), candidate="v4", dry_run=True)
+        build_index(builder, str(root), candidate="v9", dry_run=True)

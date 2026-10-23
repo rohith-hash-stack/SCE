@@ -57,6 +57,8 @@ class FakeOllama:
                     return
                 if prompt.startswith("The sentence below"):
                     content = {"summary": GOOD}
+                elif "its source code follows" in prompt:  # candidate v4's escalation
+                    content = {"effects": "stores the purchase; charges the card", "summary": GOOD}
                 else:
                     content = {q: GOOD for q in re.findall(r"^Qualified Name: (\S+)$", prompt, re.M)}
                 out = json.dumps({"message": {"content": json.dumps(content)}}).encode()

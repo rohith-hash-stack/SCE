@@ -69,21 +69,58 @@ REPAIR_PROMPT = (
     "Sentence: {summary}\n\nProfile:\n{card}\n\n"
     "Respond with a JSON object {{\"summary\": \"<the rewritten sentence>\"}}.")
 REPAIR_ATTEMPTS = 2
+#: Candidate v4, pass 2: a summary the v2 pass left restating the function's name
+#: is written again from the card plus the function's own source (at most
+#: BODY_CAP lines), effects first.
+BODY_CAP = 60
+ESCALATION_PROMPT = (
+    "You are an expert software architect describing a function for a code search index.\n"
+    "Its profile alone gave too little to go on, so its source code follows.\n\n"
+    "Profile:\n{card}\n\nSource:\n{body}\n\n"
+    "First list, in a few words each, what the function checks, computes, changes, sends or returns (the effects).\n"
+    "Then, from those effects, write one plain-English sentence of 8 to 14 words saying what it does and how, in the words "
+    "a developer would use when asking about this behaviour.\n"
+    "Rules for the sentence: no code identifiers (no function, method, class, variable, module or file names; no "
+    "backticks, dots, underscores, camelCase or parentheses); do not list the functions it calls; do not simply restate "
+    "the function's name; no internal analysis labels or filler.\n"
+    "Respond with a JSON object {{\"effects\": \"<what it checks, computes, changes, sends or returns>\", "
+    "\"summary\": \"<the sentence>\"}}.")
 
 
 #: Summarizer candidates. "v2" is locked and shipped. The others are unvalidated:
-#: v2 plus a stricter lint whose flagged summaries go to the same repair pass -
-#: "v3" flags summaries that restate the function's name or fall under the
-#: prompt's 8-word floor, "v3-name" only the first (an ablation of the length
-#: rule). harness/experiments/purpose_search/CANDIDATE_V3.md.
+#: v3 / v3-name add lint checks whose flagged summaries go to the same repair
+#: pass (dropped at stage 1, CANDIDATE_V3.md); v4 keeps the v2 lint and repair
+#: and escalates summaries that restate the function's name to a second pass
+#: that also sees the function's source (CANDIDATE_V4.md).
 CANDIDATES = {"v2": {"lint_flags": ()}, "v3": {"lint_flags": ("restates_name", "too_short")},
-              "v3-name": {"lint_flags": ("restates_name",)}}
+              "v3-name": {"lint_flags": ("restates_name",)},
+              "v4": {"lint_flags": (), "escalate": ("restates_name",)}}
+#: Pipeline-record keys that belong to a candidate, not to the v2 summarizer.
+_CANDIDATE_KEYS = ("lint", "escalation_sha", "body_cap")
 
 
 def _generation(pipeline: dict) -> dict:
-    """The part of a pipeline record that decides the summaries themselves
-    (model, prompt, card, repair prompt) - everything but the lint version."""
-    return {k: v for k, v in pipeline.items() if k != "lint"}
+    """The part of a pipeline record that decides the pass-1 summaries
+    (model, prompt, card, repair prompt) - everything but the candidate's own
+    keys (lint version, escalation prompt)."""
+    return {k: v for k, v in pipeline.items() if k not in _CANDIDATE_KEYS}
+
+
+def candidate_pipeline(candidate: str, model: str = None) -> dict:
+    """The pipeline record an index built as `candidate` carries."""
+    p = {**locked_pipeline(), **({"model": model} if model else {})}
+    if candidate != "v2":
+        p["lint"] = candidate
+    if CANDIDATES[candidate].get("escalate"):
+        p |= {"escalation_sha": hashlib.sha1(ESCALATION_PROMPT.encode()).hexdigest()[:16], "body_cap": BODY_CAP}
+    return p
+
+
+def function_body(lines: list[str], line_range: tuple[int, int], cap: int = BODY_CAP) -> str:
+    """The function's source lines, at most `cap` of them."""
+    body = lines[line_range[0] - 1:line_range[1]]
+    more = len(body) - cap
+    return "\n".join(body[:cap]) + (f"\n... ({more} more lines)" if more > 0 else "")
 
 
 def card_key(model: str, card: str) -> str:
@@ -161,6 +198,19 @@ def repair(llm, summary: str, card: str, extra: "tuple[str, ...]" = ()) -> str:
     return best
 
 
+def escalate(llm, summary: str, card: str, body: str, flags: "tuple[str, ...]") -> tuple[str | None, str]:
+    """Pass 2 (candidate v4): `(new summary or None, effects)`. The new
+    summary is kept only if it has no v2 lint flag and fewer flags (v2 plus
+    `flags`) than the pass-1 summary - escalation never makes a summary worse
+    by the lint's measure."""
+    got = llm.json(ESCALATION_PROMPT.format(card=card, body=body), max_out=320) or {}
+    cand, effects = _clean(got.get("summary") or ""), _clean(got.get("effects") or "")
+    score = lambda s: sum(lint(s, card, flags).values())
+    if cand and not any(lint(cand, card).values()) and score(cand) < score(summary):
+        return cand, effects
+    return None, effects
+
+
 def build_index(
     builder, repo_root: str, *, model: str = LOCKED_MODEL, llm=None, base_urls: "list[str] | None" = None,
     batch: int = BATCH, threads: int = 4, from_cache: "dict | None" = None, dry_run: bool = False,
@@ -183,7 +233,8 @@ def build_index(
     fns = function_symbols(nlq.pool)
     cards = {s.qualified_name: c["card"] for s in fns if (c := build_card(builder, {}, entries, s.qualified_name, axes=False))}
     keys = {q: card_key(model, c) for q, c in cards.items()}
-    pipeline = {**locked_pipeline(), "model": model, **({"lint": candidate} if candidate != "v2" else {})}
+    escalate_flags = CANDIDATES[candidate].get("escalate", ())
+    pipeline = candidate_pipeline(candidate, model)
     path = index_path(repo_root)
     old = read_index(path) or {}
     old_pipeline = old.get("pipeline") or {}
@@ -193,15 +244,29 @@ def build_index(
     # locked v2 index never holds summaries a candidate's repair rewrote.
     old_lint = old_pipeline.get("lint", "v2")
     same_generation = _generation(old_pipeline) == _generation(pipeline)
-    same_lint = old_lint == candidate
+    same_lint = old_lint == candidate and old_pipeline == pipeline
     previous = (old.get("functions") or {}) if same_generation and (same_lint or old_lint == "v2") else {}
-    done: dict[str, dict] = {q: {"key": keys[q], "summary": previous[q]["summary"],
-                                 "checked": bool(previous[q].get("checked")) and same_lint}
-                             for q in cards if previous.get(q, {}).get("key") == keys[q] and previous[q].get("summary")}
+    by_name = {s.qualified_name: s for s in fns}
+    current_sha = lambda q: source_sha(nlq._source(by_name[q].file), by_name[q].line_range)
+    done: dict[str, dict] = {}
+    for q in cards:
+        e = previous.get(q, {})
+        if e.get("key") != keys[q] or not e.get("summary"):
+            continue
+        entry = {"key": keys[q], "summary": e["summary"], "checked": bool(e.get("checked")) and same_lint}
+        if escalate_flags and ((same_lint and e.get("v2_checked")) or (old_lint == "v2" and e.get("checked"))):
+            entry["v2_checked"] = True  # v2's lint and repair already saw it: only the escalation is left
+        if same_lint and e.get("escalation_tried"):
+            if e.get("source_sha") == current_sha(q):  # escalated from this very body
+                entry |= {k: e[k] for k in ("escalation_tried", "escalated", "pass1", "effects") if k in e}
+            else:  # the body changed: back to the pass-1 summary, escalate again
+                entry = {"key": keys[q], "summary": e.get("pass1", e["summary"]), "checked": False, "v2_checked": True}
+        done[q] = entry
     imported = 0
     for q, e in (from_cache or {}).items():  # harness cache: {qname: {"key", "summary", "raw"?}}, repaired under v2
         if q in cards and q not in done and isinstance(e, dict) and e.get("key") == keys[q] and e.get("summary"):
-            done[q] = {"key": keys[q], "summary": _clean(e["summary"]), "checked": not extra}
+            done[q] = {"key": keys[q], "summary": _clean(e["summary"]), "checked": not (extra or escalate_flags),
+                       **({"v2_checked": True} if escalate_flags and not extra else {})}
             imported += 1
     todo = [q for q in cards if q not in done]
     counts = {"functions": len(fns), "cards": len(cards), "kept": len(done) - imported, "imported": imported,
@@ -212,8 +277,10 @@ def build_index(
         f"to re-lint {len(unchecked)} (candidate {candidate})")
     if dry_run:
         counts["to_repair"] = sum(1 for q in unchecked if any(lint(done[q]["summary"], cards[q], extra).values()))
+        if escalate_flags:
+            counts["to_escalate"] = sum(1 for q in unchecked if not done[q].get("escalation_tried")
+                                        and any(lint(done[q]["summary"], cards[q], escalate_flags).values()))
         return counts
-    by_name = {s.qualified_name: s for s in fns}
 
     def save() -> None:
         write_index(path, pipeline, {q: {**e, "source_sha": source_sha(nlq._source(by_name[q].file), by_name[q].line_range)}
@@ -241,10 +308,14 @@ def build_index(
         counts["failed"] = len([q for q in todo if q not in done])
         to_check = [q for q in cards if q in done and not done[q]["checked"]]
     if to_check:
-        clean = [q for q in to_check if not any(lint(done[q]["summary"], cards[q], extra).values())]
+        # Lint + repair. With an escalation pass still to come, an entry is only
+        # `v2_checked` here; `checked` means every pass has seen it.
+        mark = "v2_checked" if escalate_flags else "checked"
+        pending = [q for q in to_check if not done[q].get(mark)]
+        clean = [q for q in pending if not any(lint(done[q]["summary"], cards[q], extra).values())]
         for q in clean:
-            done[q]["checked"] = True
-        flagged = [q for q in to_check if not done[q]["checked"]]
+            done[q][mark] = True
+        flagged = [q for q in pending if not done[q].get(mark)]
         if flagged:
             checkpoint("summaries done, repairing")
         step = every * batch
@@ -253,9 +324,32 @@ def build_index(
                 if new != done[q]["summary"]:
                     done[q]["summary"] = new
                     counts["repaired"] += 1
-                done[q]["checked"] = True
+                done[q][mark] = True
                 if j % step == 0 and j < len(flagged):
                     checkpoint(f"repair {j}/{len(flagged)}")
+        if escalate_flags:
+            esc = [q for q in to_check if not done[q].get("escalation_tried")
+                   and any(lint(done[q]["summary"], cards[q], escalate_flags).values())]
+            counts["escalation_tried"] = len(esc)
+            counts.setdefault("escalated", 0)
+            if esc:
+                checkpoint(f"escalating {len(esc)}")
+
+            def run(q):
+                body = function_body(nlq._source(by_name[q].file), by_name[q].line_range)
+                return escalate(llm, done[q]["summary"], cards[q], body, escalate_flags)
+            with cf.ThreadPoolExecutor(threads) as ex:
+                for j, (q, (new, effects)) in enumerate(zip(esc, ex.map(run, esc)), 1):
+                    done[q]["escalation_tried"] = True
+                    if effects:  # kept even when the summary is not: what the model read in the body
+                        done[q]["effects"] = effects
+                    if new:
+                        done[q] |= {"pass1": done[q]["summary"], "summary": new, "escalated": True}
+                        counts["escalated"] += 1
+                    if j % step == 0 and j < len(esc):
+                        checkpoint(f"escalation {j}/{len(esc)}")
+            for q in to_check:
+                done[q]["checked"] = True
     save()
     counts["coverage"] = round(len(done) / len(fns), 4) if fns else 0.0
     counts["locked_pipeline"] = pipeline == locked_pipeline()
