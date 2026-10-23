@@ -41,3 +41,9 @@ two-sided exact sign test; mean recall@5.
 3. Summarize on Kaggle (`kaggle/summary_candidate_v5_cell.py`, part B: v2, v4, v5).
 4. After stage 2 continues, score once:
    `python -m harness.experiments.heldout_retrieval.set6.score APPS reports/summary_candidate_v5/set6 reports/heldout_set6`.
+
+## Status
+
+Frozen before any engine ran on the repositories; scored once with `score.py` (`reports/heldout_set6/DECISION.md`):
+**V5 does not qualify** (V5 vs V2 25 / 16 / 79, sign p = 0.211; V5 vs BASE 40 / 16 / 64, p = 0.0018). Never
+edited after the run. Notes: `reports/heldout_set6/NOTES.md`.

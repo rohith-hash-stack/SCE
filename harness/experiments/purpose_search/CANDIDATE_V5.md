@@ -1,6 +1,9 @@
 # Summarizer candidate v5: wider escalation trigger + effects in the search text
 
-**Status: implemented, unvalidated. v2 stays locked and shipped.** A v5 index is used by
+**Outcome: v5 does not qualify on set 6; v2 stays locked and shipped** (`reports/heldout_set6/DECISION.md`,
+NOTES.md): V5 vs V2 25 / 16 / 79, sign p = 0.211. Stage 1 PASS; stage 2 CONTINUE (37 / 24).
+
+**Status: implemented, not validated.** A v5 index is used by
 `prism.ask` at weight 0 (its pipeline records `"lint": "v5"`).
 
 **Approved** (specification, set 6 repositories and size, the rule below) before any v5 or
