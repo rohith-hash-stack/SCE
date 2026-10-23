@@ -72,3 +72,8 @@ Frozen (`dataset.json`: `"status": "frozen"`, `"version": 1`) after review, befo
 search, ranking or summarizer ran on Hono. The questions, gold and decoys are the reviewed draft of
 commit `90ce565` unchanged (`questions_sha256` = `0b27992136c197a1...`). Scored once, with `score.py`;
 never edited after that run.
+
+Scored once against the live 14B index of Hono (`reports/prism_summarize_live/hono`, coverage 1.0,
+w = 0.5): `reports/heldout_set5/DECISION.md`. **Rule 1: keep the test-file exclusion** (B vs A 5 / 4 / 21,
+recall@5 +0.033). **Rule 2: not confirmed on Hono** (C vs B 6 / 6 / 18, sign p = 1.0; recall@5 0.683 -> 0.767).
+Diagnostics after scoring: `reports/heldout_set5/NOTES.md`.
