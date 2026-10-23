@@ -687,13 +687,18 @@ def ask(question: str, repo_path: str, top_k: int, as_json: bool, deps: bool) ->
 @click.option("--from-cache", "from_cache", type=click.Path(exists=True, dir_okay=False),
               help="Install summaries from a purpose-search harness cache (summary_cache_<repo>.json); each entry is checked against its card key.")
 @click.option("--dry-run", is_flag=True, help="Count what would be summarized; call no model, write nothing.")
-def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, from_cache: str | None, dry_run: bool) -> None:
+@click.option("--checkpoint-every", "checkpoint_every", default=25, show_default=True, type=click.IntRange(1),
+              help="Write the index every N batches; an interrupted run resumes from the last checkpoint.")
+def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, from_cache: str | None, dry_run: bool,
+              checkpoint_every: int) -> None:
     """Build or refresh the offline summary index (.prism/summaries.json)
     that `prism ask` / `prism.ask` use as a second search field.
 
     The locked pipeline (prism.summaries.pipeline): a context card per
     function, one plain-English sentence from a local Ollama model, a lint
-    + repair pass. Incremental: unchanged functions keep their summary.
+    + repair pass. Incremental and resumable: unchanged functions keep their
+    summary, and the index is checkpointed every --checkpoint-every batches,
+    so rerunning after a crash or timeout continues where it stopped.
     Serving never calls a model; with >= 95% coverage search applies the
     summaries at weight 0.5, otherwise not at all."""
     from prism.summaries.index import MIN_COVERAGE, SUMMARY_WEIGHT
@@ -703,14 +708,14 @@ def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, f
     cache = json.loads(open(from_cache, encoding="utf-8").read()) if from_cache else None
     counts = build_index(builder, repo_root, model=model or LOCKED_MODEL,
                          base_urls=[u for u in base_urls.split(",") if u], threads=threads, from_cache=cache,
-                         dry_run=dry_run, log=lambda m: click.echo(m, err=True))
+                         dry_run=dry_run, checkpoint_every=checkpoint_every, log=lambda m: click.echo(m, err=True))
     if dry_run:
         click.echo(json.dumps(counts, indent=2))
         return
     weight = SUMMARY_WEIGHT if counts["locked_pipeline"] and counts["coverage"] >= MIN_COVERAGE else 0.0
     click.echo(f"Wrote {counts['path']}: coverage {counts['coverage']:.1%} of {counts['functions']} functions "
                f"(summarized {counts['summarized']}, repaired {counts['repaired']}, failed {counts['failed']}, "
-               f"kept {counts['kept']}, imported {counts['imported']}).")
+               f"kept {counts['kept']}, imported {counts['imported']}, checkpoints {counts['checkpoints']}).")
     click.echo(f"Search summary weight: {weight}" + ("" if counts["locked_pipeline"] else " (not the locked pipeline)"))
 
 

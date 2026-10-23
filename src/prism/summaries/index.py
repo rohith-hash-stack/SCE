@@ -130,10 +130,23 @@ def state_for(builder, repo_root: str) -> SummaryState:
 
 
 def write_index(path: "str | Path", pipeline: dict, functions: dict[str, dict]) -> None:
-    """Atomic write: a reader never sees half an index."""
+    """Atomic, durable write: the new index goes to a fresh temporary file
+    in the same directory, is flushed and fsync'd, then renamed over the
+    old one (`os.replace`, atomic on POSIX and Windows). A process killed at
+    any point leaves either the previous index or the new one - never a
+    partial file; a leftover temporary file is ignored by readers."""
+    import tempfile
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps({"format": INDEX_FORMAT, "pipeline": pipeline,
-                               "functions": dict(sorted(functions.items()))}, indent=0) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    text = json.dumps({"format": INDEX_FORMAT, "pipeline": pipeline,
+                       "functions": dict(sorted(functions.items()))}, indent=0) + "\n"
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise

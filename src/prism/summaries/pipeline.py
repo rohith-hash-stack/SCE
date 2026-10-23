@@ -15,8 +15,14 @@ evaluated pipeline cannot drift. Card keys equal the harness's v2 cache
 keys, so a cache produced there (e.g. on a GPU notebook) can be installed
 with `--from-cache` and is checked card by card.
 
-Incremental: an entry whose card key is unchanged is kept; only new or
-changed functions are summarized.
+Incremental and resumable: an entry whose card key is unchanged is kept;
+only new or changed functions are summarized. While it runs, the index is
+checkpointed (atomically, `index.write_index`) every `CHECKPOINT_BATCHES`
+batches and during the repair pass, so a crash or a notebook timeout loses
+at most that much work - rerunning the same command resumes from the last
+checkpoint. Each entry records whether the repair pass has `checked` it, so
+a summary written before an interruption is still linted and repaired on
+the resumed run.
 """
 from __future__ import annotations
 
@@ -38,6 +44,8 @@ from prism.summaries.lint import lint, problems
 LOCKED_MODEL = "qwen2.5-coder:14b-instruct-q8_0"
 VARIANT = "v2"
 BATCH = 12
+#: Write the index every this many summary batches (and repairs) during a run.
+CHECKPOINT_BATCHES = 25
 SUMMARY_PROMPT = (
     "You are an expert software architect describing functions for a code search index.\n"
     "Below are the structural profiles of {n} functions, separated by '---'.\n\n{cards}\n\n"
@@ -140,10 +148,12 @@ def repair(llm, summary: str, card: str) -> str:
 def build_index(
     builder, repo_root: str, *, model: str = LOCKED_MODEL, llm=None, base_urls: "list[str] | None" = None,
     batch: int = BATCH, threads: int = 4, from_cache: "dict | None" = None, dry_run: bool = False,
-    log: Callable[[str], None] = lambda _m: None,
+    checkpoint_every: int = CHECKPOINT_BATCHES, log: Callable[[str], None] = lambda _m: None,
 ) -> dict:
     """Bring `.prism/summaries.json` up to date for `builder`'s functions.
-    Returns counts; `dry_run` only counts what would be summarized."""
+    Returns counts; `dry_run` only counts what would be summarized.
+    `checkpoint_every`: batches (and, in the repair pass, that many times
+    `batch` repairs) between atomic checkpoint writes."""
     from prism.graph.entry_points import find_entry_points
     from prism.query.nlq import NLQIndex
     nlq = NLQIndex(builder, repo_root)
@@ -155,38 +165,63 @@ def build_index(
     path = index_path(repo_root)
     old = read_index(path) or {}
     previous = (old.get("functions") or {}) if old.get("pipeline") == pipeline else {}
-    done: dict[str, dict] = {q: {"key": keys[q], "summary": previous[q]["summary"]}
-                             for q in cards if previous.get(q, {}).get("key") == keys[q]}
+    done: dict[str, dict] = {q: {"key": keys[q], "summary": previous[q]["summary"], "checked": bool(previous[q].get("checked"))}
+                             for q in cards if previous.get(q, {}).get("key") == keys[q] and previous[q].get("summary")}
     imported = 0
-    for q, e in (from_cache or {}).items():  # harness cache: {qname: {"key", "summary", "raw"?}}
+    for q, e in (from_cache or {}).items():  # harness cache: {qname: {"key", "summary", "raw"?}}, already repaired
         if q in cards and q not in done and isinstance(e, dict) and e.get("key") == keys[q] and e.get("summary"):
-            done[q] = {"key": keys[q], "summary": _clean(e["summary"])}
+            done[q] = {"key": keys[q], "summary": _clean(e["summary"]), "checked": True}
             imported += 1
     todo = [q for q in cards if q not in done]
     counts = {"functions": len(fns), "cards": len(cards), "kept": len(done) - imported, "imported": imported,
-              "to_summarize": len(todo), "summarized": 0, "repaired": 0, "failed": 0}
+              "to_summarize": len(todo), "summarized": 0, "repaired": 0, "failed": 0, "checkpoints": 0}
     log(f"{len(fns)} functions, {len(cards)} cards: kept {counts['kept']}, imported {imported}, to summarize {len(todo)}")
     if dry_run:
         return counts
-    if todo:
+    by_name = {s.qualified_name: s for s in fns}
+
+    def save() -> None:
+        write_index(path, pipeline, {q: {**e, "source_sha": source_sha(nlq._source(by_name[q].file), by_name[q].line_range)}
+                                     for q, e in done.items()})
+
+    def checkpoint(what: str) -> None:
+        save()
+        counts["checkpoints"] += 1
+        log(f"checkpoint: {len(done)}/{len(cards)} summaries ({what})")
+
+    every = max(1, checkpoint_every)
+    to_check = [q for q in cards if q in done and not done[q]["checked"]]  # left unrepaired by an interrupted run
+    if todo or to_check:
         llm = llm or Ollama(model, base_urls or [])
+    if todo:
         batches = [todo[i:i + batch] for i in range(0, len(todo), batch)]
         with cf.ThreadPoolExecutor(threads) as ex:
             for i, got in enumerate(ex.map(lambda b: summarize_batch(llm, cards, b), batches), 1):
                 for q, s in got.items():
-                    done[q] = {"key": keys[q], "summary": s}
+                    done[q] = {"key": keys[q], "summary": s, "checked": False}
                     counts["summarized"] += 1
                 log(f"summarized {i}/{len(batches)} batches")
-        flagged = [q for q in todo if q in done and any(lint(done[q]["summary"], cards[q]).values())]
+                if i % every == 0 and i < len(batches):
+                    checkpoint(f"batch {i}/{len(batches)}")
+        counts["failed"] = len([q for q in todo if q not in done])
+        to_check = [q for q in cards if q in done and not done[q]["checked"]]
+    if to_check:
+        clean = [q for q in to_check if not any(lint(done[q]["summary"], cards[q]).values())]
+        for q in clean:
+            done[q]["checked"] = True
+        flagged = [q for q in to_check if not done[q]["checked"]]
+        if flagged:
+            checkpoint("summaries done, repairing")
+        step = every * batch
         with cf.ThreadPoolExecutor(threads) as ex:
-            for q, new in zip(flagged, ex.map(lambda q: repair(llm, done[q]["summary"], cards[q]), flagged)):
+            for j, (q, new) in enumerate(zip(flagged, ex.map(lambda q: repair(llm, done[q]["summary"], cards[q]), flagged)), 1):
                 if new != done[q]["summary"]:
                     done[q]["summary"] = new
                     counts["repaired"] += 1
-        counts["failed"] = len([q for q in todo if q not in done])
-    by_name = {s.qualified_name: s for s in fns}
-    write_index(path, pipeline, {q: {**e, "source_sha": source_sha(nlq._source(by_name[q].file), by_name[q].line_range)}
-                                 for q, e in done.items()})
+                done[q]["checked"] = True
+                if j % step == 0 and j < len(flagged):
+                    checkpoint(f"repair {j}/{len(flagged)}")
+    save()
     counts["coverage"] = round(len(done) / len(fns), 4) if fns else 0.0
     counts["locked_pipeline"] = pipeline == locked_pipeline()
     counts["path"] = str(path)
