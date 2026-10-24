@@ -74,11 +74,24 @@ DONE = {"ok", "leak"}  # a rerun skips these (a leak only if the current check s
 
 
 # ---------------------------------------------------------------- tasks / cells
-def load_tasks(directory: Path = TASKS_DIR) -> dict[str, dict]:
-    tasks = {t["task_id"]: t for t in T.load_suite(directory)}
-    errors = T.validate_suite(list(tasks.values()))
-    if errors:
-        raise SystemExit(f"task suite invalid: {errors}")
+def load_tasks(directory: Path | list[Path] = TASKS_DIR) -> dict[str, dict]:
+    """Tasks of one or more directories. A P3b directory (`p3b_*` tasks, or FROZEN.json beside it)
+    is accepted only if its files are exactly the frozen ones (`p3b_freeze.verify`, the P3b guard);
+    the Layer 4 suite must have its 16-task design."""
+    from harness.experiments.retrieval_pivot.p3b_freeze import FROZEN, verify
+    tasks: dict[str, dict] = {}
+    for d in [directory] if isinstance(directory, Path) else directory:
+        suite = T.load_suite(d)
+        if (d.parent / FROZEN).exists() or any(t["task_id"].startswith("p3b_") for t in suite):
+            verify(d)
+        else:
+            errors = T.validate_suite(suite)
+            if errors:
+                raise SystemExit(f"task suite invalid: {errors}")
+        for t in suite:
+            if t["task_id"] in tasks:
+                raise SystemExit(f"task {t['task_id']} in more than one --tasks-dir")
+            tasks[t["task_id"]] = t
     return tasks
 
 
@@ -310,7 +323,8 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("run", "contamination", "summarize"):
         s = sub.add_parser(name)
         s.add_argument("--out", required=True, type=Path)
-        s.add_argument("--tasks-dir", type=Path, default=TASKS_DIR)
+        s.add_argument("--tasks-dir", type=Path, action="append", default=None,
+                       help="repeatable; default benchmarks/layer4/tasks. A P3b directory must match its FROZEN.json")
         if name == "summarize":
             s.add_argument("--contamination", type=Path, help="the arm0 run whose flags to use")
             continue
@@ -318,6 +332,9 @@ def build_parser() -> argparse.ArgumentParser:
             s.add_argument("--arms", default="all", help=f"comma-separated, or all: {','.join(X.ARMS)}")
         s.add_argument("--tasks", default="all", help="comma-separated task ids, or all")
         s.add_argument("--corpus", help="only this corpus's tasks")
+        s.add_argument("--family", choices=("forward_blast", "backward_adaptation"),
+                       help="only this family's tasks of a --tasks-dir")
+        s.add_argument("--family-dir", type=Path, help="apply --family only to this --tasks-dir's tasks")
         s.add_argument("--seeds", default="42,43,44,45,46,47,48,49,50,51")
         s.add_argument("--python", action="append", default=[], help="corpus=interpreter (fastapi, django)")
         s.add_argument("--node", default="node", help="Node binary (tRPC needs Node 20)")
@@ -347,7 +364,10 @@ def main(argv=None) -> int:
     install_sigterm_exit()
     args = build_parser().parse_args(argv)
     EVAL_TIMEOUT_S = getattr(args, "eval_timeout", EVAL_TIMEOUT_S)
-    tasks = load_tasks(args.tasks_dir)
+    tasks = load_tasks(args.tasks_dir or [TASKS_DIR])
+    if getattr(args, "family", None):
+        only = {t["task_id"] for t in T.load_suite(args.family_dir)} if args.family_dir else set(tasks)
+        tasks = {k: v for k, v in tasks.items() if k not in only or v["family"] == args.family}
     if args.command == "summarize":
         s = summarize(args.out, tasks, args.contamination)
         print(json.dumps({"status_counts": s["status_counts"], "flagged_tasks": s["flagged_tasks"]}, indent=1))
@@ -379,10 +399,10 @@ def main(argv=None) -> int:
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}, indent=1, default=str) + "\n")
     run(tasks, arms, seeds, args.out, cfg, client, pythons, args.node)
     if args.command == "contamination":
-        report = contamination_report(args.out, load_tasks(args.tasks_dir))
+        report = contamination_report(args.out, load_tasks(args.tasks_dir or [TASKS_DIR]))
         print(json.dumps({"flagged": report["flagged"]}, indent=1))
     else:
-        s = summarize(args.out, load_tasks(args.tasks_dir))
+        s = summarize(args.out, load_tasks(args.tasks_dir or [TASKS_DIR]))
         print(json.dumps({"status_counts": s["status_counts"]}, indent=1))
     return 0
 

@@ -140,7 +140,8 @@ def validate_suite(tasks: list[dict], corpora: tuple[str, ...] = CORPORA) -> lis
 
 
 def load_suite(directory: str | Path) -> list[dict]:
-    return [json.loads(p.read_text()) for p in sorted(Path(directory).glob("l4_*.json"))]
+    """The Layer 4 tasks (`l4_*`) or P3b's frozen ones (`p3b_*`) in `directory`."""
+    return [json.loads(p.read_text()) for pattern in ("l4_*.json", "p3b_*.json") for p in sorted(Path(directory).glob(pattern))]
 
 
 # ---------------------------------------------------------------- arm view

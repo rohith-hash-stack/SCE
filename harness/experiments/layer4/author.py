@@ -5,7 +5,12 @@ gold, run gates, validate, write.
         --python fastapi=<venv>/bin/python --python django=<venv>/bin/python \\
         [--node <node20>] [--names-dir <dir>] [--only l4_fwd_django_01,...] [--corpus trpc]
 
-Writes, per task, under `benchmarks/layer4/`:
+P3b (retrieval_pivot/P3.md): `--specs benchmarks/layer4/specs_p3b.py --eligibility p3b
+--out benchmarks/layer4_p3b --corpus <c>` traces the drawn specs in draw order and keeps the first
+`--per-corpus` (8) eligible - clean trace exit, the focal runs, 3..15 gold within `max_depth` 2 - and
+logs every decision to `OUT/authoring_log_<c>.json` (`author_p3b`).
+
+Writes, per task, under `benchmarks/layer4/` (or `--out`):
 - `tasks/<task_id>.json` - the `layer4.task.v1` record (validated);
 - `manifests/<task_id>.json` - the mapped trace manifest the gold or the
   oracle callers came from (raw Node locations kept alongside);
@@ -60,6 +65,19 @@ TRPC_PREFIX = "packages/server/src"
 TRPC_CWD = "packages/tests"
 NODE = {"bin": "node"}  # --node: the Node 20 the tRPC workspace needs
 MAX_GOLD = T.MAX_ANSWER_SYMBOLS
+#: P3b eligibility (harness/experiments/retrieval_pivot/P3.md): a forward spec yields a task only if
+#: its trace exits 0, the focal runs, and it has P3B_MIN_GOLD..MAX_GOLD gold callers within the spec's
+#: max_depth (2); specs are taken per corpus in draw order until P3B_PER_CORPUS are kept.
+P3B_MIN_GOLD = 3
+P3B_PER_CORPUS = 8
+#: rejection reason codes, matched on the SystemExit text the checks raise
+REASON_CODES = (("timed out", "trace_timeout"), ("trace exited", "trace_exit_nonzero"),
+                ("never ran", "focal_not_run"), ("empty gold", "gold_below_min"), ("gold symbols <", "gold_below_min"),
+                ("gold symbols >", "gold_above_max"), ("not an indexed", "not_indexed"), ("invalid task", "invalid_task"))
+#: reasons that are a property of the drawn candidate; anything else (an invalid task, an unknown error)
+#: is a tooling fault and aborts, so a bug never silently skips a draw
+ELIGIBILITY_REASONS = {"trace_timeout", "trace_exit_nonzero", "focal_not_run", "gold_below_min", "gold_above_max",
+                       "not_indexed"}
 
 
 def corpus_root(corpus: str) -> str:
@@ -332,6 +350,8 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
                              f"ancestor locations, {len(m.get('ancestor_depth', {}))} with a depth)")
         if len(gold) > MAX_GOLD:
             raise SystemExit(f"{tid}: {len(gold)} gold symbols > {MAX_GOLD}; lower max_depth")
+        if len(gold) < spec.get("min_gold", 1):
+            raise SystemExit(f"{tid}: {len(gold)} gold symbols < {spec['min_gold']} within {depth} call hops")
         side_effects = tables = None
         if corpus == "django":
             kept, dropped = filter_sql(m.get("sql", {}), test_app_tables(root))
@@ -344,7 +364,7 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
                             "exclude_paths": []}
         task["gold"] = {"source": "runtime_trace", "direction": "upstream", "affected_symbols": gold,
                         "side_effects": side_effects, "tables": tables,
-                        "trace_manifest": f"benchmarks/layer4/manifests/{tid}.json", "trace_command": m["command"],
+                        "trace_manifest": f"{out_label()}/manifests/{tid}.json", "trace_command": m["command"],
                         "min_count": spec.get("min_count", 1), "max_depth": depth}
     else:
         if corpus == "django":
@@ -426,21 +446,102 @@ def author_with_fallbacks(spec: dict, pythons: dict, names_dir: str | None, buil
     raise SystemExit(f"{spec['task_id']}: every candidate rejected: {[r['qname'] for r in rejected]}")
 
 
+def out_label() -> str:
+    """OUT as recorded in a task: repository-relative when inside the repository."""
+    return OUT.relative_to(SCE).as_posix() if OUT.is_relative_to(SCE) else OUT.as_posix()
+
+
+def reason_code(message: str) -> str:
+    return next((code for needle, code in REASON_CODES if needle in message), "other")
+
+
+def load_specs(path: str | None) -> list[dict]:
+    """`SPECS` of a spec module: benchmarks/layer4/specs.py by default, or the file given."""
+    if not path:
+        from benchmarks.layer4.specs import SPECS
+        return SPECS
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("layer4_specs_override", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.SPECS
+
+
+def author_p3b(specs: list[dict], pythons: dict, names_dir: str | None, builders: dict, sce_commit: str,
+               per_corpus: int = P3B_PER_CORPUS, log_path: Path | None = None) -> dict:
+    """P3b eligibility: per corpus, specs in their (draw) order, each authored with the 3..15 gold rule,
+    until `per_corpus` are kept; every decision is appended to `log_path` (resumable: a decided spec
+    is not traced again). Returns the log."""
+    log_path = log_path or OUT / "authoring_log.json"
+    log = json.loads(log_path.read_text()) if log_path.exists() else {"decisions": {}}
+    decisions = log["decisions"]
+    for corpus in dict.fromkeys(s["corpus"] for s in specs):
+        ordered = sorted((s for s in specs if s["corpus"] == corpus), key=lambda s: s.get("draw_rank", 0))
+        for spec in ordered:
+            kept = sum(1 for s in ordered if decisions.get(s["task_id"], {}).get("status") == "kept")
+            if kept >= per_corpus:
+                break
+            if spec["task_id"] in decisions:
+                continue
+            if corpus in ("express", "trpc") and corpus not in builders:
+                from prism.engine import PrismEngine
+                builders[corpus] = PrismEngine.from_repo(corpus_root(corpus)).builder
+            LAST_TRACE.pop(spec["task_id"], None)
+            try:
+                task = author({**spec, "min_gold": P3B_MIN_GOLD}, pythons, names_dir, builders, sce_commit)
+                decisions[spec["task_id"]] = {"status": "kept", "corpus": corpus, "qname": spec["qname"],
+                                              "draw_rank": spec.get("draw_rank"),
+                                              "gold": len(task["gold"]["affected_symbols"])}
+                print(f"[keep] {spec['task_id']} {spec['qname']}: {len(task['gold']['affected_symbols'])} gold", flush=True)
+            except SystemExit as exc:
+                msg = str(exc)
+                if reason_code(msg) not in ELIGIBILITY_REASONS:
+                    raise SystemExit(f"{spec['task_id']}: not an eligibility failure - fix the tooling, then "
+                                     f"resume (nothing logged for it):\n{msg}") from exc
+                trace = diagnostics(LAST_TRACE.get(spec["task_id"]))
+                decisions[spec["task_id"]] = {"status": "skipped", "corpus": corpus, "qname": spec["qname"],
+                                              "draw_rank": spec.get("draw_rank"), "reason": reason_code(msg),
+                                              "detail": msg[:600], "trace": trace}
+                print(f"[skip] {spec['task_id']} {spec['qname']}: {reason_code(msg)}", flush=True)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(json.dumps(log, indent=1, sort_keys=True, default=str) + "\n")
+    return log
+
+
 def main(argv=None) -> int:
-    from benchmarks.layer4.specs import SPECS
+    global OUT
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--python", action="append", default=[], help="corpus=interpreter (fastapi, django)")
     p.add_argument("--names-dir", help="cache of the corpora's indexed names (<corpus>_names.json)")
     p.add_argument("--only", help="comma-separated task ids")
     p.add_argument("--corpus", help="only this corpus's specs")
     p.add_argument("--node", default="node", help="Node binary for tRPC (Node 20)")
+    p.add_argument("--specs", help="a spec module other than benchmarks/layer4/specs.py (e.g. specs_p3b.py)")
+    p.add_argument("--out", help="output directory for tasks/, manifests/, gates/ (default benchmarks/layer4)")
+    p.add_argument("--eligibility", choices=("p3b",), help="p3b: 3..15 gold, first --per-corpus kept per corpus, "
+                   "in draw order, every decision logged to OUT/authoring_log.json")
+    p.add_argument("--per-corpus", type=int, default=P3B_PER_CORPUS)
     args = p.parse_args(argv)
+    if args.out:
+        OUT = Path(args.out).resolve()
+    SPECS = load_specs(args.specs)
     NODE["bin"] = args.node
     pythons = dict(x.split("=", 1) for x in args.python)
     wanted = set(args.only.split(",")) if args.only else None
     sce_commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=SCE, capture_output=True,
                                 text=True).stdout.strip()
     builders = {}
+    if args.eligibility == "p3b":
+        chosen = [s for s in SPECS if (not wanted or s["task_id"] in wanted) and (not args.corpus or s["corpus"] == args.corpus)]
+        # one log per corpus: the Kaggle cell authors corpora in parallel lanes
+        log_path = OUT / (f"authoring_log_{args.corpus}.json" if args.corpus else "authoring_log.json")
+        log = author_p3b(chosen, pythons, args.names_dir, builders, sce_commit, per_corpus=args.per_corpus,
+                         log_path=log_path)
+        kept = {}
+        for d in log["decisions"].values():
+            kept[d["corpus"]] = kept.get(d["corpus"], 0) + (d["status"] == "kept")
+        print(f"[p3b] kept per corpus: {kept}", flush=True)
+        return 0
     failed: list[str] = []
     for spec in SPECS:
         if (wanted and spec["task_id"] not in wanted) or (args.corpus and spec["corpus"] != args.corpus):
