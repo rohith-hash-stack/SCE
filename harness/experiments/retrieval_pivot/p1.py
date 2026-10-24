@@ -233,6 +233,7 @@ def run_case(case: dict, engine, summaries: dict[str, str], arms=ARMS, budgets=B
                 "gold_with_summary": sum(1 for q in present if reps[q].endswith("+sum")),
                 "edges": len(case["gold_edges"]),
                 "edges_both_present": sum(1 for f, t in case["gold_edges"] if f in reps and t in reps),
+                "seed_tokens": tok.get(case["seed"], 0), "over_budget": sum(tok.values()) > budget,
                 "noise_tokens": sum(v for q, v in tok.items() if q != case["seed"] and q not in gold),
                 "summary_tokens": summary_tok,
                 "production_overlap": round(len(production[budget] & set(reps)) / max(1, len(production[budget] | set(reps))), 3),
@@ -242,14 +243,30 @@ def run_case(case: dict, engine, summaries: dict[str, str], arms=ARMS, budgets=B
 
 
 # ---------------------------------------------------------------- report
+def feasible(rows: list[dict]) -> list[dict]:
+    """Rows of (case, budget) cells where every arm's payload fits the budget. A cell where the seed
+    alone, or the packer's mandatory additions, already overflow (production `prism.slice` refuses a
+    seed larger than the budget) is dropped for every arm."""
+    bad = {(x["case"], x["budget"]) for x in rows if x["over_budget"]}
+    return [x for x in rows if (x["case"], x["budget"]) not in bad]
+
+
 def report(rows: list[dict]) -> str:
-    L = ["# P1: payload compression with v2 summaries (offline, no model)", "",
+    kept = feasible(rows)
+    return ("# P1: payload compression with v2 summaries (offline, no model)\n\n" + table(rows, "All cells (some payloads overflow the budget: the seed alone or the packer's mandatory "
+                        "additions exceed it - identical in every arm)")
+            + "\n" + table(kept, f"Feasible cells only ({len(kept) // len(ARMS)} of {len(rows) // len(ARMS)} "
+                                  "case x budget cells; every arm fits the budget)"))
+
+
+def table(rows: list[dict], title: str) -> str:
+    L = [f"## {title}", "",
          "Per arm and budget, pooled over cases: gold nodes present (any representation / at full body),",
          "gold edges with both ends present, mean tokens used, noise share (tokens on nodes that are",
          "neither seed nor gold), summary tokens. Arms: see p1.py.", "",
          "Ceiling: gold nodes inside the packer's candidate pool at all (reachable within its hop limits):",
-         f"{sum(x['gold_reachable'] for x in rows if x['arm'] == 'A0' and x['budget'] == BUDGETS[0])}/"
-         f"{sum(x['gold'] for x in rows if x['arm'] == 'A0' and x['budget'] == BUDGETS[0])}.", "",
+         f"{sum(x['gold_reachable'] for x in rows if x['arm'] == 'A0' and x['budget'] == BUDGETS[-1])}/"
+         f"{sum(x['gold'] for x in rows if x['arm'] == 'A0' and x['budget'] == BUDGETS[-1])} (8k cells).", "",
          "| budget | arm | gold present | gold at full body | gold edges | tokens (mean) | noise share | summary tokens (mean) |",
          "|---|---|---|---|---|---|---|---|"]
     for budget in BUDGETS:
