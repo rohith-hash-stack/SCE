@@ -34,3 +34,9 @@ def test_the_change_template_names_only_the_focal():
     assert D.leaf("observable.ObservableAbortError.constructor") == "ObservableAbortError"
     text = D.TEMPLATES["python"].format(name="Store.save")
     assert text.startswith("Store.save() gains a required keyword-only argument `context`")
+
+
+def test_django_traces_never_label_an_app_the_sqlite_settings_cannot_run():
+    files = ["tests/gis_tests/a.py", "tests/gis_tests/b.py", "tests/postgres_tests/c.py", "tests/auth_tests/d.py"]
+    assert D.trace_for("django", files) == {"trace_labels": ["auth_tests"]}
+    assert D.trace_for("django", files[:3]) == {}  # mentioned only where no trace can run

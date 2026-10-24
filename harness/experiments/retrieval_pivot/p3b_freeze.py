@@ -5,9 +5,11 @@
 - the sha256 of the draw (`draw.json`) and of the specs (`specs_p3b.py`);
 - per task: the sha256 of its task file and of its trace manifest, plus corpus, focal, draw rank and
   gold count;
-- per corpus: kept and skipped counts;
-- every skipped candidate: draw skips (`draw.json`, no test mention) and trace skips
-  (`authoring_log*.json`, with reason codes).
+- the eligibility rule in force (`min_gold`, amendment 1 of P3.md);
+- per corpus: kept, skipped and environment-fault counts;
+- every candidate not kept: draw skips (`draw.json`: no test mention, no runnable test), trace skips
+  (`authoring_log*.json`, with reason codes) and environment faults (the run failed with nothing
+  traced too, or timed out - set aside, not counted as ineligible).
 
 It refuses when:
 - a kept decision has no task file, or a task file no kept decision;
@@ -38,6 +40,7 @@ OUT = SCE / "benchmarks" / "layer4_p3b"
 SPECS_FILE = SCE / "benchmarks" / "layer4" / "specs_p3b.py"
 MIN_TASKS = 24
 PER_CORPUS = 8
+AMENDMENT = 1  # P3.md "Amendment 1": gold 2..15, unrunnable Django apps excluded, control runs, tRPC as source
 FROZEN = "FROZEN.json"
 
 
@@ -80,12 +83,15 @@ def freeze(out: Path = OUT) -> dict:
     corpora = sorted({d["corpus"] for d in decisions.values()})
     per_corpus = {c: {"kept": sum(1 for t in tasks.values() if t["corpus"] == c),
                       "trace_skipped": sum(1 for d in decisions.values() if d["corpus"] == c and d["status"] == "skipped"),
+                      "env_faults": sum(1 for d in decisions.values() if d["corpus"] == c and d["status"] == "env_fault"),
                       "draw_skipped": len(draw["corpora"].get(c, {}).get("skipped_before_specs", []))} for c in corpora}
+    from harness.experiments.layer4.author import MAX_GOLD, P3B_MIN_GOLD
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=SCE, capture_output=True, text=True).stdout.strip()
     frozen = {
         "seed": draw["seed"], "draw_sha256": sha256(draw_path), "specs_sha256": sha256(SPECS_FILE),
         "authoring_logs_sha256": {p.name: sha256(p) for p in log_paths}, "sce_commit": head,
         "frozen_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "amendment": AMENDMENT, "eligibility": {"min_gold": P3B_MIN_GOLD, "max_gold": MAX_GOLD, "max_depth": 2},
         "per_corpus_target": PER_CORPUS, "min_tasks": MIN_TASKS, "total": len(tasks), "per_corpus": per_corpus,
         "short_corpora": [c for c, v in per_corpus.items() if v["kept"] < PER_CORPUS],
         "tasks": tasks,
@@ -93,6 +99,8 @@ def freeze(out: Path = OUT) -> dict:
             "draw": {c: r.get("skipped_before_specs", []) for c, r in draw["corpora"].items()},
             "trace": [{"task_id": tid, **{k: d.get(k) for k in ("corpus", "qname", "draw_rank", "reason")}}
                       for tid, d in sorted(decisions.items()) if d["status"] == "skipped"],
+            "environment": [{"task_id": tid, **{k: d.get(k) for k in ("corpus", "qname", "draw_rank", "reason", "detail")}}
+                            for tid, d in sorted(decisions.items()) if d["status"] == "env_fault"],
         },
     }
     (out / FROZEN).write_text(json.dumps(frozen, indent=1) + "\n")

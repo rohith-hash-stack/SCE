@@ -18,9 +18,11 @@ fastapi, express, trpc):
 3. **Specs, in draw order.** The trace for each candidate is chosen mechanically, by plain text:
    test files under the corpus's test directory that contain the focal's name as a word
    (`git grep -w`). A candidate no test file mentions is skipped (`no_test_mention`); the trace
-   could not run it. Trace commands:
+   could not run it; one mentioned only where no trace can run is skipped as `no_runnable_test`.
+   Trace commands:
    - fastapi and express: the whole suite, as the existing tasks;
-   - django: the test apps that mention it (at most 3, most mentions first);
+   - django: the test apps that mention it (at most 3, most mentions first), never an app the
+     SQLite settings cannot run (`DJANGO_UNRUNNABLE_APPS`);
    - trpc: the test files that mention it (at most 8).
 
    The change is one fixed template per language (a new required `context` argument). The gold
@@ -30,7 +32,8 @@ fastapi, express, trpc):
 `SPECS_PER_CORPUS` specs per corpus go to `benchmarks/layer4/specs_p3b.py` (generated - never edited
 by hand); the full draw goes to `benchmarks/layer4_p3b/draw.json`. `author.py --specs` then keeps
 the first 8 eligible per corpus, in this order. If 8 are not reached, more specs are generated from
-the same draw (`--n` larger), never a new draw.
+the same draw (`--n` larger), never a new draw. Amendment 1 (P3.md) raised `--n` to 96 and dropped
+the unrunnable Django apps; the pilot run's draw and logs are kept in `benchmarks/layer4_p3b/pilot1/`.
 
 Usage: python -m harness.experiments.retrieval_pivot.p3b_draw [--n SPECS_PER_CORPUS]
 """
@@ -48,7 +51,9 @@ from pathlib import Path
 SCE = Path(__file__).resolve().parents[3]
 SEED = 20261024
 CORPORA = ("django", "fastapi", "express", "trpc")
-SPECS_PER_CORPUS = 24
+#: amendment 1 (P3.md): 96, enough to draw Express (30), tRPC (63) and FastAPI (89) to exhaustion; the
+#: pilot run had 24. The order is unchanged - only more of it is written out.
+SPECS_PER_CORPUS = 96
 OUT_DIR = SCE / "benchmarks" / "layer4_p3b"
 SPECS_FILE = SCE / "benchmarks" / "layer4" / "specs_p3b.py"
 #: corpus -> (test directory relative to the clone root, language)
@@ -57,6 +62,9 @@ TEST_DIRS = {"django": ("tests", "python"), "fastapi": ("tests", "python"), "exp
 #: corpus -> qualified-name prefix of its library package (tRPC: the whole index is packages/server/src)
 LIBRARY_PREFIX = {"django": "django.", "fastapi": "fastapi.", "express": "lib.", "trpc": ""}
 MAX_DJANGO_LABELS = 3
+#: Django test apps the SQLite test settings cannot run (amendment 1): gis_tests aborts the whole
+#: run without a GIS backend; postgres_tests needs PostgreSQL. Never chosen as trace labels.
+DJANGO_UNRUNNABLE_APPS = frozenset({"gis_tests", "postgres_tests"})
 MAX_TRPC_FILES = 8
 TEMPLATES = {
     "python": "{name}() gains a required keyword-only argument `context` (a mapping of per-call settings); "
@@ -137,8 +145,9 @@ def trace_for(corpus: str, files: list[str]) -> dict:
     if corpus == "express":
         return {"trace": base.MOCHA + [base.EXPRESS_UNIT]}
     if corpus == "django":
-        apps = Counter(f.split("/")[1] for f in files if f.count("/") >= 2)
-        return {"trace_labels": [a for a, _ in sorted(apps.items(), key=lambda kv: (-kv[1], kv[0]))[:MAX_DJANGO_LABELS]]}
+        apps = Counter(f.split("/")[1] for f in files if f.count("/") >= 2 and f.split("/")[1] not in DJANGO_UNRUNNABLE_APPS)
+        labels = [a for a, _ in sorted(apps.items(), key=lambda kv: (-kv[1], kv[0]))[:MAX_DJANGO_LABELS]]
+        return {"trace_labels": labels} if labels else {}
     rel = [f.removeprefix("packages/") for f in files if f.endswith((".test.ts", ".test.tsx"))]
     return {"trace": base.VITEST + rel[:MAX_TRPC_FILES]} if rel else {}
 
@@ -163,7 +172,8 @@ def draw(n: int = SPECS_PER_CORPUS) -> dict:
             files = mentions(corpus.clone_root, test_dir, leaf(q))
             trace = trace_for(name, files) if files else {}
             if not trace:
-                skipped.append({"rank": rank, "qname": q, "reason": "no_test_mention"})
+                reason = "no_test_mention" if not files else "no_runnable_test"  # unrunnable apps / no .test.ts
+                skipped.append({"rank": rank, "qname": q, "reason": reason})
                 continue
             spec = {"task_id": f"p3b_fwd_{name}_{rank:04d}", "corpus": name, "family": "forward_blast", "qname": q,
                     "change": {"kind": "signature",

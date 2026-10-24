@@ -7,7 +7,7 @@ gold, run gates, validate, write.
 
 P3b (retrieval_pivot/P3.md): `--specs benchmarks/layer4/specs_p3b.py --eligibility p3b
 --out benchmarks/layer4_p3b --corpus <c>` traces the drawn specs in draw order and keeps the first
-`--per-corpus` (8) eligible - clean trace exit, the focal runs, 3..15 gold within `max_depth` 2 - and
+`--per-corpus` (8) eligible - clean trace exit, the focal runs, 2..15 gold within `max_depth` 2 - and
 logs every decision to `OUT/authoring_log_<c>.json` (`author_p3b`).
 
 Writes, per task, under `benchmarks/layer4/` (or `--out`):
@@ -65,19 +65,29 @@ TRPC_PREFIX = "packages/server/src"
 TRPC_CWD = "packages/tests"
 NODE = {"bin": "node"}  # --node: the Node 20 the tRPC workspace needs
 MAX_GOLD = T.MAX_ANSWER_SYMBOLS
-#: P3b eligibility (harness/experiments/retrieval_pivot/P3.md): a forward spec yields a task only if
-#: its trace exits 0, the focal runs, and it has P3B_MIN_GOLD..MAX_GOLD gold callers within the spec's
-#: max_depth (2); specs are taken per corpus in draw order until P3B_PER_CORPUS are kept.
-P3B_MIN_GOLD = 3
+#: P3b eligibility (harness/experiments/retrieval_pivot/P3.md, amendment 1): a forward spec yields a
+#: task only if its trace exits 0, the focal runs, and it has P3B_MIN_GOLD..MAX_GOLD gold callers
+#: within the spec's max_depth (2); specs are taken per corpus in draw order until P3B_PER_CORPUS are
+#: kept. P3B_MIN_GOLD was 3 in the pilot run (9 of 96 traced specs eligible).
+P3B_MIN_GOLD = 2
 P3B_PER_CORPUS = 8
+#: environment faults tolerated per corpus before authoring aborts (the environment is broken)
+P3B_MAX_ENV_FAULTS = 5
 #: rejection reason codes, matched on the SystemExit text the checks raise
-REASON_CODES = (("timed out", "trace_timeout"), ("trace exited", "trace_exit_nonzero"),
+REASON_CODES = (("environment fault", "env_fault"), ("timed out", "env_fault"), ("trace exited", "trace_exit_nonzero"),
                 ("never ran", "focal_not_run"), ("empty gold", "gold_below_min"), ("gold symbols <", "gold_below_min"),
                 ("gold symbols >", "gold_above_max"), ("not an indexed", "not_indexed"), ("invalid task", "invalid_task"))
-#: reasons that are a property of the drawn candidate; anything else (an invalid task, an unknown error)
-#: is a tooling fault and aborts, so a bug never silently skips a draw
-ELIGIBILITY_REASONS = {"trace_timeout", "trace_exit_nonzero", "focal_not_run", "gold_below_min", "gold_above_max",
-                       "not_indexed"}
+#: reasons that are a property of the drawn candidate (the spec is skipped and the next one traced)
+ELIGIBILITY_REASONS = {"trace_exit_nonzero", "focal_not_run", "gold_below_min", "gold_above_max", "not_indexed"}
+#: reasons that are the environment's, not the candidate's: the spec is set aside (`env_fault`), not
+#: counted as ineligible, and the next one traced. Anything else (an invalid task, an unknown error)
+#: is a tooling fault and aborts, so a bug never skips a draw.
+ENVIRONMENT_REASONS = {"env_fault"}
+#: tRPC source aliases: a trace-only Vitest config next to the corpus's own (`trpc_source_config`)
+TRPC_SOURCE_CONFIG = "vitest.l4-source.config.ts"
+TRPC_PACKAGES = ("server", "client", "react-query", "next")
+#: the focal of a control run: a name no corpus defines, so the profiler runs and records nothing
+CONTROL_FOCAL = "__l4_control__.none"
 
 
 def corpus_root(corpus: str) -> str:
@@ -112,6 +122,45 @@ def vitest_bin(clone: str) -> str:
     pkg = json.loads(Path(clone, TRPC_CWD, "node_modules", "vitest", "package.json").read_text())
     rel = pkg["bin"]["vitest"] if isinstance(pkg["bin"], dict) else pkg["bin"]
     return str(Path(clone, TRPC_CWD, "node_modules", "vitest", rel).resolve())
+
+
+def trpc_source_aliases(clone: str) -> list[tuple[str, str]]:
+    """(import specifier, source file) for every `exports` entry of the tRPC packages: `@trpc/server`,
+    `@trpc/server/observable`, `@trpc/client/links/httpLink`, ... -> `packages/<pkg>/src/...`.
+    The tests' own config aliases only `@trpc/<pkg>/src/`; every other import resolves through
+    `exports` to the build in `dist/`, where the instrumented source never runs."""
+    out = []
+    for pkg in TRPC_PACKAGES:
+        base = Path(clone, "packages", pkg)
+        for key, target in json.loads((base / "package.json").read_text()).get("exports", {}).items():
+            built = target.get("import") if isinstance(target, dict) else target
+            if key == "./package.json" or not isinstance(built, str) or not built.startswith("./dist/"):
+                continue
+            stem = built[len("./dist/"):].rsplit(".", 1)[0]  # adapters/aws-lambda/index, observable/index
+            src = next((base / "src" / (stem + ext) for ext in (".ts", ".tsx") if (base / "src" / (stem + ext)).exists()),
+                       None)
+            if src is None:
+                raise SystemExit(f"trpc: no source for @trpc/{pkg} export {key} ({built})")
+            out.append((f"@trpc/{pkg}" + key[1:], str(src)))
+    return out
+
+
+def trpc_source_config(clone: str) -> Path:
+    """Write the trace-only Vitest config: the corpus's own `packages/tests/vitest.config.ts` plus
+    exact-match aliases from each package export to its source file, so a traced focal runs as
+    source however a test imports it. Returns its path (in packages/tests, beside the original)."""
+    aliases = ",\n".join(f"    {{ find: /^{re_escape(spec)}$/, replacement: {json.dumps(src)} }}"
+                         for spec, src in trpc_source_aliases(clone))
+    path = Path(clone, TRPC_CWD, TRPC_SOURCE_CONFIG)
+    path.write_text("// generated by harness/experiments/layer4/author.py (trpc_source_config): trace-only\n"
+                    "import { mergeConfig } from 'vitest/config';\nimport base from './vitest.config';\n\n"
+                    f"export default mergeConfig(base, {{ resolve: {{ alias: [\n{aliases},\n  ] }} }});\n")
+    return path
+
+
+def re_escape(spec: str) -> str:
+    """An import specifier as a JS regex body (`/` and `.` and `-` escaped)."""
+    return "".join("\\" + ch if ch in "/.-+*?()[]{}|^$\\" else ch for ch in spec)
 
 
 def expand(cmd: list[str], root: str, python: str | None) -> list[str]:
@@ -199,8 +248,11 @@ def trace_python(root: str, python: str, focal: str, cmd: list[str], out: Path) 
 def trace_django(root: str, python: str, focal: str, labels: list[str], out: Path) -> dict:
     cmd = [python, "-m", "harness.experiments.layer4.trace_django", "--in-tests-only", "--root", root, "--focal", focal,
            "--out", str(out), "--", *labels]
-    proc = subprocess.run(cmd, cwd=root, env=dict(os.environ, PYTHONPATH=str(SCE), PYTHONDONTWRITEBYTECODE="1"),
-                          capture_output=True, text=True, timeout=3600)
+    try:
+        proc = subprocess.run(cmd, cwd=root, env=dict(os.environ, PYTHONPATH=str(SCE), PYTHONDONTWRITEBYTECODE="1"),
+                              capture_output=True, text=True, timeout=3600)
+    except subprocess.TimeoutExpired:
+        raise SystemExit(f"traced run timed out after 3600 s: {' '.join(labels)}") from None
     m = json.loads(out.read_text())
     m["command"] = ["{python}", "-m", "harness.experiments.layer4.trace_django", "--in-tests-only", "--root", ".",
                     "--focal", focal, "--", *labels]
@@ -208,30 +260,42 @@ def trace_django(root: str, python: str, focal: str, labels: list[str], out: Pat
     return m
 
 
-def trace_trpc(clone: str, file: str, line: int, focal: str, cmd: list[str], out: Path, builder) -> dict:
+def trace_trpc(clone: str, file: str, line: int, focal: str, cmd: list[str], out: Path, builder,
+               source: bool = False, control: bool = False) -> dict:
     """Vitest 0.32 in fork mode (`--no-threads`), the runtime in NODE_OPTIONS,
-    one output per process merged; locations rebased to the index root."""
+    one output per process merged; locations rebased to the index root.
+    `source`: under `trpc_source_config` (every `@trpc/*` import as source). `control`: the
+    focal is not instrumented (the environment check of a failed trace)."""
     full = expand(cmd, clone, None)
-    for attempt in range(1, TRACE_ATTEMPTS + 1):
-        try:
-            raw = run_traced(clone, file, line, full, str(out), cwd=TRPC_CWD, multi=True, timeout=TRACE_TIMEOUT_S,
-                             env={"NODE_OPTIONS": f"--require {RUNTIME} --enable-source-maps"})
-            break
-        except subprocess.TimeoutExpired:
-            print(f"[retry] traced run timed out after {TRACE_TIMEOUT_S}s (attempt {attempt})", flush=True)
-    else:
-        raise SystemExit(f"traced run timed out {TRACE_ATTEMPTS} times: {' '.join(cmd)}")
+    config = trpc_source_config(clone) if source else None
+    if config:
+        full = full[:2] + ["--config", str(config)] + full[2:]  # {node} {vitest} --config ... --run ...
+    try:
+        for attempt in range(1, TRACE_ATTEMPTS + 1):
+            try:
+                raw = run_traced(clone, file, line, full, str(out), cwd=TRPC_CWD, multi=True, timeout=TRACE_TIMEOUT_S,
+                                 env={"NODE_OPTIONS": f"--require {RUNTIME} --enable-source-maps"}, instrument=not control)
+                break
+            except subprocess.TimeoutExpired:
+                print(f"[retry] traced run timed out after {TRACE_TIMEOUT_S}s (attempt {attempt})", flush=True)
+        else:
+            raise SystemExit(f"traced run timed out {TRACE_TIMEOUT_S} s x {TRACE_ATTEMPTS}: {' '.join(cmd)}")
+    finally:
+        if config:
+            config.unlink(missing_ok=True)
     m = map_manifest(rebase(raw, TRPC_PREFIX), builder, focal)
     m["command"], m["trace_attempts"] = cmd, attempt
+    m["vitest_config"] = f"{TRPC_CWD}/{TRPC_SOURCE_CONFIG}" if config else None
     m["raw"] = {k: raw.get(k) for k in ("ancestors", "chains", "descendants", "source_mapping", "processes")}
     m["output_tail"] = raw.get("output_tail", "")
     return m
 
 
-def trace_express(root: str, file: str, line: int, focal: str, cmd: list[str], out: Path, builder) -> dict:
+def trace_express(root: str, file: str, line: int, focal: str, cmd: list[str], out: Path, builder,
+                  control: bool = False) -> dict:
     full = expand(cmd, root, None)
     full = full[:1] + ["--require", str(RUNTIME)] + full[1:]
-    raw = run_traced(root, file, line, full, str(out))
+    raw = run_traced(root, file, line, full, str(out), instrument=not control)
     m = map_manifest(raw, builder, focal)
     m["command"] = cmd
     m["raw"] = {k: raw.get(k) for k in ("ancestors", "chains", "descendants", "source_mapping")}
@@ -285,7 +349,8 @@ def diagnostics(m: dict | None) -> dict:
     if not m:
         return {}
     chains = sorted((m.get("raw") or {}).get("chains", m.get("chains", {})).items(), key=lambda kv: -kv[1])[:8]
-    return {"exit_code": m.get("exit_code"), "focal_calls": m.get("focal_calls"), "n_tests": len(m.get("tests", [])),
+    return {"exit_code": m.get("exit_code"), "control_exit_code": m.get("control_exit_code"),
+            "env_skipped": m.get("env_skipped"), "vitest_config": m.get("vitest_config"), "focal_calls": m.get("focal_calls"), "n_tests": len(m.get("tests", [])),
             "tests_sample": m.get("tests", [])[:5], "ancestors": m.get("ancestors"),
             "ancestors_unmapped": m.get("ancestors_unmapped"), "ancestor_depth": m.get("ancestor_depth"),
             "outside_ancestors": m.get("outside_ancestors"), "top_chains": chains,
@@ -312,14 +377,18 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
     python = pythons.get(corpus)
     tmp = Path(tempfile.mkdtemp(prefix=f"l4_{tid}_"))
 
-    def trace(cmd_or_labels):
+    def trace(cmd_or_labels, control=False):
+        """`control`: the same run with nothing traced (Python: a focal that never exists; Node: the
+        focal not instrumented) - a failure there too is the environment's, not the candidate's."""
+        focal = CONTROL_FOCAL if control else qname
         if corpus == "django":
-            return trace_django(root, python, qname, cmd_or_labels, tmp / "m.json")
+            return trace_django(root, python, focal, cmd_or_labels, tmp / "m.json")
         if corpus == "fastapi":
-            return trace_python(root, python, qname, cmd_or_labels, tmp / "m.json")
+            return trace_python(root, python, focal, cmd_or_labels, tmp / "m.json")
         if corpus == "trpc":
-            return trace_trpc(root, file, line, qname, cmd_or_labels, tmp / "raw.json", builders[corpus])
-        return trace_express(root, file, line, qname, cmd_or_labels, tmp / "raw.json", builders[corpus])
+            return trace_trpc(root, file, line, qname, cmd_or_labels, tmp / "raw.json", builders[corpus],
+                              source=spec.get("trpc_source", False), control=control)
+        return trace_express(root, file, line, qname, cmd_or_labels, tmp / "raw.json", builders[corpus], control=control)
 
     task = {
         "schema_version": "layer4.task.v1", "task_id": tid, "family": family, "corpus": corpus,
@@ -336,6 +405,13 @@ def author(spec: dict, pythons: dict, names_dir: str | None, builders: dict, sce
     if family == "forward_blast":
         m = trace(spec.get("trace_labels") or spec["trace"])
         LAST_TRACE[tid] = m
+        if m.get("exit_code") != 0 and spec.get("control_on_failure"):
+            c = trace(spec.get("trace_labels") or spec["trace"], control=True)
+            m["control_exit_code"] = c.get("exit_code")
+            if c.get("exit_code") != 0:
+                raise SystemExit(f"{tid}: environment fault: the tests fail with nothing traced too (traced exit "
+                                 f"{m.get('exit_code')}, control exit {c.get('exit_code')})\n"
+                                 f"{c.get('output_tail', '')[-2000:]}")
         check_trace(tid, m)
         # the shallowest depth from max_depth up to max_depth_limit that yields gold
         depth = spec["max_depth"]
@@ -469,40 +545,48 @@ def load_specs(path: str | None) -> list[dict]:
 
 def author_p3b(specs: list[dict], pythons: dict, names_dir: str | None, builders: dict, sce_commit: str,
                per_corpus: int = P3B_PER_CORPUS, log_path: Path | None = None) -> dict:
-    """P3b eligibility: per corpus, specs in their (draw) order, each authored with the 3..15 gold rule,
-    until `per_corpus` are kept; every decision is appended to `log_path` (resumable: a decided spec
-    is not traced again). Returns the log."""
+    """P3b eligibility: per corpus, specs in their (draw) order, each authored with the
+    P3B_MIN_GOLD..MAX_GOLD rule, until `per_corpus` are kept; every decision is appended to
+    `log_path` (resumable: a decided spec is not traced again). Returns the log.
+
+    Decisions: `kept`; `skipped` (an ELIGIBILITY_REASONS reason: the candidate's property);
+    `env_fault` (the run fails with nothing traced too, or times out: the environment's - set aside,
+    not counted as ineligible; more than P3B_MAX_ENV_FAULTS in a corpus aborts). Any other failure
+    aborts with nothing logged for the spec. Each spec runs with `control_on_failure` (a failed
+    trace is re-run untraced to tell the two apart) and, for tRPC, `trpc_source`."""
     log_path = log_path or OUT / "authoring_log.json"
     log = json.loads(log_path.read_text()) if log_path.exists() else {"decisions": {}}
     decisions = log["decisions"]
     for corpus in dict.fromkeys(s["corpus"] for s in specs):
         ordered = sorted((s for s in specs if s["corpus"] == corpus), key=lambda s: s.get("draw_rank", 0))
         for spec in ordered:
-            kept = sum(1 for s in ordered if decisions.get(s["task_id"], {}).get("status") == "kept")
-            if kept >= per_corpus:
+            mine = [decisions[s["task_id"]] for s in ordered if s["task_id"] in decisions]
+            if sum(d["status"] == "kept" for d in mine) >= per_corpus:
                 break
+            if sum(d["status"] == "env_fault" for d in mine) > P3B_MAX_ENV_FAULTS:
+                raise SystemExit(f"{corpus}: more than {P3B_MAX_ENV_FAULTS} environment faults - the test "
+                                 f"environment is broken; fix it and resume")
             if spec["task_id"] in decisions:
                 continue
             if corpus in ("express", "trpc") and corpus not in builders:
                 from prism.engine import PrismEngine
                 builders[corpus] = PrismEngine.from_repo(corpus_root(corpus)).builder
             LAST_TRACE.pop(spec["task_id"], None)
+            base = {"corpus": corpus, "qname": spec["qname"], "draw_rank": spec.get("draw_rank")}
             try:
-                task = author({**spec, "min_gold": P3B_MIN_GOLD}, pythons, names_dir, builders, sce_commit)
-                decisions[spec["task_id"]] = {"status": "kept", "corpus": corpus, "qname": spec["qname"],
-                                              "draw_rank": spec.get("draw_rank"),
-                                              "gold": len(task["gold"]["affected_symbols"])}
+                task = author({**spec, "min_gold": P3B_MIN_GOLD, "control_on_failure": True,
+                               "trpc_source": corpus == "trpc"}, pythons, names_dir, builders, sce_commit)
+                decisions[spec["task_id"]] = {"status": "kept", **base, "gold": len(task["gold"]["affected_symbols"])}
                 print(f"[keep] {spec['task_id']} {spec['qname']}: {len(task['gold']['affected_symbols'])} gold", flush=True)
             except SystemExit as exc:
-                msg = str(exc)
-                if reason_code(msg) not in ELIGIBILITY_REASONS:
+                msg, code = str(exc), reason_code(str(exc))
+                if code not in ELIGIBILITY_REASONS | ENVIRONMENT_REASONS:
                     raise SystemExit(f"{spec['task_id']}: not an eligibility failure - fix the tooling, then "
                                      f"resume (nothing logged for it):\n{msg}") from exc
-                trace = diagnostics(LAST_TRACE.get(spec["task_id"]))
-                decisions[spec["task_id"]] = {"status": "skipped", "corpus": corpus, "qname": spec["qname"],
-                                              "draw_rank": spec.get("draw_rank"), "reason": reason_code(msg),
-                                              "detail": msg[:600], "trace": trace}
-                print(f"[skip] {spec['task_id']} {spec['qname']}: {reason_code(msg)}", flush=True)
+                status = "env_fault" if code in ENVIRONMENT_REASONS else "skipped"
+                decisions[spec["task_id"]] = {"status": status, **base, "reason": code, "detail": msg[:600],
+                                              "trace": diagnostics(LAST_TRACE.get(spec["task_id"]))}
+                print(f"[{'env' if status == 'env_fault' else 'skip'}] {spec['task_id']} {spec['qname']}: {code}", flush=True)
             log_path.parent.mkdir(parents=True, exist_ok=True)
             log_path.write_text(json.dumps(log, indent=1, sort_keys=True, default=str) + "\n")
     return log
@@ -518,7 +602,7 @@ def main(argv=None) -> int:
     p.add_argument("--node", default="node", help="Node binary for tRPC (Node 20)")
     p.add_argument("--specs", help="a spec module other than benchmarks/layer4/specs.py (e.g. specs_p3b.py)")
     p.add_argument("--out", help="output directory for tasks/, manifests/, gates/ (default benchmarks/layer4)")
-    p.add_argument("--eligibility", choices=("p3b",), help="p3b: 3..15 gold, first --per-corpus kept per corpus, "
+    p.add_argument("--eligibility", choices=("p3b",), help="p3b: 2..15 gold, first --per-corpus kept per corpus, "
                    "in draw order, every decision logged to OUT/authoring_log.json")
     p.add_argument("--per-corpus", type=int, default=P3B_PER_CORPUS)
     args = p.parse_args(argv)

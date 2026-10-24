@@ -6,14 +6,22 @@
 #
 # harness/experiments/retrieval_pivot/P3.md, "Task authoring and freezing".
 # The blind draw is already committed (p3b_draw.py, seed 20261024):
-# benchmarks/layer4/specs_p3b.py (24 specs per corpus, draw order - never
-# edited by hand) and benchmarks/layer4_p3b/draw.json. This cell:
+# benchmarks/layer4/specs_p3b.py (96 specs per corpus, draw order - never
+# edited by hand) and benchmarks/layer4_p3b/draw.json. Amendment 1 (P3.md),
+# after the pilot run (9 of 96 traced specs eligible; its record is in
+# benchmarks/layer4_p3b/pilot1/): gold 2..15, Django never traces gis_tests /
+# postgres_tests, root-only permission tests are skipped, a failed trace is
+# re-run untraced to tell an environment fault from the candidate's failure,
+# and tRPC is traced as source (every @trpc/* import aliased to src/). This
+# cell:
 #   step 1  author - per corpus, the specs in draw order, each traced on the
 #           corpus's own tests (python -m harness.experiments.layer4.author
 #           --specs ... --eligibility p3b): kept when the trace exits cleanly,
-#           the focal runs, and 3..15 gold callers lie within 2 call hops;
+#           the focal runs, and 2..15 gold callers lie within 2 call hops;
 #           otherwise skipped with a reason code, and the next spec in draw
-#           order is traced. The first 8 kept per corpus are the tasks. A
+#           order is traced. A trace that fails with nothing traced too (or
+#           times out) is an environment fault: set aside as `env_fault`, not
+#           counted as ineligible; more than 5 in a corpus abort it. The first 8 kept per corpus are the tasks. A
 #           corpus that runs out of specs keeps its natural yield (approved:
 #           no backfill from another corpus). Every decision is logged to
 #           benchmarks/layer4_p3b/authoring_log_<corpus>.json. A tooling
@@ -54,6 +62,8 @@ EXPECTED_GITHUB_USER = "rohith-hash-stack"
 LANES = [["django", "trpc"], ["fastapi", "express"]]
 CORPORA = [c for lane in LANES for c in lane]
 PER_CORPUS = 8                              # = p3b_freeze.PER_CORPUS
+MIN_GOLD = 2                                # = author.P3B_MIN_GOLD (amendment 1)
+AMENDMENT = 1                               # = p3b_freeze.AMENDMENT
 MIN_TASKS = 24                              # = p3b_freeze.MIN_TASKS
 SEED = 20261024                             # = specs_p3b.SEED
 RETRY_PASSES = 2                            # reruns of a corpus whose author process died
@@ -371,13 +381,52 @@ for corpus, pins in (("fastapi", FASTAPI_PINS), ("django", DJANGO_PINS)):
     print(f"[ok] {corpus}: {run([py, '--version'], capture=True).stdout.strip()}", flush=True)
 PYTHON_ARGS = [arg for c, py in PYTHONS.items() for arg in ("--python", f"{c}={py}")]
 
-print("\n[setup 8/8] Preflight: the P3b tests, and the specs are the committed draw's", flush=True)
+print("\n[setup 8/8] Preflight: the P3b tests, the rule in force, tRPC as source", flush=True)
 if run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_p3b_draw.py",
         "tests/test_p3b_authoring.py"], cwd=SCE_DIR, env=child_env, check=False).returncode != 0:
     abort("the P3b authoring tests fail on this checkout")
 from benchmarks.layer4 import specs_p3b  # noqa: E402
 if specs_p3b.SEED != SEED or json.load(open(os.path.join(local_out, "draw.json")))["seed"] != SEED:
     abort(f"specs/draw seed is not {SEED}")
+rule = run([sys.executable, "-c", "from harness.experiments.layer4.author import P3B_MIN_GOLD as g; "
+            "from harness.experiments.retrieval_pivot.p3b_freeze import AMENDMENT as a; print(g, a)"],
+           cwd=SCE_DIR, env=child_env, capture=True).stdout.strip().splitlines()[-1]
+if rule != f"{MIN_GOLD} {AMENDMENT}":
+    abort(f"the harness's rule ({rule}: min gold, amendment) is not the cell's ({MIN_GOLD} {AMENDMENT})")
+# tRPC is traced under a generated Vitest config that aliases every @trpc/* export to its source.
+# The whole suite runs untraced under the corpus's own config and under it: a test file failing only
+# as source would turn every trace of it into an environment fault, so that aborts here.
+src_check = run([sys.executable, "-c", f"""
+import json, re, subprocess
+from harness.experiments.layer4 import author as A
+A.NODE["bin"] = {NODE!r}
+clone = A.clone_root("trpc")
+def suite(extra):
+    cmd = A.expand(["{{node}}", "{{vitest}}", *extra, "--run", "--no-threads"], clone, None)
+    p = subprocess.run(cmd, cwd=clone + "/" + A.TRPC_CWD, capture_output=True, text=True, timeout=3600)
+    out = re.sub(r"\\x1b\\[[0-9;]*m", "", p.stdout + p.stderr)
+    return {{"exit": p.returncode, "failed": sorted(set(re.findall(r"FAIL\\s+(\\S+\\.test\\.tsx?)", out))),
+            "files": (re.findall(r"Test Files\\s+(.*)", out) or ["?"])[-1].strip(), "tail": out[-1500:]}}
+base = suite([])
+cfg = A.trpc_source_config(clone)
+try:
+    src = suite(["--config", str(cfg)])
+finally:
+    cfg.unlink(missing_ok=True)
+print("SRC_CHECK " + json.dumps({{"base": base, "source": src, "aliases": len(A.trpc_source_aliases(clone))}}))
+"""], cwd=SCE_DIR, env=child_env, check=False, capture=True)
+try:
+    sc = json.loads([ln for ln in src_check.stdout.splitlines() if ln.startswith("SRC_CHECK ")][-1][10:])
+except Exception:
+    abort(f"tRPC source-config check crashed:\n{(src_check.stderr or src_check.stdout)[-3000:]}")
+only_source = sorted(set(sc["source"]["failed"]) - set(sc["base"]["failed"]))
+print(f"[trpc] own config: exit {sc['base']['exit']}, files {sc['base']['files']}, failing {sc['base']['failed']}", flush=True)
+print(f"[trpc] as source ({sc['aliases']} exports aliased): exit {sc['source']['exit']}, files {sc['source']['files']}, "
+      f"failing {sc['source']['failed']}", flush=True)
+if only_source or (sc["source"]["exit"] != 0 and not sc["source"]["failed"]):
+    abort(f"the tRPC suite fails as source where it passes as built: {only_source or 'no test file ran'}\n"
+          f"{sc['source']['tail']}")
+TRPC_SRC_CHECK = {k: {"exit": v["exit"], "files": v["files"], "failed": v["failed"]} for k, v in sc.items() if k != "aliases"}
 SPEC_IDS = {c: [s["task_id"] for s in specs_p3b.SPECS if s["corpus"] == c] for c in CORPORA}
 print(f"[ok] specs per corpus: { {c: len(v) for c, v in SPEC_IDS.items()} }", flush=True)
 
@@ -389,10 +438,11 @@ STOP = threading.Event()
 
 
 def corpus_state(corpus):
-    """(kept, decided, finished): finished = 8 kept, or every spec of the corpus decided."""
+    """(kept, decided, finished, env faults): finished = 8 kept, or every spec of the corpus decided."""
     d = decisions_of(os.path.join(local_out, f"authoring_log_{corpus}.json"))
     kept = sum(1 for v in d.values() if v["status"] == "kept")
-    return kept, len(d), kept >= PER_CORPUS or set(SPEC_IDS[corpus]) <= set(d)
+    env = sum(1 for v in d.values() if v["status"] == "env_fault")
+    return kept, len(d), kept >= PER_CORPUS or set(SPEC_IDS[corpus]) <= set(d), env
 
 
 def push_outputs(message):
@@ -418,19 +468,21 @@ def lane_worker(corpora, status, procs):
             for line in proc.stdout:
                 log.write(line)
                 log.flush()
-                if line.startswith(("[keep]", "[skip]", "[p3b]", "Traceback")) or "eligibility failure" in line:
+                if line.startswith(("[keep]", "[skip]", "[env]", "[p3b]", "Traceback")) or "eligibility failure" in line \
+                        or "environment is broken" in line:
                     print(f"[{corpus}] {line}", end="", flush=True)
             code = proc.wait()
             log.write(f"=== exit {code} ===\n")
             log.close()
-            kept, decided, finished = corpus_state(corpus)
-            status[corpus] = f"exit {code}, kept {kept}, decided {decided}, finished {finished}"
+            kept, decided, finished, env = corpus_state(corpus)
+            status[corpus] = f"exit {code}, kept {kept}, decided {decided}, env faults {env}, finished {finished}"
             print(f"[{corpus}] pass {attempt}: {status[corpus]}", flush=True)
             if STOP.is_set():
                 return
             if finished:
                 break
-            if code != 0 and "eligibility failure" in open(os.path.join(local_out, f"author_{corpus}.log")).read()[-4000:]:
+            said = open(os.path.join(local_out, f"author_{corpus}.log")).read()[-4000:]
+            if code != 0 and ("eligibility failure" in said or "environment is broken" in said):
                 status[corpus] += " - TOOLING FAULT, see the log"
                 break  # a rerun would hit the same fault: it needs a code fix
         push_outputs(f"P3b authoring: {corpus} {status.get(corpus, '')}")
@@ -480,10 +532,11 @@ else:
 states = {c: corpus_state(c) for c in CORPORA}
 unfinished = [c for c, s in states.items() if not s[2]]
 total = sum(s[0] for s in states.values())
-report = ["# P3b task authoring", "", f"Branch `{BRANCH}`, HEAD `{HEAD}`, seed {SEED}. Code: `{json.dumps(CODE)}`.", "",
-          "| corpus | kept | decided | specs | finished |", "|---|---|---|---|---|"]
-for c, (kept, decided, finished) in states.items():
-    report.append(f"| {c} | {kept} | {decided} | {len(SPEC_IDS[c])} | {finished} |")
+report = ["# P3b task authoring", "", f"tRPC suite untraced: {json.dumps(TRPC_SRC_CHECK)}.", "", f"Branch `{BRANCH}`, HEAD `{HEAD}`, seed {SEED}, amendment {AMENDMENT} "
+          f"(gold {MIN_GOLD}..15 within 2 hops). Code: `{json.dumps(CODE)}`.", "",
+          "| corpus | kept | decided | env faults | specs | finished |", "|---|---|---|---|---|---|"]
+for c, (kept, decided, finished, env) in states.items():
+    report.append(f"| {c} | {kept} | {decided} | {env} | {len(SPEC_IDS[c])} | {finished} |")
 report += ["", f"Total kept: {total} (target {PER_CORPUS * len(CORPORA)}, minimum {MIN_TASKS}).", ""]
 for c in CORPORA:
     d = decisions_of(os.path.join(local_out, f"authoring_log_{c}.json"))
@@ -492,6 +545,8 @@ for c in CORPORA:
         if tid in d:
             v = d[tid]
             report.append(f"| {tid} | `{v['qname']}` | {v['status']} | {v.get('gold') if v['status'] == 'kept' else v.get('reason')} |")
+    report.append("")
+    report.append(f"Decided {len(d)} of {len(SPEC_IDS[c])} specs; the rest of the draw order was not traced.")
     report.append("")
 
 outcome = None
@@ -524,7 +579,8 @@ if os.path.exists(FROZEN_PATH):
     else:
         frozen = json.load(open(FROZEN_PATH))
         report += ["## Frozen", "", f"{frozen['total']} tasks, short corpora {frozen['short_corpora']}, "
-                   f"trace skips {len(frozen['skipped']['trace'])}, draw skips "
+                   f"trace skips {len(frozen['skipped']['trace'])}, environment faults "
+                   f"{len(frozen['skipped']['environment'])}, draw skips "
                    f"{sum(len(v) for v in frozen['skipped']['draw'].values())}. Verified with the runner's guard.", ""]
 report[1:1] = ["", f"**Outcome: {outcome}**"]
 open(os.path.join(local_out, "AUTHORING.md"), "w").write("\n".join(report) + "\n")

@@ -53,11 +53,13 @@ def merge(parts: list[dict]) -> dict:
 
 
 def run_traced(repo_root: str, focal_file: str, focal_line: int, command: list[str], out_path: str,
-               env: dict | None = None, timeout: int = 1800, cwd: str = ".", multi: bool = False) -> dict:
+               env: dict | None = None, timeout: int = 1800, cwd: str = ".", multi: bool = False,
+               instrument: bool = True) -> dict:
     """Instrument `focal_file:focal_line`, run `command` in `repo_root/cwd`
     (it must load `RUNTIME`), restore the file, and return the raw manifest
     with the command's exit status. `multi`: the runner forks, so each
-    process writes `<out_path>.<pid>.json` and they are merged."""
+    process writes `<out_path>.<pid>.json` and they are merged. `instrument=False`: the same run with
+    the focal left as it is (the control run that tells an environment failure from a traced one)."""
     focal_abs = os.path.join(repo_root, focal_file)
     span = locate(focal_abs, focal_line)
     source = Path(focal_abs).read_bytes()
@@ -71,7 +73,8 @@ def run_traced(repo_root: str, focal_file: str, focal_line: int, command: list[s
     for old in [out, *out.parent.glob(out.name + ".*.json")]:
         old.unlink(missing_ok=True)
     with edited(focal_abs):
-        instrument_js(span, ENTER, EXIT)
+        if instrument:
+            instrument_js(span, ENTER, EXIT)
         proc = subprocess.run(command, cwd=os.path.join(repo_root, cwd), env=run_env, capture_output=True, text=True,
                               timeout=timeout)
     if multi:

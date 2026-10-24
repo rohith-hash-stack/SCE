@@ -117,3 +117,61 @@ def test_the_runner_refuses_a_p3b_directory_without_or_against_its_freeze(tmp_pa
     (tasks / "p3b_fwd_django_0001.json").write_text(json.dumps({"task_id": "p3b_fwd_django_0001"}))
     with pytest.raises(SystemExit, match="not frozen"):
         R.load_tasks([tasks])
+
+
+def test_an_environment_fault_is_set_aside_not_counted_and_too_many_abort(tmp_path, monkeypatch):
+    env = "environment fault: the tests fail with nothing traced too (traced exit 1, control exit 1)"
+    outcome = {1: env, 2: "traced run timed out 600 s x 3: x", 3: 4, 4: "1 gold symbols < 2 within 2 call hops", 5: 2}
+    monkeypatch.setattr(A, "author", _fake_author(tmp_path, outcome))
+    d = A.author_p3b(_specs("django", 5), {}, None, {}, "abc", per_corpus=2,
+                     log_path=tmp_path / "authoring_log.json")["decisions"]
+    assert [d[f"p3b_fwd_django_{r:04d}"]["status"] for r in range(1, 6)] == [
+        "env_fault", "env_fault", "kept", "skipped", "kept"]
+    assert d["p3b_fwd_django_0001"]["reason"] == d["p3b_fwd_django_0002"]["reason"] == "env_fault"
+    monkeypatch.setattr(A, "author", _fake_author(tmp_path / "c", {r: env for r in range(1, 20)}))
+    with pytest.raises(SystemExit, match="environment is broken"):
+        A.author_p3b(_specs("express", 19), {}, None, {"express": object()}, "abc", per_corpus=2,
+                     log_path=tmp_path / "c" / "authoring_log.json")
+
+
+def test_p3b_specs_run_with_control_runs_and_trpc_as_source(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(A, "author", lambda spec, *a, **k: seen.append(spec) or _fake_author(tmp_path, {1: 3})(spec))
+    A.author_p3b(_specs("trpc", 1) + _specs("express", 1), {}, None, {"trpc": object(), "express": object()}, "abc",
+                 per_corpus=1, log_path=tmp_path / "authoring_log.json")
+    assert [(s["corpus"], s["min_gold"], s["control_on_failure"], s["trpc_source"]) for s in seen] == [
+        ("trpc", 2, True, True), ("express", 2, True, False)]
+
+
+def test_trpc_source_aliases_map_every_export_to_its_source_file(tmp_path):
+    for pkg in A.TRPC_PACKAGES:
+        base = tmp_path / "packages" / pkg
+        (base / "src" / "observable").mkdir(parents=True)
+        (base / "src" / "index.ts").write_text("")
+        (base / "src" / "observable" / "index.ts").write_text("")
+        (base / "src" / "links.tsx").write_text("")
+        (base / "package.json").write_text(json.dumps({"exports": {
+            "./package.json": "./package.json", ".": {"import": "./dist/index.mjs"},
+            "./observable": {"import": "./dist/observable/index.mjs"}, "./links": {"import": "./dist/links.mjs"}}}))
+    (tmp_path / "packages" / "tests").mkdir()
+    got = dict(A.trpc_source_aliases(str(tmp_path)))
+    assert got["@trpc/server"].endswith("packages/server/src/index.ts")
+    assert got["@trpc/server/observable"].endswith("packages/server/src/observable/index.ts")
+    assert got["@trpc/react-query/links"].endswith("packages/react-query/src/links.tsx")
+    text = A.trpc_source_config(str(tmp_path)).read_text()
+    assert "import base from './vitest.config'" in text and r"find: /^@trpc\/server\/observable$/" in text
+    (tmp_path / "packages" / "server" / "src" / "links.tsx").unlink()
+    with pytest.raises(SystemExit, match="no source for @trpc/server export ./links"):
+        A.trpc_source_aliases(str(tmp_path))
+
+
+def test_freeze_counts_environment_faults_apart_and_records_the_rule(tmp_path, monkeypatch):
+    out = _authored(tmp_path, monkeypatch, 8)
+    log = json.loads((out / "authoring_log.json").read_text())
+    log["decisions"]["p3b_fwd_trpc_0099"] = {"status": "env_fault", "corpus": "trpc", "qname": "x", "draw_rank": 99,
+                                             "reason": "env_fault", "detail": "environment fault: ..."}
+    (out / "authoring_log.json").write_text(json.dumps(log))
+    frozen = F.freeze(out)
+    assert frozen["per_corpus"]["trpc"]["env_faults"] == 1 and frozen["per_corpus"]["trpc"]["trace_skipped"] == 0
+    assert [e["task_id"] for e in frozen["skipped"]["environment"]] == ["p3b_fwd_trpc_0099"]
+    assert frozen["eligibility"] == {"min_gold": 2, "max_gold": 15, "max_depth": 2} and frozen["amendment"] == 1

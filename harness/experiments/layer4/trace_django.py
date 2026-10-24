@@ -11,7 +11,8 @@ SQL hook (`_patch_django`, one choke point for both cursor wrappers) and a
 this process with `--parallel=1` (parallel workers would escape the
 profiler). Test labels are runtests labels: an app (`queries`), a module
 (`queries.test_q`) or a test (`basic.tests.ModelTest.test_save`). The
-manifest gains `exit_code` and `labels`.
+manifest gains `exit_code`, `labels` and `env_skipped` (`ROOT_ONLY_TESTS`
+skipped because the run is root's).
 """
 from __future__ import annotations
 
@@ -24,6 +25,15 @@ import threading
 import unittest
 
 from harness.experiments.layer4.trace_py import Tracer, _patch_django
+
+#: tests that assert a permission denial after chmod: root bypasses file permissions, so as root they
+#: fail whatever the code does (Kaggle runs as root). Skipped only when the euid is 0, and listed
+#: in the manifest (`env_skipped`).
+ROOT_ONLY_TESTS = {
+    "template_tests.test_loaders.FileSystemLoaderTests.test_permissions_error",
+    "file_uploads.tests.DirectoryCreationTests.test_readonly_root",
+    "i18n.test_compilation.PoFileTests.test_no_write_access",
+}
 
 
 def main(argv=None) -> int:
@@ -40,8 +50,13 @@ def main(argv=None) -> int:
     tracer = Tracer(root, {f.strip() for f in args.focal.split(",") if f.strip()}, in_tests_only=args.in_tests_only)
 
     run_test = unittest.TestCase.run
+    as_root = hasattr(os, "geteuid") and os.geteuid() == 0
+    env_skipped = []
 
     def run(self, result=None):
+        if as_root and self.id() in ROOT_ONLY_TESTS:
+            env_skipped.append(self.id())
+            setattr(self, self._testMethodName, unittest.skip("asserts a permission denial; running as root")(lambda: None))
         tracer.current_test = self.id()
         try:
             return run_test(self, result)
@@ -64,7 +79,8 @@ def main(argv=None) -> int:
     finally:
         sys.setprofile(None)
         threading.setprofile(None)
-        manifest = tracer.manifest() | {"exit_code": code, "labels": args.labels, "in_tests_only": args.in_tests_only}
+        manifest = tracer.manifest() | {"exit_code": code, "labels": args.labels, "in_tests_only": args.in_tests_only,
+                                        "env_skipped": sorted(env_skipped)}
         with open(args.out, "w") as fh:
             json.dump(manifest, fh, indent=1, sort_keys=True)
     return code
