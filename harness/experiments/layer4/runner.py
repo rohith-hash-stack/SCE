@@ -359,8 +359,8 @@ def main(argv=None) -> int:
     if args.corpus:
         tasks = {k: v for k, v in tasks.items() if v["corpus"] == args.corpus}
     arms = ["arm0_no_retrieval"] if args.command == "contamination" else (
-        list(X.ARMS) if args.arms == "all" else args.arms.split(","))
-    unknown = set(arms) - set(X.ARMS)
+        list(X.ARMS) if args.arms == "all" else list(X.P3_ARMS) if args.arms == "p3" else args.arms.split(","))
+    unknown = set(arms) - set(X.ARMS) - set(X.P3_ARMS)
     if unknown:
         raise SystemExit(f"unknown arms {sorted(unknown)}; known: {X.ARMS}")
     cfg = SweepConfig(model=args.model, temperature=args.temperature, budget=args.budget,

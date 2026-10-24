@@ -35,6 +35,8 @@ from harness.experiments.layer4.source_edit import locate
 #: Layer 4 arm name -> Stage 2 engine id (`benchmarks.final_sweep.config.STAGE2_ARMS`)
 ARMS = ("arm0_no_retrieval", "arm1_hybrid_rag", "repomap_pagerank", "prism_full", "prism_ask", "normal_oracle",
         "prism_oracle")
+#: Phase P3 payload arms (`harness.experiments.retrieval_pivot.p3`), selected with `--arms p3`.
+from harness.experiments.retrieval_pivot.p3 import ARMS as P3_ARMS  # noqa: E402
 #: strings that only trace manifests and gate records contain
 TRACE_MARKERS = ("ancestor_depth", "descendant_depth", "focal_calls", "oracle_callers", "sql_dropped_tables",
                  "STUB_IMPLEMENTATION")
@@ -232,6 +234,9 @@ def build_context(corpus: Corpus, arm: str, task: dict, seed: int | None, cfg, c
     from benchmarks.final_sweep.runner import NO_CONTEXT_TEXT, _two_pass_context
     from prism.slicer.tokenizer import count_tokens
 
+    if arm in P3_ARMS:
+        from harness.experiments.retrieval_pivot import p3
+        return p3.build_context(corpus, arm, task, seed, cfg, client, log, record)
     state = corpus.state
     spec = C.resolve_arm(C.STAGE2_ARMS[arm])
     et = T.to_evaluation_task(task)

@@ -79,6 +79,8 @@ def arm_rep(arm: str, ring: int) -> str:
         return "full+prof" if ring == 1 else "sig"
     if arm == "A5":
         return "full+prof" if ring == 1 else "sig+prof"
+    if arm == "A6":  # helpers keep code and gain their profile; outer nodes stay full code
+        return "full+prof" if ring == 1 else "full"
     raise ValueError(arm)
 
 
