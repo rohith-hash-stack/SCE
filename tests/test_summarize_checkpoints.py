@@ -186,3 +186,15 @@ def test_an_unrepaired_summary_from_an_interrupted_run_is_repaired_on_resume(tmp
     assert counts["to_summarize"] == 0 and counts["repaired"] == 1 and llm.repairs == 1 and llm.calls == 1
     fixed = S.read_index(path)["functions"]["app.ops.op3"]
     assert fixed["summary"] == GOOD and fixed["checked"]
+
+
+def test_only_summarizes_the_listed_functions(tmp_path):
+    root = _repo(tmp_path / "repo", n=6)
+    builder = build_pipeline(str(root), use_cache=False)[0]
+    srv = FakeOllama()
+    try:
+        counts = build_index(builder, str(root), base_urls=[srv.url], threads=1, only={"app.ops.op1", "app.ops.op4"})
+    finally:
+        srv.release()
+    assert counts["functions"] == 2 and counts["coverage"] == 1.0
+    assert set(S.read_index(S.index_path(str(root)))["functions"]) == {"app.ops.op1", "app.ops.op4"}

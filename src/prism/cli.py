@@ -694,8 +694,10 @@ def ask(question: str, repo_path: str, top_k: int, as_json: bool, deps: bool) ->
                    "are reused): v3 / v3-name - a stricter lint sends name-restating (and, for v3, short) summaries to "
                    "repair; v4 - name-restating summaries are rewritten from the function's source; v5 - v4, also for "
                    "long functions with short summaries, and the rewrite's effects are indexed too.")
+@click.option("--only", "only", type=click.Path(exists=True, dir_okay=False),
+              help="Summarize only the functions listed in this file (one qualified name per line) - for experiments.")
 def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, from_cache: str | None, dry_run: bool,
-              checkpoint_every: int, candidate: str) -> None:
+              checkpoint_every: int, candidate: str, only: str | None) -> None:
     """Build or refresh the offline summary index (.prism/summaries.json)
     that `prism ask` / `prism.ask` use as a second search field.
 
@@ -714,7 +716,8 @@ def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, f
     counts = build_index(builder, repo_root, model=model or LOCKED_MODEL,
                          base_urls=[u for u in base_urls.split(",") if u], threads=threads, from_cache=cache,
                          dry_run=dry_run, checkpoint_every=checkpoint_every, candidate=candidate,
-                         log=lambda m: click.echo(m, err=True))
+                         log=lambda m: click.echo(m, err=True),
+                         only={ln.strip() for ln in open(only, encoding="utf-8") if ln.strip()} if only else None)
     if dry_run:
         click.echo(json.dumps(counts, indent=2))
         return

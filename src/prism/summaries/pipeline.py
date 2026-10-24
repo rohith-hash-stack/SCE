@@ -233,6 +233,7 @@ def build_index(
     builder, repo_root: str, *, model: str = LOCKED_MODEL, llm=None, base_urls: "list[str] | None" = None,
     batch: int = BATCH, threads: int = 4, from_cache: "dict | None" = None, dry_run: bool = False,
     checkpoint_every: int = CHECKPOINT_BATCHES, candidate: str = "v2", log: Callable[[str], None] = lambda _m: None,
+    only: "set[str] | None" = None,
 ) -> dict:
     """Bring `.prism/summaries.json` up to date for `builder`'s functions.
     Returns counts; `dry_run` only counts what would be summarized (and, for
@@ -240,7 +241,8 @@ def build_index(
     `checkpoint_every`: batches (and, in the repair pass, that many times
     `batch` repairs) between atomic checkpoint writes. `candidate`: `"v2"`
     (locked) or an unvalidated `CANDIDATES` entry, whose index search uses at
-    weight 0 until it is validated and locked."""
+    weight 0 until it is validated and locked. `only`: summarize just these
+    qualified names (an experiment's subset; coverage is then over them)."""
     if candidate not in CANDIDATES:
         raise ValueError(f"unknown candidate {candidate!r}; one of {sorted(CANDIDATES)}")
     extra = CANDIDATES[candidate]["lint_flags"]
@@ -249,6 +251,8 @@ def build_index(
     nlq = NLQIndex(builder, repo_root)
     entries = find_entry_points(builder)
     fns = function_symbols(nlq.pool)
+    if only is not None:
+        fns = [s for s in fns if s.qualified_name in only]
     cards = {s.qualified_name: c["card"] for s in fns if (c := build_card(builder, {}, entries, s.qualified_name, axes=False))}
     keys = {q: card_key(model, c) for q, c in cards.items()}
     escalate_flags = CANDIDATES[candidate].get("escalate", ())
