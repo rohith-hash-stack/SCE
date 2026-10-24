@@ -89,11 +89,21 @@ def build_context(corpus, arm: str, task: dict, seed, cfg, client, log, record) 
             sections.append(text)
             packed.append(q)
     rendered = SECTION_SEP.join(sections)
+    tokens_before = count_tokens(rendered)
+    trimmed = 0
+    # node costs are counted per node; the joined text can tokenize slightly larger: drop the
+    # last-packed non-focal sections (the farthest fill first) until the whole context fits
+    while count_tokens(rendered) > budget and len(sections) > 1:
+        i = max(j for j, q in enumerate(packed) if q != focal)
+        sections.pop(i)
+        packed.pop(i)
+        trimmed += 1
+        rendered = SECTION_SEP.join(sections)
     leak = X.context_leaks(rendered, task, definition, common)
     tokens = count_tokens(rendered)
     return {"rendered": rendered, "leak_check": X.LEAK_CHECK_VERSION, "manifest_direction": None,
-            "selected_symbols": sorted(packed), "context_tokens": tokens, "context_tokens_pre_ceiling": tokens,
-            "n_ceiling_dropped": 0, "leak": leak, "leaked": X.leaked(leak), "engine_id": f"{ENGINE_ID}/{arm}",
+            "selected_symbols": sorted(packed), "context_tokens": tokens, "context_tokens_pre_ceiling": tokens_before,
+            "n_ceiling_dropped": trimmed, "leak": leak, "leaked": X.leaked(leak), "engine_id": f"{ENGINE_ID}/{arm}",
             "dropped_test_nodes": dropped, "masked_nodes": masked_ids, "dropped_nested_nodes": nested,
             "focal_in_context": focal in packed}
 
@@ -112,11 +122,12 @@ def dryrun(out: Path, corpora=("fastapi", "django")) -> list[dict]:
                 ctx = build_context(corpus, arm, task, None, None, None, None, None)
                 sel = set(ctx["selected_symbols"])
                 rows.append({"task": task["task_id"], "family": task["family"], "arm": arm,
-                             "tokens": ctx["context_tokens"], "nodes": len(sel), "leaked": ctx["leaked"],
+                             "tokens": ctx["context_tokens"], "trimmed": ctx["n_ceiling_dropped"],
+                             "nodes": len(sel), "leaked": ctx["leaked"],
                              "focal_in_context": ctx["focal_in_context"], "gold_callers": len(gold),
                              "gold_callers_in_context": len(gold & sel)})
     out.mkdir(parents=True, exist_ok=True)
-    (out / "p3_dryrun.json").write_text(json.dumps(rows, indent=1) + "\n")
+    (out / f"p3_dryrun_{'_'.join(corpora)}.json").write_text(json.dumps(rows, indent=1) + "\n")
     return rows
 
 
@@ -124,8 +135,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=("dryrun",))
     ap.add_argument("out", type=Path)
+    ap.add_argument("--corpora", default="fastapi,django", help="comma-separated Layer 4 corpora")
     a = ap.parse_args(argv)
-    rows = dryrun(a.out)
+    rows = dryrun(a.out, tuple(a.corpora.split(",")))
     for r in rows:
         print(f"{r['task']:22} {r['arm']:16} tokens {r['tokens']:5}  nodes {r['nodes']:3}  leaked {r['leaked']!s:5}  "
               f"gold callers {r['gold_callers_in_context']}/{r['gold_callers']}")
