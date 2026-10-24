@@ -25,6 +25,14 @@ def seed(x):
 
 def caller(x):
     return seed(x)
+
+
+def grand(x):
+    return caller(x)
+
+
+def great(x):
+    return grand(x)
 '''
 
 
@@ -41,6 +49,8 @@ def test_arm_representations():
     assert [p1.arm_rep("A1n", r) for r in (1, 3)] == ["full", "sig"]
     assert [p1.arm_rep("A2", r) for r in (1, 2)] == ["sig+sum", "sig+sum"]
     assert [p1.arm_rep("A3", r) for r in (1, 2)] == ["full+sum", "sig+sum"]
+    assert [p1.arm_rep("A4", r) for r in (0, 1, 2)] == ["full", "full+prof", "sig"]
+    assert [p1.arm_rep("A5", r) for r in (1, 2)] == ["full+prof", "sig+prof"]
 
 
 def test_rings_and_rendering_and_the_cost_patch_is_restored(tmp_path):
@@ -69,3 +79,22 @@ def test_a_case_reports_gold_tokens_and_representations(tmp_path):
     assert a0["gold_full"] == 2 and a1["gold_full"] == 1 and a1["gold_with_summary"] == 1
     assert a1["tokens"] < a0["tokens"] and a1["summary_tokens"] > 0 and a0["summary_tokens"] == 0
     assert a0["gold_reachable"] == 2
+
+
+def test_the_profile_names_the_axes_and_the_anchor_link(tmp_path):
+    from prism.semantics.bitmask import FeatureBit
+    assert p1.axis_names(FeatureBit.SINK_PURE_COMPUTE | FeatureBit.FORM_LINEAR | FeatureBit.ROLE_LEAF_UTILITY) == {
+        "substance": ["pure compute"], "form": ["linear"], "role": ["leaf utility"]}
+    e = _engine(tmp_path)
+    r = p1.Renderer(e.builder, e._contracts, {}, seed="app.m.seed")
+    text, rep = r.render("app.m.mid", "full+prof")
+    assert rep == "full+prof" and "[profile] " in text and "substance:" in text and "a = leaf(x)" in text
+
+
+def test_relaxed_reach_keeps_the_production_pack_first_and_adds_farther_callers(tmp_path):
+    e = _engine(tmp_path)
+    r0 = [i.symbol for i in p1.pack_reach(e.builder, e._contracts, "app.m.seed", 4000, "R0")]
+    r1 = p1.pack_reach(e.builder, e._contracts, "app.m.seed", 4000, "R1")
+    assert [i.symbol for i in r1][:len(r0)] == r0  # priority preserved
+    assert "app.m.grand" not in r0 and "app.m.grand" in {i.symbol for i in r1}
+    assert sum(i.cost for i in r1) <= 4000

@@ -47,7 +47,18 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 CORPORA = ("fastapi", "django")
 BUDGETS = (2000, 4000, 8000)
-ARMS = ("A0", "A1", "A1n", "A2", "A3")
+ARMS = ("A0", "A1", "A1n", "A2", "A3", "A4", "A5")
+#: Reach modes: R0 the production packer; R1 the production pack, then ring-by-ring fill: nodes at
+#: ring 2, 3, ... FILL_MAX_RING hops from the seed (any direction - callers of callers, siblings,
+#: deep callees), nearer rings first, and within a ring the most links to already-packed nodes
+#: first, appended while they fit the remaining budget. The production packer only ever considers
+#: the seed's direct callers upstream, so its distance limits alone cannot reach farther callers.
+REACHES = ("R0", "R1")
+FILL_MAX_RING = 4
+#: Below this remaining budget no node fits (a header and a signature line): the fill stops.
+MIN_NODE_TOKENS = 30
+AXES = (("substance", 0, 7), ("form", 10, 25), ("output", 25, 35), ("role", 35, 45))
+_AXIS_PREFIX = ("SINK_", "FORM_", "OUTPUT_", "ROLE_")
 L4_DEPTH = 2
 NODE_HEADER = "### {kind} {qname} ({rel}:{line})"
 
@@ -64,6 +75,10 @@ def arm_rep(arm: str, ring: int) -> str:
         return "sig+sum"
     if arm == "A3":
         return "full+sum" if ring == 1 else "sig+sum"
+    if arm == "A4":  # Direction A: helpers keep code and gain their 4-axis profile
+        return "full+prof" if ring == 1 else "sig"
+    if arm == "A5":
+        return "full+prof" if ring == 1 else "sig+prof"
     raise ValueError(arm)
 
 
@@ -131,10 +146,55 @@ def contract_text(contract) -> str:
     return "[contract] " + "; ".join(parts) if parts else ""
 
 
+def axis_names(mask: int) -> dict[str, list[str]]:
+    from prism.semantics.bitmask import FeatureBit
+    out = {}
+    for axis, lo, hi in AXES:
+        names = []
+        for bit in range(lo, hi):
+            if mask >> bit & 1:
+                try:
+                    name = FeatureBit(1 << bit).name
+                except ValueError:
+                    continue
+                for prefix in _AXIS_PREFIX:
+                    name = name.removeprefix(prefix)
+                names.append(name.lower().replace("_", " "))
+        if names:
+            out[axis] = names
+    return out
+
+
 class Renderer:
-    def __init__(self, builder, contracts: dict, summaries: dict[str, str]):
+    def __init__(self, builder, contracts: dict, summaries: dict[str, str], seed: str | None = None):
         from prism.packer.submodular_knapsack import _signature_stub
         self.b, self.contracts, self.summaries, self._stub = builder, contracts, summaries, _signature_stub
+        self.seed, self._profile = seed, None
+
+    def _profile_data(self):
+        if self._profile is None:
+            from prism.semantics.extractor import compute_feature_masks_cached
+            from prism.traversal.causal_weights import compute_all_data_flow_edges, compute_guard_indicator_edges
+            self._profile = (compute_feature_masks_cached(self.b, self.b.repo_root),
+                             set(compute_all_data_flow_edges(self.b)), set(compute_guard_indicator_edges(self.b)))
+        return self._profile
+
+    def profile(self, q: str) -> str:
+        """The node's four-axis coordinate (Substance, Form, Output, Role) and how it is coupled to
+        the anchor: static, no model."""
+        masks, flow, guard = self._profile_data()
+        parts = [f"{axis}: {', '.join(names)}" for axis, names in axis_names(masks.get(q, 0)).items()]
+        s, links = self.seed, []
+        if s is not None:
+            if (s, q) in flow:
+                links.append("anchor passes data into it")
+            if (q, s) in flow:
+                links.append("passes data into anchor")
+            if (s, q) in guard or (q, s) in guard:
+                links.append("call is guarded")
+        if links:
+            parts.append("anchor link: " + ", ".join(links))
+        return "[profile] " + "; ".join(parts) if parts else ""
 
     def body(self, q: str) -> str:
         info = self.b.symbol_table.get(q)
@@ -150,23 +210,27 @@ class Renderer:
         return NODE_HEADER.format(kind=info.kind if info else "?", qname=q, rel=rel, line=info.line_range[0] if info else 0)
 
     def render(self, q: str, rep: str) -> tuple[str, str]:
-        """(text, the representation actually used): `sig` falls back to `full` when there is no
-        stub (a class, a binding), and a summary part is dropped when there is no summary."""
-        summary = self.summaries.get(q)
-        if rep in ("sig", "sig+sum"):
+        """(text, the representation actually used). `rep` is a base (`full`, `sig`) plus extras
+        (`+sum`, `+prof`). `sig` falls back to `full` when there is no stub (a class, a binding);
+        an extra with nothing to say (no summary, empty profile) is dropped."""
+        base, *extras = rep.split("+")
+        core = None
+        if base == "sig":
             stub = self._stub(self.b, q)
             if stub is None:
-                rep = "full+sum" if rep == "sig+sum" else "full"
+                base = "full"
             else:
                 core = "\n".join(x for x in (stub, contract_text(self.contracts.get(q))) if x)
-        if rep in ("full", "full+sum"):
+        if base == "full":
             core = "\n".join(x for x in (self.body(q), contract_text(self.contracts.get(q))) if x)
-        if rep.endswith("+sum"):
-            if summary:
-                core += f"\n[summary] {summary}"
-            else:
-                rep = rep[:-4]
-        return f"{self.header(q)}\n{core}", rep
+        used = [base]
+        for extra in extras:
+            text = f"[summary] {self.summaries[q]}" if extra == "sum" and self.summaries.get(q) else (
+                self.profile(q) if extra == "prof" else "")
+            if text:
+                core += f"\n{text}"
+                used.append(extra)
+        return f"{self.header(q)}\n{core}", "+".join(used)
 
 
 # ---------------------------------------------------------------- packing
@@ -199,10 +263,47 @@ def pack(builder, contracts: dict, seed: str, budget: int):
     return pack_symbol_context(builder, seed, budget, max_hops=DEFAULT_D_MAX, referenced_constants=referenced)
 
 
-def run_case(case: dict, engine, summaries: dict[str, str], arms=ARMS, budgets=BUDGETS) -> list[dict]:
+def fill_candidates(builder, ring: dict[str, int], max_ring: int = FILL_MAX_RING) -> list[str]:
+    """Indexed functions, methods and classes within `max_ring` hops (ring >= 1)."""
+    out = []
+    for q, d in ring.items():
+        info = builder.symbol_table.get(q)
+        if 1 <= d <= max_ring and info is not None and info.kind in ("function", "method", "class"):
+            out.append(q)
+    return out
+
+
+def pack_reach(builder, contracts: dict, seed: str, budget: int, reach: str, ring: dict[str, int] | None = None) -> list:
+    """The packed items under a reach mode (costs: whatever `_default_costs` prices - inside
+    `repriced`, the arm's renderings). R1 keeps the production pack's items and order."""
+    import prism.packer.submodular_knapsack as K
+    first = pack(builder, contracts, seed, budget)
+    if reach == "R0":
+        return list(first.items)
+    ring = ring if ring is not None else rings(builder, seed)
+    items, used = list(first.items), sum(i.cost for i in first.items)
+    have = {i.symbol for i in items}
+    G = builder.graph
+    todo = [q for q in fill_candidates(builder, ring) if q not in have]
+    for r in range(1, FILL_MAX_RING + 1):
+        # links to what is packed when the ring starts: one sort per ring
+        links = lambda q: sum(1 for n in list(G.successors(q)) + list(G.predecessors(q)) if n in have)
+        for q in sorted((q for q in todo if ring[q] == r), key=lambda q: (-links(q), q)):
+            if budget - used < MIN_NODE_TOKENS:
+                return items
+            cost = K._default_costs(builder, [q]).get(q, 0)
+            if 0 < cost and used + cost <= budget:
+                items.append(K.SubmodularPackedItem(symbol=q, cost=cost, feature_mask=0, dist_w=float(r),
+                                                    role="fill", compression="L0_full"))
+                have.add(q)
+                used += cost
+    return items
+
+
+def run_case(case: dict, engine, summaries: dict[str, str], arms=ARMS, budgets=BUDGETS, reaches=("R0",)) -> list[dict]:
     from prism.slicer.tokenizer import count_tokens
     b, contracts = engine.builder, engine._contracts
-    r = Renderer(b, contracts, summaries)
+    r = Renderer(b, contracts, summaries, seed=case["seed"])
     ring = rings(b, case["seed"])
     gold = set(case["gold_nodes"])
     rows = []
@@ -210,32 +311,35 @@ def run_case(case: dict, engine, summaries: dict[str, str], arms=ARMS, budgets=B
     pool: set[str] = set()  # every symbol the packer may choose from (budget-independent)
     with repriced(r, case["seed"], "A0", ring, record=pool):
         pack(b, contracts, case["seed"], min(budgets))
-    for arm in arms:
-        for budget in budgets:
+    relaxed_pool = set(fill_candidates(b, ring)) if "R1" in reaches else set()
+    for reach, arm, budget in ((x, y, z) for x in reaches for y in arms for z in budgets):
+        if True:
             with repriced(r, case["seed"], arm, ring):
-                res = pack(b, contracts, case["seed"], budget)
+                packed = pack_reach(b, contracts, case["seed"], budget, reach, ring)
             rendered, reps = [], {}
-            for item in res.items:
+            for item in packed:
                 rep = "full" if item.symbol == case["seed"] else arm_rep(arm, ring.get(item.symbol, 99))
-                if item.compression == "L2_skeleton" and rep in ("full", "full+sum"):
-                    rep = "sig"  # the packer's own stub fallback
+                if item.compression == "L2_skeleton" and rep.startswith("full"):
+                    rep = "sig" + rep[4:]  # the packer's own stub fallback
                 text, reps[item.symbol] = r.render(item.symbol, rep)
                 rendered.append((item.symbol, text))
             tok = {q: count_tokens(t) for q, t in rendered}
-            summary_tok = sum(count_tokens(f"[summary] {summaries[q]}") for q in reps if reps[q].endswith("+sum"))
+            summary_tok = sum(count_tokens(f"[summary] {summaries[q]}") for q in reps if "+sum" in reps[q])
+            profile_tok = sum(count_tokens(r.profile(q)) for q in reps if "+prof" in reps[q])
             present = gold & set(reps)
             rows.append({
-                "case": case["id"], "corpus": case["corpus"], "arm": arm, "budget": budget,
+                "case": case["id"], "corpus": case["corpus"], "reach": reach, "arm": arm, "budget": budget,
                 "tokens": sum(tok.values()), "nodes": len(reps), "reps": dict(Counter(reps.values())),
                 "gold": len(gold), "gold_present": len(present), "gold_reachable": len(gold & (pool | {case["seed"]})),
+                "gold_reachable_relaxed": len(gold & (pool | relaxed_pool | {case["seed"]})),
                 "gold_full": sum(1 for q in present if reps[q].startswith("full")),
                 "gold_compressed_only": sum(1 for q in present if reps[q].startswith("sig")),
-                "gold_with_summary": sum(1 for q in present if reps[q].endswith("+sum")),
+                "gold_with_summary": sum(1 for q in present if "+sum" in reps[q]),
                 "edges": len(case["gold_edges"]),
                 "edges_both_present": sum(1 for f, t in case["gold_edges"] if f in reps and t in reps),
                 "seed_tokens": tok.get(case["seed"], 0), "over_budget": sum(tok.values()) > budget,
                 "noise_tokens": sum(v for q, v in tok.items() if q != case["seed"] and q not in gold),
-                "summary_tokens": summary_tok,
+                "summary_tokens": summary_tok, "profile_tokens": profile_tok,
                 "production_overlap": round(len(production[budget] & set(reps)) / max(1, len(production[budget] | set(reps))), 3),
                 "selected": sorted(reps),
             })
@@ -253,42 +357,41 @@ def feasible(rows: list[dict]) -> list[dict]:
 
 def report(rows: list[dict]) -> str:
     kept = feasible(rows)
-    return ("# P1: payload compression with v2 summaries (offline, no model)\n\n" + table(rows, "All cells (some payloads overflow the budget: the seed alone or the packer's mandatory "
-                        "additions exceed it - identical in every arm)")
-            + "\n" + table(kept, f"Feasible cells only ({len(kept) // len(ARMS)} of {len(rows) // len(ARMS)} "
-                                  "case x budget cells; every arm fits the budget)"))
+    cells = lambda rs: len({(x["case"], x["budget"]) for x in rs})
+    return ("# P1: payload compression, reach and helper profiles (offline, no model)\n\n"
+            + table(rows, "All cells (some payloads overflow the budget: the seed alone or the packer's mandatory "
+                          "additions exceed it - identical in every arm)")
+            + "\n" + table(kept, f"Feasible cells only ({cells(kept)} of {cells(rows)} case x budget cells; every "
+                                  "arm fits the budget)"))
 
 
 def table(rows: list[dict], title: str) -> str:
+    big = [x for x in rows if x["arm"] == "A0" and x["budget"] == BUDGETS[-1] and x["reach"] == "R0"]
     L = [f"## {title}", "",
-         "Per arm and budget, pooled over cases: gold nodes present (any representation / at full body),",
-         "gold edges with both ends present, mean tokens used, noise share (tokens on nodes that are",
-         "neither seed nor gold), summary tokens. Arms: see p1.py.", "",
-         "Ceiling: gold nodes inside the packer's candidate pool at all (reachable within its hop limits):",
-         f"{sum(x['gold_reachable'] for x in rows if x['arm'] == 'A0' and x['budget'] == BUDGETS[-1])}/"
-         f"{sum(x['gold'] for x in rows if x['arm'] == 'A0' and x['budget'] == BUDGETS[-1])} (8k cells).", "",
-         "| budget | arm | gold present | gold at full body | gold edges | tokens (mean) | noise share | summary tokens (mean) |",
-         "|---|---|---|---|---|---|---|---|"]
+         "Per reach, arm and budget, pooled over cases: gold nodes present (any representation / at full body),",
+         "gold edges with both ends present, mean tokens used, noise share (tokens on nodes that are neither",
+         "seed nor gold), mean summary and profile tokens. Arms and reach modes: see p1.py.", "",
+         f"Ceiling (8k cells): gold inside the production packer's candidate pool {sum(x['gold_reachable'] for x in big)}"
+         f"/{sum(x['gold'] for x in big)}; within R1's ring <= {FILL_MAX_RING} {sum(x['gold_reachable_relaxed'] for x in big)}"
+         f"/{sum(x['gold'] for x in big)}.", "",
+         "| budget | reach | arm | gold present | gold at full body | gold edges | tokens (mean) | noise share | summary tok | profile tok |",
+         "|---|---|---|---|---|---|---|---|---|---|"]
     for budget in BUDGETS:
-        for arm in ARMS:
-            rs = [x for x in rows if x["arm"] == arm and x["budget"] == budget]
-            if not rs:
-                continue
-            g, gp, gf = sum(x["gold"] for x in rs), sum(x["gold_present"] for x in rs), sum(x["gold_full"] for x in rs)
-            e, ep = sum(x["edges"] for x in rs), sum(x["edges_both_present"] for x in rs)
-            tokens = st.mean(x["tokens"] for x in rs)
-            noise = sum(x["noise_tokens"] for x in rs) / max(1, sum(x["tokens"] for x in rs))
-            L.append(f"| {budget} | {arm} | {gp}/{g} ({gp / max(1, g):.0%}) | {gf}/{g} | {ep}/{e} | {tokens:.0f} | "
-                     f"{noise:.0%} | {st.mean(x['summary_tokens'] for x in rs):.0f} |")
-    a0 = [x["production_overlap"] for x in rows if x["arm"] == "A0"]
-    L += ["", f"Faithfulness: A0's selection vs the production packer's own (body-only costs), Jaccard mean "
-          f"{st.mean(a0):.2f}, min {min(a0):.2f}." if a0 else ""]
-    L += ["", "Per case, gold present at 4k (A0 -> A1 / A2 / A3):", ""]
-    by = {(x["case"], x["arm"]): x for x in rows if x["budget"] == 4000}
-    for case in sorted({x["case"] for x in rows}):
-        a = [by.get((case, arm)) for arm in ("A0", "A1", "A2", "A3")]
-        if all(a):
-            L.append(f"- {case} ({a[0]['gold']} gold): " + " -> ".join(str(x["gold_present"]) for x in a))
+        for reach in REACHES:
+            for arm in ARMS:
+                rs = [x for x in rows if x["arm"] == arm and x["budget"] == budget and x["reach"] == reach]
+                if not rs:
+                    continue
+                g, gp, gf = sum(x["gold"] for x in rs), sum(x["gold_present"] for x in rs), sum(x["gold_full"] for x in rs)
+                e, ep = sum(x["edges"] for x in rs), sum(x["edges_both_present"] for x in rs)
+                noise = sum(x["noise_tokens"] for x in rs) / max(1, sum(x["tokens"] for x in rs))
+                L.append(f"| {budget} | {reach} | {arm} | {gp}/{g} ({gp / max(1, g):.0%}) | {gf}/{g} | {ep}/{e} | "
+                         f"{st.mean(x['tokens'] for x in rs):.0f} | {noise:.0%} | {st.mean(x['summary_tokens'] for x in rs):.0f} | "
+                         f"{st.mean(x.get('profile_tokens', 0) for x in rs):.0f} |")
+    a0 = [x["production_overlap"] for x in rows if x["arm"] == "A0" and x["reach"] == "R0"]
+    if a0:
+        L += ["", f"Faithfulness: R0 A0's selection vs the production packer's own (body-only costs), Jaccard mean "
+              f"{st.mean(a0):.2f}, min {min(a0):.2f}."]
     return "\n".join(L) + "\n"
 
 
@@ -334,7 +437,7 @@ def main(argv=None) -> int:
     for case in cases:
         idx = read_index(summaries_dir / f"{case['corpus']}.json") or {"functions": {}}
         summaries = {q: e["summary"] for q, e in idx["functions"].items()}
-        rows += run_case(case, eng[case["corpus"]], summaries)
+        rows += run_case(case, eng[case["corpus"]], summaries, reaches=REACHES)
     out.mkdir(parents=True, exist_ok=True)
     (out / "p1.json").write_text(json.dumps({"cases": cases, "rows": rows}, indent=1) + "\n")
     (out / "P1.md").write_text(report(rows))
