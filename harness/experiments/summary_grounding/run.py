@@ -7,6 +7,7 @@ questions with BASE, V2 (the tracked locked index), SRC, SRCC and SRCC_PLUS and 
 
 Usage:
   python -m harness.experiments.summary_grounding.run generate APPS OUT [--base-urls URLS] [--threads N] [--model M]
+                                                            [--arms src,srcc | long]
   python -m harness.experiments.summary_grounding.run score APPS OUT
 """
 from __future__ import annotations
@@ -23,12 +24,18 @@ from pathlib import Path
 from prism.summaries.cards import build_card, resources
 from prism.summaries.index import MIN_COVERAGE, SUMMARY_WEIGHT, function_symbols, read_index, search_text
 from prism.summaries.lint import lint
-from prism.summaries.pipeline import BODY_CAP, LOCKED_MODEL, Ollama, _clean, repair
+from prism.summaries.lint import problems
+from prism.summaries.pipeline import BATCH, BODY_CAP, LOCKED_MODEL, REPAIR_ATTEMPTS, REPAIR_PROMPT, SUMMARY_PROMPT, Ollama, _clean, repair
 
 ROOT = Path(__file__).resolve().parents[3]
 V2_INDEXES = ROOT / "reports" / "summary_candidate_v5" / "set6"
 ARMS = ("BASE", "V2", "SRC", "SRCC", "SRCC_PLUS")
 GENERATED = ("src", "srcc")
+#: Length control (README "Follow-up"): V2's prompts with only the sentence length changed.
+_V2_LENGTH, _LONG_LENGTH = "8 to 14 words", "12 to 15 words"
+LONG_PROMPT = SUMMARY_PROMPT.replace(_V2_LENGTH, _LONG_LENGTH)
+LONG_REPAIR_PROMPT = REPAIR_PROMPT.replace(_V2_LENGTH, _LONG_LENGTH)
+assert LONG_PROMPT != SUMMARY_PROMPT and LONG_REPAIR_PROMPT != REPAIR_PROMPT, "v2 prompts no longer state the length"
 FACT_TYPES = ("condition", "exception", "state_change", "return", "external_call", "computation")
 CHECKPOINT = 50
 ALPHA, MAX_RECALL5_DROP = 0.05, 0.02
@@ -115,12 +122,66 @@ def _save(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
-def generate_repo(llm, apps: Path, repo: str, spec: dict, out: Path, threads: int, log=print) -> dict:
+def long_batch(llm, cards: dict[str, str], batch: list[str]) -> dict[str, str]:
+    """V2's `pipeline.summarize_batch` with LONG_PROMPT: one reply for the batch, a card it left out retried alone."""
+    got = llm.json(LONG_PROMPT.format(n=len(batch), cards="\n---\n".join(cards[q] for q in batch)),
+                   max_out=60 * len(batch) + 200) or {}
+    out = {q: _clean(got[q]) for q in batch if isinstance(got, dict) and got.get(q)}
+    for q in batch:
+        if q not in out:
+            one = llm.json(LONG_PROMPT.format(n=1, cards=cards[q]), max_out=200) or {}
+            v = one.get(q) or (next(iter(one.values())) if isinstance(one, dict) and len(one) == 1 else None)
+            if v:
+                out[q] = _clean(v)
+    return out
+
+
+def long_repair(llm, summary: str, card: str) -> str:
+    """V2's `pipeline.repair` with LONG_REPAIR_PROMPT."""
+    best, best_n = summary, sum(lint(summary, card).values())
+    for _ in range(REPAIR_ATTEMPTS):
+        if not best_n:
+            break
+        got = llm.json(LONG_REPAIR_PROMPT.format(problems="; ".join(problems(best, card)), summary=best, card=card),
+                       max_out=200) or {}
+        cand = _clean(got.get("summary") or "")
+        n = sum(lint(cand, card).values()) if cand else best_n
+        if cand and n < best_n:
+            best, best_n = cand, n
+    return best
+
+
+def generate_long(llm, builder, entries, fns, path: Path, threads: int, log, label: str) -> dict:
+    """The LONG arm: V2's card (no body) and batch procedure, longer sentences (README "Follow-up")."""
+    done = _load(path)
+    cards = {s.qualified_name: c["card"] for s in fns if s.qualified_name not in done
+             and (c := build_card(builder, {}, entries, s.qualified_name, axes=False))}
+    todo = list(cards)
+    log(f"{label}: {len(fns)} functions, {len(done)} done, {len(todo)} to write")
+    t0 = time.time()
+    batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
+    with cf.ThreadPoolExecutor(threads) as ex:
+        for i, got in enumerate(ex.map(lambda b: long_batch(llm, cards, b), batches), 1):
+            for q, s in got.items():
+                flagged = any(lint(s, cards[q]).values())
+                done[q] = {"summary": long_repair(llm, s, cards[q]) if flagged else s, "repaired": flagged}
+            if i % max(1, CHECKPOINT // BATCH) == 0:
+                _save(path, done)
+                log(f"{label}: {len(done)}/{len(fns)} ({time.time() - t0:.0f}s)")
+    _save(path, done)
+    return {"functions": len(fns), "written": len(done), "seconds": round(time.time() - t0, 1)}
+
+
+def generate_repo(llm, apps: Path, repo: str, spec: dict, out: Path, threads: int, log=print,
+                  arms: "tuple[str, ...]" = GENERATED) -> dict:
     root, builder, base, fns, entries = corpus(apps, repo, spec)
     out.mkdir(parents=True, exist_ok=True)
     stats = {}
-    for arm in GENERATED:
+    for arm in arms:
         path = out / f"{arm}.json"
+        if arm == "long":
+            stats[arm] = generate_long(llm, builder, entries, fns, path, threads, log, f"{repo}/{arm}")
+            continue
         done = _load(path)
         todo = [s for s in fns if s.qualified_name not in done]
         log(f"{repo}/{arm}: {len(fns)} functions, {len(done)} done, {len(todo)} to write")
@@ -174,14 +235,17 @@ def score(apps: Path, out: Path, allow_partial: bool = False) -> dict:
     from harness.experiments.heldout_retrieval.set5.score import _best, _score, compare
     from prism.query.nlq import NLQIndex
     ds = frozen_set6()
-    rows = {a: {} for a in ARMS}
-    coverage, gen, texts_all = {}, {}, {}
+    # Length-control mode (README "Follow-up"): every repository has the LONG arm.
+    length = all((out / repo / "long.json").exists() for repo in ds["repos"])
+    generated = GENERATED + (("long",) if length else ())
+    rows = {a: {} for a in ARMS + (("LONG",) if length else ())}
+    coverage, gen, texts_all, words = {}, {}, {}, {}
     for repo, spec in ds["repos"].items():
         root, builder, base, fns, _entries = corpus(apps, repo, spec)
         names = {s.qualified_name for s in fns}
         v2 = read_index(V2_INDEXES / repo / "v2.json")
         arms = {"V2": {q: search_text(e, v2.get("pipeline") or {}) for q, e in v2["functions"].items()}}
-        for arm in GENERATED:
+        for arm in generated:
             data = _load(out / repo / f"{arm}.json")
             arms[arm.upper()] = {q: e["summary"] for q, e in data.items()}
             gen[f"{repo}/{arm}"] = {
@@ -200,12 +264,17 @@ def score(apps: Path, out: Path, allow_partial: bool = False) -> dict:
                 raise SystemExit(f"{repo}/{arm}: coverage {coverage[f'{repo}/{arm}']} < {MIN_COVERAGE}")
             idx[arm] = NLQIndex(builder, root, summaries=texts, summary_weight=SUMMARY_WEIGHT)
         texts_all[repo] = arms
+        for arm in ("V2", "SRC", "SRCC") + (("LONG",) if length else ()):
+            words.setdefault(arm, []).extend(len(arms[arm][q].split()) for q in names if arms[arm].get(q))
         for qn in (q for q in ds["questions"] if q["repo"] == repo):
             for arm, index in idx.items():
                 rows[arm][qn["id"]] = {**_score(index.ranked(qn["question"]), qn["gold"]), "repo": repo}
     contrasts = {}
-    for a, b in (("SRC", "V2"), ("SRCC", "V2"), ("SRC", "BASE"), ("SRCC", "BASE"), ("SRCC", "SRC"),
-                 ("SRCC_PLUS", "V2"), ("V2", "BASE")):
+    pairs = (("SRC", "V2"), ("SRCC", "V2"), ("SRC", "BASE"), ("SRCC", "BASE"), ("SRCC", "SRC"),
+             ("SRCC_PLUS", "V2"), ("V2", "BASE"))
+    if length:
+        pairs = (("SRC", "LONG"), ("LONG", "V2"), ("SRCC", "LONG"), ("LONG", "BASE")) + pairs
+    for a, b in pairs:
         c = compare(rows, a, b)
         c["beats"] = c["better"] > c["worse"] and c["sign_p"] < ALPHA and c["recall5_delta"] >= -MAX_RECALL5_DROP - 1e-12
         contrasts[f"{a} vs {b}"] = c
@@ -225,12 +294,23 @@ def score(apps: Path, out: Path, allow_partial: bool = False) -> dict:
                           "worse": sum(_best(rows[arm][i]) > _best(rows["V2"][i]) for i in ids)} for g, ids in groups.items()}
     v2b = contrasts["V2 vs BASE"]
     valid = v2b["better"] == 37 and v2b["worse"] == 20 and metrics["V2"]["recall@5"] == 0.758 and metrics["BASE"]["recall@5"] == 0.7
+    mean_words = {a: round(st.mean(v), 1) for a, v in words.items() if v}
     result = {"valid": valid, "metrics": metrics, "recall@5_by_repo": by_repo, "contrasts": contrasts,
-              "gold_change_split": split, "coverage": coverage, "generation": gen, "per_question": rows}
+              "gold_change_split": split, "coverage": coverage, "generation": gen, "mean_words": mean_words,
+              "per_question": rows}
+    if length:
+        matched = mean_words["LONG"] >= mean_words["SRC"] - 1.0
+        result["length_control"] = {
+            "length_matched": matched, "src_mean_words": mean_words["SRC"], "long_mean_words": mean_words["LONG"],
+            "verdict": ("length not matched (inconclusive)" if not matched else
+                        "code adds value beyond length" if contrasts["SRC vs LONG"]["beats"] else
+                        "no evidence that code adds value beyond length")}
     out.mkdir(parents=True, exist_ok=True)
-    (out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
-    _accuracy_sample(out, texts_all, apps, ds)
-    (out / "REPORT.md").write_text(render(result) + "\n")
+    suffix = "_length" if length else ""
+    (out / f"results{suffix}.json").write_text(json.dumps(result, indent=1) + "\n")
+    if not length:
+        _accuracy_sample(out, texts_all, apps, ds)
+    (out / f"REPORT{suffix}.md").write_text(render(result) + "\n")
     print(render(result))
     return result
 
@@ -249,10 +329,15 @@ def _accuracy_sample(out: Path, texts_all: dict, apps: Path, ds: dict) -> None:
 
 
 def render(r: dict) -> str:
-    L = ["# Summary grounding on set 6 (development comparison; README.md)", "",
-         f"**Validity check (V2 vs BASE reproduces the recorded set-6 result): {'PASS' if r['valid'] else 'FAIL - results not interpretable'}**", "",
-         "| arm | recall@5 | recall@20 | MRR |", "|---|---|---|---|"]
-    L += [f"| {a} | {m['recall@5']} | {m['recall@20']} | {m['mrr']} |" for a, m in r["metrics"].items()]
+    L = ["# Summary grounding on set 6 (development comparison; README.md)", ""]
+    if "length_control" in r:
+        lc = r["length_control"]
+        L += [f"**Length control (pre-registered, README 'Follow-up'): {lc['verdict'].upper()}** "
+              f"(mean words: SRC {lc['src_mean_words']}, LONG {lc['long_mean_words']}; matched: {lc['length_matched']})", ""]
+    L += [f"**Validity check (V2 vs BASE reproduces the recorded set-6 result): {'PASS' if r['valid'] else 'FAIL - results not interpretable'}**", "",
+          "| arm | recall@5 | recall@20 | MRR | mean words |", "|---|---|---|---|---|"]
+    L += [f"| {a} | {m['recall@5']} | {m['recall@20']} | {m['mrr']} | {r.get('mean_words', {}).get(a, '-')} |"
+          for a, m in r["metrics"].items()]
     L += ["", "| contrast | better / worse / ties | sign p | recall@5 delta | MRR delta | beats (pre-registered) |",
           "|---|---|---|---|---|---|"]
     L += [f"| {k} | {c['better']} / {c['worse']} / {c['ties']} | {c['sign_p']} | {c['recall5_delta']:+.3f} | "
@@ -278,6 +363,7 @@ def main(argv=None) -> int:
     g.add_argument("--threads", type=int, default=2)
     g.add_argument("--model", default=LOCKED_MODEL)
     g.add_argument("--repos", default="")
+    g.add_argument("--arms", default=",".join(GENERATED), help="summary arms to write: src, srcc, long")
     s = sub.add_parser("score")
     s.add_argument("apps", type=Path)
     s.add_argument("out", type=Path)
@@ -288,8 +374,12 @@ def main(argv=None) -> int:
         ds = frozen_set6()
         llm = Ollama(args.model, [u for u in args.base_urls.split(",") if u])
         want = [r for r in args.repos.split(",") if r] or list(ds["repos"])
-        stats = {r: generate_repo(llm, args.apps, r, ds["repos"][r], args.out / r, args.threads) for r in want}
-        (args.out / "generation.json").write_text(json.dumps({"model": args.model, "stats": stats, "llm": llm.usage}, indent=1) + "\n")
+        arms = tuple(a for a in args.arms.split(",") if a)
+        if not arms or set(arms) - set(GENERATED + ("long",)):
+            raise SystemExit(f"--arms must name src, srcc and/or long, got {args.arms!r}")
+        stats = {r: generate_repo(llm, args.apps, r, ds["repos"][r], args.out / r, args.threads, arms=arms) for r in want}
+        name = "generation.json" if arms == GENERATED else f"generation_{'_'.join(arms)}.json"
+        (args.out / name).write_text(json.dumps({"model": args.model, "arms": arms, "stats": stats, "llm": llm.usage}, indent=1) + "\n")
         print(json.dumps(stats, indent=1))
         return 0
     res = score(args.apps, args.out, allow_partial=args.allow_partial)

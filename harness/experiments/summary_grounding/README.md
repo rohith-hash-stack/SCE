@@ -55,6 +55,19 @@ Also recorded:
 - for `SRCC`, how many listed facts cited lines outside the function and were dropped;
 - the summaries of the 60 functions from the earlier accuracy audit (`accuracy_sample.json`), for fact-coverage scoring afterwards.
 
+## Follow-up: length control (added after the first result, before its own run)
+
+**First result** (`reports/summary_grounding/REPORT.md`, `d3f36a8`): SRC and SRCC beat V2 under the rule above. Their sentences were longer, though: 12.9 and 11.6 mean words vs V2's 8.9. When every SRC / SRCC sentence was cut to the word count of its V2 sentence, the advantage over V2 was no longer significant (SRC vs V2: 31 / 20, p = 0.16). Cutting also removes the extra detail, so it cannot tell content from length.
+
+**New arm `LONG`:** V2's card (no function body), V2's batch procedure (batches of 12) and lint, with the sentence length changed from "8 to 14 words" to "12 to 15 words" in both the summary and repair prompts. Nothing else differs from V2. So LONG differs from SRC only in not seeing the code.
+
+**Pre-registered reading:**
+- Primary contrast: `SRC vs LONG`.
+- **"Code adds value beyond length"** iff SRC beats LONG under the rule above (more better than worse, sign p < 0.05, recall@5 at most 0.02 lower) **and** LONG's mean sentence length is at least SRC's minus 1 word.
+- If LONG's sentences come out more than 1 word shorter than SRC's, the result is reported as **length not matched (inconclusive)**, whatever the ranking.
+- Secondary: `LONG vs V2` (does length alone help?) and `SRCC vs LONG`.
+- Outputs go to `results_length.json` / `REPORT_length.md`. The first run's files are not changed.
+
 ## Run
 
 ```

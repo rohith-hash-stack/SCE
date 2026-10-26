@@ -73,6 +73,50 @@ def test_generate_writes_both_arms_and_resumes(tmp_path):
     assert len(llm.prompts) == calls  # resumed: nothing written twice
 
 
+class FakeBatchLLM:
+    """Answers LONG batch prompts with one sentence per Qualified Name in the prompt."""
+
+    def __init__(self):
+        self.prompts = []
+        self.usage = {"calls": 0, "failed": 0}
+
+    def json(self, prompt, max_out, seed=42):
+        self.prompts.append(prompt)
+        names = [ln.split(":", 1)[1].strip() for ln in prompt.splitlines() if ln.startswith("Qualified Name:")]
+        return {q: "Checks the given value and returns a cleaned number or nothing at all" for q in names}
+
+
+def test_long_prompts_differ_from_v2_only_in_length():
+    from prism.summaries.pipeline import REPAIR_PROMPT, SUMMARY_PROMPT
+    assert G.LONG_PROMPT == SUMMARY_PROMPT.replace("8 to 14 words", "12 to 15 words")
+    assert G.LONG_REPAIR_PROMPT == REPAIR_PROMPT.replace("8 to 14 words", "12 to 15 words")
+    assert "Source" not in G.LONG_PROMPT  # the LONG arm never sees the function body
+
+
+def test_generate_long_batches_cards_and_resumes(tmp_path):
+    repo = tmp_path / "apps" / "toy"
+    repo.mkdir(parents=True)
+    (repo / "ports.py").write_text(SOURCE)
+    llm = FakeBatchLLM()
+    out = tmp_path / "out" / "toy"
+    stats = G.generate_repo(llm, tmp_path / "apps", "toy", {"root": "."}, out, threads=1, log=lambda _m: None,
+                            arms=("long",))
+    assert stats["long"]["written"] == 2 and len(llm.prompts) == 1  # both cards in one V2-style batch
+    assert "12 to 15 words" in llm.prompts[0] and "Source (lines" not in llm.prompts[0]
+    long = json.loads((out / "long.json").read_text())
+    assert set(long) == {"ports.normalize_port", "ports.build"} and not any(e["repaired"] for e in long.values())
+    assert not (out / "src.json").exists()  # only the requested arm is written
+    G.generate_repo(llm, tmp_path / "apps", "toy", {"root": "."}, out, threads=1, log=lambda _m: None, arms=("long",))
+    assert len(llm.prompts) == 1  # resumed
+
+
+def test_generate_rejects_unknown_arms(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.setattr(G, "frozen_set6", lambda: {"repos": {}})
+    with pytest.raises(SystemExit):
+        G.main(["generate", str(tmp_path), str(tmp_path / "out"), "--arms", "src,bogus"])
+
+
 def test_accuracy_sample_is_the_audited_sixty():
     assert len(G.ACCURACY_SAMPLE) == 60 and len({tuple(x) for x in G.ACCURACY_SAMPLE}) == 60
     assert {r for r, _q in G.ACCURACY_SAMPLE} == {"httpx", "rich", "elysia", "oclif"}
