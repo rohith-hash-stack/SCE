@@ -728,6 +728,29 @@ def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, f
     click.echo(f"Search summary weight: {weight}" + ("" if counts["locked_pipeline"] else " (not the locked pipeline)"))
 
 
+@main.command()
+@click.argument("symbol")
+@click.option("--repo", "repo_path", default=".", type=click.Path(exists=True, file_okay=False), help="Repository root (default: current directory).")
+@click.option("--budget", "budget_tokens", default=12000, show_default=True, type=click.IntRange(1000, 200000),
+              help="Token budget for the whole package; callers' code fills what is left.")
+@click.option("--no-tests", is_flag=True, help="Leave test callers out.")
+@click.option("--json", "as_json", is_flag=True, help="Print the package as JSON.")
+def impact(symbol: str, repo_path: str, budget_tokens: int, no_tests: bool, as_json: bool) -> None:
+    """Everything to read before changing SYMBOL: the codebase and its group, the full code and digest of
+    SYMBOL, how each caller depends on it (result, errors, arguments, await), what it relies on in its
+    callees, the conventions and closest sibling code to follow, its callers' code, and its wider impact
+    (see prism.impact.context)."""
+    from prism.impact.context import ChangeContextBuilder, render
+    repo_root = os.path.abspath(repo_path)
+    builder, _tags = build_pipeline(repo_root)
+    if builder.symbol_table.get(symbol) is None:
+        leaf = symbol.rsplit(".", 1)[-1]
+        matches = sorted(q for q in builder._def_nodes if q.rsplit(".", 1)[-1] == leaf)[:10]
+        raise click.ClickException(f"unknown symbol {symbol!r}" + (f"; did you mean: {', '.join(matches)}" if matches else ""))
+    ctx = ChangeContextBuilder(builder, repo_root).build(symbol, budget_tokens=budget_tokens, include_tests=not no_tests)
+    click.echo(json.dumps(ctx.to_dict(), indent=2, default=str) if as_json else render(ctx), nl=False)
+
+
 @main.command(name="mcp")
 @click.option(
     "--transport", type=click.Choice(["stdio", "sse", "streamable-http"]), default="stdio", show_default=True,

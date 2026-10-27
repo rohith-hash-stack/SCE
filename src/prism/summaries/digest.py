@@ -342,6 +342,27 @@ def _raw_line(node, src: bytes) -> str:
     return _short(src[start: end if end != -1 else len(src)].decode("utf8", "replace"), RAW_CAP)
 
 
+def catch_type(clause, src: bytes) -> str:
+    """What an except / catch clause catches: `ValueError`, `(A, B)`, `IOException | RuntimeException`,
+    `any error (e)`, or `any exception`."""
+    if clause.type == "except_clause":
+        head = _text(clause, src).split(":", 1)[0].removeprefix("except").strip()
+        head = re.sub(r"\s+as\s+\w+$", "", head).lstrip("*").strip()
+        return _short(head or "any exception", 60)
+    for c in clause.named_children:
+        if c.type == "catch_formal_parameter":
+            t = next((x for x in c.named_children if x.type == "catch_type"), None)
+            return _short(_text(t, src) if t is not None else _text(c, src), 60)
+        if c.type == "catch_declaration":
+            t = c.child_by_field_name("type")
+            return _short(_text(t, src) if t is not None else _text(c, src), 60)
+    param = clause.child_by_field_name("parameter")
+    if param is not None:
+        ann = clause.child_by_field_name("type")
+        return f"any error ({_text(param, src)}" + (f": {_text(ann, src)}" if ann is not None else "") + ")"
+    return "any exception"
+
+
 def _leaf(call, src: bytes, lang) -> tuple[list[str] | None, str]:
     """(callee segments or None, the callee's last name)."""
     if call.type == CALL_NODE_TYPE.get(lang):
@@ -752,23 +773,7 @@ class _Extractor:
         return texts
 
     def _catch_type(self, clause) -> str:
-        src = self.src
-        if clause.type == "except_clause":
-            head = _text(clause, src).split(":", 1)[0].removeprefix("except").strip()
-            head = re.sub(r"\s+as\s+\w+$", "", head).lstrip("*").strip()
-            return _short(head or "any exception", 60)
-        for c in clause.named_children:
-            if c.type == "catch_formal_parameter":
-                t = next((x for x in c.named_children if x.type == "catch_type"), None)
-                return _short(_text(t, src) if t is not None else _text(c, src), 60)
-            if c.type == "catch_declaration":
-                t = c.child_by_field_name("type")
-                return _short(_text(t, src) if t is not None else _text(c, src), 60)
-        param = clause.child_by_field_name("parameter")
-        if param is not None:
-            ann = clause.child_by_field_name("type")
-            return f"any error ({_text(param, src)}" + (f": {_text(ann, src)}" if ann is not None else "") + ")"
-        return "any exception"
+        return catch_type(clause, self.src)
 
     def _callback_text(self, fn) -> str:
         parent = fn.parent

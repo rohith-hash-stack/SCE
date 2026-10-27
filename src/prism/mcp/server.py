@@ -42,6 +42,7 @@ docstring.
 from __future__ import annotations
 
 import difflib
+import json
 import os
 from typing import Any
 
@@ -766,6 +767,61 @@ ASK_MAX_TOP_K = 50
 #: `reindex_repo` - a new builder - gets a fresh one) and the summary
 #: index's mtime (a new `prism summarize` run does too).
 _nlq_indexes: dict[tuple, Any] = {}
+
+
+@server.tool(name="prism.change_context")
+def prism_change_context(
+    repo_path: str,
+    symbol: str,
+    budget_tokens: int = 12000,
+    include_tests: bool = True,
+    format: str = "markdown",
+    api_key: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Everything to read before changing `symbol`, in one package (`prism.impact.context`):
+
+    1. the codebase's largest directories and how they call each other;
+    2. the symbol's directory: its API, dependencies and conventions;
+    3. the symbol's full code and its digest (line-cited facts with conditions and certainty);
+    4. who depends on it: per caller, what it does with the result, which of the symbol's errors it
+       catches or lets propagate, the arguments it passes, whether it awaits;
+    5. what it depends on in its callees (their errors, empty returns, state changes);
+    6. the conventions and the full code of its two closest siblings, to follow the same style;
+    7. its callers' code (full where the budget allows, the call-site windows of long callers, digests after);
+    8. its wider impact: transitive callers by hop, entry points and tests that reach it.
+
+    Args:
+        repo_path: Absolute path to the repository root (same sandbox rules as `prism.slice`).
+        symbol: Fully qualified symbol name, exactly as indexed.
+        budget_tokens: 1000-128000 (default 12000) for the whole package.
+        include_tests: Keep test callers (default True).
+        format: "markdown" (the rendered package) or "json".
+
+    Returns `{symbol, context, token_count, callers, transitive_callers}`.
+    """
+    from prism.impact.context import ChangeContextBuilder, render as render_change_context
+    if not (1000 <= budget_tokens <= 128_000):
+        raise MCPError(code=-32602, message=f"budget_tokens must be between 1000 and 128000, got {budget_tokens}")
+    if format not in ("markdown", "json"):
+        raise MCPError(code=-32602, message=f"format must be 'markdown' or 'json' - got {format!r}")
+    try:
+        symbol = validate_symbol_name(symbol)
+    except SecurityError as exc:
+        raise MCPError(code=-32602, message=str(exc)) from exc
+    enforce_auth(_authorization_header(ctx), api_key)
+    repo_ctx = _repo_context_for_surface(repo_path)
+    symbol = _resolve_seed_or_raise(repo_ctx, symbol)
+    change = ChangeContextBuilder(repo_ctx.builder, repo_ctx.repo_root).build(
+        symbol, budget_tokens=budget_tokens, include_tests=include_tests)
+    body = json.dumps(change.to_dict(), default=str) if format == "json" else render_change_context(change)
+    return {
+        "symbol": symbol,
+        "context": body,
+        "token_count": change.token_count,
+        "callers": [r.caller for r in change.callers],
+        "transitive_callers": change.impact.get("transitive_callers", 0),
+    }
 
 
 @server.tool(name="prism.ask")
