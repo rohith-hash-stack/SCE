@@ -49,6 +49,9 @@ class ChangeContext:
     impact: dict = field(default_factory=dict)
     omitted: dict = field(default_factory=dict)
     token_count: int = 0
+    #: code the reader already has open (`visible`): `(qname, file, (lo, hi))` sent as a pointer, not again
+    in_view: list[tuple[str, str, tuple[int, int]]] = field(default_factory=list)
+    anchor_in_view: bool = False
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -80,11 +83,32 @@ class ChangeContextBuilder:
             return set()
         return {u for u, _v in graph.in_edges(anchor)} | {v for _u, v in graph.out_edges(anchor)}
 
-    def build(self, anchor: str, budget_tokens: int = DEFAULT_BUDGET, include_tests: bool = True) -> ChangeContext:
+    def _visible(self, visible) -> dict[str, list[tuple[int, int]]]:
+        """`{repo-relative file: [(lo, hi), ...]}` from `{path: [(lo, hi)] | None}` (None: the whole file)."""
+        out: dict[str, list[tuple[int, int]]] = {}
+        for path, ranges in (visible or {}).items():
+            rel = _rel(os.path.join(self.root, path) if not os.path.isabs(path) else path, self.root)
+            out.setdefault(rel, []).extend(ranges or [(1, 10 ** 9)])
+        return out
+
+    def build(self, anchor: str, budget_tokens: int = DEFAULT_BUDGET, include_tests: bool = True,
+              visible=None) -> ChangeContext:
+        """The change context for `anchor`. `visible` (`{file: [(first, last line), ...]}`, None for a whole
+        file) names code the reader already has open - an editor's file, a prompt's excerpt: code entirely
+        inside it is not sent again (a pointer to its lines is), and the freed budget goes to other code.
+        Without `visible` the package is unchanged (version 1)."""
         b = self.b
         sym = b.symbol_table.get(anchor)
         if sym is None or b.def_node(anchor) is None:
             raise KeyError(anchor)
+        view = self._visible(visible)
+
+        def seen(qname: str) -> bool:
+            s = b.symbol_table.get(qname)
+            if s is None:
+                return False
+            lo, hi = s.line_range
+            return any(a <= lo and hi <= z for a, z in view.get(_rel(s.file, self.root), ()))
         group = self.groups.summary(self.groups.of(anchor), self.digests)
         callers = [r for r in self.deps.callers(anchor) if include_tests or not r.is_test]
         ctx = ChangeContext(
@@ -93,7 +117,13 @@ class ChangeContextBuilder:
             anchor_code=source_of(b, anchor), anchor_digest=self.digests.digest(anchor).render(header=False),
             callers=callers, callees=self.deps.callees(anchor), conventions=group.conventions,
             siblings=[Sibling(s.qname, _rel(s.file, self.root), s.lines, s.reason, s.code)
-                      for s in siblings(b, anchor, self.groups.of, exclude=self._neighbours(anchor))])
+                      for s in siblings(b, anchor, self.groups.of, exclude=self._neighbours(anchor),
+                                        k=2 if not view else 12) if not seen(s.qname)][:2])
+        if view:
+            ctx.anchor_in_view = seen(anchor)
+            if ctx.anchor_in_view:
+                ctx.anchor_code = ""
+                ctx.in_view.append((anchor, ctx.file, ctx.lines))
         walked = upstream_callers_by_hop(b, anchor, include_tests=include_tests)
         by_hop: dict[int, int] = {}
         for _q, hop in walked.items():
@@ -107,6 +137,10 @@ class ChangeContextBuilder:
         spent = count_tokens(render(ctx))
         omitted = 0
         for report in callers:
+            if view and seen(report.caller):
+                s = b.symbol_table.get(report.caller)
+                ctx.in_view.append((report.caller, report.file, tuple(s.line_range)))
+                continue
             text = caller_excerpt(b, report)
             cost = count_tokens(text) + 20
             if spent + cost <= budget_tokens:
@@ -124,6 +158,20 @@ class ChangeContextBuilder:
             ctx.omitted["callers without code or digest (over budget)"] = omitted
         ctx.token_count = count_tokens(render(ctx))
         return ctx
+
+
+def parse_visible(specs) -> dict[str, list[tuple[int, int]] | None]:
+    """`["a.py", "b.py:10-80"]` -> `{"a.py": None, "b.py": [(10, 80)]}` (None: the whole file is open)."""
+    out: dict[str, list[tuple[int, int]] | None] = {}
+    for spec in specs or ():
+        path, sep, span = spec.rpartition(":")
+        if sep and "-" in span and span.replace("-", "").isdigit():
+            lo, hi = (int(x) for x in span.split("-", 1))
+            if out.get(path, []) is not None:
+                out.setdefault(path, []).append((lo, hi))
+        else:
+            out[spec] = None
+    return out
 
 
 def caller_excerpt(builder, report: CallerReport, context: int = 8) -> str:
@@ -178,8 +226,12 @@ def render(ctx: ChangeContext) -> str:
     if g.used_by:
         out.append("Used by: " + ", ".join(f"`{q}` ({n} calls)" for q, n in g.used_by))
 
-    out += ["", "## 3. Anchor", f"```{fence}", ctx.anchor_code, "```", "", "Digest (what its code does, line by line):",
-            "```", ctx.anchor_digest, "```"]
+    out += ["", "## 3. Anchor"]
+    if ctx.anchor_in_view:
+        out.append(f"Code: already in view ({ctx.file}, lines {ctx.lines[0]}-{ctx.lines[1]}).")
+    else:
+        out += [f"```{fence}", ctx.anchor_code, "```"]
+    out += ["", "Digest (what its code does, line by line):", "```", ctx.anchor_digest, "```"]
 
     out += ["", "## 4. Who depends on it"]
     if not ctx.callers:
@@ -205,8 +257,11 @@ def render(ctx: ChangeContext) -> str:
     for s in ctx.siblings:
         out += ["", f"Sibling `{s.qname}` ({s.file}:{s.lines[0]}; {s.reason}):", f"```{fence}", s.code, "```"]
 
-    if ctx.caller_code or ctx.caller_digests:
+    callers_in_view = [(q, f, lines) for q, f, lines in ctx.in_view if q != ctx.anchor]
+    if ctx.caller_code or ctx.caller_digests or callers_in_view:
         out += ["", "## 7. Callers' code"]
+        for q, f, lines in callers_in_view:
+            out.append(f"`{q}`: already in view ({f}, lines {lines[0]}-{lines[1]}).")
         for q, f, code in ctx.caller_code:
             out += [f"`{q}` ({f}):", f"```{fence}", code, "```"]
         for q, digest in ctx.caller_digests:

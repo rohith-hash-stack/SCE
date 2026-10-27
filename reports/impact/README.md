@@ -4,8 +4,8 @@ What PRISM gives an AI before it changes a function (the **anchor**), so the cha
 depends on the anchor, what the anchor depends on, and how the surrounding code is written.
 
 ```
-prism impact <symbol> --repo <path> [--budget 12000] [--no-tests] [--json]
-MCP tool: prism.change_context(repo_path, symbol, budget_tokens, include_tests, format)
+prism impact <symbol> --repo <path> [--budget 12000] [--no-tests] [--visible FILE[:FIRST-LAST] ...] [--json]
+MCP tool: prism.change_context(repo_path, symbol, budget_tokens, include_tests, format, visible)
 ```
 
 ## Flow
@@ -63,6 +63,32 @@ MCP tool: prism.change_context(repo_path, symbol, budget_tokens, include_tests, 
 | 6. Style to follow | how to write code that fits | conventions with counts + 2 sibling functions' code |
 | 7. Callers' code | the code that must keep working | callers' real code, budgeted |
 | 8. Wider impact | how far a change can reach | transitive callers, entry points, tests |
+
+## Code the AI already has open (`visible`)
+
+When the caller says which files or line ranges the AI already has (an editor's open file, an excerpt
+already in the prompt), code entirely inside them is sent as a pointer (`already in view (file, lines
+a-b)`) instead of again:
+- the anchor's code (its digest stays);
+- siblings in view (the next-best sibling not in view is shown instead);
+- callers' code in view (their dependency statements in section 4 stay).
+
+The freed budget goes to callers whose code is not in view. Without `visible` the package is unchanged: the
+first version, as used in the git-history sanity run.
+
+On the 11 tasks of that run (`harness/experiments/change_history`), with `visible` set to the file
+window the AI saw:
+
+| | first version | with `visible` |
+|---|---|---|
+| package tokens (mean) | 3,483 | 2,855 (-18%) |
+| repeated lines (tokens, mean) | 992 | 306 |
+| whole prompt vs FILE-only prompt | 1.74x | 1.61x |
+
+- The remaining "repeated" tokens are mostly look-alike code that is not in view (httpx's `post` / `put` /
+  `patch` are written like the in-view `get`), not true repeats.
+- Two packages grew (ch06, ch08), because the freed budget was spent on callers' code they lacked before.
+- The rebuilt first-version packages matched the frozen ones byte for byte (11 of 11).
 
 ## Honesty rules carried through
 

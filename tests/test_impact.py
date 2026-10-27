@@ -301,3 +301,53 @@ def test_mcp_change_context(ports):
     assert "app.ports.build_url" in out["callers"] and out["transitive_callers"] >= len(out["callers"])
     assert out["token_count"] <= 8000 + 500
     assert CERTAIN == "certain"
+
+
+# --------------------------------------------------------------------- #
+# Code the reader already has open is not sent again
+# --------------------------------------------------------------------- #
+def test_without_visible_the_package_is_unchanged(ports):
+    root, b, _an = ports
+    cb = ChangeContextBuilder(b, root)
+    assert render(cb.build("app.ports.normalize_port")) == render(cb.build("app.ports.normalize_port", visible={}))
+
+
+def test_visible_code_becomes_a_pointer(ports):
+    root, b, _an = ports
+    cb = ChangeContextBuilder(b, root)
+    full = cb.build("app.ports.normalize_port")
+    trimmed = cb.build("app.ports.normalize_port", visible={"app/ports.py": None})
+    text = render(trimmed)
+    assert trimmed.anchor_in_view and "Code: already in view (app/ports.py, lines 8-15)." in text
+    assert "def normalize_port(port, scheme):" not in text  # the anchor's code is not sent twice
+    assert "L14 raise PortError" in text  # its digest stays
+    assert "`app.ports.build_url`: already in view (app/ports.py" in text
+    assert [q for q, _f, _c in trimmed.caller_code] == ["tests.test_ports.test_normalize_port"]  # not in view
+    assert "## 4. Who depends on it" in text and "checks `p is None`" in text  # statements stay
+    assert trimmed.token_count < full.token_count
+
+
+def test_visible_ranges_only_cover_what_they_name(ports):
+    root, b, _an = ports
+    ctx = ChangeContextBuilder(b, root).build("app.ports.normalize_port", visible={"app/ports.py": [(8, 15)]})
+    assert ctx.anchor_in_view and [q for q, _f, _l in ctx.in_view] == ["app.ports.normalize_port"]
+    assert {q for q, _f, _c in ctx.caller_code} >= {"app.ports.build_url"}
+
+
+def test_parse_visible():
+    from prism.impact.context import parse_visible
+    assert parse_visible(["a.py", "b.py:10-80", "b.py:90-99", "c:d.py"]) == {
+        "a.py": None, "b.py": [(10, 80), (90, 99)], "c:d.py": None}
+
+
+def test_cli_and_mcp_accept_visible(ports):
+    from prism.mcp import server
+    root, _b, _an = ports
+    out = CliRunner().invoke(cli_main, ["impact", "app.ports.normalize_port", "--repo", root, "--visible", "app/ports.py"])
+    assert out.exit_code == 0 and "already in view" in out.output
+    server._cache.clear()
+    try:
+        res = server.prism_change_context(repo_path=root, symbol="app.ports.normalize_port", visible=["app/ports.py:8-15"])
+    finally:
+        server._cache.clear()
+    assert "Code: already in view (app/ports.py, lines 8-15)." in res["context"]

@@ -776,6 +776,7 @@ def prism_change_context(
     budget_tokens: int = 12000,
     include_tests: bool = True,
     format: str = "markdown",
+    visible: list[str] | None = None,
     api_key: str | None = None,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
@@ -797,10 +798,12 @@ def prism_change_context(
         budget_tokens: 1000-128000 (default 12000) for the whole package.
         include_tests: Keep test callers (default True).
         format: "markdown" (the rendered package) or "json".
+        visible: Code the agent already has open, as repo-relative `"file"` or `"file:FIRST-LAST"`; code
+            entirely inside it is sent as a pointer to its lines instead of again.
 
     Returns `{symbol, context, token_count, callers, transitive_callers}`.
     """
-    from prism.impact.context import ChangeContextBuilder, render as render_change_context
+    from prism.impact.context import ChangeContextBuilder, parse_visible, render as render_change_context
     if not (1000 <= budget_tokens <= 128_000):
         raise MCPError(code=-32602, message=f"budget_tokens must be between 1000 and 128000, got {budget_tokens}")
     if format not in ("markdown", "json"):
@@ -813,7 +816,7 @@ def prism_change_context(
     repo_ctx = _repo_context_for_surface(repo_path)
     symbol = _resolve_seed_or_raise(repo_ctx, symbol)
     change = ChangeContextBuilder(repo_ctx.builder, repo_ctx.repo_root).build(
-        symbol, budget_tokens=budget_tokens, include_tests=include_tests)
+        symbol, budget_tokens=budget_tokens, include_tests=include_tests, visible=parse_visible(visible))
     body = json.dumps(change.to_dict(), default=str) if format == "json" else render_change_context(change)
     return {
         "symbol": symbol,
