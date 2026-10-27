@@ -5,7 +5,7 @@ the code that must change when a function changes? The answer key is real histor
 developer changed a function (the anchor) and, in the same commit, the functions that call it.
 
 This README, `mine.py`, `select.py` and `run.py` were committed **before any model ran on these tasks**.
-It is a small **sanity run**, not a benchmark: 12 tasks, 4 per tier, results described, not tested for
+It is a small **sanity run**, not a benchmark: up to 4 tasks per tier, results described, not tested for
 significance.
 
 ## Tasks
@@ -23,7 +23,7 @@ significance.
 
    | tier | rule |
    |---|---|
-   | easy | one caller changed, in the anchor's own file |
+   | easy | one or two callers changed, all in the anchor's own file |
    | medium | one or two callers changed, at least one in another file |
    | hard | three or more callers changed, or changed callers in two or more other files |
 
@@ -36,7 +36,7 @@ significance.
 
 The model is asked to name every other function that must change, and to write its complete new code
 (JSON). Model: `qwen2.5-coder:14b-instruct-q8_0` (the locked project model), temperature 0.2, seed 42,
-context 16,384 tokens. One call per task and arm, 24 calls in all.
+context 20,480 tokens. One call per task and arm.
 
 ## Scores (per task and arm, against the commit)
 
@@ -49,8 +49,21 @@ context 16,384 tokens. One call per task and arm, 24 calls in all.
 | removed lines gone | the share of the lines the developer removed that no longer appear |
 | new code parses | the model's code for the caller parses (Python `ast`, tree-sitter otherwise) |
 
-Reported per tier and overall. No arm "wins" by rule: with 12 tasks this is a sanity check of whether the
+Reported per tier and overall. No arm "wins" by rule: with 11 tasks this is a sanity check of whether the
 package helps, hurts or does nothing. It decides whether a larger, pre-registered run is worth doing.
+
+## Frozen tasks
+
+`tasks.json` (sha256 of the task list `05244c3b0df47adc…`, in the file): 11 tasks, 4 easy, 4 medium and 3 hard.
+Only 3 hard tasks remain after the filter in the mined pool (89 candidates, 50 after the filter, 28 commits).
+Two hard tasks (ch09, ch10) share an anchor, `httpx._api.request`, from two different commits; the rules
+allow one task per commit, so both stay.
+
+Corrections made after selection and before any model ran:
+- the easy rule above now states what `mine.tier` always did: one or two callers changed, all in the
+  anchor's own file (the text said "one caller");
+- the context was raised from 16,384 to 20,480 tokens, because the largest PRISM prompt (ch08, about 12,700
+  tokens) plus a 4,096-token answer did not fit. It applies to both arms.
 
 ## Run
 

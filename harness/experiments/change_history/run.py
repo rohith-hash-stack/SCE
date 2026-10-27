@@ -33,7 +33,7 @@ from pathlib import Path
 ARMS = ("FILE", "PRISM")
 FILE_WINDOW = 300
 MODEL = "qwen2.5-coder:14b-instruct-q8_0"
-NUM_CTX = 16384
+NUM_CTX = 20480
 
 INSTRUCTIONS = """You are a software engineer working in the repository `{repo}`.
 
