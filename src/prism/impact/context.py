@@ -9,6 +9,8 @@
     7. Callers' code full code of the direct callers that fit the budget, digests for the rest
     8. Wider impact  transitive callers by hop, and the tests among them
 
+With the anchor's proposed new code, a first section lists the calls that change breaks (`prism.impact.breaks`).
+
 The AI always sees real code (the anchor, its siblings, its callers as far as the budget allows); digests
 and statements add what is outside the code it is shown. Sections are filled in priority order under
 `budget_tokens`; what does not fit is counted, not dropped silently.
@@ -52,6 +54,8 @@ class ChangeContext:
     #: code the reader already has open (`visible`): `(qname, file, (lo, hi))` sent as a pointer, not again
     in_view: list[tuple[str, str, tuple[int, int]]] = field(default_factory=list)
     anchor_in_view: bool = False
+    #: with `new_code`: the calls the proposed change breaks (`prism.impact.breaks`); None: not checked
+    breaks: list | None = None
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -92,11 +96,13 @@ class ChangeContextBuilder:
         return out
 
     def build(self, anchor: str, budget_tokens: int = DEFAULT_BUDGET, include_tests: bool = True,
-              visible=None) -> ChangeContext:
+              visible=None, new_code: str | None = None) -> ChangeContext:
         """The change context for `anchor`. `visible` (`{file: [(first, last line), ...]}`, None for a whole
         file) names code the reader already has open - an editor's file, a prompt's excerpt: code entirely
         inside it is not sent again (a pointer to its lines is), and the freed budget goes to other code.
-        Without `visible` the package is unchanged (version 1)."""
+        `new_code` (the anchor's proposed new code) adds the calls it breaks, checked call site by call site,
+        at the top; it is outside the budget (it never displaces callers' code).
+        Without `visible` and `new_code` the package is unchanged (version 1)."""
         b = self.b
         sym = b.symbol_table.get(anchor)
         if sym is None or b.def_node(anchor) is None:
@@ -156,6 +162,9 @@ class ChangeContextBuilder:
                 omitted += 1
         if omitted:
             ctx.omitted["callers without code or digest (over budget)"] = omitted
+        if new_code is not None:
+            from prism.impact.breaks import BreakChecker
+            ctx.breaks = BreakChecker(self.deps).check(anchor, new_code, include_tests=include_tests)
         ctx.token_count = count_tokens(render(ctx))
         return ctx
 
@@ -204,6 +213,9 @@ def _fence(lang: str) -> str:
 def render(ctx: ChangeContext) -> str:
     fence = _fence(ctx.language)
     out = [f"# Change context: `{ctx.anchor}`", f"{ctx.file}, lines {ctx.lines[0]}-{ctx.lines[1]}", ""]
+    if ctx.breaks is not None:
+        from prism.impact.breaks import render_breaks
+        out += render_breaks(ctx.breaks).rstrip("\n").split("\n") + [""]
 
     cb = ctx.codebase
     out += ["## 1. Codebase", f"{cb['functions']} functions in {cb['groups']} directories; "

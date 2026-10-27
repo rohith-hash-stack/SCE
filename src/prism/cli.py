@@ -736,9 +736,11 @@ def summarize(repo_path: str, model: str | None, base_urls: str, threads: int, f
 @click.option("--no-tests", is_flag=True, help="Leave test callers out.")
 @click.option("--visible", "visible", multiple=True, metavar="FILE[:FIRST-LAST]",
               help="Code the AI already has open (repeatable): code entirely inside it is sent as a pointer, not again.")
+@click.option("--new-code", "new_code_path", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="A file with SYMBOL's proposed new code: adds the calls that change breaks, call site by call site.")
 @click.option("--json", "as_json", is_flag=True, help="Print the package as JSON.")
 def impact(symbol: str, repo_path: str, budget_tokens: int, no_tests: bool, visible: tuple[str, ...],
-           as_json: bool) -> None:
+           new_code_path: str | None, as_json: bool) -> None:
     """Everything to read before changing SYMBOL: the codebase and its group, the full code and digest of
     SYMBOL, how each caller depends on it (result, errors, arguments, await), what it relies on in its
     callees, the conventions and closest sibling code to follow, its callers' code, and its wider impact
@@ -751,7 +753,9 @@ def impact(symbol: str, repo_path: str, budget_tokens: int, no_tests: bool, visi
         matches = sorted(q for q in builder._def_nodes if q.rsplit(".", 1)[-1] == leaf)[:10]
         raise click.ClickException(f"unknown symbol {symbol!r}" + (f"; did you mean: {', '.join(matches)}" if matches else ""))
     ctx = ChangeContextBuilder(builder, repo_root).build(symbol, budget_tokens=budget_tokens, include_tests=not no_tests,
-                                                         visible=parse_visible(visible))
+                                                         visible=parse_visible(visible),
+                                                         new_code=open(new_code_path, encoding="utf8").read()
+                                                         if new_code_path else None)
     click.echo(json.dumps(ctx.to_dict(), indent=2, default=str) if as_json else render(ctx), nl=False)
 
 

@@ -777,6 +777,7 @@ def prism_change_context(
     include_tests: bool = True,
     format: str = "markdown",
     visible: list[str] | None = None,
+    new_code: str | None = None,
     api_key: str | None = None,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
@@ -800,8 +801,11 @@ def prism_change_context(
         format: "markdown" (the rendered package) or "json".
         visible: Code the agent already has open, as repo-relative `"file"` or `"file:FIRST-LAST"`; code
             entirely inside it is sent as a pointer to its lines instead of again.
+        new_code: The symbol's proposed new code. Adds, first, the calls it breaks (a removed or renamed
+            keyword, a new required parameter, arguments that now land in another parameter, a new
+            uncaught exception, a new empty return the call uses), each with its file and line.
 
-    Returns `{symbol, context, token_count, callers, transitive_callers}`.
+    Returns `{symbol, context, token_count, callers, transitive_callers, breaks}` (`breaks` with new_code).
     """
     from prism.impact.context import ChangeContextBuilder, parse_visible, render as render_change_context
     if not (1000 <= budget_tokens <= 128_000):
@@ -816,7 +820,8 @@ def prism_change_context(
     repo_ctx = _repo_context_for_surface(repo_path)
     symbol = _resolve_seed_or_raise(repo_ctx, symbol)
     change = ChangeContextBuilder(repo_ctx.builder, repo_ctx.repo_root).build(
-        symbol, budget_tokens=budget_tokens, include_tests=include_tests, visible=parse_visible(visible))
+        symbol, budget_tokens=budget_tokens, include_tests=include_tests, visible=parse_visible(visible),
+        new_code=new_code)
     body = json.dumps(change.to_dict(), default=str) if format == "json" else render_change_context(change)
     return {
         "symbol": symbol,
@@ -824,6 +829,8 @@ def prism_change_context(
         "token_count": change.token_count,
         "callers": [r.caller for r in change.callers],
         "transitive_callers": change.impact.get("transitive_callers", 0),
+        **({"breaks": [{"caller": x.caller, "file": x.file, "line": x.line, "severity": x.severity,
+                        "problem": x.problem} for x in change.breaks]} if change.breaks is not None else {}),
     }
 
 

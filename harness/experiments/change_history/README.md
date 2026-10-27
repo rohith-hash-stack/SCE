@@ -159,3 +159,65 @@ python -m harness.experiments.change_history.run overview harness/experiments/ch
 python -m harness.experiments.change_history.run generate harness/experiments/change_history/forced/tasks.json reports/change_history_forced
 python -m harness.experiments.change_history.run score harness/experiments/change_history/forced/tasks.json reports/change_history_forced
 ```
+
+# Run 3: the break check (pre-registered before selection)
+
+Run 2 showed that the model misses callers it can see: in 6 tasks it answered "nothing to change" next to a
+call that the change breaks. Run 3 tests `prism.impact.breaks`. Given the anchor's new code, it checks
+every call site the way the language binds arguments and states which calls fail or change meaning. The
+check was designed after reading run 2's misses, so run 3 uses **new commits only**.
+
+## Tasks
+
+- `select.py --forced --seed 3301 --per-tier 8 --exclude tasks.json forced/tasks.json` writes
+  `breaks/tasks.json`. It uses the same mined candidates and rules as run 2, minus the commits of runs 1
+  and 2. The pool has only four hard commits, so the hard tier will be small.
+- `plan.py --breaks` adds `breaks_context` to each task: the frozen change context with the break
+  section at the top. It is computed at the parent revision from the anchor's new code (no model). It
+  checks that the context without the section equals the frozen `prism_context`.
+
+## Versions (same model and settings as runs 1 and 2)
+
+| version | the model also sees |
+|---|---|
+| `FILE` | the anchor's file window |
+| `PRISM` | `FILE` + the change context, as in runs 1 and 2 |
+| `PRISM_BREAKS` | `FILE` + the change context with the break section ("Calls this change breaks") |
+
+## The check without a model
+
+On the run-3 tasks:
+- **recall:** changed callers with at least one `fails` or `changes meaning` statement;
+- **false alarms:** unchanged production callers with such a statement.
+
+The same two numbers are reported over all the other forced candidates as development data. There they
+are only descriptive: the check's rules are frozen with this commit and are not changed after these numbers
+are seen.
+
+## Scores and reading
+
+The same scores as runs 1 and 2, per tier and overall, with no significance test. The questions are:
+- does `PRISM_BREAKS` find callers that `PRISM` misses;
+- does it name more wrong functions, especially callers the check flagged wrongly.
+
+If `PRISM_BREAKS` finds more callers without more wrong functions, it becomes the default whenever new
+code is known (an agent's proposed edit), and the bigger test follows.
+
+## Run 3: selected and planned (before any model ran)
+
+`breaks/tasks.json`: 190 forced candidates in 124 new commits pass the filter. Nineteen were chosen: 8 easy,
+8 medium and 3 hard (only four hard commits remained). Task-list sha256: `48841c54…`.
+
+- **ch19:** the anchor `Environment.compile` calls itself, so it is also one of its own changed callers.
+  An answer naming it is scored as the anchor, so ch19 can find at most 2 of its 3 callers.
+- **ch17:** its frozen context was mined before ties in conventions were broken by name. It was rebuilt with
+  the same lines in the stable order (`plan.py`).
+
+The check on the 19 tasks, without a model (rules frozen in this commit):
+
+| | flagged `fails` / `changes meaning` |
+|---|---|
+| callers that had to change | 23 of 32 |
+| production callers that did not change (false alarms) | 0 of 9 |
+
+Prompt sizes (mean / largest tokens): FILE 3,578 / 5,567; PRISM 6,133 / 9,895; PRISM_BREAKS 6,329 / 10,096.

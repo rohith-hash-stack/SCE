@@ -51,8 +51,12 @@ def main(argv=None) -> int:
     p.add_argument("--seed", type=int, default=1301)
     p.add_argument("--forced", action="store_true",
                    help="keep only forced changes (forced_reasons) whose counted callers' changes touch the call")
+    p.add_argument("--exclude", nargs="*", default=[], metavar="TASKS.json",
+                   help="leave out the commits of these frozen task files (earlier runs)")
     args = p.parse_args(argv)
     tasks = json.loads(Path(args.candidates).read_text())
+    used = {t["commit"] for f in args.exclude for t in json.loads(Path(f).read_text())["tasks"]}
+    tasks = [t for t in tasks if t["commit"] not in used]
     kept = []
     for t in tasks:
         if args.forced:
@@ -91,6 +95,7 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "tasks.json").write_text(json.dumps({
         "version": 1, "status": "frozen", "seed": args.seed, "per_tier": args.per_tier, "forced": args.forced,
+        **({"excluded_commits_of": args.exclude} if args.exclude else {}),
         "tasks_sha256": hashlib.sha256(body.encode()).hexdigest(), "tasks": chosen}, indent=1) + "\n")
     counts = {tr: sum(1 for t in chosen if t["tier"] == tr) for tr in TIERS}
     print(f"{len(kept)} tasks pass the filter ({len(best)} commits); chose {counts}")

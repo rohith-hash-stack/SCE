@@ -32,10 +32,14 @@ from pathlib import Path
 
 ARMS = ("FILE", "PRISM")
 ARMS_WITH_MAP = ("FILE", "PRISM", "PRISM_MAP")
+ARMS_WITH_BREAKS = ("FILE", "PRISM", "PRISM_BREAKS")
 
 
 def arms_for(tasks: list[dict]) -> tuple[str, ...]:
-    """PRISM_MAP runs when every task carries an overview plan (`plan.py`); older task files keep two arms."""
+    """PRISM_BREAKS runs when every task carries a break context, PRISM_MAP when every task carries an overview
+    plan (`plan.py`); older task files keep two arms."""
+    if tasks and all(t.get("breaks_context") for t in tasks):
+        return ARMS_WITH_BREAKS
     return ARMS_WITH_MAP if tasks and all(t.get("overview_plan") for t in tasks) else ARMS
 FILE_WINDOW = 300
 MODEL = "qwen2.5-coder:14b-instruct-q8_0"
@@ -100,6 +104,8 @@ def prompt(task: dict, arm: str, overview: dict | None = None) -> str:
              FILE_BLOCK.format(file=task["anchor_file"], lo=lo, hi=hi, text=text)]
     if arm == "PRISM":
         parts.append(PRISM_BLOCK.format(anchor=task["anchor"], context=task["prism_context"]))
+    elif arm == "PRISM_BREAKS":
+        parts.append(PRISM_BLOCK.format(anchor=task["anchor"], context=task["breaks_context"]))
     elif arm == "PRISM_MAP":
         from prism.impact.overview import OverviewPlan, render_overview
         if overview is None:

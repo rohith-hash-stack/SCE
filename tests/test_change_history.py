@@ -94,3 +94,12 @@ def test_prism_map_prompt_adds_only_the_map_and_the_second_ring():
     assert with_map.startswith(run.prompt(task, "FILE"))
     assert TASK["prism_context"] in with_map and "## 0. Map" in with_map and "Runs the command line." in with_map
     assert "## 0. Map" not in run.prompt(task, "PRISM")
+
+
+def test_prism_breaks_prompt_is_the_prism_prompt_with_the_break_section():
+    section = "## Calls this change breaks (its new code checked against every call site)\n- **fails**: x\n"
+    lines = TASK["prism_context"].split("\n")
+    breaks = "\n".join(lines[:3] + section.rstrip("\n").split("\n") + [""] + lines[3:])
+    task = {**TASK, "breaks_context": breaks}
+    assert run.arms_for([task]) == ("FILE", "PRISM", "PRISM_BREAKS")
+    assert run.prompt(task, "PRISM_BREAKS").replace(section + "\n", "", 1) == run.prompt(task, "PRISM")
