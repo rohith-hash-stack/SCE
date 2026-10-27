@@ -31,6 +31,12 @@ import urllib.request
 from pathlib import Path
 
 ARMS = ("FILE", "PRISM")
+ARMS_WITH_MAP = ("FILE", "PRISM", "PRISM_MAP")
+
+
+def arms_for(tasks: list[dict]) -> tuple[str, ...]:
+    """PRISM_MAP runs when every task carries an overview plan (`plan.py`); older task files keep two arms."""
+    return ARMS_WITH_MAP if tasks and all(t.get("overview_plan") for t in tasks) else ARMS
 FILE_WINDOW = 300
 MODEL = "qwen2.5-coder:14b-instruct-q8_0"
 NUM_CTX = 20480
@@ -78,14 +84,46 @@ def file_window(task: dict) -> tuple[str, int, int]:
     return "\n".join(lines[start - 1:end]), start, end
 
 
-def prompt(task: dict, arm: str) -> str:
+MAP_BLOCK = """PRISM change context for `{anchor}` (computed before the change), with the map of the repository and the
+second ring of related functions:
+
+{map}
+{context}
+{ring}
+"""
+
+
+def prompt(task: dict, arm: str, overview: dict | None = None) -> str:
     text, lo, hi = file_window(task)
     parts = [INSTRUCTIONS.format(repo=task["repo"], anchor=task["anchor"], file=task["anchor_file"],
                                  old=task["anchor_old"], new=task["anchor_new"]),
              FILE_BLOCK.format(file=task["anchor_file"], lo=lo, hi=hi, text=text)]
     if arm == "PRISM":
         parts.append(PRISM_BLOCK.format(anchor=task["anchor"], context=task["prism_context"]))
+    elif arm == "PRISM_MAP":
+        from prism.impact.overview import OverviewPlan, render_overview
+        if overview is None:
+            raise ValueError(f"{task['id']}: PRISM_MAP needs the written overview")
+        map_text, ring_text = render_overview(OverviewPlan.from_dict(task["overview_plan"]), overview)
+        parts.append(MAP_BLOCK.format(anchor=task["anchor"], map=map_text, context=task["prism_context"], ring=ring_text))
     return "\n".join(parts)
+
+
+def write_overviews(tasks: list[dict], out: Path, base_url: str, model: str) -> None:
+    """The map and second-ring sentences for every task (one task at a time, saved as it goes)."""
+    from prism.impact.overview import OverviewPlan, write_overview
+    from prism.summaries.pipeline import Ollama
+    path = out / "overview.json"
+    done = _load(path)
+    llm = Ollama(model, [base_url])
+    for t in tasks:
+        if t["id"] in done:
+            continue
+        t0 = time.time()
+        done[t["id"]] = write_overview(OverviewPlan.from_dict(t["overview_plan"]), llm)
+        done[t["id"]]["seconds"] = round(time.time() - t0, 1)
+        path.write_text(json.dumps(done, indent=1, sort_keys=True) + "\n")
+        print(f"  overview {t['id']}: {done[t['id']]['seconds']}s", flush=True)
 
 
 def _load(path: Path) -> dict:
@@ -107,13 +145,17 @@ def ollama(base_url: str, model: str, text: str, timeout: int = 900) -> tuple[st
 def generate(tasks: list[dict], out: Path, base_url: str, model: str, threads: int = 2) -> None:
     path = out / "answers.json"
     answers = _load(path)
-    todo = [(t, arm) for t in tasks for arm in ARMS if f"{t['id']}/{arm}" not in answers]
+    overviews = _load(out / "overview.json")
+    arms = arms_for(tasks)
+    if "PRISM_MAP" in arms and any(t["id"] not in overviews for t in tasks):
+        raise SystemExit("write the overviews first (the `overview` command)")
+    todo = [(t, arm) for t in tasks for arm in arms if f"{t['id']}/{arm}" not in answers]
     print(f"{len(todo)} model calls to make ({len(answers)} done)", flush=True)
 
     def one(item):
         t, arm = item
         try:
-            text, secs = ollama(base_url, model, prompt(t, arm))
+            text, secs = ollama(base_url, model, prompt(t, arm, overviews.get(t["id"])))
             return f"{t['id']}/{arm}", {"raw": text, "seconds": round(secs, 1), "model": model}
         except Exception as exc:  # recorded; scored as no answer
             return f"{t['id']}/{arm}", {"raw": "", "error": f"{type(exc).__name__}: {exc}", "model": model}
@@ -231,8 +273,9 @@ def _mean(xs):
 def score(tasks: list[dict], out: Path) -> dict:
     answers = _load(out / "answers.json")
     rows, summary = [], {}
+    arms = arms_for(tasks)
     for t in tasks:
-        for arm in ARMS:
+        for arm in arms:
             a = answers.get(f"{t['id']}/{arm}")
             if a is None:
                 continue
@@ -240,7 +283,7 @@ def score(tasks: list[dict], out: Path) -> dict:
             rows.append({"id": t["id"], "tier": t["tier"], "repo": t["repo"], "arm": arm,
                          "changed": len(t["changed_callers"]), **s, "error": a.get("error")})
     for group in ("all", "easy", "medium", "hard"):
-        for arm in ARMS:
+        for arm in arms:
             rs = [r for r in rows if r["arm"] == arm and (group == "all" or r["tier"] == group)]
             if not rs:
                 continue
@@ -269,19 +312,20 @@ def render(tasks: list[dict], result: dict) -> str:
         group, arm = key.split("/")
         lines.append(f"| {group} | {arm} | {s['tasks']} | {s['callers_found']} | {s['tasks_all_found']} | "
                      f"{s['extra_named']} | {s['added_kept']} | {s['removed_gone']} | {s['parses']} |")
-    lines += ["", "Per task:", "", "| task | tier | repo | anchor | changed callers | FILE found | PRISM found |",
-              "|---|---|---|---|---|---|---|"]
+    arms = arms_for(tasks)
+    lines += ["", "Per task:", "", "| task | tier | repo | anchor | changed callers | "
+              + " | ".join(f"{a} found" for a in arms) + " |", "|---|---|---|---|---|" + "---|" * len(arms)]
     by = {(r["id"], r["arm"]): r for r in result["rows"]}
     for t in tasks:
-        f, p = by.get((t["id"], "FILE")), by.get((t["id"], "PRISM"))
+        cells = [str(len(by[(t["id"], a)]["found"])) if (t["id"], a) in by else "-" for a in arms]
         lines.append(f"| {t['id']} | {t['tier']} | {t['repo']} | `{t['anchor']}` | {len(t['changed_callers'])} | "
-                     f"{len(f['found']) if f else '-'} | {len(p['found']) if p else '-'} |")
+                     + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
-    p.add_argument("command", choices=("prompts", "generate", "score"))
+    p.add_argument("command", choices=("prompts", "overview", "generate", "score"))
     p.add_argument("tasks")
     p.add_argument("out")
     p.add_argument("--base-url", default="http://127.0.0.1:11434")
@@ -295,10 +339,14 @@ def main(argv=None) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     if args.command == "prompts":
+        overviews = _load(out / "overview.json")
+        arms = [a for a in arms_for(tasks) if a != "PRISM_MAP" or all(t["id"] in overviews for t in tasks)]
         for t in tasks:
-            for arm in ARMS:
-                (out / f"{t['id']}_{arm}.txt").write_text(prompt(t, arm))
-        print(f"{2 * len(tasks)} prompts -> {out}")
+            for arm in arms:
+                (out / f"{t['id']}_{arm}.txt").write_text(prompt(t, arm, overviews.get(t["id"])))
+        print(f"{len(arms) * len(tasks)} prompts -> {out}")
+    elif args.command == "overview":
+        write_overviews(tasks, out, args.base_url, args.model)
     elif args.command == "generate":
         generate(tasks, out, args.base_url, args.model, args.threads)
     else:

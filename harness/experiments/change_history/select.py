@@ -49,11 +49,18 @@ def main(argv=None) -> int:
     p.add_argument("out")
     p.add_argument("--per-tier", type=int, default=4)
     p.add_argument("--seed", type=int, default=1301)
+    p.add_argument("--forced", action="store_true",
+                   help="keep only forced changes (forced_reasons) whose counted callers' changes touch the call")
     args = p.parse_args(argv)
     tasks = json.loads(Path(args.candidates).read_text())
     kept = []
     for t in tasks:
-        real = [c for c in t["changed_callers"] if because_of_anchor(t, c)]
+        if args.forced:
+            why = forced_reasons(t)
+            if not why:
+                continue
+            t = {**t, "forced": why}
+        real = [c for c in t["changed_callers"] if (touches_call(t, c) if args.forced else because_of_anchor(t, c))]
         if not real:
             continue
         moved = [c["qname"] for c in t["changed_callers"] if c not in real]
@@ -83,7 +90,7 @@ def main(argv=None) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "tasks.json").write_text(json.dumps({
-        "version": 1, "status": "frozen", "seed": args.seed, "per_tier": args.per_tier,
+        "version": 1, "status": "frozen", "seed": args.seed, "per_tier": args.per_tier, "forced": args.forced,
         "tasks_sha256": hashlib.sha256(body.encode()).hexdigest(), "tasks": chosen}, indent=1) + "\n")
     counts = {tr: sum(1 for t in chosen if t["tier"] == tr) for tr in TIERS}
     print(f"{len(kept)} tasks pass the filter ({len(best)} commits); chose {counts}")
@@ -91,6 +98,64 @@ def main(argv=None) -> int:
         print(f"  {t['id']} {t['tier']:6} {t['repo']:7} {t['commit'][:10]} {t['anchor']} -> "
               f"{[c['qname'] for c in t['changed_callers']]}")
     return 0
+
+
+# ---------------------------------------------------------------- forced changes
+def _split_params(code: str) -> list[str]:
+    m = re.search(r"\(", code)
+    if not m:
+        return []
+    depth, start, parts = 0, m.end(), []
+    for i in range(m.start(), len(code)):
+        ch = code[i]
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+            if depth == 0:
+                parts.append(code[start:i])
+                break
+        elif ch == "," and depth == 1:
+            parts.append(code[start:i])
+            start = i + 1
+    return [p.strip() for p in parts if p.strip() and p.strip() not in ("self", "cls", "*", "/")]
+
+
+def _param_names(code: str) -> dict[str, bool]:
+    """`{name: has_default}` of a function's parameters."""
+    out = {}
+    for p in _split_params(code):
+        name = re.split(r"[:=]", p, maxsplit=1)[0].strip().lstrip("*").strip()
+        if re.fullmatch(r"[A-Za-z_$][\w$]*", name or ""):
+            out[name] = "=" in p
+    return out
+
+
+_RAISED = re.compile(r"\b(?:raise|throw)\s+(?:new\s+)?([A-Za-z_$][\w$.]*)")
+_EMPTY_RETURN = re.compile(r"\breturn\s*(None|null|undefined)?\s*(;|$)", re.M)
+
+
+def forced_reasons(task: dict) -> list[str]:
+    """Why callers that were not updated would break: removed / renamed / new required parameters, a changed
+    set of raised exceptions, or returning nothing added or removed. Empty: nothing forces the callers."""
+    old, new = _param_names(task["anchor_old"]), _param_names(task["anchor_new"])
+    reasons = []
+    removed = set(old) - set(new)
+    required = {n for n, has_default in new.items() if n not in old and not has_default}
+    if removed:
+        reasons.append("parameter removed or renamed: " + ", ".join(sorted(removed)))
+    if required:
+        reasons.append("new required parameter: " + ", ".join(sorted(required)))
+    if set(_RAISED.findall(task["anchor_old"])) != set(_RAISED.findall(task["anchor_new"])):
+        reasons.append("raised exceptions changed")
+    if bool(_EMPTY_RETURN.search(task["anchor_old"])) != bool(_EMPTY_RETURN.search(task["anchor_new"])):
+        reasons.append("returning nothing added or removed")
+    return reasons
+
+
+def touches_call(task: dict, caller: dict) -> bool:
+    leaf = task["anchor"].rsplit(".", 1)[-1].split("#", 1)[0]
+    return any(re.search(rf"\b{re.escape(leaf)}\b", line) for line in _changed_lines(caller["old"], caller["new"]))
 
 
 if __name__ == "__main__":

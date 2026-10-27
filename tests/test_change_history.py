@@ -79,3 +79,18 @@ def test_a_same_named_caller_in_another_file_is_not_the_anchor():
     assert run.score_task(task, other_file)["found"] == ["pkg.helpers.redirect"]
     same_file = json.dumps({"changes": [{"function": "redirect", "file": "pkg/app.py", "new_code": "x"}]})
     assert run.score_task(task, same_file)["found"] == []  # the model restating the anchor itself
+
+
+def test_prism_map_prompt_adds_only_the_map_and_the_second_ring():
+    plan = {"repo": "toy", "readme": "", "folders": [["pkg", 3]], "folder_files": {"pkg": ["pkg/ports.py"]},
+            "files": ["pkg/ports.py"], "outlines": {"pkg/ports.py": "function normalize_port"},
+            "ring": [{"qname": "pkg.cli.main", "relation": "caller of a caller", "via": "pkg.urls.URL.port",
+                      "file": "pkg/cli.py", "line": 3, "card": "Qualified Name: pkg.cli.main"}]}
+    task = {**TASK, "overview_plan": plan}
+    text = {"repo": "A toy.", "folders": {"pkg": "Ports."}, "files": {"pkg/ports.py": "Port parsing."},
+            "ring": {"pkg.cli.main": "Runs the command line."}}
+    assert run.arms_for([task]) == ("FILE", "PRISM", "PRISM_MAP") and run.arms_for([TASK]) == ("FILE", "PRISM")
+    with_map = run.prompt(task, "PRISM_MAP", text)
+    assert with_map.startswith(run.prompt(task, "FILE"))
+    assert TASK["prism_context"] in with_map and "## 0. Map" in with_map and "Runs the command line." in with_map
+    assert "## 0. Map" not in run.prompt(task, "PRISM")

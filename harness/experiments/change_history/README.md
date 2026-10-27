@@ -77,3 +77,61 @@ python -m harness.experiments.change_history.run score harness/experiments/chang
 
 `kaggle/change_history_cell.py` runs `generate` and `score` on Kaggle (the tasks and prompts are frozen in
 `tasks.json`; Kaggle needs no repository checkouts).
+
+---
+
+# Run 2: forced changes, three versions (pre-registered before selection)
+
+The sanity run above showed that some "easy" commits changed callers for reasons the anchor's change did not
+force (the developer's wider intent). Run 2 keeps only **forced** changes and adds a third version: the
+map of the repository and the second ring of related functions.
+
+## Tasks
+
+- `mine.py --forced --scan 4000 --max-candidates 200` over six repositories: flask, click, httpx, express
+  (as above) and `pallets/jinja`, `psf/requests` (never used for tuning).
+- `select.py --forced --seed 2601 --per-tier 4` writes `forced/tasks.json`. A task is kept only when the
+  anchor's change would break callers that were not updated (`select.forced_reasons`):
+  - a parameter removed or renamed;
+  - a new parameter without a default;
+  - a changed set of raised exceptions;
+  - returning nothing added or removed.
+
+  A caller counts only when its own changed lines touch the call (`select.touches_call`). The same tiers,
+  one task per commit, at most two per repository per tier. Tasks from the run-1 commits are allowed;
+  run 1's results are not used for anything here.
+- `plan.py` then adds each task's map and second-ring plan (`prism.impact.overview.plan_overview`, no
+  model), after checking the rebuilt change context equals the frozen one.
+
+## Versions (same model and settings as run 1)
+
+| version | the model also sees |
+|---|---|
+| `FILE` | the anchor's file window (300 lines), as in run 1 |
+| `PRISM` | `FILE` + the change context (first version, budget 6,000, production callers), as in run 1 |
+| `PRISM_MAP` | `PRISM` + the map (two sentences for the repository, one per main folder, one per file near the change) + the second ring (one line each for the callers of the callers and for similar functions) |
+
+The map and second-ring sentences are written once per task by the same model, before any version is
+answered (`run.py overview`):
+- files from their outline;
+- folders from their files' sentences;
+- the repository from its README and folder sentences;
+- second-ring functions from their v2 summary cards with the shipped summarizer prompt.
+
+## Scores and reading
+
+The same scores as run 1, per tier and overall, described with no significance test. The questions are:
+- does `PRISM_MAP` find callers that `PRISM` misses;
+- does it name more wrong functions;
+- does it cost more tokens and time.
+
+A larger pre-registered run follows only if `PRISM_MAP` is at least as good as `PRISM`.
+
+```
+python -m harness.experiments.change_history.mine OUT --forced --scan 4000 --max-candidates 200 NAME=CLONE ...
+python -m harness.experiments.change_history.select CANDIDATES.json harness/experiments/change_history/forced --forced --seed 2601
+python -m harness.experiments.change_history.plan harness/experiments/change_history/forced/tasks.json NAME=CLONE ...
+python -m harness.experiments.change_history.run overview harness/experiments/change_history/forced/tasks.json reports/change_history_forced
+python -m harness.experiments.change_history.run generate harness/experiments/change_history/forced/tasks.json reports/change_history_forced
+python -m harness.experiments.change_history.run score harness/experiments/change_history/forced/tasks.json reports/change_history_forced
+```

@@ -121,7 +121,7 @@ def changed_functions(repo: str, commit: str, files: list[str]) -> dict[tuple[st
     return out
 
 
-def pass1(repo: str, scan: int) -> list[dict]:
+def pass1(repo: str, scan: int, forced: bool = False) -> list[dict]:
     log = git(repo, "log", "--no-merges", f"-n{scan}", "--format=%H%x00%s", "--numstat")
     candidates, current = [], None
     for line in log.splitlines() + [""]:
@@ -151,6 +151,10 @@ def pass1(repo: str, scan: int) -> list[dict]:
             if anchor[1].rsplit(".", 1)[-1].startswith("__") or len(changed[anchor]["old"].splitlines()) > MAX_ANCHOR_LINES:
                 continue
             callers = [k for k in changed if k != anchor and re.search(rf"\b{re.escape(leaf)}\s*\(", changed[k]["old"])]
+            if forced:
+                from harness.experiments.change_history.select import forced_reasons
+                if not forced_reasons({"anchor_old": changed[anchor]["old"], "anchor_new": changed[anchor]["new"]}):
+                    continue  # nothing in the anchor's change forces its callers to change
             if callers:
                 pairs.append((anchor, callers))
         if pairs:
@@ -236,6 +240,7 @@ def main(argv=None) -> int:
     p.add_argument("--scan", type=int, default=1500, help="newest non-merge commits scanned per repository")
     p.add_argument("--budget", type=int, default=6000, help="token budget of the PRISM change context")
     p.add_argument("--max-candidates", type=int, default=40, help="pass-2 candidates per repository")
+    p.add_argument("--forced", action="store_true", help="pass 1 keeps only anchors whose change forces callers")
     args = p.parse_args(argv)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -243,7 +248,7 @@ def main(argv=None) -> int:
     tasks = []
     for spec in args.repos:
         name, _, repo = spec.partition("=")
-        cands = pass1(repo, args.scan)
+        cands = pass1(repo, args.scan, args.forced)
         print(f"{name}: {len(cands)} pass-1 candidates", flush=True)
         for cand in cands[: args.max_candidates]:
             try:

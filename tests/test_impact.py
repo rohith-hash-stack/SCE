@@ -3,6 +3,8 @@ callees, the style to follow (siblings, conventions), its group and codebase (la
 assembled package (`prism impact`, `prism.change_context`). Small self-contained repos, no model."""
 from __future__ import annotations
 
+import json
+
 import pytest
 from click.testing import CliRunner
 
@@ -351,3 +353,60 @@ def test_cli_and_mcp_accept_visible(ports):
     finally:
         server._cache.clear()
     assert "Code: already in view (app/ports.py, lines 8-15)." in res["context"]
+
+
+# --------------------------------------------------------------------- #
+# Map and second ring (prism.impact.overview)
+# --------------------------------------------------------------------- #
+class FakeOverviewLLM:
+    def __init__(self):
+        self.prompts = []
+
+    def json(self, prompt, max_out, seed=42):
+        self.prompts.append(prompt)
+        if "Qualified Name" in prompt:
+            names = [ln.split(":", 1)[1].strip() for ln in prompt.splitlines() if ln.startswith("Qualified Name:")]
+            return {q: "Builds a web address from a host and an optional port" for q in names}
+        return {"summary": "Turns raw port values into numbers and builds addresses."}
+
+
+LAYERS = {
+    "app/__init__.py": "",
+    "app/ports.py": PORTS,
+    "app/web/__init__.py": "",
+    "app/web/views.py": "from app.ports import build_url\n\n\ndef home_link(host):\n    return build_url(host, 80)\n\n\n"
+                        "def page(host):\n    return home_link(host)\n",
+    "README.md": "# Toy\n\nA toy project that builds URLs.\n",
+}
+
+
+def test_overview_plan_picks_callers_of_callers_and_similar_functions(tmp_path):
+    from prism.impact.overview import OverviewPlan, plan_overview
+    root, b = build(tmp_path, LAYERS)
+    cb = ChangeContextBuilder(b, root)
+    ctx = cb.build("app.ports.build_url", include_tests=False)
+    plan = plan_overview(cb, "app.ports.build_url", ctx)
+    up = [(r.qname, r.via) for r in plan.ring if r.relation == "caller of a caller"]
+    assert up == [("app.web.views.page", "app.web.views.home_link")]
+    assert all("shares" in r.via or "name words" in r.via for r in plan.ring if r.relation == "similar")
+    assert {r.qname for r in plan.ring}.isdisjoint({r.caller for r in ctx.callers} | {ctx.anchor})
+    assert "A toy project that builds URLs." in plan.readme
+    assert plan.files[0] == "app/ports.py" and "app/web/views.py" in plan.files
+    assert "function build_url" in plan.outlines["app/ports.py"]
+    assert OverviewPlan.from_dict(json.loads(json.dumps(plan.to_dict()))) == plan  # plain JSON round trip
+
+
+def test_overview_is_written_bottom_up_and_rendered(tmp_path):
+    from prism.impact.overview import plan_overview, render_overview, write_overview
+    root, b = build(tmp_path, LAYERS)
+    cb = ChangeContextBuilder(b, root)
+    plan = plan_overview(cb, "app.ports.build_url", cb.build("app.ports.build_url", include_tests=False))
+    llm = FakeOverviewLLM()
+    text = write_overview(plan, llm)
+    assert set(text["files"]) == set(plan.outlines) and set(text["ring"]) == {r.qname for r in plan.ring}
+    folder_prompts = [p for p in llm.prompts if "contains these files" in p]
+    assert folder_prompts and "Turns raw port values" in folder_prompts[0]  # folders built from file sentences
+    m, r = render_overview(plan, text)
+    assert m.startswith("## 0. Map") and "Repository `repo`:" in m and "Files near the change:" in m
+    assert r.startswith("## 9. Second ring") and "`app.web.views.page` (app/web/views.py:8), calls " \
+        "`app.web.views.home_link`: Builds a web address" in r
