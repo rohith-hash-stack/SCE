@@ -3,7 +3,8 @@
     python -m harness.experiments.change_history.plan TASKS.json NAME=CLONE [NAME=CLONE ...]
 
 For each task: index the parent revision, rebuild the change context and check it is the task's
-`prism_context` byte for byte (else abort: the code changed since mining), then add
+`prism_context` byte for byte (else abort: the code changed since mining; the same lines in another order
+are accepted and the stable order kept), then add
 `prism.impact.overview.plan_overview`'s plan as `overview_plan`. The task list's sha256 is recomputed; the
 selection itself is not touched.
 """
@@ -35,9 +36,15 @@ def main(argv=None) -> int:
             b = build_pipeline(work, use_cache=False)[0]
             cb = ChangeContextBuilder(b, work)
             ctx = cb.build(t["anchor"], budget_tokens=6000, include_tests=False)
-            if render(ctx) != t["prism_context"]:
-                raise SystemExit(f"{t['id']}: the change context differs from the frozen one")
-            t["overview_plan"] = plan_overview(cb, t["anchor"], ctx).to_dict()
+            got = render(ctx)
+            if got != t["prism_context"]:
+                if sorted(got.splitlines()) != sorted(t["prism_context"].splitlines()):
+                    raise SystemExit(f"{t['id']}: the change context differs from the frozen one")
+                # same lines, other order: tied conventions were listed in set order before ties were broken
+                # by name; keep the now-stable order
+                print(f"{t['id']}: same lines, stable order now; context replaced", flush=True)
+                t["prism_context"] = got
+            t["overview_plan"] = plan_overview(cb, t["anchor"], ctx, repo_name=t["repo"]).to_dict()
             print(f"{t['id']}: {len(t['overview_plan']['ring'])} second-ring functions, "
                   f"{len(t['overview_plan']['outlines'])} files to describe", flush=True)
         finally:

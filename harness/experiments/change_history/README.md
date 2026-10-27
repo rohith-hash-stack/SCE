@@ -118,6 +118,30 @@ answered (`run.py overview`):
 - the repository from its README and folder sentences;
 - second-ring functions from their v2 summary cards with the shipped summarizer prompt.
 
+## Selected and planned (before any model ran)
+
+`forced/tasks.json`: 214 of 319 candidates pass the forced filter (139 commits). Twelve were chosen,
+4 easy, 4 medium and 4 hard, from all six repositories. Task-list sha256: `36aa60fd…` (full value in the file).
+
+Changes made while planning, before any model saw a task:
+- **Stable convention order.** Conventions tied on count (for example two helpers each "called by 3 of
+  28") were listed in Python's per-process set order, so a rebuild could list them in another order
+  (ch08). Ties are now broken by name. All 12 frozen contexts rebuild byte for byte.
+- **Real repository name.** The map named the temporary worktree. It now uses the task's repository name.
+- **"Similar" needs a specific word.** A shared generic name word alone (`get`, `set`, `make`, … —
+  `overview.GENERIC_WORDS`) no longer makes a function similar. Sharing callees, or a specific name word
+  such as `size` or `terminal`, still does. This removed noise like `get_app_dir` for `get_terminal_size`.
+
+Prompt sizes, measured with a fake model server (same tokenizer as run 1; the map and ring sentences at
+20 words each):
+
+| | FILE | PRISM | PRISM_MAP |
+|---|---|---|---|
+| mean tokens | 4,204 | 7,074 | 7,674 |
+| largest (ch02) | 6,002 | 10,144 | 10,992 |
+
+The largest prompt is well below the 16,384 left after the 4,096 output tokens.
+
 ## Scores and reading
 
 The same scores as run 1, per tier and overall, described with no significance test. The questions are:

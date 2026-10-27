@@ -126,6 +126,11 @@ def _decorators(builder, qname: str) -> set[str]:
     return {t.lstrip("@[").split("(", 1)[0].rstrip("]").strip() for t in texts}
 
 
+def _top(counter: collections.Counter, k: int) -> list[tuple[str, int]]:
+    """The k most common, ties broken by name (a Counter's own order follows set order, which varies by run)."""
+    return sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
+
+
 def conventions(builder, functions: list[str], digests: DigestBuilder, cap: int = 600) -> list[Convention]:
     """Conventions of a set of functions (a group), most common first, each with its evidence."""
     functions = sorted(functions)[:cap]
@@ -161,15 +166,15 @@ def conventions(builder, functions: list[str], digests: DigestBuilder, cap: int 
         if node is not None and any(c.type == "async" for c in node.children):
             is_async += 1
     out: list[Convention] = []
-    for name, n in raised.most_common(3):
+    for name, n in _top(raised, 3):
         if n >= MIN_EVIDENCE and n / max(raise_total, 1) >= 0.25:
             out.append(Convention(f"errors are raised as `{name}` ({n} of {raise_total} raises here)", n, raise_total))
-    for target, n in helpers.most_common(5):
+    for target, n in _top(helpers, 5):
         if n >= MIN_EVIDENCE and n / total >= 0.05:
             out.append(Convention(f"`{target}` is a shared helper here: called by {n} of {total} functions", n, total))
     log_total = sum(loggers.values())
     if log_total >= MIN_EVIDENCE:
-        top = ", ".join(f"`{k}`" for k, _ in loggers.most_common(3))
+        top = ", ".join(f"`{k}`" for k, _ in _top(loggers, 3))
         out.append(Convention(f"logging goes through {top} ({log_total} calls)", log_total, log_total))
     named = snake + camel
     if named >= MIN_EVIDENCE:
@@ -179,7 +184,7 @@ def conventions(builder, functions: list[str], digests: DigestBuilder, cap: int 
             out.append(Convention(f"function names are camelCase ({camel} of {named} multi-word names)", camel, named))
     if is_async >= MIN_EVIDENCE:
         out.append(Convention(f"{is_async} of {total} functions are async", is_async, total))
-    for name, n in decorators.most_common(3):
+    for name, n in _top(decorators, 3):
         if n >= MIN_EVIDENCE and n / total >= 0.1:
             out.append(Convention(f"`@{name}` is used on {n} of {total} functions", n, total))
     return out

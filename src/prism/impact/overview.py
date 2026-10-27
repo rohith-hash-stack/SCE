@@ -27,6 +27,10 @@ OUTLINE_CAP = 40      # outline lines per file
 FILES_PER_FOLDER = 6  # a folder is described from its largest files
 _NOT_MAIN = re.compile(r"(^|/)(examples?|docs?|tests?|benchmarks?|scripts?|tools?)(/|$)")
 README_CAP = 1200     # characters of the README's opening
+# name words too common to make two functions similar on their own
+GENERIC_WORDS = frozenset("get set is has make new create init to from as add remove update run do handle "
+                          "process check load save read write build parse format render call apply value "
+                          "default data info name type list dict str".split())
 
 FILE_PROMPT = (
     "Below is the outline of the source file `{path}` (its classes and functions, with the first line of their "
@@ -108,7 +112,16 @@ def file_outline(builder, path: str, root: str) -> str:
     return "\n".join(lines[:OUTLINE_CAP] + ([f"... (+{len(lines) - OUTLINE_CAP} more)"] if len(lines) > OUTLINE_CAP else []))
 
 
-def plan_overview(cb, anchor: str, ctx) -> OverviewPlan:
+def _similar(reason: str) -> bool:
+    """A sibling is similar when it shares callees, or a name word that is not generic: nearness alone
+    (same class, file or folder) or a shared `get` is not similarity."""
+    if "shares" in reason:
+        return True
+    m = re.search(r"name words: ([^;]*?)(?:, same decorators|$)", reason)
+    return bool(m) and any(w.strip() not in GENERIC_WORDS for w in m.group(1).split(","))
+
+
+def plan_overview(cb, anchor: str, ctx, repo_name: str | None = None) -> OverviewPlan:
     """What the map and the second ring show for `anchor`, given its change context `ctx`
     (`prism.impact.context.ChangeContextBuilder` `cb`)."""
     from prism.impact.style import siblings
@@ -134,8 +147,8 @@ def plan_overview(cb, anchor: str, ctx) -> OverviewPlan:
     for s in siblings(b, anchor, cb.groups.of, k=MAX_RING_SIMILAR * 4, exclude=in_package):
         if len([x for x in ring if x.relation == "similar"]) >= MAX_RING_SIMILAR or s.qname in {x.qname for x in ring}:
             continue
-        if "shares" not in s.reason and "name words" not in s.reason:
-            continue  # nearness alone (same class or file) is not similarity
+        if not _similar(s.reason):
+            continue
         card = build_card(b, {}, cb.entries, s.qname, axes=False)
         if card is not None:
             ring.append(RingItem(s.qname, "similar", s.reason, _rel(s.file, root), s.lines[0], card["card"]))
@@ -157,7 +170,7 @@ def plan_overview(cb, anchor: str, ctx) -> OverviewPlan:
         folder_files[g] = sorted(set(largest) | {f for f in files if (os.path.dirname(f) or ".") == g})
     outline_files = list(dict.fromkeys(files + [p for ps in folder_files.values() for p in ps]))
     outlines = {f: file_outline(b, os.path.join(root, f), root) for f in outline_files}
-    return OverviewPlan(os.path.basename(root.rstrip(os.sep)), readme_excerpt(root), folders, folder_files, files,
+    return OverviewPlan(repo_name or os.path.basename(root.rstrip(os.sep)), readme_excerpt(root), folders, folder_files, files,
                         outlines, ring)
 
 

@@ -394,6 +394,16 @@ def test_overview_plan_picks_callers_of_callers_and_similar_functions(tmp_path):
     assert plan.files[0] == "app/ports.py" and "app/web/views.py" in plan.files
     assert "function build_url" in plan.outlines["app/ports.py"]
     assert OverviewPlan.from_dict(json.loads(json.dumps(plan.to_dict()))) == plan  # plain JSON round trip
+    assert plan_overview(cb, "app.ports.build_url", ctx, repo_name="toy").repo == "toy"
+
+
+def test_overview_similarity_needs_shared_callees_or_a_specific_name_word():
+    from prism.impact.overview import _similar
+    assert _similar("same directory, shares 2 callees")
+    assert _similar("same directory, name words: get, size")
+    assert _similar("same file, name words: terminal, same decorators: cached")
+    assert not _similar("same directory, name words: get")
+    assert not _similar("same class")
 
 
 def test_overview_is_written_bottom_up_and_rendered(tmp_path):
