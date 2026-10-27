@@ -1,11 +1,35 @@
 {
  "version": 1,
- "status": "draft",
+ "status": "frozen",
  "repos": {
-  "werkzeug": {"url": "https://github.com/pallets/werkzeug", "tag": "3.1.9", "commit": "6604c3b8784ecc7cf5ac0b7412d916989b4c7d45", "root": "src/werkzeug", "language": "python"},
-  "aiohttp": {"url": "https://github.com/aio-libs/aiohttp", "tag": "v3.14.5", "commit": "f17c631bddcfd4ec712342db28f1d3381a3fec71", "root": "aiohttp", "language": "python"},
-  "kysely": {"url": "https://github.com/kysely-org/kysely", "tag": "v0.29.7", "commit": "ac876c212cfec0e62a77cccc39c7417a13d11ab0", "root": "src", "language": "typescript"},
-  "nest": {"url": "https://github.com/nestjs/nest", "tag": "v12.2.0", "commit": "af37111368de7fd2dfab0bdec2f530c7845510c2", "root": "packages", "language": "typescript"}
+  "werkzeug": {
+   "url": "https://github.com/pallets/werkzeug",
+   "tag": "3.1.9",
+   "commit": "6604c3b8784ecc7cf5ac0b7412d916989b4c7d45",
+   "root": "src/werkzeug",
+   "language": "python"
+  },
+  "aiohttp": {
+   "url": "https://github.com/aio-libs/aiohttp",
+   "tag": "v3.14.5",
+   "commit": "f17c631bddcfd4ec712342db28f1d3381a3fec71",
+   "root": "aiohttp",
+   "language": "python"
+  },
+  "kysely": {
+   "url": "https://github.com/kysely-org/kysely",
+   "tag": "v0.29.7",
+   "commit": "ac876c212cfec0e62a77cccc39c7417a13d11ab0",
+   "root": "src",
+   "language": "typescript"
+  },
+  "nest": {
+   "url": "https://github.com/nestjs/nest",
+   "tag": "v12.2.0",
+   "commit": "af37111368de7fd2dfab0bdec2f530c7845510c2",
+   "root": "packages",
+   "language": "typescript"
+  }
  },
  "authoring_rules": [
   "Seventh held-out set, for the digest-grounded summary decision (README.md: arms BASE, V2, SRC, DIGEST).",
@@ -15,6 +39,1716 @@
   "No question contains its gold symbol's name or every word of it (check.py).",
   "Gold and decoys are library code in the pool, never test files; no property setter is gold or decoy."
  ],
- "questions": [],
- "skips": []
+ "questions": [
+  {
+   "id": "wz01",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "If the request body was already read into memory by an earlier call, where does form parsing get its bytes from so it does not read input that was already consumed?",
+   "gold": [
+    "wrappers.request.Request._get_stream_for_parsing"
+   ],
+   "decoys": [
+    "wrappers.request.Request.get_data",
+    "wrappers.request.Request._load_form_data"
+   ]
+  },
+  {
+   "id": "wz02",
+   "repo": "werkzeug",
+   "category": "io_sink",
+   "question": "Which request method can a subclass override to decide where each uploaded file's contents are buffered during multipart parsing?",
+   "gold": [
+    "wrappers.request.Request._get_file_stream"
+   ],
+   "decoys": [
+    "formparser.default_stream_factory",
+    "wrappers.request.Request.make_form_data_parser"
+   ]
+  },
+  {
+   "id": "wz03",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How is a Set-Cookie value built: when is the value quoted with octal escapes, what turns Secure on automatically, and when is a warning about its size emitted?",
+   "gold": [
+    "http.dump_cookie"
+   ],
+   "decoys": [
+    "http.parse_cookie",
+    "http.dump_header"
+   ]
+  },
+  {
+   "id": "wz04",
+   "repo": "werkzeug",
+   "category": "io_sink",
+   "question": "While a form is parsed, are uploaded files kept in memory or written to a temporary file on disk, and what size threshold decides that?",
+   "gold": [
+    "formparser.default_stream_factory"
+   ],
+   "decoys": [
+    "wrappers.request.Request._get_file_stream",
+    "formparser.parse_form_data"
+   ]
+  },
+  {
+   "id": "wz05",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How do I run a WSGI application against an environ and turn its output, status and headers into a response object, optionally buffering the whole body?",
+   "gold": [
+    "wrappers.response.Response.from_app"
+   ],
+   "decoys": [
+    "wrappers.response.Response.force_type",
+    "wrappers.response.Response.get_app_iter"
+   ]
+  },
+  {
+   "id": "wz06",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "On a header collection, how do I read a header and, only when it is missing, store a fallback value and return that?",
+   "gold": [
+    "datastructures.headers.Headers.setdefault"
+   ],
+   "decoys": [
+    "datastructures.headers.Headers.setlistdefault",
+    "datastructures.headers.Headers.get"
+   ]
+  },
+  {
+   "id": "wz07",
+   "repo": "werkzeug",
+   "category": "routing",
+   "question": "After changing a URL rule's attributes in place, what re-binds it to its map so its matching is rebuilt?",
+   "gold": [
+    "routing.rules.Rule.refresh"
+   ],
+   "decoys": [
+    "routing.rules.Rule.bind",
+    "routing.rules.Rule.compile"
+   ]
+  },
+  {
+   "id": "wz08",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "For a 429 or 503 error, how is the Retry-After header added to the response, and how is a datetime written differently from a number of seconds?",
+   "gold": [
+    "exceptions._RetryAfter.get_headers"
+   ],
+   "decoys": [
+    "http.http_date",
+    "exceptions.HTTPException.get_response"
+   ]
+  },
+  {
+   "id": "wz09",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "Right before a response starts, how is the Location header made absolute, Content-Length dropped for 1xx and 204, entity headers stripped for 304, and the length computed for buffered bodies?",
+   "gold": [
+    "wrappers.response.Response.get_wsgi_headers"
+   ],
+   "decoys": [
+    "wrappers.response.Response.get_wsgi_response",
+    "wrappers.response.Response.calculate_content_length",
+    "http.remove_entity_headers"
+   ]
+  },
+  {
+   "id": "wz10",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "In a dict that keeps several values per key, how do I remove a key and get all of its values back, receiving an empty list instead of an error when the key is absent?",
+   "gold": [
+    "datastructures.structures.MultiDict.poplist"
+   ],
+   "decoys": [
+    "datastructures.structures.MultiDict.pop",
+    "datastructures.structures.MultiDict.popitemlist"
+   ]
+  },
+  {
+   "id": "wz11",
+   "repo": "werkzeug",
+   "category": "routing",
+   "question": "How do I get an unbound copy of a URL rule so it can be reused in a different map?",
+   "gold": [
+    "routing.rules.Rule.empty"
+   ],
+   "decoys": [
+    "routing.rules.Rule.get_empty_kwargs",
+    "routing.rules.Rule.bind"
+   ]
+  },
+  {
+   "id": "wz12",
+   "repo": "werkzeug",
+   "category": "io_sink",
+   "question": "When a WSGI app returns a file, how does it use the server's own file wrapper if the environ provides one and otherwise fall back to a generic chunked iterator?",
+   "gold": [
+    "wsgi.wrap_file"
+   ],
+   "decoys": [
+    "wsgi.responder",
+    "wsgi.get_input_stream"
+   ]
+  },
+  {
+   "id": "wz13",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "When an Accept header is read, how are items with an invalid or out-of-range quality value handled, and what quality does an item without one get?",
+   "gold": [
+    "http.parse_accept_header"
+   ],
+   "decoys": [
+    "http.parse_options_header",
+    "http.parse_list_header"
+   ]
+  },
+  {
+   "id": "wz14",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How does a Host header value get validated against the configured allowed domains, including leading-dot entries that accept subdomains, and which ports make it fail?",
+   "gold": [
+    "sansio.utils.host_is_trusted"
+   ],
+   "decoys": [
+    "sansio.utils.get_host",
+    "wsgi.get_host"
+   ]
+  },
+  {
+   "id": "wz15",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How does deleting a header remove every value stored under that name regardless of letter case?",
+   "gold": [
+    "datastructures.headers.Headers._del_key"
+   ],
+   "decoys": [
+    "datastructures.headers.Headers.remove",
+    "datastructures.headers.Headers.pop"
+   ]
+  },
+  {
+   "id": "wz16",
+   "repo": "werkzeug",
+   "category": "io_sink",
+   "question": "Where is the multipart form parser created with the request's upload stream factory and its memory, content-length and part-count limits?",
+   "gold": [
+    "wrappers.request.Request.make_form_data_parser"
+   ],
+   "decoys": [
+    "wrappers.request.Request._load_form_data",
+    "formparser.parse_form_data"
+   ]
+  },
+  {
+   "id": "wz17",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "In the insertion-ordered multi-value dict, how does iterating each key together with all of its values follow the original order and yield each key only once?",
+   "gold": [
+    "datastructures.structures._OrderedMultiDict.lists"
+   ],
+   "decoys": [
+    "datastructures.structures._OrderedMultiDict.items",
+    "datastructures.structures.MultiDict.lists"
+   ]
+  },
+  {
+   "id": "wz18",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How do I turn a header value collection such as the Vary values into Python's built-in unordered collection type, either keeping the original letter case or lowercasing everything?",
+   "gold": [
+    "datastructures.structures.HeaderSet.as_set"
+   ],
+   "decoys": [
+    "datastructures.structures.HeaderSet.find",
+    "datastructures.structures.HeaderSet.update"
+   ]
+  },
+  {
+   "id": "wz19",
+   "repo": "werkzeug",
+   "category": "io_sink",
+   "question": "How does the development server's main loop stop quietly on Ctrl+C and always close its socket afterwards?",
+   "gold": [
+    "serving.BaseWSGIServer.serve_forever"
+   ],
+   "decoys": [
+    "serving.BaseWSGIServer.handle_error",
+    "serving.BaseWSGIServer.log_startup"
+   ]
+  },
+  {
+   "id": "wz20",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "When a response body must be a list, when is the iterable converted automatically, and when is a RuntimeError raised instead because of direct passthrough or disabled conversion?",
+   "gold": [
+    "wrappers.response.Response._ensure_sequence"
+   ],
+   "decoys": [
+    "wrappers.response.Response.make_sequence",
+    "wrappers.response.Response.iter_encoded"
+   ]
+  },
+  {
+   "id": "wz21",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How do I add support for a custom Cache-Control directive in a subclass as a typed attribute, with a generated docstring?",
+   "gold": [
+    "datastructures.cache_control.cache_control_property"
+   ],
+   "decoys": [
+    "http.parse_cache_control_header",
+    "http.dump_header"
+   ]
+  },
+  {
+   "id": "wz22",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "Where does the request turn the conditional 'changed after this date' header into a timezone-aware datetime?",
+   "gold": [
+    "sansio.request.Request.if_modified_since"
+   ],
+   "decoys": [
+    "sansio.request.Request.if_unmodified_since",
+    "http.parse_date"
+   ]
+  },
+  {
+   "id": "wz23",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How is a comma-separated header value split into items while keeping commas inside quoted strings, dropping empty items, and returning nothing when a quote is never closed?",
+   "gold": [
+    "http.parse_list_header"
+   ],
+   "decoys": [
+    "http.parse_dict_header",
+    "http.dump_header",
+    "http.parse_set_header"
+   ]
+  },
+  {
+   "id": "wz24",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How do I replace a response body with a string or bytes, and when is the Content-Length header updated to match?",
+   "gold": [
+    "wrappers.response.Response.set_data"
+   ],
+   "decoys": [
+    "wrappers.response.Response.get_data",
+    "wrappers.response.Response.calculate_content_length"
+   ]
+  },
+  {
+   "id": "wz25",
+   "repo": "werkzeug",
+   "category": "routing",
+   "question": "When a link is generated for an endpoint whose placeholder only accepts a fixed group of choices, what error does a value outside those choices raise?",
+   "gold": [
+    "routing.converters.AnyConverter.to_url"
+   ],
+   "decoys": [
+    "routing.rules.Rule.build",
+    "routing.converters.BaseConverter.to_url"
+   ]
+  },
+  {
+   "id": "wz26",
+   "repo": "werkzeug",
+   "category": "routing",
+   "question": "How do I build a response that sends the client to another URL with a 3xx status, including a small HTML body with an escaped link?",
+   "gold": [
+    "utils.redirect"
+   ],
+   "decoys": [
+    "utils.append_slash_redirect",
+    "wrappers.response.Response.get_wsgi_headers"
+   ]
+  },
+  {
+   "id": "wz27",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "How can I plug in my own parser for the browser identification header on incoming requests?",
+   "gold": [
+    "sansio.request.Request.user_agent"
+   ],
+   "decoys": [
+    "sansio.request.Request.access_route",
+    "sansio.request.Request.authorization"
+   ]
+  },
+  {
+   "id": "wz28",
+   "repo": "werkzeug",
+   "category": "feature_logic",
+   "question": "When appending a header, how are extra keyword parameters such as filename turned into header options, and what happens to a value that contains a newline?",
+   "gold": [
+    "datastructures.headers.Headers.add"
+   ],
+   "decoys": [
+    "datastructures.headers.Headers.set",
+    "http.dump_options_header"
+   ]
+  },
+  {
+   "id": "wz29",
+   "repo": "werkzeug",
+   "category": "routing",
+   "question": "How are converter arguments written in a URL rule, like 'True', 'None', '2' or a quoted string, turned into Python values?",
+   "gold": [
+    "routing.rules._pythonize"
+   ],
+   "decoys": [
+    "routing.rules.parse_converter_args",
+    "routing.rules.Rule.get_converter"
+   ]
+  },
+  {
+   "id": "wz30",
+   "repo": "werkzeug",
+   "category": "routing",
+   "question": "After a failed URL build, how is each candidate rule weighed when suggesting the closest one: how much do endpoint-name similarity, the given arguments and the method count?",
+   "gold": [
+    "routing.exceptions.BuildError._score_rule"
+   ],
+   "decoys": [
+    "routing.exceptions.BuildError.closest_rule",
+    "routing.rules.Rule.build_compare_key"
+   ]
+  },
+  {
+   "id": "ah01",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "On a stream reader, how do I take whatever bytes are already buffered without awaiting, and when does that raise because another coroutine is waiting?",
+   "gold": [
+    "streams.StreamReader.read_nowait"
+   ],
+   "decoys": [
+    "streams.StreamReader._read_nowait",
+    "streams.StreamReader.readany"
+   ]
+  },
+  {
+   "id": "ah02",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "Which application method fires the handlers registered to run when the server starts?",
+   "gold": [
+    "web_app.Application.startup"
+   ],
+   "decoys": [
+    "web_app.Application.cleanup",
+    "web_app.Application.shutdown"
+   ]
+  },
+  {
+   "id": "ah03",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "When a web runner shuts down, in what order are sites stopped, idle connections closed and the server shut down, and how are the SIGINT and SIGTERM handlers removed?",
+   "gold": [
+    "web_runner.BaseRunner.cleanup"
+   ],
+   "decoys": [
+    "web_runner.BaseRunner.setup",
+    "web_app.Application.cleanup"
+   ]
+  },
+  {
+   "id": "ah04",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "How does a request determine the client's IP address from the socket peer name, and what does it give when there is none?",
+   "gold": [
+    "web_request.BaseRequest.remote"
+   ],
+   "decoys": [
+    "web_request.BaseRequest.forwarded",
+    "web_request.BaseRequest.host"
+   ]
+  },
+  {
+   "id": "ah05",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "How does a client connection get handed back to the connector's pool for reuse once a response is finished?",
+   "gold": [
+    "connector.Connection.release"
+   ],
+   "decoys": [
+    "connector.Connection.close",
+    "connector.Connection._notify_release"
+   ]
+  },
+  {
+   "id": "ah06",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "How is a small WebSocket message compressed and written in one go without awaiting, including setting the RSV1 bit and stripping the deflate trailer?",
+   "gold": [
+    "_websocket.writer.WebSocketWriter._send_compressed_frame_sync"
+   ],
+   "decoys": [
+    "_websocket.writer.WebSocketWriter._send_compressed_frame_async_locked",
+    "_websocket.writer.WebSocketWriter.send_frame"
+   ]
+  },
+  {
+   "id": "ah07",
+   "repo": "aiohttp",
+   "category": "routing",
+   "question": "Which middleware factory sends requests to a path with an added or removed trailing slash or merged double slashes, and in what order are those fixes tried?",
+   "gold": [
+    "web_middlewares.normalize_path_middleware"
+   ],
+   "decoys": [
+    "web_middlewares._check_request_resolves",
+    "web_middlewares._fix_request_current_app"
+   ]
+  },
+  {
+   "id": "ah08",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "Which client session method sends a request with the HTTP verb meant for submitting data, carrying a body?",
+   "gold": [
+    "client.ClientSession.post"
+   ],
+   "decoys": [
+    "client.ClientSession.put",
+    "client.ClientSession._request"
+   ]
+  },
+  {
+   "id": "ah09",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "How do I turn on gzip or deflate encoding for a streamed response, forcing a specific coding, and what happens if a boolean is passed instead?",
+   "gold": [
+    "web_response.StreamResponse.enable_compression"
+   ],
+   "decoys": [
+    "web_response.StreamResponse._start_compression",
+    "web_response.StreamResponse.enable_chunked_encoding"
+   ]
+  },
+  {
+   "id": "ah10",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "How are HTTP basic credentials built out of the user and password embedded in an address like http://user:pass@host, and what if the address has neither?",
+   "gold": [
+    "helpers.BasicAuth.from_url"
+   ],
+   "decoys": [
+    "helpers.BasicAuth.decode",
+    "client.ClientSession._get_netrc_auth"
+   ]
+  },
+  {
+   "id": "ah11",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "How is a client request body written to the connection: waiting for 100-continue, honouring a content-length limit, reporting upload progress, and turning OS errors into client errors?",
+   "gold": [
+    "client_reqrep.ClientRequest.write_bytes"
+   ],
+   "decoys": [
+    "client_reqrep.ClientRequest.send",
+    "client_reqrep.ClientRequest.update_body"
+   ]
+  },
+  {
+   "id": "ah12",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "When decoding a deflate-encoded response body, how does it detect data sent without the zlib header and switch decoders, and what error is raised when decompression fails?",
+   "gold": [
+    "http_parser.DeflateBuffer.feed_data"
+   ],
+   "decoys": [
+    "http_parser.DeflateBuffer.feed_eof",
+    "streams.StreamReader.feed_data"
+   ]
+  },
+  {
+   "id": "ah13",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "When a part's content type header is malformed, what type is assumed instead of text/plain?",
+   "gold": [
+    "helpers.EnsureOctetStream.get_content_type"
+   ],
+   "decoys": [
+    "helpers.parse_mimetype",
+    "helpers.BasicAuth.decode"
+   ]
+  },
+  {
+   "id": "ah14",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "When a response finishes, how are the last chunk and the compressor's flushed bytes written out, coalesced with headers not yet sent, and terminated for chunked encoding?",
+   "gold": [
+    "http_writer.StreamWriter.write_eof"
+   ],
+   "decoys": [
+    "http_writer.StreamWriter.write",
+    "http_writer.StreamWriter.set_eof"
+   ]
+  },
+  {
+   "id": "ah15",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "How are cleanup-context generators entered when the application starts, including plain async generator functions wrapped into context managers, so their exit runs during teardown?",
+   "gold": [
+    "web_app.CleanupContext._on_startup"
+   ],
+   "decoys": [
+    "web_app.CleanupContext._on_cleanup",
+    "web_app.Application.startup"
+   ]
+  },
+  {
+   "id": "ah16",
+   "repo": "aiohttp",
+   "category": "routing",
+   "question": "How are client-side middlewares chained around the request handler so that the first one in the list runs outermost?",
+   "gold": [
+    "client_middlewares.build_client_middlewares"
+   ],
+   "decoys": [
+    "client_middlewares.make_wrapper",
+    "client.ClientSession._request"
+   ]
+  },
+  {
+   "id": "ah17",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "How does the WebSocket reader parse incoming bytes into frames, reading the header bits, payload length and mask, and pausing when the message queue is above its limit?",
+   "gold": [
+    "_websocket.reader_py.WebSocketReader._feed_data"
+   ],
+   "decoys": [
+    "_websocket.reader_py.WebSocketReader._handle_frame",
+    "_websocket.reader_py.WebSocketReader.feed_data"
+   ]
+  },
+  {
+   "id": "ah18",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "How is a file name guessed for an uploaded file-like object, ignoring pseudo names like '<stdin>'?",
+   "gold": [
+    "helpers.guess_filename"
+   ],
+   "decoys": [
+    "helpers.content_disposition_header",
+    "helpers.parse_content_type"
+   ]
+  },
+  {
+   "id": "ah19",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "For a text file payload, how are the remaining length and the first encoded chunk read together in one step before streaming?",
+   "gold": [
+    "payload.TextIOPayload._read_and_available_len"
+   ],
+   "decoys": [
+    "payload.TextIOPayload._read",
+    "payload.IOBasePayload.size"
+   ]
+  },
+  {
+   "id": "ah20",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "When a client response is closed, how is its pending body-writing task cancelled while the number of uploaded bytes is kept?",
+   "gold": [
+    "client_reqrep.ClientResponse._cleanup_writer"
+   ],
+   "decoys": [
+    "client_reqrep.ClientResponse.close",
+    "client_reqrep.ClientResponse._release_connection"
+   ]
+  },
+  {
+   "id": "ah21",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "How does a scheduled timeout callback call a method on an object held only by a weak reference, doing nothing if the object is gone and swallowing its errors?",
+   "gold": [
+    "helpers._weakref_handle"
+   ],
+   "decoys": [
+    "helpers.weakref_handle",
+    "helpers.call_later"
+   ]
+  },
+  {
+   "id": "ah22",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "After setting up client tracing hooks, what locks every tracing signal so no more callbacks can be added?",
+   "gold": [
+    "tracing.TraceConfig.freeze"
+   ],
+   "decoys": [
+    "tracing.TraceConfig.on_request_redirect",
+    "web_app.Application.freeze"
+   ]
+  },
+  {
+   "id": "ah23",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "How is the number of bytes a file payload holds computed so that Content-Length stays correct when the same payload is resent after a 307 or 308 redirect?",
+   "gold": [
+    "payload.IOBasePayload.size"
+   ],
+   "decoys": [
+    "payload.IOBasePayload._set_or_restore_start_position",
+    "payload.TextIOPayload._read_and_available_len"
+   ]
+  },
+  {
+   "id": "ah24",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "On a server WebSocket, what errors does transmitting binary data raise if the connection was not prepared or the data is not bytes-like?",
+   "gold": [
+    "web_ws.WebSocketResponse.send_bytes"
+   ],
+   "decoys": [
+    "web_ws.WebSocketResponse.send_str",
+    "web_ws.WebSocketResponse.send_frame"
+   ]
+  },
+  {
+   "id": "ah25",
+   "repo": "aiohttp",
+   "category": "routing",
+   "question": "How does a sub-application mounted by a custom rule, such as a domain, match a request, and how does it report the allowed methods when the method does not fit?",
+   "gold": [
+    "web_urldispatcher.MatchedSubAppResource.resolve"
+   ],
+   "decoys": [
+    "web_app.Application.add_domain",
+    "web_urldispatcher.UrlDispatcher.resolve"
+   ]
+  },
+  {
+   "id": "ah26",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "How is the permessage-deflate extension offer negotiated: which window bits are accepted, and when is no-context-takeover turned on, for the server versus the client?",
+   "gold": [
+    "_websocket.helpers.ws_ext_parse"
+   ],
+   "decoys": [
+    "_websocket.helpers.ws_ext_gen",
+    "web_ws.WebSocketResponse._handshake"
+   ]
+  },
+  {
+   "id": "ah27",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "In the pytest plugin, how is the teardown part of an async generator fixture run after the test finishes?",
+   "gold": [
+    "pytest_plugin.finalizer"
+   ],
+   "decoys": [
+    "pytest_plugin.pytest_fixture_setup",
+    "pytest_plugin.wrapper"
+   ]
+  },
+  {
+   "id": "ah28",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "How do I push bytes back onto the front of a stream reader's buffer, and is that still supported?",
+   "gold": [
+    "streams.StreamReader.unread_data"
+   ],
+   "decoys": [
+    "streams.StreamReader.feed_data",
+    "streams.StreamReader.readany"
+   ]
+  },
+  {
+   "id": "ah29",
+   "repo": "aiohttp",
+   "category": "io_sink",
+   "question": "How do I add a JSON-encoded part to a multipart body that is being written?",
+   "gold": [
+    "multipart.MultipartWriter.append_json"
+   ],
+   "decoys": [
+    "multipart.MultipartWriter.append_form",
+    "multipart.MultipartWriter.append_payload"
+   ]
+  },
+  {
+   "id": "ah30",
+   "repo": "aiohttp",
+   "category": "feature_logic",
+   "question": "How is an access log format string such as '%a %t %{User-Agent}i' turned into a template plus the list of functions that fill each placeholder?",
+   "gold": [
+    "web_log.AccessLogger.compile_format"
+   ],
+   "decoys": [
+    "web_log.AccessLogger.log",
+    "web_log.AccessLogger._format_i"
+   ]
+  },
+  {
+   "id": "ky01",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "On an update query, how do I apply some builder calls only when a runtime condition is true, leaving the query unchanged otherwise?",
+   "gold": [
+    "query-builder.update-query-builder.UpdateQueryBuilder.$if"
+   ],
+   "decoys": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.$if",
+    "query-builder.update-query-builder.UpdateQueryBuilder.where"
+   ]
+  },
+  {
+   "id": "ky02",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "When configuring the plugin that turns JSON strings in query results into objects, what defaults are used for the object strategy, the reviver and the check deciding which strings get decoded?",
+   "gold": [
+    "plugin.parse-json-results.parse-json-results-plugin.ParseJSONResultsPlugin.constructor"
+   ],
+   "decoys": [
+    "plugin.parse-json-results.parse-json-results-plugin.ParseJSONResultsPlugin.transformResult"
+   ]
+  },
+  {
+   "id": "ky03",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "What happens when an unsupported unary operator, for example a typo, is passed while building a 'not' or 'exists' style expression?",
+   "gold": [
+    "parser.unary-operation-parser.parseUnaryOperation"
+   ],
+   "decoys": [
+    "parser.unary-operation-parser.parseExists",
+    "parser.unary-operation-parser.parseNotExists"
+   ]
+  },
+  {
+   "id": "ky04",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "When inserting several rows that have different sets of keys, how are the column list and the matrix of row values built?",
+   "gold": [
+    "parser.insert-values-parser.parseInsertColumnsAndValues"
+   ],
+   "decoys": [
+    "parser.insert-values-parser.parseColumnNamesAndIndexes",
+    "parser.insert-values-parser.parseRowValues"
+   ]
+  },
+  {
+   "id": "ky05",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "With the plugin that adds a default schema to table names, how are the tables listed in a 'for update of' locking clause qualified?",
+   "gold": [
+    "plugin.with-schema.with-schema-transformer.WithSchemaTransformer.transformSelectModifier"
+   ],
+   "decoys": [
+    "plugin.with-schema.with-schema-transformer.WithSchemaTransformer.transformSchemableIdentifier",
+    "plugin.with-schema.with-schema-transformer.WithSchemaTransformer.transformReferences"
+   ]
+  },
+  {
+   "id": "ky06",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How do I attach a query-rewriting extension to just one delete query instead of the whole database instance?",
+   "gold": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.withPlugin"
+   ],
+   "decoys": [
+    "query-builder.update-query-builder.UpdateQueryBuilder.withPlugin",
+    "query-builder.delete-query-builder.DeleteQueryBuilder.$if"
+   ]
+  },
+  {
+   "id": "ky07",
+   "repo": "kysely",
+   "category": "io_sink",
+   "question": "How do I make a delete statement give back every column of the deleted rows, optionally for one table only?",
+   "gold": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.returningAll"
+   ],
+   "decoys": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.returning",
+    "query-builder.update-query-builder.UpdateQueryBuilder.returningAll"
+   ]
+  },
+  {
+   "id": "ky08",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How does the SQL compiler print an aggregate call with distinct, an order by inside the parentheses, within group, a filter clause and an over window?",
+   "gold": [
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.visitAggregateFunction"
+   ],
+   "decoys": [
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.compileList",
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.visitCase"
+   ]
+  },
+  {
+   "id": "ky09",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "When chaining union or intersect onto a select, how are those combined queries accumulated on the query node?",
+   "gold": [
+    "operation-node.select-query-node.cloneWithSetOperations"
+   ],
+   "decoys": [
+    "operation-node.select-query-node.cloneWithFrontModifier",
+    "operation-node.select-query-node.cloneWithSelections"
+   ]
+  },
+  {
+   "id": "ky10",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How do I bring additional tables into a delete statement, in the form that lists extra tables after the target, so they can be referenced in its where clause?",
+   "gold": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.using"
+   ],
+   "decoys": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.where",
+    "query-builder.delete-query-builder.DeleteQueryBuilder.whereRef"
+   ]
+  },
+  {
+   "id": "ky11",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How are keywords such as DISTINCT or SQL_CALC_FOUND_ROWS that appear right after SELECT added to a select query node?",
+   "gold": [
+    "operation-node.select-query-node.cloneWithFrontModifier"
+   ],
+   "decoys": [
+    "operation-node.select-query-node.cloneWithDistinctOn",
+    "operation-node.select-query-node.cloneWithSetOperations"
+   ]
+  },
+  {
+   "id": "ky12",
+   "repo": "kysely",
+   "category": "io_sink",
+   "question": "When a delete query is expected to affect a row, how do I get the first result or throw, and how can I supply my own error class or factory?",
+   "gold": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.executeTakeFirstOrThrow"
+   ],
+   "decoys": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.executeTakeFirst",
+    "query-builder.delete-query-builder.DeleteQueryBuilder.execute"
+   ]
+  },
+  {
+   "id": "ky13",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "What validates the 'on commit' option of a temporary table, and what error does an unknown action give?",
+   "gold": [
+    "parser.on-commit-action-parse.parseOnCommitAction"
+   ],
+   "decoys": [
+    "schema.create-table-builder.CreateTableBuilder.onCommit"
+   ]
+  },
+  {
+   "id": "ky14",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "In the expression builder, how do I test whether a subquery returns any row?",
+   "gold": [
+    "expression.expression-builder.createExpressionBuilder.exists"
+   ],
+   "decoys": [
+    "expression.expression-builder.createExpressionBuilder.not",
+    "parser.unary-operation-parser.parseExists"
+   ]
+  },
+  {
+   "id": "ky15",
+   "repo": "kysely",
+   "category": "io_sink",
+   "question": "With the SQL Server driver, how is each incoming row turned into an object keyed by column name while streaming, and when is the stream paused?",
+   "gold": [
+    "dialect.mssql.mssql-driver.MssqlRequest.rowListener"
+   ],
+   "decoys": [
+    "dialect.mssql.mssql-driver.MssqlRequest.readChunk",
+    "dialect.mssql.mssql-driver.MssqlConnection.streamQuery"
+   ]
+  },
+  {
+   "id": "ky16",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How are identifier quote characters inside a table or column name escaped when the SQL is compiled?",
+   "gold": [
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.sanitizeIdentifier"
+   ],
+   "decoys": [
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.compileUnwrappedIdentifier",
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.sanitizeJSONPathMemberValue"
+   ]
+  },
+  {
+   "id": "ky17",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How does the database class tell whether its constructor received an already-built set of internal props rather than a user config?",
+   "gold": [
+    "kysely.isKyselyProps"
+   ],
+   "decoys": [
+    "kysely.assertNotCommittedOrRolledBack"
+   ]
+  },
+  {
+   "id": "ky18",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "In a MERGE statement, how do I add a row for source rows that have no match in the target?",
+   "gold": [
+    "query-builder.merge-query-builder.NotMatchedThenableMergeQueryBuilder.thenInsertValues"
+   ],
+   "decoys": [
+    "query-builder.merge-query-builder.NotMatchedThenableMergeQueryBuilder.thenDoNothing"
+   ]
+  },
+  {
+   "id": "ky19",
+   "repo": "kysely",
+   "category": "io_sink",
+   "question": "On SQL Server, how is a transaction or a savepoint rolled back through the callback-based driver?",
+   "gold": [
+    "dialect.mssql.mssql-driver.MssqlConnection.rollbackTransaction"
+   ],
+   "decoys": [
+    "dialect.mssql.mssql-driver.MssqlConnection.commitTransaction",
+    "dialect.mssql.mssql-driver.MssqlConnection.savepoint"
+   ]
+  },
+  {
+   "id": "ky20",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How is a savepoint statement such as SAVEPOINT or RELEASE SAVEPOINT built so that the savepoint's name is escaped?",
+   "gold": [
+    "parser.savepoint-parser.parseSavepointCommand"
+   ],
+   "decoys": [
+    "dialect.mssql.mssql-driver.MssqlConnection.savepoint"
+   ]
+  },
+  {
+   "id": "ky21",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "Which plugin logic rewrites 'column = null' and 'column != null' into IS NULL and IS NOT NULL?",
+   "gold": [
+    "plugin.safe-null-comparison.safe-null-comparison-transformer.SafeNullComparisonTransformer.transformBinaryOperation"
+   ],
+   "decoys": [
+    "operation-node.operation-node-transformer.OperationNodeTransformer.transformBinaryOperation",
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.visitBinaryOperation"
+   ]
+  },
+  {
+   "id": "ky22",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "In a raw SQL template, how do I insert a column name like 'person.first_name' so it is quoted as an identifier instead of being passed as a parameter?",
+   "gold": [
+    "raw-builder.sql.ref"
+   ],
+   "decoys": [
+    "raw-builder.sql.lit",
+    "raw-builder.sql.table"
+   ]
+  },
+  {
+   "id": "ky23",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "In a raw SQL template, how do I embed a value directly into the SQL text, inline, rather than as a bound parameter?",
+   "gold": [
+    "raw-builder.sql.lit"
+   ],
+   "decoys": [
+    "raw-builder.sql.ref",
+    "raw-builder.sql.val"
+   ]
+  },
+  {
+   "id": "ky24",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "What happens when code inside a transaction asks it for a reserved session to run several queries on?",
+   "gold": [
+    "kysely.Transaction.connection"
+   ],
+   "decoys": [
+    "kysely.Kysely.connection",
+    "kysely.Transaction.transaction"
+   ]
+  },
+  {
+   "id": "ky25",
+   "repo": "kysely",
+   "category": "io_sink",
+   "question": "How does the default mechanism that hands out database connections acquire one for a piece of work and guarantee it is released afterwards, even on errors?",
+   "gold": [
+    "driver.default-connection-provider.DefaultConnectionProvider.provideConnection"
+   ],
+   "decoys": [
+    "driver.runtime-driver.RuntimeDriver.acquireConnection",
+    "driver.runtime-driver.RuntimeDriver.releaseConnection"
+   ]
+  },
+  {
+   "id": "ky26",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "On Postgres, how do I select several expressions as a single JSON value keyed by name?",
+   "gold": [
+    "helpers.postgres.jsonBuildObject"
+   ],
+   "decoys": [
+    "helpers.postgres.jsonArrayFrom",
+    "helpers.postgres.jsonObjectFrom"
+   ]
+  },
+  {
+   "id": "ky27",
+   "repo": "kysely",
+   "category": "io_sink",
+   "question": "What error do I get when rolling back to a savepoint on a driver that does not support it?",
+   "gold": [
+    "driver.runtime-driver.RuntimeDriver.rollbackToSavepoint"
+   ],
+   "decoys": [
+    "driver.runtime-driver.RuntimeDriver.savepoint",
+    "driver.runtime-driver.RuntimeDriver.releaseSavepoint"
+   ]
+  },
+  {
+   "id": "ky28",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "On a delete statement's node, are tables passed to a second call of the extra-tables clause appended to the earlier ones, or do they replace them?",
+   "gold": [
+    "operation-node.delete-query-node.cloneWithUsing"
+   ],
+   "decoys": [
+    "query-builder.delete-query-builder.DeleteQueryBuilder.using",
+    "operation-node.select-query-node.cloneWithSetOperations"
+   ]
+  },
+  {
+   "id": "ky29",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How does the SQL Server dialect group table column changes by kind so that added, dropped and modified columns are emitted as separate comma-joined sections?",
+   "gold": [
+    "dialect.mssql.mssql-query-compiler.MssqlQueryCompiler.compileColumnAlterations"
+   ],
+   "decoys": [
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.compileColumnAlterations",
+    "query-compiler.default-query-compiler.DefaultQueryCompiler.visitAlterTable"
+   ]
+  },
+  {
+   "id": "ky30",
+   "repo": "kysely",
+   "category": "feature_logic",
+   "question": "How do I make a unique constraint be checked immediately, rather than allowing its check to be postponed until commit?",
+   "gold": [
+    "schema.unique-constraint-builder.UniqueConstraintNodeBuilder.notDeferrable"
+   ],
+   "decoys": [
+    "schema.unique-constraint-builder.UniqueConstraintNodeBuilder.deferrable"
+   ]
+  },
+  {
+   "id": "ns01",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "How are sensitive fields such as passwords masked in logged objects, given key names and dotted paths, while coping with circular references?",
+   "gold": [
+    "common.services.utils.redact.util.createRedactor"
+   ],
+   "decoys": [
+    "common.services.utils.redact.util.redactObject",
+    "common.services.utils.redact.util.visitProperty"
+   ]
+  },
+  {
+   "id": "ns02",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "When creating an application, how is it decided whether an error during bootstrap exits the process or is thrown to the caller?",
+   "gold": [
+    "core.nest-factory.NestFactoryStatic.setAbortOnError"
+   ],
+   "decoys": [
+    "core.nest-factory.NestFactoryStatic.handleInitializationError",
+    "core.nest-factory.NestFactoryStatic.isHttpServer"
+   ]
+  },
+  {
+   "id": "ns03",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "How do I find a module's enhancer instance wrapper, for a guard, interceptor or pipe, by its internal id?",
+   "gold": [
+    "core.injector.module.Module.getInjectableById"
+   ],
+   "decoys": [
+    "core.injector.module.Module.getProviderById",
+    "core.injector.module.Module.getControllerById"
+   ]
+  },
+  {
+   "id": "ns04",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "With the Kafka client, which partition is used for responses to a request topic, and what error occurs when the consumer has no assignment for that topic?",
+   "gold": [
+    "microservices.client.client-kafka.ClientKafka.getReplyTopicPartition"
+   ],
+   "decoys": [
+    "microservices.client.client-kafka.ClientKafka.setConsumerAssignments",
+    "microservices.client.client-kafka.ClientKafka.bindTopics"
+   ]
+  },
+  {
+   "id": "ns05",
+   "repo": "nest",
+   "category": "routing",
+   "question": "How do I make my own route-parameter decorator that extracts data from the request, and how are pipes passed to it registered?",
+   "gold": [
+    "common.decorators.http.create-route-param-metadata.decorator.createParamDecorator"
+   ],
+   "decoys": [
+    "common.decorators.http.create-route-param-metadata.decorator.isPipe",
+    "core.router.router-execution-context.RouterExecutionContext.exchangeKeysForValues"
+   ]
+  },
+  {
+   "id": "ns06",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "When a Fastify multipart file is saved to disk, how is an upload stream that closes before it finishes detected and turned into an error?",
+   "gold": [
+    "platform-fastify.multipart.storage.disk.storage.rejectWhenCutOff"
+   ],
+   "decoys": [
+    "platform-fastify.multipart.storage.disk.storage.diskStorage._handleFile",
+    "platform-fastify.multipart.storage.disk.storage.store"
+   ]
+  },
+  {
+   "id": "ns07",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "In the REPL, how are the built-in helper functions exposed on the global scope, and how is their help text attached to each?",
+   "gold": [
+    "core.repl.repl-context.ReplContext.registerFunctionIntoGlobalScope"
+   ],
+   "decoys": [
+    "core.repl.repl-context.ReplContext.initializeNativeFunctions",
+    "core.repl.repl-context.ReplContext.addNativeFunction"
+   ]
+  },
+  {
+   "id": "ns08",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "How does the MQTT client establish its broker session only once, register its event listeners, and stop caching a failed attempt when automatic retrying is turned off?",
+   "gold": [
+    "microservices.client.client-mqtt.ClientMqtt.connect"
+   ],
+   "decoys": [
+    "microservices.client.client-mqtt.ClientMqtt.registerConnectListener",
+    "microservices.client.client-mqtt.ClientMqtt.handleClose"
+   ]
+  },
+  {
+   "id": "ns09",
+   "repo": "nest",
+   "category": "routing",
+   "question": "How does a route handler notice that the HTTP client has gone away, because its socket closed, so streaming or server-sent events can stop?",
+   "gold": [
+    "core.router.router-execution-context.RouterExecutionContext.fromClientDisconnect"
+   ],
+   "decoys": [
+    "core.router.router-execution-context.RouterExecutionContext.attachSseAbortSignal",
+    "core.router.router-response-controller.RouterResponseController.sse"
+   ]
+  },
+  {
+   "id": "ns10",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "How are nested class-validator errors collected into a map from dotted property path to messages?",
+   "gold": [
+    "common.pipes.validation.pipe.ValidationPipe.groupValidationErrors"
+   ],
+   "decoys": [
+    "common.pipes.validation.pipe.ValidationPipe.flattenValidationErrors",
+    "common.pipes.validation.pipe.ValidationPipe.mapChildrenToValidationErrors"
+   ]
+  },
+  {
+   "id": "ns11",
+   "repo": "nest",
+   "category": "routing",
+   "question": "With the Kafka transport, how is an incoming topic matched to a handler when handlers were registered with regular-expression patterns?",
+   "gold": [
+    "microservices.server.server-kafka.ServerKafka.getHandlerByPattern"
+   ],
+   "decoys": [
+    "microservices.server.server-kafka.ServerKafka.isPatternMatch",
+    "microservices.server.server-kafka.ServerKafka.handleMessage"
+   ]
+  },
+  {
+   "id": "ns12",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "For microservice message handlers, how are guards run before the handler, and what error is thrown when one refuses?",
+   "gold": [
+    "microservices.context.rpc-context-creator.RpcContextCreator.createGuardsFn"
+   ],
+   "decoys": [
+    "core.router.router-execution-context.RouterExecutionContext.createGuardsFn",
+    "microservices.context.rpc-context-creator.RpcContextCreator.createPipesFn"
+   ]
+  },
+  {
+   "id": "ns13",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "When piping a streamed file response breaks, how is the stream cleaned up and the error reported?",
+   "gold": [
+    "core.router.router-response-controller.RouterResponseController.fail"
+   ],
+   "decoys": [
+    "core.router.router-response-controller.RouterResponseController.endStream",
+    "core.router.router-response-controller.RouterResponseController.onClose"
+   ]
+  },
+  {
+   "id": "ns14",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "When a consumer that requested transient providers is torn down, how are the transient copies made for it, nested ones included, discarded throughout its dependency tree?",
+   "gold": [
+    "core.injector.instance-wrapper.InstanceWrapper.removeTransientInstancesOf"
+   ],
+   "decoys": [
+    "core.injector.instance-wrapper.InstanceWrapper.detachFromDependencies",
+    "core.injector.instance-wrapper.InstanceWrapper.cloneTransientInstance"
+   ]
+  },
+  {
+   "id": "ns15",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "For gRPC streaming handlers declared as stream calls, how is the buffered observable drained after the handler returns, including when it returns a promise?",
+   "gold": [
+    "microservices.decorators.message-pattern.decorator.value"
+   ],
+   "decoys": [
+    "microservices.decorators.message-pattern.decorator.GrpcStreamCall",
+    "microservices.decorators.message-pattern.decorator.GrpcStreamMethod"
+   ]
+  },
+  {
+   "id": "ns16",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "How does the cross-origin request protection decide whether to reject a request using Sec-Fetch-Site, Origin and the Host or :authority header?",
+   "gold": [
+    "core.security.cross-origin-protection.CrossOriginProtection.check"
+   ],
+   "decoys": [
+    "core.security.cross-origin-protection.CrossOriginProtection.isExcluded",
+    "core.security.cross-origin-protection.CrossOriginProtection.isPathExcluded"
+   ]
+  },
+  {
+   "id": "ns17",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "How do I configure the Fastify multipart module synchronously with static options so they are injectable elsewhere?",
+   "gold": [
+    "platform-fastify.multipart.multipart.module.MultipartModule.register"
+   ],
+   "decoys": [
+    "platform-fastify.multipart.multipart.module.MultipartModule.registerAsync",
+    "platform-fastify.multipart.multipart.module.MultipartModule.createAsyncProviders"
+   ]
+  },
+  {
+   "id": "ns18",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "How does the NATS client publish a fire-and-forget message with merged headers, without waiting for a response?",
+   "gold": [
+    "microservices.client.client-nats.ClientNats.dispatchEvent"
+   ],
+   "decoys": [
+    "microservices.client.client-nats.ClientNats.publish",
+    "microservices.client.client-nats.ClientNats.mergeHeaders"
+   ]
+  },
+  {
+   "id": "ns19",
+   "repo": "nest",
+   "category": "routing",
+   "question": "How does a WebSocket gateway's handleConnection hook get called for each new client without firing twice for the same socket?",
+   "gold": [
+    "websockets.web-sockets-controller.WebSocketsController.subscribeConnectionEvent"
+   ],
+   "decoys": [
+    "websockets.web-sockets-controller.WebSocketsController.getConnectionHandler",
+    "websockets.web-sockets-controller.WebSocketsController.connectGatewayToServer"
+   ]
+  },
+  {
+   "id": "ns20",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "How do I get the underlying Redis publisher and subscriber clients from the Redis transport client, and what happens if it has not connected yet?",
+   "gold": [
+    "microservices.client.client-redis.ClientRedis.unwrap"
+   ],
+   "decoys": [
+    "microservices.client.client-redis.ClientRedis.createClient",
+    "microservices.client.client-redis.ClientRedis.getClientOptions"
+   ]
+  },
+  {
+   "id": "ns21",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "How does the gRPC server start serving, and how are errors while creating its client reported?",
+   "gold": [
+    "microservices.server.server-grpc.ServerGrpc.listen"
+   ],
+   "decoys": [
+    "microservices.server.server-grpc.ServerGrpc.start",
+    "microservices.server.server-grpc.ServerGrpc.createClient"
+   ]
+  },
+  {
+   "id": "ns22",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "When a module is added to the DI container, how is it marked global, and why are global modules given the maximum distance?",
+   "gold": [
+    "core.injector.container.NestContainer.setModule"
+   ],
+   "decoys": [
+    "core.injector.container.NestContainer.addModule",
+    "core.injector.container.NestContainer.isGlobalModule"
+   ]
+  },
+  {
+   "id": "ns23",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "How is a guard's canActivate outcome normalised when it gives back a boolean, a promise or an observable, even one from another copy of rxjs?",
+   "gold": [
+    "core.guards.guards-consumer.GuardsConsumer.pickResult"
+   ],
+   "decoys": [
+    "core.guards.guards-consumer.GuardsConsumer.tryActivate",
+    "core.guards.guards-consumer.GuardsConsumer.createContext"
+   ]
+  },
+  {
+   "id": "ns24",
+   "repo": "nest",
+   "category": "routing",
+   "question": "When detecting conflicting routes, how are host restrictions compared, and when are two routes with no host restriction considered able to collide?",
+   "gold": [
+    "core.router.route-conflict-detector.RouteConflictDetector.hostsCanOverlap"
+   ],
+   "decoys": [
+    "core.router.route-conflict-detector.RouteConflictDetector.hostValuesCanMatchSameRequest",
+    "core.router.route-conflict-detector.RouteConflictDetector.pathsCanOverlap"
+   ]
+  },
+  {
+   "id": "ns25",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "When a microservice starts, how are its socket gateways, clients and listeners set up, and what changes when it is attached to a hybrid HTTP application?",
+   "gold": [
+    "microservices.nest-microservice.NestMicroservice.registerModules"
+   ],
+   "decoys": [
+    "microservices.nest-microservice.NestMicroservice.init",
+    "microservices.nest-microservice.NestMicroservice.registerListeners"
+   ]
+  },
+  {
+   "id": "ns26",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "For discovery by metadata key, how is a provider wrapper stored so that the same provider is kept only once even after its wrapper is re-created?",
+   "gold": [
+    "core.discovery.discoverable-meta-host-collection.DiscoverableMetaHostCollection.insertByMetaKey"
+   ],
+   "decoys": [
+    "core.discovery.discoverable-meta-host-collection.DiscoverableMetaHostCollection.getProvidersByMetaKey",
+    "core.discovery.discoverable-meta-host-collection.DiscoverableMetaHostCollection.inspectProvider"
+   ]
+  },
+  {
+   "id": "ns27",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "How does a module reference build a brand-new instance of a class outside the container, resolving its constructor and property dependencies?",
+   "gold": [
+    "core.injector.module-ref.instantiateClass"
+   ],
+   "decoys": [
+    "core.injector.module-ref.loadInstance",
+    "core.injector.module-ref.introspect"
+   ]
+  },
+  {
+   "id": "ns28",
+   "repo": "nest",
+   "category": "io_sink",
+   "question": "How are module-level and per-route Fastify multipart options merged, and when are the upload limits validated?",
+   "gold": [
+    "platform-fastify.multipart.multipart.multipart-interceptor.factory.constructor"
+   ],
+   "decoys": [
+    "platform-fastify.multipart.multipart.multipart-interceptor.factory.createMultipartInterceptor",
+    "platform-fastify.multipart.multipart.multipart-interceptor.factory.setUpHttpAdapter"
+   ]
+  },
+  {
+   "id": "ns29",
+   "repo": "nest",
+   "category": "feature_logic",
+   "question": "How is a useValue provider registered in a module, including wrapping it with an instrumentation instance decorator and marking promises as async?",
+   "gold": [
+    "core.injector.module.Module.addCustomValue"
+   ],
+   "decoys": [
+    "core.injector.module.Module.addCustomFactory",
+    "core.injector.module.Module.addCustomClass"
+   ]
+  },
+  {
+   "id": "ns30",
+   "repo": "nest",
+   "category": "routing",
+   "question": "How are several interceptors chained so that each one's next.handle() call runs the following interceptor and finally the route handler?",
+   "gold": [
+    "core.interceptors.interceptors-consumer.InterceptorsConsumer.nextFn"
+   ],
+   "decoys": [
+    "core.interceptors.interceptors-consumer.InterceptorsConsumer.intercept",
+    "core.interceptors.interceptors-consumer.InterceptorsConsumer.transformDeferred"
+   ]
+  }
+ ],
+ "skips": [
+  {
+   "repo": "werkzeug",
+   "name": "datastructures.structures._OrderedMultiDict.poplist",
+   "reason": "duplicate",
+   "note": "same behaviour as the MultiDict question (remove a key, get all its values)"
+  },
+  {
+   "repo": "werkzeug",
+   "name": "datastructures.headers.Headers.add_header",
+   "reason": "trivial",
+   "note": "alias that calls add()"
+  },
+  {
+   "repo": "werkzeug",
+   "name": "debug.shared.debugger.createConsole",
+   "reason": "trivial",
+   "note": "creates an empty DOM element"
+  },
+  {
+   "repo": "aiohttp",
+   "name": "web_request.BaseRequest.path",
+   "reason": "trivial",
+   "note": "returns an attribute of the relative URL"
+  },
+  {
+   "repo": "aiohttp",
+   "name": "payload.BytesPayload.write",
+   "reason": "trivial",
+   "note": "one awaited writer.write call"
+  },
+  {
+   "repo": "aiohttp",
+   "name": "tracing.TraceConfig.on_connection_queued_start",
+   "reason": "trivial",
+   "note": "property returning a stored signal"
+  },
+  {
+   "repo": "aiohttp",
+   "name": "payload.IOBasePayload.close",
+   "reason": "trivial",
+   "note": "calls _close()"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.operation-node-transformer.OperationNodeTransformer.transformAlias",
+   "reason": "trivial",
+   "note": "rebuilds an alias node from its transformed children"
+  },
+  {
+   "repo": "kysely",
+   "name": "schema.drop-index-builder.DropIndexBuilder.toOperationNode",
+   "reason": "trivial",
+   "note": "passes the node through the executor's transform"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.on-conflict-node.cloneWith",
+   "reason": "trivial",
+   "note": "generic shallow copy with new props"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.operation-node-transformer.OperationNodeTransformer.transformReferences",
+   "reason": "trivial",
+   "note": "rebuilds a references node from its transformed children"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.tuple-node.create",
+   "reason": "trivial",
+   "note": "node constructor"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.returning-node.create",
+   "reason": "trivial",
+   "note": "node constructor"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.create-index-node.cloneWith",
+   "reason": "trivial",
+   "note": "generic shallow copy with new props"
+  },
+  {
+   "repo": "kysely",
+   "name": "query-builder.delete-query-builder.DeleteQueryBuilder.$assertType",
+   "reason": "unaskable",
+   "note": "changes only the static type; no runtime behaviour"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.or-action-node.create",
+   "reason": "trivial",
+   "note": "node constructor"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.select-query-node.cloneWithFetch",
+   "reason": "trivial",
+   "note": "copies the node with one field set"
+  },
+  {
+   "repo": "kysely",
+   "name": "operation-node.operation-node-transformer.OperationNodeTransformer.transformPrimitiveValueList",
+   "reason": "trivial",
+   "note": "returns the node unchanged"
+  },
+  {
+   "repo": "kysely",
+   "name": "plugin.safe-null-comparison.safe-null-comparison-plugin.SafeNullComparisonPlugin.transformResult",
+   "reason": "trivial",
+   "note": "returns the result unchanged"
+  },
+  {
+   "repo": "kysely",
+   "name": "query-builder.update-query-builder.UpdateQueryBuilder.withPlugin",
+   "reason": "duplicate",
+   "note": "same behaviour as the delete-query plugin question"
+  },
+  {
+   "repo": "kysely",
+   "name": "kysely.Transaction.$pickTables",
+   "reason": "unaskable",
+   "note": "changes only the static type; no runtime behaviour"
+  },
+  {
+   "repo": "kysely",
+   "name": "query-builder.aggregate-function-builder.AliasedAggregateFunctionBuilder.toOperationNode",
+   "reason": "trivial",
+   "note": "wraps the node in an alias node"
+  },
+  {
+   "repo": "nest",
+   "name": "core.helpers.external-context-creator.ExternalContextCreator.getParamsMetadata",
+   "reason": "trivial",
+   "note": "closure forwarding to exchangeKeysForValues"
+  },
+  {
+   "repo": "nest",
+   "name": "core.router.router-response-controller.RouterResponseController.commitHeaders",
+   "reason": "trivial",
+   "note": "two-line try/catch closure"
+  },
+  {
+   "repo": "nest",
+   "name": "microservices.errors.invalid-packet-id.exception.InvalidPacketIdException.constructor",
+   "reason": "trivial",
+   "note": "exception constructor with a message"
+  }
+ ],
+ "frozen_note": "Frozen before any engine, search, ranking or summarizer ran on these repositories (only the name-only pool of select.py and check.py). 120 questions, 30 per repository, written in draw.json order with 25 recorded skips; check.py 0 violations. questions_sha256 below. To be scored once with score.py under the rule in README.md; never edited after the freeze.",
+ "questions_sha256": "d6f3b12fbe0bf8bf8d9e7cd96d6603f9aa45f450c9e10ad751ea95458c51ec2f"
 }

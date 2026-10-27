@@ -1,4 +1,4 @@
-# Held-out set 7 (draft until frozen)
+# Held-out set 7 (frozen, version 1)
 
 The decision set for **digest-grounded summaries** (`prism.summaries.digest`): does a one-sentence summary
 written from PRISM's digest of a function rank as well as one written from the function's raw source, and
@@ -92,6 +92,12 @@ Readings:
 - results per repository, and split by whether the gold function is longer than 60 lines (SRC truncates there);
 - mean sentence words per arm;
 - generation time and failures.
+
+## Status
+
+Frozen: 120 questions (30 per repository; 71 feature_logic, 34 io_sink, 15 routing), 25 recorded skips
+(werkzeug 3, aiohttp 4, kysely 15, nest 3), `check.py` 0 violations; `questions_sha256` in `dataset.json`.
+Not scored yet.
 
 ## Order
 
