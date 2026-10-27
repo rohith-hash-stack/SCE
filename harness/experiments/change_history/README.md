@@ -234,5 +234,6 @@ other commits, with the same rules.
   `self.decoder.decode(...)`, which is linked to `GZipDecoder.decode` by name only; the statement says so
   ("possible"). The others are mostly "too many positional arguments" in Flask callers that may have been
   changed in a later commit.
-- **Misses:** mostly changes that no signature shows: a different return value, new behaviour, or keyword
-  arguments passed through `**kwargs`.
+- **Misses:** recall depends on what changed. When the parameter list changed, 131 of 167 changed callers
+  are flagged (78%). When only the raised errors or empty returns changed, 0 of 54 are: those get only a
+  `check` statement, by design, and are not counted here.
