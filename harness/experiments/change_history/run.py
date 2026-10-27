@@ -188,9 +188,18 @@ def parse_answer(raw: str) -> list[dict]:
     return [c for c in changes if isinstance(c, dict) and c.get("function")]
 
 
+def _is_anchor(change: dict, task: dict) -> bool:
+    """The model's own restatement of the anchor - not a same-named function elsewhere (`App.redirect` vs
+    `helpers.redirect`): a stated file must be the anchor's, and a stated class the anchor's."""
+    if not _matches(change["function"], task["anchor"]):
+        return False
+    stated = (change.get("file") or "").strip().lstrip("./")
+    return not stated or stated == task["anchor_file"] or task["anchor_file"].endswith(stated)
+
+
 def score_task(task: dict, raw: str) -> dict:
     lang = "python" if task["anchor_file"].endswith(".py") else "js"
-    changes = [c for c in parse_answer(raw) if not _matches(c["function"], task["anchor"])]
+    changes = [c for c in parse_answer(raw) if not _is_anchor(c, task)]
     found, edits = [], []
     used = set()
     for caller in task["changed_callers"]:

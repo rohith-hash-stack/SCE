@@ -68,3 +68,14 @@ def test_scoring_against_the_commit():
 def test_wrong_class_is_not_a_match():
     answer = json.dumps({"changes": [{"function": "Other.port", "new_code": "def port(self): pass"}]})
     assert run.score_task(TASK, answer)["found"] == []
+
+
+def test_a_same_named_caller_in_another_file_is_not_the_anchor():
+    task = {**TASK, "anchor": "pkg.app.App.redirect", "anchor_file": "pkg/app.py",
+            "changed_callers": [{"qname": "pkg.helpers.redirect", "file": "pkg/helpers.py", "name": "redirect",
+                                 "old": "def redirect(code=302):\n    pass\n", "new": "def redirect(code=303):\n    pass\n"}]}
+    other_file = json.dumps({"changes": [{"function": "redirect", "file": "pkg/helpers.py",
+                                          "new_code": "def redirect(code=303):\n    pass\n"}]})
+    assert run.score_task(task, other_file)["found"] == ["pkg.helpers.redirect"]
+    same_file = json.dumps({"changes": [{"function": "redirect", "file": "pkg/app.py", "new_code": "x"}]})
+    assert run.score_task(task, same_file)["found"] == []  # the model restating the anchor itself
