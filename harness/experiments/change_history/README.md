@@ -221,3 +221,18 @@ The check on the 19 tasks, without a model (rules frozen in this commit):
 | production callers that did not change (false alarms) | 0 of 9 |
 
 Prompt sizes (mean / largest tokens): FILE 3,578 / 5,567; PRISM 6,133 / 9,895; PRISM_BREAKS 6,329 / 10,096.
+
+Development data (after the rules were frozen; `breaks/dev_check.json`): the forced candidates of the 124
+other commits, with the same rules.
+
+| | flagged |
+|---|---|
+| callers that had to change | 131 of 221 (59%) |
+| production callers that did not change | 14 of 96 (15%) |
+
+- **False alarms:** six of the 14 come from one httpx commit. There, `TextDecoder.decode` calls
+  `self.decoder.decode(...)`, which is linked to `GZipDecoder.decode` by name only; the statement says so
+  ("possible"). The others are mostly "too many positional arguments" in Flask callers that may have been
+  changed in a later commit.
+- **Misses:** mostly changes that no signature shows: a different return value, new behaviour, or keyword
+  arguments passed through `**kwargs`.
