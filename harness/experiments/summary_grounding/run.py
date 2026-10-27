@@ -1,4 +1,5 @@
-"""Summary grounding on set 6: summaries written from the function's own source (README.md).
+"""Summary grounding: summaries written from the function's own source (README.md), on set 6 and on held-out
+set 7 (harness/experiments/heldout_retrieval/set7/README.md: BASE, V2, SRC, DIGEST).
 
 `generate` writes the SRC and SRCC summaries of every function in each set-6 repository, resumably
 (`<out>/<repo>/{src,srcc}.json`, checkpointed every CHECKPOINT functions). `score` ranks the frozen set-6
@@ -7,8 +8,13 @@ questions with BASE, V2 (the tracked locked index), SRC, SRCC and SRCC_PLUS and 
 
 Usage:
   python -m harness.experiments.summary_grounding.run generate APPS OUT [--base-urls URLS] [--threads N] [--model M]
-                                                            [--arms src,srcc | long]
-  python -m harness.experiments.summary_grounding.run score APPS OUT
+                                                            [--arms src,srcc | long | v2,src,digest] [--set 6|7]
+  python -m harness.experiments.summary_grounding.run score APPS OUT            (set 6)
+  python -m harness.experiments.heldout_retrieval.set7.score APPS OUT OUT_DIR    (set 7)
+
+`--set 7` generates for set 7's repositories. Its `v2` arm runs the shipped summarizer
+(`prism.summaries.pipeline.build_index`, checkpointed to `<out>/<repo>/v2.json`); `digest` is SRC's prompt with the
+function's digest (`prism.summaries.digest`) in place of its source, and nothing else changed.
 """
 from __future__ import annotations
 
@@ -36,6 +42,9 @@ _V2_LENGTH, _LONG_LENGTH = "8 to 14 words", "12 to 15 words"
 LONG_PROMPT = SUMMARY_PROMPT.replace(_V2_LENGTH, _LONG_LENGTH)
 LONG_REPAIR_PROMPT = REPAIR_PROMPT.replace(_V2_LENGTH, _LONG_LENGTH)
 assert LONG_PROMPT != SUMMARY_PROMPT and LONG_REPAIR_PROMPT != REPAIR_PROMPT, "v2 prompts no longer state the length"
+#: Every arm `generate` can write, and the arms a run on set 7 writes.
+ALL_ARMS = ("src", "srcc", "long", "v2", "digest")
+SET7_ARMS = ("v2", "src", "digest")
 FACT_TYPES = ("condition", "exception", "state_change", "return", "external_call", "computation")
 CHECKPOINT = 50
 ALPHA, MAX_RECALL5_DROP = 0.05, 0.02
@@ -56,6 +65,14 @@ SRC_PROMPT = (
     "developer would use when asking about this behaviour. Base it on the source: what it checks, computes, changes, "
     "sends, raises or returns.\n" + _RULES +
     "Respond with a JSON object {{\"summary\": \"<the sentence>\"}}.")
+
+#: SRC's prompt with the digest in place of the source block - the only difference between the two arms.
+_SRC_BLOCK = "Source (lines {start}-{end}):\n{body}"
+_DIGEST_BLOCK = ("Digest of its code (lines {start}-{end}): each line is a fact with its line numbers, indented under "
+                 "the conditions it runs in; a call shows its target and how sure that target is:\n{body}")
+DIGEST_PROMPT = (SRC_PROMPT.replace(_SRC_BLOCK, _DIGEST_BLOCK).replace("Base it on the source:", "Base it on the digest:")
+                 .replace("present in the profile and source;", "present in the profile and digest;"))
+assert DIGEST_PROMPT.lower().count("digest") == 3 and "Source (lines" not in DIGEST_PROMPT, "SRC prompt changed: update DIGEST_PROMPT"
 
 SRCC_PROMPT = (
     "You are an expert software architect describing a function for a code search index.\n\n"
@@ -177,11 +194,18 @@ def generate_repo(llm, apps: Path, repo: str, spec: dict, out: Path, threads: in
     root, builder, base, fns, entries = corpus(apps, repo, spec)
     out.mkdir(parents=True, exist_ok=True)
     stats = {}
+    digests = None
     for arm in arms:
         path = out / f"{arm}.json"
         if arm == "long":
             stats[arm] = generate_long(llm, builder, entries, fns, path, threads, log, f"{repo}/{arm}")
             continue
+        if arm == "v2":
+            stats[arm] = generate_v2(llm, builder, root, path, threads, log, f"{repo}/{arm}")
+            continue
+        if arm == "digest" and digests is None:
+            from prism.summaries.digest import DigestBuilder
+            digests = DigestBuilder(builder, entries)
         done = _load(path)
         todo = [s for s in fns if s.qualified_name not in done]
         log(f"{repo}/{arm}: {len(fns)} functions, {len(done)} done, {len(todo)} to write")
@@ -196,6 +220,11 @@ def generate_repo(llm, apps: Path, repo: str, spec: dict, out: Path, threads: in
             if arm == "src":
                 got = llm.json(SRC_PROMPT.format(card=c["card"], start=start, end=shown_end, body=body), max_out=200) or {}
                 entry = {}
+            elif arm == "digest":
+                d = digests.digest(q)
+                got = llm.json(DIGEST_PROMPT.format(card=c["card"], start=d.lines[0], end=d.lines[1],
+                                                    body=d.render(header=False) or "(no facts)"), max_out=200) or {}
+                entry, cut = {"omitted": sum(d.omitted.values())}, False
             else:
                 res = ", ".join(resources(builder, q)) or "none"
                 got = llm.json(SRCC_PROMPT.format(card=c["card"], resources=res, start=start, end=shown_end, body=body),
@@ -222,6 +251,28 @@ def generate_repo(llm, apps: Path, repo: str, spec: dict, out: Path, threads: in
         _save(path, done)
         stats[arm] = {"functions": len(fns), "written": len(done), "seconds": round(time.time() - t0, 1)}
     return stats
+
+
+def generate_v2(llm, builder, root: str, path: Path, threads: int, log, label: str) -> dict:
+    """The V2 arm on new repositories: the shipped summarizer, `prism.summaries.pipeline.build_index`, unchanged.
+    It keeps its own index at `<root>/.prism/summaries.json`; that file is restored from `path` before the run
+    (resume) and copied back to `path` at every checkpoint and at the end."""
+    import shutil
+    from prism.summaries.index import index_path
+    from prism.summaries.pipeline import build_index
+    live = Path(index_path(root))
+    if path.exists():
+        live.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, live)
+
+    def log_and_copy(message: str) -> None:
+        log(f"{label}: {message}")
+        if message.startswith("checkpoint") and live.exists():
+            shutil.copyfile(live, path)
+    t0 = time.time()
+    counts = build_index(builder, root, llm=llm, threads=threads, log=log_and_copy)
+    shutil.copyfile(live, path)
+    return {**counts, "seconds": round(time.time() - t0, 1)}
 
 
 def frozen_set6() -> dict:
@@ -363,7 +414,9 @@ def main(argv=None) -> int:
     g.add_argument("--threads", type=int, default=2)
     g.add_argument("--model", default=LOCKED_MODEL)
     g.add_argument("--repos", default="")
-    g.add_argument("--arms", default=",".join(GENERATED), help="summary arms to write: src, srcc, long")
+    g.add_argument("--arms", default="", help="summary arms to write: src, srcc, long, v2, digest "
+                   "(default: src,srcc for set 6; v2,src,digest for set 7)")
+    g.add_argument("--set", type=int, choices=(6, 7), default=6, dest="set_id")
     s = sub.add_parser("score")
     s.add_argument("apps", type=Path)
     s.add_argument("out", type=Path)
@@ -371,14 +424,19 @@ def main(argv=None) -> int:
                    help="score although a generated arm covers < 95%% of functions (scoring-path check only)")
     args = ap.parse_args(argv)
     if args.cmd == "generate":
-        ds = frozen_set6()
+        if args.set_id == 7:
+            from harness.experiments.heldout_retrieval.set7.score import frozen_dataset as frozen_set7
+            ds = frozen_set7()
+        else:
+            ds = frozen_set6()
         llm = Ollama(args.model, [u for u in args.base_urls.split(",") if u])
         want = [r for r in args.repos.split(",") if r] or list(ds["repos"])
-        arms = tuple(a for a in args.arms.split(",") if a)
-        if not arms or set(arms) - set(GENERATED + ("long",)):
-            raise SystemExit(f"--arms must name src, srcc and/or long, got {args.arms!r}")
+        arms = tuple(a for a in args.arms.split(",") if a) or (SET7_ARMS if args.set_id == 7 else GENERATED)
+        if set(arms) - set(ALL_ARMS):
+            raise SystemExit(f"--arms must name {', '.join(ALL_ARMS)}, got {args.arms!r}")
         stats = {r: generate_repo(llm, args.apps, r, ds["repos"][r], args.out / r, args.threads, arms=arms) for r in want}
-        name = "generation.json" if arms == GENERATED else f"generation_{'_'.join(arms)}.json"
+        name = "generation.json" if arms in (GENERATED, SET7_ARMS) else f"generation_{'_'.join(arms)}.json"
+        args.out.mkdir(parents=True, exist_ok=True)
         (args.out / name).write_text(json.dumps({"model": args.model, "arms": arms, "stats": stats, "llm": llm.usage}, indent=1) + "\n")
         print(json.dumps(stats, indent=1))
         return 0

@@ -77,3 +77,15 @@ python -m harness.experiments.summary_grounding.run score <apps_dir> <out_dir>
 
 `<apps_dir>/<repo>` holds the pinned checkout (`kaggle/summary_grounding_cell.py` prepares it). Generation is
 resumable: summaries are checkpointed to `<out_dir>/<repo>/<arm>.json`.
+
+## Held-out decision: set 7 (DIGEST vs SRC vs V2)
+
+The decision on digest-grounded summaries is made on held-out set 7, under its own pre-registered rule:
+`harness/experiments/heldout_retrieval/set7/README.md` (frozen, `questions_sha256` in its `dataset.json`).
+`generate --set 7` writes the three arms for set 7's repositories:
+- `v2`: the shipped summarizer, `prism.summaries.pipeline.build_index`, unchanged;
+- `src`: as above;
+- `digest`: SRC's prompt with the function's digest (`prism.summaries.digest`) in place of its source, and
+  nothing else changed.
+
+`harness/experiments/heldout_retrieval/set7/score.py` scores them once. Kaggle: `kaggle/set7_digest_cell.py`.
