@@ -56,6 +56,9 @@ def build_env(repo_name: str, work: str, cache: str) -> tuple[str | None, str]:
     if r.returncode:
         return None, "\n".join(log)
     env = dict(os.environ, AIOHTTP_NO_EXTENSIONS="1", SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0")
+    if os.path.exists(os.path.join(work, ".gitmodules")):  # e.g. aiohttp's vendored llhttp: needed to install
+        r = _run(["git", "-C", work, "submodule", "update", "--init", "--depth", "1"])
+        log.append(f"submodules: {r.returncode} {r.stderr[-300:]}")
     reqs = []
     for g in REQ_GLOBS:
         reqs += sorted(glob.glob(os.path.join(work, g)))

@@ -3,7 +3,7 @@
     python -m harness.experiments.suite.run generate TYPE TASKS.json OUT_DIR [--base-url URL] [--model M] [--threads 1]
     python -m harness.experiments.suite.run score TYPE TASKS.json OUT_DIR
 
-TYPE is `bugs` (type 3) or `newfn` (type 2). Type 6 (`testgen`) uses this `generate`, but is scored by running
+TYPE is `bugs` (type 3), `newfn` (type 2), `blast` (type 4) or `concepts` (type 5). Type 6 (`testgen`) uses this `generate`, but is scored by running
 the tests (`testgen score`). Type 1 runs with `harness.experiments.change_history.run`.
 
 The model settings are those of every earlier run: temperature 0.2, seed 42, a 20,480-token window and
@@ -22,7 +22,8 @@ from pathlib import Path
 from harness.experiments.change_history.run import MODEL, ollama
 
 TYPES = {"bugs": "harness.experiments.suite.bugs", "newfn": "harness.experiments.suite.newfn",
-         "testgen": "harness.experiments.suite.testgen"}
+         "testgen": "harness.experiments.suite.testgen", "blast": "harness.experiments.suite.blast",
+         "concepts": "harness.experiments.suite.concepts"}
 
 
 def _load(path: Path) -> dict:
