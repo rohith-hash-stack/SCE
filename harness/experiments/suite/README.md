@@ -41,8 +41,12 @@ one candidate commit.
 - **Source:** commits that add one new function (6-60 lines, not a test, not nested, not `__dunder__`)
   whose body calls at least two functions that already existed (resolved in the parent's index). At most 3
   changed source files.
-- **The task:** the file at the parent, the new function's signature and docstring (or the commit subject
-  when it has none) at its real place; the AI writes the body.
+- **The task:** the file at the parent, the new function's signature and its description at its real place;
+  the AI writes the body.
+- **Amendment (before selection, from a sample of candidates):**
+  - a description is required: the docstring (Python) or the `/** */` comment above the function
+    (JavaScript), at least 5 words. A commit subject was too often unrelated to the function;
+  - the function's class must already exist at the parent.
 - **Versions:**
   - `FILE`: the file;
   - `PRISM`: + `prism.impact.newcode`'s context: helpers that fit (by name, docstring and group), their
@@ -56,8 +60,13 @@ one candidate commit.
 
 ### 3. Bug localisation: which functions must change to fix this bug
 
-- **Source:** commits whose subject says they fix something (`fix`, `bug`, `regression`, `crash`,
-  `error`, `issue`) and which also change a test. The commit must modify 1-4 existing source functions in
+- **Source:** commits whose subject says they fix something and which also change a test.
+- **Amendment (before selection, from a sample of candidates):**
+  - only `fix`, `bug`, `regression`, `crash`, `broken`, `incorrect` and `wrong` count: `error` and
+    `issue` also matched refactors;
+  - at least 8 words besides "fix"/"bug" and the masks are required;
+  - SVN/Mercurial conversion lines are removed;
+  - a description in which an answer name survives the masking is dropped. The commit must modify 1-4 existing source functions in
   1-3 files, with at most 120 changed source lines.
 - **The bug description:** the commit's subject and body, with every name of a changed function, its class
   and its file masked as `<name>`. Descriptions shorter than 6 words after masking are dropped.
