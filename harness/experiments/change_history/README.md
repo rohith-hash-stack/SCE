@@ -237,3 +237,22 @@ other commits, with the same rules.
 - **Misses:** recall depends on what changed. When the parameter list changed, 131 of 167 changed callers
   are flagged (78%). When only the raised errors or empty returns changed, 0 of 54 are: those get only a
   `check` statement, by design, and are not counted here.
+
+## Note: token counts and the context window (checked after run 2)
+
+The token figures above come from PRISM's tokenizer. On these machines it falls back to a regex
+approximation (`prism.slicer.tokenizer.is_exact()` is False), which overcounts. Recounted with the model's
+own tokenizer (Qwen2 `tokenizer.json`, the same as Qwen2.5's):
+
+| | mean prompt tokens (real) | approximation said |
+|---|---|---|
+| run 1 FILE / PRISM | 3,071 / 5,692 (1.85x) | 4,701 / 8,208 (1.75x) |
+| run 2 FILE / PRISM / PRISM_MAP | 2,689 / 4,731 / 5,209 | 4,204 / 7,074 / 7,675 |
+| run 3 FILE / PRISM / PRISM_BREAKS | 2,307 / 4,275 / 4,428 | 3,578 / 6,133 / 6,329 |
+
+No call came near its window:
+- The largest prompt plus answer was 11,136 tokens of the 20,480 window (run 1, ch09).
+- The longest answer was 3,083 tokens of the 4,096 cap.
+- All 58 answers of runs 1 and 2 are complete JSON.
+- Run 3's largest prompt is 6,902 tokens; with a full 4,096-token answer it would still be 10,998.
+- The map calls of run 2 (8,192 window) were at most 1,583 tokens, and none came back empty.
