@@ -115,6 +115,17 @@ one candidate commit.
   - its name must be unique in the repository;
   - ties go to the one defined in the file the test file is named after (`test_tree.py` → `tree.py`);
   - commits are taken from 2019 on, because older revisions rarely install on today's Pythons.
+- **Amendment 2 (after planning showed problems on scrapy; before any model saw a type-6 task):**
+  - **Coverage:** it now runs with an empty coverage configuration. scrapy's own settings (parallel data
+    files) had made every target show 0 covered lines.
+  - **Target:**
+    - it must be defined in the file the test file is named after (`test_http_headers.py` → `headers.py`);
+    - or else be the only candidate, and a function rather than a class;
+    - otherwise the task is skipped. The old rule picked classes the tests only build as input, such as
+      `Request` for a middleware's tests.
+  - **Gate:** it now also requires the developer's tests to execute at least one line of the target.
+  - Type 6 was re-planned for all six Python repositories under these rules. The earlier frozen files
+    (marshmallow, werkzeug, rich, tornado) are replaced.
 - **The task:** write tests for the target in the test file.
 - **Versions:**
   - `FILE`: the target's file and the test file;

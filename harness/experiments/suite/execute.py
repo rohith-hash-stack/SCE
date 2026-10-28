@@ -93,7 +93,9 @@ def run_tests(py: str, work: str, test_file: str, new_text: str, names: list[str
     cov_json = tempfile.mktemp(suffix=".json")
     data = os.path.join(tempfile.mkdtemp(), ".coverage")
     try:
-        cmd = [py, "-m", "coverage", "run", f"--data-file={data}"]
+        rc_empty = os.path.join(os.path.dirname(data), "coveragerc")
+        Path(rc_empty).write_text("[run]\n")  # the repository's own coverage settings (parallel, source) are ignored
+        cmd = [py, "-m", "coverage", "run", f"--rcfile={rc_empty}", f"--data-file={data}"]
         if target_file:
             cmd.append(f"--include={os.path.join(work, target_file)}")
         cmd += ["-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:randomly", test_file, "-k",
@@ -109,7 +111,7 @@ def run_tests(py: str, work: str, test_file: str, new_text: str, names: list[str
         skipped = sum(1 for _n, body in ran if "<skipped" in body)
         covered = []
         if target_file and os.path.exists(data):
-            _run([py, "-m", "coverage", "json", f"--data-file={data}", "-o", cov_json], cwd=work)
+            _run([py, "-m", "coverage", "json", f"--rcfile={rc_empty}", f"--data-file={data}", "-o", cov_json], cwd=work)
             if os.path.exists(cov_json):
                 files = json.loads(Path(cov_json).read_text()).get("files", {})
                 for f, v in files.items():

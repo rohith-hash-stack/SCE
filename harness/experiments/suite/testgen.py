@@ -72,9 +72,11 @@ def select(cands: list[dict], seed: int) -> list[dict]:
 
 
 def choose_target(builder, tests: list[dict], test_file: str = "") -> str | None:
-    """The production function or class the new tests call most: called by at least half of them, its name
-    unique among the repository's non-test functions and classes. Ties go to the one defined in the file the
-    test file is named after (`tests/test_tree.py` -> `tree.py`), then to the name."""
+    """The subject of the new tests. Candidates: production functions and classes called by at least half of them,
+    their names unique in the repository. The target is the candidate defined in the file the test file is
+    named after (`test_tree.py` -> `tree.py`, `test_downloadermiddleware_useragent.py` -> `useragent.py`), or
+    else the only candidate when it is a function. Otherwise there is no clear target and the task is skipped:
+    a class the tests merely build as input (`Request` in a middleware's tests) is not their subject."""
     by_leaf: dict[str, list[str]] = collections.defaultdict(list)
     for q in builder._def_nodes:
         s = builder.symbol_table.get(q)
@@ -88,13 +90,15 @@ def choose_target(builder, tests: list[dict], test_file: str = "") -> str | None
     stem = os.path.splitext(os.path.basename(test_file))[0].removeprefix("test_").removesuffix("_test")
 
     def named_after(name: str) -> bool:
-        f = builder.symbol_table.get(by_leaf[name][0]).file
-        return bool(stem) and os.path.splitext(os.path.basename(f))[0] == stem
+        f = os.path.splitext(os.path.basename(builder.symbol_table.get(by_leaf[name][0]).file))[0]
+        return bool(stem) and f not in ("__init__", "utils", "misc") and (stem == f or stem.endswith("_" + f))
     eligible = [n for n, c in counts.items() if c * 2 >= len(tests)]
-    if not eligible:
-        return None
-    best = sorted(eligible, key=lambda n: (-named_after(n), -counts[n], n))[0]
-    return by_leaf[best][0]
+    named = [n for n in eligible if named_after(n)]
+    if named:
+        return by_leaf[sorted(named, key=lambda n: (-counts[n], n))[0]][0]
+    if len(eligible) == 1 and builder.symbol_table.get(by_leaf[eligible[0]][0]).kind in ("function", "method"):
+        return by_leaf[eligible[0]][0]
+    return None  # no clear subject: the tests may be about something they only construct through a helper
 
 
 def _excerpt(text: str, head: int, tail: int) -> tuple[str, str]:
@@ -122,7 +126,7 @@ def plan_one(task: dict, work: str, repo: str, envs: str) -> dict | None:
                               capture_output=True, text=True).stdout
     names = [t["name"].rsplit(".", 1)[-1] for t in task["tests"]]
     gate = run_tests(py, work, task["test_file"], new_text, names, target_file, (lo, hi))
-    if gate["ran"] == 0 or gate["failed"] or gate["passed"] == 0:
+    if gate["ran"] == 0 or gate["failed"] or gate["passed"] == 0 or not gate["covered"]:
         return {"skip": "gate", "gate": {k: v for k, v in gate.items() if k != "covered"}}
     src = Path(sym.file).read_text(errors="replace").splitlines()
     a = max(1, lo - (TARGET_WINDOW - (hi - lo + 1)) // 2)
