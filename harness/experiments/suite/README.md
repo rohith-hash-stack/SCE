@@ -109,6 +109,12 @@ one candidate commit.
 
 - **Source:** commits that only add tests: new test functions, no source change. The target is the
   production function the new tests call most (resolved in the parent's index).
+- **Amendments (before selection, from a planning trial on rich):**
+  - the target may be a class, since most tests construct one (`Tree(...)`, `Table(...)`);
+  - it must be called by at least half of the new tests;
+  - its name must be unique in the repository;
+  - ties go to the one defined in the file the test file is named after (`test_tree.py` → `tree.py`);
+  - commits are taken from 2019 on, because older revisions rarely install on today's Pythons.
 - **The task:** write tests for the target in the test file.
 - **Versions:**
   - `FILE`: the target's file and the test file;
