@@ -148,7 +148,9 @@ def build(name: str, work: Path, push: bool) -> None:
                         "--per-repo", "20"), log)
             w = wd / "tests.json"
             _subset(sel, w, name)
-            if _sh(_py("harness.experiments.suite.testgen", "plan", str(w), str(work / "envs"), spec), log):
+            while (rc := _sh(_py("harness.experiments.suite.testgen", "plan", str(w), str(work / "envs"), spec), log)) == 3:
+                pass  # a batch done; a fresh process for the next one
+            if rc:
                 raise SystemExit(f"{name}: type-6 planning failed")
             n = freeze(w, out / "tests.json", "tests", name)
             commit([out / "tests.json"], f"Suite {name}: type 6 frozen ({n} tasks)", push)

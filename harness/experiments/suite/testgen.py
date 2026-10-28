@@ -33,6 +33,8 @@ from harness.experiments.suite.newfn import GENERIC
 ARMS = ("FILE", "PRISM")
 TARGET_WINDOW = 120
 TEST_HEAD, TEST_TAIL = 60, 140
+BATCH = 8      # candidates planned per process (memory: every revision's index is kept until exit)
+MORE = 3       # exit code: more candidates to plan
 
 INSTRUCTIONS = """You are a software engineer working in the repository `{repo}`.
 
@@ -147,6 +149,7 @@ def plan(path: Path, envs: str, repos: dict[str, str], per_repo: int) -> None:
     skipped = data.get("skipped") or {}
     if isinstance(skipped, list):  # a per-repository working file starts with an empty list
         skipped = {k: {"skip": "earlier"} for k in skipped}
+    handled = 0
     for repo in sorted({c["repo"] for c in data["candidates"]}):
         for c in sorted((c for c in data["candidates"] if c["repo"] == repo), key=lambda c: c["order"]):
             key = f"{c['commit']}:{c['test_file']}"
@@ -154,6 +157,10 @@ def plan(path: Path, envs: str, repos: dict[str, str], per_repo: int) -> None:
                 break
             if key in planned or key in skipped:
                 continue
+            if handled >= BATCH:  # each index stays in memory: exit and let the caller start a fresh process
+                print(f"batch of {BATCH} done; run again to continue", flush=True)
+                raise SystemExit(MORE)
+            handled += 1
             work = tempfile.mkdtemp(prefix="tg_")
             subprocess.run(["git", "-C", repos[repo], "worktree", "add", "-q", "--detach", work, c["parent"]],
                            check=True, capture_output=True)
