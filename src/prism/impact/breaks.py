@@ -334,7 +334,12 @@ class BreakChecker:
         return sorted(out, key=lambda x: (order[x.severity], x.file, x.line, x.problem))
 
 
-def render_breaks(breaks: list[Break], calls_checked: int | None = None) -> str:
+def render_breaks(breaks: list[Break], calls_checked: int | None = None, wording: int = 2) -> str:
+    """The section for the change context. Wording 2 (the default) is empty when nothing breaks - a clean check
+    is not an all-clear, the AI then reads the plain context - and says the list is not complete. Wording 1
+    (run 3 of the git-history test) said "No call site breaks" and gave no such warning."""
+    if not breaks and wording >= 2:
+        return ""
     out = ["## Calls this change breaks (its new code checked against every call site)"]
     if not breaks:
         out.append("No call site breaks by its signature, raised errors or empty returns"
@@ -346,4 +351,8 @@ def render_breaks(breaks: list[Break], calls_checked: int | None = None) -> str:
     callers = len({x.caller for x in breaks if x.severity != CHECK})
     if callers:
         out.append(f"These {callers} caller{'s' if callers != 1 else ''} must change with it.")
+    if wording >= 2:
+        out.append("This list is NOT complete: it only finds what the calls themselves show (arguments, raised "
+                   "errors, empty returns). Other callers may still have to change because of what the function "
+                   "now does: read section 4 and the callers' code as well.")
     return "\n".join(out) + "\n"

@@ -139,13 +139,19 @@ def _load(path: Path) -> dict:
         return {}
 
 
-def ollama(base_url: str, model: str, text: str, timeout: int = 900) -> tuple[str, float]:
+def ollama(base_url: str, model: str, text: str, timeout: int = 900, stats: dict | None = None) -> tuple[str, float]:
+    """The model's reply and the seconds it took; `stats` receives Ollama's own counts (prompt and answer
+    tokens) and why it stopped (`stop`, or `length` when the answer hit `num_predict`)."""
     body = json.dumps({"model": model, "prompt": text, "stream": False, "format": "json",
                        "options": {"temperature": 0.2, "seed": 42, "num_ctx": NUM_CTX, "num_predict": 4096}}).encode()
     req = urllib.request.Request(f"{base_url}/api/generate", data=body, headers={"Content-Type": "application/json"})
     t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read())["response"], time.time() - t0
+        out = json.loads(resp.read())
+    if stats is not None:
+        stats.update(prompt_tokens=out.get("prompt_eval_count"), answer_tokens=out.get("eval_count"),
+                     done_reason=out.get("done_reason"))
+    return out["response"], time.time() - t0
 
 
 def generate(tasks: list[dict], out: Path, base_url: str, model: str, threads: int = 2) -> None:
@@ -161,8 +167,9 @@ def generate(tasks: list[dict], out: Path, base_url: str, model: str, threads: i
     def one(item):
         t, arm = item
         try:
-            text, secs = ollama(base_url, model, prompt(t, arm, overviews.get(t["id"])))
-            return f"{t['id']}/{arm}", {"raw": text, "seconds": round(secs, 1), "model": model}
+            stats: dict = {}
+            text, secs = ollama(base_url, model, prompt(t, arm, overviews.get(t["id"])), stats=stats)
+            return f"{t['id']}/{arm}", {"raw": text, "seconds": round(secs, 1), "model": model, **stats}
         except Exception as exc:  # recorded; scored as no answer
             return f"{t['id']}/{arm}", {"raw": "", "error": f"{type(exc).__name__}: {exc}", "model": model}
 

@@ -51,6 +51,9 @@ def main(argv=None) -> int:
     p.add_argument("--seed", type=int, default=1301)
     p.add_argument("--forced", action="store_true",
                    help="keep only forced changes (forced_reasons) whose counted callers' changes touch the call")
+    p.add_argument("--per-repo-tier", type=int, default=2, help="at most this many tasks per repository per tier")
+    p.add_argument("--no-self-callers", action="store_true",
+                   help="an anchor is never its own caller (a recursive call); off for runs 1-3")
     p.add_argument("--exclude", nargs="*", default=[], metavar="TASKS.json",
                    help="leave out the commits of these frozen task files (earlier runs)")
     args = p.parse_args(argv)
@@ -64,10 +67,12 @@ def main(argv=None) -> int:
             if not why:
                 continue
             t = {**t, "forced": why}
-        real = [c for c in t["changed_callers"] if (touches_call(t, c) if args.forced else because_of_anchor(t, c))]
+        real = [c for c in t["changed_callers"] if not (args.no_self_callers and c["qname"] == t["anchor"])
+                and (touches_call(t, c) if args.forced else because_of_anchor(t, c))]
         if not real:
             continue
-        moved = [c["qname"] for c in t["changed_callers"] if c not in real]
+        moved = [c["qname"] for c in t["changed_callers"] if c not in real
+                 and not (args.no_self_callers and c["qname"] == t["anchor"])]
         t = {**t, "changed_callers": real, "unchanged_callers": sorted(set(t["unchanged_callers"]) | set(moved))}
         t["tier"] = tier(t["anchor_file"], real)
         kept.append(t)
@@ -85,7 +90,7 @@ def main(argv=None) -> int:
             if sum(1 for c in chosen if c["tier"] == tr) >= args.per_tier:
                 break
             key = (t["repo"], tr)
-            if t["tier"] == tr and per_repo_tier.get(key, 0) < 2:
+            if t["tier"] == tr and per_repo_tier.get(key, 0) < args.per_repo_tier:
                 chosen.append(t)
                 per_repo_tier[key] = per_repo_tier.get(key, 0) + 1
     for i, t in enumerate(chosen, 1):
@@ -95,6 +100,8 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "tasks.json").write_text(json.dumps({
         "version": 1, "status": "frozen", "seed": args.seed, "per_tier": args.per_tier, "forced": args.forced,
+        **({"per_repo_tier": args.per_repo_tier} if args.per_repo_tier != 2 else {}),
+        **({"no_self_callers": True} if args.no_self_callers else {}),
         **({"excluded_commits_of": args.exclude} if args.exclude else {}),
         "tasks_sha256": hashlib.sha256(body.encode()).hexdigest(), "tasks": chosen}, indent=1) + "\n")
     counts = {tr: sum(1 for t in chosen if t["tier"] == tr) for tr in TIERS}

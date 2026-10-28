@@ -9,7 +9,8 @@
     7. Callers' code full code of the direct callers that fit the budget, digests for the rest
     8. Wider impact  transitive callers by hop, and the tests among them
 
-With the anchor's proposed new code, a first section lists the calls that change breaks (`prism.impact.breaks`).
+With the anchor's proposed new code, a first section lists the calls that change breaks (`prism.impact.breaks`);
+when it finds none the section is left out.
 
 The AI always sees real code (the anchor, its siblings, its callers as far as the budget allows); digests
 and statements add what is outside the code it is shown. Sections are filled in priority order under
@@ -213,7 +214,7 @@ def _fence(lang: str) -> str:
 def render(ctx: ChangeContext) -> str:
     fence = _fence(ctx.language)
     out = [f"# Change context: `{ctx.anchor}`", f"{ctx.file}, lines {ctx.lines[0]}-{ctx.lines[1]}", ""]
-    if ctx.breaks is not None:
+    if ctx.breaks:  # nothing found: no section (a clean check is not an all-clear)
         from prism.impact.breaks import render_breaks
         out += render_breaks(ctx.breaks).rstrip("\n").split("\n") + [""]
 

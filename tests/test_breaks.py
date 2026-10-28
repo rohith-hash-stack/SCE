@@ -174,3 +174,16 @@ def test_cli_and_mcp_accept_new_code(tmp_path):
         server._cache.clear()
     assert [(x["caller"], x["severity"]) for x in res["breaks"]] == [("p.Parser.visit", "changes meaning")]
     assert "breaks" not in plain and "## Calls this change breaks" not in plain["context"]
+
+
+def test_wording_two_leaves_the_section_out_when_nothing_breaks_and_says_the_list_is_incomplete(tmp_path):
+    cb, ch = _checker(tmp_path, {"p.py": PARSER})
+    plain = render(cb.build("p.context", budget_tokens=6000, include_tests=False))
+    pure_rename = "def renamed(resp, prepared_request, stream=False):\n    return resp\n"
+    ctx = cb.build("p.renamed", budget_tokens=6000, include_tests=False, new_code=pure_rename)
+    assert ctx.breaks == [] and render(ctx) == render(cb.build("p.renamed", budget_tokens=6000, include_tests=False))
+    assert render_breaks([]) == "" and "No call site breaks" in render_breaks([], wording=1)
+    found = ch.check("p.context", "def context(request, verify, cert, poolmanager):\n    return 1\n")
+    assert "This list is NOT complete" in render_breaks(found)
+    assert "NOT complete" not in render_breaks(found, wording=1)
+    assert plain  # the plain context is built as before

@@ -256,3 +256,70 @@ No call came near its window:
 - All 58 answers of runs 1 and 2 are complete JSON.
 - Run 3's largest prompt is 6,902 tokens; with a full 4,096-token answer it would still be 10,998.
 - The map calls of run 2 (8,192 window) were at most 1,583 tokens, and none came back empty.
+
+# Run 4: the big test (pre-registered before mining)
+
+Run 3: the break check gained 4 callers where it fired and lost 4 where it was silent or partial (the model
+read "No call site breaks" as "nothing to change", and a partial list as complete). Run 4 tests the
+revised section (**wording 2**, `prism.impact.breaks.render_breaks`):
+- when the check finds nothing, the section is left out (the prompt is then exactly PRISM's);
+- when it finds breaks, it says the list is not complete.
+
+It is tested on a much larger set from repositories never used before.
+
+## Repositories (none used in runs 1-3, or to design the check)
+
+Python: `pallets/werkzeug`, `encode/starlette`, `fastapi/fastapi`, `python-attrs/attrs`, `Textualize/rich`,
+`marshmallow-code/marshmallow`, `tornadoweb/tornado`, `aio-libs/aiohttp`, `scrapy/scrapy`, `httpie/cli`,
+`sanic-org/sanic`, `pydantic/pydantic`.
+
+JavaScript / TypeScript: `koajs/koa`, `axios/axios`, `tj/commander.js`, `yargs/yargs`, `mochajs/mocha`,
+`fastify/fastify`, `socketio/socket.io`, `hapijs/hapi`, `date-fns/date-fns`, `sindresorhus/got`.
+
+A repository that cannot be cloned or indexed is dropped and listed in the report. None is replaced after
+its tasks have been seen.
+
+## Tasks
+
+- **Mining:** `mine.py --forced --scan 10000` over each repository's history, with every pass-1 candidate
+  indexed (no candidate cap).
+- **Selection:** `select.py --forced --no-self-callers --seed 4401 --per-tier 60 --per-repo-tier 3`. The same filter and
+  tiers as runs 2-3, at most 3 tasks per repository per tier, up to 60 per tier (180 tasks).
+- **New quality rule:** an anchor never counts as its own caller (a recursive call). Run 3's ch19 could
+  not be fully scored because of this; such callers are dropped before selection.
+- **Planning:** `plan.py --breaks --no-overview` adds `breaks_context` with wording 2.
+- **Frozen before any model runs:** the task list sha256 is pinned in the Kaggle cell.
+
+## Versions (same model and settings as runs 1-3)
+
+| version | the model also sees |
+|---|---|
+| `FILE` | the anchor's file window |
+| `PRISM` | `FILE` + the change context, as in runs 1-3 |
+| `PRISM_BREAKS` | `FILE` + the change context with the wording-2 break section (none when nothing breaks) |
+
+Each answer also records Ollama's own prompt and answer token counts and its stop reason, so a cut-off
+answer or prompt is visible directly.
+
+## Scores and tests (fixed now)
+
+The same scores as runs 1-3, per tier, per language and overall. With this many tasks, two comparisons
+are tested; everything else is descriptive:
+
+1. **Primary: `PRISM_BREAKS` vs `PRISM`**, on changed callers found. McNemar's exact test over the
+   callers both versions were scored on (found by one version only), two-sided, α = 0.05. Also a
+   bootstrap 95% interval (10,000 resamples over tasks, seed 4401) of the difference in callers found per
+   task.
+2. **Secondary: `PRISM` vs `FILE`**, with the same tests.
+
+Wrong functions named are compared per task with the Wilcoxon signed-rank test (descriptive if all
+differences are zero).
+
+## Decision rule (fixed now)
+
+- `PRISM_BREAKS` becomes the default when new code is known only if both hold:
+  - it finds significantly more callers than `PRISM`;
+  - its mean number of wrong functions per task is no higher than `PRISM`'s.
+- If it finds more callers but not significantly, it stays optional and the report says so.
+
+The run may take several Kaggle sessions: the cell resumes from the answers already pushed.

@@ -56,7 +56,7 @@ def main(argv=None) -> int:
             if "--breaks" in flags:
                 bctx = cb.build(t["anchor"], budget_tokens=6000, include_tests=False, new_code=t["anchor_new"])
                 text, section = render(bctx), render_breaks(bctx.breaks)
-                if text.replace(section + "\n", "", 1) != t["prism_context"]:
+                if (text.replace(section + "\n", "", 1) if section else text) != t["prism_context"]:
                     raise SystemExit(f"{t['id']}: the break context is not the frozen context plus the section")
                 t["breaks_context"] = text
                 t["breaks"] = [{"caller": x.caller, "line": x.line, "severity": x.severity, "problem": x.problem}
