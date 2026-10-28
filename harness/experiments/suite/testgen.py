@@ -140,7 +140,9 @@ def plan_one(task: dict, work: str, repo: str, envs: str) -> dict | None:
 def plan(path: Path, envs: str, repos: dict[str, str], per_repo: int) -> None:
     data = json.loads(path.read_text())
     planned = {f"{t['commit']}:{t['test_file']}": t for t in data.get("tasks", [])}
-    skipped = data.get("skipped", {})
+    skipped = data.get("skipped") or {}
+    if isinstance(skipped, list):  # a per-repository working file starts with an empty list
+        skipped = {k: {"skip": "earlier"} for k in skipped}
     for repo in sorted({c["repo"] for c in data["candidates"]}):
         for c in sorted((c for c in data["candidates"] if c["repo"] == repo), key=lambda c: c["order"]):
             key = f"{c['commit']}:{c['test_file']}"
