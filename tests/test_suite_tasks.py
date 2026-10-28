@@ -47,3 +47,17 @@ def test_newfn_existing_helpers_and_scores():
     got = newfn.score_task(task, json.dumps({"code": bad}))
     assert got["reuse"] == 0.0 and got["invented"] == 2
     assert newfn.score_task(task, "{}")["answered"] is False
+
+
+def test_preregistered_statistics():
+    from harness.experiments.suite import stats
+    m = stats.mcnemar([True] * 5 + [False] * 15, [True] * 5 + [True] * 12 + [False] * 3)
+    assert (m["only_a"], m["only_b"]) == (0, 12) and m["p"] < 0.001
+    assert stats.mcnemar([True, False], [True, False])["p"] == 1.0
+    assert stats.wilcoxon([0.1, 0.2], [0.1, 0.2]) is None
+    w = stats.wilcoxon([0.0] * 10, [0.5, 0.4, 0.6, 0.7, 0.2, 0.3, 0.8, 0.9, 0.1, 0.5])
+    assert w["p"] < 0.01
+    b = stats.bootstrap_diff([0, 0, 1, 1], [1, 1, 1, 1], groups=["t1", "t1", "t2", "t2"], resamples=2000)
+    assert b["tasks"] == 2 and b["mean"] == 1.0 and b["low"] <= b["mean"] <= b["high"]
+    h = stats.holm({"a": 0.01, "b": 0.04, "c": 0.03})
+    assert h == {"a": 0.03, "c": 0.06, "b": 0.06}
