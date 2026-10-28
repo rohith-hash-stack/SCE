@@ -83,6 +83,28 @@ def test_conventions(builder, tests: list[str]) -> list[str]:
     return out
 
 
+TARGET_CODE_LINES = 120
+
+
+def _capped(builder, target: str, code: str) -> str:
+    """The target's code, at most TARGET_CODE_LINES lines; for a longer one (a large class), the rest is replaced by
+    the signatures of its methods."""
+    lines = code.splitlines()
+    if len(lines) <= TARGET_CODE_LINES:
+        return code
+    methods = sorted((q for q in builder._def_nodes if q.startswith(target + ".") and q.count(".") == target.count(".") + 1
+                      and (s := builder.symbol_table.get(q)) is not None and s.kind in ("function", "method")),
+                     key=lambda q: builder.symbol_table.get(q).line_range[0])
+    sigs = []
+    for q in methods:
+        first = source_of(builder, q).strip().splitlines()
+        sig = next((ln.strip() for ln in first if ln.strip().startswith(("def ", "async def "))), "")
+        if sig:
+            sigs.append("    " + sig)
+    return "\n".join(lines[:TARGET_CODE_LINES] + [f"    # ... {len(lines) - TARGET_CODE_LINES} more lines; its methods:"]
+                     + sigs[:60])
+
+
 class TestContextBuilder:
     __test__ = False  # not a pytest test class
 
@@ -94,7 +116,7 @@ class TestContextBuilder:
         b = self.b
         cctx = self.change.build(target, budget_tokens=2000, include_tests=True)
         path = os.path.join(self.root, test_file)
-        ctx = TestContext(target, test_file, cctx.anchor_code, cctx.anchor_digest)
+        ctx = TestContext(target, test_file, _capped(b, target, cctx.anchor_code), cctx.anchor_digest)
         ctx.callees = [d.text for d in cctx.callees]
         ctx.callers = [f"`{r.caller}` ({r.file}): " + "; ".join(f"L{d.line} {d.aspect}: {d.text}" for d in r.dependencies[:3])
                        for r in cctx.callers if not r.is_test][:6]

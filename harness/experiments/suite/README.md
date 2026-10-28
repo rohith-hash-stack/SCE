@@ -126,6 +126,11 @@ one candidate commit.
   - **Gate:** it now also requires the developer's tests to execute at least one line of the target.
   - Type 6 was re-planned for all six Python repositories under these rules. The earlier frozen files
     (marshmallow, werkzeug, rich, tornado) are replaced.
+- **Amendment 3 (presentation only; before any model):** a target longer than 250 lines (a large class
+  such as rich's `Console`, up to 1,976 lines) made the prompt exceed the window (up to 28,154 tokens).
+  - The file window now shows at most 250 lines of it, from its start.
+  - PRISM's test context shows at most 120 lines of its code, then the signatures of its methods.
+  - All type-6 tasks were re-rendered (`rerender_tests.py`). Targets, gates and coverage are unchanged.
 - **The task:** write tests for the target in the test file.
 - **Versions:**
   - `FILE`: the target's file and the test file;

@@ -32,6 +32,7 @@ from harness.experiments.suite.newfn import GENERIC
 
 ARMS = ("FILE", "PRISM")
 TARGET_WINDOW = 120
+TARGET_MAX = 250   # a longer target (a large class) is shown from its start for this many lines
 TEST_HEAD, TEST_TAIL = 60, 140
 BATCH = 8      # candidates planned per process (memory: every revision's index is kept until exit)
 MORE = 3       # exit code: more candidates to plan
@@ -103,6 +104,15 @@ def choose_target(builder, tests: list[dict], test_file: str = "") -> str | None
     return None  # no clear subject: the tests may be about something they only construct through a helper
 
 
+def target_window(lo: int, hi: int, n_lines: int) -> tuple[int, int]:
+    """Lines shown of the target's file: TARGET_WINDOW lines around it; a target longer than TARGET_MAX lines (a
+    large class) is shown from its first line for TARGET_MAX lines."""
+    if hi - lo + 1 > TARGET_MAX:
+        return lo, min(n_lines, lo + TARGET_MAX - 1)
+    a = max(1, lo - (TARGET_WINDOW - (hi - lo + 1)) // 2)
+    return a, min(n_lines, a + max(TARGET_WINDOW, hi - lo + 1) - 1)
+
+
 def _excerpt(text: str, head: int, tail: int) -> tuple[str, str]:
     lines = text.splitlines()
     if len(lines) <= head + tail:
@@ -131,8 +141,7 @@ def plan_one(task: dict, work: str, repo: str, envs: str) -> dict | None:
     if gate["ran"] == 0 or gate["failed"] or gate["passed"] == 0 or not gate["covered"]:
         return {"skip": "gate", "gate": {k: v for k, v in gate.items() if k != "covered"}}
     src = Path(sym.file).read_text(errors="replace").splitlines()
-    a = max(1, lo - (TARGET_WINDOW - (hi - lo + 1)) // 2)
-    z = min(len(src), a + max(TARGET_WINDOW, hi - lo + 1) - 1)
+    a, z = target_window(lo, hi, len(src))
     test_now = Path(work, task["test_file"]).read_text(errors="replace")
     test_text, note = _excerpt(test_now, TEST_HEAD, TEST_TAIL)
     ctx = TestContextBuilder(b, work).build(target, task["test_file"])
