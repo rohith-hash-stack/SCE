@@ -1,0 +1,919 @@
+{
+ "type": "tests",
+ "repo": "scrapy",
+ "status": "frozen",
+ "seed": 5501,
+ "per_repo": 20,
+ "skipped": 234,
+ "tasks_sha256": "ff12c02f12177135eebf0c939e9c48cdaf8f0a64ff70e595cc0bb08ed9dcce39",
+ "tasks": [
+  {
+   "repo": "scrapy",
+   "commit": "ddf89e92f7ec143cc0d83afcccb0e786c13578a5",
+   "parent": "83de8f227bf8e2fa18c4b703008eb549ccfd0a67",
+   "subject": "Add more header-related tests. (#8375)",
+   "date": "2026-10-20T11:45:41+02:00",
+   "test_file": "tests/test_http_headers.py",
+   "tests": [
+    {
+     "name": "test_pop",
+     "code": "def test_pop() -> None:\n    h = Headers({\"Content-Type\": \"text/html\", \"X-Forwarded-For\": [\"ip1\", \"ip2\"]})\n    olist = h.getlist(\"X-Forwarded-For\")\n    assert h.pop(\"x-forwarded-for\") is olist\n    assert olist == [b\"ip1\", b\"ip2\"]\n    assert list(h.keys()) == [b\"Content-Type\"]\n    assert h.pop(\"X-Forwarded-For\", None) is None\n    with pytest.raises(KeyError):\n        h.pop(\"X-Forwarded-For\")",
+     "start": 100,
+     "calls": [
+      "Headers",
+      "getlist",
+      "keys",
+      "list",
+      "pop",
+      "raises"
+     ]
+    }
+   ],
+   "order": 41,
+   "target": "scrapy.http.headers.Headers",
+   "target_file": "scrapy/http/headers.py",
+   "target_lines": [
+    19,
+    232
+   ],
+   "target_window": "\n    def pop(self, key: str | bytes, *args: Any) -> Any:\n        return dict.pop(self, self._normkey(key), *args)\n\n    def update(  # type: ignore[override]\n        self,\n        seq: Mapping[str, Any]\n        | Mapping[bytes, Any]\n        | Iterable[tuple[str | bytes, Any]],\n    ) -> None:\n        items = seq.items() if isinstance(seq, Mapping) else seq\n        iseq: dict[bytes, list[bytes]] = {}\n        # normkey() only sees keys already stored, so keys from seq that differ\n        # only in case are mapped to a single spelling here.\n        spellings: dict[bytes, bytes] = {}\n        for k, v in items:\n            key = self._normkey(k)\n            key = spellings.setdefault(key.lower(), key)\n            iseq.setdefault(key, []).extend(self._normvalue(v))\n        dict.update(self, iseq)\n\n    def _normkey(self, key: str | bytes) -> bytes:\n        \"\"\"Normalize key to bytes, matching the case of an existing key if any.\"\"\"\n        key = self._tobytes(key)\n        if dict.__contains__(self, key):\n            return key\n        lower_key = key.lower()\n        existing_key: bytes\n        for existing_key in dict.keys(self):\n            if existing_key.lower() == lower_key:\n                return existing_key\n        return key\n\n    def normkey(self, key: str | bytes) -> bytes:  # pragma: no cover\n        warnings.warn(\n            \"Headers.normkey() is deprecated\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return self._normkey(key)\n\n    def _normvalue(self, value: _RawValue | Iterable[_RawValue]) -> list[bytes]:\n        \"\"\"Normalize values to bytes.\"\"\"\n        _value: Iterable[_RawValue]\n        if value is None:\n            _value = []\n        elif isinstance(value, (str, bytes)):\n            _value = [value]\n        elif hasattr(value, \"__iter__\"):\n            _value = value\n        else:\n            _value = [value]\n\n        return [self._tobytes(x) for x in _value]\n\n    def normvalue(\n        self, value: _RawValue | Iterable[_RawValue]\n    ) -> list[bytes]:  # pragma: no cover\n        warnings.warn(\n            \"Headers.normvalue() is deprecated\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return self._normvalue(value)\n\n    def _tobytes(self, x: _RawValue) -> bytes:\n        if isinstance(x, bytes):\n            return x\n        if isinstance(x, str):\n            return x.encode(self.encoding)\n        if isinstance(x, int):\n            return str(x).encode(self.encoding)\n        raise TypeError(f\"Unsupported value type: {type(x)}\")\n\n    def __getitem__(self, key: str | bytes) -> bytes | None:\n        try:\n            return cast(\"list[bytes]\", dict.__getitem__(self, self._normkey(key)))[-1]\n        except IndexError:\n            return None\n\n    def get(self, key: str | bytes, def_val: Any = None) -> bytes | None:\n        values = cast(\"list[bytes] | None\", dict.get(self, self._normkey(key)))\n        if not values:\n            # The header is missing, or it was set to None so that it is not\n            # sent; neither has a value to return.\n            values = self._normvalue(def_val)\n        return values[-1] if values else None\n\n    def getlist(\n        self, key: str | bytes, def_val: _RawValue | Iterable[_RawValue] | None = None\n    ) -> list[bytes]:\n        try:\n            return cast(\"list[bytes]\", dict.__getitem__(self, self._normkey(key)))\n        except KeyError:\n            if def_val is not None:\n                return self._normvalue(def_val)\n            return []\n\n    def setlist(self, key: str | bytes, list_: Iterable[_RawValue]) -> None:\n        warnings.warn(\n            \"Headers.setlist() is deprecated, assign the list instead:\"\n            \" headers[key] = values.\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        self[key] = list_\n\n    def setlistdefault(\n        self, key: str | bytes, default_list: Iterable[_RawValue] = ()\n    ) -> Any:\n        warnings.warn(\n            \"Headers.setlistdefault() is deprecated, use setdefault() instead.\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return self.setdefault(key, default_list)\n\n    def appendlist(self, key: str | bytes, value: Iterable[_RawValue]) -> None:\n        lst = self.getlist(key)\n        lst.extend(self._normvalue(value))\n        self[key] = lst\n\n    def items(self) -> Iterable[tuple[bytes, list[bytes]]]:  # type: ignore[override]\n        return ((k, self.getlist(k)) for k in self.keys())\n\n    def values(self) -> list[bytes | None]:  # type: ignore[override]\n        return [\n            self[k]\n            for k in self.keys()  # pylint: disable=consider-using-dict-items\n        ]\n\n    def to_string(self) -> bytes:\n        return headers_dict_to_raw(self)\n\n    def to_unicode_dict(self) -> CaseInsensitiveDict:\n        warnings.warn(\n            \"Headers.to_unicode_dict() is deprecated, use to_tuple_list() instead.\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return CaseInsensitiveDict(\n            (\n                key.decode(self.encoding, errors=\"replace\"),\n                b\",\".join(value).decode(self.encoding, errors=\"replace\"),\n            )\n            for key, value in self.items()\n        )\n\n    def to_tuple_list(self) -> list[tuple[str, str]]:\n        \"\"\"Return headers as a list of ``(key, value)`` tuples.\n\n        Multiple values are represented as multiple tuples with the same key.\n        Bytes that cannot be decoded are replaced with U+FFFD.\n        \"\"\"\n        return [\n            (\n                key.decode(self.encoding, errors=\"replace\"),\n                value.decode(self.encoding, errors=\"replace\"),\n            )\n            for key, values in self.items()\n            for value in values\n        ]\n\n    def __copy__(self) -> Self:\n        return self.__class__(self)\n\n    copy = __copy__",
+   "target_window_lines": [
+    66,
+    232
+   ],
+   "test_excerpt": "import copy\n\nimport pytest\n\nfrom scrapy.exceptions import ScrapyDeprecationWarning\nfrom scrapy.http import Headers\n\n\ndef test_basics() -> None:\n    h = Headers({\"Content-Type\": \"text/html\", \"Content-Length\": 1234})\n    assert h[\"Content-Type\"]\n    assert h[\"Content-Length\"]\n\n    with pytest.raises(KeyError):\n        h[\"Accept\"]\n    assert h.get(\"Accept\") is None\n    assert h.getlist(\"Accept\") == []\n\n    assert h.get(\"Accept\", \"*/*\") == b\"*/*\"\n    assert h.getlist(\"Accept\", \"*/*\") == [b\"*/*\"]\n    assert h.getlist(\"Accept\", [\"text/html\", \"images/jpeg\"]) == [\n        b\"text/html\",\n        b\"images/jpeg\",\n    ]\n\n\ndef test_single_value() -> None:\n    h = Headers()\n    h[\"Content-Type\"] = \"text/html\"\n    assert h[\"Content-Type\"] == b\"text/html\"\n    assert h.get(\"Content-Type\") == b\"text/html\"\n    assert h.getlist(\"Content-Type\") == [b\"text/html\"]\n\n\ndef test_multivalue() -> None:\n    h = Headers()\n    h[\"X-Forwarded-For\"] = hlist = [\"ip1\", \"ip2\"]\n    assert h[\"X-Forwarded-For\"] == b\"ip2\"\n    assert h.get(\"X-Forwarded-For\") == b\"ip2\"\n    assert h.getlist(\"X-Forwarded-For\") == [b\"ip1\", b\"ip2\"]\n    assert h.getlist(\"X-Forwarded-For\") is not hlist  # type: ignore[comparison-overlap]\n\n\ndef test_multivalue_for_one_header() -> None:\n    h = Headers(((\"a\", \"b\"), (\"a\", \"c\")))\n    assert h[\"a\"] == b\"c\"\n    assert h.get(\"a\") == b\"c\"\n    assert h.getlist(\"a\") == [b\"b\", b\"c\"]\n\n\ndef test_encode_utf8() -> None:\n    h = Headers({\"key\": \"\\xa3\"}, encoding=\"utf-8\")\n    key, val = dict(h.items()).popitem()\n    assert isinstance(key, bytes), key\n    assert isinstance(val[0], bytes), val[0]\n    assert val[0] == b\"\\xc2\\xa3\"\n\n\ndef test_encode_latin1() -> None:\n    h = Headers({\"key\": \"\\xa3\"}, encoding=\"latin1\")\n# ... (35 lines not shown) ...\n    del h[\"Content-Type\"]\n    assert \"Content-Type\" not in h\n\n\ndef test_setdefault() -> None:\n    h = Headers()\n    hlist = [\"ip1\", \"ip2\"]\n    olist = h.setdefault(\"X-Forwarded-For\", hlist)\n    assert h.getlist(\"X-Forwarded-For\") is not hlist  # type: ignore[comparison-overlap]\n    assert h.getlist(\"X-Forwarded-For\") is olist\n\n    h = Headers()\n    olist = h.setdefault(\"X-Forwarded-For\", \"ip1\")\n    assert h.getlist(\"X-Forwarded-For\") == [b\"ip1\"]\n    assert h.getlist(\"X-Forwarded-For\") is olist\n\n\ndef test_has_key() -> None:\n    h = Headers({\"Content-Type\": \"text/html\"})\n    with pytest.warns(ScrapyDeprecationWarning, match=\"has_key\"):\n        assert h.has_key(\"content-type\")\n\n\ndef test_fromkeys() -> None:\n    with pytest.warns(ScrapyDeprecationWarning, match=\"fromkeys\"):\n        h = Headers.fromkeys((\"Content-Type\", \"Content-Length\"), \"value\")\n    assert h.getlist(\"Content-Type\") == [b\"value\"]\n    assert h.getlist(\"Content-Length\") == [b\"value\"]\n\n\ndef test_iterables() -> None:\n    idict = {\"Content-Type\": \"text/html\", \"X-Forwarded-For\": [\"ip1\", \"ip2\"]}\n\n    h = Headers(idict)\n    assert dict(h.items()) == {\n        b\"Content-Type\": [b\"text/html\"],\n        b\"X-Forwarded-For\": [b\"ip1\", b\"ip2\"],\n    }\n    assert sorted(h.keys()) == [b\"Content-Type\", b\"X-Forwarded-For\"]\n    assert sorted(h.items()) == [\n        (b\"Content-Type\", [b\"text/html\"]),\n        (b\"X-Forwarded-For\", [b\"ip1\", b\"ip2\"]),\n    ]\n    assert set(h.values()) == {b\"ip2\", b\"text/html\"}\n\n\ndef test_update() -> None:\n    h = Headers()\n    h.update({\"Content-Type\": \"text/html\", \"X-Forwarded-For\": [\"ip1\", \"ip2\"]})\n    assert h.getlist(\"Content-Type\") == [b\"text/html\"]\n    assert h.getlist(\"X-Forwarded-For\") == [b\"ip1\", b\"ip2\"]\n\n\ndef test_copy() -> None:\n    h1 = Headers({\"header1\": [\"value1\", \"value2\"]})\n    h2 = copy.copy(h1)\n    assert h1 == h2\n    assert h1.getlist(\"header1\") == h2.getlist(\"header1\")\n    assert h1.getlist(\"header1\") is not h2.getlist(\"header1\")\n    assert isinstance(h2, Headers)\n\n\ndef test_appendlist() -> None:\n    h1 = Headers({\"header1\": \"value1\"})\n    h1.appendlist(\"header1\", \"value3\")\n    assert h1.getlist(\"header1\") == [b\"value1\", b\"value3\"]\n\n    h1 = Headers()\n    h1.appendlist(\"header1\", \"value1\")\n    h1.appendlist(\"header1\", \"value3\")\n    assert h1.getlist(\"header1\") == [b\"value1\", b\"value3\"]\n\n\ndef test_setlist() -> None:\n    h1 = Headers({\"header1\": \"value1\"})\n    assert h1.getlist(\"header1\") == [b\"value1\"]\n    with pytest.warns(ScrapyDeprecationWarning, match=\"setlist\"):\n        h1.setlist(\"header1\", [b\"value2\", b\"value3\"])\n    assert h1.getlist(\"header1\") == [b\"value2\", b\"value3\"]\n\n\ndef test_setlistdefault() -> None:\n    h1 = Headers({\"header1\": \"value1\"})\n    with pytest.warns(ScrapyDeprecationWarning, match=\"setlistdefault\"):\n        h1.setlistdefault(\"header1\", [\"value2\", \"value3\"])\n    with pytest.warns(ScrapyDeprecationWarning, match=\"setlistdefault\"):\n        h1.setlistdefault(\"header2\", [\"value2\", \"value3\"])\n    assert h1.getlist(\"header1\") == [b\"value1\"]\n    assert h1.getlist(\"header2\") == [b\"value2\", b\"value3\"]\n\n\ndef test_none_value() -> None:\n    h1 = Headers()\n    h1[\"foo\"] = \"bar\"\n    h1[\"foo\"] = None\n    h1.setdefault(\"foo\", \"bar\")\n    assert h1[\"foo\"] is None\n    assert h1.get(\"foo\") is None\n    assert h1.get(\"foo\", \"baz\") == b\"baz\"\n    assert h1.getlist(\"foo\") == []\n\n\ndef test_int_value() -> None:\n    h1 = Headers({\"hey\": 5})\n    h1[\"foo\"] = 1\n    h1.setdefault(\"bar\", 2)\n    h1[\"buz\"] = [1, \"dos\", 3]\n    assert h1.getlist(\"foo\") == [b\"1\"]\n    assert h1.getlist(\"bar\") == [b\"2\"]\n    assert h1.getlist(\"buz\") == [b\"1\", b\"dos\", b\"3\"]\n    assert h1.getlist(\"hey\") == [b\"5\"]\n\n\ndef test_invalid_value() -> None:\n    with pytest.raises(TypeError, match=\"Unsupported value type\"):\n        Headers({\"foo\": object()})\n    with pytest.raises(TypeError, match=\"Unsupported value type\"):\n        Headers()[\"foo\"] = object()\n    with pytest.raises(TypeError, match=\"Unsupported value type\"):\n        Headers().setdefault(\"foo\", object())\n    with pytest.raises(TypeError, match=\"Unsupported value type\"):\n        Headers()[\"foo\"] = [object()]\n\n\ndef test_to_unicode_dict_undecodable() -> None:\n    h = Headers({b\"Public-Key-Pins\": b'pin-sha256=\\x94\"a\"', b\"X-\\xff\": b\"ok\"})\n    with pytest.warns(ScrapyDeprecationWarning, match=\"to_unicode_dict\"):\n        unicode_dict = h.to_unicode_dict()\n    assert unicode_dict == {\n        \"Public-Key-Pins\": 'pin-sha256=\ufffd\"a\"',\n        \"X-\ufffd\": \"ok\",\n    }\n\n\ndef test_to_tuple_list_undecodable() -> None:\n    h = Headers({b\"Public-Key-Pins\": b'pin-sha256=\\x94\"a\"', b\"X-\\xff\": b\"ok\"})\n    assert h.to_tuple_list() == [\n        (\"Public-Key-Pins\", 'pin-sha256=\ufffd\"a\"'),\n        (\"X-\ufffd\", \"ok\"),\n    ]",
+   "test_excerpt_note": "first 60 and last 140 of 235 lines",
+   "existing_test_names": [
+    "test_appendlist",
+    "test_basics",
+    "test_copy",
+    "test_delete_and_contains",
+    "test_encode_latin1",
+    "test_encode_multiple",
+    "test_encode_utf8",
+    "test_fromkeys",
+    "test_has_key",
+    "test_int_value",
+    "test_invalid_value",
+    "test_iterables",
+    "test_key_case_kept",
+    "test_key_case_of_first_spelling_wins",
+    "test_multivalue",
+    "test_multivalue_for_one_header",
+    "test_none_value",
+    "test_setdefault",
+    "test_setlist",
+    "test_setlistdefault",
+    "test_single_value",
+    "test_to_tuple_list_undecodable",
+    "test_to_unicode_dict_undecodable",
+    "test_update"
+   ],
+   "dev_gate": {
+    "ran": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "error": ""
+   },
+   "dev_covered": [
+    19,
+    22,
+    30,
+    31,
+    32,
+    33,
+    35,
+    38,
+    41,
+    44,
+    52,
+    55,
+    56,
+    67,
+    68,
+    70,
+    76,
+    77,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    87,
+    89,
+    90,
+    91,
+    92,
+    94,
+    95,
+    96,
+    97,
+    107,
+    110,
+    112,
+    113,
+    114,
+    115,
+    119,
+    131,
+    132,
+    134,
+    135,
+    140,
+    146,
+    154,
+    157,
+    158,
+    164,
+    173,
+    183,
+    188,
+    191,
+    197,
+    200,
+    214,
+    229,
+    232
+   ],
+   "prism_context": "# Test context: `scrapy.http.headers.Headers` (tests go to tests/test_http_headers.py)\n\n## 1. Target\n```\nclass Headers(dict):  # type: ignore[type-arg]\n    \"\"\"Case insensitive http headers dictionary\"\"\"\n\n    def __init__(\n        self,\n        seq: Mapping[str, Any]\n        | Mapping[bytes, Any]\n        | Iterable[tuple[str | bytes, Any]]\n        | None = None,\n        encoding: str = \"utf-8\",\n    ):\n        self.encoding: str = encoding\n        super().__init__()\n        if seq:\n            self.update(seq)\n\n    def __setitem__(self, key: str | bytes, value: Any) -> None:\n        dict.__setitem__(self, self._normkey(key), self._normvalue(value))\n\n    def __delitem__(self, key: str | bytes) -> None:\n        dict.__delitem__(self, self._normkey(key))\n\n    def __contains__(self, key: str | bytes) -> bool:  # type: ignore[override]\n        return dict.__contains__(self, self._normkey(key))\n\n    def has_key(self, key: str | bytes) -> bool:\n        warnings.warn(\n            'Headers.has_key() is deprecated, use the \"in\" operator instead.',\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return key in self\n\n    def setdefault(self, key: str | bytes, def_val: Any = None) -> Any:\n        return dict.setdefault(self, self._normkey(key), self._normvalue(def_val))\n\n    @classmethod\n    def fromkeys(  # type: ignore[override]\n        cls, keys: Iterable[str | bytes], value: Any = None\n    ) -> Self:\n        warnings.warn(\n            \"Headers.fromkeys() is deprecated, pass (key, value) pairs to\"\n            \" Headers() instead.\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return cls((k, value) for k in keys)\n\n    def pop(self, key: str | bytes, *args: Any) -> Any:\n        return dict.pop(self, self._normkey(key), *args)\n\n    def update(  # type: ignore[override]\n        self,\n        seq: Mapping[str, Any]\n        | Mapping[bytes, Any]\n        | Iterable[tuple[str | bytes, Any]],\n    ) -> None:\n        items = seq.items() if isinstance(seq, Mapping) else seq\n        iseq: dict[bytes, list[bytes]] = {}\n        # normkey() only sees keys already stored, so keys from seq that differ\n        # only in case are mapped to a single spelling here.\n        spellings: dict[bytes, bytes] = {}\n        for k, v in items:\n            key = self._normkey(k)\n            key = spellings.setdefault(key.lower(), key)\n            iseq.setdefault(key, []).extend(self._normvalue(v))\n        dict.update(self, iseq)\n\n    def _normkey(self, key: str | bytes) -> bytes:\n        \"\"\"Normalize key to bytes, matching the case of an existing key if any.\"\"\"\n        key = self._tobytes(key)\n        if dict.__contains__(self, key):\n            return key\n        lower_key = key.lower()\n        existing_key: bytes\n        for existing_key in dict.keys(self):\n            if existing_key.lower() == lower_key:\n                return existing_key\n        return key\n\n    def normkey(self, key: str | bytes) -> bytes:  # pragma: no cover\n        warnings.warn(\n            \"Headers.normkey() is deprecated\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return self._normkey(key)\n\n    def _normvalue(self, value: _RawValue | Iterable[_RawValue]) -> list[bytes]:\n        \"\"\"Normalize values to bytes.\"\"\"\n        _value: Iterable[_RawValue]\n        if value is None:\n            _value = []\n        elif isinstance(value, (str, bytes)):\n            _value = [value]\n        elif hasattr(value, \"__iter__\"):\n            _value = value\n        else:\n            _value = [value]\n\n        return [self._tobytes(x) for x in _value]\n\n    def normvalue(\n        self, value: _RawValue | Iterable[_RawValue]\n    ) -> list[bytes]:  # pragma: no cover\n        warnings.warn(\n            \"Headers.normvalue() is deprecated\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return self._normvalue(value)\n\n    def _tobytes(self, x: _RawValue) -> bytes:\n        if isinstance(x, bytes):\n            return x\n        if isinstance(x, str):\n            return x.encode(self.encoding)\n        if isinstance(x, int):\n            return str(x).encode(self.encoding)\n        raise TypeError(f\"Unsupported value type: {type(x)}\")\n\n    def __getitem__(self, key: str | bytes) -> bytes | None:\n        try:\n            return cast(\"list[bytes]\", dict.__getitem__(self, self._normkey(key)))[-1]\n        except IndexError:\n            return None\n\n    def get(self, key: str | bytes, def_val: Any = None) -> bytes | None:\n        values = cast(\"list[bytes] | None\", dict.get(self, self._normkey(key)))\n        if not values:\n            # The header is missing, or it was set to None so that it is not\n            # sent; neither has a value to return.\n            values = self._normvalue(def_val)\n        return values[-1] if values else None\n\n    def getlist(\n        self, key: str | bytes, def_val: _RawValue | Iterable[_RawValue] | None = None\n    ) -> list[bytes]:\n        try:\n            return cast(\"list[bytes]\", dict.__getitem__(self, self._normkey(key)))\n        except KeyError:\n            if def_val is not None:\n                return self._normvalue(def_val)\n            return []\n\n    def setlist(self, key: str | bytes, list_: Iterable[_RawValue]) -> None:\n        warnings.warn(\n            \"Headers.setlist() is deprecated, assign the list instead:\"\n            \" headers[key] = values.\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        self[key] = list_\n\n    def setlistdefault(\n        self, key: str | bytes, default_list: Iterable[_RawValue] = ()\n    ) -> Any:\n        warnings.warn(\n            \"Headers.setlistdefault() is deprecated, use setdefault() instead.\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return self.setdefault(key, default_list)\n\n    def appendlist(self, key: str | bytes, value: Iterable[_RawValue]) -> None:\n        lst = self.getlist(key)\n        lst.extend(self._normvalue(value))\n        self[key] = lst\n\n    def items(self) -> Iterable[tuple[bytes, list[bytes]]]:  # type: ignore[override]\n        return ((k, self.getlist(k)) for k in self.keys())\n\n    def values(self) -> list[bytes | None]:  # type: ignore[override]\n        return [\n            self[k]\n            for k in self.keys()  # pylint: disable=consider-using-dict-items\n        ]\n\n    def to_string(self) -> bytes:\n        return headers_dict_to_raw(self)\n\n    def to_unicode_dict(self) -> CaseInsensitiveDict:\n        warnings.warn(\n            \"Headers.to_unicode_dict() is deprecated, use to_tuple_list() instead.\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return CaseInsensitiveDict(\n            (\n                key.decode(self.encoding, errors=\"replace\"),\n                b\",\".join(value).decode(self.encoding, errors=\"replace\"),\n            )\n            for key, value in self.items()\n        )\n\n    def to_tuple_list(self) -> list[tuple[str, str]]:\n        \"\"\"Return headers as a list of ``(key, value)`` tuples.\n\n        Multiple values are represented as multiple tuples with the same key.\n        Bytes that cannot be decoded are replaced with U+FFFD.\n        \"\"\"\n        return [\n            (\n                key.decode(self.encoding, errors=\"replace\"),\n                value.decode(self.encoding, errors=\"replace\"),\n            )\n            for key, values in self.items()\n            for value in values\n        ]\n\n    def __copy__(self) -> Self:\n        return self.__class__(self)\n\n    copy = __copy__\n```\n\nDigest (what a test should exercise):\n```\nL22-33 defines nested method __init__\nL35-36 defines nested method __setitem__\nL38-39 defines nested method __delitem__\nL41-42 defines nested method __contains__\nL44-50 defines nested method has_key\nL52-53 defines nested method setdefault\nL56-65 defines nested method fromkeys\nL67-68 defines nested method pop\nL70-85 defines nested method update\nL87-97 defines nested method _normkey\nL99-105 defines nested method normkey\nL107-119 defines nested method _normvalue\nL121-129 defines nested method normvalue\nL131-138 defines nested method _tobytes\nL140-144 defines nested method __getitem__\nL146-152 defines nested method get\nL154-162 defines nested method getlist\nL164-171 defines nested method setlist\nL173-181 defines nested method setlistdefault\nL183-186 defines nested method appendlist\nL188-189 defines nested method items\nL191-195 defines nested method values\nL197-198 defines nested method to_string\nL200-212 defines nested method to_unicode_dict\nL214-227 defines nested method to_tuple_list\nL229-230 defines nested method __copy__\nL232 copy = __copy__\n```\n\n## 2. How production code calls it\n- `scrapy.core._http2.stream.Stream.__init__` (scrapy/core/_http2/stream.py): L170 result: uses the result in an expression\n- `scrapy.core.downloader.handlers._aioftp.AioftpDownloadHandler._extract_headers` (scrapy/core/downloader/handlers/_aioftp.py): L241 result: returns the result to its own callers\n- `scrapy.core.downloader.handlers._aiohttp.AiohttpDownloadHandler._extract_headers` (scrapy/core/downloader/handlers/_aiohttp.py): L132 result: returns the result to its own callers; L132 arguments: passes 1 positional argument\n- `scrapy.core.downloader.handlers._httpx.HttpxDownloadHandler._extract_headers` (scrapy/core/downloader/handlers/_httpx.py): L225 result: returns the result to its own callers; L225 arguments: passes 1 positional argument\n- `scrapy.core.downloader.handlers.http11._ScrapyAgent._headers_from_twisted_response` (scrapy/core/downloader/handlers/http11.py): L637 result: stores the result in `headers`, then reads .update; indexes [b\"Content-Length\"]; returns it\n- `scrapy.http.request.Request.__init__` (scrapy/http/request/__init__.py): L256 result: uses the result in an expression; L256 arguments: passes 1 positional argument, keywords `encoding`\n\n## 3. Existing tests\nTests that already reach it: `tests.test_http_headers.test_appendlist`, `tests.test_http_headers.test_basics`, `tests.test_http_headers.test_copy`, `tests.test_http_headers.test_delete_and_contains`, `tests.test_http_headers.test_encode_latin1`, `tests.test_http_headers.test_encode_multiple`, `tests.test_http_headers.test_encode_utf8`, `tests.test_http_headers.test_has_key`, `tests.test_http_headers.test_int_value`, `tests.test_http_headers.test_invalid_value`, `tests.test_http_headers.test_iterables`, `tests.test_http_headers.test_key_case_kept`\n\n`tests.test_http_headers.test_appendlist` (in tests/test_http_headers.py):\n```python\ndef test_appendlist() -> None:\n    h1 = Headers({\"header1\": \"value1\"})\n    h1.appendlist(\"header1\", \"value3\")\n    assert h1.getlist(\"header1\") == [b\"value1\", b\"value3\"]\n\n    h1 = Headers()\n    h1.appendlist(\"header1\", \"value1\")\n    h1.appendlist(\"header1\", \"value3\")\n    assert h1.getlist(\"header1\") == [b\"value1\", b\"value3\"]\n```\n\n`tests.test_http_headers.test_basics` (in tests/test_http_headers.py):\n```python\ndef test_basics() -> None:\n    h = Headers({\"Content-Type\": \"text/html\", \"Content-Length\": 1234})\n    assert h[\"Content-Type\"]\n    assert h[\"Content-Length\"]\n\n    with pytest.raises(KeyError):\n        h[\"Accept\"]\n    assert h.get(\"Accept\") is None\n    assert h.getlist(\"Accept\") == []\n\n    assert h.get(\"Accept\", \"*/*\") == b\"*/*\"\n    assert h.getlist(\"Accept\", \"*/*\") == [b\"*/*\"]\n    assert h.getlist(\"Accept\", [\"text/html\", \"images/jpeg\"]) == [\n        b\"text/html\",\n        b\"images/jpeg\",\n    ]\n```\n\n## 4. Test conventions in tests/test_http_headers.py\n- plain `assert` statements (23 of 24 tests)\n- errors checked with `pytest.raises` (2 of 24 tests)\n",
+   "id": "scrapy-tests-001"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "fed75a6c76ab846d0d00b8f100ba947302380a01",
+   "parent": "90deebe75e49e7217592072e4cb30b56750093c8",
+   "subject": "Refactor test_crawl.py and test_crawler.py. (#7566)",
+   "date": "2026-06-03T14:48:12+02:00",
+   "test_file": "tests/test_crawl.py",
+   "tests": [
+    {
+     "name": "TestCrawl.test_open_spider_error_on_faulty_pipeline_crawl",
+     "code": "async def test_open_spider_error_on_faulty_pipeline_crawl(\n        self, mockserver: MockServer\n    ) -> None:\n        # cover the except block in Crawler.crawl()\n        settings = {\n            \"ITEM_PIPELINES\": {\n                \"tests.pipelines.ZeroDivisionErrorPipeline\": 300,\n            }\n        }\n        crawler = get_crawler(SimpleSpider, settings)\n        with pytest.raises(ZeroDivisionError):\n            await maybe_deferred_to_future(\n                crawler.crawl(mockserver.url(\"/status?n=200\"), mockserver=mockserver)\n            )\n        assert not crawler.crawling",
+     "start": 415,
+     "calls": [
+      "crawl",
+      "get_crawler",
+      "maybe_deferred_to_future",
+      "raises",
+      "url"
+     ]
+    }
+   ],
+   "order": 52,
+   "target": "scrapy.utils.defer.maybe_deferred_to_future",
+   "target_file": "scrapy/utils/defer.py",
+   "target_lines": [
+    499,
+    524
+   ],
+   "target_window": "                stacklevel=2,\n            )\n        return result\n    if asyncio.isfuture(result) or inspect.isawaitable(result):\n        return deferred_from_coro(result)\n    if isinstance(result, failure.Failure):  # pragma: no cover\n        if warn:\n            warnings.warn(\n                f\"{global_object_name(f)} returned a Failure, this is deprecated.\"\n                f\" Please refactor this function to return a coroutine.\",\n                ScrapyDeprecationWarning,\n                stacklevel=2,\n            )\n        return fail(result)\n    return succeed(result)\n\n\ndef deferred_to_future(d: Deferred[_T]) -> Future[_T]:\n    \"\"\"Return an :class:`asyncio.Future` object that wraps *d*.\n\n    This function requires\n    :class:`~twisted.internet.asyncioreactor.AsyncioSelectorReactor` to be\n    installed.\n\n    When :ref:`using the asyncio reactor <install-asyncio>`, you cannot await\n    on :class:`~twisted.internet.defer.Deferred` objects from :ref:`Scrapy\n    callables defined as coroutines <coroutine-support>`, you can only await on\n    ``Future`` objects. Wrapping ``Deferred`` objects into ``Future`` objects\n    allows you to wait on them::\n\n        class MySpider(Spider):\n            ...\n            async def parse(self, response):\n                additional_request = scrapy.Request('https://example.org/price')\n                deferred = self.crawler.engine.download(additional_request)\n                additional_response = await deferred_to_future(deferred)\n\n    .. versionchanged:: 2.14\n        This function no longer installs an asyncio loop if called before the\n        Twisted asyncio reactor is installed. A :exc:`RuntimeError` is raised\n        in this case.\n    \"\"\"\n    if not is_asyncio_available():\n        raise RuntimeError(\"deferred_to_future() requires AsyncioSelectorReactor.\")\n    return d.asFuture(asyncio.get_event_loop())\n\n\ndef maybe_deferred_to_future(d: Deferred[_T]) -> Deferred[_T] | Future[_T]:\n    \"\"\"Return *d* as an object that can be awaited from a :ref:`Scrapy callable\n    defined as a coroutine <coroutine-support>`.\n\n    What you can await in Scrapy callables defined as coroutines depends on the\n    value of :setting:`TWISTED_REACTOR`:\n\n    -   When :ref:`using the asyncio reactor <install-asyncio>`, you can only\n        await on :class:`asyncio.Future` objects.\n\n    -   When not using the asyncio reactor, you can only await on\n        :class:`~twisted.internet.defer.Deferred` objects.\n\n    If you want to write code that uses ``Deferred`` objects but works with any\n    reactor, use this function on all ``Deferred`` objects::\n\n        class MySpider(Spider):\n            ...\n            async def parse(self, response):\n                additional_request = scrapy.Request('https://example.org/price')\n                deferred = self.crawler.engine.download(additional_request)\n                additional_response = await maybe_deferred_to_future(deferred)\n    \"\"\"\n    if not is_asyncio_available():\n        return d\n    return deferred_to_future(d)\n\n\ndef _schedule_coro(coro: Coroutine[Any, Any, Any]) -> None:\n    \"\"\"Schedule the coroutine as a task or a Deferred.\n\n    This doesn't store the reference to the task/Deferred, so a better\n    alternative is calling :func:`scrapy.utils.defer.deferred_from_coro`,\n    keeping the result, and adding proper exception handling (e.g. errbacks) to\n    it.\n    \"\"\"\n    if not is_asyncio_available():\n        Deferred.fromCoroutine(coro)\n        return\n    loop = asyncio.get_event_loop()\n    loop.create_task(coro)  # noqa: RUF006\n\n\n@overload\ndef ensure_awaitable(o: Awaitable[_T], _warn: str | None = None) -> Awaitable[_T]: ...\n\n\n@overload\ndef ensure_awaitable(o: _T, _warn: str | None = None) -> Awaitable[_T]: ...\n\n\ndef ensure_awaitable(o: _T | Awaitable[_T], _warn: str | None = None) -> Awaitable[_T]:\n    \"\"\"Convert any value to an awaitable object.\n\n    For a :class:`~twisted.internet.defer.Deferred` object, use\n    :func:`maybe_deferred_to_future` to wrap it into a suitable object. For an\n    awaitable object of a different type, return it as is. For any other\n    value, return a coroutine that completes with that value.\n\n    .. versionadded:: 2.14\n    \"\"\"\n    if isinstance(o, Deferred):\n        if _warn:\n            warnings.warn(\n                f\"{_warn} returned a Deferred, this is deprecated.\"\n                f\" Please refactor this function to return a coroutine.\",\n                ScrapyDeprecationWarning,\n                stacklevel=2,\n            )\n        return maybe_deferred_to_future(o)\n    if inspect.isawaitable(o):\n        return o\n",
+   "target_window_lines": [
+    452,
+    571
+   ],
+   "test_excerpt": "from __future__ import annotations\n\nimport json\nimport logging\nfrom ipaddress import IPv4Address\nfrom socket import gethostbyname\nfrom typing import TYPE_CHECKING, Any\nfrom urllib.parse import urlencode, urlparse\n\nimport pytest\nfrom cryptography.x509 import load_der_x509_certificate\nfrom testfixtures import LogCapture\nfrom twisted.internet.defer import succeed\nfrom twisted.internet.ssl import Certificate\nfrom twisted.python.failure import Failure\n\nfrom scrapy import Spider, signals\nfrom scrapy.crawler import AsyncCrawlerRunner, CrawlerRunner\nfrom scrapy.exceptions import CloseSpider, ScrapyDeprecationWarning, StopDownload\nfrom scrapy.http import Request\nfrom scrapy.http.response import Response\nfrom scrapy.utils.defer import ensure_awaitable, maybe_deferred_to_future\nfrom scrapy.utils.engine import format_engine_status, get_engine_status\nfrom scrapy.utils.python import to_unicode\nfrom scrapy.utils.test import get_crawler, get_reactor_settings\nfrom tests import NON_EXISTING_RESOLVABLE\nfrom tests.mockserver.http import MockServer\nfrom tests.spiders import (\n    AsyncDefAsyncioGenComplexSpider,\n    AsyncDefAsyncioGenExcSpider,\n    AsyncDefAsyncioGenLoopSpider,\n    AsyncDefAsyncioGenSpider,\n    AsyncDefAsyncioReqsReturnSpider,\n    AsyncDefAsyncioReturnSingleElementSpider,\n    AsyncDefAsyncioReturnSpider,\n    AsyncDefAsyncioSpider,\n    AsyncDefDeferredDirectSpider,\n    AsyncDefDeferredMaybeWrappedSpider,\n    AsyncDefDeferredWrappedSpider,\n    AsyncDefSpider,\n    BrokenStartSpider,\n    BytesReceivedCallbackSpider,\n    BytesReceivedErrbackSpider,\n    CrawlSpiderWithAsyncCallback,\n    CrawlSpiderWithAsyncGeneratorCallback,\n    CrawlSpiderWithErrback,\n    CrawlSpiderWithParseMethod,\n    CrawlSpiderWithProcessRequestCallbackKeywordArguments,\n    DelaySpider,\n    DuplicateStartSpider,\n    FollowAllSpider,\n    HeadersReceivedCallbackSpider,\n    HeadersReceivedErrbackSpider,\n    SimpleSpider,\n    SingleRequestSpider,\n    StartGoodAndBadOutput,\n    StartItemSpider,\n)\nfrom tests.utils.decorators import coroutine_test, inline_callbacks_test\n\n# ... (731 lines not shown) ...\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n        assert len(failures) == 1\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n\n    @inline_callbacks_test\n    def test_spider_errback_exception(self):\n        def eb(failure: Failure) -> None:\n            raise ValueError(\"foo\")\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n        assert \"Spider error processing\" in str(log)\n\n    @inline_callbacks_test\n    def test_spider_errback_item(self):\n        def eb(failure: Failure) -> Any:\n            return {\"foo\": \"bar\"}\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n        assert \"'item_scraped_count': 1\" in str(log)\n\n    @inline_callbacks_test\n    def test_spider_errback_request(self):\n        def eb(failure: Failure) -> Request:\n            return Request(self.mockserver.url(\"/\"))\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n        assert \"Crawled (200)\" in str(log)\n\n    @inline_callbacks_test\n    def test_spider_errback_downloader_error(self):\n        failures = []\n\n        def eb(failure: Failure) -> Failure:\n            failures.append(failure)\n            return failure\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/drop?abort=1\"), errback_func=eb\n            )\n        assert len(failures) == 1\n        assert \"Error downloading\" in str(log)\n        assert \"Spider error processing\" not in str(log)\n\n    @inline_callbacks_test\n    def test_spider_errback_downloader_error_exception(self):\n        def eb(failure: Failure) -> None:\n            raise ValueError(\"foo\")\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/drop?abort=1\"), errback_func=eb\n            )\n        assert \"Error downloading\" in str(log)\n        assert \"Spider error processing\" in str(log)\n\n    @inline_callbacks_test\n    def test_spider_errback_downloader_error_item(self):\n        def eb(failure: Failure) -> Any:\n            return {\"foo\": \"bar\"}\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/drop?abort=1\"), errback_func=eb\n            )\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n        assert \"'item_scraped_count': 1\" in str(log)\n\n    @inline_callbacks_test\n    def test_spider_errback_downloader_error_request(self):\n        def eb(failure: Failure) -> Request:\n            return Request(self.mockserver.url(\"/\"))\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/drop?abort=1\"), errback_func=eb\n            )\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n        assert \"Crawled (200)\" in str(log)\n\n    @inline_callbacks_test\n    def test_spider_errback_deferred_deprecated(self):\n        def eb(failure: Failure) -> Any:\n            return succeed(None)\n\n        crawler = get_crawler(SingleRequestSpider)\n        with pytest.warns(\n            ScrapyDeprecationWarning,\n            match=\"Returning Deferreds from spider errbacks is deprecated\",\n        ):\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n\n    @inline_callbacks_test\n    def test_raise_closespider(self):\n        def cb(response):\n            raise CloseSpider\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(seed=self.mockserver.url(\"/\"), callback_func=cb)\n        assert \"Closing spider (cancelled)\" in str(log)\n        assert \"Spider error processing\" not in str(log)\n\n    @inline_callbacks_test\n    def test_raise_closespider_reason(self):\n        def cb(response):\n            raise CloseSpider(\"my_reason\")\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(seed=self.mockserver.url(\"/\"), callback_func=cb)\n        assert \"Closing spider (my_reason)\" in str(log)\n        assert \"Spider error processing\" not in str(log)",
+   "test_excerpt_note": "first 60 and last 140 of 931 lines",
+   "existing_test_names": [
+    "test_async_def_asyncgen_parse",
+    "test_async_def_asyncgen_parse_complex",
+    "test_async_def_asyncgen_parse_exc",
+    "test_async_def_asyncgen_parse_loop",
+    "test_async_def_asyncio_parse",
+    "test_async_def_asyncio_parse_items_list",
+    "test_async_def_asyncio_parse_items_single_element",
+    "test_async_def_asyncio_parse_reqs_list",
+    "test_async_def_deferred_direct",
+    "test_async_def_deferred_maybe_wrapped",
+    "test_async_def_deferred_wrapped",
+    "test_async_def_parse",
+    "test_bytes_received_stop_download_callback",
+    "test_bytes_received_stop_download_errback",
+    "test_crawl_multiple",
+    "test_crawlerrunner_accepts_crawler",
+    "test_crawlspider_process_request_cb_kwargs",
+    "test_crawlspider_with_async_callback",
+    "test_crawlspider_with_async_generator_callback",
+    "test_crawlspider_with_errback",
+    "test_crawlspider_with_parse",
+    "test_engine_status",
+    "test_fixed_delay",
+    "test_follow_all",
+    "test_format_engine_status",
+    "test_headers_received_stop_download_callback",
+    "test_headers_received_stop_download_errback",
+    "test_open_spider_error_on_faulty_pipeline",
+    "test_raise_closespider",
+    "test_raise_closespider_reason",
+    "test_randomized_delay",
+    "test_referer_header",
+    "test_response_ip_address",
+    "test_response_ssl_certificate",
+    "test_response_ssl_certificate_none",
+    "test_retry_503",
+    "test_retry_conn_aborted",
+    "test_retry_conn_failed",
+    "test_retry_conn_lost",
+    "test_retry_dns_error",
+    "test_spider_callback_deferred_deprecated",
+    "test_spider_errback",
+    "test_spider_errback_deferred_deprecated",
+    "test_spider_errback_downloader_error",
+    "test_spider_errback_downloader_error_exception",
+    "test_spider_errback_downloader_error_item",
+    "test_spider_errback_downloader_error_request",
+    "test_spider_errback_exception",
+    "test_spider_errback_item",
+    "test_spider_errback_request",
+    "test_spider_errback_silence",
+    "test_start_bug_before_yield",
+    "test_start_bug_yielding",
+    "test_start_dupes",
+    "test_start_items",
+    "test_start_unsupported_output",
+    "test_timeout_failure",
+    "test_timeout_success",
+    "test_unbounded_response",
+    "test_unknown_url_scheme"
+   ],
+   "dev_gate": {
+    "ran": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "error": ""
+   },
+   "dev_covered": [
+    499,
+    522,
+    523
+   ],
+   "prism_context": "# Test context: `scrapy.utils.defer.maybe_deferred_to_future` (tests go to tests/test_crawl.py)\n\n## 1. Target\n```\ndef maybe_deferred_to_future(d: Deferred[_T]) -> Deferred[_T] | Future[_T]:\n    \"\"\"Return *d* as an object that can be awaited from a :ref:`Scrapy callable\n    defined as a coroutine <coroutine-support>`.\n\n    What you can await in Scrapy callables defined as coroutines depends on the\n    value of :setting:`TWISTED_REACTOR`:\n\n    -   When :ref:`using the asyncio reactor <install-asyncio>`, you can only\n        await on :class:`asyncio.Future` objects.\n\n    -   When not using the asyncio reactor, you can only await on\n        :class:`~twisted.internet.defer.Deferred` objects.\n\n    If you want to write code that uses ``Deferred`` objects but works with any\n    reactor, use this function on all ``Deferred`` objects::\n\n        class MySpider(Spider):\n            ...\n            async def parse(self, response):\n                additional_request = scrapy.Request('https://example.org/price')\n                deferred = self.crawler.engine.download(additional_request)\n                additional_response = await maybe_deferred_to_future(deferred)\n    \"\"\"\n    if not is_asyncio_available():\n        return d\n    return deferred_to_future(d)\n```\n\nDigest (what a test should exercise):\n```\nL522 calls inside: is_asyncio_available() -> scrapy.utils.asyncio.is_asyncio_available\nwhen not is_asyncio_available():\n  L523 return d\nL524 return deferred_to_future(d) [calls: deferred_to_future() -> scrapy.utils.defer.deferred_to_future]\n```\n\nWhat it relies on in its callees:\n- `scrapy.utils.asyncio.is_asyncio_available` can raise `RuntimeError`; this function does not catch it\n- `scrapy.utils.defer.deferred_to_future` can raise `RuntimeError`; this function does not catch it\n\n## 2. How production code calls it\n- `scrapy.core.downloader.Downloader._enqueue_request` (scrapy/core/downloader/__init__.py): L191 result: returns the result to its own callers; L191 errors: calls it inside a try block catching ; L191 arguments: passes 1 positional argument\n- `scrapy.core.downloader.handlers.DownloadHandlers.download_request_async` (scrapy/core/downloader/handlers/__init__.py): L150 result: returns the result to its own callers; L150 arguments: passes 1 positional argument; L150 async: awaits it\n- `scrapy.core.downloader.handlers.ftp.FTPDownloadHandler.download_request` (scrapy/core/downloader/handlers/ftp.py): L108 result: stores the result in `client`, then reads .retrieveFile; L108 arguments: passes 1 positional argument; L108 async: awaits it\n- `scrapy.core.downloader.handlers.http11.HTTP11DownloadHandler.close` (scrapy/core/downloader/handlers/http11.py): L155 result: ignores the return value; L155 errors: calls it inside a try block catching ; L155 arguments: passes 1 positional argument\n- `scrapy.core.downloader.handlers.http11.HTTP11DownloadHandler.download_request` (scrapy/core/downloader/handlers/http11.py): L131 result: returns the result to its own callers; L131 errors: calls it inside a try block catching ResponseDataLossError; L131 arguments: passes 1 positional argument\n- `scrapy.core.downloader.handlers.http2.H2DownloadHandler.download_request` (scrapy/core/downloader/handlers/http2.py): L60 result: returns the result to its own callers; L60 arguments: passes 1 positional argument; L60 async: awaits it\n\n## 3. Existing tests\nTests that already reach it: `tests.CrawlerProcess.sleeping.SleepingSpider.parse`, `tests.spiders.AsyncDefDeferredMaybeWrappedSpider.parse`, `tests.test_core_downloader.TestContextFactoryBase.get_page`, `tests.test_crawl.TestCrawl.test_unknown_url_scheme`, `tests.test_crawl.TestCrawlSpider._run_spider`, `tests.test_crawler.test_deprecated_crawler_stop`, `tests.test_downloader_handlers_http_base.TestHttpBase.test_timeout_download_from_spider_nodata_rcvd`, `tests.test_downloader_handlers_http_base.TestHttpBase.test_timeout_download_from_spider_server_hangs`, `tests.test_downloader_handlers_http_base.TestHttpWithCrawlerBase.test_download`, `tests.test_downloader_handlers_http_base.TestHttpWithCrawlerBase.test_download_with_content_length`, `tests.test_downloader_handlers_http_base.TestRealWebsiteBase.test_download_with_spider`, `tests.test_downloadermiddleware.TestDownloadDeprecated.test_mwman_download`\n\n`tests.test_crawl.TestCrawl.test_unknown_url_scheme` (in tests/test_crawl.py):\n```python\n    @coroutine_test\n    async def test_unknown_url_scheme(self, caplog: pytest.LogCaptureFixture) -> None:\n        crawler = get_crawler(SimpleSpider)\n        await maybe_deferred_to_future(crawler.crawl(\"foo://bar\"))\n        assert \"NotSupported: Unsupported URL scheme 'foo'\" in caplog.text\n```\n\n`tests.test_crawl.TestCrawlSpider.test_async_def_deferred_maybe_wrapped` (in tests/test_crawl.py):\n```python\n    @coroutine_test\n    async def test_async_def_deferred_maybe_wrapped(self):\n        _, items, _ = await self._run_spider(AsyncDefDeferredMaybeWrappedSpider)\n        assert items == [{\"code\": 200}]\n```\n\n## 4. Test conventions in tests/test_crawl.py\n- plain `assert` statements (51 of 60 tests)\n- errors checked with `pytest.raises` (1 of 60 tests)\n- `@pytest.mark.parametrize` for several inputs (2 of 60 tests)\n- async tests (15 of 60 tests)\n- tests grouped in test classes (60 of 60 tests)\n- fixtures taken as parameters: `caplog` (2), `mockserver` (2), `url` (2)\n",
+   "id": "scrapy-tests-002"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "c7eacdbb30a4563bbbe04ed02781768f4e19eabb",
+   "parent": "e810f5fca166e8cd03d005d07b6a6a2373407d6a",
+   "subject": "Unpack some test classes that are just containers. (#8000)",
+   "date": "2026-08-17T14:33:26+02:00",
+   "test_file": "tests/test_logstats.py",
+   "tests": [
+    {
+     "name": "test_stats_calculation_no_elapsed_time",
+     "code": "def test_stats_calculation_no_elapsed_time(\n    crawler: Crawler, stats: StatsCollector\n) -> None:\n    \"\"\"The stat values should be None since the elapsed time is 0.\"\"\"\n    logstats = build_from_crawler(LogStats, crawler)\n    stats.set_value(\"start_time\", datetime.fromtimestamp(1655100172))\n    stats.set_value(\"finish_time\", datetime.fromtimestamp(1655100172))\n    assert crawler.spider\n    logstats.spider_closed(crawler.spider, \"test reason\")\n    assert stats.get_value(\"responses_per_minute\") is None\n    assert stats.get_value(\"items_per_minute\") is None",
+     "start": 86,
+     "calls": [
+      "build_from_crawler",
+      "fromtimestamp",
+      "get_value",
+      "set_value",
+      "spider_closed"
+     ]
+    },
+    {
+     "name": "test_stats_calculations",
+     "code": "async def test_stats_calculations(crawler: Crawler, stats: StatsCollector) -> None:\n    logstats = build_from_crawler(LogStats, crawler)\n\n    with pytest.raises(AttributeError):\n        logstats.pagesprev\n    with pytest.raises(AttributeError):\n        logstats.itemsprev\n\n    assert crawler.spider\n    logstats.spider_opened(crawler.spider)\n    assert logstats.pagesprev == 4802\n    assert logstats.itemsprev == 3201\n\n    logstats.calculate_stats()\n    assert logstats.items == 3201\n    assert logstats.pages == 4802\n    assert logstats.irate == 0.0\n    assert logstats.prate == 0.0\n    assert logstats.pagesprev == 4802\n    assert logstats.itemsprev == 3201\n\n    # Simulate what happens after a minute\n    stats.set_value(\"response_received_count\", 5187)\n    stats.set_value(\"item_scraped_count\", 3492)\n    logstats.calculate_stats()\n    assert logstats.items == 3492\n    assert logstats.pages == 5187\n    assert logstats.irate == 291.0\n    assert logstats.prate == 385.0\n    assert logstats.pagesprev == 5187\n    assert logstats.itemsprev == 3492\n\n    # Simulate when spider closes after running for 30 mins\n    stats.set_value(\"start_time\", datetime.fromtimestamp(1655100172))\n    stats.set_value(\"finish_time\", datetime.fromtimestamp(1655101972))\n    logstats.spider_closed(crawler.spider, \"test reason\")\n    assert stats.get_value(\"responses_per_minute\") == 172.9\n    assert stats.get_value(\"items_per_minute\") == 116.4",
+     "start": 35,
+     "calls": [
+      "build_from_crawler",
+      "calculate_stats",
+      "fromtimestamp",
+      "get_value",
+      "raises",
+      "set_value",
+      "spider_closed",
+      "spider_opened"
+     ]
+    },
+    {
+     "name": "test_stats_calculations_no_time",
+     "code": "def test_stats_calculations_no_time(crawler: Crawler, stats: StatsCollector) -> None:\n    \"\"\"The stat values should be None since the start and finish time are\n    not available.\n    \"\"\"\n    logstats = build_from_crawler(LogStats, crawler)\n    assert crawler.spider\n    logstats.spider_closed(crawler.spider, \"test reason\")\n    assert stats.get_value(\"responses_per_minute\") is None\n    assert stats.get_value(\"items_per_minute\") is None",
+     "start": 75,
+     "calls": [
+      "build_from_crawler",
+      "get_value",
+      "spider_closed"
+     ]
+    }
+   ],
+   "order": 53,
+   "target": "scrapy.utils.misc.build_from_crawler",
+   "target_file": "scrapy/utils/misc.py",
+   "target_lines": [
+    195,
+    218
+   ],
+   "target_window": "        (\n            \"The scrapy.utils.misc.md5sum function is deprecated and will be \"\n            \"removed in a future version of Scrapy.\"\n        ),\n        ScrapyDeprecationWarning,\n        stacklevel=2,\n    )\n    m = hashlib.md5()  # noqa: S324\n    while True:\n        d = file.read(8096)\n        if not d:\n            break\n        m.update(d)\n    return m.hexdigest()\n\n\ndef rel_has_nofollow(rel: str | None) -> bool:\n    \"\"\"Return True if link rel attribute has nofollow type\"\"\"\n    return rel is not None and \"nofollow\" in rel.lower().replace(\",\", \" \").split()\n\n\nclass SupportsFromCrawler(Protocol[_T_co, _P]):\n    @classmethod\n    def from_crawler(\n        cls, crawler: Crawler, /, *args: _P.args, **kwargs: _P.kwargs\n    ) -> _T_co: ...\n\n\n@overload\ndef build_from_crawler(\n    objcls: SupportsFromCrawler[_T_co, _P],\n    crawler: Crawler,\n    /,\n    *args: _P.args,\n    **kwargs: _P.kwargs,\n) -> _T_co: ...\n\n\n@overload\ndef build_from_crawler(\n    objcls: Callable[_P, _T_co],\n    crawler: Crawler,\n    /,\n    *args: _P.args,\n    **kwargs: _P.kwargs,\n) -> _T_co: ...\n\n\ndef build_from_crawler(\n    objcls: Any,\n    crawler: Crawler,\n    /,\n    *args: Any,\n    **kwargs: Any,\n) -> Any:\n    \"\"\"Construct a class instance using its ``from_crawler()`` or ``__init__()`` constructor.\n\n    .. versionadded:: 2.12\n\n    ``*args`` and ``**kwargs`` are forwarded to the constructor.\n\n    Raises ``TypeError`` if the resulting instance is ``None``.\n    \"\"\"\n    if hasattr(objcls, \"from_crawler\"):\n        instance = objcls.from_crawler(crawler, *args, **kwargs)\n        method_name = \"from_crawler\"\n    else:\n        instance = objcls(*args, **kwargs)\n        method_name = \"__new__\"\n    if instance is None:\n        raise TypeError(f\"{objcls.__qualname__}.{method_name} returned None\")\n    return instance\n\n\n@contextmanager\ndef set_environ(**kwargs: str) -> Iterator[None]:\n    \"\"\"Temporarily set environment variables inside the context manager and\n    fully restore previous environment afterwards\n    \"\"\"\n\n    original_env = {k: os.environ.get(k) for k in kwargs}\n    os.environ.update(kwargs)\n    try:\n        yield\n    finally:\n        for k, v in original_env.items():\n            if v is None:\n                del os.environ[k]\n            else:\n                os.environ[k] = v\n\n\ndef walk_callable(node: ast.AST) -> Iterable[ast.AST]:\n    \"\"\"Similar to ``ast.walk``, but walks only function body and skips nested\n    functions defined within the node.\n    \"\"\"\n    todo: deque[ast.AST] = deque([node])\n    walked_func_def = False\n    while todo:\n        node = todo.popleft()\n        if isinstance(node, ast.FunctionDef):\n            if walked_func_def:\n                continue\n            walked_func_def = True\n        todo.extend(ast.iter_child_nodes(node))\n        yield node\n\n\n_generator_callbacks_cache: LocalWeakReferencedCache[Callable[..., Any], bool] = (\n    LocalWeakReferencedCache(limit=128)\n)\n\n\ndef _returns_none(return_node: ast.Return) -> bool:\n    value = return_node.value\n    return value is None or (isinstance(value, ast.Constant) and value.value is None)\n\n\ndef is_generator_with_return_value(callable: Callable[..., Any]) -> bool:  # noqa: A002\n    \"\"\"",
+   "target_window_lines": [
+    147,
+    266
+   ],
+   "test_excerpt": "from __future__ import annotations\n\nfrom datetime import datetime\n\nimport pytest\n\nfrom scrapy.extensions.logstats import LogStats\nfrom scrapy.utils.misc import build_from_crawler\nfrom scrapy.utils.test import get_crawler\nfrom tests.spiders import SimpleSpider\nfrom tests.utils.decorators import coroutine_test\n\n\nclass TestLogStats:\n    def setup_method(self) -> None:\n        self.crawler = get_crawler(SimpleSpider)\n        self.spider = self.crawler._create_spider(\"spidey\")\n        self.stats = self.crawler.stats\n\n        self.stats.set_value(\"response_received_count\", 4802)\n        self.stats.set_value(\"item_scraped_count\", 3201)\n\n    @coroutine_test\n    async def test_stats_calculations(self) -> None:\n        logstats = build_from_crawler(LogStats, self.crawler)\n\n        with pytest.raises(AttributeError):\n            logstats.pagesprev\n        with pytest.raises(AttributeError):\n            logstats.itemsprev\n\n        logstats.spider_opened(self.spider)\n        assert logstats.pagesprev == 4802\n        assert logstats.itemsprev == 3201\n\n        logstats.calculate_stats()\n        assert logstats.items == 3201\n        assert logstats.pages == 4802\n        assert logstats.irate == 0.0\n        assert logstats.prate == 0.0\n        assert logstats.pagesprev == 4802\n        assert logstats.itemsprev == 3201\n\n        # Simulate what happens after a minute\n        self.stats.set_value(\"response_received_count\", 5187)\n        self.stats.set_value(\"item_scraped_count\", 3492)\n        logstats.calculate_stats()\n        assert logstats.items == 3492\n        assert logstats.pages == 5187\n        assert logstats.irate == 291.0\n        assert logstats.prate == 385.0\n        assert logstats.pagesprev == 5187\n        assert logstats.itemsprev == 3492\n\n        # Simulate when spider closes after running for 30 mins\n        self.stats.set_value(\"start_time\", datetime.fromtimestamp(1655100172))\n        self.stats.set_value(\"finish_time\", datetime.fromtimestamp(1655101972))\n        logstats.spider_closed(self.spider, \"test reason\")\n        assert self.stats.get_value(\"responses_per_minute\") == 172.9\n        assert self.stats.get_value(\"items_per_minute\") == 116.4\n\n    def test_stats_calculations_no_time(self) -> None:\n        \"\"\"The stat values should be None since the start and finish time are\n        not available.\n        \"\"\"\n        logstats = build_from_crawler(LogStats, self.crawler)\n        logstats.spider_closed(self.spider, \"test reason\")\n        assert self.stats.get_value(\"responses_per_minute\") is None\n        assert self.stats.get_value(\"items_per_minute\") is None\n\n    def test_stats_calculation_no_elapsed_time(self) -> None:\n        \"\"\"The stat values should be None since the elapsed time is 0.\"\"\"\n        logstats = build_from_crawler(LogStats, self.crawler)\n        self.stats.set_value(\"start_time\", datetime.fromtimestamp(1655100172))\n        self.stats.set_value(\"finish_time\", datetime.fromtimestamp(1655100172))\n        logstats.spider_closed(self.spider, \"test reason\")\n        assert self.stats.get_value(\"responses_per_minute\") is None\n        assert self.stats.get_value(\"items_per_minute\") is None\n",
+   "test_excerpt_note": "whole file",
+   "existing_test_names": [
+    "test_stats_calculation_no_elapsed_time",
+    "test_stats_calculations",
+    "test_stats_calculations_no_time"
+   ],
+   "dev_gate": {
+    "ran": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "error": ""
+   },
+   "dev_covered": [
+    195,
+    210,
+    211,
+    212,
+    216,
+    218
+   ],
+   "prism_context": "# Test context: `scrapy.utils.misc.build_from_crawler` (tests go to tests/test_logstats.py)\n\n## 1. Target\n```\ndef build_from_crawler(\n    objcls: Any,\n    crawler: Crawler,\n    /,\n    *args: Any,\n    **kwargs: Any,\n) -> Any:\n    \"\"\"Construct a class instance using its ``from_crawler()`` or ``__init__()`` constructor.\n\n    .. versionadded:: 2.12\n\n    ``*args`` and ``**kwargs`` are forwarded to the constructor.\n\n    Raises ``TypeError`` if the resulting instance is ``None``.\n    \"\"\"\n    if hasattr(objcls, \"from_crawler\"):\n        instance = objcls.from_crawler(crawler, *args, **kwargs)\n        method_name = \"from_crawler\"\n    else:\n        instance = objcls(*args, **kwargs)\n        method_name = \"__new__\"\n    if instance is None:\n        raise TypeError(f\"{objcls.__qualname__}.{method_name} returned None\")\n    return instance\n```\n\nDigest (what a test should exercise):\n```\nwhen hasattr(objcls, \"from_crawler\"):\n  L211 instance = objcls.from_crawler(crawler, *args, **kwargs) [calls: from_crawler() -> one of extras.qpsclient.QPSSpider.from_crawler|scrapy.core.downloader.contextfactory._ScrapyClientContextFactory.from_crawler|scrapy.core.downloader.handlers.base.BaseDownloadHandler.from_crawler|...]\n  L212 method_name = \"from_crawler\"\nwhen not (hasattr(objcls, \"from_crawler\")):\n  L214 dynamic: calls the function passed as argument objcls -> one of: scrapy.core.downloader.middleware.DownloaderMiddlewareManager, scrapy.core.engine.ExecutionEngine.scheduler_cls, scrapy.core.scheduler.Scheduler.pqclass, scrapy.core.spidermw.SpiderMiddlewareManager, scrapy.extension.ExtensionManager, scrapy.downloadermiddlewares.robotstxt.RobotsTxtMiddleware._parserimpl | code: instance = objcls(*args, **kwargs)\n  L214 instance = objcls(*args, **kwargs)\n  L215 method_name = \"__new__\"\nwhen instance is None:\n  L217 raise TypeError(f\"{objcls.__qualname__}.{method_name} returned None\")\nL218 return instance\n```\n\nWhat it relies on in its callees:\n- `extras.qpsclient.QPSSpider.from_crawler` changes state: crawler.settings.set(\"DOWNLOAD_DELAY\", 1 / spider.qps, prio\u2026\n- `scrapy.downloadermiddlewares.cookies.CookiesMiddleware.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.downloadermiddlewares.httpauth.HttpAuthMiddleware.from_crawler` can raise `ValueError`; this function does not catch it\n- `scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.downloadermiddlewares.stats.DownloaderStats.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.extensions.logstats.LogStats.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.extensions.memdebug.MemoryDebugger.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.extensions.periodic_log.PeriodicLog.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.extensions.spiderstate.SpiderState.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.extensions.statsmailer.StatsMailer.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.spidermiddlewares.referer.RefererMiddleware.from_crawler` can raise `NotConfigured`; this function does not catch it\n- `scrapy.spidermiddlewares.urllength.UrlLengthMiddleware.from_crawler` can raise `NotConfigured`; this function does not catch it\n\n## 2. How production code calls it\n- `scrapy.addons.AddonManager.load_settings` (scrapy/addons.py): L38 result: stores the result in `addon`, then checks `hasattr(addon, \"update_settings\")`; reads .update_settings; passes it to `self.addons.append()`, `hasattr()`; L38 errors: does not catch `TypeError` raised by it: the error propagates to this function's callers; L38 arguments: passes 2 positional arguments\n- `scrapy.core.downloader.Downloader.__init__` (scrapy/core/downloader/__init__.py): L103 result: stores the result in `self.middleware`; L103 errors: does not catch `TypeError` raised by it: the error propagates to this function's callers; L103 arguments: passes 2 positional arguments\n- `scrapy.core.downloader.contextfactory._load_context_factory_from_settings` (scrapy/core/downloader/contextfactory.py): L298 result: passes the result to `cast()`; L298 errors: does not catch `TypeError` raised by it: the error propagates to this function's callers; L298 arguments: passes 2 positional arguments, keywords `method`\n- `scrapy.core.downloader.handlers.DownloadHandlers._load_handler` (scrapy/core/downloader/handlers/__init__.py): L115 result: stores the result in `dh`, then checks `not inspect.iscoroutinefunction(dh.download_request)`; reads .download_request; returns it; L115 errors: catches `TypeError` raised by it (around the call: NotConfigured, Exception); L115 arguments: passes 2 positional arguments\n- `scrapy.core.downloader.handlers.s3.S3DownloadHandler.__init__` (scrapy/core/downloader/handlers/s3.py): L45 result: stores the result in `_http_handler`, then reads .download_request; L45 errors: does not catch `TypeError` raised by it: the error propagates to this function's callers; L45 arguments: passes 2 positional arguments\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` (scrapy/core/engine.py): L556 result: stores the result in `scheduler`, then checks `hasattr(scheduler, \"open\") and ( d := scheduler.open(self.crawler.spi\u2026`; reads .open; passes it to `hasattr()`, `_Slot()`; L556 errors: does not catch `TypeError` raised by it: the error propagates to this function's callers; L556 arguments: passes 2 positional arguments\n\n## 3. Existing tests\nTests that already reach it: `tests.test_core_downloader.TestContextFactoryCiphers.test_custom`, `tests.test_core_downloader.TestContextFactoryCiphers.test_default`, `tests.test_core_downloader.TestContextFactoryCiphers.test_none`, `tests.test_core_downloader.TestContextFactoryTLSMethod.test_direct_from_crawler`, `tests.test_downloader_handler_httpx.test_pool_limits`, `tests.test_downloader_handler_twisted_ftp.TestFTPBase.dh`, `tests.test_downloader_handler_twisted_ftp.test_not_configured_without_reactor`, `tests.test_downloader_handler_twisted_http11.test_not_configured_without_reactor`, `tests.test_downloader_handler_twisted_http2.test_not_configured_without_reactor`, `tests.test_downloader_handlers.TestDataURI.setup_method`, `tests.test_downloader_handlers.TestFile.setup_method`, `tests.test_downloader_handlers.TestS3.setup_method`\n\n`tests.test_logstats.TestLogStats.test_stats_calculation_no_elapsed_time` (in tests/test_logstats.py):\n```python\n    def test_stats_calculation_no_elapsed_time(self) -> None:\n        \"\"\"The stat values should be None since the elapsed time is 0.\"\"\"\n        logstats = build_from_crawler(LogStats, self.crawler)\n        self.stats.set_value(\"start_time\", datetime.fromtimestamp(1655100172))\n        self.stats.set_value(\"finish_time\", datetime.fromtimestamp(1655100172))\n        logstats.spider_closed(self.spider, \"test reason\")\n        assert self.stats.get_value(\"responses_per_minute\") is None\n        assert self.stats.get_value(\"items_per_minute\") is None\n```\n\n`tests.test_logstats.TestLogStats.test_stats_calculations` (in tests/test_logstats.py):\n```python\n    @coroutine_test\n    async def test_stats_calculations(self) -> None:\n        logstats = build_from_crawler(LogStats, self.crawler)\n\n        with pytest.raises(AttributeError):\n            logstats.pagesprev\n        with pytest.raises(AttributeError):\n            logstats.itemsprev\n\n        logstats.spider_opened(self.spider)\n        assert logstats.pagesprev == 4802\n        assert logstats.itemsprev == 3201\n\n        logstats.calculate_stats()\n        assert logstats.items == 3201\n        assert logstats.pages == 4802\n        assert logstats.irate == 0.0\n        assert logstats.prate == 0.0\n        assert logstats.pagesprev == 4802\n        assert logstats.itemsprev == 3201\n\n        # Simulate what happens after a minute\n        self.stats.set_value(\"response_received_count\", 5187)\n        self.stats.set_value(\"item_scraped_count\", 3492)\n        logstats.calculate_stats()\n        assert logstats.items == 3492\n        assert logstats.pages == 5187\n        assert logstats.irate == 291.0\n        assert logstats.prate == 385.0\n        assert logstats.pagesprev == 5187\n        assert logstats.itemsprev == 3492\n\n        # Simulate when spider closes after running for 30 mins\n        self.stats.set_value(\"start_time\", datetime.fromtimestamp(1655100172))\n        self.stats.set_value(\"finish_time\", datetime.fromtimestamp(1655101972))\n        logstats.spider_closed(self.spider, \"test reason\")\n        assert self.stats.get_value(\"responses_per_minute\") == 172.9\n        assert self.stats.get_value(\"items_per_minute\") == 116.4\n```\n\n## 4. Test conventions in tests/test_logstats.py\n- plain `assert` statements (3 of 3 tests)\n- errors checked with `pytest.raises` (1 of 3 tests)\n- async tests (1 of 3 tests)\n- tests grouped in test classes (3 of 3 tests)\n",
+   "id": "scrapy-tests-003"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "7afc875081c5a3a26fdc8d717818d84c3bd789fd",
+   "parent": "a8ffdcf8517a8973391a14635234b6993b15a86a",
+   "subject": "Add coverage for Item.__delitem__() (#7610)",
+   "date": "2026-06-12T15:32:38+05:00",
+   "test_file": "tests/test_item.py",
+   "tests": [
+    {
+     "name": "TestItem.test_delitem",
+     "code": "def test_delitem(self):\n        class TestItem(Item):\n            name = Field()\n\n        i = TestItem(name=\"John\")\n        del i[\"name\"]\n        with pytest.raises(KeyError):\n            i[\"name\"]\n\n        with pytest.raises(KeyError):\n            del i[\"name\"]",
+     "start": 51,
+     "calls": [
+      "Field",
+      "TestItem",
+      "raises"
+     ]
+    }
+   ],
+   "order": 90,
+   "target": "scrapy.item.Field",
+   "target_file": "scrapy/item.py",
+   "target_lines": [
+    24,
+    25
+   ],
+   "target_window": "\"\"\"\nScrapy Item\n\nSee documentation in docs/topics/item.rst\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom abc import ABCMeta\nfrom collections.abc import MutableMapping\nfrom copy import deepcopy\nfrom pprint import pformat\nfrom typing import TYPE_CHECKING, Any, NoReturn\n\nfrom scrapy.utils.trackref import object_ref\n\nif TYPE_CHECKING:\n    from collections.abc import Iterator, KeysView\n\n    # typing.Self requires Python 3.11\n    from typing_extensions import Self\n\n\nclass Field(dict[str, Any]):\n    \"\"\"Container of field metadata\"\"\"\n\n\nclass ItemMeta(ABCMeta):\n    \"\"\"Metaclass_ of :class:`Item` that handles field definitions.\n\n    .. _metaclass: https://realpython.com/python-metaclasses\n    \"\"\"\n\n    def __new__(\n        mcs, class_name: str, bases: tuple[type, ...], attrs: dict[str, Any]\n    ) -> ItemMeta:\n        classcell = attrs.pop(\"__classcell__\", None)\n        new_bases = tuple(base._class for base in bases if hasattr(base, \"_class\"))\n        _class = super().__new__(mcs, \"x_\" + class_name, new_bases, attrs)\n\n        fields = getattr(_class, \"fields\", {})\n        new_attrs = {}\n        for n in dir(_class):\n            v = getattr(_class, n)\n            if isinstance(v, Field):\n                fields[n] = v\n            elif n in attrs:\n                new_attrs[n] = attrs[n]\n\n        new_attrs[\"fields\"] = fields\n        new_attrs[\"_class\"] = _class\n        if classcell is not None:\n            new_attrs[\"__classcell__\"] = classcell\n        return super().__new__(mcs, class_name, bases, new_attrs)\n\n\nclass Item(MutableMapping[str, Any], object_ref, metaclass=ItemMeta):\n    \"\"\"Base class for scraped items.\n\n    In Scrapy, an object is considered an ``item`` if it's supported by the\n    `itemadapter`_ library. For example, when the output of a spider callback\n    is evaluated, only such objects are passed to :ref:`item pipelines\n    <topics-item-pipeline>`. :class:`Item` is one of the classes supported by\n    `itemadapter`_ by default.\n\n    Items must declare :class:`Field` attributes, which are processed and stored\n    in the ``fields`` attribute. This restricts the set of allowed field names\n    and prevents typos, raising ``KeyError`` when referring to undefined fields.\n    Additionally, fields can be used to define metadata and control the way\n    data is processed internally. Please refer to the :ref:`documentation\n    about fields <topics-items-fields>` for additional information.\n\n    Unlike instances of :class:`dict`, instances of :class:`Item` may be\n    :ref:`tracked <topics-leaks-trackrefs>` to debug memory leaks.\n\n    .. _itemadapter: https://github.com/scrapy/itemadapter\n    \"\"\"\n\n    #: A dictionary containing *all declared fields* for this Item, not only\n    #: those populated. The keys are the field names and the values are the\n    #: :class:`Field` objects used in the :ref:`Item declaration\n    #: <topics-items-declaring>`.\n    fields: dict[str, Field]\n\n    def __init__(self, *args: Any, **kwargs: Any):\n        self._values: dict[str, Any] = {}\n        if args or kwargs:  # avoid creating dict for most common case\n            for k, v in dict(*args, **kwargs).items():\n                self[k] = v\n\n    def __getitem__(self, key: str) -> Any:\n        return self._values[key]\n\n    def __setitem__(self, key: str, value: Any) -> None:\n        if key in self.fields:\n            self._values[key] = value\n        else:\n            raise KeyError(f\"{self.__class__.__name__} does not support field: {key}\")\n\n    def __delitem__(self, key: str) -> None:\n        del self._values[key]\n\n    def __getattr__(self, name: str) -> NoReturn:\n        if name in self.fields:\n            raise AttributeError(f\"Use item[{name!r}] to get field value\")\n        raise AttributeError(name)\n\n    def __setattr__(self, name: str, value: Any) -> None:\n        if not name.startswith(\"_\"):\n            raise AttributeError(f\"Use item[{name!r}] = {value!r} to set field value\")\n        super().__setattr__(name, value)\n\n    def __len__(self) -> int:\n        return len(self._values)\n\n    def __iter__(self) -> Iterator[str]:\n        return iter(self._values)\n\n    __hash__ = object_ref.__hash__\n",
+   "target_window_lines": [
+    1,
+    120
+   ],
+   "test_excerpt": "from abc import ABCMeta\nfrom unittest import mock\n\nimport pytest\n\nfrom scrapy.item import Field, Item, ItemMeta\n\n\nclass TestItem:\n    def assertSortedEqual(self, first, second, msg=None):\n        assert sorted(first) == sorted(second), msg\n\n    def test_simple(self):\n        class TestItem(Item):\n            name = Field()\n\n        i = TestItem()\n        i[\"name\"] = \"name\"\n        assert i[\"name\"] == \"name\"\n\n    def test_init(self):\n        class TestItem(Item):\n            name = Field()\n\n        i = TestItem()\n        with pytest.raises(KeyError):\n            i[\"name\"]\n\n        i2 = TestItem(name=\"john doe\")\n        assert i2[\"name\"] == \"john doe\"\n\n        i3 = TestItem({\"name\": \"john doe\"})\n        assert i3[\"name\"] == \"john doe\"\n\n        i4 = TestItem(i3)\n        assert i4[\"name\"] == \"john doe\"\n\n        with pytest.raises(KeyError):\n            TestItem({\"name\": \"john doe\", \"other\": \"foo\"})\n\n    def test_invalid_field(self):\n        class TestItem(Item):\n            pass\n\n        i = TestItem()\n        with pytest.raises(KeyError):\n            i[\"field\"] = \"text\"\n        with pytest.raises(KeyError):\n            i[\"field\"]\n\n    def test_repr(self):\n        class TestItem(Item):\n            name = Field()\n            number = Field()\n\n        i = TestItem()\n        i[\"name\"] = \"John Doe\"\n        i[\"number\"] = 123\n        itemrepr = repr(i)\n\n# ... (101 lines not shown) ...\n        item = D(save=\"X\", load=\"Y\")\n        assert item[\"save\"] == \"X\"\n        assert item[\"load\"] == \"Y\"\n        assert D.fields == {\"load\": {\"default\": \"A\"}, \"save\": {\"default\": \"A\"}}\n\n        # D class inverted\n        class E(C, B):\n            pass\n\n        assert E(save=\"X\")[\"save\"] == \"X\"\n        assert E(load=\"X\")[\"load\"] == \"X\"\n        assert E.fields == {\"load\": {\"default\": \"C\"}, \"save\": {\"default\": \"C\"}}\n\n    def test_metaclass_multiple_inheritance_diamond(self):\n        class A(Item):\n            fields = {\"update\": Field(default=\"A\")}\n            save = Field(default=\"A\")\n            load = Field(default=\"A\")\n\n        class B(A):\n            pass\n\n        class C(A):\n            fields = {\"update\": Field(default=\"C\")}\n            save = Field(default=\"C\")\n\n        class D(B, C):\n            fields = {\"update\": Field(default=\"D\")}\n            load = Field(default=\"D\")\n\n        assert D(save=\"X\")[\"save\"] == \"X\"\n        assert D(load=\"X\")[\"load\"] == \"X\"\n        assert D.fields == {\n            \"save\": {\"default\": \"C\"},\n            \"load\": {\"default\": \"D\"},\n            \"update\": {\"default\": \"D\"},\n        }\n\n        # D class inverted\n        class E(C, B):\n            load = Field(default=\"E\")\n\n        assert E(save=\"X\")[\"save\"] == \"X\"\n        assert E(load=\"X\")[\"load\"] == \"X\"\n        assert E.fields == {\n            \"save\": {\"default\": \"C\"},\n            \"load\": {\"default\": \"E\"},\n            \"update\": {\"default\": \"C\"},\n        }\n\n    def test_metaclass_multiple_inheritance_without_metaclass(self):\n        class A(Item):\n            fields = {\"load\": Field(default=\"A\")}\n            save = Field(default=\"A\")\n\n        class B(A):\n            pass\n\n        class C:\n            fields = {\"load\": Field(default=\"C\")}\n            not_allowed = Field(default=\"not_allowed\")\n            save = Field(default=\"C\")\n\n        class D(B, C):\n            pass\n\n        with pytest.raises(KeyError):\n            D(not_allowed=\"value\")\n        assert D(save=\"X\")[\"save\"] == \"X\"\n        assert D.fields == {\"save\": {\"default\": \"A\"}, \"load\": {\"default\": \"A\"}}\n\n        # D class inverted\n        class E(C, B):\n            pass\n\n        with pytest.raises(KeyError):\n            E(not_allowed=\"value\")\n        assert E(save=\"X\")[\"save\"] == \"X\"\n        assert E.fields == {\"save\": {\"default\": \"A\"}, \"load\": {\"default\": \"A\"}}\n\n    def test_to_dict(self):\n        class TestItem(Item):\n            name = Field()\n\n        i = TestItem()\n        i[\"name\"] = \"John\"\n        assert dict(i) == {\"name\": \"John\"}\n\n    def test_copy(self):\n        class TestItem(Item):\n            name = Field()\n\n        item = TestItem({\"name\": \"lower\"})\n        copied_item = item.copy()\n        assert id(item) != id(copied_item)\n        copied_item[\"name\"] = copied_item[\"name\"].upper()\n        assert item[\"name\"] != copied_item[\"name\"]\n\n    def test_deepcopy(self):\n        class TestItem(Item):\n            tags = Field()\n\n        item = TestItem({\"tags\": [\"tag1\"]})\n        copied_item = item.deepcopy()\n        item[\"tags\"].append(\"tag2\")\n        assert item[\"tags\"] != copied_item[\"tags\"]\n\n\nclass TestItemMeta:\n    def test_new_method_propagates_classcell(self):\n        new_mock = mock.Mock(side_effect=ABCMeta.__new__)\n        base = ItemMeta.__bases__[0]\n\n        with mock.patch.object(base, \"__new__\", new_mock):\n\n            class MyItem(Item):\n                def f(self):\n                    # For rationale of this see:\n                    # https://github.com/python/cpython/blob/ee1a81b77444c6715cbe610e951c655b6adab88b/Lib/test/test_super.py#L222\n                    return __class__\n\n            MyItem()\n\n        (first_call, second_call) = new_mock.call_args_list[-2:]\n\n        *_, attrs = first_call[0]\n        assert \"__classcell__\" not in attrs\n        *_, attrs = second_call[0]\n        assert \"__classcell__\" in attrs\n\n\nclass TestItemMetaClassCellRegression:\n    def test_item_meta_classcell_regression(self):\n        class MyItem(Item, metaclass=ItemMeta):\n            def __init__(self, *args, **kwargs):  # pylint: disable=useless-parent-delegation\n                # This call to super() trigger the __classcell__ propagation\n                # requirement. When not done properly raises an error:\n                # TypeError: __class__ set to <class '__main__.MyItem'>\n                # defining 'MyItem' as <class '__main__.MyItem'>\n                super().__init__(*args, **kwargs)",
+   "test_excerpt_note": "first 60 and last 140 of 301 lines",
+   "existing_test_names": [
+    "test_copy",
+    "test_custom_methods",
+    "test_deepcopy",
+    "test_init",
+    "test_invalid_field",
+    "test_item_meta_classcell_regression",
+    "test_metaclass",
+    "test_metaclass_inheritance",
+    "test_metaclass_multiple_inheritance_diamond",
+    "test_metaclass_multiple_inheritance_simple",
+    "test_metaclass_multiple_inheritance_without_metaclass",
+    "test_metaclass_with_fields_attribute",
+    "test_new_method_propagates_classcell",
+    "test_private_attr",
+    "test_raise_getattr",
+    "test_raise_setattr",
+    "test_repr",
+    "test_simple",
+    "test_to_dict"
+   ],
+   "dev_gate": {
+    "ran": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "error": ""
+   },
+   "dev_covered": [
+    24
+   ],
+   "prism_context": "# Test context: `scrapy.item.Field` (tests go to tests/test_item.py)\n\n## 1. Target\n```\nclass Field(dict[str, Any]):\n    \"\"\"Container of field metadata\"\"\"\n```\n\nDigest (what a test should exercise):\n```\nempty body\n```\n\n## 2. How production code calls it\nNo production callers in the index.\n\n## 3. Existing tests\nTests that already reach it: `tests.test_exporters.TestCsvItemExporter.TestItem2`, `tests.test_feedexport.TestFeedExportBase.MyItem`, `tests.test_feedexport.TestFeedExportBase.MyItem2`, `tests.test_item.TestItem.A`, `tests.test_item.TestItem.A#2`, `tests.test_item.TestItem.A#3`, `tests.test_item.TestItem.C`, `tests.test_item.TestItem.C#2`, `tests.test_item.TestItem.C#3`, `tests.test_item.TestItem.D#2`, `tests.test_item.TestItem.E#2`, `tests.test_item.TestItem.ParentItem`\n\n`tests.test_item.TestItem.test_copy` (in tests/test_item.py):\n```python\n    def test_copy(self):\n        class TestItem(Item):\n            name = Field()\n\n        item = TestItem({\"name\": \"lower\"})\n        copied_item = item.copy()\n        assert id(item) != id(copied_item)\n        copied_item[\"name\"] = copied_item[\"name\"].upper()\n        assert item[\"name\"] != copied_item[\"name\"]\n```\n\n`tests.test_item.TestItem.test_custom_methods` (in tests/test_item.py):\n```python\n    def test_custom_methods(self):\n        class TestItem(Item):\n            name = Field()\n\n            def get_name(self):\n                return self[\"name\"]\n\n            def change_name(self, name):\n                self[\"name\"] = name\n\n        i = TestItem()\n        with pytest.raises(KeyError):\n            i.get_name()\n        i[\"name\"] = \"lala\"\n        assert i.get_name() == \"lala\"\n        i.change_name(\"other\")\n        assert i.get_name() == \"other\"\n```\n\n## 4. Test conventions in tests/test_item.py\n- plain `assert` statements (14 of 19 tests)\n- errors checked with `pytest.raises` (6 of 19 tests)\n- tests grouped in test classes (19 of 19 tests)\n",
+   "id": "scrapy-tests-004"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "259be5d2dd02ab1be876bf4b6be1849cbab88c6f",
+   "parent": "7436afc95f521482b1b1473c88f6b5ab1d430bea",
+   "subject": "CI: Run coverage in as few jobs as necessary (#7834)",
+   "date": "2026-07-31T11:20:21+05:00",
+   "test_file": "tests/test_utils_console.py",
+   "tests": [
+    {
+     "name": "test_start_python_console_exit",
+     "code": "def test_start_python_console_exit(monkeypatch: pytest.MonkeyPatch) -> None:\n    def embed(namespace: dict[str, object], banner: str) -> None:\n        raise SystemExit\n\n    monkeypatch.setattr(\n        \"scrapy.utils.console.get_shell_embed_func\", lambda shells: embed\n    )\n    start_python_console()",
+     "start": 64,
+     "calls": [
+      "embed",
+      "setattr",
+      "start_python_console"
+     ]
+    },
+    {
+     "name": "test_start_python_console_no_shell",
+     "code": "def test_start_python_console_no_shell(monkeypatch: pytest.MonkeyPatch) -> None:\n    monkeypatch.setattr(\n        \"scrapy.utils.console.get_shell_embed_func\", lambda shells: None\n    )\n    start_python_console()",
+     "start": 74,
+     "calls": [
+      "setattr",
+      "start_python_console"
+     ]
+    }
+   ],
+   "order": 118,
+   "target": "scrapy.utils.console.start_python_console",
+   "target_file": "scrapy/utils/console.py",
+   "target_lines": [
+    122,
+    138
+   ],
+   "target_window": "\n\ndef _embed_standard_shell(\n    namespace: dict[str, Any] | None = None, banner: str = \"\"\n) -> EmbedFuncT:\n    \"\"\"Start a standard python shell\"\"\"\n    try:  # readline module is only available on unix systems\n        import readline  # noqa: PLC0415\n    except ImportError:\n        pass\n    else:\n        import rlcompleter  # noqa: F401,PLC0415\n\n        readline.parse_and_bind(\"tab:complete\")  # type: ignore[attr-defined,unused-ignore]\n\n    @wraps(_embed_standard_shell)\n    def wrapper(namespace: dict[str, Any] = namespace or {}, banner: str = \"\") -> None:\n        code.interact(banner=banner, local=namespace)\n\n    return wrapper\n\n\nDEFAULT_PYTHON_SHELLS: KnownShellsT = {\n    \"ptpython\": _embed_ptpython_shell,\n    \"ipython\": _embed_ipython_shell,\n    \"bpython\": _embed_bpython_shell,\n    \"python\": _embed_standard_shell,\n}\n\n\ndef get_shell_embed_func(\n    shells: Iterable[str] | None = None, known_shells: KnownShellsT | None = None\n) -> EmbedFuncT | None:\n    \"\"\"Return the first acceptable shell-embed function\n    from a given list of shell names.\n    \"\"\"\n    if shells is None:  # list, preference order of shells\n        shells = DEFAULT_PYTHON_SHELLS.keys()\n    if known_shells is None:  # available embeddable shells\n        known_shells = DEFAULT_PYTHON_SHELLS.copy()\n    for shell in shells:\n        if shell in known_shells:\n            try:\n                # function test: run all setup code (imports),\n                # but dont fall into the shell\n                return known_shells[shell]()\n            except ImportError:\n                continue\n    return None\n\n\ndef start_python_console(\n    namespace: dict[str, Any] | None = None,\n    banner: str = \"\",\n    shells: Iterable[str] | None = None,\n) -> None:\n    \"\"\"Start Python console bound to the given namespace.\n    Readline support and tab completion will be used on Unix, if available.\n    \"\"\"\n    if namespace is None:\n        namespace = {}\n\n    try:\n        shell = get_shell_embed_func(shells)\n        if shell is not None:\n            shell(namespace=namespace, banner=banner)\n    except SystemExit:  # raised when using exit() in python code.interact\n        pass",
+   "target_window_lines": [
+    71,
+    138
+   ],
+   "test_excerpt": "from __future__ import annotations\n\nfrom importlib.util import find_spec\n\nimport pytest\n\nfrom scrapy.utils.console import get_shell_embed_func\n\n\ndef test_get_shell_embed_func():\n    shell = get_shell_embed_func([\"invalid\"])\n    assert shell is None\n\n    shell = get_shell_embed_func([\"invalid\", \"python\"])\n    assert callable(shell)\n    assert shell.__name__ == \"_embed_standard_shell\"\n\n\ndef test_get_shell_embed_func_python():\n    # the standard shell is always available\n    shell = get_shell_embed_func([\"python\"])\n    assert callable(shell)\n    assert shell.__name__ == \"_embed_standard_shell\"\n\n\ndef test_get_shell_embed_func_bpython():\n    pytest.importorskip(\"bpython\")\n    shell = get_shell_embed_func([\"bpython\"])\n    assert callable(shell)\n    assert shell.__name__ == \"_embed_bpython_shell\"\n\n\ndef test_get_shell_embed_func_ipython():\n    pytest.importorskip(\"IPython\")\n    shell = get_shell_embed_func([\"ipython\"])\n    assert shell is not None\n    assert shell.__name__ == \"_embed_ipython_shell\"\n\n\ndef test_get_shell_embed_func_ptpython():\n    pytest.importorskip(\"ptpython\")\n    shell = get_shell_embed_func([\"ptpython\"])\n    assert shell is not None\n    assert shell.__name__ == \"_embed_ptpython_shell\"\n\n\ndef test_get_shell_embed_func_default():\n    # with no shells given, the first available shell in preference order\n    # (ptpython, ipython, bpython, python) is returned; the standard shell\n    # is always available, so the default is never None\n    shell = get_shell_embed_func()\n    assert shell is not None\n    if find_spec(\"ptpython\") is not None:\n        expected = \"_embed_ptpython_shell\"\n    elif find_spec(\"IPython\") is not None:\n        expected = \"_embed_ipython_shell\"\n    elif find_spec(\"bpython\") is not None:\n        expected = \"_embed_bpython_shell\"\n    else:\n        expected = \"_embed_standard_shell\"\n    assert shell.__name__ == expected\n",
+   "test_excerpt_note": "whole file",
+   "existing_test_names": [
+    "test_get_shell_embed_func",
+    "test_get_shell_embed_func_bpython",
+    "test_get_shell_embed_func_default",
+    "test_get_shell_embed_func_ipython",
+    "test_get_shell_embed_func_ptpython",
+    "test_get_shell_embed_func_python"
+   ],
+   "dev_gate": {
+    "ran": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "error": ""
+   },
+   "dev_covered": [
+    122,
+    130,
+    131,
+    133,
+    134,
+    135,
+    136,
+    137,
+    138
+   ],
+   "prism_context": "# Test context: `scrapy.utils.console.start_python_console` (tests go to tests/test_utils_console.py)\n\n## 1. Target\n```\ndef start_python_console(\n    namespace: dict[str, Any] | None = None,\n    banner: str = \"\",\n    shells: Iterable[str] | None = None,\n) -> None:\n    \"\"\"Start Python console bound to the given namespace.\n    Readline support and tab completion will be used on Unix, if available.\n    \"\"\"\n    if namespace is None:\n        namespace = {}\n\n    try:\n        shell = get_shell_embed_func(shells)\n        if shell is not None:\n            shell(namespace=namespace, banner=banner)\n    except SystemExit:  # raised when using exit() in python code.interact\n        pass\n```\n\nDigest (what a test should exercise):\n```\nwhen namespace is None:\n  L131 namespace = {}\nL134 shell = get_shell_embed_func(shells) [calls: get_shell_embed_func() -> scrapy.utils.console.get_shell_embed_func]\nwhen shell is not None:\n  L136 dynamic: calls the function held in local variable shell -> unknown | code: shell(namespace=namespace, banner=banner)\nL137-138 catches SystemExit: ignores the error\n```\n\nWhat it relies on in its callees:\n- `scrapy.utils.console.get_shell_embed_func` returns None when on some path\n\n## 2. How production code calls it\n- `scrapy.shell.Shell.start` (scrapy/shell.py): L184 result: ignores the return value; L184 arguments: passes 1 positional argument, keywords `shells`, `banner`\n\n## 3. Existing tests\nTests that already reach it: `tests.test_command_shell.TestShell.test_start_with_request`, `tests.test_command_shell.TestShell.test_start_with_response`, `tests.test_command_shell.TestShell.test_inspect_response`, `tests.test_command_shell.TestShellNoReactor.test_inspect_response_no_reactor`\n\n`tests.test_utils_console.test_get_shell_embed_func_python` (in tests/test_utils_console.py):\n```python\ndef test_get_shell_embed_func_python():\n    # the standard shell is always available\n    shell = get_shell_embed_func([\"python\"])\n    assert callable(shell)\n    assert shell.__name__ == \"_embed_standard_shell\"\n```\n\n`tests.test_utils_console.test_get_shell_embed_func` (in tests/test_utils_console.py):\n```python\ndef test_get_shell_embed_func():\n    shell = get_shell_embed_func([\"invalid\"])\n    assert shell is None\n\n    shell = get_shell_embed_func([\"invalid\", \"python\"])\n    assert callable(shell)\n    assert shell.__name__ == \"_embed_standard_shell\"\n```\n\n## 4. Test conventions in tests/test_utils_console.py\n- plain `assert` statements (6 of 6 tests)\n",
+   "id": "scrapy-tests-005"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "9558c60ed5174ac609feecca0cc3fdd8cdfcab76",
+   "parent": "949a61727978b5fea2cb38f6b8626300d4cece49",
+   "subject": "Some test cleanups. (#8273)",
+   "date": "2026-10-03T19:37:47+02:00",
+   "test_file": "tests/test_request_cb_kwargs.py",
+   "tests": [
+    {
+     "name": "test_callback_kwargs",
+     "code": "async def test_callback_kwargs(\n    caplog: pytest.LogCaptureFixture, mockserver: MockServer\n) -> None:\n    crawler = get_crawler(KeywordArgumentsSpider)\n    with caplog.at_level(logging.ERROR):\n        await crawler.crawl_async(mockserver=mockserver)\n    assert isinstance(crawler.spider, KeywordArgumentsSpider)\n    assert all(crawler.spider.checks)\n    assert len(crawler.spider.checks) == crawler.stats.get_value(\"boolean_checks\")\n    # check exceptions for argument mismatch\n    exceptions = {}\n    for line in caplog.records:\n        for key in (\"takes_less\", \"takes_more\"):\n            if key in line.getMessage():\n                exceptions[key] = line\n    takes_less_exc_info = exceptions[\"takes_less\"].exc_info\n    assert takes_less_exc_info is not None\n    assert takes_less_exc_info[0] is TypeError\n    assert str(takes_less_exc_info[1]).endswith(\n        \"parse_takes_less() got an unexpected keyword argument 'number'\"\n    )\n    takes_more_exc_info = exceptions[\"takes_more\"].exc_info\n    assert takes_more_exc_info is not None\n    assert takes_more_exc_info[0] is TypeError\n    assert str(takes_more_exc_info[1]).endswith(\n        \"parse_takes_more() missing 1 required positional argument: 'other'\"\n    )",
+     "start": 164,
+     "calls": [
+      "all",
+      "at_level",
+      "crawl_async",
+      "endswith",
+      "getMessage",
+      "get_crawler",
+      "get_value",
+      "isinstance",
+      "len",
+      "parse_takes_less",
+      "parse_takes_more",
+      "str"
+     ]
+    }
+   ],
+   "order": 124,
+   "target": "scrapy.crawler.Crawler.crawl_async",
+   "target_file": "scrapy/crawler.py",
+   "target_lines": [
+    321,
+    357
+   ],
+   "target_window": "    # being installed already, which is done within _apply_settings(), inside\n    # this method.\n    @inlineCallbacks\n    def crawl(self, *args: Any, **kwargs: Any) -> Generator[Deferred[Any], Any, None]:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        Return a deferred that is fired when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = ExecutionEngine(self)\n            try:\n                yield deferred_from_coro(self.engine.open_spider_async())\n            except CloseSpider as exc:\n                yield deferred_from_coro(\n                    self.engine.close_async(reason=exc.reason, error=exc.error)\n                )\n            else:\n                # The spider may have been closed already, e.g. by an\n                # extension, in which case the engine is already stopped.\n                if self.engine.state is EngineState.SPIDER_OPEN:\n                    yield deferred_from_coro(self.engine.start_async())\n        except Exception:\n            if self._engine is not None:\n                yield deferred_from_coro(self._engine.close_async())\n            raise\n        finally:\n            self.crawling = False\n\n    async def crawl_async(self, *args: Any, **kwargs: Any) -> None:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        .. versionadded:: 2.14\n\n        Complete when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl_async() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = ExecutionEngine(self)\n            try:\n                await self.engine.open_spider_async()\n            except CloseSpider as exc:\n                await self.engine.close_async(reason=exc.reason, error=exc.error)\n            else:\n                # The spider may have been closed already, e.g. by an\n                # extension, in which case the engine is already stopped.\n                if self.engine.state is EngineState.SPIDER_OPEN:\n                    await self.engine.start_async()\n        except Exception:\n            if self._engine is not None:\n                await self._engine.close_async()\n            raise\n        finally:\n            self.crawling = False\n\n    def _create_spider(self, *args: Any, **kwargs: Any) -> Spider:\n        return self.spidercls.from_crawler(self, *args, **kwargs)\n\n    def stop(self, *, mode: _StopMode = \"graceful\") -> Deferred[None]:\n        \"\"\"Stop the crawler.\"\"\"\n        warnings.warn(\n            \"Crawler.stop() is deprecated, use stop_async() instead\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return deferred_from_coro(self.stop_async(mode=mode))\n\n    async def stop_async(self, *, mode: _StopMode = \"graceful\") -> None:\n        \"\"\"Stop the crawler.\n\n        .. versionadded:: 2.14\n\n        .. versionchanged:: VERSION\n            Calling it while the spider is being opened now closes the spider\n            as soon as it is open.\n\n        Completes when the crawl has finished, except when the spider is still\n        being opened or the crawler is already stopping, in which case it\n        completes immediately, and when :signal:`engine_started` handlers are\n        still running, in which case it completes once the spider is closed.\n        \"\"\"\n        mode = _normalize_stop_mode(mode)\n        was_crawling = self.crawling\n        self.crawling = False\n\n        if not was_crawling and mode == \"graceful\":\n            return\n\n        if mode == \"force\":\n            if self._force_stop_callback is not None:\n                await ensure_awaitable(self._force_stop_callback())\n                return\n            logger.warning(\n                \"Force stop requested, but no process-level force stop callback is available. Falling back to fast stop.\"\n            )\n            mode = \"fast\"",
+   "target_window_lines": [
+    280,
+    399
+   ],
+   "test_excerpt": "from __future__ import annotations\n\nimport logging\nfrom typing import TYPE_CHECKING\n\nfrom scrapy.http import Request\nfrom scrapy.utils.test import get_crawler\nfrom tests.spiders import MockServerSpider\nfrom tests.utils.decorators import coroutine_test\n\nif TYPE_CHECKING:\n    import pytest\n\n    from tests.mockserver.http import MockServer\n\n\nclass InjectArgumentsDownloaderMiddleware:\n    \"\"\"\n    Make sure downloader middlewares are able to update the keyword arguments\n    \"\"\"\n\n    def process_request(self, request):\n        if request.callback.__name__ == \"parse_downloader_mw\":\n            request.cb_kwargs[\"from_process_request\"] = True\n\n    def process_response(self, request, response):\n        if request.callback.__name__ == \"parse_downloader_mw\":\n            request.cb_kwargs[\"from_process_response\"] = True\n        return response\n\n\nclass InjectArgumentsSpiderMiddleware:\n    \"\"\"\n    Make sure spider middlewares are able to update the keyword arguments\n    \"\"\"\n\n    async def process_start(self, start):\n        async for request in start:\n            if request.callback.__name__ == \"parse_spider_mw\":\n                request.cb_kwargs[\"from_process_start\"] = True\n            yield request\n\n    def process_spider_input(self, response):\n        request = response.request\n        if request.callback.__name__ == \"parse_spider_mw\":\n            request.cb_kwargs[\"from_process_spider_input\"] = True\n\n    async def process_spider_output(self, response, result):\n        async for element in result:\n            if (\n                isinstance(element, Request)\n                and element.callback\n                and element.callback.__name__ == \"parse_spider_mw_2\"\n            ):\n                element.cb_kwargs[\"from_process_spider_output\"] = True\n            yield element\n\n\nclass KeywordArgumentsSpider(MockServerSpider):\n    name = \"kwargs\"\n    custom_settings = {\n        \"DOWNLOADER_MIDDLEWARES\": {\n            InjectArgumentsDownloaderMiddleware: 750,\n        },\n        \"SPIDER_MIDDLEWARES\": {\n            InjectArgumentsSpiderMiddleware: 750,\n        },\n    }\n\n    checks: list[bool] = []\n\n    def _inc_checks(self, count: int = 1) -> None:\n        self.crawler.stats.inc_value(\"boolean_checks\", count)\n\n    async def start(self):\n        assert self.mockserver\n        data = {\"key\": \"value\", \"number\": 123, \"callback\": \"some_callback\"}\n        yield Request(self.mockserver.url(\"/first\"), self.parse_first, cb_kwargs=data)\n        yield Request(\n            self.mockserver.url(\"/general_with\"), self.parse_general, cb_kwargs=data\n        )\n        yield Request(self.mockserver.url(\"/general_without\"), self.parse_general)\n        yield Request(self.mockserver.url(\"/no_kwargs\"), self.parse_no_kwargs)\n        yield Request(\n            self.mockserver.url(\"/default\"), self.parse_default, cb_kwargs=data\n        )\n        yield Request(\n            self.mockserver.url(\"/takes_less\"), self.parse_takes_less, cb_kwargs=data\n        )\n        yield Request(\n            self.mockserver.url(\"/takes_more\"), self.parse_takes_more, cb_kwargs=data\n        )\n        yield Request(self.mockserver.url(\"/downloader_mw\"), self.parse_downloader_mw)\n        yield Request(self.mockserver.url(\"/spider_mw\"), self.parse_spider_mw)\n\n    def parse_first(self, response, key, number):\n        assert self.mockserver\n        self.checks.append(key == \"value\")\n        self.checks.append(number == 123)\n        self._inc_checks(2)\n        yield response.follow(\n            self.mockserver.url(\"/two\"),\n            self.parse_second,\n            cb_kwargs={\"new_key\": \"new_value\"},\n        )\n\n    def parse_second(self, response, new_key):\n        self.checks.append(new_key == \"new_value\")\n        self._inc_checks()\n\n    def parse_general(self, response, **kwargs):\n        if response.url.endswith(\"/general_with\"):\n            self.checks.append(kwargs[\"key\"] == \"value\")\n            self.checks.append(kwargs[\"number\"] == 123)\n            self.checks.append(kwargs[\"callback\"] == \"some_callback\")\n            self._inc_checks(3)\n        elif response.url.endswith(\"/general_without\"):\n            self.checks.append(kwargs == {})\n            self._inc_checks()\n\n    def parse_no_kwargs(self, response):\n        self.checks.append(response.url.endswith(\"/no_kwargs\"))\n        self._inc_checks()\n\n    def parse_default(self, response, key, number=None, default=99):\n        self.checks.append(response.url.endswith(\"/default\"))\n        self.checks.append(key == \"value\")\n        self.checks.append(number == 123)\n        self.checks.append(default == 99)\n        self._inc_checks(4)\n\n    def parse_takes_less(self, response, key, callback):\n        \"\"\"\n        Should raise\n        TypeError: parse_takes_less() got an unexpected keyword argument 'number'\n        \"\"\"\n\n    def parse_takes_more(self, response, key, number, callback, other):\n        \"\"\"\n        Should raise\n        TypeError: parse_takes_more() missing 1 required positional argument: 'other'\n        \"\"\"\n\n    def parse_downloader_mw(\n        self, response, from_process_request, from_process_response\n    ):\n        self.checks.append(bool(from_process_request))\n        self.checks.append(bool(from_process_response))\n        self._inc_checks(2)\n\n    def parse_spider_mw(self, response, from_process_spider_input, from_process_start):\n        assert self.mockserver\n        self.checks.append(bool(from_process_spider_input))\n        self.checks.append(bool(from_process_start))\n        self._inc_checks(2)\n        return Request(self.mockserver.url(\"/spider_mw_2\"), self.parse_spider_mw_2)\n\n    def parse_spider_mw_2(self, response, from_process_spider_output):\n        self.checks.append(bool(from_process_spider_output))\n        self._inc_checks()\n\n\nclass TestCallbackKeywordArguments:\n    @coroutine_test\n    async def test_callback_kwargs(\n        self, caplog: pytest.LogCaptureFixture, mockserver: MockServer\n    ) -> None:\n        crawler = get_crawler(KeywordArgumentsSpider)\n        with caplog.at_level(logging.ERROR):\n            await crawler.crawl_async(mockserver=mockserver)\n        assert isinstance(crawler.spider, KeywordArgumentsSpider)\n        assert all(crawler.spider.checks)\n        assert len(crawler.spider.checks) == crawler.stats.get_value(\"boolean_checks\")\n        # check exceptions for argument mismatch\n        exceptions = {}\n        for line in caplog.records:\n            for key in (\"takes_less\", \"takes_more\"):\n                if key in line.getMessage():\n                    exceptions[key] = line\n        takes_less_exc_info = exceptions[\"takes_less\"].exc_info\n        assert takes_less_exc_info is not None\n        assert takes_less_exc_info[0] is TypeError\n        assert str(takes_less_exc_info[1]).endswith(\n            \"parse_takes_less() got an unexpected keyword argument 'number'\"\n        )\n        takes_more_exc_info = exceptions[\"takes_more\"].exc_info\n        assert takes_more_exc_info is not None\n        assert takes_more_exc_info[0] is TypeError\n        assert str(takes_more_exc_info[1]).endswith(\n            \"parse_takes_more() missing 1 required positional argument: 'other'\"\n        )\n",
+   "test_excerpt_note": "whole file",
+   "existing_test_names": [
+    "test_callback_kwargs"
+   ],
+   "dev_gate": {
+    "ran": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "error": ""
+   },
+   "dev_covered": [
+    321,
+    330,
+    332,
+    336,
+    338,
+    339,
+    340,
+    341,
+    342,
+    343,
+    344,
+    350,
+    351,
+    357
+   ],
+   "prism_context": "# Test context: `scrapy.crawler.Crawler.crawl_async` (tests go to tests/test_request_cb_kwargs.py)\n\n## 1. Target\n```\n    async def crawl_async(self, *args: Any, **kwargs: Any) -> None:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        .. versionadded:: 2.14\n\n        Complete when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl_async() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = ExecutionEngine(self)\n            try:\n                await self.engine.open_spider_async()\n            except CloseSpider as exc:\n                await self.engine.close_async(reason=exc.reason, error=exc.error)\n            else:\n                # The spider may have been closed already, e.g. by an\n                # extension, in which case the engine is already stopped.\n                if self.engine.state is EngineState.SPIDER_OPEN:\n                    await self.engine.start_async()\n        except Exception:\n            if self._engine is not None:\n                await self._engine.close_async()\n            raise\n        finally:\n            self.crawling = False\n```\n\nDigest (what a test should exercise):\n```\nwhen self.crawling:\n  L331 raise RuntimeError(\"Crawling already taking place\")\nwhen self._started:\n  L333-335 raise RuntimeError( \"Cannot run Crawler.crawl_async() more than once on the same instance.\" )\nL336 self.crawling = self._started = True (own state)\nL336 self._started = True (own state)\nL339 self.spider = self._create_spider(*args, **kwargs) (own state) [calls: _create_spider() -> scrapy.crawler.Crawler._create_spider]\nL340 call self._apply_settings() -> scrapy.crawler.Crawler._apply_settings\nL341 call self._update_root_log_handler() -> scrapy.crawler.Crawler._update_root_log_handler\nL342 self.engine = ExecutionEngine(self) (own state) [calls: ExecutionEngine() -> scrapy.core.engine.ExecutionEngine]\nL344 call await self.engine.open_spider_async() -> one of: scrapy.core.engine.ExecutionEngine.open_spider_async\nL345-346 catches CloseSpider: calls\nwhen on CloseSpider:\n  L346 call await self.engine.close_async(reason=exc.reason, error=exc.error) -> one of: scrapy.core.engine.ExecutionEngine.close_async\nwhen no exception was raised:\n  when self.engine.state is EngineState.SPIDER_OPEN:\n    L351 call await self.engine.start_async() -> one of: scrapy.core.engine.ExecutionEngine.start_async\nL352-355 catches Exception: raises, calls\nwhen on Exception:\n  when self._engine is not None:\n    L354 call await self._engine.close_async() -> one of: scrapy.core.engine.ExecutionEngine.close_async\n  L355 raise (re-raises the current exception)\nwhen finally (always):\n  L357 self.crawling = False (own state)\n```\n\nWhat it relies on in its callees:\n- `scrapy.crawler.Crawler._apply_settings` can raise `RuntimeError`; this function catches it\n- `scrapy.crawler.Crawler._apply_settings` returns nothing when self.settings.frozen\n- `scrapy.crawler.Crawler._apply_settings` changes state: self.stats = load_object(self.settings[\"STATS_CLASS\"])(self\u2026; self.logformatter = build_from_crawler(lf_cls, self) (own s\u2026; self.request_fingerprinter = build_from_crawler( load_objec\u2026 (+1 more)\n- `scrapy.core.engine.ExecutionEngine.close_async` returns nothing when self._state is EngineState.CREATED\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` can raise `RuntimeError`; this function catches it\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` can raise `close_spider_exc`; this function catches it\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` changes state: self.spider = self.crawler.spider (own state); self._slot = _Slot(close_if_idle, nextcall, scheduler) (own\u2026; self._start = await self.scraper.spidermw.process_start() (\u2026\n- `scrapy.core.engine.ExecutionEngine.start_async` can raise `RuntimeError`; this function catches it\n- `scrapy.core.engine.ExecutionEngine.start_async` changes state: self.start_time = time() (own state); self._closewait = Deferred() (own state); self._sending_engine_started = True (own state) (+3 more)\n\n## 2. How production code calls it\n- `scrapy.crawler.AsyncCrawlerRunner._crawl_and_track` (scrapy/crawler.py): L737 result: ignores the return value; L737 errors: catches `RuntimeError` raised by it (around the call: Exception); L737 arguments: passes spread / unpacked arguments\n\n## 3. Existing tests\nTests that already reach it: `tests.test_core_downloader.test_fetch_deprecated_spider_arg`, `tests.test_core_downloader.test_slot_concurrency`, `tests.test_core_scraper.test_errback_error_on_ignored_request`, `tests.test_core_scraper.test_none_in_callback_output`, `tests.test_core_scraper.test_scraper_exception`, `tests.test_crawl.TestCrawl._test_delay`, `tests.test_crawl.TestCrawl.test_engine_status`, `tests.test_crawl.TestCrawl.test_follow_all`, `tests.test_crawl.TestCrawl.test_format_engine_status`, `tests.test_crawl.TestCrawl.test_open_spider_error_on_faulty_pipeline`, `tests.test_crawl.TestCrawl.test_print_engine_status`, `tests.test_crawl.TestCrawl.test_referer_header`\n\n`tests.test_request_cb_kwargs.TestCallbackKeywordArguments.test_callback_kwargs` (in tests/test_request_cb_kwargs.py):\n```python\n    @coroutine_test\n    async def test_callback_kwargs(\n        self, caplog: pytest.LogCaptureFixture, mockserver: MockServer\n    ) -> None:\n        crawler = get_crawler(KeywordArgumentsSpider)\n        with caplog.at_level(logging.ERROR):\n            await crawler.crawl_async(mockserver=mockserver)\n        assert isinstance(crawler.spider, KeywordArgumentsSpider)\n        assert all(crawler.spider.checks)\n        assert len(crawler.spider.checks) == crawler.stats.get_value(\"boolean_checks\")\n        # check exceptions for argument mismatch\n        exceptions = {}\n        for line in caplog.records:\n            for key in (\"takes_less\", \"takes_more\"):\n                if key in line.getMessage():\n                    exceptions[key] = line\n        takes_less_exc_info = exceptions[\"takes_less\"].exc_info\n        assert takes_less_exc_info is not None\n        assert takes_less_exc_info[0] is TypeError\n        assert str(takes_less_exc_info[1]).endswith(\n            \"parse_takes_less() got an unexpected keyword argument 'number'\"\n        )\n        takes_more_exc_info = exceptions[\"takes_more\"].exc_info\n        assert takes_more_exc_info is not None\n        assert takes_more_exc_info[0] is TypeError\n        assert str(takes_more_exc_info[1]).endswith(\n            \"parse_takes_more() missing 1 required positional argument: 'other'\"\n        )\n```\n\n## 4. Test conventions in tests/test_request_cb_kwargs.py\n- plain `assert` statements (1 of 1 tests)\n- async tests (1 of 1 tests)\n- tests grouped in test classes (1 of 1 tests)\n",
+   "id": "scrapy-tests-006"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "c7eacdbb30a4563bbbe04ed02781768f4e19eabb",
+   "parent": "e810f5fca166e8cd03d005d07b6a6a2373407d6a",
+   "subject": "Unpack some test classes that are just containers. (#8000)",
+   "date": "2026-08-17T14:33:26+02:00",
+   "test_file": "tests/test_signalmanager.py",
+   "tests": [
+    {
+     "name": "test_disconnect_all",
+     "code": "def test_disconnect_all() -> None:\n    signal = object()\n    sender = object()\n    sm = SignalManager(sender)\n\n    calls = []\n\n    def handler():\n        calls.append(1)\n\n    sm.connect(handler, signal)\n    sm.send_catch_log(signal)\n    assert calls == [1]\n\n    sm.disconnect_all(signal)\n    sm.send_catch_log(signal)\n    assert calls == [1]  # handler no longer called after disconnect_all",
+     "start": 4,
+     "calls": [
+      "SignalManager",
+      "append",
+      "connect",
+      "disconnect_all",
+      "handler",
+      "object",
+      "send_catch_log"
+     ]
+    }
+   ],
+   "order": 152,
+   "target": "scrapy.signalmanager.SignalManager",
+   "target_file": "scrapy/signalmanager.py",
+   "target_lines": [
+    14,
+    116
+   ],
+   "target_window": "from pydispatch import dispatcher\nfrom twisted.internet.defer import Deferred\n\nfrom scrapy.exceptions import ScrapyDeprecationWarning\nfrom scrapy.utils import signal as _signal\nfrom scrapy.utils.defer import maybe_deferred_to_future\n\n\nclass SignalManager:\n    def __init__(self, sender: Any = dispatcher.Anonymous):\n        self.sender: Any = sender\n\n    def connect(self, receiver: Any, signal: Any, **kwargs: Any) -> None:\n        \"\"\"\n        Connect a receiver function to a signal.\n\n        The signal can be any object, although Scrapy comes with some\n        predefined signals that are documented in the :ref:`topics-signals`\n        section.\n\n        :param receiver: the function to be connected\n        :type receiver: collections.abc.Callable\n\n        :param signal: the signal to connect to\n        :type signal: object\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        dispatcher.connect(receiver, signal, **kwargs)\n\n    def disconnect(self, receiver: Any, signal: Any, **kwargs: Any) -> None:\n        \"\"\"\n        Disconnect a receiver function from a signal. This has the\n        opposite effect of the :meth:`connect` method, and the arguments\n        are the same.\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        dispatcher.disconnect(receiver, signal, **kwargs)\n\n    def send_catch_log(self, signal: Any, **kwargs: Any) -> list[tuple[Any, Any]]:\n        \"\"\"\n        Send a signal, catch exceptions and log them.\n\n        The keyword arguments are passed to the signal handlers (connected\n        through the :meth:`connect` method).\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        return _signal.send_catch_log(signal, **kwargs)\n\n    def send_catch_log_deferred(\n        self, signal: Any, **kwargs: Any\n    ) -> Deferred[list[tuple[Any, Any]]]:  # pragma: no cover\n        \"\"\"\n        Like :meth:`send_catch_log` but supports :ref:`asynchronous signal\n        handlers <signal-deferred>`.\n\n        Returns a Deferred that gets fired once all signal handlers\n        have finished. Send a signal, catch exceptions and log them.\n\n        The keyword arguments are passed to the signal handlers (connected\n        through the :meth:`connect` method).\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        warnings.warn(\n            \"send_catch_log_deferred() is deprecated, use send_catch_log_async() instead\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return _signal._send_catch_log_deferred(signal, **kwargs)\n\n    async def send_catch_log_async(\n        self, signal: Any, **kwargs: Any\n    ) -> list[tuple[Any, Any]]:\n        \"\"\"\n        Like :meth:`send_catch_log` but supports :ref:`asynchronous signal\n        handlers <signal-deferred>`.\n\n        Returns a coroutine that completes once all signal handlers\n        have finished. Send a signal, catch exceptions and log them.\n\n        The keyword arguments are passed to the signal handlers (connected\n        through the :meth:`connect` method).\n\n        .. versionadded:: 2.14\n        \"\"\"\n        # note that this returns exceptions instead of Failures in the second tuple member\n        kwargs.setdefault(\"sender\", self.sender)\n        return await _signal.send_catch_log_async(signal, **kwargs)\n\n    def disconnect_all(self, signal: Any, **kwargs: Any) -> None:\n        \"\"\"\n        Disconnect all receivers from the given signal.\n\n        :param signal: the signal to disconnect from\n        :type signal: object\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        _signal.disconnect_all(signal, **kwargs)\n\n    async def wait_for(self, signal: Any) -> None:\n        \"\"\"Await the next *signal*.\n\n        See :ref:`start-requests-lazy` for an example.\n        \"\"\"\n        d: Deferred[None] = Deferred()\n\n        def handle() -> None:\n            self.disconnect(handle, signal)\n            d.callback(None)\n\n        self.connect(handle, signal)\n        await maybe_deferred_to_future(d)",
+   "target_window_lines": [
+    6,
+    116
+   ],
+   "test_excerpt": "from scrapy.signalmanager import SignalManager\n\n\nclass TestSignalManager:\n    def test_disconnect_all(self):\n        signal = object()\n        sender = object()\n        sm = SignalManager(sender)\n\n        calls = []\n\n        def handler():\n            calls.append(1)\n\n        sm.connect(handler, signal)\n        sm.send_catch_log(signal)\n        assert calls == [1]\n\n        sm.disconnect_all(signal)\n        sm.send_catch_log(signal)\n        assert calls == [1]  # handler no longer called after disconnect_all\n",
+   "test_excerpt_note": "whole file",
+   "existing_test_names": [
+    "test_disconnect_all"
+   ],
+   "dev_gate": {
+    "ran": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "error": ""
+   },
+   "dev_covered": [
+    14,
+    15,
+    16,
+    18,
+    32,
+    33,
+    35,
+    44,
+    51,
+    52,
+    75,
+    94,
+    101,
+    102,
+    104
+   ],
+   "prism_context": "# Test context: `scrapy.signalmanager.SignalManager` (tests go to tests/test_signalmanager.py)\n\n## 1. Target\n```\nclass SignalManager:\n    def __init__(self, sender: Any = dispatcher.Anonymous):\n        self.sender: Any = sender\n\n    def connect(self, receiver: Any, signal: Any, **kwargs: Any) -> None:\n        \"\"\"\n        Connect a receiver function to a signal.\n\n        The signal can be any object, although Scrapy comes with some\n        predefined signals that are documented in the :ref:`topics-signals`\n        section.\n\n        :param receiver: the function to be connected\n        :type receiver: collections.abc.Callable\n\n        :param signal: the signal to connect to\n        :type signal: object\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        dispatcher.connect(receiver, signal, **kwargs)\n\n    def disconnect(self, receiver: Any, signal: Any, **kwargs: Any) -> None:\n        \"\"\"\n        Disconnect a receiver function from a signal. This has the\n        opposite effect of the :meth:`connect` method, and the arguments\n        are the same.\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        dispatcher.disconnect(receiver, signal, **kwargs)\n\n    def send_catch_log(self, signal: Any, **kwargs: Any) -> list[tuple[Any, Any]]:\n        \"\"\"\n        Send a signal, catch exceptions and log them.\n\n        The keyword arguments are passed to the signal handlers (connected\n        through the :meth:`connect` method).\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        return _signal.send_catch_log(signal, **kwargs)\n\n    def send_catch_log_deferred(\n        self, signal: Any, **kwargs: Any\n    ) -> Deferred[list[tuple[Any, Any]]]:  # pragma: no cover\n        \"\"\"\n        Like :meth:`send_catch_log` but supports :ref:`asynchronous signal\n        handlers <signal-deferred>`.\n\n        Returns a Deferred that gets fired once all signal handlers\n        have finished. Send a signal, catch exceptions and log them.\n\n        The keyword arguments are passed to the signal handlers (connected\n        through the :meth:`connect` method).\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        warnings.warn(\n            \"send_catch_log_deferred() is deprecated, use send_catch_log_async() instead\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return _signal._send_catch_log_deferred(signal, **kwargs)\n\n    async def send_catch_log_async(\n        self, signal: Any, **kwargs: Any\n    ) -> list[tuple[Any, Any]]:\n        \"\"\"\n        Like :meth:`send_catch_log` but supports :ref:`asynchronous signal\n        handlers <signal-deferred>`.\n\n        Returns a coroutine that completes once all signal handlers\n        have finished. Send a signal, catch exceptions and log them.\n\n        The keyword arguments are passed to the signal handlers (connected\n        through the :meth:`connect` method).\n\n        .. versionadded:: 2.14\n        \"\"\"\n        # note that this returns exceptions instead of Failures in the second tuple member\n        kwargs.setdefault(\"sender\", self.sender)\n        return await _signal.send_catch_log_async(signal, **kwargs)\n\n    def disconnect_all(self, signal: Any, **kwargs: Any) -> None:\n        \"\"\"\n        Disconnect all receivers from the given signal.\n\n        :param signal: the signal to disconnect from\n        :type signal: object\n        \"\"\"\n        kwargs.setdefault(\"sender\", self.sender)\n        _signal.disconnect_all(signal, **kwargs)\n\n    async def wait_for(self, signal: Any) -> None:\n        \"\"\"Await the next *signal*.\n\n        See :ref:`start-requests-lazy` for an example.\n        \"\"\"\n        d: Deferred[None] = Deferred()\n\n        def handle() -> None:\n            self.disconnect(handle, signal)\n            d.callback(None)\n\n        self.connect(handle, signal)\n        await maybe_deferred_to_future(d)\n```\n\nDigest (what a test should exercise):\n```\nL15-16 defines nested method __init__\nL18-33 defines nested method connect\nL35-42 defines nested method disconnect\nL44-52 defines nested method send_catch_log\nL54-73 defines nested method send_catch_log_deferred\nL75-92 defines nested method send_catch_log_async\nL94-102 defines nested method disconnect_all\nL104-116 defines nested method wait_for\n```\n\n## 2. How production code calls it\n- `scrapy.crawler.Crawler.__init__` (scrapy/crawler.py): L128 result: stores the result in `self.signals`; L128 arguments: passes 1 positional argument\n\n## 3. Existing tests\nTests that already reach it: `tests.test_extension_statsmailer.test_from_crawler_connects_spider_closed_signal`, `tests.test_extension_statsmailer.test_from_crawler_with_recipients_initializes_extension`, `tests.test_signalmanager.TestSignalManager.test_disconnect_all`, `tests.test_crawler.TestCrawler.test_crawler_accepts_None`, `tests.test_crawler.TestCrawler.test_crawler_rejects_spider_objects`, `tests.test_crawler.TestCrawler.test_populate_spidercls_settings`, `tests.test_crawler.get_raw_crawler`, `tests.test_crawler_runners.test_crawlerrunner_accepts_crawler`, `tests.test_crawler_runners.test_create_crawler_instance_consistent_with_spider_class`, `tests.test_crawler_runners.test_runner_settings_applied_to_crawler_instance`, `tests.test_crawler_runners.test_spider_custom_settings_override_runner`, `tests.test_downloader_handler_twisted_ftp.test_not_configured_without_reactor`\n\n`tests.test_signalmanager.TestSignalManager.test_disconnect_all` (in tests/test_signalmanager.py):\n```python\n    def test_disconnect_all(self):\n        signal = object()\n        sender = object()\n        sm = SignalManager(sender)\n\n        calls = []\n\n        def handler():\n            calls.append(1)\n\n        sm.connect(handler, signal)\n        sm.send_catch_log(signal)\n        assert calls == [1]\n\n        sm.disconnect_all(signal)\n        sm.send_catch_log(signal)\n        assert calls == [1]  # handler no longer called after disconnect_all\n```\n\n## 4. Test conventions in tests/test_signalmanager.py\n- plain `assert` statements (1 of 1 tests)\n- tests grouped in test classes (1 of 1 tests)\n",
+   "id": "scrapy-tests-007"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "9558c60ed5174ac609feecca0cc3fdd8cdfcab76",
+   "parent": "949a61727978b5fea2cb38f6b8626300d4cece49",
+   "subject": "Some test cleanups. (#8273)",
+   "date": "2026-10-03T19:37:47+02:00",
+   "test_file": "tests/test_signals.py",
+   "tests": [
+    {
+     "name": "test_scheduler_empty",
+     "code": "async def test_scheduler_empty() -> None:\n    crawler = get_crawler()\n    calls = []\n\n    def track_call() -> None:\n        calls.append(object())\n\n    crawler.signals.connect(track_call, signals.scheduler_empty)\n    await crawler.crawl_async()\n    assert len(calls) >= 1",
+     "start": 30,
+     "calls": [
+      "append",
+      "connect",
+      "crawl_async",
+      "get_crawler",
+      "len",
+      "object",
+      "track_call"
+     ]
+    },
+    {
+     "name": "test_simple_pipeline",
+     "code": "async def test_simple_pipeline(mockserver: MockServer) -> None:\n    items: list[Any] = []\n\n    async def _on_item_scraped(item: Any) -> None:\n        item = await get_from_asyncio_queue(item)\n        items.append(item)\n\n    crawler = get_crawler(ItemSpider)\n    crawler.signals.connect(_on_item_scraped, signals.item_scraped)\n    await crawler.crawl_async(mockserver=mockserver)\n    assert len(items) == 10\n    for index in range(10):\n        assert {\"index\": index} in items",
+     "start": 44,
+     "calls": [
+      "_on_item_scraped",
+      "append",
+      "connect",
+      "crawl_async",
+      "get_crawler",
+      "get_from_asyncio_queue",
+      "len",
+      "range"
+     ]
+    }
+   ],
+   "order": 178,
+   "target": "scrapy.crawler.Crawler.crawl_async",
+   "target_file": "scrapy/crawler.py",
+   "target_lines": [
+    321,
+    357
+   ],
+   "target_window": "    # being installed already, which is done within _apply_settings(), inside\n    # this method.\n    @inlineCallbacks\n    def crawl(self, *args: Any, **kwargs: Any) -> Generator[Deferred[Any], Any, None]:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        Return a deferred that is fired when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = ExecutionEngine(self)\n            try:\n                yield deferred_from_coro(self.engine.open_spider_async())\n            except CloseSpider as exc:\n                yield deferred_from_coro(\n                    self.engine.close_async(reason=exc.reason, error=exc.error)\n                )\n            else:\n                # The spider may have been closed already, e.g. by an\n                # extension, in which case the engine is already stopped.\n                if self.engine.state is EngineState.SPIDER_OPEN:\n                    yield deferred_from_coro(self.engine.start_async())\n        except Exception:\n            if self._engine is not None:\n                yield deferred_from_coro(self._engine.close_async())\n            raise\n        finally:\n            self.crawling = False\n\n    async def crawl_async(self, *args: Any, **kwargs: Any) -> None:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        .. versionadded:: 2.14\n\n        Complete when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl_async() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = ExecutionEngine(self)\n            try:\n                await self.engine.open_spider_async()\n            except CloseSpider as exc:\n                await self.engine.close_async(reason=exc.reason, error=exc.error)\n            else:\n                # The spider may have been closed already, e.g. by an\n                # extension, in which case the engine is already stopped.\n                if self.engine.state is EngineState.SPIDER_OPEN:\n                    await self.engine.start_async()\n        except Exception:\n            if self._engine is not None:\n                await self._engine.close_async()\n            raise\n        finally:\n            self.crawling = False\n\n    def _create_spider(self, *args: Any, **kwargs: Any) -> Spider:\n        return self.spidercls.from_crawler(self, *args, **kwargs)\n\n    def stop(self, *, mode: _StopMode = \"graceful\") -> Deferred[None]:\n        \"\"\"Stop the crawler.\"\"\"\n        warnings.warn(\n            \"Crawler.stop() is deprecated, use stop_async() instead\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return deferred_from_coro(self.stop_async(mode=mode))\n\n    async def stop_async(self, *, mode: _StopMode = \"graceful\") -> None:\n        \"\"\"Stop the crawler.\n\n        .. versionadded:: 2.14\n\n        .. versionchanged:: VERSION\n            Calling it while the spider is being opened now closes the spider\n            as soon as it is open.\n\n        Completes when the crawl has finished, except when the spider is still\n        being opened or the crawler is already stopping, in which case it\n        completes immediately, and when :signal:`engine_started` handlers are\n        still running, in which case it completes once the spider is closed.\n        \"\"\"\n        mode = _normalize_stop_mode(mode)\n        was_crawling = self.crawling\n        self.crawling = False\n\n        if not was_crawling and mode == \"graceful\":\n            return\n\n        if mode == \"force\":\n            if self._force_stop_callback is not None:\n                await ensure_awaitable(self._force_stop_callback())\n                return\n            logger.warning(\n                \"Force stop requested, but no process-level force stop callback is available. Falling back to fast stop.\"\n            )\n            mode = \"fast\"",
+   "target_window_lines": [
+    280,
+    399
+   ],
+   "test_excerpt": "from __future__ import annotations\n\nfrom typing import TYPE_CHECKING\n\nimport pytest\n\nfrom scrapy import Request, Spider, signals\nfrom scrapy.utils.test import get_crawler, get_from_asyncio_queue\nfrom tests.utils.decorators import coroutine_test\n\nif TYPE_CHECKING:\n    from tests.mockserver.http import MockServer\n\n\nclass ItemSpider(Spider):\n    name = \"itemspider\"\n    mockserver: MockServer\n\n    async def start(self):\n        for index in range(10):\n            yield Request(\n                self.mockserver.url(f\"/status?n=200&id={index}\"), meta={\"index\": index}\n            )\n\n    def parse(self, response):\n        return {\"index\": response.meta[\"index\"]}\n\n\nclass TestMain:\n    @coroutine_test\n    async def test_scheduler_empty(self):\n        crawler = get_crawler()\n        calls = []\n\n        def track_call():\n            calls.append(object())\n\n        crawler.signals.connect(track_call, signals.scheduler_empty)\n        await crawler.crawl_async()\n        assert len(calls) >= 1\n\n\nclass TestMockServer:\n    def setup_method(self):\n        self.items = []\n\n    async def _on_item_scraped(self, item):\n        item = await get_from_asyncio_queue(item)\n        self.items.append(item)\n\n    @pytest.mark.only_asyncio\n    @coroutine_test\n    async def test_simple_pipeline(self, mockserver: MockServer) -> None:\n        crawler = get_crawler(ItemSpider)\n        crawler.signals.connect(self._on_item_scraped, signals.item_scraped)\n        await crawler.crawl_async(mockserver=mockserver)\n        assert len(self.items) == 10\n        for index in range(10):\n            assert {\"index\": index} in self.items\n",
+   "test_excerpt_note": "whole file",
+   "existing_test_names": [
+    "test_scheduler_empty",
+    "test_simple_pipeline"
+   ],
+   "dev_gate": {
+    "ran": 2,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 1,
+    "error": ""
+   },
+   "dev_covered": [
+    321,
+    330,
+    332,
+    336,
+    338,
+    339,
+    340,
+    341,
+    342,
+    343,
+    344,
+    350,
+    351,
+    357
+   ],
+   "prism_context": "# Test context: `scrapy.crawler.Crawler.crawl_async` (tests go to tests/test_signals.py)\n\n## 1. Target\n```\n    async def crawl_async(self, *args: Any, **kwargs: Any) -> None:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        .. versionadded:: 2.14\n\n        Complete when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl_async() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = ExecutionEngine(self)\n            try:\n                await self.engine.open_spider_async()\n            except CloseSpider as exc:\n                await self.engine.close_async(reason=exc.reason, error=exc.error)\n            else:\n                # The spider may have been closed already, e.g. by an\n                # extension, in which case the engine is already stopped.\n                if self.engine.state is EngineState.SPIDER_OPEN:\n                    await self.engine.start_async()\n        except Exception:\n            if self._engine is not None:\n                await self._engine.close_async()\n            raise\n        finally:\n            self.crawling = False\n```\n\nDigest (what a test should exercise):\n```\nwhen self.crawling:\n  L331 raise RuntimeError(\"Crawling already taking place\")\nwhen self._started:\n  L333-335 raise RuntimeError( \"Cannot run Crawler.crawl_async() more than once on the same instance.\" )\nL336 self.crawling = self._started = True (own state)\nL336 self._started = True (own state)\nL339 self.spider = self._create_spider(*args, **kwargs) (own state) [calls: _create_spider() -> scrapy.crawler.Crawler._create_spider]\nL340 call self._apply_settings() -> scrapy.crawler.Crawler._apply_settings\nL341 call self._update_root_log_handler() -> scrapy.crawler.Crawler._update_root_log_handler\nL342 self.engine = ExecutionEngine(self) (own state) [calls: ExecutionEngine() -> scrapy.core.engine.ExecutionEngine]\nL344 call await self.engine.open_spider_async() -> one of: scrapy.core.engine.ExecutionEngine.open_spider_async\nL345-346 catches CloseSpider: calls\nwhen on CloseSpider:\n  L346 call await self.engine.close_async(reason=exc.reason, error=exc.error) -> one of: scrapy.core.engine.ExecutionEngine.close_async\nwhen no exception was raised:\n  when self.engine.state is EngineState.SPIDER_OPEN:\n    L351 call await self.engine.start_async() -> one of: scrapy.core.engine.ExecutionEngine.start_async\nL352-355 catches Exception: raises, calls\nwhen on Exception:\n  when self._engine is not None:\n    L354 call await self._engine.close_async() -> one of: scrapy.core.engine.ExecutionEngine.close_async\n  L355 raise (re-raises the current exception)\nwhen finally (always):\n  L357 self.crawling = False (own state)\n```\n\nWhat it relies on in its callees:\n- `scrapy.crawler.Crawler._apply_settings` can raise `RuntimeError`; this function catches it\n- `scrapy.crawler.Crawler._apply_settings` returns nothing when self.settings.frozen\n- `scrapy.crawler.Crawler._apply_settings` changes state: self.stats = load_object(self.settings[\"STATS_CLASS\"])(self\u2026; self.logformatter = build_from_crawler(lf_cls, self) (own s\u2026; self.request_fingerprinter = build_from_crawler( load_objec\u2026 (+1 more)\n- `scrapy.core.engine.ExecutionEngine.close_async` returns nothing when self._state is EngineState.CREATED\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` can raise `RuntimeError`; this function catches it\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` can raise `close_spider_exc`; this function catches it\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` changes state: self.spider = self.crawler.spider (own state); self._slot = _Slot(close_if_idle, nextcall, scheduler) (own\u2026; self._start = await self.scraper.spidermw.process_start() (\u2026\n- `scrapy.core.engine.ExecutionEngine.start_async` can raise `RuntimeError`; this function catches it\n- `scrapy.core.engine.ExecutionEngine.start_async` changes state: self.start_time = time() (own state); self._closewait = Deferred() (own state); self._sending_engine_started = True (own state) (+3 more)\n\n## 2. How production code calls it\n- `scrapy.crawler.AsyncCrawlerRunner._crawl_and_track` (scrapy/crawler.py): L737 result: ignores the return value; L737 errors: catches `RuntimeError` raised by it (around the call: Exception); L737 arguments: passes spread / unpacked arguments\n\n## 3. Existing tests\nTests that already reach it: `tests.test_core_downloader.test_fetch_deprecated_spider_arg`, `tests.test_core_downloader.test_slot_concurrency`, `tests.test_core_scraper.test_errback_error_on_ignored_request`, `tests.test_core_scraper.test_none_in_callback_output`, `tests.test_core_scraper.test_scraper_exception`, `tests.test_crawl.TestCrawl._test_delay`, `tests.test_crawl.TestCrawl.test_engine_status`, `tests.test_crawl.TestCrawl.test_follow_all`, `tests.test_crawl.TestCrawl.test_format_engine_status`, `tests.test_crawl.TestCrawl.test_open_spider_error_on_faulty_pipeline`, `tests.test_crawl.TestCrawl.test_print_engine_status`, `tests.test_crawl.TestCrawl.test_referer_header`\n\n`tests.test_signals.TestMain.test_scheduler_empty` (in tests/test_signals.py):\n```python\n    @coroutine_test\n    async def test_scheduler_empty(self):\n        crawler = get_crawler()\n        calls = []\n\n        def track_call():\n            calls.append(object())\n\n        crawler.signals.connect(track_call, signals.scheduler_empty)\n        await crawler.crawl_async()\n        assert len(calls) >= 1\n```\n\n`tests.test_signals.TestMockServer.test_simple_pipeline` (in tests/test_signals.py):\n```python\n    @pytest.mark.only_asyncio\n    @coroutine_test\n    async def test_simple_pipeline(self, mockserver: MockServer) -> None:\n        crawler = get_crawler(ItemSpider)\n        crawler.signals.connect(self._on_item_scraped, signals.item_scraped)\n        await crawler.crawl_async(mockserver=mockserver)\n        assert len(self.items) == 10\n        for index in range(10):\n            assert {\"index\": index} in self.items\n```\n\n## 4. Test conventions in tests/test_signals.py\n- plain `assert` statements (2 of 2 tests)\n- async tests (2 of 2 tests)\n- tests grouped in test classes (2 of 2 tests)\n",
+   "id": "scrapy-tests-008"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "c7eacdbb30a4563bbbe04ed02781768f4e19eabb",
+   "parent": "e810f5fca166e8cd03d005d07b6a6a2373407d6a",
+   "subject": "Unpack some test classes that are just containers. (#8000)",
+   "date": "2026-08-17T14:33:26+02:00",
+   "test_file": "tests/test_link.py",
+   "tests": [
+    {
+     "name": "test_bytes_url",
+     "code": "def test_bytes_url() -> None:\n    with pytest.raises(TypeError):\n        Link(b\"http://www.example.com/\\xc2\\xa3\")  # type: ignore[arg-type]",
+     "start": 58,
+     "calls": [
+      "Link",
+      "raises"
+     ]
+    },
+    {
+     "name": "test_eq_and_hash",
+     "code": "def test_eq_and_hash() -> None:\n    l1 = Link(\"http://www.example.com\")\n    l2 = Link(\"http://www.example.com/other\")\n    l3 = Link(\"http://www.example.com\")\n\n    _assert_same_links(l1, l1)\n    _assert_different_links(l1, l2)\n    _assert_same_links(l1, l3)\n\n    l4 = Link(\"http://www.example.com\", text=\"test\")\n    l5 = Link(\"http://www.example.com\", text=\"test2\")\n    l6 = Link(\"http://www.example.com\", text=\"test\")\n\n    _assert_same_links(l4, l4)\n    _assert_different_links(l4, l5)\n    _assert_same_links(l4, l6)\n\n    l7 = Link(\n        \"http://www.example.com\", text=\"test\", fragment=\"something\", nofollow=False\n    )\n    l8 = Link(\n        \"http://www.example.com\", text=\"test\", fragment=\"something\", nofollow=False\n    )\n    l9 = Link(\n        \"http://www.example.com\", text=\"test\", fragment=\"something\", nofollow=True\n    )\n    l10 = Link(\"http://www.example.com\", text=\"test\", fragment=\"other\", nofollow=False)\n    _assert_same_links(l7, l8)\n    _assert_different_links(l7, l9)\n    _assert_different_links(l7, l10)",
+     "start": 18,
+     "calls": [
+      "Link",
+      "_assert_different_links",
+      "_assert_same_links"
+     ]
+    },
+    {
+     "name": "test_eq_non_link",
+     "code": "def test_eq_non_link() -> None:\n    url = \"http://example.com\"\n    assert Link(url) != url",
+     "start": 63,
+     "calls": [
+      "Link"
+     ]
+    },
+    {
+     "name": "test_repr",
+     "code": "def test_repr() -> None:\n    l1 = Link(\n        \"http://www.example.com\", text=\"test\", fragment=\"something\", nofollow=True\n    )\n    l2 = eval(repr(l1))\n    _assert_same_links(l1, l2)",
+     "start": 50,
+     "calls": [
+      "Link",
+      "_assert_same_links",
+      "eval",
+      "repr"
+     ]
+    }
+   ],
+   "order": 195,
+   "target": "scrapy.link.Link",
+   "target_file": "scrapy/link.py",
+   "target_lines": [
+    9,
+    61
+   ],
+   "target_window": "\"\"\"\nThis module defines the Link object used in Link extractors.\n\nFor actual link extractors implementation see scrapy.linkextractors, or\nits documentation in: docs/topics/link-extractors.rst\n\"\"\"\n\n\nclass Link:\n    \"\"\"Link objects represent an extracted link by the LinkExtractor.\n\n    Using the anchor tag sample below to illustrate the parameters:\n\n    .. code-block:: html\n\n            <a href=\"https://example.com/nofollow.html#foo\" rel=\"nofollow\">Dont follow this one</a>\n\n    :param url: the absolute url being linked to in the anchor tag.\n                From the sample, this is ``https://example.com/nofollow.html``.\n\n    :param text: the text in the anchor tag. From the sample, this is ``Dont follow this one``.\n\n    :param fragment: the part of the url after the hash symbol. From the sample, this is ``foo``.\n\n    :param nofollow: an indication of the presence or absence of a nofollow value in the ``rel`` attribute\n                    of the anchor tag.\n    \"\"\"\n\n    __slots__ = [\"fragment\", \"nofollow\", \"text\", \"url\"]\n\n    def __init__(\n        self, url: str, text: str = \"\", fragment: str = \"\", nofollow: bool = False\n    ):\n        if not isinstance(url, str):\n            got = url.__class__.__name__\n            raise TypeError(f\"Link urls must be str objects, got {got}\")\n        self.url: str = url\n        self.text: str = text\n        self.fragment: str = fragment\n        self.nofollow: bool = nofollow\n\n    def __eq__(self, other: object) -> bool:\n        if not isinstance(other, Link):\n            return NotImplemented\n        return (\n            self.url == other.url\n            and self.text == other.text\n            and self.fragment == other.fragment\n            and self.nofollow == other.nofollow\n        )\n\n    def __hash__(self) -> int:\n        return (\n            hash(self.url) ^ hash(self.text) ^ hash(self.fragment) ^ hash(self.nofollow)\n        )\n\n    def __repr__(self) -> str:\n        return (\n            f\"Link(url={self.url!r}, text={self.text!r}, \"\n            f\"fragment={self.fragment!r}, nofollow={self.nofollow!r})\"\n        )",
+   "target_window_lines": [
+    1,
+    61
+   ],
+   "test_excerpt": "from __future__ import annotations\n\nimport pytest\n\nfrom scrapy.link import Link\n\n\nclass TestLink:\n    def _assert_same_links(self, link1: Link, link2: Link) -> None:\n        assert link1 == link2\n        assert hash(link1) == hash(link2)\n\n    def _assert_different_links(self, link1: Link, link2: Link) -> None:\n        assert link1 != link2\n        assert hash(link1) != hash(link2)\n\n    def test_eq_and_hash(self) -> None:\n        l1 = Link(\"http://www.example.com\")\n        l2 = Link(\"http://www.example.com/other\")\n        l3 = Link(\"http://www.example.com\")\n\n        self._assert_same_links(l1, l1)\n        self._assert_different_links(l1, l2)\n        self._assert_same_links(l1, l3)\n\n        l4 = Link(\"http://www.example.com\", text=\"test\")\n        l5 = Link(\"http://www.example.com\", text=\"test2\")\n        l6 = Link(\"http://www.example.com\", text=\"test\")\n\n        self._assert_same_links(l4, l4)\n        self._assert_different_links(l4, l5)\n        self._assert_same_links(l4, l6)\n\n        l7 = Link(\n            \"http://www.example.com\", text=\"test\", fragment=\"something\", nofollow=False\n        )\n        l8 = Link(\n            \"http://www.example.com\", text=\"test\", fragment=\"something\", nofollow=False\n        )\n        l9 = Link(\n            \"http://www.example.com\", text=\"test\", fragment=\"something\", nofollow=True\n        )\n        l10 = Link(\n            \"http://www.example.com\", text=\"test\", fragment=\"other\", nofollow=False\n        )\n        self._assert_same_links(l7, l8)\n        self._assert_different_links(l7, l9)\n        self._assert_different_links(l7, l10)\n\n    def test_repr(self) -> None:\n        l1 = Link(\n            \"http://www.example.com\", text=\"test\", fragment=\"something\", nofollow=True\n        )\n        l2 = eval(repr(l1))\n        self._assert_same_links(l1, l2)\n\n    def test_bytes_url(self) -> None:\n        with pytest.raises(TypeError):\n            Link(b\"http://www.example.com/\\xc2\\xa3\")  # type: ignore[arg-type]\n\n    def test_eq_non_link(self) -> None:\n        url = \"http://example.com\"\n        assert Link(url) != url\n",
+   "test_excerpt_note": "whole file",
+   "existing_test_names": [
+    "test_bytes_url",
+    "test_eq_and_hash",
+    "test_eq_non_link",
+    "test_repr"
+   ],
+   "dev_gate": {
+    "ran": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "error": ""
+   },
+   "dev_covered": [
+    9,
+    29,
+    31,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    42,
+    43,
+    44,
+    45,
+    52,
+    53,
+    57,
+    58
+   ],
+   "prism_context": "# Test context: `scrapy.link.Link` (tests go to tests/test_link.py)\n\n## 1. Target\n```\nclass Link:\n    \"\"\"Link objects represent an extracted link by the LinkExtractor.\n\n    Using the anchor tag sample below to illustrate the parameters:\n\n    .. code-block:: html\n\n            <a href=\"https://example.com/nofollow.html#foo\" rel=\"nofollow\">Dont follow this one</a>\n\n    :param url: the absolute url being linked to in the anchor tag.\n                From the sample, this is ``https://example.com/nofollow.html``.\n\n    :param text: the text in the anchor tag. From the sample, this is ``Dont follow this one``.\n\n    :param fragment: the part of the url after the hash symbol. From the sample, this is ``foo``.\n\n    :param nofollow: an indication of the presence or absence of a nofollow value in the ``rel`` attribute\n                    of the anchor tag.\n    \"\"\"\n\n    __slots__ = [\"fragment\", \"nofollow\", \"text\", \"url\"]\n\n    def __init__(\n        self, url: str, text: str = \"\", fragment: str = \"\", nofollow: bool = False\n    ):\n        if not isinstance(url, str):\n            got = url.__class__.__name__\n            raise TypeError(f\"Link urls must be str objects, got {got}\")\n        self.url: str = url\n        self.text: str = text\n        self.fragment: str = fragment\n        self.nofollow: bool = nofollow\n\n    def __eq__(self, other: object) -> bool:\n        if not isinstance(other, Link):\n            return NotImplemented\n        return (\n            self.url == other.url\n            and self.text == other.text\n            and self.fragment == other.fragment\n            and self.nofollow == other.nofollow\n        )\n\n    def __hash__(self) -> int:\n        return (\n            hash(self.url) ^ hash(self.text) ^ hash(self.fragment) ^ hash(self.nofollow)\n        )\n\n    def __repr__(self) -> str:\n        return (\n            f\"Link(url={self.url!r}, text={self.text!r}, \"\n            f\"fragment={self.fragment!r}, nofollow={self.nofollow!r})\"\n        )\n```\n\nDigest (what a test should exercise):\n```\nL29 __slots__ = [\"fragment\", \"nofollow\", \"text\", \"url\"]\nL31-40 defines nested method __init__\nL42-50 defines nested method __eq__\nL52-55 defines nested method __hash__\nL57-61 defines nested method __repr__\n```\n\n## 2. How production code calls it\n- `scrapy.linkextractors.lxmlhtml.LxmlParserLinkExtractor._extract_links` (scrapy/linkextractors/lxmlhtml.py): L145 result: stores the result in `link`, then passes it to `links.append()`; L145 arguments: passes 2 positional arguments, keywords `nofollow`\n\n## 3. Existing tests\nTests that already reach it: `tests.test_link.TestLink.test_bytes_url`, `tests.test_link.TestLink.test_eq_and_hash`, `tests.test_link.TestLink.test_eq_non_link`, `tests.test_link.TestLink.test_repr`, `tests.test_linkextractors.TestLxmlLinkExtractor.test_area_tag_with_unicode_present`, `tests.test_linkextractors.TestLxmlLinkExtractor.test_attrs`, `tests.test_linkextractors.TestLxmlLinkExtractor.test_base_url_with_restrict_xpaths`, `tests.test_linkextractors.TestLxmlLinkExtractor.test_canonicalize_once_per_link`, `tests.test_linkextractors.TestLxmlLinkExtractor.test_encoded_url`, `tests.test_linkextractors.TestLxmlLinkExtractor.test_encoded_url_in_restricted_xpath`, `tests.test_linkextractors.TestLxmlLinkExtractor.test_extract_all_links`, `tests.test_linkextractors.TestLxmlLinkExtractor.test_extract_filter_allow`\n\n`tests.test_link.TestLink.test_eq_non_link` (in tests/test_link.py):\n```python\n    def test_eq_non_link(self) -> None:\n        url = \"http://example.com\"\n        assert Link(url) != url\n```\n\n`tests.test_link.TestLink.test_bytes_url` (in tests/test_link.py):\n```python\n    def test_bytes_url(self) -> None:\n        with pytest.raises(TypeError):\n            Link(b\"http://www.example.com/\\xc2\\xa3\")  # type: ignore[arg-type]\n```\n\n## 4. Test conventions in tests/test_link.py\n- plain `assert` statements (1 of 4 tests)\n- errors checked with `pytest.raises` (1 of 4 tests)\n- tests grouped in test classes (4 of 4 tests)\n",
+   "id": "scrapy-tests-009"
+  },
+  {
+   "repo": "scrapy",
+   "commit": "54d8562fb0f20b5378646deb6f284c10ea4b030e",
+   "parent": "4e1faf883d83781a15732d453981de988b0db300",
+   "subject": "Assorted test improvements (#7232)",
+   "date": "2026-02-02T09:37:39+01:00",
+   "test_file": "tests/test_crawl.py",
+   "tests": [
+    {
+     "name": "TestCrawlSpider.test_response_ip_address",
+     "code": "async def test_response_ip_address(self, mockserver: MockServer, url: str) -> None:\n        crawler = get_crawler(SingleRequestSpider)\n        url = mockserver.url(url)\n        expected_netloc, _ = urlparse(url).netloc.split(\":\")\n        await crawler.crawl_async(seed=url, mockserver=mockserver)\n        assert isinstance(crawler.spider, SingleRequestSpider)\n        ip_address = crawler.spider.meta[\"responses\"][0].ip_address\n        assert isinstance(ip_address, IPv4Address)\n        assert str(ip_address) == gethostbyname(expected_netloc)",
+     "start": 676,
+     "calls": [
+      "crawl_async",
+      "get_crawler",
+      "gethostbyname",
+      "isinstance",
+      "split",
+      "str",
+      "url",
+      "urlparse"
+     ]
+    }
+   ],
+   "order": 229,
+   "target": "scrapy.crawler.Crawler.crawl_async",
+   "target_file": "scrapy/crawler.py",
+   "target_lines": [
+    179,
+    207
+   ],
+   "target_window": "        logger.info(\n            \"Overridden settings:\\n%(settings)s\", {\"settings\": pprint.pformat(d)}\n        )\n\n    def _apply_reactorless_default_settings(self):\n        \"\"\"Change some setting defaults when not using a Twisted reactor.\n\n        Some settings need different defaults when using and not using a\n        reactor, but as we can't put this logic into default_settings.py we\n        change them here when the reactor is not used.\n        \"\"\"\n        self.settings.set(\"TELNETCONSOLE_ENABLED\", False, priority=\"default\")\n\n    # Cannot use @deferred_f_from_coro_f because that relies on the reactor\n    # being installed already, which is done within _apply_settings(), inside\n    # this method.\n    @inlineCallbacks\n    def crawl(self, *args: Any, **kwargs: Any) -> Generator[Deferred[Any], Any, None]:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        Return a deferred that is fired when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = self._create_engine()\n            yield deferred_from_coro(self.engine.open_spider_async())\n            yield deferred_from_coro(self.engine.start_async())\n        except Exception:\n            self.crawling = False\n            if self.engine is not None:\n                yield deferred_from_coro(self.engine.close_async())\n            raise\n\n    async def crawl_async(self, *args: Any, **kwargs: Any) -> None:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        .. versionadded:: 2.14\n\n        Complete when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl_async() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = self._create_engine()\n            await self.engine.open_spider_async()\n            await self.engine.start_async()\n        except Exception:\n            self.crawling = False\n            if self.engine is not None:\n                await self.engine.close_async()\n            raise\n\n    def _create_spider(self, *args: Any, **kwargs: Any) -> Spider:\n        return self.spidercls.from_crawler(self, *args, **kwargs)\n\n    def _create_engine(self) -> ExecutionEngine:\n        return ExecutionEngine(self, lambda _: self.stop_async())\n\n    def stop(self) -> Deferred[None]:\n        \"\"\"Start a graceful stop of the crawler and return a deferred that is\n        fired when the crawler is stopped.\"\"\"\n        warnings.warn(\n            \"Crawler.stop() is deprecated, use stop_async() instead\",\n            ScrapyDeprecationWarning,\n            stacklevel=2,\n        )\n        return deferred_from_coro(self.stop_async())\n\n    async def stop_async(self) -> None:\n        \"\"\"Start a graceful stop of the crawler and complete when the crawler is stopped.\n\n        .. versionadded:: 2.14\n        \"\"\"\n        if self.crawling:\n            self.crawling = False\n            assert self.engine\n            if self.engine.running:\n                await self.engine.stop_async()\n\n    @staticmethod\n    def _get_component(\n        component_class: type[_T], components: Iterable[Any]\n    ) -> _T | None:\n        for component in components:\n            if isinstance(component, component_class):\n                return component\n        return None\n\n    def get_addon(self, cls: type[_T]) -> _T | None:\n        \"\"\"Return the run-time instance of an :ref:`add-on <topics-addons>` of\n        the specified class or a subclass, or ``None`` if none is found.\n\n        .. versionadded:: 2.12\n        \"\"\"\n        return self._get_component(cls, self.addons.addons)\n\n    def get_downloader_middleware(self, cls: type[_T]) -> _T | None:",
+   "target_window_lines": [
+    134,
+    253
+   ],
+   "test_excerpt": "from __future__ import annotations\n\nimport json\nimport logging\nfrom ipaddress import IPv4Address\nfrom socket import gethostbyname\nfrom typing import TYPE_CHECKING, Any\nfrom urllib.parse import urlencode, urlparse\n\nimport pytest\nfrom testfixtures import LogCapture\nfrom twisted.internet.defer import inlineCallbacks, succeed\nfrom twisted.internet.ssl import Certificate\nfrom twisted.python.failure import Failure\n\nfrom scrapy import Spider, signals\nfrom scrapy.crawler import CrawlerRunner\nfrom scrapy.exceptions import CloseSpider, ScrapyDeprecationWarning, StopDownload\nfrom scrapy.http import Request\nfrom scrapy.http.response import Response\nfrom scrapy.utils.defer import deferred_f_from_coro_f, maybe_deferred_to_future\nfrom scrapy.utils.engine import format_engine_status, get_engine_status\nfrom scrapy.utils.python import to_unicode\nfrom scrapy.utils.test import get_crawler, get_reactor_settings\nfrom tests import NON_EXISTING_RESOLVABLE\nfrom tests.mockserver.http import MockServer\nfrom tests.spiders import (\n    AsyncDefAsyncioGenComplexSpider,\n    AsyncDefAsyncioGenExcSpider,\n    AsyncDefAsyncioGenLoopSpider,\n    AsyncDefAsyncioGenSpider,\n    AsyncDefAsyncioReqsReturnSpider,\n    AsyncDefAsyncioReturnSingleElementSpider,\n    AsyncDefAsyncioReturnSpider,\n    AsyncDefAsyncioSpider,\n    AsyncDefDeferredDirectSpider,\n    AsyncDefDeferredMaybeWrappedSpider,\n    AsyncDefDeferredWrappedSpider,\n    AsyncDefSpider,\n    BrokenStartSpider,\n    BytesReceivedCallbackSpider,\n    BytesReceivedErrbackSpider,\n    CrawlSpiderWithAsyncCallback,\n    CrawlSpiderWithAsyncGeneratorCallback,\n    CrawlSpiderWithErrback,\n    CrawlSpiderWithParseMethod,\n    CrawlSpiderWithProcessRequestCallbackKeywordArguments,\n    DelaySpider,\n    DuplicateStartSpider,\n    FollowAllSpider,\n    HeadersReceivedCallbackSpider,\n    HeadersReceivedErrbackSpider,\n    SimpleSpider,\n    SingleRequestSpider,\n    StartGoodAndBadOutput,\n    StartItemSpider,\n)\n\nif TYPE_CHECKING:\n    from scrapy.statscollectors import StatsCollector\n# ... (706 lines not shown) ...\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n        assert len(failures) == 1\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n\n    @inlineCallbacks\n    def test_spider_errback_exception(self):\n        def eb(failure: Failure) -> None:\n            raise ValueError(\"foo\")\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n        assert \"Spider error processing\" in str(log)\n\n    @inlineCallbacks\n    def test_spider_errback_item(self):\n        def eb(failure: Failure) -> Any:\n            return {\"foo\": \"bar\"}\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n        assert \"'item_scraped_count': 1\" in str(log)\n\n    @inlineCallbacks\n    def test_spider_errback_request(self):\n        def eb(failure: Failure) -> Request:\n            return Request(self.mockserver.url(\"/\"))\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n        assert \"Crawled (200)\" in str(log)\n\n    @inlineCallbacks\n    def test_spider_errback_downloader_error(self):\n        failures = []\n\n        def eb(failure: Failure) -> Failure:\n            failures.append(failure)\n            return failure\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/drop?abort=1\"), errback_func=eb\n            )\n        assert len(failures) == 1\n        assert \"Error downloading\" in str(log)\n        assert \"Spider error processing\" not in str(log)\n\n    @inlineCallbacks\n    def test_spider_errback_downloader_error_exception(self):\n        def eb(failure: Failure) -> None:\n            raise ValueError(\"foo\")\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/drop?abort=1\"), errback_func=eb\n            )\n        assert \"Error downloading\" in str(log)\n        assert \"Spider error processing\" in str(log)\n\n    @inlineCallbacks\n    def test_spider_errback_downloader_error_item(self):\n        def eb(failure: Failure) -> Any:\n            return {\"foo\": \"bar\"}\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/drop?abort=1\"), errback_func=eb\n            )\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n        assert \"'item_scraped_count': 1\" in str(log)\n\n    @inlineCallbacks\n    def test_spider_errback_downloader_error_request(self):\n        def eb(failure: Failure) -> Request:\n            return Request(self.mockserver.url(\"/\"))\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/drop?abort=1\"), errback_func=eb\n            )\n        assert \"HTTP status code is not handled or not allowed\" not in str(log)\n        assert \"Spider error processing\" not in str(log)\n        assert \"Crawled (200)\" in str(log)\n\n    @inlineCallbacks\n    def test_spider_errback_deferred_deprecated(self):\n        def eb(failure: Failure) -> Any:\n            return succeed(None)\n\n        crawler = get_crawler(SingleRequestSpider)\n        with pytest.warns(\n            ScrapyDeprecationWarning,\n            match=\"Returning Deferreds from spider errbacks is deprecated\",\n        ):\n            yield crawler.crawl(\n                seed=self.mockserver.url(\"/status?n=400\"), errback_func=eb\n            )\n\n    @inlineCallbacks\n    def test_raise_closespider(self):\n        def cb(response):\n            raise CloseSpider\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(seed=self.mockserver.url(\"/\"), callback_func=cb)\n        assert \"Closing spider (cancelled)\" in str(log)\n        assert \"Spider error processing\" not in str(log)\n\n    @inlineCallbacks\n    def test_raise_closespider_reason(self):\n        def cb(response):\n            raise CloseSpider(\"my_reason\")\n\n        crawler = get_crawler(SingleRequestSpider)\n        with LogCapture() as log:\n            yield crawler.crawl(seed=self.mockserver.url(\"/\"), callback_func=cb)\n        assert \"Closing spider (my_reason)\" in str(log)\n        assert \"Spider error processing\" not in str(log)",
+   "test_excerpt_note": "first 60 and last 140 of 906 lines",
+   "existing_test_names": [
+    "test_async_def_asyncgen_parse",
+    "test_async_def_asyncgen_parse_complex",
+    "test_async_def_asyncgen_parse_exc",
+    "test_async_def_asyncgen_parse_loop",
+    "test_async_def_asyncio_parse",
+    "test_async_def_asyncio_parse_items_list",
+    "test_async_def_asyncio_parse_items_single_element",
+    "test_async_def_asyncio_parse_reqs_list",
+    "test_async_def_deferred_direct",
+    "test_async_def_deferred_maybe_wrapped",
+    "test_async_def_deferred_wrapped",
+    "test_async_def_parse",
+    "test_bytes_received_stop_download_callback",
+    "test_bytes_received_stop_download_errback",
+    "test_crawl_multiple",
+    "test_crawlerrunner_accepts_crawler",
+    "test_crawlspider_process_request_cb_kwargs",
+    "test_crawlspider_with_async_callback",
+    "test_crawlspider_with_async_generator_callback",
+    "test_crawlspider_with_errback",
+    "test_crawlspider_with_parse",
+    "test_dns_server_ip_address",
+    "test_dns_server_ip_address_none",
+    "test_engine_status",
+    "test_fixed_delay",
+    "test_follow_all",
+    "test_format_engine_status",
+    "test_headers_received_stop_download_callback",
+    "test_headers_received_stop_download_errback",
+    "test_open_spider_error_on_faulty_pipeline",
+    "test_raise_closespider",
+    "test_raise_closespider_reason",
+    "test_randomized_delay",
+    "test_referer_header",
+    "test_response_ssl_certificate",
+    "test_response_ssl_certificate_empty_response",
+    "test_response_ssl_certificate_none",
+    "test_retry_503",
+    "test_retry_conn_aborted",
+    "test_retry_conn_failed",
+    "test_retry_conn_lost",
+    "test_retry_dns_error",
+    "test_spider_callback_deferred_deprecated",
+    "test_spider_errback",
+    "test_spider_errback_deferred_deprecated",
+    "test_spider_errback_downloader_error",
+    "test_spider_errback_downloader_error_exception",
+    "test_spider_errback_downloader_error_item",
+    "test_spider_errback_downloader_error_request",
+    "test_spider_errback_exception",
+    "test_spider_errback_item",
+    "test_spider_errback_request",
+    "test_spider_errback_silence",
+    "test_start_bug_before_yield",
+    "test_start_bug_yielding",
+    "test_start_dupes",
+    "test_start_items",
+    "test_start_unsupported_output",
+    "test_timeout_failure",
+    "test_timeout_success",
+    "test_unbounded_response",
+    "test_unknown_url_scheme"
+   ],
+   "dev_gate": {
+    "ran": 2,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 1,
+    "error": ""
+   },
+   "dev_covered": [
+    179,
+    188,
+    190,
+    194,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201,
+    202
+   ],
+   "prism_context": "# Test context: `scrapy.crawler.Crawler.crawl_async` (tests go to tests/test_crawl.py)\n\n## 1. Target\n```\n    async def crawl_async(self, *args: Any, **kwargs: Any) -> None:\n        \"\"\"Start the crawler by instantiating its spider class with the given\n        *args* and *kwargs* arguments, while setting the execution engine in\n        motion. Should be called only once.\n\n        .. versionadded:: 2.14\n\n        Complete when the crawl is finished.\n        \"\"\"\n        if self.crawling:\n            raise RuntimeError(\"Crawling already taking place\")\n        if self._started:\n            raise RuntimeError(\n                \"Cannot run Crawler.crawl_async() more than once on the same instance.\"\n            )\n        self.crawling = self._started = True\n\n        try:\n            self.spider = self._create_spider(*args, **kwargs)\n            self._apply_settings()\n            self._update_root_log_handler()\n            self.engine = self._create_engine()\n            await self.engine.open_spider_async()\n            await self.engine.start_async()\n        except Exception:\n            self.crawling = False\n            if self.engine is not None:\n                await self.engine.close_async()\n            raise\n```\n\nDigest (what a test should exercise):\n```\nwhen self.crawling:\n  L189 raise RuntimeError(\"Crawling already taking place\")\nwhen self._started:\n  L191-193 raise RuntimeError( \"Cannot run Crawler.crawl_async() more than once on the same instance.\" )\nL194 self.crawling = self._started = True (own state)\nL194 self._started = True (own state)\nL197 self.spider = self._create_spider(*args, **kwargs) (own state) [calls: _create_spider() -> scrapy.crawler.Crawler._create_spider]\nL198 call self._apply_settings() -> scrapy.crawler.Crawler._apply_settings\nL199 call self._update_root_log_handler() -> scrapy.crawler.Crawler._update_root_log_handler\nL200 self.engine = self._create_engine() (own state) [calls: _create_engine() -> scrapy.crawler.Crawler._create_engine]\nL201 call await self.engine.open_spider_async() -> one of: scrapy.core.engine.ExecutionEngine.open_spider_async\nL202 call await self.engine.start_async() -> one of: scrapy.core.engine.ExecutionEngine.start_async\nL203-207 catches Exception: raises, calls, assigns\nwhen on Exception:\n  L204 self.crawling = False (own state)\n  when self.engine is not None:\n    L206 call await self.engine.close_async() -> one of: scrapy.core.engine.ExecutionEngine.close_async\n  L207 raise (re-raises the current exception)\n```\n\nWhat it relies on in its callees:\n- `scrapy.crawler.Crawler._apply_settings` returns nothing when self.settings.frozen\n- `scrapy.crawler.Crawler._apply_settings` changes state: self.stats = load_object(self.settings[\"STATS_CLASS\"])(self\u2026; self.logformatter = lf_cls.from_crawler(self) (own state); self.request_fingerprinter = build_from_crawler( load_objec\u2026 (+1 more)\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` can raise `RuntimeError`; this function catches it\n- `scrapy.core.engine.ExecutionEngine.open_spider_async` changes state: self.spider = self.crawler.spider (own state); self._slot = _Slot(close_if_idle, nextcall, scheduler) (own\u2026; self._start = await self.scraper.spidermw.process_start() (\u2026\n- `scrapy.core.engine.ExecutionEngine.start_async` can raise `RuntimeError`; this function catches it\n- `scrapy.core.engine.ExecutionEngine.start_async` returns nothing when self._stopping; _start_request_processing and self.spider is None\n- `scrapy.core.engine.ExecutionEngine.start_async` changes state: self.start_time = time() (own state); self._starting = True (own state); self.running = True (own state) (+3 more)\n\n## 2. How production code calls it\n- `scrapy.crawler.AsyncCrawlerRunner._crawl` (scrapy/crawler.py): L541 result: passes the result to `loop.create_task()`; L541 errors: does not catch `RuntimeError` raised by it: the error propagates to this function's callers; L541 arguments: passes spread / unpacked arguments\n\n## 3. Existing tests\nTests that already reach it: `tests.test_core_downloader.test_fetch_deprecated_spider_arg`, `tests.test_core_scraper.test_scraper_exception`, `tests.test_crawl.TestCrawl._test_delay`, `tests.test_crawler.TestCrawler.test_crawler_crawl_async_twice_parallel_unsupported`, `tests.test_crawler.TestCrawler.test_crawler_crawl_async_twice_seq_unsupported`, `tests.test_crawler.TestCrawlerLogging.test_spider_custom_settings_log_level`, `tests.test_downloaderslotssettings.test_none_slot_with_priority_queue`, `tests.test_engine_loop.TestMain.test_close_during_start_iteration`, `tests.test_engine_loop.TestMain.test_sleep`, `tests.test_engine_loop.TestRequestSendOrder._test_request_order`, `tests.test_feedexport.TestBatchDeliveries.run_and_export`, `tests.test_feedexport.TestFeedExport.run_and_export`\n\n`tests.test_crawl.TestCrawl.test_crawl_multiple` (in tests/test_crawl.py):\n```python\n    @inlineCallbacks\n    def test_crawl_multiple(self, caplog: pytest.LogCaptureFixture):\n        runner = CrawlerRunner(get_reactor_settings())\n        runner.crawl(\n            SimpleSpider,\n            self.mockserver.url(\"/status?n=200\"),\n            mockserver=self.mockserver,\n        )\n        runner.crawl(\n            SimpleSpider,\n            self.mockserver.url(\"/status?n=503\"),\n            mockserver=self.mockserver,\n        )\n\n        with caplog.at_level(logging.DEBUG):\n            yield runner.join()\n\n        self._assert_retried(caplog.text)\n        assert \"Got response 200\" in caplog.text\n```\n\n`tests.test_crawl.TestCrawlSpider.test_async_def_asyncgen_parse` (in tests/test_crawl.py):\n```python\n    @pytest.mark.only_asyncio\n    @deferred_f_from_coro_f\n    async def test_async_def_asyncgen_parse(self):\n        log, _, stats = await self._run_spider(AsyncDefAsyncioGenSpider)\n        assert \"Got response 200\" in str(log)\n        itemcount = stats.get_value(\"item_scraped_count\")\n        assert itemcount == 1\n```\n\n## 4. Test conventions in tests/test_crawl.py\n- plain `assert` statements (53 of 62 tests)\n- errors checked with `pytest.raises` (1 of 62 tests)\n- async tests (12 of 62 tests)\n- tests grouped in test classes (62 of 62 tests)\n- fixtures taken as parameters: `caplog` (2)\n",
+   "id": "scrapy-tests-010"
+  }
+ ]
+}
