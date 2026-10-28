@@ -36,6 +36,7 @@ ARMS = ("FILE", "GREP", "PRISM")
 BUDGET = 6000
 FILE_WINDOW = 200
 TEST_DIRS = {"tornado": "tornado/test"}
+TRACE_ARGS = {"aiohttp": ["-p", "no:aiohttp"]}  # its conftest loads pytest_aiohttp itself; the auto-loaded copy clashes
 TRACE_TIMEOUT = 5400
 
 INSTRUCTIONS = """You are a software engineer working in the repository `{repo}`.
@@ -76,7 +77,7 @@ def trace(name: str, clone: str, envs: str, out: str, tests: str | None = None) 
                PYTHONPATH=os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
     tests = tests or TEST_DIRS.get(name, "tests")
     cmd = [py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "harness.experiments.suite.trace_edges",
-           "-o", "addopts=", "-x" if False else "-q", tests]
+           "-o", "addopts=", *TRACE_ARGS.get(name, []), tests]
     try:
         r = subprocess.run(cmd, cwd=clone, env=env, capture_output=True, text=True, timeout=TRACE_TIMEOUT)
         tail = r.stdout[-1500:]
