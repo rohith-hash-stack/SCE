@@ -161,3 +161,9 @@ one candidate commit.
 - Several Kaggle sessions, one cell per type.
 - Each cell resumes from the answers already pushed.
 - Type 6's cell also builds each repository's environment at every task's parent commit.
+
+## Frozen task sets (before any model ran)
+
+| type | file | tasks | notes |
+|---|---|---|---|
+| 5 conceptual | `tasks/concepts.json` | 100 (10 per repository) | the search's own recall@10 over the 175 answer functions: BM25 124, PRISM 127 |
