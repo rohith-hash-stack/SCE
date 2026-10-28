@@ -257,7 +257,10 @@ No call came near its window:
 - Run 3's largest prompt is 6,902 tokens; with a full 4,096-token answer it would still be 10,998.
 - The map calls of run 2 (8,192 window) were at most 1,583 tokens, and none came back empty.
 
-# Run 4: the big test (pre-registered before mining)
+# Run 4: the big test (pre-registered before mining) - SUPERSEDED
+
+Replaced, before any run-4 task was selected, by the ten-repository task suite in
+`harness/experiments/suite/README.md`, whose type 1 keeps this design.
 
 Run 3: the break check gained 4 callers where it fired and lost 4 where it was silent or partial (the model
 read "No call site breaks" as "nothing to change", and a partial list as complete). Run 4 tests the

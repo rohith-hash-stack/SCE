@@ -245,22 +245,30 @@ def main(argv=None) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     scratch = tempfile.mkdtemp(prefix="mine_", dir=out)
-    tasks = []
+    # resumable: the tasks found so far and the commits already indexed are kept across restarts
+    tasks = json.loads((out / "candidates.json").read_text()) if (out / "candidates.json").exists() else []
+    done_path = out / "processed.json"
+    done = set(json.loads(done_path.read_text())) if done_path.exists() else set()
     for spec in args.repos:
         name, _, repo = spec.partition("=")
         cands = pass1(repo, args.scan, args.forced)
-        print(f"{name}: {len(cands)} pass-1 candidates", flush=True)
+        print(f"{name}: {len(cands)} pass-1 candidates ({len(done)} already processed)", flush=True)
         for cand in cands[: args.max_candidates]:
+            if cand["commit"] in done:
+                continue
             try:
                 found = pass2(name, repo, cand, scratch, args.budget)
             except Exception as exc:  # one bad revision must not stop the mining
                 print(f"  {cand['commit'][:10]}: skipped ({type(exc).__name__}: {exc})", flush=True)
+                done.add(cand["commit"])
                 continue
             for t in found:
                 print(f"  {t['commit'][:10]} {t['tier']:6} {t['anchor']} -> {len(t['changed_callers'])} changed, "
                       f"{len(t['unchanged_callers'])} unchanged callers", flush=True)
             tasks.extend(found)
             (out / "candidates.json").write_text(json.dumps(tasks, indent=1) + "\n")  # saved as it goes
+            done.add(cand["commit"])
+            done_path.write_text(json.dumps(sorted(done)) + "\n")
     (out / "candidates.json").write_text(json.dumps(tasks, indent=1) + "\n")
     print(f"{len(tasks)} tasks -> {out / 'candidates.json'}")
     return 0
