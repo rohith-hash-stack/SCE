@@ -1,0 +1,186 @@
+{
+ "werkzeug-forward-001/FILE": {
+  "answer_tokens": 938,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2309,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HeaderSet.remove\",\n      \"file\": \"src/werkzeug/datastructures/structures.py\",\n      \"reason\": \"The `remove` method uses the `find` method to locate the header index, which has been updated to use `_order` instead of `_headers`.\",\n      \"new_code\": \"def remove(self: te.Self, header: str) -> None:\\n        \\\"\\\"\\\"Remove a header from the set.  This raises an :exc:`KeyError` if the\\n        header is not in the set.\\n\\n        .. versionchanged:: 0.5\\n            In older versions a :exc:`IndexError` was raised instead of a\\n            :exc:`KeyError` if the object was missing.\\n\\n        :param header: the header to be removed.\\n        \\\"\\\"\\\"\\n        key = header.lower()\\n        if key not in self._set:\\n            raise KeyError(header)\\n        self._set.remove(key)\\n        for idx, key in enumerate(self._headers):\\n            if key.lower() == header:\\n                del self._headers[idx]\\n                break\\n        if self._on_update is not None:\\n            self._on_update(self)\"\n    },\n    {\n      \"function\": \"HeaderSet.discard\",\n      \"file\": \"src/werkzeug/datastructures/structures.py\",\n      \"reason\": \"The `discard` method uses the `remove` method, which has been updated to use `_order` instead of `_headers`.\",\n      \"new_code\": \"def discard(self, header: str) -> None:\\n        \\\"\\\"\\\"Like :meth:`remove` but ignores errors.\\n\\n        :param header: the header to be discarded.\\n        \\\"\\\"\\\"\\n        try:\\n            self.remove(header)\\n        except KeyError:\\n            pass\"\n    },\n    {\n      \"function\": \"HeaderSet.index\",\n      \"file\": \"src/werkzeug/datastructures/structures.py\",\n      \"reason\": \"The `index` method uses the `find` method, which has been updated to use `_order` instead of `_headers`.\",\n      \"new_code\": \"def index(self, header: str) -> int:\\n        \\\"\\\"\\\"Return the index of the header in the set or raise an\\n        :exc:`IndexError`.\\n\\n        :param header: the header to be looked up.\\n        \\\"\\\"\\\"\\n        rv = self.find(header)\\n        if rv < 0:\\n            raise IndexError(header)\\n        return rv\"\n    },\n    {\n      \"function\": \"HeaderSet.__delitem__\",\n      \"file\": \"src/werkzeug/datastructures/structures.py\",\n      \"reason\": \"The `__delitem__` method uses the `find` method, which has been updated to use `_order` instead of `_headers`.\",\n      \"new_code\": \"def __delitem__(self: te.Self, idx: t.SupportsIndex) -> None:\\n        rv = self._headers.pop(idx)\\n        self._set.remove(rv.lower())\\n        if self._on_update is not None:\\n            self._on_update(self)\"\n    },\n    {\n      \"function\": \"HeaderSet.__setitem__\",\n      \"file\": \"src/werkzeug/datastructures/structures.py\",\n      \"reason\": \"The `__setitem__` method uses the `find` method, which has been updated to use `_order` instead of `_headers`.\",\n      \"new_code\": \"def __setitem__(self: te.Self, idx: t.SupportsIndex, value: str) -> None:\\n        old = self._headers[idx]\\n        self._set.remove(old.lower())\\n        self._headers[idx] = value\\n        self._set.add(value.lower())\\n        if self._on_update is not None:\\n            self._on_update(self)\"\n    },\n    {\n      \"function\": \"HeaderSet.__contains__\",\n      \"file\": \"src/werkzeug/datastructures/structures.py\",\n      \"reason\": \"The `__contains__` method uses the `find` method, which has been updated to use `_order` instead of `_headers`.\",\n      \"new_code\": \"def __contains__(self, header: str) -> bool:  # type: ignore[override]\\n        return header.lower() in self._set\"\n    }\n  ]\n}",
+  "seconds": 65.7
+ },
+ "werkzeug-forward-001/PRISM": {
+  "answer_tokens": 163,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3756,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HeaderSet.index\",\n      \"file\": \"src/werkzeug/datastructures/structures.py\",\n      \"reason\": \"The `find` method's parameter name changed from `header` to `value`, so the `index` method must be updated to reflect this change.\",\n      \"new_code\": \"def index(self, value: str) -> int:\\n        \\\"\\\"\\\"Return the index of the value in the set or raise an\\n        :exc:`IndexError`.\\n\\n        :param value: the value to be looked up.\\n        \\\"\\\"\\\"\\n        rv = self.find(value)\\n        if rv < 0:\\n            raise IndexError(value)\\n        return rv\"\n    }\n  ]\n}",
+  "seconds": 13.3
+ },
+ "werkzeug-forward-001/PRISM_BREAKS": {
+  "answer_tokens": 163,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3756,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HeaderSet.index\",\n      \"file\": \"src/werkzeug/datastructures/structures.py\",\n      \"reason\": \"The `find` method's parameter name changed from `header` to `value`, so the `index` method must be updated to reflect this change.\",\n      \"new_code\": \"def index(self, value: str) -> int:\\n        \\\"\\\"\\\"Return the index of the value in the set or raise an\\n        :exc:`IndexError`.\\n\\n        :param value: the value to be looked up.\\n        \\\"\\\"\\\"\\n        rv = self.find(value)\\n        if rv < 0:\\n            raise IndexError(value)\\n        return rv\"\n    }\n  ]\n}",
+  "seconds": 11.1
+ },
+ "werkzeug-forward-002/FILE": {
+  "answer_tokens": 715,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2543,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Rule.match\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The `match` method needs to pass the HTTP method to the `suitable_for` method.\",\n      \"new_code\": \"def match(self, path, method):\\n    \\\"\\\"\\\"Check if the rule matches a given path. Path is a string in the form ``\\\"subdomain|/path(method)\\\"`` and is assembled by the map.\\n\\n    If the rule matches a dict with the converted values is returned,\\n    otherwise the return value is `None`.\\n    \\\"\\\"\\\"\\n    if not self.build_only:\\n        m = self._regex.search(path)\\n        if m is not None:\\n            groups = m.groupdict()\\n            # we have a folder like part of the url without a trailing\\n            # slash and strict slashes enabled. raise an exception that\\n            # tells the map to redirect to the same url but with a\\n            # trailing slash\\n            if self.strict_slashes and not self.is_leaf and \\\\\\n               not groups.pop('__suffix__'):\\n                raise RequestSlash()\\n            # if we are not in strict slashes mode we have to remove\\n            # a __suffix__\\n            elif not self.strict_slashes:\\n                del groups['__suffix__']\\n\\n            result = {}\\n            for name, value in groups.iteritems():\\n                try:\\n                    value = self._converters[name].to_python(value)\\n                except ValidationError:\\n                    return\\n                result[str(name)] = value\\n            if self.defaults is not None:\\n                result.update(self.defaults)\\n            if self.suitable_for(result, method):\\n                return result\"\n    },\n    {\n      \"function\": \"Rule.build_compare\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The `build_compare` method needs to consider the HTTP method when comparing rules.\",\n      \"new_code\": \"def build_compare(self, other):\\n    \\\"\\\"\\\"Compare this object with another one for building.\\\"\\\"\\\"\\n    if not other.arguments and self.arguments:\\n        return -1\\n    elif other.arguments and not self.arguments:\\n        return 1\\n    elif other.defaults is None and self.defaults is not None:\\n        return -1\\n    elif other.defaults is not None and self.defaults is None:\\n        return 1\\n    elif self.provides_defaults_for(other):\\n        return -1\\n    elif other.provides_defaults_for(self):\\n        return 1\\n    elif self.methods is not None and other.methods is None:\\n        return -1\\n    elif self.methods is None and other.methods is not None:\\n        return 1\\n    elif self.methods is not None and other.methods is not None:\\n        if len(self.methods) > len(other.methods):\\n            return -1\\n        elif len(self.methods) < len(other.methods):\\n            return 1\\n    elif self.greediness > other.greediness:\\n        return -1\\n    elif self.greediness < other.greediness:\\n        return 1\\n    elif len(self.arguments) > len(other.arguments):\\n        return -1\\n    elif len(self.arguments) < len(other.arguments):\\n        return 1\\n    return -1\"\n    }\n  ]\n}",
+  "seconds": 50.9
+ },
+ "werkzeug-forward-002/PRISM": {
+  "answer_tokens": 758,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4561,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"werkzeug.routing.MapAdapter.build\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The `suitable_for` method now requires an additional `method` parameter.\",\n      \"new_code\": \"def build(self, endpoint, values=None, force_external=False):\\n        \\\"\\\"\\\"\\n        Build a new url hostname relative to the current one. If you\\n        reference a resource on another subdomain the hostname is added\\n        automatically. You can force external urls by setting\\n        `force_external` to `True`.\\n        \\\"\\\"\\\"\\n        self.map.update()\\n        values = values or {}\\n\\n        for rule in self.map._rules_by_endpoint.get(endpoint) or ():\\n            if rule.suitable_for(values, self.method):\\n                rv = rule.build(values)\\n                if rv is not None:\\n                    break\\n        else:\\n            raise BuildError(endpoint, values)\\n        subdomain, path = rv\\n        if not force_external and subdomain == self.subdomain:\\n            return str(urljoin(self.script_name, path.lstrip('/')))\\n        return str('%s://%s%s%s/%s' % (\\n            self.url_scheme,\\n            subdomain and subdomain + '.' or '',\\n            self.server_name,\\n            self.script_name[:-1],\\n            path.lstrip('/')\\n        ))\"\n    },\n    {\n      \"function\": \"werkzeug.routing.MapAdapter.match\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The `suitable_for` method now requires an additional `method` parameter.\",\n      \"new_code\": \"def match(self, path_info, method='GET'):\\n        \\\"\\\"\\\"\\n        Match a given path_info, script_name and subdomain against the\\n        known rules. If the subdomain is not given it defaults to the\\n        default subdomain of the map which is usally `www`. Thus if you\\n        don't define it anywhere you can safely ignore it.\\n        \\\"\\\"\\\"\\n        self.map.update()\\n        if not isinstance(path_info, unicode):\\n            path_info = path_info.decode(self.map.charset, 'ignore')\\n        path = u'%s|/%s(%s)' % (\\n            self.subdomain,\\n            path_info.lstrip('/'),\\n            method.upper()\\n        )\\n        for rule in self.map._rules:\\n            try:\\n                rv = rule.match(path)\\n            except RequestSlash:\\n                raise RequestRedirect(str('%s://%s%s%s/%s/' % (\\n                    self.url_scheme,\\n                    self.subdomain and self.subdomain + '.' or '',\\n                    self.server_name,\\n                    self.script_name[:-1],\\n                    path_info.lstrip('/')\\n                )))\\n            if rv is None:\\n                continue\\n            if self.map.redirect_defaults:\\n                for r in self.map._rules_by_endpoint[rule.endpoint]:\\n                    if r.provides_defaults_for(rule) and \\\\\\n                       r.suitable_for(rv, method):\\n                        rv.update(r.defaults)\\n                        subdomain, path = r.build(rv)\\n                        raise RequestRedirect(str('%s://%s%s%s/%s' % (\\n                            self.url_scheme,\\n                            subdomain and subdomain + '.' or '',\\n                            self.server_name,\\n                            self.script_name[:-1],\\n                            path.lstrip('/')\\n                        )))\\n            return rule.endpoint, rv\\n        raise NotFound()\"\n    }\n  ]\n}",
+  "seconds": 55.5
+ },
+ "werkzeug-forward-002/PRISM_BREAKS": {
+  "answer_tokens": 644,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4731,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"werkzeug.routing.MapAdapter.match\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The `suitable_for` method now requires a `method` argument, which is not provided in the current implementation.\",\n      \"new_code\": \"def match(self, path_info, method='GET'):\\n        self.map.update()\\n        if not isinstance(path_info, unicode):\\n            path_info = path_info.decode(self.map.charset, 'ignore')\\n        path = u'%s|/%s(%s)' % (\\n            self.subdomain,\\n            path_info.lstrip('/'),\\n            method.upper()\\n        )\\n        for rule in self.map._rules:\\n            try:\\n                rv = rule.match(path)\\n            except RequestSlash:\\n                raise RequestRedirect(str('%s://%s%s%s/%s/' % (\\n                    self.url_scheme,\\n                    self.subdomain and self.subdomain + '.' or '',\\n                    self.server_name,\\n                    self.script_name[:-1],\\n                    path_info.lstrip('/')\\n                )))\\n            if rv is None:\\n                continue\\n            if self.map.redirect_defaults:\\n                for r in self.map._rules_by_endpoint[rule.endpoint]:\\n                    if r.provides_defaults_for(rule) and \\\\\\n                       r.suitable_for(rv, method):\\n                        rv.update(r.defaults)\\n                        subdomain, path = r.build(rv)\\n                        raise RequestRedirect(str('%s://%s%s%s/%s' % (\\n                            self.url_scheme,\\n                            subdomain and subdomain + '.' or '',\\n                            self.server_name,\\n                            self.script_name[:-1],\\n                            path.lstrip('/')\\n                        )))\\n            return rule.endpoint, rv\\n        raise NotFound()\"\n    },\n    {\n      \"function\": \"werkzeug.routing.MapAdapter.build\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The `suitable_for` method now requires a `method` argument, which is not provided in the current implementation.\",\n      \"new_code\": \"def build(self, endpoint, values=None, force_external=False):\\n        self.map.update()\\n        values = values or {}\\n\\n        for rule in self.map._rules_by_endpoint.get(endpoint) or ():\\n            if rule.suitable_for(values, method='GET'):\\n                rv = rule.build(values)\\n                if rv is not None:\\n                    break\\n        else:\\n            raise BuildError(endpoint, values)\\n        subdomain, path = rv\\n        if not force_external and subdomain == self.subdomain:\\n            return str(urljoin(self.script_name, path.lstrip('/')))\\n        return str('%s://%s%s%s/%s' % (\\n            self.url_scheme,\\n            subdomain and subdomain + '.' or '',\\n            self.server_name,\\n            self.script_name[:-1],\\n            path.lstrip('/')\\n        ))\"\n    }\n  ]\n}",
+  "seconds": 48.4
+ },
+ "werkzeug-forward-003/FILE": {
+  "answer_tokens": 396,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2196,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Rule.match\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The new `match` method now checks for a trailing slash and raises a `RequestSlash` exception if the conditions are met. Other functions that use the `match` method may need to handle this new exception.\",\n      \"new_code\": \"def match(self, path):\\n        m = self._regex.search(path)\\n        if m is not None:\\n            groups = m.groupdict()\\n            no_suffix = not groups.pop('__suffix__')\\n            # we have a folder like part of the url without a trailing\\n            # slash and strict slashes enabled. raise an error\\n            if self.strict_slashes and not self.is_leaf and no_suffix:\\n                raise RequestSlash()\\n            result = {}\\n            for name, value in groups.iteritems():\\n                try:\\n                    value = self._converters[name].to_python(value)\\n                except ValidationError:\\n                    return\\n                result[str(name)] = value\\n            return result\"\n    },\n    {\n      \"function\": \"Matcher.match\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The `Matcher.match` method calls the `Rule.match` method, which now raises a `RequestSlash` exception. The `Matcher.match` method needs to handle this new exception.\",\n      \"new_code\": \"def match(self, path_info):\\n        path = '<%s>/%s' % (self.subdomain, path_info.lstrip('/'))\\n        for rule in self._rules:\\n            try:\\n                rv = rule.match(path)\\n                if rv is not None:\\n                    return rule.endpoint, rv\\n            except RequestSlash:\\n                raise RequestRedirect(path + '/')\\n        raise NotFound(path_info)\"\n    }\n  ]\n}",
+  "seconds": 29.3
+ },
+ "werkzeug-forward-003/PRISM": {
+  "answer_tokens": 172,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3013,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Matcher.match\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The `match` method in `Rule` now raises `RequestSlash` if strict slashes are enabled and there is no trailing slash. The `Matcher` class needs to handle this exception.\",\n      \"new_code\": \"def match(self, path_info):\\n        path = '<%s>/%s' % (self.subdomain, path_info.lstrip('/'))\\n        for rule in self._rules:\\n            try:\\n                rv = rule.match(path)\\n                if rv is not None:\\n                    return rule.endpoint, rv\\n            except RequestSlash:\\n                raise RequestRedirect(path_info + '/')\\n        raise NotFound(path_info)\"\n    }\n  ]\n}",
+  "seconds": 13.1
+ },
+ "werkzeug-forward-003/PRISM_BREAKS": {
+  "answer_tokens": 161,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3179,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"werkzeug.routing.Matcher.match\",\n      \"file\": \"werkzeug/routing.py\",\n      \"reason\": \"The new `match` method in `Rule` can raise `RequestSlash`, which needs to be caught and handled.\",\n      \"new_code\": \"def match(self, path_info):\\n        path = '<%s>/%s' % (self.subdomain, path_info.lstrip('/'))\\n        for rule in self._rules:\\n            try:\\n                rv = rule.match(path)\\n                if rv is not None:\\n                    return rule.endpoint, rv\\n            except RequestSlash:\\n                raise RequestRedirect(path_info + '/')\\n        raise NotFound(path_info)\"\n    }\n  ]\n}",
+  "seconds": 12.7
+ },
+ "werkzeug-forward-004/FILE": {
+  "answer_tokens": 115,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3637,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"normalize_string_tuple\",\n      \"file\": \"werkzeug/urls.py\",\n      \"reason\": \"The new `url_unparse` function calls `normalize_string_tuple`, which is not defined in the provided code. This function must be added to handle the normalization of the URL components.\",\n      \"new_code\": \"def normalize_string_tuple(components):\\n    return tuple(map(to_unicode, components)) if isinstance(components[0], text_type) else tuple(map(to_bytes, components))\"\n    }\n  ]\n}",
+  "seconds": 12.4
+ },
+ "werkzeug-forward-004/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8708,
+  "raw": "{\"changes\": []}",
+  "seconds": 7.8
+ },
+ "werkzeug-forward-004/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8708,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.6
+ },
+ "werkzeug-forward-005/FILE": {
+  "answer_tokens": 161,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2782,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"CacheControl.cache_property\",\n      \"file\": \"werkzeug/http.py\",\n      \"reason\": \"The `cache_property` method needs to be updated to use the new `_get_cache_value` method signature.\",\n      \"new_code\": \"def cache_property(key, empty, type):\\n    \\\"\\\"\\\"Return a new property object for a cache header.  Useful if you\\n    want to add support for a cache extension in a subclass.\\\"\\\"\\\"\\n    return property(lambda x: x._get_cache_value(key, empty, type),\\n                    lambda x, v: x._set_cache_value(key, v, type),\\n                    'accessor for %r' % key)\"\n    }\n  ]\n}",
+  "seconds": 14.9
+ },
+ "werkzeug-forward-005/PRISM": {
+  "answer_tokens": 173,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4086,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"werkzeug.http.CacheControl.cache_property\",\n      \"file\": \"werkzeug/http.py\",\n      \"reason\": \"The `cache_property` function uses the `_get_cache_value` method, which now has a different parameter name (`empty` instead of `default`).\",\n      \"new_code\": \"def cache_property(key, empty, type):\\n    \\\"\\\"\\\"Return a new property object for a cache header.  Useful if you\\n    want to add support for a cache extension in a subclass.\\\"\\\"\\\"\\n    return property(lambda x: x._get_cache_value(key, empty, type),\\n                    lambda x, v: x._set_cache_value(key, v, type),\\n                    'accessor for %r' % key)\"\n    }\n  ]\n}",
+  "seconds": 14.1
+ },
+ "werkzeug-forward-005/PRISM_BREAKS": {
+  "answer_tokens": 173,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4086,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"werkzeug.http.CacheControl.cache_property\",\n      \"file\": \"werkzeug/http.py\",\n      \"reason\": \"The `cache_property` function uses the `_get_cache_value` method, which now has a different parameter name (`empty` instead of `default`).\",\n      \"new_code\": \"def cache_property(key, empty, type):\\n        \\\"\\\"\\\"Return a new property object for a cache header.  Useful if you\\n        want to add support for a cache extension in a subclass.\\\"\\\"\\\"\\n        return property(lambda x: x._get_cache_value(key, empty, type),\\n                        lambda x, v: x._set_cache_value(key, v, type),\\n                        'accessor for %r' % key)\"\n    }\n  ]\n}",
+  "seconds": 11.8
+ },
+ "werkzeug-forward-006/FILE": {
+  "answer_tokens": 177,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2919,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"StatReloaderLoop.run_step\",\n      \"file\": \"src/werkzeug/_reloader.py\",\n      \"reason\": \"The `_find_stat_paths` function now returns a set of paths instead of yielding them, so the `run_step` method needs to iterate over the set.\",\n      \"new_code\": \"def run_step(self):\\n    for name in _find_stat_paths(self.extra_files, []):\\n        try:\\n            mtime = os.stat(name).st_mtime\\n        except OSError:\\n            continue\\n\\n        old_time = self.mtimes.get(name)\\n\\n        if old_time is None:\\n            self.mtimes[name] = mtime\\n            continue\\n\\n        if mtime > old_time:\\n            self.trigger_reload(name)\"\n    }\n  ]\n}",
+  "seconds": 15.7
+ },
+ "werkzeug-forward-006/PRISM": {
+  "answer_tokens": 183,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4867,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"src.werkzeug._reloader.StatReloaderLoop.run_step\",\n      \"file\": \"src/werkzeug/_reloader.py\",\n      \"reason\": \"The function now returns a set of paths instead of yielding them, so the caller needs to iterate over the returned set.\",\n      \"new_code\": \"    def run_step(self):\\n        paths = _find_stat_paths(self.extra_files, [])\\n        for name in paths:\\n            try:\\n                mtime = os.stat(name).st_mtime\\n            except OSError:\\n                continue\\n\\n            old_time = self.mtimes.get(name)\\n\\n            if old_time is None:\\n                self.mtimes[name] = mtime\\n                continue\\n\\n            if mtime > old_time:\\n                self.trigger_reload(name)\"\n    }\n  ]\n}",
+  "seconds": 15.8
+ },
+ "werkzeug-forward-006/PRISM_BREAKS": {
+  "answer_tokens": 179,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4993,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"src.werkzeug._reloader.StatReloaderLoop.run_step\",\n      \"file\": \"src/werkzeug/_reloader.py\",\n      \"reason\": \"The new `_find_stat_paths` function requires an `exclude_patterns` argument, which is not provided by the original caller.\",\n      \"new_code\": \"def run_step(self):\\n    for name in chain(_find_stat_paths(self.extra_files, [])):\\n        try:\\n            mtime = os.stat(name).st_mtime\\n        except OSError:\\n            continue\\n\\n        old_time = self.mtimes.get(name)\\n\\n        if old_time is None:\\n            self.mtimes[name] = mtime\\n            continue\\n\\n        if mtime > old_time:\\n            self.trigger_reload(name)\"\n    }\n  ]\n}",
+  "seconds": 15.6
+ },
+ "werkzeug-forward-007/FILE": {
+  "answer_tokens": 591,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2364,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"run_with_reloader\",\n      \"file\": \"werkzeug/_reloader.py\",\n      \"reason\": \"The `run_with_reloader` function needs to pass the `reloader_modules` parameter to `_find_observable_paths`.\",\n      \"new_code\": \"def run_with_reloader(main_func, extra_files=None, interval=1, reloader_type='auto', reloader_modules='auto'):\\n    \\\"\\\"\\\"Run the given function in an independent python interpreter.\\\"\\\"\\\"\\n    import signal\\n    reloader = reloader_loops[reloader_type](reloader_modules, extra_files, interval)\\n    signal.signal(signal.SIGTERM, lambda *args: sys.exit(0))\\n    try:\\n        if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':\\n            t = threading.Thread(target=main_func, args=())\\n            t.setDaemon(True)\\n            t.start()\\n            reloader.run()\\n        else:\\n            sys.exit(reloader.restart_with_reloader())\\n    except KeyboardInterrupt:\\n        pass\"\n    },\n    {\n      \"function\": \"WatchdogReloaderLoop.__init__\",\n      \"file\": \"werkzeug/_reloader.py\",\n      \"reason\": \"The `WatchdogReloaderLoop` class needs to pass the `reloader_modules` parameter to `_find_observable_paths`.\",\n      \"new_code\": \"def __init__(self, extra_files=None, interval=1, reloader_modules='auto'):\\n    ReloaderLoop.__init__(self, extra_files, interval)\\n    from watchdog.observers import Observer\\n    from watchdog.events import FileSystemEventHandler\\n    self.observable_paths = set()\\n\\n    def _check_modification(filename):\\n        if filename in self.extra_files:\\n            self.trigger_reload(filename)\\n        dirname = os.path.dirname(filename)\\n        if dirname.startswith(tuple(self.observable_paths)):\\n            if filename.endswith(('.pyc', '.pyo')):\\n                self.trigger_reload(filename[:-1])\\n            elif filename.endswith('.py'):\\n                self.trigger_reload(filename)\\n\\n    class _CustomHandler(FileSystemEventHandler):\\n        def on_created(self, event):\\n            _check_modification(event.src_path)\\n        def on_modified(self, event):\\n            _check_modification(event.src_path)\\n\\n    reloader_name = Observer.__name__.lower()\\n    if reloader_name.endswith('observer'):\\n        reloader_name = reloader_name[:-8]\\n    reloader_name += ' reloader'\\n\\n    self.name = reloader_name\\n\\n    self.observer_class = Observer\\n    self.event_handler = _CustomHandler()\\n    self.should_reload = False\"\n    }\n  ]\n}",
+  "seconds": 42.4
+ },
+ "werkzeug-forward-007/PRISM": {
+  "answer_tokens": 293,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4286,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"werkzeug._reloader.WatchdogReloaderLoop.run\",\n      \"file\": \"werkzeug/_reloader.py\",\n      \"reason\": \"The function now requires an additional argument `reloader_modules` which is passed to `_find_observable_paths`.\",\n      \"new_code\": \"def run(self):\\n        watches = {}\\n        observer = self.observer_class()\\n        observer.start()\\n\\n        while not self.should_reload:\\n            to_delete = set(watches)\\n            paths = _find_common_roots(\\n                _find_observable_paths('auto', self.extra_files))\\n            for path in paths:\\n                if path not in watches:\\n                    try:\\n                        watches[path] = observer.schedule(\\n                            self.event_handler, path, recursive=True)\\n                    except OSError:\\n                        # \\\"Path is not a directory\\\". We could filter out\\n                        # those paths beforehand, but that would cause\\n                        # additional stat calls.\\n                        watches[path] = None\\n                to_delete.discard(path)\\n            for path in to_delete:\\n                watch = watches.pop(path, None)\\n                if watch is not None:\\n                    observer.unschedule(watch)\\n            self.observable_paths = paths\\n            self._sleep(self.interval)\\n\\n        sys.exit(3)\"\n    }\n  ]\n}",
+  "seconds": 23.1
+ },
+ "werkzeug-forward-007/PRISM_BREAKS": {
+  "answer_tokens": 290,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4426,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"WatchdogReloaderLoop.run\",\n      \"file\": \"werkzeug/_reloader.py\",\n      \"reason\": \"The function `_find_observable_paths` now takes an additional argument `reloader_modules`, which must be passed when calling it.\",\n      \"new_code\": \"def run(self):\\n        watches = {}\\n        observer = self.observer_class()\\n        observer.start()\\n\\n        while not self.should_reload:\\n            to_delete = set(watches)\\n            paths = _find_common_roots(\\n                _find_observable_paths('auto', self.extra_files))\\n            for path in paths:\\n                if path not in watches:\\n                    try:\\n                        watches[path] = observer.schedule(\\n                            self.event_handler, path, recursive=True)\\n                    except OSError:\\n                        # \\\"Path is not a directory\\\". We could filter out\\n                        # those paths beforehand, but that would cause\\n                        # additional stat calls.\\n                        watches[path] = None\\n                to_delete.discard(path)\\n            for path in to_delete:\\n                watch = watches.pop(path, None)\\n                if watch is not None:\\n                    observer.unschedule(watch)\\n            self.observable_paths = paths\\n            self._sleep(self.interval)\\n\\n        sys.exit(3)\"\n    }\n  ]\n}",
+  "seconds": 23.0
+ },
+ "werkzeug-forward-008/FILE": {
+  "answer_tokens": 292,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2960,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"parse_cache_control_header\",\n      \"file\": \"werkzeug/http.py\",\n      \"reason\": \"The parameter name `cache_control_class` has been changed to `cls` in the function signature.\",\n      \"new_code\": \"def parse_cache_control_header(value, on_update=None, cls=None):\\n    \\\"\\\"\\\"Parse a cache control header.  The RFC differs between response and\\n    request cache control, this method does not.  It's your responsibility\\n    to not use the wrong control statements.\\n\\n    .. versionadded:: 0.5\\n       The `cls` was added.  If not specified an immutable\\n       :class:`RequestCacheControl` is returned.\\n\\n    :param value: a cache control header to be parsed.\\n    :param on_update: an optional callable that is called every time a\\n                      value on the :class:`CacheControl` object is changed.\\n    :param cls: the class for the returned object.  By default\\n                                :class:`RequestCacheControl` is used.\\n    :return: a `cls` object.\\n    \\\"\\\"\\\"\\n    if cls is None:\\n        cls = RequestCacheControl\\n    if not value:\\n        return cls(None, on_update)\\n    return cls(parse_dict_header(value), on_update)\"\n    }\n  ]\n}",
+  "seconds": 23.4
+ },
+ "werkzeug-forward-008/PRISM": {
+  "answer_tokens": 629,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5288,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"werkzeug.contrib.fixers.InternetExplorerFix.fix_headers\",\n      \"file\": \"werkzeug/contrib/fixers.py\",\n      \"reason\": \"The function `parse_cache_control_header` now uses `cls` instead of `cache_control_class` as the parameter name.\",\n      \"new_code\": \"def fix_headers(self, environ, headers, status=None):\\n    if self.fix_vary:\\n        header = headers.get('content-type', '')\\n        mimetype, options = parse_options_header(header)\\n        if mimetype not in ('text/html', 'text/plain', 'text/sgml'):\\n            headers.pop('vary', None)\\n\\n    if self.fix_attach and 'content-disposition' in headers:\\n        pragma = parse_set_header(headers.get('pragma', ''))\\n        pragma.discard('no-cache')\\n        if not pragma:\\n            headers.pop('pragma', '')\\n        else:\\n            headers['Pragma'] = pragma\\n        header = headers.get('cache-control', '')\\n        if header:\\n            cc = parse_cache_control_header(header, None, ResponseCacheControl)\\n            cc.no_cache = cc.no_store = False\\n            header = cc.to_header()\\n            if not header:\\n                headers.pop('cache-control', '')\\n            else:\\n                headers['Cache-Control'] = header\"\n    },\n    {\n      \"function\": \"werkzeug.wrappers.ETagRequestMixin.cache_control\",\n      \"file\": \"werkzeug/wrappers.py\",\n      \"reason\": \"The function `parse_cache_control_header` now uses `cls` instead of `cache_control_class` as the parameter name.\",\n      \"new_code\": \"@cached_property\\ndef cache_control(self):\\n    \\\"\\\"\\\"A :class:`RequestCacheControl` object for the incoming cache control\\n    headers.\\n    \\\"\\\"\\\"\\n    cache_control = self.environ.get('HTTP_CACHE_CONTROL')\\n    return parse_cache_control_header(cache_control, None, RequestCacheControl)\"\n    },\n    {\n      \"function\": \"werkzeug.wrappers.ETagResponseMixin.cache_control\",\n      \"file\": \"werkzeug/wrappers.py\",\n      \"reason\": \"The function `parse_cache_control_header` now uses `cls` instead of `cache_control_class` as the parameter name.\",\n      \"new_code\": \"@property\\ndef cache_control(self):\\n    \\\"\\\"\\\"The Cache-Control general-header field is used to specify\\n    directives that MUST be obeyed by all caching mechanisms along the\\n    request/response chain.\\n    \\\"\\\"\\\"\\n    def on_update(cache_control):\\n        if not cache_control and 'cache-control' in self.headers:\\n            del self.headers['cache-control']\\n        elif cache_control:\\n            self.headers['Cache-Control'] = cache_control.to_header()\\n    return parse_cache_control_header(self.headers.get('cache-control'), on_update, ResponseCacheControl)\"\n    }\n  ]\n}",
+  "seconds": 47.6
+ }
+}
