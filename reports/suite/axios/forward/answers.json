@@ -158,5 +158,133 @@
   "prompt_tokens": 3387,
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AxiosHeaders.clear\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `clear` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function clear(matcher) {\\n  const keys = Object.keys(this);\\n  let i = keys.length;\\n  let deleted = false;\\n\\n  while (i--) {\\n    const key = keys[i];\\n    if(!matcher || matchHeaderValue(this, this[key], key, matcher, false)) {\\n      delete this[key];\\n      deleted = true;\\n    }\\n  }\\n\\n  return deleted;\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.deleteHeader\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `deleteHeader` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function deleteHeader(_header) {\\n  _header = normalizeHeader(_header);\\n\\n  if (_header) {\\n    const key = utils.findKey(self, _header);\\n\\n    if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher, false))) {\\n      delete self[key];\\n\\n      deleted = true;\\n    }\\n  }\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.has\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `has` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function has(header, matcher) {\\n  header = normalizeHeader(header);\\n\\n  if (header) {\\n    const key = utils.findKey(this, header);\\n\\n    return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher, false)));\\n  }\\n\\n  return false;\\n}\"\n    }\n  ]\n}",
   "seconds": 35.8
+ },
+ "axios-forward-007/PRISM_BREAKS": {
+  "answer_tokens": 458,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3648,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AxiosHeaders.has\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function requires an additional parameter `isHeaderNameFilter`, which is not provided in the original call.\",\n      \"new_code\": \"function has(header, matcher) {\\n  header = normalizeHeader(header);\\n\\n  if (header) {\\n    const key = utils.findKey(this, header);\\n\\n    return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher, false)));\\n  }\\n\\n  return false;\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.deleteHeader\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function requires an additional parameter `isHeaderNameFilter`, which is not provided in the original call.\",\n      \"new_code\": \"function deleteHeader(_header) {\\n  _header = normalizeHeader(_header);\\n\\n  if (_header) {\\n    const key = utils.findKey(self, _header);\\n\\n    if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher, false))) {\\n      delete self[key];\\n\\n      deleted = true;\\n    }\\n  }\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.clear\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function requires an additional parameter `isHeaderNameFilter`, which is not provided in the original call.\",\n      \"new_code\": \"function clear(matcher) {\\n  const keys = Object.keys(this);\\n  let i = keys.length;\\n  let deleted = false;\\n\\n  while (i--) {\\n    const key = keys[i];\\n    if(!matcher || matchHeaderValue(this, this[key], key, matcher, false)) {\\n      delete this[key];\\n      deleted = true;\\n    }\\n  }\\n\\n  return deleted;\\n}\"\n    }\n  ]\n}",
+  "seconds": 33.4
+ },
+ "axios-forward-008/FILE": {
+  "answer_tokens": 79,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2238,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"isFormData\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The function signature and implementation have changed to simplify the check for FormData objects.\",\n      \"new_code\": \"function isFormData(val) {\\n  return toString.call(val) === '[object FormData]';\\n}\"\n    }\n  ]\n}",
+  "seconds": 8.4
+ },
+ "axios-forward-008/PRISM": {
+  "answer_tokens": 539,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3608,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"httpAdapter\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The change in `isFormData` function affects the way `httpAdapter` checks if `data` is a FormData instance. The new implementation of `isFormData` only checks if the object is an instance of FormData using `toString.call(val) === '[object FormData]'`, which might not cover all cases where `data` could be a FormData instance.\",\n      \"new_code\": \"module.exports = function httpAdapter(config) {\\n  return new Promise(function dispatchHttpRequest(resolvePromise, rejectPromise) {\\n    var onCanceled;\\n    function done() {\\n      if (config.cancelToken) {\\n        config.cancelToken.unsubscribe(onCanceled);\\n      }\\n    }\\n\\n    var data = config.data;\\n    var headers = config.headers;\\n\\n    if (utils.isFormData(data)) {\\n      Object.assign(headers, data.getHeaders());\\n    } else if (data && !utils.isStream(data)) {\\n      if (Buffer.isBuffer(data)) {\\n        // Nothing to do...\\n      } else if (utils.isArrayBuffer(data)) {\\n        data = Buffer.from(new Uint8Array(data));\\n      } else if (utils.isString(data)) {\\n        data = Buffer.from(data, 'utf-8');\\n      }\\n    }\\n\\n    // ... rest of the code ...\\n  });\\n};\"\n    },\n    {\n      \"function\": \"xhrAdapter\",\n      \"file\": \"lib/adapters/xhr.js\",\n      \"reason\": \"The change in `isFormData` function affects the way `xhrAdapter` checks if `requestData` is a FormData instance. The new implementation of `isFormData` only checks if the object is an instance of FormData using `toString.call(val) === '[object FormData]'`, which might not cover all cases where `requestData` could be a FormData instance.\",\n      \"new_code\": \"module.exports = function xhrAdapter(config) {\\n  return new Promise(function dispatchXhrRequest(resolve, reject) {\\n    var requestData = config.data;\\n    var requestHeaders = config.headers;\\n    var responseType = config.responseType;\\n    var onCanceled;\\n\\n    if (utils.isFormData(requestData)) {\\n      delete requestHeaders['Content-Type']; // Let the browser set it\\n    }\\n\\n    var request = new XMLHttpRequest();\\n\\n    // ... rest of the code ...\\n  });\\n};\"\n    }\n  ]\n}",
+  "seconds": 38.7
+ },
+ "axios-forward-008/PRISM_BREAKS": {
+  "answer_tokens": 539,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3608,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"httpAdapter\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The change in `isFormData` function affects the way `httpAdapter` checks if `data` is a FormData instance. The new implementation of `isFormData` only checks if the object is an instance of FormData using `toString.call(val) === '[object FormData]'`, which might not cover all cases where `data` could be a FormData instance.\",\n      \"new_code\": \"module.exports = function httpAdapter(config) {\\n  return new Promise(function dispatchHttpRequest(resolvePromise, rejectPromise) {\\n    var onCanceled;\\n    function done() {\\n      if (config.cancelToken) {\\n        config.cancelToken.unsubscribe(onCanceled);\\n      }\\n    }\\n\\n    var data = config.data;\\n    var headers = config.headers;\\n\\n    if (utils.isFormData(data)) {\\n      Object.assign(headers, data.getHeaders());\\n    } else if (data && !utils.isStream(data)) {\\n      if (Buffer.isBuffer(data)) {\\n        // Nothing to do...\\n      } else if (utils.isArrayBuffer(data)) {\\n        data = Buffer.from(new Uint8Array(data));\\n      } else if (utils.isString(data)) {\\n        data = Buffer.from(data, 'utf-8');\\n      }\\n    }\\n\\n    // ... rest of the code ...\\n  });\\n};\"\n    },\n    {\n      \"function\": \"xhrAdapter\",\n      \"file\": \"lib/adapters/xhr.js\",\n      \"reason\": \"The change in `isFormData` function affects the way `xhrAdapter` checks if `requestData` is a FormData instance. The new implementation of `isFormData` only checks if the object is an instance of FormData using `toString.call(val) === '[object FormData]'`, which might not cover all cases where `requestData` could be a FormData instance.\",\n      \"new_code\": \"module.exports = function xhrAdapter(config) {\\n  return new Promise(function dispatchXhrRequest(resolve, reject) {\\n    var requestData = config.data;\\n    var requestHeaders = config.headers;\\n    var responseType = config.responseType;\\n    var onCanceled;\\n\\n    if (utils.isFormData(requestData)) {\\n      delete requestHeaders['Content-Type']; // Let the browser set it\\n    }\\n\\n    var request = new XMLHttpRequest();\\n\\n    // ... rest of the code ...\\n  });\\n};\"\n    }\n  ]\n}",
+  "seconds": 36.5
+ },
+ "axios-forward-009/FILE": {
+  "answer_tokens": 266,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2367,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"createShortMethods\",\n      \"file\": \"lib/axios.js\",\n      \"reason\": \"The function now needs to use 'config' instead of 'options' to match the updated axios function signature.\",\n      \"new_code\": \"function createShortMethods() {\\n  utils.forEach(arguments, function (method) {\\n    axios[method] = function (url, config) {\\n      return axios(utils.merge(config || {}, {\\n        method: method,\\n        url: url\\n      }));\\n    };\\n  });\\n}\"\n    },\n    {\n      \"function\": \"createShortMethodsWithData\",\n      \"file\": \"lib/axios.js\",\n      \"reason\": \"The function now needs to use 'config' instead of 'options' to match the updated axios function signature.\",\n      \"new_code\": \"function createShortMethodsWithData() {\\n  utils.forEach(arguments, function (method) {\\n    axios[method] = function (url, data, config) {\\n      return axios(utils.merge(config || {}, {\\n        method: method,\\n        url: url,\\n        data: data\\n      }));\\n    };\\n  });\\n}\"\n    }\n  ]\n}",
+  "seconds": 20.9
+ },
+ "axios-forward-009/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4633,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.8
+ },
+ "axios-forward-009/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4633,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.5
+ },
+ "axios-forward-010/FILE": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 647,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.9
+ },
+ "axios-forward-010/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2893,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.4
+ },
+ "axios-forward-010/PRISM_BREAKS": {
+  "answer_tokens": 221,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3478,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"factory\",\n      \"file\": \"lib/adapters/fetch.js\",\n      \"reason\": \"The `unsubscribe` function now returns nothing, so the code that uses its return value must be adjusted.\",\n      \"new_code\": \"const unsubscribe =\\n  composedSignal &&\\n  composedSignal.unsubscribe &&\\n  (() => {\\n    composedSignal.unsubscribe();\\n  });\\n\\n// ... (rest of the code remains the same)\\n\\n!isStreamResponse && unsubscribe && unsubscribe();\\n\\nreturn await new Promise((resolve, reject) => {\\n  settle(resolve, reject, {\\n    data: responseData,\\n    headers: AxiosHeaders.from(response.headers),\\n    status: response.status,\\n    statusText: response.statusText,\\n    config,\\n    request,\\n  });\\n});\\n} catch (err) {\\n  unsubscribe && unsubscribe();\\n\\n  // ... (rest of the code remains the same)\\n}\"\n    }\n  ]\n}",
+  "seconds": 18.7
+ },
+ "axios-forward-011/FILE": {
+  "answer_tokens": 284,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2300,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"toJSONObject\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The `toJSONObject` function uses the `visit` function, which has been updated to use a `Set` instead of an array for tracking visited objects. Therefore, `toJSONObject` needs to be updated to use the new `visit` function.\",\n      \"new_code\": \"const toJSONObject = (obj) => {\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (isObject(source)) {\\n      if (visited.has(source)) {\\n        return;\\n      }\\n\\n      //Buffer check\\n      if (isBuffer(source)) {\\n        return source;\\n      }\\n\\n      if (!('toJSON' in source)) {\\n        visited.add(source);\\n        const target = isArray(source) ? [] : {};\\n\\n        forEach(source, (value, key) => {\\n          const reducedValue = visit(value);\\n          !isUndefined(reducedValue) && (target[key] = reducedValue);\\n        });\\n\\n        visited.delete(source);\\n\\n        return target;\\n      }\\n    }\\n\\n    return source;\\n  };\\n\\n  return visit(obj);\\n};\"\n    }\n  ]\n}",
+  "seconds": 21.9
+ },
+ "axios-forward-011/PRISM": {
+  "answer_tokens": 265,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4224,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.utils.toJSONObject\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The `visit` function signature has changed from accepting two parameters to one. The `toJSONObject` function needs to be updated to reflect this change.\",\n      \"new_code\": \"const toJSONObject = (obj) => {\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (isObject(source)) {\\n      if (visited.has(source)) {\\n        return;\\n      }\\n\\n      //Buffer check\\n      if (isBuffer(source)) {\\n        return source;\\n      }\\n\\n      if (!('toJSON' in source)) {\\n        visited.add(source);\\n        const target = isArray(source) ? [] : {};\\n\\n        forEach(source, (value, key) => {\\n          const reducedValue = visit(value);\\n          !isUndefined(reducedValue) && (target[key] = reducedValue);\\n        });\\n\\n        visited.delete(source);\\n\\n        return target;\\n      }\\n    }\\n\\n    return source;\\n  };\\n\\n  return visit(obj);\\n};\"\n    }\n  ]\n}",
+  "seconds": 21.1
+ },
+ "axios-forward-011/PRISM_BREAKS": {
+  "answer_tokens": 471,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4439,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.utils.toJSONObject\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The `visit` function now takes only one argument, so the second argument `i` must be removed.\",\n      \"new_code\": \"const toJSONObject = (obj) => {\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (isObject(source)) {\\n      if (visited.has(source)) {\\n        return;\\n      }\\n\\n      //Buffer check\\n      if (isBuffer(source)) {\\n        return source;\\n      }\\n\\n      if (!('toJSON' in source)) {\\n        visited.add(source);\\n        const target = isArray(source) ? [] : {};\\n\\n        forEach(source, (value, key) => {\\n          const reducedValue = visit(value);\\n          !isUndefined(reducedValue) && (target[key] = reducedValue);\\n        });\\n\\n        visited.delete(source);\\n\\n        return target;\\n      }\\n    }\\n\\n    return source;\\n  };\\n\\n  return visit(obj);\\n};\"\n    },\n    {\n      \"function\": \"lib.utils.visit\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The `visit` function now takes only one argument, so the second argument `i` must be removed.\",\n      \"new_code\": \"const visit = (source) => {\\n  if (isObject(source)) {\\n    if (visited.has(source)) {\\n      return;\\n    }\\n\\n    //Buffer check\\n    if (isBuffer(source)) {\\n      return source;\\n    }\\n\\n    if (!('toJSON' in source)) {\\n      visited.add(source);\\n      const target = isArray(source) ? [] : {};\\n\\n      forEach(source, (value, key) => {\\n        const reducedValue = visit(value);\\n        !isUndefined(reducedValue) && (target[key] = reducedValue);\\n      });\\n\\n      visited.delete(source);\\n\\n      return target;\\n    }\\n  }\\n\\n  return source;\\n};\"\n    }\n  ]\n}",
+  "seconds": 35.5
+ },
+ "axios-forward-012/FILE": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 989,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5
+ },
+ "axios-forward-012/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3578,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.8
+ },
+ "axios-forward-012/PRISM_BREAKS": {
+  "answer_tokens": 379,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3695,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.helpers.toFormData.toFormData\",\n      \"file\": \"lib/helpers/toFormData.js\",\n      \"reason\": \"The `build` function now requires a `path` parameter, which is not being passed in the `toFormData` function.\",\n      \"new_code\": \"function toFormData(obj, formData) {\\n  // eslint-disable-next-line no-param-reassign\\n  formData = formData || new FormData();\\n\\n  var stack = [];\\n\\n  function convertValue(value) {\\n    if (value === null) return '';\\n\\n    if (utils.isDate(value)) {\\n      return value.toISOString();\\n    }\\n\\n    if (utils.isArrayBuffer(value) || utils.isTypedArray(value)) {\\n      return typeof Blob === 'function' ? new Blob([value]) : Buffer.from(value);\\n    }\\n\\n    return value;\\n  }\\n\\n  function build(value, path) {\\n    if (utils.isUndefined(value)) return;\\n\\n    if (stack.indexOf(value) !== -1) {\\n      throw Error('Circular reference detected in ' + path.join('.'));\\n    }\\n\\n    stack.push(value);\\n\\n    utils.forEach(value, function each(el, key) {\\n      var result = !utils.isUndefined(el) && defaultVisitor.call(\\n        formData, el, utils.isString(key) ? key.trim() : key, path, exposedHelpers\\n      );\\n\\n      if (result === true) {\\n        build(el, path ? path.concat(key) : [key]);\\n      }\\n    });\\n\\n    stack.pop();\\n  }\\n\\n  build(obj, []);\\n\\n  return formData;\\n}\"\n    }\n  ]\n}",
+  "seconds": 29.4
  }
 }
