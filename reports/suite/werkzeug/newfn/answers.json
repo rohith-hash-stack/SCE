@@ -1,0 +1,322 @@
+{
+ "werkzeug-newfn-001/FILE": {
+  "answer_tokens": 171,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2495,
+  "raw": "{\n  \"code\": \"def setlist(self, key, values):\\n        \\\"\\\"\\\"Set multiple header values at once.\\n\\n        The `values` argument should be iterable. This will replace\\n        any existing values for the key with the values passed. It is\\n        the inverse of the getlist method.\\n\\n        .. versionadded:: 1.0\\n        \\\"\\\"\\\"\\n        key = _unicodify_header_value(key)\\n        self._validate_value(key)\\n        self._list = [(k, v) for k, v in self._list if k.lower() != key.lower()]\\n        for value in values:\\n            value = _unicodify_header_value(value)\\n            self._validate_value(value)\\n            self._list.append((key, value))\"\n}",
+  "seconds": 14.9
+ },
+ "werkzeug-newfn-001/PRISM": {
+  "answer_tokens": 165,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6499,
+  "raw": "{\n  \"code\": \"def setlist(self, key, values):\\n        \\\"\\\"\\\"Set multiple header values at once.\\n\\n        The `values` argument should be iterable. This will replace\\n        any existing values for the key with the values passed. It is\\n        the inverse of the getlist method.\\n\\n        .. versionadded:: 1.0\\n        \\\"\\\"\\\"\\n        key = key.lower()\\n        new_list = []\\n        for value in values:\\n            value = _unicodify_header_value(value)\\n            self._validate_value(value)\\n            new_list.append((key, value))\\n        self._list = [item for item in self._list if item[0].lower() != key] + new_list\"\n}",
+  "seconds": 17.2
+ },
+ "werkzeug-newfn-002/FILE": {
+  "answer_tokens": 22,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2635,
+  "raw": "{\n  \"code\": \"def qop(self):\\n    return self.get('qop')\"\n}",
+  "seconds": 5.4
+ },
+ "werkzeug-newfn-002/PRISM": {
+  "answer_tokens": 56,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4928,
+  "raw": "{\n  \"code\": \"    def qop(self):\\n        \\\"\\\"\\\"\\n        Indicates what \\\"quality of protection\\\" the client has applied to\\n        the message for HTTP digest auth.\\n        \\\"\\\"\\\"\\n        return self.get('qop')\"\n}",
+  "seconds": 7.2
+ },
+ "werkzeug-newfn-003/FILE": {
+  "answer_tokens": 135,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2890,
+  "raw": "{\n  \"code\": \"def get_wsgi_headers(self, environ):\\n        headers = Headers(self.headers)\\n        location = headers.get('location')\\n        if location is not None:\\n            headers['Location'] = urlparse.urljoin(\\n                get_current_url(environ, root_only=True),\\n                location\\n            )\\n        if 100 <= self.status_code < 200 or self.status_code == 204:\\n            headers['Content-Length'] = '0'\\n        elif self.status_code == 304:\\n            remove_entity_headers(headers)\\n        return headers\"\n}",
+  "seconds": 12.8
+ },
+ "werkzeug-newfn-003/PRISM": {
+  "answer_tokens": 293,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7383,
+  "raw": "{\n  \"code\": \"def get_wsgi_headers(self, environ):\\n        \\\"\\\"\\\"This is automatically called right before the response is started\\n        and returns headers modified for the given environment.  It returns a\\n        copy of the headers from the response with some modifications applied\\n        if necessary.\\n\\n        For example the location header (if present) is joined with the root\\n        URL of the environment.  Also the content length is automatically set\\n        to zero here for certain status codes.\\n\\n        .. versionchanged:: 0.6\\n           Previously that function was called `fix_headers` and modified\\n           the response object in place.\\n\\n        :param environ: the WSGI environment of the request.\\n        :return: returns a new :class:`Headers` object.\\n        \\\"\\\"\\\"\\n        headers = Headers(self.headers)\\n        location = headers.get('location')\\n        if location is not None:\\n            headers['Location'] = urlparse.urljoin(\\n                get_current_url(environ, root_only=True),\\n                location\\n            )\\n        if 100 <= self.status_code < 200 or self.status_code == 204:\\n            headers['Content-Length'] = '0'\\n        elif self.status_code == 304:\\n            remove_entity_headers(headers)\\n        return headers\"\n}",
+  "seconds": 27.1
+ },
+ "werkzeug-newfn-004/FILE": {
+  "answer_tokens": 311,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3020,
+  "raw": "{\n  \"code\": \"def apply_range(self, request: Request) -> None:\\n    from ..exceptions import RequestedRangeNotSatisfiable\\n\\n    if not self.data or self.content_length is None:\\n        raise ValueError(\\\"Response data and content length must be set for range processing.\\\")\\n\\n    if request.range is None:\\n        return\\n\\n    if request.if_range and is_resource_modified(\\n        request.environ,\\n        self.etag,\\n        last_modified=self.last_modified,\\n        ignore_if_range=False,\\n    ):\\n        return\\n\\n    if request.range.units != 'bytes':\\n        raise RequestedRangeNotSatisfiable(self.content_length)\\n\\n    if len(request.range.ranges) > 1:\\n        # Only the first range is used\\n        request.range = Range('bytes', [(request.range.ranges[0])])\\n\\n    content_range = request.range.make_content_range(self.content_length)\\n\\n    if content_range is None:\\n        raise RequestedRangeNotSatisfiable(self.content_length)\\n\\n    start, stop = content_range.start, content_range.stop\\n    self.data = self.data[start:stop]\\n    self.content_length = stop - start\\n    self.status_code = 206\\n    self.content_range = content_range\\n    self.headers['Content-Range'] = str(content_range)\\n    self.headers['Content-Length'] = str(self.content_length)\\n\"\n}",
+  "seconds": 24.9
+ },
+ "werkzeug-newfn-004/PRISM": {
+  "answer_tokens": 452,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7568,
+  "raw": "{\n  \"code\": \"```python\\ndef apply_range(self, request: Request) -> None:\\n    \\\"\\\"\\\"\\n    Advertise range request support, check :attr:`.Request.if_range`, and\\n    apply :attr:`.Request.range` if it is valid and satisfiable. The\\n    response's :attr:`data`, :attr:`content_length`, :attr:`etag`, and\\n    :attr:`last_modified` must already be set for the complete data.\\n\\n    Only the ``bytess`` unit is supported. If multiple ranges are given,\\n    only the first is used. An unknown length is not supported.\\n\\n    Call :meth:`apply_conditions` before this, to exit early if a condition\\n    was not met.\\n\\n    :param request: The request to get the range from.\\n    :raises .RequestedRangeNotSatisfiable: If the range is valid but cannot\\n        be satisfied for the content length.\\n\\n    .. versionadded:: 3.2\\n    \\\"\\\"\\\"\\n    from ..exceptions import RequestedRangeNotSatisfiable\\n\\n    # Advertise range request support\\n    self.accept_ranges = \\\"bytes\\\"\\n\\n    # Check if the resource is unchanged based on If-Range header\\n    if_range = request.if_range\\n    if if_range and if_range.check(self.etag, self.last_modified):\\n        return\\n\\n    # Process the range request\\n    parsed_range = request.range\\n    if parsed_range is None or parsed_range.units != \\\"bytes\\\":\\n        return\\n\\n    content_range = parsed_range.make_content_range(self.content_length)\\n    if content_range is None:\\n        raise RequestedRangeNotSatisfiable(self.content_length)\\n\\n    # Apply the range\\n    self.content_length = content_range.stop - content_range.start\\n    self.content_range = content_range\\n    self.status_code = 206\\n    self._wrap_range_response(content_range.start, self.content_length)\\n\\n    # Update the response data to reflect the range\\n    self.response = self.response[content_range.start:content_range.stop]\\n```\"\n}",
+  "seconds": 39.1
+ },
+ "werkzeug-newfn-005/FILE": {
+  "answer_tokens": 127,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3027,
+  "raw": "{\n  \"code\": \"def from_environ(cls, environ, **kwargs):\\n        builder = cls(path=environ.get('PATH_INFO', '/'),\\n                      base_url=environ.get('HTTP_HOST', ''),\\n                      query_string=environ.get('QUERY_STRING', ''),\\n                      method=environ.get('REQUEST_METHOD', 'GET'),\\n                      content_type=environ.get('CONTENT_TYPE'),\\n                      content_length=environ.get('CONTENT_LENGTH', type=int),\\n                      headers=dict(environ),\\n                      environ_base=environ,\\n                      **kwargs)\\n        return builder\"\n}",
+  "seconds": 12.7
+ },
+ "werkzeug-newfn-005/PRISM": {
+  "answer_tokens": 214,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7639,
+  "raw": "{\n  \"code\": \"def from_environ(cls, environ, **kwargs):\\n        \\\"\\\"\\\"Turn an environ dict back into a builder. Any extra kwargs\\n        override the args extracted from the environ.\\n\\n        .. versionadded:: 0.15\\n        \\\"\\\"\\\"\\n        builder = cls()\\n        for key, value in environ.items():\\n            if key.startswith('HTTP_') and key != 'HTTP_CONTENT_LENGTH':\\n                header_key = key[5:].replace('_', '-')\\n                builder.headers[header_key] = value\\n            elif key in ('CONTENT_TYPE', 'CONTENT_LENGTH'):\\n                setattr(builder, key.lower(), value)\\n            elif key == 'REQUEST_METHOD':\\n                builder.method = value\\n            elif key == 'PATH_INFO':\\n                builder.path = value\\n            elif key == 'QUERY_STRING':\\n                builder.query_string = value\\n        builder.environ_base = environ\\n        builder.environ_overrides = kwargs\\n        return builder\"\n}",
+  "seconds": 21.7
+ },
+ "werkzeug-newfn-006/FILE": {
+  "answer_tokens": 85,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2321,
+  "raw": "{\n    \"code\": \"def _partial_build(self, endpoint, values, method, append_unknown):\\n        for rule in self.map._rules_by_endpoint.get(endpoint, ());\\n            if rule.suitable_for(values, method):\\n                rv = rule.build(values, append_unknown)\\n                if rv is not None:\\n                    return rv\\n        raise BuildError(endpoint, values, method)\"\n}",
+  "seconds": 9.1
+ },
+ "werkzeug-newfn-006/PRISM": {
+  "answer_tokens": 141,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7168,
+  "raw": "{\n  \"code\": \"def _partial_build(self, endpoint, values, method, append_unknown):\\n        self.map.update()\\n        method = method or self.default_method\\n        if values:\\n            values = dict([(k, v) for k, v in values.items() if v is not None])\\n        else:\\n            values = {}\\n\\n        for rule in self.map._rules_by_endpoint.get(endpoint, ()):            \\n            if rule.suitable_for(values, method):\\n                rv = rule.build(values, append_unknown)\\n                if rv is not None:\\n                    return rv\\n        raise BuildError(endpoint, values, method)\"\n}",
+  "seconds": 16.3
+ },
+ "werkzeug-newfn-007/FILE": {
+  "answer_tokens": 153,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 803,
+  "raw": "{\n  \"code\": \"def make_action(app_factory, hostname='localhost', port=5000,\\n                threaded=False, processes=1):\\n    \\\"\\\"\\\"\\n    Return a new callback for werkzeug scripts that starts a local server\\n    for profiling.\\n    \\\"\\\"\\\"\\n    def action(hostname=('h', hostname), port=('p', port),\\n               threaded=threaded, processes=processes):\\n        \\\"\\\"\\\"Start a new development server with profiling middleware.\\\"\\\"\\\"\\n        from werkzeug.serving import run_simple\\n        app = ProfilerMiddleware(app_factory())\\n        run_simple(hostname, port, app, False, None, threaded, processes)\\n    return action\"\n}",
+  "seconds": 11.6
+ },
+ "werkzeug-newfn-007/PRISM": {
+  "answer_tokens": 158,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3407,
+  "raw": "{\n  \"code\": \"def make_action(app_factory, hostname='localhost', port=5000,\\n                threaded=False, processes=1):\\n    \\\"\\\"\\\"\\n    Return a new callback for werkzeug scripts that starts a local server\\n    for profiling.\\n    \\\"\\\"\\\"\\n    def action(hostname=('h', hostname), port=('p', port),\\n               threaded=threaded, processes=processes):\\n        \\\"\\\"\\\"Start a new development server with profiling middleware.\\\"\\\"\\\"\\n        from werkzeug.serving import run_simple\\n        app = app_factory()\\n        app = ProfilerMiddleware(app)\\n        run_simple(hostname, port, app, False, None, threaded, processes)\\n    return action\"\n}",
+  "seconds": 13.8
+ },
+ "werkzeug-newfn-008/FILE": {
+  "answer_tokens": 38,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2545,
+  "raw": "{\n  \"code\": \"def decode_netloc(self, charset='utf-8', errors='strict'):\\n    return to_unicode(self.netloc, charset, errors)\"\n}",
+  "seconds": 5.9
+ },
+ "werkzeug-newfn-008/PRISM": {
+  "answer_tokens": 57,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4645,
+  "raw": "{\n  \"code\": \"    def decode_netloc(self, charset='utf-8', errors='strict'):\\n        \\\"\\\"\\\"Decodes the netloc part into a string.\\\"\\\"\\\"\\n        return url_unquote(self.netloc, charset, errors)\"\n}",
+  "seconds": 7.0
+ },
+ "werkzeug-newfn-009/FILE": {
+  "answer_tokens": 23,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2546,
+  "raw": "{\n  \"code\": \"def compile(self):\\n    self.bind(self.map, rebind=True)\"\n}",
+  "seconds": 4.9
+ },
+ "werkzeug-newfn-009/PRISM": {
+  "answer_tokens": 241,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5413,
+  "raw": "{\n  \"code\": \"def compile(self):\\n    if self.map is None:\\n        raise RuntimeError('url rule %r is not bound to a map' % self)\\n    if self._regex is not None:\\n        return\\n    rule = self.subdomain + '|' + (self.is_leaf and self.rule or self.rule.rstrip('/'))\\n    regex_parts = []\\n    for converter, arguments, variable in parse_rule(rule):\\n        if converter is None:\\n            regex_parts.append(re.escape(variable))\\n        else:\\n            convobj = get_converter(self.map, converter, arguments)\\n            regex_parts.append('(?P<%s>%s)' % (variable, convobj.regex))\\n    if not self.is_leaf:\\n        regex_parts.append('/')\\n    regex = r'^%s%s$' % (\\n        u''.join(regex_parts),\\n        (not self.is_leaf or not self.strict_slashes) and '(?<!/)(?P<__suffix__>/?)' or ''\\n    )\\n    self._regex = re.compile(regex, re.UNICODE)\"\n}",
+  "seconds": 20.6
+ },
+ "werkzeug-newfn-010/FILE": {
+  "answer_tokens": 39,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3089,
+  "raw": "{\n  \"code\": \"def application(cls, f):\\n    def decorator(request):\\n        return f(request)\\n    return decorator\\nBaseRequest.application = classmethod(application)\"\n}",
+  "seconds": 6.8
+ },
+ "werkzeug-newfn-010/PRISM": {
+  "answer_tokens": 110,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6352,
+  "raw": "{\n  \"code\": \"def application(cls, f):\\n        \\\"\\\"\\\"Decorate a function as responder that accepts the request as\\n        first argument.  This works like the `responder` decorator but\\n        the function is passed the request object as first argument::\\n\\n            @Request.application\\n            def my_wsgi_app(request):\\n                return Response('Hello World!')\\n        \\\"\\\"\\\"\\n        return responder(lambda *a: f(cls(*a), *a[-2:]))\"\n}",
+  "seconds": 12.4
+ },
+ "werkzeug-newfn-011/FILE": {
+  "answer_tokens": 92,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2934,
+  "raw": "{\n  \"code\": \"def send_from_directory(directory, path, environ, **kwargs):\\n    from .security import safe_join\\n    from .exceptions import NotFound\\n    from .wrappers import Response\\n\\n    full_path = safe_join(directory, path)\\n    if full_path is None or not os.path.isfile(full_path):\\n        raise NotFound()\\n\\n    return send_file(full_path, environ=environ, **kwargs)\"\n}",
+  "seconds": 10.1
+ },
+ "werkzeug-newfn-011/PRISM": {
+  "answer_tokens": 73,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8683,
+  "raw": "{\n  \"code\": \"def send_from_directory(directory, path, environ, **kwargs):\\n    full_path = safe_join(directory, path)\\n    if full_path is None or not os.path.isfile(full_path):\\n        from werkzeug.exceptions import NotFound\\n        raise NotFound()\\n    return send_file(full_path, environ, **kwargs)\"\n}",
+  "seconds": 13.0
+ },
+ "werkzeug-newfn-012/FILE": {
+  "answer_tokens": 184,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2606,
+  "raw": "{\n  \"code\": \"def _quote_etag(etag: str, weak: bool = False) -> str:\\n    \\\"\\\"\\\"Quote an ETag value.\\n\\n    :param etag: The ETag to quote.\\n    :param weak: Add a weak marker to the quoted value.\\n\\n    .. deprecated:: 3.2\\n        Will be removed in Werkzeug 3.3. Use ``ETag.to_header`` instead.\\n    \\\"\\\"\\\"\\n    import warnings\\n\\n    warnings.warn(\\n        \\\"The '_quote_etag' function is deprecated and will be removed in Werkzeug 3.3. Use 'ETag.to_header' instead.\\\",\\n        DeprecationWarning,\\n        stacklevel=2,\\n    )\\n    return ds.ETag(etag, weak).to_header()\\n\"\n}",
+  "seconds": 16.0
+ },
+ "werkzeug-newfn-012/PRISM": {
+  "answer_tokens": 186,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6001,
+  "raw": "{\n  \"code\": \"def _quote_etag(etag: str, weak: bool = False) -> str:\\n    \\\"\\\"\\\"Quote an ETag value.\\n\\n    :param etag: The ETag to quote.\\n    :param weak: Add a weak marker to the quoted value.\\n\\n    .. deprecated:: 3.2\\n        Will be removed in Werkzeug 3.3. Use ``ETag.to_header`` instead.\\n    \\\"\\\"\\\"\\n    import warnings\\n\\n    warnings.warn(\\n        \\\"The '_quote_etag' function is deprecated and will be removed in\\\"\\n        \\\" Werkzeug 3.3. Use 'ETag.to_header' instead.\\\",\\n        DeprecationWarning,\\n        stacklevel=2,\\n    )\\n    return ds.ETag(etag, weak).to_header()\"\n}",
+  "seconds": 17.7
+ },
+ "werkzeug-newfn-013/FILE": {
+  "answer_tokens": 125,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2429,
+  "raw": "{\n  \"code\": \"def cache_control_property(key, empty, type):\\n    \\\"\\\"\\\"Return a new property object for a cache header.  Useful if you\\n    want to add support for a cache extension in a subclass.\\\"\\\"\\\"\\n    return property(\\n        lambda x: x._get_cache_value(key, empty, type),\\n        lambda x, v: x._set_cache_value(key, v, type),\\n        lambda x: x._del_cache_value(key),\\n        f\\\"accessor for {key!r}\\\",\\n    )\"\n}",
+  "seconds": 11.8
+ },
+ "werkzeug-newfn-013/PRISM": {
+  "answer_tokens": 125,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5156,
+  "raw": "{\n  \"code\": \"def cache_control_property(key, empty, type):\\n    \\\"\\\"\\\"Return a new property object for a cache header.  Useful if you\\n    want to add support for a cache extension in a subclass.\\\"\\\"\\\"\\n    return property(\\n        lambda x: x._get_cache_value(key, empty, type),\\n        lambda x, v: x._set_cache_value(key, v, type),\\n        lambda x: x._del_cache_value(key),\\n        f\\\"accessor for {key!r}\\\",\\n    )\"\n}",
+  "seconds": 12.5
+ },
+ "werkzeug-newfn-014/FILE": {
+  "answer_tokens": 339,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2429,
+  "raw": "{\n  \"code\": \"def generate_adhoc_ssl_context():\\n    import ssl\\n    context = ssl.SSLContext(ssl.PROTOCOL_TLS)\\n    context.load_cert_chain(certfile=make_temp_cert())\\n    return context\\n\\n\\ndef make_temp_cert():\\n    import tempfile\\n    import OpenSSL\\n    from OpenSSL import crypto\\n    key = crypto.PKey()\\n    key.generate_key(crypto.TYPE_RSA, 2048)\\n    cert = crypto.X509()\\n    cert.get_subject().C = \\\"US\\\"\\n    cert.get_subject().ST = \\\"California\\\"\\n    cert.get_subject().L = \\\"San Francisco\\\"\\n    cert.get_subject().O = \\\"Local Development\\\"\\n    cert.get_subject().OU = \\\"Development\\\"\\n    cert.get_subject().CN = \\\"localhost\\\"\\n    cert.set_serial_number(1000)\\n    cert.gmtime_adj_notBefore(0)\\n    cert.gmtime_adj_notAfter(10*365*24*60*60)\\n    cert.set_issuer(cert.get_subject())\\n    cert.set_pubkey(key)\\n    cert.sign(key, 'sha256')\\n    cert_file = tempfile.NamedTemporaryFile(delete=False)\\n    cert_file.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))\\n    cert_file.close()\\n    key_file = tempfile.NamedTemporaryFile(delete=False)\\n    key_file.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))\\n    key_file.close()\\n    return cert_file.name\"\n}",
+  "seconds": 25.8
+ },
+ "werkzeug-newfn-014/PRISM": {
+  "answer_tokens": 80,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4497,
+  "raw": "{\n  \"code\": \"def generate_adhoc_ssl_context():\\n    \\\"\\\"\\\"Generates an adhoc SSL context for the development server.\\\"\\\"\\\"\\n    import ssl\\n    context = ssl.SSLContext(ssl.PROTOCOL_TLS)\\n    context.load_cert_chain(certfile='adhoc.pem', keyfile='adhoc.pem')\\n    return context\\n\"\n}",
+  "seconds": 8.5
+ },
+ "werkzeug-newfn-015/FILE": {
+  "answer_tokens": 100,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2757,
+  "raw": "{\n  \"code\": \"def join(self, *args, **kwargs):\\n        \\\"\\\"\\\"Joins this URL with another one.  This is just a convenience\\n        function for calling into :meth:`url_join` and then parsing the\\n        return value again.\\n        \\\"\\\"\\\"\\n        from werkzeug.urls import url_join\\n        new_url = url_join(self, *args, **kwargs)\\n        return _iriparse(new_url)\\n\"\n}",
+  "seconds": 10.3
+ },
+ "werkzeug-newfn-015/PRISM": {
+  "answer_tokens": 100,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5919,
+  "raw": "{\n  \"code\": \"def join(self, *args, **kwargs):\\n        \\\"\\\"\\\"Joins this URL with another one.  This is just a convenience\\n        function for calling into :meth:`url_join` and then parsing the\\n        return value again.\\n        \\\"\\\"\\\"\\n        from werkzeug.urls import url_join\\n        new_url = url_join(self, *args, **kwargs)\\n        return _iriparse(new_url)\\n\"\n}",
+  "seconds": 11.5
+ },
+ "werkzeug-newfn-016/FILE": {
+  "answer_tokens": 218,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2570,
+  "raw": "{\n  \"code\": \"def dump_cookie(key, value='', max_age=None, expires=None, path='/', domain=None, secure=None, httponly=False, charset='utf-8'):\\n    \\\"\\\"\\\"Creates a new Set-Cookie header without that 'Set-Cookie'\\\"\\\"\\\"\\n    cookie = [url_quote(key, charset), '=', url_quote(value, charset)]\\n    if expires is not None:\\n        cookie.append('; Expires=%s' % cookie_date(expires))\\n    if max_age is not None:\\n        cookie.append('; Max-Age=%d' % max_age)\\n    if path is not None:\\n        cookie.append('; Path=%s' % url_quote(path, charset))\\n    if domain is not None:\\n        cookie.append('; Domain=%s' % url_quote(domain, charset))\\n    if secure:\\n        cookie.append('; Secure')\\n    if httponly:\\n        cookie.append('; HttpOnly')\\n    return ''.join(cookie)\"\n}",
+  "seconds": 18.0
+ },
+ "werkzeug-newfn-016/PRISM": {
+  "answer_tokens": 190,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5304,
+  "raw": "{\n  \"code\": \"def dump_cookie(key, value='', max_age=None, expires=None, path='/', domain=None, secure=None, httponly=False, charset='utf-8'):\\n    \\\"\\\"\\\"\\n    Creates a new Set-Cookie header without that 'Set-Cookie'\\n    \\\"\\\"\\\"\\n    morsel = _ExtendedMorsel(key, value)\\n    if expires is not None:\\n        if not isinstance(expires, basestring):\\n            expires = cookie_date(expires)\\n        morsel['expires'] = expires\\n    for k, v in (('path', path), ('domain', domain), ('secure', secure), ('httponly', httponly)):\\n        if v is not None and v is not False:\\n            morsel[k] = str(v)\\n    return morsel.output(header='')\\n\"\n}",
+  "seconds": 17.0
+ },
+ "werkzeug-newfn-017/FILE": {
+  "answer_tokens": 205,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1298,
+  "raw": "{\n  \"code\": \"def is_resource_modified(environ, etag=None, data=None, last_modified=None):\\n    \\\"\\\"\\\"Convenience method for conditional requests.\\\"\\\"\\\"\\n    if etag is None and data is not None:\\n        etag = generate_etag(data)\\n\\n    if last_modified is not None:\\n        if isinstance(last_modified, datetime):\\n            last_modified = last_modified.utctimetuple()\\n        if 'HTTP_IF_MODIFIED_SINCE' in environ:\\n            if_modified_since = parse_date(environ['HTTP_IF_MODIFIED_SINCE'])\\n            if if_modified_since and if_modified_since >= last_modified:\\n                return False\\n\\n    if etag is not None:\\n        if 'HTTP_IF_NONE_MATCH' in environ:\\n            if_none_match = parse_etags(environ['HTTP_IF_NONE_MATCH'])\\n            if if_none_match.contains(etag):\\n                return False\\n\\n    return True\"\n}",
+  "seconds": 15.6
+ },
+ "werkzeug-newfn-017/PRISM": {
+  "answer_tokens": 176,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3986,
+  "raw": "{\n  \"code\": \"def is_resource_modified(environ, etag=None, data=None, last_modified=None):\\n    # Check if the request method is GET or HEAD\\n    if environ.get('REQUEST_METHOD') not in ('GET', 'HEAD'):\\n        return False\\n\\n    # Check If-None-Match header\\n    if_none_match = parse_etags(environ.get('HTTP_IF_NONE_MATCH'))\\n    if if_none_match:\\n        if if_none_match(etag=etag, data=data):\\n            return False\\n\\n    # Check If-Modified-Since header\\n    if_modified_since = parse_date(environ.get('HTTP_IF_MODIFIED_SINCE'))\\n    if if_modified_since and last_modified:\\n        if last_modified <= if_modified_since:\\n            return False\\n\\n    return True\"\n}",
+  "seconds": 15.3
+ },
+ "werkzeug-newfn-018/FILE": {
+  "answer_tokens": 226,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2199,
+  "raw": "{\n  \"code\": \"def content_security_policy_report_only(self) -> ContentSecurityPolicy:\\n        \\\"\\\"\\\"The ``Content-Security-Policy-Report-Only`` header as a\\n        :class:`~werkzeug.datastructures.ContentSecurityPolicy` object. Available\\n        even if the header is not set.\\n\\n        The Content-Security-Policy-Report-Only header adds a csp policy\\n        that is not enforced but is reported thereby helping detect\\n        certain types of attacks.\\n        \\\"\\\"\\\"\\n\\n        def on_update(csp: ContentSecurityPolicy) -> None:\\n            if not csp and \\\"Content-Security-Policy-Report-Only\\\" in self.headers:\\n                del self.headers[\\\"Content-Security-Policy-Report-Only\\\"]\\n            elif csp:\\n                self.headers[\\\"Content-Security-Policy-Report-Only\\\"] = csp.to_header()\\n\\n        header = self.headers.get(\\\"Content-Security-Policy-Report-Only\\\")\\n        return parse_csp_header(header, on_update)\"\n}",
+  "seconds": 18.0
+ },
+ "werkzeug-newfn-018/PRISM": {
+  "answer_tokens": 240,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5442,
+  "raw": "{\n  \"code\": \"```python\\n    @property\\ndef content_security_policy_report_only(self) -> ContentSecurityPolicy:\\n        \\\"\\\"\\\"The ``Content-Security-Policy-Report-Only`` header as a\\n        :class:`~werkzeug.datastructures.ContentSecurityPolicy` object. Available\\n        even if the header is not set.\\n\\n        The Content-Security-Policy-Report-Only header adds a csp policy\\n        that is not enforced but is reported thereby helping detect\\n        certain types of attacks.\\n        \\\"\\\"\\\"\\n\\n        def on_update(csp: ContentSecurityPolicy) -> None:\\n            if not csp:\\n                del self.headers[\\\"Content-Security-Policy-Report-Only\\\"]\\n            else:\\n                self.headers[\\\"Content-Security-Policy-Report-Only\\\"] = csp.to_header()\\n\\n        rv = parse_csp_header(self.headers.get(\\\"Content-Security-Policy-Report-Only\\\"), on_update)\\n        if rv is None:\\n            rv = ContentSecurityPolicy((), on_update=on_update)\\n        return rv\\n```\"\n}",
+  "seconds": 21.2
+ },
+ "werkzeug-newfn-019/FILE": {
+  "answer_tokens": 112,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2624,
+  "raw": "{\n  \"code\": \"def parse_if_range_header(value):\\n    \\\"\\\"\\\"Parses an if-range header which can be an etag or a date.\\n\\n    .. versionadded:: 0.7\\n    \\\"\\\"\\\"\\n    if not value:\\n        return None\\n\\n    if value[0] == '\\\"':\\n        # It's an etag\\n        return unquote_etag(value)[0]\\n    else:\\n        # It's a date\\n        return parse_date(value)\"\n}",
+  "seconds": 11.0
+ },
+ "werkzeug-newfn-019/PRISM": {
+  "answer_tokens": 125,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6003,
+  "raw": "{\n  \"code\": \"def parse_if_range_header(value):\\n    \\\"\\\"\\\"Parses an if-range header which can be an etag or a date.\\n\\n    .. versionadded:: 0.7\\n    \\\"\\\"\\\"\\n    if not value:\\n        return None\\n\\n    if value.startswith(('\\\"', 'W/\\\"')):\\n        etag, weak = unquote_etag(value)\\n        return etag, weak\\n\\n    date = parse_date(value)\\n    if date is not None:\\n        return date\\n\\n    return None\"\n}",
+  "seconds": 13.4
+ },
+ "werkzeug-newfn-020/FILE": {
+  "answer_tokens": 391,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1592,
+  "raw": "{\n  \"code\": \"def main():\\n    \\\"\\\"\\\"A simple command-line interface for :py:func:`run_simple`.\\\"\\\"\\\"\\n    import argparse\\n\\n    parser = argparse.ArgumentParser(description='Run a simple WSGI server.')\\n    parser.add_argument('module', type=str, help='The WSGI application module to run.')\\n    parser.add_argument('--host', type=str, default='127.0.0.1', help='The host to bind to.')\\n    parser.add_argument('--port', type=int, default=5000, help='The port to bind to.')\\n    parser.add_argument('--use-reloader', action='store_true', help='Enable the reloader.')\\n    parser.add_argument('--use-debugger', action='store_true', help='Enable the debugger.')\\n    parser.add_argument('--use-evalex', action='store_true', help='Enable the exception evaluation feature.')\\n    parser.add_argument('--threaded', action='store_true', help='Enable threading.')\\n    parser.add_argument('--processes', type=int, default=1, help='Number of processes.')\\n\\n    args = parser.parse_args()\\n\\n    try:\\n        app_module, app_name = args.module.rsplit('.', 1)\\n        app = getattr(__import__(app_module, fromlist=[app_name]), app_name)\\n    except (ImportError, AttributeError) as e:\\n        print(f'Error importing application: {e}')\\n        sys.exit(1)\\n\\n    run_simple(args.host, args.port, app,\\n                use_reloader=args.use_reloader,\\n                use_debugger=args.use_debugger,\\n                use_evalex=args.use_evalex,\\n                threaded=args.threaded,\\n                processes=args.processes)\\n\"\n}",
+  "seconds": 28.0
+ },
+ "werkzeug-newfn-020/PRISM": {
+  "answer_tokens": 62,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4937,
+  "raw": "{\n  \"code\": \"def main():\\n    try:\\n        run_simple('localhost', 5000, test_app)\\n    except Exception as e:\\n        _log('error', 'Error: %s' % e)\\n        sys.exit(1)\"\n}",
+  "seconds": 8.5
+ }
+}
