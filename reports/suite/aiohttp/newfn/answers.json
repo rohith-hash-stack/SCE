@@ -1,0 +1,242 @@
+{
+ "aiohttp-newfn-001/FILE": {
+  "answer_tokens": 235,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2534,
+  "raw": "{\n  \"code\": \"async def _start_tls_connection(\\n        self,\\n        underlying_transport: asyncio.Transport,\\n        req: \\\"ClientRequest\\\",\\n        timeout: \\\"ClientTimeout\\\",\\n        client_error: Type[Exception] = ClientConnectorError,\\n    ) -> Tuple[asyncio.BaseTransport, ResponseHandler]:\\n        sslcontext = self._get_ssl_context(req)\\n        if sslcontext is None:\\n            raise ValueError(\\\"SSL context is required for TLS connection.\\\")\\n\\n        try:\\n            async with ceil_timeout(timeout.sock_connect):\\n                transport, protocol = await self._loop.start_tls(\\n                    underlying_transport,\\n                    req.host,\\n                    sslcontext,\\n                    server_hostname=req.host,\\n                )\\n        except cert_errors as exc:\\n            raise ClientConnectorCertificateError(req.connection_key, exc) from exc\\n        except ssl_errors as exc:\\n            raise ClientConnectorSSLError(req.connection_key, exc) from exc\\n        except OSError as exc:\\n            raise client_error(req.connection_key, exc) from exc\\n\\n        return transport, protocol\"\n}",
+  "seconds": 19.2
+ },
+ "aiohttp-newfn-001/PRISM": {
+  "answer_tokens": 234,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8314,
+  "raw": "{\n  \"code\": \"async def _start_tls_connection(\\n        self,\\n        underlying_transport: asyncio.Transport,\\n        req: \\\"ClientRequest\\\",\\n        timeout: \\\"ClientTimeout\\\",\\n        client_error: Type[Exception] = ClientConnectorError,\\n    ) -> Tuple[asyncio.BaseTransport, ResponseHandler]:\\n        sslcontext = self._get_ssl_context(req)\\n        if sslcontext is None:\\n            raise ValueError(\\\"SSL context is required for TLS connection\\\")\\n\\n        try:\\n            async with ceil_timeout(timeout.sock_connect):\\n                transport, protocol = await self._loop.start_tls(\\n                    underlying_transport,\\n                    req.host,\\n                    sslcontext,\\n                    server_hostname=req.host,\\n                )\\n        except cert_errors as exc:\\n            raise ClientConnectorCertificateError(req.connection_key, exc) from exc\\n        except ssl_errors as exc:\\n            raise ClientConnectorSSLError(req.connection_key, exc) from exc\\n        except OSError as exc:\\n            raise client_error(req.connection_key, exc) from exc\\n\\n        return transport, protocol\"\n}",
+  "seconds": 24.8
+ },
+ "aiohttp-newfn-002/FILE": {
+  "answer_tokens": 547,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1879,
+  "raw": "{\n  \"code\": \"def _send_compressed_frame_sync(self, message: bytes, opcode: int, compress: Optional[int]) -> None:\\n        if self._closing and not (opcode & WSMsgType.CLOSE):\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        rsv = 0\\n        if (compress or self.compress) and opcode < 8:\\n            rsv = 0x40\\n\\n            if compress:\\n                compressobj = self._make_compress_obj(compress)\\n            else:\\n                if not self._compressobj:\\n                    self._compressobj = self._make_compress_obj(self.compress)\\n                compressobj = self._compressobj\\n\\n            message = (\\n                compressobj.compress(message)\\n                + compressobj.flush(\\n                    ZLibBackend.Z_FULL_FLUSH\\n                    if self.notakeover\\n                    else ZLibBackend.Z_SYNC_FLUSH\\n                )\\n            ).removesuffix(WS_DEFLATE_TRAILING)\\n\\n        msg_length = len(message)\\n\\n        use_mask = self.use_mask\\n        mask_bit = 0x80 if use_mask else 0\\n\\n        first_byte = 0x80 | rsv | opcode\\n        if msg_length < 126:\\n            header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n            header_len = 2\\n        elif msg_length < 65536:\\n            header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n            header_len = 4\\n        else:\\n            header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n            header_len = 10\\n\\n        if self.transport.is_closing():\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        if use_mask:\\n            mask = PACK_RANDBITS(self.get_random_bits())\\n            message = bytearray(message)\\n            websocket_mask(mask, message)\\n            self.transport.write(header + mask + message)\\n            self._output_size += MASK_LEN\\n        elif msg_length > MSG_SIZE:\\n            self.transport.write(header)\\n            self.transport.write(message)\\n        else:\\n            self.transport.write(header + message)\\n\\n        self._output_size += header_len + msg_length\\n\\n        if self._output_size > self._limit:\\n            self._output_size = 0\\n            if self.protocol._paused:\\n                self.protocol._drain_helper()\\n\"\n}",
+  "seconds": 38.7
+ },
+ "aiohttp-newfn-002/PRISM": {
+  "answer_tokens": 553,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7644,
+  "raw": "{\n  \"code\": \"def _send_compressed_frame_sync(\\n        self, message: bytes, opcode: int, compress: Optional[int]\\n    ) -> None:\\n        if self._closing and not (opcode & WSMsgType.CLOSE):\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        rsv = 0\\n        if (compress or self.compress) and opcode < 8:\\n            rsv = 0x40\\n\\n            if compress:\\n                compressobj = self._make_compress_obj(compress)\\n            else:\\n                if not self._compressobj:\\n                    self._compressobj = self._make_compress_obj(self.compress)\\n                compressobj = self._compressobj\\n\\n            message = (\\n                compressobj.compress(message)\\n                + compressobj.flush(\\n                    ZLibBackend.Z_FULL_FLUSH\\n                    if self.notakeover\\n                    else ZLibBackend.Z_SYNC_FLUSH\\n                )\\n            ).removesuffix(WS_DEFLATE_TRAILING)\\n\\n        msg_length = len(message)\\n\\n        use_mask = self.use_mask\\n        mask_bit = 0x80 if use_mask else 0\\n\\n        first_byte = 0x80 | rsv | opcode\\n        if msg_length < 126:\\n            header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n            header_len = 2\\n        elif msg_length < 65536:\\n            header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n            header_len = 4\\n        else:\\n            header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n            header_len = 10\\n\\n        if self.transport.is_closing():\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        if use_mask:\\n            mask = PACK_RANDBITS(self.get_random_bits())\\n            message = bytearray(message)\\n            websocket_mask(mask, message)\\n            self.transport.write(header + mask + message)\\n            self._output_size += MASK_LEN\\n        elif msg_length > MSG_SIZE:\\n            self.transport.write(header)\\n            self.transport.write(message)\\n        else:\\n            self.transport.write(header + message)\\n\\n        self._output_size += header_len + msg_length\\n\\n        if self._output_size > self._limit:\\n            self._output_size = 0\\n            if self.protocol._paused:\\n                self.protocol._drain_helper()\\n\"\n}",
+  "seconds": 47.7
+ },
+ "aiohttp-newfn-003/FILE": {
+  "answer_tokens": 234,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2533,
+  "raw": "{\n  \"code\": \"async def _start_tls_connection(\\n        self,\\n        underlying_transport: asyncio.Transport,\\n        req: \\\"ClientRequest\\\",\\n        timeout: \\\"ClientTimeout\\\",\\n        client_error: Type[Exception] = ClientConnectorError,\\n    ) -> Tuple[asyncio.BaseTransport, ResponseHandler]:\\n        sslcontext = self._get_ssl_context(req)\\n        if sslcontext is None:\\n            raise ValueError(\\\"SSL context is required for TLS connection\\\")\\n\\n        try:\\n            async with ceil_timeout(timeout.sock_connect):\\n                transport, protocol = await self._loop.start_tls(\\n                    underlying_transport,\\n                    req.host,\\n                    sslcontext,\\n                    server_hostname=req.host,\\n                )\\n        except cert_errors as exc:\\n            raise ClientConnectorCertificateError(req.connection_key, exc) from exc\\n        except ssl_errors as exc:\\n            raise ClientConnectorSSLError(req.connection_key, exc) from exc\\n        except OSError as exc:\\n            raise client_error(req.connection_key, exc) from exc\\n\\n        return transport, protocol\"\n}",
+  "seconds": 19.3
+ },
+ "aiohttp-newfn-003/PRISM": {
+  "answer_tokens": 233,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8342,
+  "raw": "{\n  \"code\": \"async def _start_tls_connection(\\n        self,\\n        underlying_transport: asyncio.Transport,\\n        req: \\\"ClientRequest\\\",\\n        timeout: \\\"ClientTimeout\\\",\\n        client_error: Type[Exception] = ClientConnectorError,\\n    ) -> Tuple[asyncio.BaseTransport, ResponseHandler]:\\n        sslcontext = self._get_ssl_context(req)\\n        if sslcontext is None:\\n            raise ValueError(\\\"SSL context is required for TLS connection\\\")\\n\\n        try:\\n            async with ceil_timeout(timeout.sock_connect):\\n                transport, protocol = await self._loop.start_tls(\\n                    underlying_transport,\\n                    req,\\n                    sslcontext,\\n                    server_hostname=req.host,\\n                )\\n        except cert_errors as exc:\\n            raise ClientConnectorCertificateError(req.connection_key, exc) from exc\\n        except ssl_errors as exc:\\n            raise ClientConnectorSSLError(req.connection_key, exc) from exc\\n        except OSError as exc:\\n            raise client_error(req.connection_key, exc) from exc\\n\\n        return transport, protocol\"\n}",
+  "seconds": 24.8
+ },
+ "aiohttp-newfn-004/FILE": {
+  "answer_tokens": 115,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1788,
+  "raw": "{\n  \"code\": \"async def finish_response(self,\\n                              request: BaseRequest,\\n                              resp: StreamResponse,\\n                              start_time: float) -> bool:\\n    try:\\n        await resp.prepare(request)\\n        await resp.write_eof()\\n    except ConnectionResetError:\\n        self.log_debug('Ignored premature client disconnection 2')\\n        return True\\n\\n    if self.access_log:\\n        self.log_access(request, resp, self._loop.time() - start_time)\\n\\n    return False\"\n}",
+  "seconds": 10.7
+ },
+ "aiohttp-newfn-004/PRISM": {
+  "answer_tokens": 113,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6571,
+  "raw": "{\n  \"code\": \"async def finish_response(self,\\n                              request: BaseRequest,\\n                              resp: StreamResponse,\\n                              start_time: float) -> bool:\\n    try:\\n        await resp.prepare(request)\\n        await resp.write_eof()\\n    except ConnectionResetError:\\n        self.log_debug('Ignored premature client disconnection')\\n        return True\\n\\n    if self.access_log:\\n        self.log_access(request, resp, self._loop.time() - start_time)\\n\\n    return False\"\n}",
+  "seconds": 14.1
+ },
+ "aiohttp-newfn-005/FILE": {
+  "answer_tokens": 112,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2559,
+  "raw": "{\n  \"code\": \"def basicauth_from_netrc(netrc_obj: Optional[netrc.netrc], host: str) -> BasicAuth:\\n    if netrc_obj is None:\\n        raise LookupError(\\\"netrc_obj is None\\\")\\n    auth = netrc_obj.authenticators(host)\\n    if auth is None:\\n        raise LookupError(f\\\"No entry found for host: {host}\\\")\\n    login, _, password = auth\\n    return BasicAuth(login, password)\\n\"\n}",
+  "seconds": 11.0
+ },
+ "aiohttp-newfn-005/PRISM": {
+  "answer_tokens": 260,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7231,
+  "raw": "{\n  \"code\": \"def basicauth_from_netrc(netrc_obj: Optional[netrc.netrc], host: str) -> BasicAuth:\\n    \\\"\\\"\\\"Return :py:class:`~aiohttp.BasicAuth` credentials for ``host`` from ``netrc_obj``.\\n\\n    :raises LookupError: if ``netrc_obj`` is :py:data:`None` or if no\\n            entry is found for the ``host``.\\n    \\\"\\\"\\\"\\n    if netrc_obj is None:\\n        raise LookupError(\\\"netrc_obj is None\\\")\\n\\n    auth_info = netrc_obj.authenticators(host)\\n    if auth_info is None:\\n        raise LookupError(f\\\"No entry found for host: {host}\\\")\\n\\n    # auth_info is a (`user`, `account`, `password`) tuple,\\n    # `user` and `account` both can be username,\\n    # if `user` is None, use `account`\\n    *logins, password = auth_info\\n    login = logins[0] if logins[0] else logins[-1]\\n\\n    return BasicAuth(cast(str, login), cast(str, password))\"\n}",
+  "seconds": 24.9
+ },
+ "aiohttp-newfn-006/FILE": {
+  "answer_tokens": 643,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1871,
+  "raw": "{\n  \"code\": \"def _write_websocket_frame(self, message: bytes, opcode: int, rsv: int) -> None:\\n        \\\"\\\"\\\"Write a websocket frame to the transport.\\n\\n        This method handles frame header construction, masking, and writing to transport.\\n        It does not handle compression or flow control - those are the responsibility\\n        of the caller.\\n        \\\"\\\"\\\"\\n        msg_length = len(message)\\n\\n        use_mask = self.use_mask\\n        mask_bit = 0x80 if use_mask else 0\\n\\n        # Depending on the message length, the header is assembled differently.\\n        # The first byte is reserved for the opcode and the RSV bits.\\n        first_byte = 0x80 | rsv | opcode\\n        if msg_length < 126:\\n            header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n            header_len = 2\\n        elif msg_length < 65536:\\n            header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n            header_len = 4\\n        else:\\n            header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n            header_len = 10\\n\\n        if self.transport.is_closing():\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        # https://datatracker.ietf.org/doc/html/rfc6455#section-5.3\\n        # If we are using a mask, we need to generate it randomly\\n        # and apply it to the message before sending it. A mask is\\n        # a 32-bit value that is applied to the message using a\\n        # bitwise XOR operation. It is used to prevent certain types\\n        # of attacks on the websocket protocol. The mask is only used\\n        # when aiohttp is acting as a client. Servers do not use a mask.\\n        if use_mask:\\n            mask = PACK_RANDBITS(self.get_random_bits())\\n            message = bytearray(message)\\n            websocket_mask(mask, message)\\n            self.transport.write(header + mask + message)\\n            self._output_size += MASK_LEN\\n        elif msg_length > MSG_SIZE:\\n            self.transport.write(header)\\n            self.transport.write(message)\\n        else:\\n            self.transport.write(header + message)\\n\\n        self._output_size += header_len + msg_length\\n\\n        # Once we have written output_size up to the limit, we call the\\n        # drain helper which waits for the transport to be ready to accept\\n        # more data. This is a flow control mechanism to prevent the buffer\\n        # from growing too large. The drain helper will return right away\\n        # if the writer is not paused.\\n        if self._output_size > self._limit:\\n            self._output_size = 0\\n            if self.protocol._paused:\\n                await self.protocol._drain_helper()\"\n}",
+  "seconds": 44.9
+ },
+ "aiohttp-newfn-006/PRISM": {
+  "answer_tokens": 654,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8154,
+  "raw": "{\n  \"code\": \"def _write_websocket_frame(self, message: bytes, opcode: int, rsv: int) -> None:\\n        \\\"\\\"\\\"Write a websocket frame to the transport.\\n\\n        This method handles frame header construction, masking, and writing to transport.\\n        It does not handle compression or flow control - those are the responsibility\\n        of the caller.\\n        \\\"\\\"\\\"\\n        if self._closing and not (opcode & WSMsgType.CLOSE):\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        msg_length = len(message)\\n\\n        use_mask = self.use_mask\\n        mask_bit = 0x80 if use_mask else 0\\n\\n        # Depending on the message length, the header is assembled differently.\\n        # The first byte is reserved for the opcode and the RSV bits.\\n        first_byte = 0x80 | rsv | opcode\\n        if msg_length < 126:\\n            header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n            header_len = 2\\n        elif msg_length < 65536:\\n            header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n            header_len = 4\\n        else:\\n            header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n            header_len = 10\\n\\n        if self.transport.is_closing():\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        # If we are using a mask, we need to generate it randomly\\n        # and apply it to the message before sending it. A mask is\\n        # a 32-bit value that is applied to the message using a\\n        # bitwise XOR operation. It is used to prevent certain types\\n        # of attacks on the websocket protocol. The mask is only used\\n        # when aiohttp is acting as a client. Servers do not use a mask.\\n        if use_mask:\\n            mask = PACK_RANDBITS(self.get_random_bits())\\n            message = bytearray(message)\\n            websocket_mask(mask, message)\\n            self.transport.write(header + mask + message)\\n            self._output_size += MASK_LEN\\n        elif msg_length > MSG_SIZE:\\n            self.transport.write(header)\\n            self.transport.write(message)\\n        else:\\n            self.transport.write(header + message)\\n\\n        self._output_size += header_len + msg_length\\n\\n        # Once we have written output_size up to the limit, we call the\\n        # drain helper which waits for the transport to be ready to accept\\n        # more data. This is a flow control mechanism to prevent the buffer\\n        # from growing too large. The drain helper will return right away\\n        # if the writer is not paused.\\n        if self._output_size > self._limit:\\n            self._output_size = 0\\n            if self.protocol._paused:\\n                await self.protocol._drain_helper()\\n\"\n}",
+  "seconds": 56.4
+ },
+ "aiohttp-newfn-007/FILE": {
+  "answer_tokens": 164,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2185,
+  "raw": "{\n  \"code\": \"def _get_netrc_auth(self, host: str) -> BasicAuth | None:\\n        \\\"\\\"\\\"\\n        Get auth from netrc for the given host.\\n\\n        This method is designed to be called in an executor to avoid\\n        blocking I/O in the event loop.\\n        \\\"\\\"\\\"\\n        import netrc\\n        from urllib.parse import urlparse\\n\\n        try:\\n            netrc_obj = netrc.netrc()\\n            auth_info = netrc_obj.authenticators(urlparse(host).hostname)\\n            if auth_info:\\n                login, account, password = auth_info\\n                return BasicAuth(login, password)\\n        except (netrc.NetrcParseError, FileNotFoundError):\\n            pass\\n        return None\"\n}",
+  "seconds": 14.3
+ },
+ "aiohttp-newfn-007/PRISM": {
+  "answer_tokens": 138,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8313,
+  "raw": "{\n  \"code\": \"    def _get_netrc_auth(self, host: str) -> BasicAuth | None:\\n        \\\"\\\"\\\"Get auth from netrc for the given host.\\n\\n        This method is designed to be called in an executor to avoid\\n        blocking I/O in the event loop.\\n        \\\"\\\"\\\"\\n        if not self._trust_env:\\n            return None\\n\\n        netrc_obj = netrc_from_env()\\n        try:\\n            auth_from_netrc = basicauth_from_netrc(netrc_obj, host)\\n            return auth_from_netrc\\n        except LookupError:\\n            return None\"\n}",
+  "seconds": 18.2
+ },
+ "aiohttp-newfn-008/FILE": {
+  "answer_tokens": 274,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2277,
+  "raw": "{\n  \"code\": \"async def _wait_for_available_connection(self, key: \\\"ConnectionKey\\\", traces: List[\\\"Trace\\\"]) -> None:\\n        \\\"\\\"\\\"\\n        Wait until there is an available connection.\\n        \\\"\\\"\\\"\\n        while self._available_connections(key) <= 0:\\n            fut: asyncio.Future[None] = self._loop.create_future()\\n\\n            # This connection will now count towards the limit.\\n            self._waiters[key].append(fut)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_start()\\n\\n            try:\\n                await fut\\n            except BaseException as e:\\n                if key in self._waiters:\\n                    # remove a waiter even if it was cancelled, normally it's\\n                    #  removed when it's notified\\n                    try:\\n                        self._waiters[key].remove(fut)\\n                    except ValueError:  # fut may no longer be in list\\n                        pass\\n\\n                raise e\\n            finally:\\n                if key in self._waiters and not self._waiters[key]:\\n                    del self._waiters[key]\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_end()\"\n}",
+  "seconds": 21.6
+ },
+ "aiohttp-newfn-008/PRISM": {
+  "answer_tokens": 264,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8548,
+  "raw": "{\n    \"code\": \"async def _wait_for_available_connection(self, key: \\\"ConnectionKey\\\", traces: List[\\\"Trace\\\"]) -> None:\\n        \\\"\\\"\\\"\\n        Wait until there is an available connection.\\n        \\\"\\\"\\\"\\n        while True:\\n            available = self._available_connections(key)\\n            if available > 0:\\n                return\\n\\n            if key not in self._waiters:\\n                self._waiters[key] = deque()\\n\\n            fut: asyncio.Future[None] = self._loop.create_future()\\n            self._waiters[key].append(fut)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_start()\\n\\n            try:\\n                await fut\\n            except BaseException as e:\\n                if key in self._waiters:\\n                    try:\\n                        self._waiters[key].remove(fut)\\n                    except ValueError:\\n                        pass\\n                raise e\\n            finally:\\n                if key in self._waiters and not self._waiters[key]:\\n                    del self._waiters[key]\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_end()\"\n}",
+  "seconds": 27.7
+ },
+ "aiohttp-newfn-009/FILE": {
+  "answer_tokens": 125,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2575,
+  "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n    # Log the exception for debugging purposes\\n    ws_logger.error(f\\\"Exception during ping/pong processing: {exc}\\\")\\n\\n    # Set the closed flag to indicate the connection is no longer usable\\n    self._set_closed()\\n\\n    # Set the close code and close the transport\\n    self._set_code_close_transport(WSCloseCode.ABNORMAL_CLOSURE)\\n\\n    # Store the exception for later reference\\n    self._exception = exc\"\n}",
+  "seconds": 12.1
+ },
+ "aiohttp-newfn-009/PRISM": {
+  "answer_tokens": 83,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7556,
+  "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n        \\\"\\\"\\\"Handle exceptions raised during ping/pong processing.\\\"\\\"\\\"\\n        self._cancel_heartbeat()\\n        self._set_closed()\\n        self._set_code_close_transport(WSCloseCode.ABNORMAL_CLOSURE)\\n        self._exception = exc\"\n}",
+  "seconds": 12.5
+ },
+ "aiohttp-newfn-010/FILE": {
+  "answer_tokens": 156,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1613,
+  "raw": "{\n  \"code\": \"```python\\n@pytest.yield_fixture\\ndef aiohttp_raw_server(loop):\\n    \\\"\\\"\\\"Factory to create a RawTestServer instance, given a web handler.\\n\\n    aiohttp_raw_server(handler, **kwargs)\\n    \\\"\\\"\\\"\\n    servers = []\\n\\n    async def go(handler, *, port=None, **kwargs):\\n        server = RawTestServer(handler, port=port)\\n        await server.start_server(loop=loop, **kwargs)\\n        servers.append(server)\\n        return server\\n\\n    yield go\\n\\n    async def finalize():\\n        while servers:\\n            await servers.pop().close()\\n\\n    loop.run_until_complete(finalize())\\n```\"\n}",
+  "seconds": 12.9
+ },
+ "aiohttp-newfn-010/PRISM": {
+  "answer_tokens": 156,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4455,
+  "raw": "{\n  \"code\": \"```python\\n@pytest.yield_fixture\\ndef aiohttp_raw_server(loop):\\n    \\\"\\\"\\\"Factory to create a RawTestServer instance, given a web handler.\\n\\n    aiohttp_raw_server(handler, **kwargs)\\n    \\\"\\\"\\\"\\n    servers = []\\n\\n    async def go(handler, *, port=None, **kwargs):\\n        server = RawTestServer(handler, port=port)\\n        await server.start_server(loop=loop, **kwargs)\\n        servers.append(server)\\n        return server\\n\\n    yield go\\n\\n    async def finalize():\\n        while servers:\\n            await servers.pop().close()\\n\\n    loop.run_until_complete(finalize())\\n```\"\n}",
+  "seconds": 14.3
+ },
+ "aiohttp-newfn-011/FILE": {
+  "answer_tokens": 45,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1574,
+  "raw": "{\n  \"code\": \"def must_be_empty_body(method: str, code: int) -> bool:\\n    return method_must_be_empty_body(method) or status_code_must_be_empty_body(code)\"\n}",
+  "seconds": 5.5
+ },
+ "aiohttp-newfn-011/PRISM": {
+  "answer_tokens": 118,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6034,
+  "raw": "{\n  \"code\": \"def must_be_empty_body(method: str, code: int) -> bool:\\n    \\\"\\\"\\\"Check if a request must return an empty body.\\\"\\\"\\\"\\n    # https://datatracker.ietf.org/doc/html/rfc9112#section-6.3-2.1\\n    # https://datatracker.ietf.org/doc/html/rfc9112#section-6.3-2.2\\n    return method_must_be_empty_body(method) or status_code_must_be_empty_body(code)\"\n}",
+  "seconds": 13.9
+ },
+ "aiohttp-newfn-012/FILE": {
+  "answer_tokens": 103,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2485,
+  "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n    self._set_closed()\\n    self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n    self._exception = exc\\n    self._response.close()\\n    if self._waiting and not self._closing:\\n        self._reader.feed_data(\\n            WSMessage(WSMsgType.ERROR, self._exception, None)\\n        )\"\n}",
+  "seconds": 10.3
+ },
+ "aiohttp-newfn-012/PRISM": {
+  "answer_tokens": 120,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7913,
+  "raw": "{\n  \"code\": \"    def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n        \\\"\\\"\\\"Handle exceptions raised during ping/pong processing.\\\"\\\"\\\"\\n        self._set_closed()\\n        self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n        self._exception = exc\\n        self._response.close()\\n        if self._waiting and not self._closing:\\n            self._reader.feed_data(\\n                WSMessage(WSMsgType.ERROR, self._exception, None)\\n            )\"\n}",
+  "seconds": 15.8
+ },
+ "aiohttp-newfn-013/FILE": {
+  "answer_tokens": 88,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2748,
+  "raw": "{\n  \"code\": \"def get_env_proxy_for_url(url: URL) -> Tuple[URL, Optional[BasicAuth]]:\\n    proxies = proxies_from_env()\\n    proto = 'https' if url.scheme == 'https' else 'http'\\n    proxy_info = proxies.get(proto)\\n    if proxy_info:\\n        return proxy_info.proxy, proxy_info.proxy_auth\\n    return url, None\"\n}",
+  "seconds": 9.8
+ },
+ "aiohttp-newfn-013/PRISM": {
+  "answer_tokens": 122,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6276,
+  "raw": "{\n  \"code\": \"def get_env_proxy_for_url(url: URL) -> Tuple[URL, Optional[BasicAuth]]:\\n    \\\"\\\"\\\"Get a permitted proxy for the given URL from the env.\\\"\\\"\\\"\\n    proxies = proxies_from_env()\\n    proto = 'https' if url.scheme == 'https' else 'http'\\n    proxy_info = proxies.get(proto)\\n    if proxy_info is None:\\n        return url, None\\n    proxy_url, proxy_auth = strip_auth_from_url(proxy_info.proxy)\\n    return proxy_url, proxy_auth\"\n}",
+  "seconds": 13.4
+ },
+ "aiohttp-newfn-014/FILE": {
+  "answer_tokens": 90,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1762,
+  "raw": "{\n  \"code\": \"def update_cookies_from_headers(self, headers: Sequence[str], response_url: URL) -> None:\\n        \\\"\\\"\\\"\\n        Update cookies from raw Set-Cookie headers.\\n\\n        Default implementation parses each header separately to preserve\\n        cookies with same name but different domain/path.\\n        \\\"\\\"\\\"\\n        for header in headers:\\n            self.update_cookies(BaseCookie(header), response_url)\"\n}",
+  "seconds": 8.6
+ },
+ "aiohttp-newfn-014/PRISM": {
+  "answer_tokens": 101,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6513,
+  "raw": "{\n  \"code\": \"```python\\n    @abstractmethod\\ndef update_cookies_from_headers(\\n        self, headers: Sequence[str], response_url: URL\\n    ) -> None:\\n        \\\"\\\"\\\"Update cookies from raw Set-Cookie headers.\\n\\n        Default implementation parses each header separately to preserve\\n        cookies with same name but different domain/path.\\n        \\\"\\\"\\\"\\n        for header in headers:\\n            self.update_cookies(header, response_url)\\n```\"\n}",
+  "seconds": 13.1
+ },
+ "aiohttp-newfn-015/FILE": {
+  "answer_tokens": 148,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2412,
+  "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy and not req.proxy.ssl:\\n        # Set Proxy-Authorization header for non-SSL proxy requests\\n        if req.proxy_auth:\\n            req.headers['Proxy-Authorization'] = req.proxy_auth.encode()\\n    elif req.proxy and req.proxy.ssl:\\n        # Build the proxy request for SSL proxy requests\\n        # This is a placeholder for the actual implementation\\n        # which would involve setting up the proxy tunnel.\\n        # For the sake of this example, we'll just pass the request through.\\n        pass\\n    return req\"\n}",
+  "seconds": 13.2
+ },
+ "aiohttp-newfn-015/PRISM": {
+  "answer_tokens": 135,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8837,
+  "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy_auth and not req.is_ssl():\\n        req.headers[hdrs.PROXY_AUTHORIZATION] = req.proxy_auth.encode()\\n    if req.is_ssl():\\n        proxy_req = ClientRequest(\\n            hdrs.METH_GET,\\n            req.proxy,\\n            headers={hdrs.HOST: req.headers[hdrs.HOST]},\\n            auth=req.proxy_auth,\\n            loop=self._loop,\\n        )\\n        return proxy_req\\n    return req\"\n}",
+  "seconds": 18.4
+ }
+}
