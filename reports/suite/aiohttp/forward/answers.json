@@ -142,5 +142,245 @@
   "prompt_tokens": 4846,
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.web_protocol.RequestHandler._handle_request\",\n      \"file\": \"aiohttp/web_protocol.py\",\n      \"reason\": \"The return type of `finish_response` has changed from `bool` to `Tuple[StreamResponse, bool]`, so the caller must update how it handles the return value.\",\n      \"new_code\": \"async def _handle_request(\\n        self,\\n        request: BaseRequest,\\n        start_time: float,\\n        request_handler: Callable[[BaseRequest], Awaitable[StreamResponse]],\\n    ) -> Tuple[StreamResponse, bool]:\\n        self._handler_waiter = self._loop.create_future()\\n        try:\\n            try:\\n                self._current_request = request\\n                resp = await request_handler(request)\\n            finally:\\n                self._current_request = None\\n        except HTTPException as exc:\\n            resp = exc\\n            resp, reset = await self.finish_response(request, resp, start_time)\\n        except asyncio.CancelledError:\\n            raise\\n        except asyncio.TimeoutError as exc:\\n            self.log_debug(\\\"Request handler timed out.\\\", exc_info=exc)\\n            resp = self.handle_error(request, 504)\\n            resp, reset = await self.finish_response(request, resp, start_time)\\n        except Exception as exc:\\n            resp = self.handle_error(request, 500, exc)\\n            resp, reset = await self.finish_response(request, resp, start_time)\\n        else:\\n            # Deprecation warning (See #2415)\\n            if getattr(resp, \\\"__http_exception__\\\", False):\\n                warnings.warn(\\n                    \\\"returning HTTPException object is deprecated \\\"\\n                    \\\"(#2415) and will be removed, \\\"\\n                    \\\"please raise the exception instead\\\",\\n                    DeprecationWarning,\\n                )\\n\\n            resp, reset = await self.finish_response(request, resp, start_time)\\n        finally:\\n            self._handler_waiter.set_result(None)\\n\\n        return resp, reset\"\n    }\n  ]\n}",
   "seconds": 31.8
+ },
+ "aiohttp-forward-007/FILE": {
+  "answer_tokens": 332,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2319,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"DeflateBuffer.feed_data\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The `feed_data` method signature has changed to remove the `size` parameter, so any calls to this method must be updated accordingly.\",\n      \"new_code\": \"def feed_data(self, chunk: bytes) -> None:\\n        if not chunk:\\n            return\\n\\n        self.size += len(chunk)\\n\\n        # RFC1950\\n        # bits 0..3 = CM = 0b1000 = 8 = \\\"deflate\\\"\\n        # bits 4..7 = CINFO = 1..7 = windows size.\\n        if (\\n            not self._started_decoding\\n            and self.encoding == \\\"deflate\\\"\\n            and chunk[0] & 0xF != 8\\n        ):\\n            # Change the decoder to decompress incorrectly compressed data\\n            # Actually we should issue a warning about non-RFC-compliant data.\\n            self.decompressor = ZLibDecompressor(\\n                encoding=self.encoding, suppress_deflate_header=True\\n            )\\n\\n        try:\\n            chunk = self.decompressor.decompress_sync(chunk)\\n        except Exception:\\n            raise ContentEncodingError(\\n                \\\"Can not decode content-encoding: %s\\\" % self.encoding\\n            )\\n\\n        self._started_decoding = True\\n\\n        if chunk:\\n            self.out.feed_data(chunk)\"\n    }\n  ]\n}",
+  "seconds": 25.2
+ },
+ "aiohttp-forward-007/PRISM": {
+  "answer_tokens": 791,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4636,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.http_parser.DeflateBuffer.feed_eof\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The `feed_data` method no longer takes a `size` parameter, so `feed_eof` must be updated to call `feed_data` without it.\",\n      \"new_code\": \"def feed_eof(self) -> None:\\n        chunk = self.decompressor.flush()\\n\\n        if chunk or self.size > 0:\\n            self.out.feed_data(chunk)\\n            # decompressor is not brotli unless encoding is \\\"br\\\"\\n            if self.encoding == \\\"deflate\\\" and not self.decompressor.eof:  # type: ignore[union-attr]\\n                raise ContentEncodingError(\\\"deflate\\\")\\n\\n        self.out.feed_eof()\"\n    },\n    {\n      \"function\": \"aiohttp.http_parser.HttpPayloadParser.feed_data\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The `feed_data` method no longer takes a `size` parameter, so `feed_data` must be updated to call `feed_data` without it.\",\n      \"new_code\": \"def feed_data(\\n        self, chunk: bytes, SEP: _SEP = b\\\"\\\\r\\\\n\\\", CHUNK_EXT: bytes = b\\\";\\\"\\n    ) -> Tuple[bool, bytes]:\\n        # Read specified amount of bytes\\n        if self._type == ParseState.PARSE_LENGTH:\\n            required = self._length\\n            chunk_len = len(chunk)\\n\\n            if required >= chunk_len:\\n                self._length = required - chunk_len\\n                self.payload.feed_data(chunk)\\n                if self._length == 0:\\n                    self.payload.feed_eof()\\n                    return True, b\\\"\\n            else:\\n                self._length = 0\\n                self.payload.feed_data(chunk[:required])\\n                self.payload.feed_eof()\\n                return True, chunk[required:]\\n\\n        # Chunked transfer encoding parser\\n        elif self._type == ParseState.PARSE_CHUNKED:\\n            if self._chunk_tail:\\n                chunk = self._chunk_tail + chunk\\n                self._chunk_tail = b\\\"\\n    # ... lines 829-863 not shown ...\\n\\n                # read chunk and feed buffer\\n                if self._chunk == ChunkState.PARSE_CHUNKED_CHUNK:\\n                    required = self._chunk_size\\n                    chunk_len = len(chunk)\\n\\n                    if required > chunk_len:\\n                        self._chunk_size = required - chunk_len\\n                        self.payload.feed_data(chunk)\\n                        return False, b\\\"\\n                    else:\\n                        self._chunk_size = 0\\n                        self.payload.feed_data(chunk[:required])\\n                        chunk = chunk[required:]\\n                        if self._lax and chunk.startswith(b\\\"\\\\r\\\"):n                            chunk = chunk[1:]\\n                        self._chunk = ChunkState.PARSE_CHUNKED_CHUNK_EOF\\n                        self.payload.end_http_chunk_receiving()\\n\\n                # toss the CRLF at the end of the chunk\\n                if self._chunk == ChunkState.PARSE_CHUNKED_CHUNK_EOF:\\n    # ... lines 885-917 not shown ...\\n                        chunk = chunk[pos + len(SEP) :]\\n                        self._chunk = ParseState.PARSE_MAYBE_TRAILERS\\n                    else:\\n                        self._chunk_tail = chunk\\n                        return False, b\\\"\\n\\n        # Read all bytes until eof\\n        elif self._type == ParseState.PARSE_UNTIL_EOF:\\n            self.payload.feed_data(chunk)\\n\\n        return False, b\\\"\\\"\"\n    }\n  ]\n}",
+  "seconds": 58.2
+ },
+ "aiohttp-forward-007/PRISM_BREAKS": {
+  "answer_tokens": 1430,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5078,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.http_parser.HttpPayloadParser.feed_data\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The `feed_data` method of `DeflateBuffer` no longer accepts a `size` parameter, so the calls to `self.payload.feed_data` must be updated to remove the second argument.\",\n      \"new_code\": \"def feed_data(self, chunk: bytes, SEP: _SEP = b\\\"\\\\r\\\\n\\\", CHUNK_EXT: bytes = b\\\";\\\") -> Tuple[bool, bytes]:\\n    # Read specified amount of bytes\\n    if self._type == ParseState.PARSE_LENGTH:\\n        required = self._length\\n        chunk_len = len(chunk)\\n\\n        if required >= chunk_len:\\n            self._length = required - chunk_len\\n            self.payload.feed_data(chunk)\\n            if self._length == 0:\\n                self.payload.feed_eof()\\n                return True, b\\\"\\\"\\n        else:\\n            self._length = 0\\n            self.payload.feed_data(chunk[:required])\\n            self.payload.feed_eof()\\n            return True, chunk[required:]\\n\\n    # Chunked transfer encoding parser\\n    elif self._type == ParseState.PARSE_CHUNKED:\\n        if self._chunk_tail:\\n            chunk = self._chunk_tail + chunk\\n            self._chunk_tail = b\\\"\\\"\\n\\n        while chunk:\\n            # read next chunk size\\n            if self._chunk == ChunkState.PARSE_CHUNKED_SIZE:\\n                pos = chunk.find(SEP)\\n                if pos >= 0:\\n                    i = chunk.find(CHUNK_EXT, 0, pos)\\n                    if i >= 0:\\n                        size_b = chunk[:i]  # strip chunk-extensions\\n                    else:\\n                        size_b = chunk[:pos]\\n\\n                    if self._lax:  # Allow whitespace in lax mode.\\n                        size_b = size_b.strip()\\n\\n                    if not re.fullmatch(HEXDIGITS, size_b):\\n                        exc = TransferEncodingError(\\n                            chunk[:pos].decode(\\\"ascii\\\", \\\"surrogateescape\\\")\\n                        )\\n                        set_exception(self.payload, exc)\\n                        raise exc\\n                    size = int(bytes(size_b), 16)\\n\\n                    chunk = chunk[pos + len(SEP) :]\\n                    if size == 0:  # eof marker\\n                        self._chunk = ChunkState.PARSE_MAYBE_TRAILERS\\n                        if self._lax and chunk.startswith(b\\\"\\\\r\\\"):n                            chunk = chunk[1:]\\n                    else:\\n                        self._chunk = ChunkState.PARSE_CHUNKED_CHUNK\\n                        self._chunk_size = size\\n                        self.payload.begin_http_chunk_receiving()\\n                else:\\n                    self._chunk_tail = chunk\\n                    return False, b\\\"\\\"\\n\\n            # read chunk and feed buffer\\n            if self._chunk == ChunkState.PARSE_CHUNKED_CHUNK:\\n                required = self._chunk_size\\n                chunk_len = len(chunk)\\n\\n                if required > chunk_len:\\n                    self._chunk_size = required - chunk_len\\n                    self.payload.feed_data(chunk)\\n                    return False, b\\\"\\\"\\n                else:\\n                    self._chunk_size = 0\\n                    self.payload.feed_data(chunk[:required])\\n                    chunk = chunk[required:]\\n                    if self._lax and chunk.startswith(b\\\"\\\\r\\\"):n                        chunk = chunk[1:]\\n                    self._chunk = ChunkState.PARSE_CHUNKED_CHUNK_EOF\\n                    self.payload.end_http_chunk_receiving()\\n\\n            # toss the CRLF at the end of the chunk\\n            if self._chunk == ChunkState.PARSE_CHUNKED_CHUNK_EOF:\\n                if chunk[: len(SEP)] == SEP:\\n                    chunk = chunk[len(SEP) :]\\n                    self._chunk = ChunkState.PARSE_CHUNKED_SIZE\\n                else:\\n                    self._chunk_tail = chunk\\n                    return False, b\\\"\\\"\\n\\n            # if stream does not contain trailer, after 0\\\\r\\\\n\\n            # we should get another \\\\r\\\\n otherwise\\n            # trailers needs to be skipped until \\\\r\\\\n\\\\r\\\\n\\n            if self._chunk == ChunkState.PARSE_MAYBE_TRAILERS:\\n                head = chunk[: len(SEP)]\\n                if head == SEP:\\n                    # end of stream\\n                    self.payload.feed_eof()\\n                    return True, chunk[len(SEP) :]\\n                # Both CR and LF, or only LF may not be received yet. It is\\n                # expected that CRLF or LF will be shown at the very first\\n                # byte next time, otherwise trailers should come. The last\\n                # CRLF which marks the end of response might not be\\n                # contained in the same TCP segment which delivered the\\n                # size indicator.\\n                if not head:\\n                    return False, b\\\"\\\"\\n                if head == SEP[:1]:\\n                    self._chunk_tail = head\\n                    return False, b\\\"\\\"\\n                self._chunk = ChunkState.PARSE_TRAILERS\\n\\n            # read and discard trailer up to the CRLF terminator\\n            if self._chunk == ChunkState.PARSE_TRAILERS:\\n                pos = chunk.find(SEP)\\n                if pos >= 0:\\n                    chunk = chunk[pos + len(SEP) :]\\n                    self._chunk = ChunkState.PARSE_MAYBE_TRAILERS\\n                else:\\n                    self._chunk_tail = chunk\\n                    return False, b\\\"\\\"\\n\\n    # Read all bytes until eof\\n    elif self._type == ParseState.PARSE_UNTIL_EOF:\\n        self.payload.feed_data(chunk)\\n\\n    return False, b\\\"\\\"\"\n    },\n    {\n      \"function\": \"aiohttp.http_parser.DeflateBuffer.feed_eof\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The `feed_data` method of `DeflateBuffer` no longer accepts a `size` parameter, so the call to `self.out.feed_data` must be updated to remove the second argument.\",\n      \"new_code\": \"def feed_eof(self) -> None:\\n    chunk = self.decompressor.flush()\\n\\n    if chunk or self.size > 0:\\n        self.out.feed_data(chunk)\\n        # decompressor is not brotli unless encoding is \\\"br\\\"\\n        if self.encoding == \\\"deflate\\\" and not self.decompressor.eof:  # type: ignore[union-attr]\\n            raise ContentEncodingError(\\\"deflate\\\")\\n\\n    self.out.feed_eof()\"\n    }\n  ]\n}",
+  "seconds": 105.0
+ },
+ "aiohttp-forward-008/FILE": {
+  "answer_tokens": 145,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2102,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"TraceResponseChunkReceivedParams\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The `TraceResponseChunkReceivedParams` class needs to be updated to include the `method` and `url` parameters.\",\n      \"new_code\": \"```python\\n@attr.s(frozen=True, slots=True)\\nclass TraceResponseChunkReceivedParams:\\n    \\\"\\\"\\\" Parameters sent by the `on_response_chunk_received` signal\\\"\\\"\\\"\\n    method = attr.ib(type=str)\\n    url = attr.ib(type=URL)\\n    chunk = attr.ib(type=bytes)\\n```\"\n    }\n  ]\n}",
+  "seconds": 12.9
+ },
+ "aiohttp-forward-008/PRISM": {
+  "answer_tokens": 301,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3452,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Trace.send_response_chunk_received\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The function signature has been updated to include `method` and `url` parameters.\",\n      \"new_code\": \"async def send_response_chunk_received(self, method: str, url: URL, chunk: bytes) -> None:\\n        return await self._trace_config.on_response_chunk_received.send(\\n            self._session,\\n            self._trace_config_ctx,\\n            TraceResponseChunkReceivedParams(method, url, chunk)\\n        )\"\n    },\n    {\n      \"function\": \"ClientResponse.read\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The function calls `send_response_chunk_received` with the `method` and `url` parameters.\",\n      \"new_code\": \"async def read(self) -> bytes:\\n        \\\"\\\"\\\"Read response payload.\\\"\\\"\\\"\\n        if self._body is None:\\n            try:\\n                self._body = await self.content.read()\\n                for trace in self._traces:\\n                    await trace.send_response_chunk_received(self.method, self.url, self._body)\\n            except BaseException:\\n                self.close()\\n                raise\\n        elif self._released:\\n            raise ClientConnectionError('Connection closed')\\n\\n        return self._body\"\n    }\n  ]\n}",
+  "seconds": 22.5
+ },
+ "aiohttp-forward-008/PRISM_BREAKS": {
+  "answer_tokens": 183,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3709,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"ClientResponse.read\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The `send_response_chunk_received` method now requires `method` and `url` parameters, which were not previously passed.\",\n      \"new_code\": \"async def read(self) -> bytes:\\n        \\\"\\\"\\\"Read response payload.\\\"\\\"\\\"\\n        if self._body is None:\\n            try:\\n                self._body = await self.content.read()\\n                for trace in self._traces:\\n                    await trace.send_response_chunk_received(self.method, self.url, self._body)\\n            except BaseException:\\n                self.close()\\n                raise\\n        elif self._released:\\n            raise ClientConnectionError('Connection closed')\\n\\n        return self._body\"\n    }\n  ]\n}",
+  "seconds": 14.8
+ },
+ "aiohttp-forward-009/FILE": {
+  "answer_tokens": 145,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2102,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"TraceResponseChunkReceivedParams\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The `TraceResponseChunkReceivedParams` class needs to be updated to include the `method` and `url` parameters.\",\n      \"new_code\": \"```python\\n@attr.s(frozen=True, slots=True)\\nclass TraceResponseChunkReceivedParams:\\n    \\\"\\\"\\\" Parameters sent by the `on_response_chunk_received` signal\\\"\\\"\\\"\\n    method = attr.ib(type=str)\\n    url = attr.ib(type=URL)\\n    chunk = attr.ib(type=bytes)\\n```\"\n    }\n  ]\n}",
+  "seconds": 9.5
+ },
+ "aiohttp-forward-009/PRISM": {
+  "answer_tokens": 303,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3453,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Trace.send_response_chunk_received\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The method signature has been updated to include `method` and `url` parameters.\",\n      \"new_code\": \"async def send_response_chunk_received(self, method: str, url: URL, chunk: bytes) -> None:\\n        return await self._trace_config.on_response_chunk_received.send(\\n            self._session,\\n            self._trace_config_ctx,\\n            TraceResponseChunkReceivedParams(method, url, chunk)\\n        )\"\n    },\n    {\n      \"function\": \"ClientResponse.read\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The method needs to pass the `method` and `url` parameters to `send_response_chunk_received`.\",\n      \"new_code\": \"async def read(self) -> bytes:\\n        \\\"\\\"\\\"Read response payload.\\\"\\\"\\\"\\n        if self._body is None:\\n            try:\\n                self._body = await self.content.read()\\n                for trace in self._traces:\\n                    await trace.send_response_chunk_received(self.method, self.url, self._body)\\n            except BaseException:\\n                self.close()\\n                raise\\n        elif self._released:\\n            raise ClientConnectionError('Connection closed')\\n\\n        return self._body\"\n    }\n  ]\n}",
+  "seconds": 22.6
+ },
+ "aiohttp-forward-009/PRISM_BREAKS": {
+  "answer_tokens": 183,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3710,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"ClientResponse.read\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The `send_response_chunk_received` method now requires `method` and `url` parameters, which were not previously passed.\",\n      \"new_code\": \"async def read(self) -> bytes:\\n        \\\"\\\"\\\"Read response payload.\\\"\\\"\\\"\\n        if self._body is None:\\n            try:\\n                self._body = await self.content.read()\\n                for trace in self._traces:\\n                    await trace.send_response_chunk_received(self.method, self.url, self._body)\\n            except BaseException:\\n                self.close()\\n                raise\\n        elif self._released:\\n            raise ClientConnectionError('Connection closed')\\n\\n        return self._body\"\n    }\n  ]\n}",
+  "seconds": 14.8
+ },
+ "aiohttp-forward-010/FILE": {
+  "answer_tokens": 569,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3271,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._reused_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method calls `_reused_connection`, which did not exist before.\",\n      \"new_code\": \"async def _reused_connection(self, key: 'ConnectionKey', proto: ResponseHandler, traces: List['Trace']) -> Connection:\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_reuseconn()\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._acquired_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method calls `_acquired_connection`, which did not exist before.\",\n      \"new_code\": \"def _acquired_connection(self, proto: ResponseHandler, key: 'ConnectionKey') -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._wait_for_available_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method calls `_wait_for_available_connection`, which did not exist before.\",\n      \"new_code\": \"async def _wait_for_available_connection(self, key: 'ConnectionKey', traces: List['Trace']) -> None:\\n        fut: asyncio.Future[None] = self._loop.create_future()\\n\\n        # This connection will now count towards the limit.\\n        self._waiters[key].append(fut)\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_start()\\n\\n        try:\\n            await fut\\n        except BaseException as e:\\n            if key in self._waiters:\\n                # remove a waiter even if it was cancelled, normally it's\\n                #  removed when it's notified\\n                try:\\n                    self._waiters[key].remove(fut)\\n                except ValueError:  # fut may no longer be in list\\n                    pass\\n\\n            raise e\\n        finally:\\n            if key in self._waiters and not self._waiters[key]:\\n                del self._waiters[key]\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_end()\"\n    }\n  ]\n}",
+  "seconds": 42.5
+ },
+ "aiohttp-forward-010/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6709,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.4
+ },
+ "aiohttp-forward-010/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6709,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.5
+ },
+ "aiohttp-forward-011/FILE": {
+  "answer_tokens": 646,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3219,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._wait_for_available_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method now calls `_wait_for_available_connection` to handle waiting for available connections.\",\n      \"new_code\": \"async def _wait_for_available_connection(self, key: 'ConnectionKey', traces: List['Trace']) -> None:\\n        fut: asyncio.Future[None] = self._loop.create_future()\\n\\n        # This connection will now count towards the limit.\\n        self._waiters[key].append(fut)\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_start()\\n\\n        try:\\n            await fut\\n        except BaseException as e:\\n            if key in self._waiters:\\n                # remove a waiter even if it was cancelled, normally it's\\n                #  removed when it's notified\\n                try:\\n                    self._waiters[key].remove(fut)\\n                except ValueError:  # fut may no longer be in list\\n                    pass\\n\\n            raise e\\n        finally:\\n            if key in self._waiters and not self._waiters[key]:\\n                del self._waiters[key]\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_end()\"\n    },\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._reused_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method now calls `_reused_connection` to handle reused connections.\",\n      \"new_code\": \"async def _reused_connection(self, key: 'ConnectionKey', proto: ResponseHandler, traces: List['Trace']) -> Connection:\\n        if traces:\\n            # Acquire the connection to prevent race conditions with limits\\n            placeholder = cast(ResponseHandler, _TransportPlaceholder())\\n            self._acquired.add(placeholder)\\n            self._acquired_per_host[key].add(placeholder)\\n            for trace in traces:\\n                await trace.send_connection_reuseconn()\\n            self._acquired.remove(placeholder)\\n            self._drop_acquired_per_host(key, placeholder)\\n\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._acquired_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method now calls `_acquired_connection` to handle newly acquired connections.\",\n      \"new_code\": \"def _acquired_connection(self, proto: ResponseHandler, key: 'ConnectionKey') -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    }\n  ]\n}",
+  "seconds": 47.6
+ },
+ "aiohttp-forward-011/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6493,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.2
+ },
+ "aiohttp-forward-011/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6493,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.5
+ },
+ "aiohttp-forward-012/FILE": {
+  "answer_tokens": 182,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2150,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.web_app.Application.make_handler\",\n      \"file\": \"aiohttp/web_app.py\",\n      \"reason\": \"The method `make_handler` has been deprecated and now calls a private method `_make_handler`. Other methods that directly call `make_handler` need to be updated to call `_make_handler` instead.\",\n      \"new_code\": \"def make_handler(self, *,\\n                     loop=None,\\n                     access_log_class=AccessLogger,\\n                     **kwargs):\\n\\n        warnings.warn(\\\"Application.make_handler(...) is deprecated, \\\"\\n                      \\\"use AppRunner API instead\\\",\\n                      DeprecationWarning,\\n                      stacklevel=2)\\n\\n        return self._make_handler(loop=loop,\\n                                  access_log_class=access_log_class,\\n                                  **kwargs)\"\n    }\n  ]\n}",
+  "seconds": 15.4
+ },
+ "aiohttp-forward-012/PRISM": {
+  "answer_tokens": 192,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3761,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AppRunner._make_server\",\n      \"file\": \"aiohttp/web_runner.py\",\n      \"reason\": \"The method now calls the deprecated `make_handler` method, which needs to be replaced with the new `AppRunner` API.\",\n      \"new_code\": \"async def _make_server(self):\\n        loop = asyncio.get_event_loop()\\n        self._app._set_loop(loop)\\n        self._app.on_startup.freeze()\\n        await self._app.startup()\\n        self._app.freeze()\\n\\n        # Replace the deprecated make_handler call with the new AppRunner API\\n        runner = AppRunner(self._app, **self._kwargs)\\n        await runner.setup()\\n        site = TCPSite(runner, self._host, self._port)\\n        await site.start()\\n\\n        return runner\"\n    }\n  ]\n}",
+  "seconds": 15.5
+ },
+ "aiohttp-forward-012/PRISM_BREAKS": {
+  "answer_tokens": 194,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3761,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AppRunner._make_server\",\n      \"file\": \"aiohttp/web_runner.py\",\n      \"reason\": \"The method now calls the deprecated `make_handler` method, which needs to be replaced with the new `AppRunner` API.\",\n      \"new_code\": \"async def _make_server(self):\\n        loop = asyncio.get_event_loop()\\n        self._app._set_loop(loop)\\n        self._app.on_startup.freeze()\\n        await self._app.startup()\\n        self._app.freeze()\\n\\n        # Replace the deprecated make_handler call with the new AppRunner API\\n        runner = AppRunner(self._app, **self._kwargs)\\n        await runner.setup()\\n        site = TCPSite(runner, self._host, self._port)\\n        await site.start()\\n\\n        return runner, site\"\n    }\n  ]\n}",
+  "seconds": 13.2
+ },
+ "aiohttp-forward-013/FILE": {
+  "answer_tokens": 113,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1694,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Trace.send_dns_cache_hit\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The function signature has changed to accept a 'host' parameter.\",\n      \"new_code\": \"async def send_dns_cache_hit(self, host):\\n        return await self._trace_config.on_dns_cache_hit.send(\\n            self._session,\\n            self._trace_config_ctx,\\n            TraceDnsCacheHitParams(host)\\n        )\"\n    }\n  ]\n}",
+  "seconds": 9.9
+ },
+ "aiohttp-forward-013/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3357,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.9
+ },
+ "aiohttp-forward-013/PRISM_BREAKS": {
+  "answer_tokens": 572,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3537,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.connector.TCPConnector._resolve_host\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The function now requires a `host` argument.\",\n      \"new_code\": \"async def _resolve_host(self, host, port, traces=None):\\n        if is_ip_address(host):\\n            return [{'hostname': host, 'host': host, 'port': port,\\n                     'family': self._family, 'proto': 0, 'flags': 0}]\\n\\n        if not self._use_dns_cache:\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_start()\\n\\n            res = (await self._resolver.resolve(\\n                host, port, family=self._family))\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_end()\\n\\n            return res\\n\\n        key = (host, port)\\n\\n        if (key in self._cached_hosts) and \\\\\\n                (not self._cached_hosts.expired(key)):\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n\\n            return self._cached_hosts.next_addrs(key)\\n\\n        if key in self._throttle_dns_events:\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            await self._throttle_dns_events[key].wait()\\n        else:\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_miss()\\n            self._throttle_dns_events[key] = \\\\\\n                EventResultOrError(self._loop)\\n            try:\\n\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_start()\\n\\n                addrs = await \\\\\\n                    asyncio.shield(self._resolver.resolve(host,\\n                                                          port,\\n                                                          family=self._family),\\n                                   loop=self._loop)\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_end()\\n\\n                self._cached_hosts.add(key, addrs)\\n                self._throttle_dns_events[key].set()\\n            except Exception as e:\\n                # any DNS exception, independently of the implementation\\n                # is set for the waiters to raise the same exception.\\n                self._throttle_dns_events[key].set(exc=e)\\n                raise\\n            finally:\\n                self._throttle_dns_events.pop(key)\\n\\n        return self._cached_hosts.next_addrs(key)\"\n    }\n  ]\n}",
+  "seconds": 41.2
+ },
+ "aiohttp-forward-014/FILE": {
+  "answer_tokens": 120,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2163,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"StreamWriter.release\",\n      \"file\": \"aiohttp/streams.py\",\n      \"reason\": \"The `release` method needs to call `set_transport` on the first waiter if available, instead of directly calling the callback.\",\n      \"new_code\": \"def release(self):\\n        if self._waiters:\\n            self.available = False\\n            writer = self._waiters.pop(0)\\n            writer.set_transport(self.transport)\\n        else:\\n            self.available = True\"\n    }\n  ]\n}",
+  "seconds": 11.0
+ },
+ "aiohttp-forward-014/PRISM": {
+  "answer_tokens": 125,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3489,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.http_message.PayloadWriter.set_transport\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function, so `PayloadWriter.set_transport` needs to be updated to handle the `writer` object.\",\n      \"new_code\": \"def set_transport(self, writer):\\n    if self._replacement is not None:\\n        return\\n    self._transport = writer.transport\\n    self._buffer.clear()\"\n    }\n  ]\n}",
+  "seconds": 10.6
+ },
+ "aiohttp-forward-014/PRISM_BREAKS": {
+  "answer_tokens": 150,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3489,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.http_message.PayloadWriter.set_transport\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function, so `PayloadWriter.set_transport` needs to be updated to handle the `writer` object.\",\n      \"new_code\": \"def set_transport(self, writer):\\n    if self._replacement is not None:\\n        return\\n    self._transport = writer.transport\\n    self._buffer.clear()\\n    if self._drain_waiter is not None:\\n        self._drain_waiter.set_result(None)\"\n    }\n  ]\n}",
+  "seconds": 10.1
+ },
+ "aiohttp-forward-015/FILE": {
+  "answer_tokens": 569,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3200,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._reused_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method calls `_reused_connection`, which did not exist before.\",\n      \"new_code\": \"async def _reused_connection(self, key: 'ConnectionKey', proto: ResponseHandler, traces: List['Trace']) -> Connection:\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_reuseconn()\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._acquired_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method calls `_acquired_connection`, which did not exist before.\",\n      \"new_code\": \"def _acquired_connection(self, proto: ResponseHandler, key: 'ConnectionKey') -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"aiohttp.connector.BaseConnector._wait_for_available_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method calls `_wait_for_available_connection`, which did not exist before.\",\n      \"new_code\": \"async def _wait_for_available_connection(self, key: 'ConnectionKey', traces: List['Trace']) -> None:\\n        fut: asyncio.Future[None] = self._loop.create_future()\\n\\n        # This connection will now count towards the limit.\\n        self._waiters[key].append(fut)\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_start()\\n\\n        try:\\n            await fut\\n        except BaseException as e:\\n            if key in self._waiters:\\n                # remove a waiter even if it was cancelled, normally it's\\n                #  removed when it's notified\\n                try:\\n                    self._waiters[key].remove(fut)\\n                except ValueError:  # fut may no longer be in list\\n                    pass\\n\\n            raise e\\n        finally:\\n            if key in self._waiters and not self._waiters[key]:\\n                del self._waiters[key]\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_end()\"\n    }\n  ]\n}",
+  "seconds": 42.5
+ },
+ "aiohttp-forward-015/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6559,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.3
+ },
+ "aiohttp-forward-015/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6559,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.5
+ },
+ "aiohttp-forward-016/FILE": {
+  "answer_tokens": 221,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2985,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.web_response.StreamResponse._start_compression\",\n      \"file\": \"aiohttp/web_response.py\",\n      \"reason\": \"The `_do_start_compression` method now returns early if `coding` is `ContentCoding.identity`, so the caller `_start_compression` should handle this case.\",\n      \"new_code\": \"async def _start_compression(self, request: \\\"BaseRequest\\\") -> None:\\n        if self._compression_force:\\n            await self._do_start_compression(self._compression_force)\\n        else:\\n            # Encoding comparisons should be case-insensitive\\n            # https://www.rfc-editor.org/rfc/rfc9110#section-8.4.1\\n            accept_encoding = request.headers.get(hdrs.ACCEPT_ENCODING, \\\"\\\").lower()\\n            for value, coding in CONTENT_CODINGS.items():\\n                if value in accept_encoding:\\n                    await self._do_start_compression(coding)\\n                    return\"\n    }\n  ]\n}",
+  "seconds": 18.9
+ },
+ "aiohttp-forward-016/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4731,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.2
+ },
+ "aiohttp-forward-016/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4731,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.5
  }
 }
