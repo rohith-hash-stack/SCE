@@ -53,10 +53,10 @@ def forward_rows() -> list[dict]:
     return rows
 
 
-def scores(kind: str) -> list[dict]:
+def scores(kind: str, name: str = "scores.json") -> list[dict]:
     rows = []
     for repo in REPOS:
-        s = _load(OUT / repo / kind / "scores.json")
+        s = _load(OUT / repo / kind / name)
         if not s:
             continue
         for key, v in s.items():
@@ -185,6 +185,18 @@ def analyze() -> dict:
         if kind == "blast":
             entry["prism_vs_file"] = compare_scores(rows, "FILE", "PRISM", lambda r: float(r.get("recall") or 0.0))
         out["types"][kind] = entry
+    salv = scores("tests", "scores_salvage.json")
+    if salv:  # sensitivity analysis decided after the run (README, type 6): not a primary test
+        tm = {"all_pass": lambda r: float(r.get("all_pass") or False),
+              "calls_target": lambda r: float(r.get("calls_target") or False),
+              "coverage_vs_developer": lambda r: r.get("coverage_vs_developer"), "tests_written": lambda r: r.get("tests"),
+              "tests_passed": lambda r: r.get("passed")}
+        out["tests_salvage"] = {
+            "arms": split(salv, tm),
+            "all_pass": compare_items(salv, "FILE", "PRISM", lambda r: {"x": bool(r.get("all_pass"))}),
+            "coverage": compare_scores(salv, "FILE", "PRISM", lambda r: float(r.get("coverage_vs_developer") or 0.0)),
+            "pass_share": compare_scores(salv, "FILE", "PRISM",
+                                         lambda r: (r.get("passed") or 0) / r["ran"] if r.get("ran") else 0.0)}
     primaries = {k: v["primary"]["p"] for k, v in out["types"].items()
                  if k != "concepts" and isinstance(v, dict) and "primary" in v}
     out["holm"] = stats.holm(primaries) if primaries else {}

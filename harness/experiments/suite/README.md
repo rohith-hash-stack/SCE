@@ -131,6 +131,13 @@ one candidate commit.
   - The file window now shows at most 250 lines of it, from its start.
   - PRISM's test context shows at most 120 lines of its code, then the signatures of its methods.
   - All type-6 tasks were re-rendered (`rerender_tests.py`). Targets, gates and coverage are unchanged.
+- **Amendment 4 (after the run; post hoc, not a primary test):**
+  - Of 124 answers, 42 were cut at the 4,096-token cap and 67 put markdown fences inside the code, so
+    the strict score mostly measures format.
+  - A sensitivity analysis rescores every answer of both versions the same way (`testgen score --salvage`,
+    `scores_salvage.json`): fence lines are removed, and a cut answer keeps its complete tests.
+  - The strict score stays the primary test. The salvage result is reported beside it and is not in
+    Holm's correction.
 - **The task:** write tests for the target in the test file.
 - **Versions:**
   - `FILE`: the target's file and the test file;
