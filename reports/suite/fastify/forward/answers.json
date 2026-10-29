@@ -1,0 +1,242 @@
+{
+ "fastify-forward-001/FILE": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 552,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.3
+ },
+ "fastify-forward-001/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1669,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.2
+ },
+ "fastify-forward-001/PRISM_BREAKS": {
+  "answer_tokens": 88,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1791,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.hookRunner.handleResolve\",\n      \"file\": \"lib/hookRunner.js\",\n      \"reason\": \"The `next` function now only takes one argument, so `handleResolve` needs to be updated to pass only one argument.\",\n      \"new_code\": \"function handleResolve (value) {\\n  next(value)\\n}\"\n    }\n  ]\n}",
+  "seconds": 7.8
+ },
+ "fastify-forward-002/FILE": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4272,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.7
+ },
+ "fastify-forward-002/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7512,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.6
+ },
+ "fastify-forward-002/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7701,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.8
+ },
+ "fastify-forward-003/FILE": {
+  "answer_tokens": 1118,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2376,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"override\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `override` function uses `buildRoutePrefix` and needs to be updated to match the new function signature.\",\n      \"new_code\": \"function override (old, fn, opts) {\\n  const shouldSkipOverride = pluginUtils.registerPlugin.call(old, fn)\\n  if (shouldSkipOverride) {\\n    return old\\n  }\\n\\n  const middlewares = Object.assign([], old._middlewares)\\n  const instance = Object.create(old)\\n  instance._Reply = Reply.buildReply(instance._Reply)\\n  instance._Request = Request.buildRequest(instance._Request)\\n  instance._contentTypeParser = ContentTypeParser.buildContentTypeParser(instance._contentTypeParser)\\n  instance._hooks = Hooks.buildHooks(instance._hooks)\\n  instance._RoutePrefix = buildRoutePrefix(instance._RoutePrefix.prefix, opts.prefix)\\n  instance._middlewares = []\\n  instance._middie = Middie(onRunMiddlewares)\\n  instance[pluginUtils.registeredPlugins] = Object.create(instance[pluginUtils.registeredPlugins])\\n\\n  if (opts.prefix) {\\n    instance._404Context = null\\n  }\\n\\n  for (var i = 0; i < middlewares.length; i++) {\\n    instance.use.apply(instance, middlewares[i])\\n  }\\n\\n  return instance\\n}\"\n    },\n    {\n      \"function\": \"route\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `route` function uses `buildRoutePrefix` and needs to be updated to match the new function signature.\",\n      \"new_code\": \"function route (opts) {\\n  const _fastify = this\\n\\n  if (Array.isArray(opts.method)) {\\n    for (var i = 0; i < opts.method.length; i++) {\\n      if (supportedMethods.indexOf(opts.method[i]) === -1) {\\n        throw new Error(`${opts.method[i]} method is not supported!`)\\n      }\\n    }\\n  } else {\\n    if (supportedMethods.indexOf(opts.method) === -1) {\\n      throw new Error(`${opts.method} method is not supported!`)\\n    }\\n  }\\n\\n  if (!opts.handler) {\\n    throw new Error(`Missing handler function for ${opts.method}:${opts.url} route.`)\\n  }\\n\\n  _fastify._RoutePrefix = _fastify._RoutePrefix\\n\\n  _fastify.after((notHandledErr, done) => {\\n    const path = opts.url || opts.path\\n    const prefix = _fastify._RoutePrefix.prefix\\n    const url = prefix + (path === '/' && prefix.length > 0 ? '' : path)\\n\\n    const config = opts.config || {}\\n    config.url = url\\n\\n    const context = new Context(\\n      opts.schema,\\n      opts.handler.bind(_fastify),\\n      _fastify._Reply,\\n      _fastify._Request,\\n      _fastify._contentTypeParser,\\n      config,\\n      _fastify._errorHandler,\\n      _fastify._middie,\\n      _fastify\\n    )\\n\\n    try {\\n      buildSchema(context, opts.schemaCompiler || _fastify._schemaCompiler)\\n    } catch (error) {\\n      done(error)\\n      return\\n    }\\n\\n    const onRequest = _fastify._hooks.onRequest\\n    const onResponse = _fastify._hooks.onResponse\\n    const onSend = _fastify._hooks.onSend\\n    const preHandler = _fastify._hooks.preHandler.concat(opts.beforeHandler || [])\\n\\n    context.onRequest = onRequest.length ? fastIterator(onRequest, _fastify) : null\\n    context.onResponse = onResponse.length ? fastIterator(onResponse, _fastify) : null\\n    context.onSend = onSend.length ? fastIterator(onSend, _fastify) : null\\n    context.preHandler = preHandler.length ? fastIterator(preHandler, _fastify) : null\\n\\n    if (map.has(url)) {\\n      if (map.get(url)[opts.method]) {\\n        return done(new Error(`${opts.method} already set for ${url}`))\\n      }\\n\\n      if (Array.isArray(opts.method)) {\\n        for (i = 0; i < opts.method.length; i++) {\\n          map.get(url)[opts.method[i]] = context\\n        }\\n      } else {\\n        map.get(url)[opts.method] = context\\n      }\\n      router.on(opts.method, url, startHooks, context)\\n    } else {\\n      const node = {}\\n      if (Array.isArray(opts.method)) {\\n        for (i = 0; i < opts.method.length; i++) {\\n          node[opts.method[i]] = context\\n        }\\n      } else {\\n        node[opts.method] = context\\n      }\\n      map.set(url, node)\\n      router.on(opts.method, url, startHooks, context)\\n    }\\n    done(notHandledErr)\\n  })\\n\\n  // chainable api\\n  return _fastify\\n}\"\n    }\n  ]\n}",
+  "seconds": 77.8
+ },
+ "fastify-forward-003/PRISM": {
+  "answer_tokens": 328,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3323,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.override\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The function `fastify.buildRoutePrefix` now takes two arguments instead of one, so the call to `buildRoutePrefix` in `fastify.override` needs to be updated.\",\n      \"new_code\": \"function override (old, fn, opts) {\\n  const shouldSkipOverride = pluginUtils.registerPlugin.call(old, fn)\\n  if (shouldSkipOverride) {\\n    return old\\n  }\\n\\n  const middlewares = Object.assign([], old._middlewares)\\n  const instance = Object.create(old)\\n  instance._Reply = Reply.buildReply(instance._Reply)\\n  instance._Request = Request.buildRequest(instance._Request)\\n  instance._contentTypeParser = ContentTypeParser.buildContentTypeParser(instance._contentTypeParser)\\n  instance._hooks = Hooks.buildHooks(instance._hooks)\\n  instance._RoutePrefix = buildRoutePrefix(old._RoutePrefix, opts.prefix)\\n  instance._middlewares = []\\n  instance._middie = Middie(onRunMiddlewares)\\n  instance[pluginUtils.registeredPlugins] = Object.create(instance[pluginUtils.registeredPlugins])\\n\\n  if (opts.prefix) {\\n    instance._404Context = null\\n  }\\n\\n  for (var i = 0; i < middlewares.length; i++) {\\n    instance.use.apply(instance, middlewares[i])\\n  }\\n\\n  return instance\\n}\"\n    }\n  ]\n}",
+  "seconds": 23.9
+ },
+ "fastify-forward-003/PRISM_BREAKS": {
+  "answer_tokens": 337,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3323,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.override\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The function `fastify.buildRoutePrefix` now takes two arguments instead of one, so `fastify.override` needs to be updated to pass both `instance._RoutePrefix` and `opts` to `buildRoutePrefix`.\",\n      \"new_code\": \"function override (old, fn, opts) {\\n  const shouldSkipOverride = pluginUtils.registerPlugin.call(old, fn)\\n  if (shouldSkipOverride) {\\n    return old\\n  }\\n\\n  const middlewares = Object.assign([], old._middlewares)\\n  const instance = Object.create(old)\\n  instance._Reply = Reply.buildReply(instance._Reply)\\n  instance._Request = Request.buildRequest(instance._Request)\\n  instance._contentTypeParser = ContentTypeParser.buildContentTypeParser(instance._contentTypeParser)\\n  instance._hooks = Hooks.buildHooks(instance._hooks)\\n  instance._RoutePrefix = buildRoutePrefix(instance._RoutePrefix, opts)\\n  instance._middlewares = []\\n  instance._middie = Middie(onRunMiddlewares)\\n  instance[pluginUtils.registeredPlugins] = Object.create(instance[pluginUtils.registeredPlugins])\\n\\n  if (opts.prefix) {\\n    instance._404Context = null\\n  }\\n\\n  for (var i = 0; i < middlewares.length; i++) {\\n    instance.use.apply(instance, middlewares[i])\\n  }\\n\\n  return instance\\n}\"\n    }\n  ]\n}",
+  "seconds": 22.7
+ },
+ "fastify-forward-004/FILE": {
+  "answer_tokens": 480,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1670,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"bodyParsed\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `bodyParsed` function needs to pass the parsed body along with the query data to `handleNode`.\",\n      \"new_code\": \"function bodyParsed (handle, params, req, res) {\\n  function parsed (err, body) {\\n    if (err) {\\n      res.statusCode = 422\\n      res.end()\\n      return\\n    }\\n    const data = { body: body, query: req.query }\\n    handleNode(handle, params, req, res, data)\\n  }\\n  return parsed\\n}\"\n    },\n    {\n      \"function\": \"createNode\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `createNode` function needs to pass the query data to `handleNode` when handling POST and PUT requests.\",\n      \"new_code\": \"function createNode (url) {\\n  const node = {}\\n\\n  router.on(url, function handle (params, req, res) {\\n    const handle = node[req.method]\\n\\n    if (handle && req.method === 'GET') {\\n      handleNode(handle, params, req, res, { body: null, query: req.query })\\n    } else if (handle && (req.method === 'POST' || req.method === 'PUT')) {\\n      if (req.headers['content-type'] === 'application/json') {\\n        jsonParser(req, bodyParsed(handle, params, req, res))\\n      } else {\\n        res.statusCode = 415\\n        res.end()\\n      }\\n    } else {\\n      res.statusCode = 404\\n      res.end()\\n    }\\n  })\\n\\n  return node\\n}\"\n    },\n    {\n      \"function\": \"Request\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `Request` constructor needs to accept and store the query data.\",\n      \"new_code\": \"function Request (params, req, body, query) {\\n  this.params = params\\n  this.req = req\\n  this.body = body\\n  this.query = query\\n}\"\n    }\n  ]\n}",
+  "seconds": 33.7
+ },
+ "fastify-forward-004/PRISM": {
+  "answer_tokens": 412,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2950,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.createNode\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `handleNode` function now expects a `data` object containing `body` and `query`, so `createNode` needs to pass this structure.\",\n      \"new_code\": \"function createNode (url) {\\n  const node = {}\\n\\n  router.on(url, function handle (params, req, res) {\\n    const handle = node[req.method]\\n\\n    if (handle && req.method === 'GET') {\\n      handleNode(handle, params, req, res, { body: null, query: req.query })\\n    } else if (handle && (req.method === 'POST' || req.method === 'PUT')) {\\n      if (req.headers['content-type'] === 'application/json') {\\n        jsonParser(req, bodyParsed(handle, params, req, res))\\n      } else {\\n        res.statusCode = 415\\n        res.end()\\n      }\\n    } else {\\n      res.statusCode = 404\\n      res.end()\\n    }\\n  })\\n\\n  return node\\n}\"\n    },\n    {\n      \"function\": \"fastify.bodyParsed\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `handleNode` function now expects a `data` object containing `body` and `query`, so `bodyParsed` needs to pass this structure.\",\n      \"new_code\": \"function bodyParsed (handle, params, req, res) {\\n  function parsed (err, body) {\\n    if (err) {\\n      res.statusCode = 422\\n      res.end()\\n      return\\n    }\\n    handleNode(handle, params, req, res, { body: body, query: req.query })\\n  }\\n  return parsed\\n}\"\n    }\n  ]\n}",
+  "seconds": 29.5
+ },
+ "fastify-forward-004/PRISM_BREAKS": {
+  "answer_tokens": 418,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2950,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.createNode\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `handleNode` function now expects a `data` object containing `body` and `query`, so `createNode` needs to pass an object with these properties.\",\n      \"new_code\": \"function createNode (url) {\\n  const node = {}\\n\\n  router.on(url, function handle (params, req, res) {\\n    const handle = node[req.method]\\n\\n    if (handle && req.method === 'GET') {\\n      handleNode(handle, params, req, res, { body: null, query: req.query })\\n    } else if (handle && (req.method === 'POST' || req.method === 'PUT')) {\\n      if (req.headers['content-type'] === 'application/json') {\\n        jsonParser(req, bodyParsed(handle, params, req, res))\\n      } else {\\n        res.statusCode = 415\\n        res.end()\\n      }\\n    } else {\\n      res.statusCode = 404\\n      res.end()\\n    }\\n  })\\n\\n  return node\\n}\"\n    },\n    {\n      \"function\": \"fastify.bodyParsed\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `handleNode` function now expects a `data` object containing `body` and `query`, so `bodyParsed` needs to pass an object with these properties.\",\n      \"new_code\": \"function bodyParsed (handle, params, req, res) {\\n  function parsed (err, body) {\\n    if (err) {\\n      res.statusCode = 422\\n      res.end()\\n      return\\n    }\\n    handleNode(handle, params, req, res, { body: body, query: req.query })\\n  }\\n  return parsed\\n}\"\n    }\n  ]\n}",
+  "seconds": 27.9
+ },
+ "fastify-forward-005/FILE": {
+  "answer_tokens": 495,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2179,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Reply.prototype.send\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the statusCode, so the send function should not set it again.\",\n      \"new_code\": \"Reply.prototype.send = function (payload) {\\n  if (this.sent) {\\n    this.res.log.warn(new Error('Reply already sent'))\\n    return\\n  }\\n\\n  this.sent = true\\n\\n  var _isError = this[isError]\\n\\n  if (payload === undefined && _isError !== true) {\\n    this.res.setHeader('Content-Length', '0')\\n    if (!this.res.getHeader('Content-Type')) {\\n      this.res.setHeader('Content-Type', 'text/plain')\\n    }\\n    handleReplyEnd(this, '')\\n    return\\n  }\\n\\n  if (payload && payload.isBoom) {\\n    this.res.log.error(payload)\\n    this.res.statusCode = payload.output.statusCode\\n\\n    this.res.setHeader('Content-Type', 'application/json')\\n    this.headers(payload.output.headers)\\n\\n    handleReplyEnd(\\n      this,\\n      payload.output.payload\\n    )\\n    return\\n  }\\n\\n  if (payload instanceof Error || _isError === true) {\\n    handleError(this, payload, wrapHandleReplyEnd)\\n    return\\n  }\\n\\n  if (payload && payload._readableState) {\\n    if (!this.res.getHeader('Content-Type')) {\\n      this.res.setHeader('Content-Type', 'application/octet-stream')\\n    }\\n    pump(payload, this.res, wrapPumpCallback(this))\\n    return this.res\\n  }\\n\\n  handleReplyEnd(this, payload)\\n  return\\n}\"\n    },\n    {\n      \"function\": \"Reply.prototype.redirect\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the statusCode, so the redirect function should not set it again.\",\n      \"new_code\": \"Reply.prototype.redirect = function (code, url) {\\n  if (typeof code === 'string') {\\n    url = code\\n    code = 302\\n  }\\n\\n  this.header('Location', url).code(code).send()\\n}\"\n    }\n  ]\n}",
+  "seconds": 35.5
+ },
+ "fastify-forward-005/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3637,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.8
+ },
+ "fastify-forward-005/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3637,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.5
+ },
+ "fastify-forward-006/FILE": {
+  "answer_tokens": 215,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1944,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with only two arguments instead of three.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.store.onSend.length === 0) {\\n    return onSendEnd(reply, payload)\\n  }\\n  setImmediate(\\n    runHooks,\\n    new State(reply, payload),\\n    hookIterator,\\n    reply.store.onSend,\\n    wrapOnSendEnd\\n  )\\n}\"\n    },\n    {\n      \"function\": \"wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with only two arguments instead of three.\",\n      \"new_code\": \"function wrapOnSendEnd (err) {\\n  onSendEnd(this.reply, this.payload)\\n}\"\n    }\n  ]\n}",
+  "seconds": 16.9
+ },
+ "fastify-forward-006/PRISM": {
+  "answer_tokens": 241,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3392,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.reply.handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with only two arguments instead of three. It needs to be updated to match the new signature.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.store.onSend.length === 0) {\\n    return onSendEnd(reply, payload)\\n  }\\n  setImmediate(\\n    runHooks,\\n    new State(reply, payload),\\n    hookIterator,\\n    reply.store.onSend,\\n    wrapOnSendEnd\\n  )\\n}\"\n    },\n    {\n      \"function\": \"lib.reply.wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with only two arguments instead of three. It needs to be updated to match the new signature.\",\n      \"new_code\": \"function wrapOnSendEnd (err) {\\n  onSendEnd(this.reply, this.payload)\\n}\"\n    }\n  ]\n}",
+  "seconds": 18.5
+ },
+ "fastify-forward-006/PRISM_BREAKS": {
+  "answer_tokens": 233,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3680,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.reply.handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with two arguments instead of three, so we need to adjust the arguments passed.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.store.onSend.length === 0) {\\n    return onSendEnd(reply, payload)\\n  }\\n  setImmediate(\\n    runHooks,\\n    new State(reply, payload),\\n    hookIterator,\\n    reply.store.onSend,\\n    wrapOnSendEnd\\n  )\\n}\"\n    },\n    {\n      \"function\": \"lib.reply.wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with two arguments instead of three, so we need to adjust the arguments passed.\",\n      \"new_code\": \"function wrapOnSendEnd () {\\n  onSendEnd(this.reply, this.payload)\\n}\"\n    }\n  ]\n}",
+  "seconds": 18.3
+ },
+ "fastify-forward-007/FILE": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2673,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.1
+ },
+ "fastify-forward-007/PRISM": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5254,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.2
+ },
+ "fastify-forward-007/PRISM_BREAKS": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5254,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.5
+ },
+ "fastify-forward-008/FILE": {
+  "answer_tokens": 171,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 669,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"buildRequest\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The function signature has changed to include a new parameter `trustProxy`.\",\n      \"new_code\": \"function buildRequest (R, trustProxy) {\\n  if (trustProxy) {\\n    return buildRequestWithTrustProxy(R, trustProxy)\\n  }\\n\\n  return buildRegularRequest(R)\\n}\"\n    },\n    {\n      \"function\": \"Request\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The `Request` function is no longer used directly, so it should be removed or modified to use the new `buildRequest` function.\",\n      \"new_code\": \"// Removed or modified based on new buildRequest usage\"\n    }\n  ]\n}",
+  "seconds": 12.3
+ },
+ "fastify-forward-008/PRISM": {
+  "answer_tokens": 802,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2114,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.fastify\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter.\",\n      \"new_code\": \"function fastify (options) {\\n  // Options validations\\n  options = options || {}\\n\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n    # ... lines 55-144 not shown ...\\n    [kSerializerCompiler]: null,\\n    [kReplySerializerDefault]: null,\\n    [kContentTypeParser]: new ContentTypeParser(\\n      bodyLimit,\\n      (options.onProtoPoisoning || defaultInitOptions.onProtoPoisoning),\\n      (options.onConstructorPoisoning || defaultInitOptions.onConstructorPoisoning)\\n    ),\\n    [kReply]: Reply.buildReply(Reply),\\n    [kRequest]: Request.buildRequest(Request, options.trustProxy),\\n    [kFourOhFour]: fourOhFour,\\n    [pluginUtils.registeredPlugins]: [],\\n    [kPluginNameChain]: [],\\n    [kAvvioBoot]: null,\\n    // routes shorthand methods\\n    delete: function _delete (url, opts, handler) {\\n      return router.prepareRoute.call(this, 'DELETE', url, opts, handler)\\n    },\\n    # ... lines 162-529 not shown ...\"\n    },\n    {\n      \"function\": \"fastify.override\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter.\",\n      \"new_code\": \"function override (old, fn, opts) {\\n  const shouldSkipOverride = pluginUtils.registerPlugin.call(old, fn)\\n\\n  if (shouldSkipOverride) {\\n    // after every plugin registration we will enter a new name\\n    old[kPluginNameChain].push(pluginUtils.getDisplayName(fn))\\n    return old\\n  }\\n\\n  const instance = Object.create(old)\\n  old[kChildren].push(instance)\\n  instance.ready = old[kAvvioBoot].bind(instance)\\n  instance[kChildren] = []\\n  instance[kReply] = Reply.buildReply(instance[kReply])\\n  instance[kRequest] = Request.buildRequest(instance[kRequest], opts.trustProxy)\\n  instance[kContentTypeParser] = ContentTypeParser.helpers.buildContentTypeParser(instance[kContentTypeParser])\\n  instance[kHooks] = buildHooks(instance[kHooks])\\n  instance[kRoutePrefix] = buildRoutePrefix(instance[kRoutePrefix], opts.prefix)\\n  instance[kLogLevel] = opts.logLevel || instance[kLogLevel]\\n  instance[kSchemas] = buildSchemas(old[kSchemas])\\n  instance.getSchema = instance[kSchemas].getSchema.bind(instance[kSchemas])\\n  instance.getSchemas = instance[kSchemas].getSchemas.bind(instance[kSchemas])\\n  instance[pluginUtils.registeredPlugins] = Object.create(instance[pluginUtils.registeredPlugins])\\n  instance[kPluginNameChain] = [pluginUtils.getPluginName(fn) || pluginUtils.getFuncPreview(fn)]\\n\\n  if (instance[kLogSerializers] || opts.logSerializers) {\\n    instance[kLogSerializers] = Object.assign(Object.create(instance[kLogSerializers]), opts.logSerializers)\\n  }\\n\\n  if (opts.prefix) {\\n    instance[kFourOhFour].arrange404(instance)\\n  }\\n\\n  for (const hook of instance[kHooks].onRegister) hook.call(this, instance, opts)\\n\\n  return instance\\n}\"\n    }\n  ]\n}",
+  "seconds": 54.8
+ },
+ "fastify-forward-008/PRISM_BREAKS": {
+  "answer_tokens": 818,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2284,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.fastify\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `buildRequest` function now requires a second parameter `trustProxy`, which is not provided in the original call.\",\n      \"new_code\": \"function fastify (options) {\\n  // Options validations\\n  options = options || {}\\n\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n    # ... lines 55-144 not shown ...\\n    [kSerializerCompiler]: null,\\n    [kReplySerializerDefault]: null,\\n    [kContentTypeParser]: new ContentTypeParser(\\n      bodyLimit,\\n      (options.onProtoPoisoning || defaultInitOptions.onProtoPoisoning),\\n      (options.onConstructorPoisoning || defaultInitOptions.onConstructorPoisoning)\\n    ),\\n    [kReply]: Reply.buildReply(Reply),\\n    [kRequest]: Request.buildRequest(Request, options.trustProxy),\\n    [kFourOhFour]: fourOhFour,\\n    [pluginUtils.registeredPlugins]: [],\\n    [kPluginNameChain]: [],\\n    [kAvvioBoot]: null,\\n    // routes shorthand methods\\n    delete: function _delete (url, opts, handler) {\\n      return router.prepareRoute.call(this, 'DELETE', url, opts, handler)\\n    },\\n    # ... lines 162-529 not shown ...\"\n    },\n    {\n      \"function\": \"fastify.override\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `buildRequest` function now requires a second parameter `trustProxy`, which is not provided in the original call.\",\n      \"new_code\": \"function override (old, fn, opts) {\\n  const shouldSkipOverride = pluginUtils.registerPlugin.call(old, fn)\\n\\n  if (shouldSkipOverride) {\\n    // after every plugin registration we will enter a new name\\n    old[kPluginNameChain].push(pluginUtils.getDisplayName(fn))\\n    return old\\n  }\\n\\n  const instance = Object.create(old)\\n  old[kChildren].push(instance)\\n  instance.ready = old[kAvvioBoot].bind(instance)\\n  instance[kChildren] = []\\n  instance[kReply] = Reply.buildReply(instance[kReply])\\n  instance[kRequest] = Request.buildRequest(instance[kRequest], opts.trustProxy)\\n  instance[kContentTypeParser] = ContentTypeParser.helpers.buildContentTypeParser(instance[kContentTypeParser])\\n  instance[kHooks] = buildHooks(instance[kHooks])\\n  instance[kRoutePrefix] = buildRoutePrefix(instance[kRoutePrefix], opts.prefix)\\n  instance[kLogLevel] = opts.logLevel || instance[kLogLevel]\\n  instance[kSchemas] = buildSchemas(old[kSchemas])\\n  instance.getSchema = instance[kSchemas].getSchema.bind(instance[kSchemas])\\n  instance.getSchemas = instance[kSchemas].getSchemas.bind(instance[kSchemas])\\n  instance[pluginUtils.registeredPlugins] = Object.create(instance[pluginUtils.registeredPlugins])\\n  instance[kPluginNameChain] = [pluginUtils.getPluginName(fn) || pluginUtils.getFuncPreview(fn)]\\n\\n  if (instance[kLogSerializers] || opts.logSerializers) {\\n    instance[kLogSerializers] = Object.assign(Object.create(instance[kLogSerializers]), opts.logSerializers)\\n  }\\n\\n  if (opts.prefix) {\\n    instance[kFourOhFour].arrange404(instance)\\n  }\\n\\n  for (const hook of instance[kHooks].onRegister) hook.call(this, instance, opts)\\n\\n  return instance\\n}\"\n    }\n  ]\n}",
+  "seconds": 56.4
+ },
+ "fastify-forward-009/FILE": {
+  "answer_tokens": 146,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 885,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"reqIdGenFactory\",\n      \"file\": \"lib/logger.js\",\n      \"reason\": \"The function now accepts a `requestIdHeader` parameter, which requires changes in how it is called.\",\n      \"new_code\": \"function reqIdGenFactory (requestIdHeader) {\\n  var maxInt = 2147483647\\n  var nextReqId = 0\\n  return function genReqId (req) {\\n    return req.headers[requestIdHeader] || (nextReqId = (nextReqId + 1) & maxInt)\\n  }\\n}\"\n    }\n  ]\n}",
+  "seconds": 11.0
+ },
+ "fastify-forward-009/PRISM": {
+  "answer_tokens": 235,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1821,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"build\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `reqIdGenFactory` function now takes an argument `requestIdHeader`, so the caller `build` must pass this argument.\",\n      \"new_code\": \"function build (options) {\\n  options = options || {}\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n  }\\n\\n  const loggerUtils = require('./lib/logger')\\n\\n  const customGenReqId = options.logger ? options.logger.genReqId : null\\n  const genReqId = customGenReqId || loggerUtils.reqIdGenFactory('request-id')\\n  const now = loggerUtils.now\\n  const onResponseIterator = loggerUtils.onResponseIterator\\n  const onResponseCallback = hasLogger ? loggerUtils.onResponseCallback : noop\\n\\n  const app = avvio(fastify, {\\n    autostart: false\\n  })\\n  // Override to allow the plugin incapsulation\\n}\"\n    }\n  ]\n}",
+  "seconds": 17.0
+ },
+ "fastify-forward-009/PRISM_BREAKS": {
+  "answer_tokens": 280,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1939,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"build\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `reqIdGenFactory` function now requires a `requestIdHeader` parameter, which is not provided in the original call.\",\n      \"new_code\": \"function build (options) {\\n  options = options || {}\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n  }\\n\\n  const router = new Router({\\n    prefix: options.prefix,\\n    maxParamLength: options.maxParamLength,\\n    caseSensitive: options.caseSensitive\\n  })\\n\\n  fastify.printRoutes = router.prettyPrint.bind(router)\\n\\n  // logger utils\\n  const customGenReqId = options.logger ? options.logger.genReqId : null\\n  const genReqId = customGenReqId || loggerUtils.reqIdGenFactory('request-id')\\n  const now = loggerUtils.now\\n  const onResponseIterator = loggerUtils.onResponseIterator\\n  const onResponseCallback = hasLogger ? loggerUtils.onResponseCallback : noop\\n\\n  const app = avvio(fastify, {\\n    autostart: false\\n  })\\n  // Override to allow the plugin incapsulation\\n}\"\n    }\n  ]\n}",
+  "seconds": 20.2
+ },
+ "fastify-forward-010/FILE": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 857,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.9
+ },
+ "fastify-forward-010/PRISM": {
+  "answer_tokens": 297,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1800,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.build\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `reqIdGenFactory` function now accepts an optional function parameter. If a function is provided, it will be returned directly. The `fastify.build` function should pass `null` or `undefined` to maintain the previous behavior.\",\n      \"new_code\": \"function build (options) {\\n  options = options || {}\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n  }\\n\\n  # ... lines 29-34 not shown ...\\n  options.logger.serializers = options.logger.serializers || loggerUtils.serializers\\n  logger = loggerUtils.createLogger(options.logger)\\n}\\n\\nconst router = FindMyWay({ defaultRoute: defaultRoute })\\nconst map = new Map()\\n\\n// logger utils\\nconst genReqId = loggerUtils.reqIdGenFactory(null)\\nconst now = loggerUtils.now\\nconst OnResponseState = loggerUtils.OnResponseState\\nconst onResponseIterator = loggerUtils.onResponseIterator\\nconst onResponseCallback = loggerUtils.onResponseCallback\\n\\nconst app = avvio(fastify, {})\\n// Override to allow the plugin incapsulation\\napp.override = override\\n# ... lines 52-470 not shown ...\"\n    }\n  ]\n}",
+  "seconds": 21.0
+ },
+ "fastify-forward-010/PRISM_BREAKS": {
+  "answer_tokens": 285,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1916,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"build\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `reqIdGenFactory` function now accepts an optional `func` parameter, which must be provided when calling it.\",\n      \"new_code\": \"function build (options) {\\n  options = options || {}\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n  }\\n\\n  // ... lines 29-34 not shown ...\\n  options.logger.serializers = options.logger.serializers || loggerUtils.serializers\\n  logger = loggerUtils.createLogger(options.logger)\\n}\\n\\nconst router = FindMyWay({ defaultRoute: defaultRoute })\\nconst map = new Map()\\n\\n// logger utils\\nconst genReqId = loggerUtils.reqIdGenFactory() // No change needed as it passes nothing for the new parameter `func`\\nconst now = loggerUtils.now\\nconst OnResponseState = loggerUtils.OnResponseState\\nconst onResponseIterator = loggerUtils.onResponseIterator\\nconst onResponseCallback = loggerUtils.onResponseCallback\\n\\nconst app = avvio(fastify, {})\\n// Override to allow the plugin incapsulation\\napp.override = override\\n// ... lines 52-470 not shown ...\"\n    }\n  ]\n}",
+  "seconds": 20.5
+ }
+}
