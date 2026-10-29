@@ -61,3 +61,13 @@ def test_preregistered_statistics():
     assert b["tasks"] == 2 and b["mean"] == 1.0 and b["low"] <= b["mean"] <= b["high"]
     h = stats.holm({"a": 0.01, "b": 0.04, "c": 0.03})
     assert h == {"a": 0.03, "c": 0.06, "b": 0.06}
+
+
+def test_testgen_salvage_strips_fences_and_keeps_complete_tests_of_a_cut_answer():
+    from harness.experiments.suite.testgen import answer_code
+    fenced = json.dumps({"code": "```python\nimport x\n\ndef test_a():\n    assert x.f() == 1\n```"})
+    assert answer_code(fenced) .startswith("```") and answer_code(fenced, salvage=True).strip().startswith("import x")
+    cut = '{"code": "import x\\n\\ndef test_a():\\n    assert 1\\n\\ndef test_b():\\n    assert x.g(1,'
+    assert answer_code(cut) == ""
+    got = answer_code(cut, salvage=True)
+    assert "def test_a" in got and "test_b" not in got

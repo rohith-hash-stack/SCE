@@ -209,17 +209,53 @@ def prompt(task: dict, arm: str) -> str:
     return "\n".join(parts)
 
 
-def answer_code(raw: str) -> str:
+def answer_code(raw: str, salvage: bool = False) -> str:
+    """The `code` of an answer. With `salvage` (a sensitivity analysis decided after the run, applied the same way
+    to every version): Markdown fence lines inside the code are removed, and an answer cut off at the answer limit
+    keeps its complete leading part (the last, unfinished test is dropped until the code parses)."""
     try:
         got = json.loads(raw)
+        code = got.get("code", "") if isinstance(got, dict) else ""
+        code = code if isinstance(code, str) else ""
     except (ValueError, TypeError):
+        code = _partial_code(raw) if salvage else ""
+    if not salvage or not code:
+        return code
+    code = "\n".join(ln for ln in code.splitlines() if not ln.strip().startswith("```"))
+    return _complete_prefix(code)
+
+
+def _partial_code(raw: str) -> str:
+    """The value of a cut-off `"code": "..."` string, decoded as far as it goes."""
+    m = re.search(r'"code"\s*:\s*"', raw)
+    if not m:
         return ""
-    code = got.get("code", "") if isinstance(got, dict) else ""
-    return code if isinstance(code, str) else ""
+    body = raw[m.end():]
+    for cut in range(0, 12):
+        try:
+            return json.loads('"' + (body[:len(body) - cut] if cut else body) + '"')
+        except ValueError:
+            continue
+    return ""
 
 
-def score_one(task: dict, raw: str, py: str, work: str) -> dict:
-    code = answer_code(raw)
+def _complete_prefix(code: str) -> str:
+    """`code` if it parses; else `code` without its last test (or class), repeatedly, until it does."""
+    import ast
+    while code.strip():
+        try:
+            ast.parse(code)
+            return code
+        except SyntaxError:
+            starts = [m.start() for m in re.finditer(r"(?m)^[ \t]*(?:async\s+)?def\s+test\w*\s*\(|^class\s+\w+", code)]
+            if not starts or starts[-1] == 0:
+                return ""
+            code = code[:starts[-1]].rstrip() + "\n"
+    return ""
+
+
+def score_one(task: dict, raw: str, py: str, work: str, salvage: bool = False) -> dict:
+    code = answer_code(raw, salvage)
     names = test_names(code)
     if not names:
         return {"answered": bool(code.strip()), "tests": 0, "ran": 0, "passed": 0, "all_pass": False,
@@ -239,7 +275,8 @@ def score_one(task: dict, raw: str, py: str, work: str) -> dict:
             "coverage_vs_developer": len(got["covered"]) / dev, "error": got.get("error", "")[-400:]}
 
 
-def score(tasks_path: Path, answers_path: Path, out_path: Path, envs: str, repos: dict[str, str]) -> None:
+def score(tasks_path: Path, answers_path: Path, out_path: Path, envs: str, repos: dict[str, str],
+          salvage: bool = False) -> None:
     tasks = {t["id"]: t for t in json.loads(tasks_path.read_text())["tasks"]}
     answers = json.loads(answers_path.read_text())
     done = json.loads(out_path.read_text()) if out_path.exists() else {}
@@ -253,7 +290,7 @@ def score(tasks_path: Path, answers_path: Path, out_path: Path, envs: str, repos
         try:
             py, _log = build_env(t["repo"], work, envs)
             for k in keys:
-                done[k] = score_one(t, answers[k].get("raw", ""), py, work) if py else {"error": "environment"}
+                done[k] = score_one(t, answers[k].get("raw", ""), py, work, salvage) if py else {"error": "environment"}
                 out_path.write_text(json.dumps(done, indent=1, sort_keys=True) + "\n")
                 print(f"  {k}: {done[k].get('all_pass')} covered {done[k].get('covered')}", flush=True)
         finally:
@@ -278,6 +315,7 @@ def main(argv=None) -> int:
     sc.add_argument("out")
     sc.add_argument("envs")
     sc.add_argument("repos", nargs="+")
+    sc.add_argument("--salvage", action="store_true", help="sensitivity analysis: strip code fences, keep complete tests")
     args = p.parse_args(argv)
     if args.cmd == "select":
         cands = select(json.loads(Path(args.candidates).read_text()), args.seed)
@@ -289,7 +327,8 @@ def main(argv=None) -> int:
         data = json.loads(Path(args.tasks).read_text())
         plan(Path(args.tasks), args.envs, dict(a.split("=", 1) for a in args.repos), data["per_repo"])
     else:
-        score(Path(args.tasks), Path(args.answers), Path(args.out), args.envs, dict(a.split("=", 1) for a in args.repos))
+        score(Path(args.tasks), Path(args.answers), Path(args.out), args.envs, dict(a.split("=", 1) for a in args.repos),
+              args.salvage)
     return 0
 
 
