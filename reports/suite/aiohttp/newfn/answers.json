@@ -238,5 +238,85 @@
   "prompt_tokens": 8837,
   "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy_auth and not req.is_ssl():\\n        req.headers[hdrs.PROXY_AUTHORIZATION] = req.proxy_auth.encode()\\n    if req.is_ssl():\\n        proxy_req = ClientRequest(\\n            hdrs.METH_GET,\\n            req.proxy,\\n            headers={hdrs.HOST: req.headers[hdrs.HOST]},\\n            auth=req.proxy_auth,\\n            loop=self._loop,\\n        )\\n        return proxy_req\\n    return req\"\n}",
   "seconds": 18.4
+ },
+ "aiohttp-newfn-016/FILE": {
+  "answer_tokens": 279,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2845,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    \\\"\\\"\\\"Async generator that yields decoded data chunks.\\n\\n    Decodes data according the specified Content-Encoding\\n    or Content-Transfer-Encoding headers value.\\n\\n    This method offloads decompression to an executor for large payloads\\n    to avoid blocking the event loop.\\n    \\\"\\\"\\\"\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        async for chunk in self._decode_content_async_iter(data):\\n            yield chunk\\n    else:\\n        yield data\\n\\nasync def _decode_content_async_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    encoding = self.headers.get(CONTENT_ENCODING, \\\"\\\").lower()\\n    if encoding == \\\"identity\\\":\\n        yield data\\n    elif encoding in {\\\"deflate\\\", \\\"gzip\\\"}:\\n        decompressor = ZLibDecompressor(\\n            encoding=encoding,\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_async_iter(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        raise RuntimeError(f\\\"unknown content encoding: {encoding}\\\")\"\n}",
+  "seconds": 22.6
+ },
+ "aiohttp-newfn-016/PRISM": {
+  "answer_tokens": 123,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6348,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        decompressor = ZLibDecompressor(\\n            encoding=self.headers.get(CONTENT_ENCODING, \\\"\\\").lower(),\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_async(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        yield data\"\n}",
+  "seconds": 13.5
+ },
+ "aiohttp-newfn-017/FILE": {
+  "answer_tokens": 279,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2847,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    \\\"\\\"\\\"Async generator that yields decoded data chunks.\\n\\n    Decodes data according the specified Content-Encoding\\n    or Content-Transfer-Encoding headers value.\\n\\n    This method offloads decompression to an executor for large payloads\\n    to avoid blocking the event loop.\\n    \\\"\\\"\\\"\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        async for chunk in self._decode_content_async_iter(data):\\n            yield chunk\\n    else:\\n        yield data\\n\\nasync def _decode_content_async_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    encoding = self.headers.get(CONTENT_ENCODING, \\\"\\\").lower()\\n    if encoding == \\\"identity\\\":\\n        yield data\\n    elif encoding in {\\\"deflate\\\", \\\"gzip\\\"}:\\n        decompressor = ZLibDecompressor(\\n            encoding=encoding,\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_async_iter(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        raise RuntimeError(f\\\"unknown content encoding: {encoding}\\\")\"\n}",
+  "seconds": 22.3
+ },
+ "aiohttp-newfn-017/PRISM": {
+  "answer_tokens": 123,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6354,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        decompressor = ZLibDecompressor(\\n            encoding=self.headers.get(CONTENT_ENCODING, \\\"\\\").lower(),\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_iter(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        yield data\"\n}",
+  "seconds": 13.5
+ },
+ "aiohttp-newfn-018/FILE": {
+  "answer_tokens": 309,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2572,
+  "raw": "{\n  \"code\": \"async def _resolve_host_with_throttle(\\n        self,\\n        key: Tuple[str, int],\\n        host: str,\\n        port: int,\\n        traces: Optional[List[\\\"Trace\\\"]],\\n    ) -> List[Dict[str, Any]]:\\n        if key in self._throttle_dns_events:\\n            event = self._throttle_dns_events[key]\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            await event.wait()\\n        else:\\n            self._throttle_dns_events[key] = EventResultOrError(self._loop)\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_miss(host)\\n            try:\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_start(host)\\n                addrs = await self._resolver.resolve(host, port, family=self._family)\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_end(host)\\n                self._cached_hosts.add(key, addrs)\\n                self._throttle_dns_events[key].set()\\n            except BaseException as e:\\n                self._throttle_dns_events[key].set(exc=e)\\n                raise\\n            finally:\\n                self._throttle_dns_events.pop(key)\\n        return self._cached_hosts.next_addrs(key)\"\n}",
+  "seconds": 24.0
+ },
+ "aiohttp-newfn-018/PRISM": {
+  "answer_tokens": 470,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8255,
+  "raw": "{\n  \"code\": \"```python\\nasync def _resolve_host_with_throttle(\\n        self,\\n        key: Tuple[str, int],\\n        host: str,\\n        port: int,\\n        traces: Optional[List[\\\"Trace\\\"]],\\n    ) -> List[Dict[str, Any]]:\\n        if is_ip_address(host):\\n            return [\\n                {\\n                    \\\"hostname\\\": host,\\n                    \\\"host\\\": host,\\n                    \\\"port\\\": port,\\n                    \\\"family\\\": self._family,\\n                    \\\"proto\\\": 0,\\n                    \\\"flags\\\": 0,\\n                }\\n            ]\\n\\n        if not self._use_dns_cache:\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_start(host)\\n\\n            res = await self._resolver.resolve(host, port, family=self._family)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_end(host)\\n\\n            return res\\n\\n        if key in self._throttle_dns_events:\\n            event = self._throttle_dns_events[key]\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            await event.wait()\\n        else:\\n            self._throttle_dns_events[key] = EventResultOrError(self._loop)\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_miss(host)\\n            try:\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_start(host)\\n\\n                addrs = await self._resolver.resolve(host, port, family=self._family)\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_end(host)\\n\\n                self._cached_hosts.add(key, addrs)\\n                self._throttle_dns_events[key].set()\\n            except BaseException as e:\\n                self._throttle_dns_events[key].set(exc=e)\\n                raise\\n            finally:\\n                self._throttle_dns_events.pop(key)\\n\\n        return self._cached_hosts.next_addrs(key)\\n```\"\n}",
+  "seconds": 42.1
+ },
+ "aiohttp-newfn-019/FILE": {
+  "answer_tokens": 646,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1874,
+  "raw": "{\n  \"code\": \"def _write_websocket_frame(self, message: bytes, opcode: int, rsv: int) -> None:\\n    \\\"\\\"\\\"Write a websocket frame to the transport.\\n\\n    This method handles frame header construction, masking, and writing to transport.\\n    It does not handle compression or flow control - those are the responsibility\\n    of the caller.\\n    \\\"\\\"\\\"\\n    msg_length = len(message)\\n\\n    use_mask = self.use_mask\\n    mask_bit = 0x80 if use_mask else 0\\n\\n    # Depending on the message length, the header is assembled differently.\\n    # The first byte is reserved for the opcode and the RSV bits.\\n    first_byte = 0x80 | rsv | opcode\\n    if msg_length < 126:\\n        header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n        header_len = 2\\n    elif msg_length < 65536:\\n        header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n        header_len = 4\\n    else:\\n        header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n        header_len = 10\\n\\n    if self.transport.is_closing():\\n        raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n    # https://datatracker.ietf.org/doc/html/rfc6455#section-5.3\\n    # If we are using a mask, we need to generate it randomly\\n    # and apply it to the message before sending it. A mask is\\n    # a 32-bit value that is applied to the message using a\\n    # bitwise XOR operation. It is used to prevent certain types\\n    # of attacks on the websocket protocol. The mask is only used\\n    # when aiohttp is acting as a client. Servers do not use a mask.\\n    if use_mask:\\n        mask = PACK_RANDBITS(self.get_random_bits())\\n        message_arr = bytearray(message)\\n        websocket_mask(mask, message_arr)\\n        self.transport.write(header + mask + message_arr)\\n        self._output_size += MASK_LEN\\n    elif msg_length > MSG_SIZE:\\n        self.transport.write(header)\\n        self.transport.write(message)\\n    else:\\n        self.transport.write(header + message)\\n\\n    self._output_size += header_len + msg_length\\n\\n    # Once we have written output_size up to the limit, we call the\\n    # drain helper which waits for the transport to be ready to accept\\n    # more data. This is a flow control mechanism to prevent the buffer\\n    # from growing too large. The drain helper will return right away\\n    # if the writer is not paused.\\n    if self._output_size > self._limit:\\n        self._output_size = 0\\n        if self.protocol._paused:\\n            await self.protocol._drain_helper()\"\n}",
+  "seconds": 45.2
+ },
+ "aiohttp-newfn-019/PRISM": {
+  "answer_tokens": 655,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7998,
+  "raw": "{\n  \"code\": \"def _write_websocket_frame(self, message: bytes, opcode: int, rsv: int) -> None:\\n        \\\"\\\"\\\"Write a websocket frame to the transport.\\n\\n        This method handles frame header construction, masking, and writing to transport.\\n        It does not handle compression or flow control - those are the responsibility\\n        of the caller.\\n        \\\"\\\"\\\"\\n        if self._closing and not (opcode & WSMsgType.CLOSE):\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        msg_length = len(message)\\n\\n        use_mask = self.use_mask\\n        mask_bit = 0x80 if use_mask else 0\\n\\n        # Depending on the message length, the header is assembled differently.\\n        # The first byte is reserved for the opcode and the RSV bits.\\n        first_byte = 0x80 | rsv | opcode\\n        if msg_length < 126:\\n            header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n            header_len = 2\\n        elif msg_length < 65536:\\n            header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n            header_len = 4\\n        else:\\n            header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n            header_len = 10\\n\\n        if self.transport.is_closing():\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        # If we are using a mask, we need to generate it randomly\\n        # and apply it to the message before sending it. A mask is\\n        # a 32-bit value that is applied to the message using a\\n        # bitwise XOR operation. It is used to prevent certain types\\n        # of attacks on the websocket protocol. The mask is only used\\n        # when aiohttp is acting as a client. Servers do not use a mask.\\n        if use_mask:\\n            mask = PACK_RANDBITS(self.get_random_bits())\\n            message_arr = bytearray(message)\\n            websocket_mask(mask, message_arr)\\n            self.transport.write(header + mask + message_arr)\\n            self._output_size += MASK_LEN\\n        elif msg_length > MSG_SIZE:\\n            self.transport.write(header)\\n            self.transport.write(message)\\n        else:\\n            self.transport.write(header + message)\\n\\n        self._output_size += header_len + msg_length\\n\\n        # Once we have written output_size up to the limit, we call the\\n        # drain helper which waits for the transport to be ready to accept\\n        # more data. This is a flow control mechanism to prevent the buffer\\n        # from growing too large. The drain helper will return right away\\n        # if the writer is not paused.\\n        if self._output_size > self._limit:\\n            self._output_size = 0\\n            if self.protocol._paused:\\n                await self.protocol._drain_helper()\"\n}",
+  "seconds": 56.0
+ },
+ "aiohttp-newfn-020/FILE": {
+  "answer_tokens": 51,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2558,
+  "raw": "{\n  \"code\": \"def _replay_message_tail(self) -> None:\\n    if self._message_tail:\\n        self._payload_parser.feed_data(self._message_tail)\\n        self._message_tail = b\\\"\\\"\"\n}",
+  "seconds": 7.2
+ },
+ "aiohttp-newfn-020/PRISM": {
+  "answer_tokens": 48,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8659,
+  "raw": "{\n  \"code\": \"def _replay_message_tail(self) -> None:\\n        if self._message_tail:\\n            self.data_received(self._message_tail)\\n            self._message_tail = b\\\"\\\"\"\n}",
+  "seconds": 11.6
  }
 }
