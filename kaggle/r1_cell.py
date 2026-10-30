@@ -27,9 +27,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "2d4839560e86a2fba1561d3ee59484027afe36d5"
+CODE_COMMIT = "b0ebcc92c56882e25aa35ac0b8b9ffa55f39ea96"
 CODE_TREES = {"src": "95e45dc83b9be4861bc6ceb298bff0e07b0f31c9",
-              "harness": "2a55ed6ff19a73ee45ef0c16d0ef9740f0c642c2"}
+              "harness": "b6a240d8f3091ac3882f2508de91d7ba655ed877"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 SUMMARIZER = "qwen2.5-coder:14b-instruct-q8_0"   # the locked model
@@ -38,7 +38,7 @@ PORTS = (11434,)          # 14B q8_0 (~15.7 GB) needs both T4s: one server acros
 GPU_GROUPS = ("0,1",)
 PARALLEL_PER_SERVER = 1   # long prompts (up to ~11k tokens): one request at a time
 MANIFEST = "harness/experiments/r1/pads/manifest.json"
-MANIFEST_SHA = "97735e6ecd0a2978874d9858e45a9d8b1be3debbefa798aa7a7a430f3d92d155"
+MANIFEST_SHA = "24f930e110513cea12de870d1a56706354681b54a001af216e7a80d1b79b8f4e"
 SESSION_HOURS = 11.0     # stop starting new calls after this (Kaggle stops a session at 12 h)
 CHECKPOINT_MIN = 10
 WORK = "/kaggle/working"
