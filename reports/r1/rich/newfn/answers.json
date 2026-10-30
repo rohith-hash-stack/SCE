@@ -1,0 +1,137 @@
+{
+ "rich-newfn-001/FILE_BM25PAD@42": {
+  "answer_tokens": 442,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6283,
+  "raw": "{\n  \"code\": \"```python\\n@classmethod\\n@lru_cache(maxsize=1024)\\ndef parse(cls, style_definition: str) -> \\\"Style\\\":\\n    \\\"\\\"\\\"Parse style name(s) in to style object.\\\"\\\"\\\"\\n    style_attributes = {\\n        \\\"dim\\\",\\n        \\\"bold\\\",\\n        \\\"italic\\\",\\n        \\\"underline\\\",\\n        \\\"blink\\\",\\n        \\\"blink2\\\",\\n        \\\"reverse\\\",\\n        \\\"conceal\\\",\\n        \\\"strike\\\",\\n    }\\n    color: Optional[str] = None\\n    bgcolor: Optional[str] = None\\n    attributes: Dict[str, Optional[bool]] = {}\\n\\n    words = iter(style_definition.split())\\n    for original_word in words:\\n        word = original_word.lower()\\n        if word == \\\"on\\\":\\n            word = next(words, \\\"\\\")\\n            if not word:\\n                raise errors.StyleSyntaxError(\\\"color expected after 'on'\\\")\\n            try:\\n                Color.parse(word) is None\\n            except ColorParseError as error:\\n                raise errors.StyleSyntaxError(\\n                    f\\\"unable to parse {word} in {style_definition!r}; {error}\\\"\\n                )\\n            bgcolor = word\\n\\n        elif word == \\\"not\\\":\\n            word = next(words, \\\"\\\")\\n            if word not in style_attributes:\\n                raise errors.StyleSyntaxError(\\n                    f\\\"expected style attribute after 'not', found {original_word!r}\\\"\\n                )\\n            attributes[word] = False\\n\\n        elif word in style_attributes:\\n            attributes[word] = True\\n\\n        else:\\n            try:\\n                Color.parse(word)\\n            except ColorParseError as error:\\n                raise errors.StyleSyntaxError(\\n                    f\\\"unable to parse {word!r} in style {style_definition!r}; {error}\\\"\\n                )\\n            color = word\\n    style = Style(color=color, bgcolor=bgcolor, **attributes)\\n    return style\\n```\"\n}",
+  "seconds": 39.5,
+  "seed": 42
+ },
+ "rich-newfn-002/FILE_BM25PAD@42": {
+  "answer_tokens": 461,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8275,
+  "raw": "{\n  \"code\": \"def _check_and_render_buffer(self) -> None:\\n        \\\"\\\"\\\"Check if the buffer may be rendered. Render it if it can.\\\"\\\"\\\"\\n        if self.quiet:\\n            del self._buffer[:]\\n            return\\n        with self._lock:\\n            if self._buffer_index == 0:\\n                if self.is_jupyter:  # pragma: no cover\\n                    from .jupyter import display\\n\\n                    display(self._buffer, self._render_buffer(self._buffer[:]))\\n                    del self._buffer[:]\\n                else:\\n                    if WINDOWS:\\n                        try:\\n                            file_no = self.file.fileno()\\n                        except (ValueError, io.UnsupportedOperation):\\n                            file_no = -1\\n\\n                        legacy_windows_stdout = self.legacy_windows and file_no == 1\\n                        if legacy_windows_stdout:\\n                            from rich._win32_console import LegacyWindowsTerm\\n                            from rich._windows_renderer import legacy_windows_render\\n\\n                            with open(file_no, \\\"w\\\") as output_file:\\n                                legacy_windows_render(\\n                                    self._buffer[:], LegacyWindowsTerm(output_file)\\n                                )\\n\\n                        output_capture_enabled = bool(self._buffer_index)\\n                        if not legacy_windows_stdout or output_capture_enabled:\\n                            text = self._render_buffer(self._buffer[:])\\n                            # https://bugs.python.org/issue37871\\n                            write = self.file.write\\n                            for line in text.splitlines(True):\\n                                try:\\n                                    write(line)\\n                                except UnicodeEncodeError as error:\\n                                    error.reason = f\\\"{error.reason}\\\\n*** You may need to add PYTHONIOENCODING=utf-8 to your environment ***\\\"\\n                                    raise\\n                    else:\\n                        text = self._render_buffer(self._buffer[:])\\n                        try:\\n                            self.file.write(text)\\n                        except UnicodeEncodeError as error:\\n                            error.reason = f\\\"{error.reason}\\\\n*** You may need to add PYTHONIOENCODING=utf-8 to your environment ***\\\"\\n                            raise\\n\\n                    self.file.flush()\\n                    del self._buffer[:]\"\n\n}",
+  "seconds": 44.7,
+  "seed": 42
+ },
+ "rich-newfn-003/FILE_BM25PAD@42": {
+  "answer_tokens": 188,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5175,
+  "raw": "{\n  \"code\": \"def _make_region_map(self, width: int, height: int) -> RegionMap:\\n    stack: List[Tuple[Layout, Region]] = [(self, Region(0, 0, width, height))]\\n    push = stack.append\\n    pop = stack.pop\\n    layout_regions: List[Tuple[Layout, Region]] = []\\n    append_layout_region = layout_regions.append\\n    while stack:\\n        append_layout_region(pop())\\n        layout, region = layout_regions[-1]\\n        children = layout.children\\n        if children:\\n            for child_and_region in layout.splitter.divide(children, region):\\n                push(child_and_region)\\n\\n    region_map = {\\n        layout: region\\n        for layout, region in sorted(layout_regions, key=itemgetter(1))\\n    }\\n    return region_map\"\n}",
+  "seconds": 20.0,
+  "seed": 42
+ },
+ "rich-newfn-004/FILE_BM25PAD@42": {
+  "answer_tokens": 322,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6734,
+  "raw": "{\n  \"code\": \"```python\\ndef reset(\\n        self,\\n        task_id: TaskID,\\n        *,\\n        start: bool = True,\\n        total: Optional[int] = None,\\n        completed: int = 0,\\n        visible: Optional[bool] = None,\\n        description: Optional[str] = None,\\n        **fields: Any,\\n    ) -> None:\\n        \\\"\\\"\\\"Reset a task so completed is 0 and the clock is reset.\\n\\n        Args:\\n            task_id (TaskID): ID of task.\\n            start (bool, optional): Start the task after reset. Defaults to True.\\n            total (int, optional): New total steps in task, or None to use current total. Defaults to None.\\n            completed (int, optional): Number of steps completed. Defaults to 0.\\n            **fields (str): Additional data fields required for rendering.\\n        \\\"\\\"\\\"\\n        with self._lock:\\n            task = self._tasks[task_id]\\n            task.completed = completed\\n            task.start_time = None\\n            task.stop_time = None\\n            task.fields.update(fields)\\n            if total is not None:\\n                task.total = total\\n            if description is not None:\\n                task.description = description\\n            if visible is not None:\\n                task.visible = visible\\n            task._progress.clear()\\n        if start:\\n            self.start_task(task_id)\\n        self.refresh()\\n```\"\n}",
+  "seconds": 31.7,
+  "seed": 42
+ },
+ "rich-newfn-005/FILE_BM25PAD@42": {
+  "answer_tokens": 127,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7884,
+  "raw": "{\n  \"code\": \"def render_message(self, record: LogRecord, message: str) -> \\\"ConsoleRenderable\\\":\\n    use_markup = getattr(record, \\\"markup\\\") if hasattr(record, \\\"markup\\\") else self.markup\\n    if use_markup:\\n        message_text = Text.from_markup(message)\\n    else:\\n        message_text = Text(message)\\n\\n    if self.highlighter:\\n        message_text = self.highlighter(message_text)\\n    if self.KEYWORDS:\\n        message_text.highlight_words(self.KEYWORDS, \\\"logging.keyword\\\")\\n\\n    return message_text\"\n}",
+  "seconds": 19.3,
+  "seed": 42
+ },
+ "rich-newfn-006/FILE_BM25PAD@42": {
+  "answer_tokens": 287,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5165,
+  "raw": "{\n  \"code\": \"```python\\ndef render(\\n        self,\\n        text: str = \\\"\\\",\\n        *,\\n        color_system: Optional[ColorSystem] = ColorSystem.TRUECOLOR,\\n    ) -> str:\\n        \\\"\\\"\\\"Render the ANSI codes to implement the style.\\\"\\\"\\\"\\n        if color_system is None or not text:\\n            return text\\n        attrs: List[str] = []\\n        if self._color is not None:\\n            attrs.extend(self._color.downgrade(color_system).get_ansi_codes())\\n\\n        if self._bgcolor is not None:\\n            attrs.extend(\\n                self._bgcolor.downgrade(color_system).get_ansi_codes(foreground=False)\\n            )\\n\\n        set_bits = self._set_attributes\\n        if set_bits:\\n            append = attrs.append\\n            bits = self._attributes\\n            for bit_no in range(0, 9):\\n                bit = 1 << bit_no\\n                if set_bits & bit:\\n                    append(str(1 + bit_no) if bits & bit else str(21 + bit_no))\\n\\n        if attrs:\\n            return f\\\"\\\\x1b[{';'.join(attrs)}m{text or ''}\\\\x1b[0m\\\"\\n        else:\\n            return text\\n```\"\n}",
+  "seconds": 26.8,
+  "seed": 42
+ },
+ "rich-newfn-007/FILE_BM25PAD@42": {
+  "answer_tokens": 243,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6720,
+  "raw": "{\n    \"code\": \"def wrap_file(\\n        self,\\n        file: BinaryIO,\\n        total: Optional[int] = None,\\n        task_id: Optional[TaskID] = None,\\n        description: str = \\\"Reading...\\\",\\n    ) -> BinaryIO:\\n        if total is None:\\n            if hasattr(file, 'seek') and hasattr(file, 'tell'):\\n                current_position = file.tell()\\n                file.seek(0, 2)\\n                task_total = file.tell()\\n                file.seek(current_position)\\n            else:\\n                raise ValueError(\\n                    f\\\"unable to get size of {file!r}, please specify 'total'\\\"\\n                )\\n        else:\\n            task_total = total\\n\\n        if task_id is None:\\n            task_id = self.add_task(description, total=task_total)\\n        else:\\n            self.update(task_id, total=task_total)\\n\\n        if not isinstance(file.read(0), bytes):\\n            raise ValueError(\\\"expected file open in binary mode\\\")\\n\\n        return _Reader(file, self, task_id)\"\n}",
+  "seconds": 25.9,
+  "seed": 42
+ },
+ "rich-newfn-008/FILE_BM25PAD@42": {
+  "answer_tokens": 416,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7428,
+  "raw": "{\n  \"code\": \"```python\\n    @classmethod\\n    def from_ansi(\\n        cls,\\n        text: str,\\n        *,\\n        style: Union[str, Style] = \\\"\\\",\\n        justify: Optional[\\\"JustifyMethod\\\"] = None,\\n        overflow: Optional[\\\"OverflowMethod\\\"] = None,\\n        no_wrap: Optional[bool] = None,\\n        end: str = \\\"\\\\n\\\",\\n        tab_size: Optional[int] = 8,\\n    ) -> \\\"Text\\\":\\n        \\\"\\\"\\\"Create a Text object from pre-formatted ANSI.\\n\\n        Args:\\n            text (str): A string containing ANSI color codes.\\n            style (Union[str, Style], optional): Base style for text. Defaults to \\\"\\\".\\n            justify (str, optional): Justify method: \\\"left\\\", \\\"center\\\", \\\"full\\\", \\\"right\\\". Defaults to None.\\n            overflow (str, optional): Overflow method: \\\"crop\\\", \\\"fold\\\", \\\"ellipsis\\\". Defaults to None.\\n            no_wrap (bool, optional): Disable text wrapping, or None for default. Defaults to None.\\n            end (str, optional): Character to end text with. Defaults to \\\"\\\\\\\\n\\\".\\n            tab_size (int): Number of spaces per tab, or ``None`` to use ``console.tab_size``. Defaults to 8.\\n\\n        Returns:\\n            Text: A Text instance with ANSI rendered.\\n        \\\"\\\"\\\"\\n        from .ansi import AnsiCodes\\n\\n        ansi_text = AnsiCodes(text)\\n        rich_text = Text(\\n            ansi_text.plain,\\n            style=style,\\n            justify=justify,\\n            overflow=overflow,\\n            no_wrap=no_wrap,\\n            end=end,\\n            tab_size=tab_size,\\n        )\\n        rich_text._spans.extend(ansi_text.spans)\\n        return rich_text\\n```\"\n}",
+  "seconds": 39.9,
+  "seed": 42
+ },
+ "rich-newfn-009/FILE_BM25PAD@42": {
+  "answer_tokens": 86,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6355,
+  "raw": "{\n  \"code\": \"```python\\ndef get_default_columns(cls) -> Tuple[ProgressColumn, ...]:\\n    return (\\n        TextColumn(\\\"[progress.description]{task.description}\\\"),\\n        BarColumn(),\\n        TextColumn(\\\"[progress.percentage]{task.percentage:>3.0f}%\\\"),\\n        TimeRemainingColumn(),\\n    )\\n```\"\n}",
+  "seconds": 14.3,
+  "seed": 42
+ },
+ "rich-newfn-010/FILE_BM25PAD@42": {
+  "answer_tokens": 334,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6351,
+  "raw": "{\n    \"code\": \"```python\\ndef read(\\n        self,\\n        file: Union[str, PathLike, BinaryIO],\\n        total: Optional[int] = None,\\n        task_id: Optional[TaskID] = None,\\n        description: str = \\\"Reading...\\\",\\n    ) -> BinaryIO:\\n        if isinstance(file, (str, PathLike)):\\n            file = open(file, \\\"rb\\\")\\n            if total is None:\\n                total = os.stat(file.fileno()).st_size\\n        else:\\n            if total is None:\\n                raise ValueError(\\\"total must be provided for file handles\\\")\\n\\n        if task_id is None:\\n            task_id = self.add_task(description, total=total)\\n        else:\\n            self.update(task_id, total=total)\\n\\n        if self.live.auto_refresh:\\n            with _TrackThread(self, task_id, update_period=0.1) as track_thread:\\n                while True:\\n                    data = file.read(32768)\\n                    if not data:\\n                        break\\n                    yield data\\n                    track_thread.completed += len(data)\\n        else:\\n            advance = self.advance\\n            refresh = self.refresh\\n            while True:\\n                data = file.read(32768)\\n                if not data:\\n                    break\\n                yield data\\n                advance(task_id, len(data))\\n                refresh()\\n\\n        file.close()\\n        self.update(task_id, completed=total)\\n        return file\\n```\"\n}",
+  "seconds": 31.9,
+  "seed": 42
+ },
+ "rich-newfn-011/FILE_BM25PAD@42": {
+  "answer_tokens": 156,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6650,
+  "raw": "{\n    \"code\": \"```python\\n    @classmethod\\n    def from_rgb(cls, red: float, green: float, blue: float) -> \\\"Color\\\":\\n        \\\"\\\"\\\"Create a truecolor from three color components in the range(0->255).\\n\\n        Args:\\n            red (float): Red component.\\n            green (float): Green component.\\n            blue (float): Blue component.\\n\\n        Returns:\\n            Color: A new color object.\\n        \\\"\\\"\\\"\\n        triplet = ColorTriplet(int(red), int(green), int(blue))\\n        return cls(name=triplet.hex, type=ColorType.TRUECOLOR, triplet=triplet)\\n```\"\n}",
+  "seconds": 19.7,
+  "seed": 42
+ },
+ "rich-newfn-012/FILE_BM25PAD@42": {
+  "answer_tokens": 533,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4790,
+  "raw": "{\n  \"code\": \"def decode_line(self, line: str) -> Text:\\n        \\\"\\\"\\\"Decode a line containing ansi codes.\\n\\n        Args:\\n            line (str): A line of terminal output.\\n\\n        Returns:\\n            Text: A Text instance marked up according to ansi codes.\\n        \\\"\\\"\\\"\\n        text = Text()\\n        append = text.append\\n        for plain_text, ansi_codes in ansi_tokenize(line):\\n            if plain_text is not None:\\n                append(plain_text, self.style or None)\\n            elif ansi_codes is not None and ansi_codes.startswith(\\\"[\\\"):\\n                codes = ansi_codes[1:].split(\\\";\\\")\\n                iter_codes = iter(codes)\\n                while True:\\n                    try:\\n                        code = int(next(iter_codes))\\n                    except StopIteration:\\n                        break\\n\\n                    if code == 0:\\n                        self.style = Style()\\n                    elif code == 39:\\n                        self.style += Style(color=\\\"default\\\")\\n                    elif code == 49:\\n                        self.style += Style(bgcolor=\\\"default\\\")\\n                    elif 38 > code >= 30:\\n                        self.style += Style(color=Color.from_ansi(code - 30))\\n                    elif 48 > code >= 40:\\n                        self.style += Style(bgcolor=Color.from_ansi(code - 40))\\n                    elif code in (38, 48):\\n                        color_type = next(iter_codes)\\n                        if color_type == \\\"5\\\":\\n                            code = next(iter_codes)\\n                            number = int(code)\\n                            if code == 38:\\n                                self.style += Style(color=Color.from_ansi(number))\\n                            else:\\n                                self.style += Style(bgcolor=Color.from_ansi(number))\\n                        elif color_type == \\\"2\\\":\\n                            red, green, blue = (\\n                                int(_code)\\n                                for _code in (\\n                                    next(iter_codes),\\n                                    next(iter_codes),\\n                                    next(iter_codes),\\n                                )\\n                            )\\n                            if code == 38:\\n                                self.style = Style(\\n                                    color=Color.from_rgb(red, green, blue)\\n                                )\\n                            else:\\n                                self.style = Style(\\n                                    bgcolor=Color.from_rgb(red, green, blue)\\n                                )\\n        return text\"\n}",
+  "seconds": 43.0,
+  "seed": 42
+ },
+ "rich-newfn-013/FILE_BM25PAD@42": {
+  "answer_tokens": 581,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8475,
+  "raw": "{\n  \"code\": \"def _check_buffer(self) -> None:\\n        \\\"\\\"\\\"Check if the buffer may be rendered. Render it if it can (e.g. Console.quiet is False)\\n        Rendering is supported on Windows, Unix and Jupyter environments. For\\n        legacy Windows consoles, the win32 API is called directly.\\n        This method will also record what it renders if recording is enabled via Console.record.\\n        \\\"\\\"\\\"\\n        if self.quiet:\\n            del self._buffer[:]\\n            return\\n        with self._lock:\\n            if self._buffer_index == 0:\\n\\n                if self.record:\\n                    with self._record_buffer_lock:\\n                        self._record_buffer.extend(self._buffer[:])\\n\\n                if self.is_jupyter:  # pragma: no cover\\n                    from .jupyter import display\\n\\n                    display(self._buffer, self._render_buffer(self._buffer[:]))\\n                    del self._buffer[:]\\n                else:\\n                    if WINDOWS:\\n                        try:\\n                            file_no = self.file.fileno()\\n                            stdout_num = sys.stdout.fileno()\\n                            stderr_num = sys.stderr.fileno()\\n                        except (ValueError, io.UnsupportedOperation):\\n                            file_no = -1\\n                            stdout_num = 1\\n                            stderr_num = 2\\n\\n                        is_std_stream = file_no in (stdout_num, stderr_num)\\n                        legacy_windows_std = self.legacy_windows and is_std_stream\\n                        if legacy_windows_std:\\n                            from rich._win32_console import LegacyWindowsTerm\\n                            from rich._windows_renderer import legacy_windows_render\\n\\n                            legacy_windows_render(\\n                                self._buffer[:], LegacyWindowsTerm(self.file)\\n                            )\\n                        else:\\n                            # Either a non-std stream on legacy Windows, or modern Windows.\\n                            text = self._render_buffer(self._buffer[:])\\n                            # https://bugs.python.org/issue37871\\n                            write = self.file.write\\n                            for line in text.splitlines(True):\\n                                try:\\n                                    write(line)\\n                                except UnicodeEncodeError as error:\\n                                    error.reason = f\\\"{error.reason}\\\\n*** You may need to add PYTHONIOENCODING=utf-8 to your environment ***\\\"\\n                                    raise\\n                    else:\\n                        text = self._render_buffer(self._buffer[:])\\n                        try:\\n                            self.file.write(text)\\n                        except UnicodeEncodeError as error:\\n                            error.reason = f\\\"{error.reason}\\\\n*** You may need to add PYTHONIOENCODING=utf-8 to your environment ***\\\"\\n                            raise\\n\\n                    self.file.flush()\\n                    del self._buffer[:]\\n\"\n}",
+  "seconds": 54.2,
+  "seed": 42
+ },
+ "rich-newfn-014/FILE_BM25PAD@42": {
+  "answer_tokens": 183,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8213,
+  "raw": "{\n  \"code\": \"```python\\ndef split_cells(self, cut: int) -> Tuple['Segment', 'Segment']:\\n    if self.control is not None:\\n        return self, Segment()\\n\\n    pos = 0\\n    for i, char in enumerate(self.text):\\n        pos += cell_len(char)\\n        if pos == cut:\\n            return Segment(self.text[:i+1], self.style), Segment(self.text[i+1:], self.style)\\n        elif pos > cut:\\n            if cell_len(char) == 2:\\n                return Segment(self.text[:i] + ' ', self.style), Segment(' ' + self.text[i+1:], self.style)\\n            else:\\n                return Segment(self.text[:i], self.style), Segment(self.text[i:], self.style)\\n\\n    return self, Segment()\\n```\"\n}",
+  "seconds": 24.4,
+  "seed": 42
+ },
+ "rich-newfn-015/FILE_BM25PAD@42": {
+  "answer_tokens": 85,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8654,
+  "raw": "{\n  \"code\": \"def highlight(self, code: str = None) -> Text:\\n        \\\"\\\"\\\"Highlight a string with the given lexter and return a Text instance.\\n\\n        Returns:\\n            Text: A text instance containing highlights.\\n        \\\"\\\"\\\"\\n        if code is not None:\\n            self.code = code\\n        return self._highlight(self.lexer_name)\"\n}",
+  "seconds": 17.6,
+  "seed": 42
+ }
+}
