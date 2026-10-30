@@ -108,6 +108,20 @@ def generate(phase: int, kind: str, repo: str, out: Path, base_url: str, model: 
                   flush=True)
 
 
+def blast_hits(task: dict, raw: str) -> list[bool]:
+    from harness.experiments.suite.blast import _match
+    try:
+        items = [x.get("function", "") for x in json.loads(raw).get("affected", []) if isinstance(x, dict)]
+    except (ValueError, TypeError, AttributeError):
+        items = []
+    left, hits = set(task["gold"]), []
+    for a in items:
+        g = next((g for g in sorted(left) if _match(a, g)), None)
+        hits.append(g is not None)
+        left.discard(g)
+    return hits
+
+
 def score(kind: str, repo: str, out: Path) -> dict:
     """Every answer of every version and seed, with the suite's scorer for the type (and, for newfn, the outer-fence
     variant as `fence_*`)."""
@@ -130,7 +144,9 @@ def score(kind: str, repo: str, out: Path) -> dict:
             f = mod.score_task(t, a.get("raw", ""), outer_fence=True)
             s.update({"fence_parses": f["parses"]})
         if kind == "forward":
-            s["changed"] = len(t["changed_callers"])
+            s["changed"], s["tier"] = len(t["changed_callers"]), t["tier"]
+        if kind == "blast":  # the answer's names in order: which ones are traced callers (each counted once)
+            s["gold_n"], s["hits_in_order"] = len(t["gold"]), blast_hits(t, a.get("raw", ""))
         rows[key] = {"task": task_id, "repo": repo, "version": version, "seed": seed, **s,
                      "raw_sha": __import__("hashlib").sha256(a.get("raw", "").encode()).hexdigest()[:16],
                      "prompt_tokens": a.get("prompt_tokens"), "answer_tokens": a.get("answer_tokens"),

@@ -45,3 +45,24 @@ def test_r1_plan_and_analysis_on_made_up_scores(tmp_path, monkeypatch):
     assert analyze.complete_seeds("newfn", rs) == ["42"]
     c = analyze.compare(rs, "FILE_BM25PAD", "PRISM", analyze.METRICS["newfn"]["reuse"], ["42"])
     assert (c["tasks"], c["a_mean"], c["b_mean"]) == (2, 0.5, 1.0)
+
+
+def test_r1_amendment_rules():
+    from harness.experiments.r1 import analyze as A
+    e = {"primary": {"bootstrap": {"mean": 0.12, "low": 0.04, "high": 0.2}}, "validity": {"tasks": 100, "tasks_cut": 3},
+         "secondary": {"invented_PRISM_vs_pad": {"bootstrap": {"mean": 0.0}}}}
+    assert A.label("forward", e, 0.001) == "pass"
+    assert A.label("forward", e, 0.2) == "not_shown"
+    e["primary"]["bootstrap"] = {"mean": 0.06, "low": 0.01, "high": 0.1}
+    assert A.label("forward", e, 0.001) == "below_floor" and A.label("blast", e, 0.001) == "pass"
+    e["secondary"]["invented_PRISM_vs_pad"]["bootstrap"]["mean"] = 0.08
+    assert A.label("newfn", e, 0.001) == "fails_invented_calls"
+    e["primary"]["bootstrap"] = {"mean": -0.1, "low": -0.2, "high": -0.02}
+    assert A.label("forward", e, 0.001) == "padding_better"
+    e["validity"]["tasks_cut"] = 25
+    assert A.label("forward", e, 0.001) == "invalid"
+    rs = [{"task": "t", "version": v, "seed": "42", "hits_in_order": h, "gold_n": 4}
+          for v, h in (("GREP_PAD", [True, False]), ("PRISM", [False, True, True, True]))]
+    m = A.matched_k(rs, "GREP_PAD", "PRISM", ["42"])  # k = 2: pad 1/4, PRISM 1/4
+    assert (m["a_mean"], m["b_mean"]) == (0.25, 0.25)
+    assert A.cut_tasks([{"task": "t", "version": "PRISM", "seed": "42", "done_reason": "length"}], ("PRISM",), ["42"]) == {"t"}

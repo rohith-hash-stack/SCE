@@ -247,3 +247,205 @@ cuts more than 10% of its answers at the answer cap, or the two versions differ 
    a fence around the code (98% vs 97% parse once it is removed).
    The helper list should mark which names are real and callable from the target's scope.
 4. **The break section** (wording 2) points the right way but is not proven; it stays opt-in.
+
+## Amendment R1-A: analysis rules and interpretation, committed before any R1 answer is scored
+
+R1 (`harness/experiments/r1/README.md`) is running on Kaggle with frozen prompts. At the time of this commit, no
+R1 answer has been opened, scored or summarised. Everything below is analysis or interpretation. It changes no
+prompt, no task and no model call, and needs no re-run. The analysis code is `harness/experiments/r1/analyze.py`
+and `run.py` (scoring only) at this commit.
+
+### A0. Facts established from the frozen prompts and the answer key (no model output)
+
+How many answer items each prompt shows. This is computed by `analyze.hidden` and the visibility check in the
+commit message.
+
+| type | answer items | in the padded prompt | in PRISM's prompt | hidden from the padded prompt |
+|---|---|---|---|---|
+| forward (changed callers) | 298 | FILE_GREPPAD 289 (97%); FILE_BM25PAD 252 | 297 | 9 callers in 9 tasks |
+| forward medium tier | 70 | FILE_GREPPAD 65 | 70 | 5 |
+| blast (traced callers, transitive) | 3,628 | GREP_PAD 178 (5%) | 534 listed | 3,450 in all 76 tasks |
+| newfn (developer's helpers) | 358 | FILE_BM25PAD 199 | 199 | 159 in 88 tasks |
+
+- **Forward:** the grep-padded prompt contains almost every caller's code. That includes the medium tier: a
+  medium-tier caller is in another file but still names the changed function, so grep finds it. **R1's forward test
+  therefore measures whether PRISM's organisation of the callers (who depends on it, per-call-site facts) beats the
+  same callers given as raw code.** It cannot measure access to callers the model could not otherwise see. With 9
+  hidden callers, that question has no power in R1.
+- **Blast:** the reverse. The padded prompt shows few traced callers, so blast does test access.
+- **Newfn:** both prompts show the same number of the developer's helpers (199 of 358).
+
+### A1. Added reports (analysis only)
+
+| rule | applies to | status before this amendment |
+|---|---|---|
+| Forward results by tier (easy / medium / hard), for PRISM against every other version | forward | **missing**: aggregate only |
+| Blast recall within the first k = 5, 8, 10 names of each answer | blast | **missing** |
+| Blast recall at matched length: k = the shorter of the two answers, per task and seed | blast | **missing** |
+| Blast precision proxy: the share of named functions that are traced callers (a lower bound, since the trace is incomplete) | blast | **missing** |
+| Truncation per version | all | already in R1's analysis (`validity`) |
+
+- **These reports are secondary.** They are not in Holm's correction and cannot decide a type's outcome (A3).
+- The blast answers are unranked (the prompt says "list every one"). Recall at k uses the order the model wrote, so
+  it is labelled a proxy.
+
+**Truncation-exclusion rule (standing, for R1 and every later run):**
+1. A task is excluded from a primary comparison when either compared version's answer was cut at the answer cap,
+   at any seed used.
+2. The primary is computed on the remaining tasks. The all-tasks result is always reported beside it.
+3. The truncation rate of every version is reported with every primary result.
+4. If more than 20% of a type's tasks are excluded, that type's result is **invalid**.
+
+This replaces R1 README's "truncated answers stay in their arm". The change is made before any R1 answer is seen.
+
+**This rule applied to the original 742 tasks:**
+
+| type | tasks excluded | reported | under the rule |
+|---|---|---|---|
+| forward | 1 (a FILE answer) | 92 vs 214 of 298, Holm p 1.5e-26 | **92 vs 212 of 296, Holm p 5.1e-26** |
+| blast | 8 | 0.129 vs 0.302, Holm p 2.4e-4 | **0.138 vs 0.301 (68 tasks), Holm p 9.9e-4** (as in "Validity checks") |
+| newfn, bugs, concepts, break check | 0 | unchanged | unchanged |
+| tests | 33 of 62 | 0 vs 2 of 62 | **0 vs 0 of 29: invalid** (more than 20% excluded) |
+
+Every conclusion of the suite stands.
+
+### A2. Answers hidden from the padded prompt (the mechanism-only measure)
+
+For each type, the primary comparison is repeated on the answer items hidden from the padded prompt (A0):
+- forward: changed callers found;
+- blast: traced callers named;
+- newfn: helpers reused.
+
+It is descriptive and cannot decide a type's outcome. For forward (9 items) it is reported as having no power.
+
+### A3. Outcome labels and the negative branch
+
+Each type gets exactly one label, from the primary alone, in this order:
+
+| label | condition | what may be claimed |
+|---|---|---|
+| `invalid` | more than 20% of tasks excluded for truncation | nothing about this type |
+| `padding_better` | Holm p < 0.05 and the interval lies below 0 | "the padded baseline beat PRISM"; the type's suite win is withdrawn |
+| `not_shown` | Holm p ≥ 0.05, or the interval's lower end ≤ 0 | "no advantage over an equal-size baseline was shown"; the type's suite win is attributed to prompt size |
+| `below_floor` | significant and the interval is above 0, but the difference is under the floor (forward 0.10, blast 0.05, newfn 0.05) | "a small advantage of X, below the pre-registered bar"; not a pass |
+| `fails_invented_calls` | newfn only: otherwise a pass, but PRISM's invented calls exceed the padded baseline's by more than 0.05 per task | "more reuse at the cost of more invented calls"; not a pass |
+| `pass` | everything else | A4's sentence, for that type only |
+
+**Rules that stop a result being reframed afterwards:**
+- Secondary results (tiers, recall at k, per seed, per language, hidden-item analysis) **never change a label**.
+  - If forward is `not_shown`, the report may not say "PRISM still helps on medium tasks" or "grep was strong
+    but PRISM still helps".
+  - A secondary result that favours PRISM is reported as an uncorrected, exploratory observation, and becomes a
+    hypothesis for a later pre-registered round.
+- The label uses the per-task mean over all complete seeds. No seed is chosen afterwards.
+- No version, measure or task subset is added after the run. No task is excluded except by the truncation rule.
+
+**What each type's claim shrinks to if it is not a pass:**
+- **forward:** "On these tasks, PRISM's change context is not more useful than the same number of tokens of grep
+  results plus the callers' code." No narrower forward claim is available from R1. The only mechanism left
+  (callers the model cannot see at all) has 9 items. It is deferred to a round whose tasks are selected for callers
+  that grep misses (dynamic dispatch, aliases, re-exports), decided before mining.
+- **blast:** "PRISM names more of the traced callers the padded prompt does not show" is allowed **only if** the
+  hidden-item comparison (A2) is significant at α = 0.05 on its own. Even then it is labelled exploratory, because
+  it was not a primary.
+- **newfn:** "PRISM's helper list and the same number of tokens of keyword-search code give the same reuse." The
+  hidden-helper comparison (A2) is reported as exploratory.
+
+### A4. What R1 passing means, and what it does not
+
+> If a type passes, this sentence holds for that type: on these 10 repositories, with this model, PRISM's context
+> is more useful per token than an equal-size prompt of grep or keyword-search results with the matching
+> functions' code.
+>
+> It does not show:
+> - that the result holds on other repositories. These tasks come from the suite that motivated the comparison,
+>   so this needs held-out repositories;
+> - that it holds for other models. Only one model was tested, so this needs a second model;
+> - which part of PRISM's context does the work. Its change context has eight sections, never ablated, so this
+>   needs an ablation (R2).
+>
+> For forward in particular, a pass shows that organisation helps when the callers' code is already in the prompt
+> (A0). It does not show that PRISM finds callers that text search cannot.
+
+### A5. aiohttp and its submodule: closed, no effect on R1
+
+- **The submodule was not in any frozen aiohttp prompt.** The suite's aiohttp tasks were built in fresh git
+  worktrees, and a fresh worktree never checks out submodules. The R1 pads were built in fresh worktrees of new
+  clones, with git-aware discovery.
+- **Checked directly.** The stored repository-function list of `aiohttp-newfn-002` (1,040 names) equals a clean
+  index at its revision. With the submodule initialised, that index has 1,093. For `aiohttp-newfn-001` the stored
+  list also equals a clean index (878); the submodule could not be initialised at that old revision.
+- **No trace in the files.** No frozen aiohttp task file or R1 pad mentions `llhttp`, `http-parser` or `vendor/`.
+- **Rule:** aiohttp is reported with the other repositories, not separately or excluded.
+- This check used the frozen prompts and a re-index only, no R1 output.
+
+### A6. R2 skeleton: which sections of the change context do the work (not built; for review)
+
+The eight sections (`prism.impact.context.render`):
+
+| # | section |
+|---|---|
+| 1 | Codebase |
+| 2 | Group |
+| 3 | Anchor |
+| 4 | Who depends on it: callers, with per-call-site facts (result use, errors caught, arguments, await) |
+| 5 | What it depends on |
+| 6 | Style to follow: conventions with counts, and two siblings' code |
+| 7 | Callers' code |
+| 8 | Wider impact |
+
+**When R2 runs:** a type enters R2 only if its R1 label is `pass` or `below_floor`. A type that is `not_shown`,
+`padding_better` or `invalid` has nothing to attribute.
+
+**Hypotheses (each falsifiable):**
+
+| id | hypothesis | falsified if |
+|---|---|---|
+| R2-H4 | removing section 4 lowers forward callers found by ≥ 0.05, and blast recall by ≥ 0.03 | the drop's interval includes 0, or it is below the floor |
+| R2-H6 | section 6 is dead weight for forward and blast: removing it changes the primary by less than ±0.03 (equivalence test, TOST, α = 0.05). For newfn it is expected to matter: removing it lowers style match and reuse | equivalence is not shown (forward, blast), or no drop (newfn) |
+| R2-H7 | section 7 is redundant once section 4 is present: removing 7 alone changes forward by less than ±0.03 (TOST) | equivalence not shown |
+| R2-H47 | removing 4 and 7 together lowers forward by more than removing either alone | no larger drop |
+
+**Versions:**
+- Full context, and the full context with one section (or the 4+7 pair) removed.
+- **Every version is padded back to the full context's real token count** with keyword-search code (R1's
+  FILE_BM25PAD method). Otherwise removing a section would also shorten the prompt.
+
+**Tasks:**
+- Development: R1's forward, blast and newfn tasks, at seeds 42, 1001 and 2002.
+- Confirmation: the held-out repositories of the next round [TBD: count and language mix; it must include
+  TypeScript].
+- No section, wording or budget changes between the two.
+
+**Measures:**
+- **Without a model** (reported first, never pooled with the model results): the share of answer items each section
+  lists. For example, the changed callers in section 4's list and the traced callers in sections 4 and 8.
+- **With the model:** forward callers found and wrong functions; blast recall and recall at matched k; newfn reuse,
+  invented calls and style match.
+
+**Freezing:**
+- Versions, pads and seeds are frozen with sha256 in a manifest before any model call, and the Kaggle cell is
+  pinned, as in R1.
+- The truncation rule (A1) and the labels (A3) apply.
+
+**Significance:**
+- Holm across R2-H4, R2-H6, R2-H7 and R2-H47 within each type.
+- Wilcoxon over tasks of per-task means across seeds.
+- Bootstrap 95% interval, 10,000 resamples, seed 5501.
+- TOST for the equivalence claims.
+
+**"Section X is load-bearing"** when removing it drops the primary by at least the floor, with the Holm-adjusted p
+below 0.05 and the interval above 0, on the development tasks **and** in the same direction on the confirmation
+tasks. **"Dead weight"** needs the equivalence test to pass on both.
+
+**Stopping:**
+- One run per hypothesis per task set. A failed hypothesis is not re-tested by re-wording the section on the same
+  tasks.
+- If R2-H4 fails on the development tasks, no other section's ablation on that type is used to claim a mechanism.
+
+**Order, and why:**
+1. **Remove 4, and remove 6.** These are the two named hypotheses, and the cheapest to settle.
+2. **Remove 7, and remove 4 and 7 together.** Section 7 holds the callers' code that R1's grep padding also holds
+   (A0), so 4 against 7 separates organisation from raw code.
+3. Sections 1, 2, 5 and 8, only if the budget allows. They carry the least answer-relevant content in the model-free
+   measure. [TBD: confirm with that measure before ordering them.]
