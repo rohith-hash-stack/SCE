@@ -29,6 +29,12 @@ def git_visible_files(repo_root: str) -> set[str] | None:
                                 capture_output=True, text=True, timeout=30)
         if inside.returncode != 0 or inside.stdout.strip() != "true":
             return None
+        # A plain directory inside an ignored part of another repository (an unpacked archive under `tmp/`):
+        # git sees none of its files, so filtering would leave nothing. Index it as a plain directory.
+        ignored = subprocess.run(["git", "-C", os.path.dirname(root), "check-ignore", "-q", os.path.basename(root)],
+                                 capture_output=True, timeout=30)
+        if ignored.returncode == 0:
+            return None
         out = subprocess.run(["git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
                              capture_output=True, timeout=120)
     except (OSError, subprocess.SubprocessError):

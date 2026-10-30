@@ -70,3 +70,10 @@ def test_cached_index_after_checkout_matches_a_fresh_one(repo, tmp_path):
     assert any("removed_later" in q for q in newer)
     assert not any("removed_later" in q or "phantom" in q for q in cached)
     assert cached == fresh
+
+
+def test_plain_directory_inside_an_ignored_folder_is_not_emptied(repo):
+    unpacked = repo / "generated" / "archive"  # `generated/` is ignored; this is not its own repository
+    unpacked.mkdir(parents=True)
+    (unpacked / "m.py").write_text("def f():\n    pass\n")
+    assert _rel(unpacked, discover_files(str(unpacked))) == ["m.py"]
