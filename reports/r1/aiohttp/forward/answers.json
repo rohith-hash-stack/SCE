@@ -53,6 +53,15 @@
   "seconds": 2.5,
   "seed": 42
  },
+ "aiohttp-forward-004/FILE@42replay": {
+  "answer_tokens": 205,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2995,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"StreamResponse._start_compression\",\n      \"file\": \"aiohttp/web_response.py\",\n      \"reason\": \"The logic for starting compression has changed, so the function that calls it must be updated to handle the new condition.\",\n      \"new_code\": \"async def _start_compression(self, request: \\\"BaseRequest\\\") -> None:\\n        if self._compression_force:\\n            await self._do_start_compression(self._compression_force)\\n        else:\\n            # Encoding comparisons should be case-insensitive\\n            # https://www.rfc-editor.org/rfc/rfc9110#section-8.4.1\\n            accept_encoding = request.headers.get(hdrs.ACCEPT_ENCODING, \\\"\\\").lower()\\n            for value, coding in CONTENT_CODINGS.items():\\n                if value in accept_encoding:\\n                    await self._do_start_compression(coding)\\n                    return\"\n    }\n  ]\n}",
+  "seconds": 17.9,
+  "seed": 42
+ },
  "aiohttp-forward-004/FILE_BM25PAD@42": {
   "answer_tokens": 1691,
   "done_reason": "stop",
@@ -69,6 +78,15 @@
   "prompt_tokens": 4661,
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.web_response.Response._do_start_compression\",\n      \"file\": \"aiohttp/web_response.py\",\n      \"reason\": \"The condition for enabling compression has changed, so the implementation must be updated to reflect this.\",\n      \"new_code\": \"async def _do_start_compression(self, coding: ContentCoding) -> None:\\n        if self._chunked or isinstance(self._body, Payload):\\n            return await super()._do_start_compression(coding)\\n\\n        if coding is not ContentCoding.identity:\\n            # Instead of using _payload_writer.enable_compression,\\n            # compress the whole body\\n            compressor = ZLibCompressor(\\n                encoding=str(coding.value),\\n                max_sync_chunk_size=self._zlib_executor_size,\\n                executor=self._zlib_executor,\\n            )\\n            assert self._body is not None\\n            if self._zlib_executor_size is None and len(self._body) > 1024 * 1024:\\n                warnings.warn(\\n                    \\\"Synchronous compression of large response bodies \\\"\\n                    f\\\"({len(self._body)} bytes) might block the async event loop. \\\"\\n                    \\\"Consider providing a custom value to zlib_executor_size/\\n                    zlib_executor response properties or disabling compression on it.\\\"\\n                )\\n            self._compressed_body = (\\n                await compressor.compress(self._body) + compressor.flush()\\n            )\\n            assert self._compressed_body is not None\\n\\n            self._headers[hdrs.CONTENT_ENCODING] = coding.value\\n            self._headers[hdrs.CONTENT_LENGTH] = str(len(self._compressed_body))\"\n    }\n  ]\n}",
   "seconds": 28.8,
+  "seed": 42
+ },
+ "aiohttp-forward-004/PRISM@42replay": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4838,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.3,
   "seed": 42
  },
  "aiohttp-forward-005/FILE_BM25PAD@42": {
