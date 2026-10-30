@@ -1016,6 +1016,15 @@
   "seconds": 146.6,
   "seed": 42
  },
+ "aiohttp-forward-019/FILE_GREPPAD@1001": {
+  "answer_tokens": 944,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4703,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.connector.BaseConnector.__del__\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The `__del__` method now needs to handle the new return type of `_close` which is a list of awaitables.\",\n      \"new_code\": \"def __del__(self, _warnings: Any = warnings) -> None:\\n        if self._closed:\\n            return\\n        if not self._conns:\\n            return\\n\\n        conns = [repr(c) for c in self._conns.values()]\\n\\n        awaitables = self._close()\\n        for awaitable in awaitables:\\n            self._loop.run_until_complete(awaitable)\\n\\n        kwargs = {\\\"source\\\": self}\\n        _warnings.warn(f\\\"Unclosed connector {self!r}\\\", ResourceWarning, **kwargs)\\n        context = {\\n            \\\"connector\\\": self,\\n            \\\"connections\\\": conns,\\n            \\\"message\\\": \\\"Unclosed connector\\\",\\n        }\\n        if self._source_traceback is not None:\\n            context[\\\"source_traceback\\\"] = self._source_traceback\\n        self._loop.call_exception_handler(context)\"\n    },\n    {\n      \"function\": \"aiohttp.client_reqrep.ClientRequest.body#2\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The `_close` method now returns a list of awaitables, which needs to be awaited.\",\n      \"new_code\": \"    @body.setter\\n    def body(self, value: Any) -> None:\\n        \\\"\\\"\\\"Set request body with warning for non-autoclose payloads.\\n\\n        WARNING: This setter must be called from within an event loop and is not\\n        thread-safe. Setting body outside of an event loop may raise RuntimeError\\n        when closing file-based payloads.\\n\\n        DEPRECATED: Direct assignment to body is deprecated and will be removed\\n        in a future version. Use await update_body() instead for proper resource\\n        management.\\n        \\\"\\\"\\\"\\n        # Close existing payload if present\\n        if self._body is not None:\\n            # Warn if the payload needs manual closing\\n            # stacklevel=3: user code -> body setter -> _warn_if_unclosed_payload\\n            _warn_if_unclosed_payload(self._body, stacklevel=3)\\n            # NOTE: In the future, when we remove sync close support,\\n            # this setter will need to be removed and only the async\\n            # update_body() method will be available. For now, we call\\n            # _close() for backwards compatibility.\\n            awaitables = self._body._close()\\n            for awaitable in awaitables:\\n                self._loop.run_until_complete(awaitable)\\n        self._update_body(value)\"\n    },\n    {\n      \"function\": \"aiohttp.payload.Payload.close\",\n      \"file\": \"aiohttp/payload.py\",\n      \"reason\": \"The `close` method now needs to handle the new return type of `_close` which is a list of awaitables.\",\n      \"new_code\": \"    async def close(self) -> None:\\n        \\\"\\\"\\\"\\n        Close the payload if it holds any resources.\\n\\n        IMPORTANT: This method must not await anything that might not finish\\n        immediately, as it may be called during cleanup/cancellation. Schedule\\n        any long-running operations without awaiting them.\\n\\n        In the future, this will be the only close method supported.\\n        \\\"\\\"\\\"\\n        awaitables = self._close()\\n        for awaitable in awaitables:\\n            await awaitable\"\n    },\n    {\n      \"function\": \"aiohttp.payload.IOBasePayload.close\",\n      \"file\": \"aiohttp/payload.py\",\n      \"reason\": \"The `close` method now needs to handle the new return type of `_close` which is a list of awaitables.\",\n      \"new_code\": \"    async def close(self) -> None:\\n        \\\"\\\"\\\"\\n        Close the payload if it holds any resources.\\n\\n        IMPORTANT: This method must not await anything that might not finish\\n        immediately, as it may be called during cleanup/cancellation. Schedule\\n        any long-running operations without awaiting them.\\n        \\\"\\\"\\\"\\n        awaitables = self._close()\\n        for awaitable in awaitables:\\n            await awaitable\"\n    }\n  ]\n}",
+  "seconds": 69.1,
+  "seed": 1001
+ },
  "aiohttp-forward-019/FILE_GREPPAD@42": {
   "answer_tokens": 855,
   "done_reason": "stop",
@@ -1034,6 +1043,24 @@
   "seconds": 35.2,
   "seed": 1001
  },
+ "aiohttp-forward-020/FILE@1001": {
+  "answer_tokens": 858,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3216,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.connector.TCPConnector._resolve_host\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The `_resolve_host_with_throttle` method now takes an additional `futures` parameter, so `_resolve_host` must be updated to pass this parameter.\",\n      \"new_code\": \"async def _resolve_host(\\n        self, host: str, port: int, traces: Optional[Sequence['Trace']] = None\\n    ) -> List[ResolveResult]:\\n        if is_ip_address(host):\\n            return [\\n                {\\n                    'hostname': host,\\n                    'host': host,\\n                    'port': port,\\n                    'family': self._family,\\n                    'proto': 0,\\n                    'flags': 0,\\n                }\\n            ]\\n\\n        if not self._use_dns_cache:\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_start(host)\\n\\n            res = await self._resolver.resolve(host, port, family=self._family)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_end(host)\\n\\n            return res\\n\\n        key = (host, port)\\n        if key in self._cached_hosts and not self._cached_hosts.expired(key):\\n            # get result early, before any await (#4014)\\n            result = self._cached_hosts.next_addrs(key)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            return result\\n\\n        #\\n        # If multiple connectors are resolving the same host, we wait\\n        # for the first one to resolve and then use the result for all of them.\\n        # We use a throttle event to ensure that we only resolve the host once\\n        # and then use the result for all the waiters.\\n        #\\n        # In this case we need to create a task to ensure that we can shield\\n        # the task from cancellation as cancelling this lookup should not cancel\\n        # the underlying lookup or else the cancel event will get broadcast to\\n        # all the waiters across all connections.\\n        #\\n        futures = set()\\n        coro = self._resolve_host_with_throttle(key, host, port, futures, traces)\\n        loop = asyncio.get_running_loop()\\n        if sys.version_info >= (3, 12):\\n            # Optimization for Python 3.12, try to send immediately\\n            resolved_host_task = asyncio.Task(coro, loop=loop, eager_start=True)\\n        else:\\n            resolved_host_task = loop.create_task(coro)\\n\\n        if not resolved_host_task.done():\\n            self._resolve_host_tasks.add(resolved_host_task)\\n            resolved_host_task.add_done_callback(self._resolve_host_tasks.discard)\\n\\n        try:\\n            return await asyncio.shield(resolved_host_task)\\n        except asyncio.CancelledError:\\n\\n            def drop_exception(fut: 'asyncio.Future[List[ResolveResult]]') -> None:\\n                with suppress(Exception, asyncio.CancelledError):\\n                    fut.result()\\n\\n            resolved_host_task.add_done_callback(drop_exception)\\n            raise\"\n    },\n    {\n      \"function\": \"aiohttp.connector.TCPConnector.close\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The `_throttle_dns_events` dictionary has been renamed to `_throttle_dns_futures`, so the `close` method must be updated to reflect this change.\",\n      \"new_code\": \"def close(self) -> Awaitable[None]:\\n        \\\"\\\"\\\"Close all ongoing DNS calls.\\\"\\\"\\\"\\n        for ev in self._throttle_dns_futures.values():\\n            ev.cancel()\\n\\n        for t in self._resolve_host_tasks:\\n            t.cancel()\\n\\n        return super().close()\"\n    }\n  ]\n}",
+  "seconds": 62.1,
+  "seed": 1001
+ },
+ "aiohttp-forward-020/FILE_BM25PAD@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6284,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.6,
+  "seed": 1001
+ },
  "aiohttp-forward-020/FILE_BM25PAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -1043,6 +1070,15 @@
   "seconds": 8.4,
   "seed": 42
  },
+ "aiohttp-forward-020/FILE_GREPPAD@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6029,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.5,
+  "seed": 1001
+ },
  "aiohttp-forward-020/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -1051,5 +1087,14 @@
   "raw": "{\"changes\": []}",
   "seconds": 4.5,
   "seed": 42
+ },
+ "aiohttp-forward-020/PRISM@1001": {
+  "answer_tokens": 730,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6284,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.connector.TCPConnector._resolve_host\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The `_resolve_host_with_throttle` method now takes an additional `futures` parameter, so `_resolve_host` must be updated to pass this parameter.\",\n      \"new_code\": \"async def _resolve_host(\\n        self, host: str, port: int, traces: Optional[Sequence['Trace']] = None\\n    ) -> List[ResolveResult]:\\n        \\\"\\\"\\\"Resolve host and return list of addresses.\\\"\\\"\\\"\\n        if is_ip_address(host):\\n            return [\\n                {\\n                    \\\"hostname\\\": host,\\n                    \\\"host\\\": host,\\n                    \\\"port\\\": port,\\n                    \\\"family\\\": self._family,\\n                    \\\"proto\\\": 0,\\n                    \\\"flags\\\": 0,\\n                }\\n            ]\\n\\n        if not self._use_dns_cache:\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_start(host)\\n\\n            res = await self._resolver.resolve(host, port, family=self._family)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_end(host)\\n\\n            return res\\n\\n        key = (host, port)\\n        if key in self._cached_hosts and not self._cached_hosts.expired(key):\\n            # get result early, before any await (#4014)\\n            result = self._cached_hosts.next_addrs(key)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            return result\\n\\n        #\\n        # If multiple connectors are resolving the same host, we wait\\n        # for the first one to resolve and then use the result for all of them.\\n        # We use a throttle event to ensure that we only resolve the host once\\n        # and then use the result for all the waiters.\\n        #\\n        # In this case we need to create a task to ensure that we can shield\\n        # the task from cancellation as cancelling this lookup should not cancel\\n        # the underlying lookup or else the cancel event will get broadcast to\\n        # all the waiters across all connections.\\n        #\\n        futures = set()\\n        coro = self._resolve_host_with_throttle(key, host, port, futures, traces)\\n        loop = asyncio.get_running_loop()\\n        if sys.version_info >= (3, 12):\\n            # Optimization for Python 3.12, try to send immediately\\n            resolved_host_task = asyncio.Task(coro, loop=loop, eager_start=True)\\n        else:\\n            resolved_host_task = loop.create_task(coro)\\n\\n        if not resolved_host_task.done():\\n            self._resolve_host_tasks.add(resolved_host_task)\\n            resolved_host_task.add_done_callback(self._resolve_host_tasks.discard)\\n\\n        try:\\n            return await asyncio.shield(resolved_host_task)\\n        except asyncio.CancelledError:\\n\\n            def drop_exception(fut: 'asyncio.Future[List[ResolveResult]]') -> None:\\n                with suppress(Exception, asyncio.CancelledError):\\n                    fut.result()\\n\\n            resolved_host_task.add_done_callback(drop_exception)\\n            raise\"\n    }\n  ]\n}",
+  "seconds": 56.6,
+  "seed": 1001
  }
 }
