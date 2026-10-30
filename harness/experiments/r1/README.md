@@ -39,6 +39,19 @@ filled until the whole prompt has PRISM's real token count for that task (Qwen2.
 - **What the padding never uses:** the call graph, PRISM's contexts or the answer key. Function boundaries come from
   the parser.
 - **Filling:** whole functions in rank order while they fit, then the first lines of the next one to reach the target.
+- **Amendment (after building the pads, before any model call):** 19 of 588 padded prompts missed the ±5% band.
+  - **The ranked list ran out** (13 prompts). BM25 ranks only functions that share a word with the query, and a
+    rare name matches few. The fill now continues with functions from the anchor's file, then its folder, then the
+    rest of the repository, in file order (`NEAR_HEAD`). This is nearness only: no call graph, no ranking.
+  - **The grep lines alone overflowed the target** (6 forward prompts). The lines are now cut, ending with a count of
+    those left out, so the lines take at most 95% of the target.
+  - **An item too big to start** (1 prompt: a minified file whose first line alone overflows) is skipped, and
+    the fill continues with the next item.
+  - Only these prompts were rebuilt. With the new rules every other prompt comes out the same, since the fallback
+    applies only after the ranked lists are used up. The 5 in-band versions rebuilt with these tasks came out
+    byte-identical.
+  - Two prompts stay unpadded, as the rules say: werkzeug-blast-005 (the GREP prompt is already larger than
+    PRISM's) and fastify-forward-004 (at that revision the repository is one file, all of it already shown).
 - **When the base prompt is already at least 95% of PRISM's size:** no padding; the task is counted and reported.
 - **Audit:** the builder (`pad.py`) records every padded prompt's real token count and the share within ±5%.
 

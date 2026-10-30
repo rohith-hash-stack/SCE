@@ -35,6 +35,7 @@ BASE = {"FILE_BM25PAD": "FILE", "FILE_GREPPAD": "FILE", "GREP_PAD": "GREP"}
 BM25_HEAD = "Other code from the repository (the functions a keyword search ranks highest for this {what}):\n\n"
 BODIES_HEAD = "The code of the functions those lines are in:\n\n"
 MORE_HEAD = "\n\nMore code from the repository (keyword search):\n\n"
+NEAR_HEAD = "\n\nMore code from the repository (the same file, then the same folder, then the rest):\n\n"
 
 
 def base_prompt(kind: str, task: dict, version: str) -> str:
@@ -105,6 +106,12 @@ class Repo:
         prod = {q for fs in self.spans.values() for _lo, _hi, q in fs}
         return [q for q in ranked if q in prod]
 
+    def nearby(self, rel: str) -> list[str]:
+        """Every production function: the given file first, then its folder, then the rest, each in file order."""
+        folder = os.path.dirname(rel)
+        order = lambda f: (f != rel, os.path.dirname(f) != folder, f)
+        return [q for f in sorted(self.spans, key=order) for _lo, _hi, q in sorted(self.spans[f])]
+
     def grep(self, leaf: str) -> list[tuple[str, int]]:
         hits = []
         for rel in self.prod_files:
@@ -140,6 +147,8 @@ def _fill(count, base: str, head: str, groups: list[tuple[str, list[tuple[str, s
                         hi = mid - 1
                 if lo:
                     block, partial = block + "\n".join(lines[:lo]) + "\n```", q
+            if total(block) < (1 - BAND) * target:  # not even this item's first lines fit (a minified file): skip it
+                continue
             return {"block": block, "items": shown, "partial": partial}
     return {"block": block, "items": shown, "partial": partial}
 
@@ -150,6 +159,7 @@ def build_task(kind: str, task: dict, repo: Repo, count) -> dict:
     target = count(base_prompt(kind, task, "PRISM"))
     keep = lambda q: q != own and not repo.in_window(q, rel, lo, hi)
     text = lambda q: _hit_text(repo.b, repo.work, q)
+    near = lambda used: [(q, text(q)) for q in repo.nearby(rel) if keep(q) and q not in used][:200]
     bm25 = [q for q in repo.bm25(_query(kind, task)) if keep(q)]
     out = {"target": target}
     for version in TYPES[kind]["versions"]:
@@ -159,7 +169,8 @@ def build_task(kind: str, task: dict, repo: Repo, count) -> dict:
             rec.update(block="", items=[], partial=None, empty=True)
         elif version == "FILE_BM25PAD":
             what = "change" if kind == "forward" else "new function"
-            rec.update(_fill(count, base, BM25_HEAD.format(what=what), [("", [(q, text(q)) for q in bm25[:80]])], target))
+            rec.update(_fill(count, base, BM25_HEAD.format(what=what),
+                             [("", [(q, text(q)) for q in bm25[:80]]), (NEAR_HEAD, near(bm25))], target))
         else:
             leaf = task["anchor"].rsplit(".", 1)[-1]
             hits = repo.grep(leaf)
@@ -168,7 +179,13 @@ def build_task(kind: str, task: dict, repo: Repo, count) -> dict:
                 from harness.experiments.suite.blast import BUDGET, GREP_BLOCK, _cap
                 lines = "\n".join(f"{f}:{i}: {Path(repo.work, f).read_text(errors='replace').splitlines()[i - 1].strip()[:160]}"
                                   for f, i in hits)
-                head = GREP_BLOCK.format(leaf=leaf, lines=_cap(lines, BUDGET)) + "\n"
+                lines = _cap(lines, BUDGET).splitlines()
+                while lines and count(base + "\n" + GREP_BLOCK.format(leaf=leaf, lines="\n".join(lines)) + "\n"
+                                      + BODIES_HEAD) > (1 - BAND) * target:  # the lines alone must leave room
+                    cut = max(1, len(lines) // 10)
+                    shown = [ln for ln in lines if not ln.startswith("... (")][:-cut]
+                    lines = shown + [f"... ({len(hits) - len(shown)} more lines not shown)"] if shown else []
+                head = GREP_BLOCK.format(leaf=leaf, lines="\n".join(lines)) + "\n" if lines else ""
             bodies = []
             for f, i in hits:
                 q = repo.enclosing(f, i)
@@ -176,7 +193,8 @@ def build_task(kind: str, task: dict, repo: Repo, count) -> dict:
                     bodies.append(q)
             more = [q for q in bm25 if q not in bodies][:80]
             rec.update(_fill(count, base, head + BODIES_HEAD, [("", [(q, text(q)) for q in bodies]),
-                                                               (MORE_HEAD, [(q, text(q)) for q in more])], target))
+                                                               (MORE_HEAD, [(q, text(q)) for q in more]),
+                                                               (NEAR_HEAD, near(bodies + more))], target))
             rec["bodies"] = sum(q in bodies for q in rec["items"])
         full = base + "\n" + rec["block"] if rec["block"] else base
         rec["tokens"] = count(full)
