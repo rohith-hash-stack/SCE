@@ -25,6 +25,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from harness.experiments.suite.fences import strip_outer_fence
+
 ARMS = ("FILE", "PRISM")
 FILE_WINDOW = 300
 GENERIC = frozenset((
@@ -225,13 +227,16 @@ _BUILTINS = frozenset(dir(__import__("builtins"))) | frozenset((
 ).split())
 
 
-def score_task(task: dict, raw: str) -> dict:
+def score_task(task: dict, raw: str, outer_fence: bool = False) -> dict:
     """reuse: share of the developer's existing helpers the answer also calls. invented: calls to names that
     exist nowhere - `self.x(` with no method `x` in the class, or a bare `x(` that is not in the repository,
-    not imported, not a builtin and not defined in the answer itself."""
+    not imported, not a builtin and not defined in the answer itself. With `outer_fence` (a sensitivity analysis,
+    the same for every version): a fence wrapping the whole answer or the whole code is removed first."""
     try:
-        got = json.loads(raw)
+        got = json.loads(strip_outer_fence(raw) if outer_fence else raw)
         code = got.get("code", "") if isinstance(got, dict) else ""
+        if outer_fence and isinstance(code, str):
+            code = strip_outer_fence(code)
     except (ValueError, TypeError):
         code = ""
     if not isinstance(code, str) or not code.strip():

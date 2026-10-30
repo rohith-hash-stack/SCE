@@ -71,3 +71,26 @@ def test_testgen_salvage_strips_fences_and_keeps_complete_tests_of_a_cut_answer(
     assert answer_code(cut) == ""
     got = answer_code(cut, salvage=True)
     assert "def test_a" in got and "test_b" not in got
+
+
+def test_outer_fence_only_the_wrapper_goes():
+    from harness.experiments.suite.fences import strip_outer_fence
+    code = "def f():\n    return 1"
+    assert strip_outer_fence(code) == code                                   # no fence: unchanged
+    assert strip_outer_fence(f"```\n{code}\n```") == code
+    assert strip_outer_fence(f"```python\n{code}\n```\n") == code
+    assert strip_outer_fence(f"```python\n{code}") == code                   # cut off: no closing fence
+    md = 'def test_render():\n    text = """\n```python\nx = 1\n```\n"""\n    assert render(text)'
+    assert strip_outer_fence(md) == md                                       # fences inside a string: code
+    assert strip_outer_fence(f"```python\n{md}\n```") == md
+    split = f"```python\n{code}\n```\nand then\n```python\n{code}\n```"
+    assert "```" in strip_outer_fence(split)                                 # several blocks: still broken
+    assert strip_outer_fence(strip_outer_fence(f"```\n{code}\n```")) == code  # once is enough
+
+
+def test_newfn_outer_fence_scoring_is_opt_in():
+    task = {"existing_helpers": ["helper"], "class_methods": [], "repo_leaves": ["helper"], "file": "m.py"}
+    raw = json.dumps({"code": "```python\ndef new():\n    return helper()\n```"})
+    assert newfn.score_task(task, raw)["parses"] is False
+    assert newfn.score_task(task, raw, outer_fence=True)["parses"] is True
+    assert newfn.score_task(task, "```json\n" + raw + "\n```", outer_fence=True)["reuse"] == 1.0

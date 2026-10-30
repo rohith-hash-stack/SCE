@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import click
 
 from prism.analysis.hybrid_engine import DEFAULT_RUNTIME_BIAS, HybridFlowEngine
+from prism.git_files import keep_git_visible
 from prism.graph.concrete_builder import ConcreteGraphBuilder
 from prism.graph.hierarchy import compute_hierarchical_profile
 from prism.graph.metamodel import SemanticMetamodel
@@ -123,7 +124,7 @@ def discover_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE
         for filename in filenames:
             if any(filename.endswith(ext) for ext in allowed_extensions):
                 files.append(os.path.join(dirpath, filename))
-    return sorted(files)
+    return sorted(keep_git_visible(repo_root, files))
 
 
 def discover_robot_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERMISSIVE) -> list[str]:
@@ -137,7 +138,7 @@ def discover_robot_files(repo_root: str, language_tier: str = LANGUAGE_TIER_PERM
         for filename in filenames:
             if filename.endswith(ROBOT_EXTENSIONS):
                 files.append(os.path.join(dirpath, filename))
-    return sorted(files)
+    return sorted(keep_git_visible(repo_root, files))
 
 
 def build_pipeline(

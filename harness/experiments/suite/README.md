@@ -51,6 +51,9 @@ one candidate commit.
   - `FILE`: the file;
   - `PRISM`: + `prism.impact.newcode`'s context: helpers that fit (by name, docstring and group), their
     digests, the group's conventions, and the two closest siblings.
+- **Amendment (after the run; post hoc, not a primary test):** an outer-fence sensitivity analysis
+  (`run score newfn --outer-fence`, `scores_fence.json`). A Markdown fence wrapping the whole answer or the
+  whole code is removed, the same way for both versions; nothing else changes. The strict score stays primary.
 - **Scores:**
   - helper reuse: the share of the existing functions the developer's body calls that the AI's body also
     calls;

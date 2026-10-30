@@ -192,6 +192,44 @@ tests were run in each repository at the parent commit.
 fences and raise or remove the answer cap. That is a change to the task, so it needs new tasks, not a
 re-run of these.
 
+## Validity checks (added after the run)
+
+These checks don't change any primary result. They test whether the results can be trusted.
+
+**Truncation per version** (`RESULTS.json`, `validity`). A comparison counts as invalid when a version
+cuts more than 10% of its answers at the answer cap, or the two versions differ by more than 5 points.
+
+| type | baseline | PRISM | valid |
+|---|---|---|---|
+| forward | FILE 0.5% | 0% | yes |
+| bugs, concepts, newfn | 0% | 0% | yes |
+| blast | GREP 7.9% | 2.6% | no (a 5.3-point gap) |
+| tests | FILE 37% | 31% | no |
+
+- **Blast, without the 8 tasks that had a cut-off answer:** GREP 0.138, PRISM 0.301, p = 2.5e-4. The win holds.
+- **Tests, without the 33 tasks that had a cut-off answer:** 0 vs 0 pass. Test writing stays invalid; fixing it needs new tasks.
+- No prompt came close to the window: the prompt-near-window share is 0 for every type.
+
+**newfn, outer fence removed** (`scores_fence.json`; a check after the fact, applied to both versions alike):
+
+| | FILE | PRISM |
+|---|---|---|
+| the code parses (strict) | 96% | 88% |
+| the code parses, outer fence removed | 98% | 97% (p = 0.69) |
+| reuse | 0.591 | 0.708 (unchanged) |
+| invented calls | 0.19 | 0.30 (unchanged) |
+
+- 11 PRISM answers and 3 FILE answers wrapped the code in a fence.
+- **Most of the parse "cost" was this fence, not broken code.** The invented-call cost is real.
+
+**Tokens** (`TOKENS.json`, measured with the Qwen2 tokenizer):
+- PRISM's estimate overcounts in every context: by 1.35× on average, 1.15× at the 5th percentile and 1.55× at the 95th.
+  - By type, the average ranges from 1.20× (blast) to 1.46× (concepts).
+  - So its budgets never overrun; they leave about a quarter of the budget unused.
+- The harness rebuilds all 740 saved prompts exactly. Ollama's count is always the harness count + 29, the chat template's overhead. So the frozen prompts can be replayed with other seeds.
+
+**Index:** before this fix, PRISM indexed every file on disk. An initialised git submodule (aiohttp's `vendor/llhttp`) added 13 files and 164 graph nodes. That is the most likely source of the "43 phantom functions" first blamed on the cache; the cache itself checks every file's content hash. Discovery now follows git (`prism.git_files`). None of the 22 clean clones changes.
+
 ## Costs
 
 - PRISM's contexts are 1.3–2.8× the baseline's prompt (forward 1.9×, newfn 2.8×, blast 2.3× GREP).
@@ -200,10 +238,12 @@ re-run of these.
 
 ## Product issues this run found
 
-1. **Index-cache staleness.** After a checkout, a cached index keeps functions that were deleted (43
-   extra on aiohttp). The suite indexed fresh for every task; the cache needs invalidation by revision.
+1. **Indexing depended on what was on disk** (fixed). Untracked files, such as an initialised submodule, were
+   indexed. This was first reported as cache staleness (43 extra functions on aiohttp). Discovery now follows git; see
+   "Validity checks".
 2. **`prism.ask` ranking gives no gain over BM25** on bug localisation (type 3) or concept questions
    (type 5). Its value is in the structured contexts (change context, blast radius), not in search ranking.
-3. **`newcode` raises invented calls** (0.19 → 0.30) and parse failures (4% → 12%) along with reuse.
+3. **`newcode` raises invented calls** (0.19 → 0.30) along with reuse. The parse failures (4% → 12%) were mostly
+   a fence around the code (98% vs 97% parse once it is removed).
    The helper list should mark which names are real and callable from the target's scope.
 4. **The break section** (wording 2) points the right way but is not proven; it stays opt-in.

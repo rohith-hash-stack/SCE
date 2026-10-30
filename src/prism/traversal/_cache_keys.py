@@ -25,6 +25,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Generic, Iterator, TypeVar
 
+from prism.git_files import keep_git_visible
 from prism.parser.tree_sitter_loader import EXTENSION_LANGUAGE_MAP
 
 _V = TypeVar("_V")
@@ -188,7 +189,7 @@ def _discover_tracked_files(repo_root: str) -> list[str]:
         for filename in filenames:
             if any(filename.endswith(ext) for ext in EXTENSION_LANGUAGE_MAP):
                 files.append(os.path.join(dirpath, filename))
-    return sorted(files)
+    return sorted(keep_git_visible(repo_root, files))
 
 
 def _normalize_content(raw: bytes) -> bytes:

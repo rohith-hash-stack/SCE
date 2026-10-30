@@ -57,9 +57,12 @@ def generate(kind: str, tasks: list[dict], out: Path, base_url: str, model: str,
                   flush=True)
 
 
-def score(kind: str, tasks: list[dict], out: Path) -> dict:
+def score(kind: str, tasks: list[dict], out: Path, outer_fence: bool = False) -> dict:
+    """`outer_fence` (newfn only): the outer-fence sensitivity analysis, written to `scores_fence.json`;
+    `scores.json`, the pre-registered strict score, is left as it is."""
     mod = importlib.import_module(TYPES[kind])
     answers = _load(out / "answers.json")
+    extra = {"outer_fence": True} if outer_fence else {}
     rows = {}
     for t in tasks:
         for arm in mod.ARMS:
@@ -67,11 +70,12 @@ def score(kind: str, tasks: list[dict], out: Path) -> dict:
             if a is None:
                 continue
             rows[f"{t['id']}/{arm}"] = {"task": t["id"], "repo": t["repo"], "arm": arm,
-                                        **mod.score_task(t, a.get("raw", "")),
+                                        **mod.score_task(t, a.get("raw", ""), **extra),
                                         "seconds": a.get("seconds"), "prompt_tokens": a.get("prompt_tokens"),
                                         "answer_tokens": a.get("answer_tokens"), "done_reason": a.get("done_reason")}
-    (out / "scores.json").write_text(json.dumps(rows, indent=1, sort_keys=True) + "\n")
-    print(f"{len(rows)} answers scored -> {out / 'scores.json'}")
+    name = "scores_fence.json" if outer_fence else "scores.json"
+    (out / name).write_text(json.dumps(rows, indent=1, sort_keys=True) + "\n")
+    print(f"{len(rows)} answers scored -> {out / name}")
     return rows
 
 
@@ -84,7 +88,10 @@ def main(argv=None) -> int:
     p.add_argument("--base-url", default="http://127.0.0.1:11434")
     p.add_argument("--model", default=MODEL)
     p.add_argument("--threads", type=int, default=1)
+    p.add_argument("--outer-fence", action="store_true", help="score: the outer-fence sensitivity analysis (newfn)")
     args = p.parse_args(argv)
+    if args.outer_fence and args.kind != "newfn":
+        raise SystemExit("--outer-fence applies to newfn only: the other types' answers are lists of names")
     data = json.loads(Path(args.tasks).read_text())
     if data.get("status") != "frozen":
         raise SystemExit("tasks are not frozen")
@@ -93,7 +100,7 @@ def main(argv=None) -> int:
     if args.cmd == "generate":
         generate(args.kind, data["tasks"], out, args.base_url, args.model, args.threads)
     else:
-        score(args.kind, data["tasks"], out)
+        score(args.kind, data["tasks"], out, outer_fence=args.outer_fence)
     return 0
 
 

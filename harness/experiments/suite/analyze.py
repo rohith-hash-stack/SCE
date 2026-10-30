@@ -124,6 +124,28 @@ def split(rows, metrics) -> dict:
                       for repo in REPOS if any(r["repo"] == repo for r in rows)}}
 
 
+NUM_CTX, NUM_PREDICT = 20480, 4096
+MAX_TRUNCATED, MAX_TRUNCATED_GAP = 0.10, 0.05
+
+
+def validity(rows, arms) -> dict:
+    """Per version: the share of answers cut at the answer cap (`done_reason` "length"), and of prompts so long that
+    the window could not also hold a full answer (Ollama would cut the prompt). A comparison is invalid when either
+    version cuts more than 10% of its answers or the two differ by more than 5 points."""
+    per = {}
+    for arm in arms:
+        rs = [r for r in rows if r["arm"] == arm]
+        if not rs:
+            continue
+        per[arm] = {"n": len(rs),
+                    "truncated": round(sum(r.get("done_reason") == "length" for r in rs) / len(rs), 3),
+                    "prompt_near_window": round(sum(int(r.get("prompt_tokens") or 0) >= NUM_CTX - NUM_PREDICT
+                                                    for r in rs) / len(rs), 3)}
+    rates = [v["truncated"] for v in per.values()]
+    return {"arms": per, "valid": bool(rates) and max(rates) <= MAX_TRUNCATED
+            and max(rates) - min(rates) <= MAX_TRUNCATED_GAP}
+
+
 # ------------------------------------------------------------------ the analysis
 def analyze() -> dict:
     out: dict = {"types": {}}
@@ -141,13 +163,14 @@ def analyze() -> dict:
         for r in fw:
             a = ans.get(f"{r['id']}/{r['arm']}", {})
             r["seconds"], r["prompt_tokens"] = a.get("seconds"), a.get("prompt_tokens")
-            r["task"] = r["id"]
+            r["done_reason"], r["task"] = a.get("done_reason"), r["id"]
         out["types"]["forward"] = {
             "arms": split(fw, metrics),
             "primary": compare_items(fw, "FILE", "PRISM", found),
             "breaks_vs_prism": compare_items(fw, "PRISM", "PRISM_BREAKS", found),
             "wrong_functions_breaks_vs_prism": compare_scores(fw, "PRISM", "PRISM_BREAKS", lambda r: float(len(r["extra"]))),
-            "tiers": {tier: by_arm([r for r in fw if r["tier"] == tier], metrics) for tier in ("easy", "medium", "hard")}}
+            "tiers": {tier: by_arm([r for r in fw if r["tier"] == tier], metrics) for tier in ("easy", "medium", "hard")},
+            "validity": validity(fw, ("FILE", "PRISM", "PRISM_BREAKS"))}
     for kind, base, pmetric, metrics, test in (
             ("bugs", "BM25", "top5_any", {"top1": lambda r: float(r["top1"]), "top5": lambda r: float(r["top5_any"]),
                                           "recall5": lambda r: r["recall5"]}, "items"),
@@ -170,6 +193,7 @@ def analyze() -> dict:
             for r in rows:
                 a = ans.get(f"{r['task']}/{r['arm']}", {})
                 r["seconds"], r["prompt_tokens"] = a.get("seconds"), a.get("prompt_tokens")
+                r["done_reason"] = a.get("done_reason")
         if not rows:
             out["types"][kind] = {"pending": True}
             continue
@@ -177,7 +201,14 @@ def analyze() -> dict:
             primary = compare_items(rows, base, "PRISM", lambda r: {"x": bool(r.get(pmetric))})
         else:
             primary = compare_scores(rows, base, "PRISM", lambda r: float(r.get(pmetric) or 0.0))
-        entry = {"arms": split(rows, metrics), "primary": primary}
+        entry = {"arms": split(rows, metrics), "primary": primary, "validity": validity(rows, (base, "PRISM"))}
+        if not entry["validity"]["valid"]:  # the primary again, without the tasks where either version was cut off
+            cut = {r["task"] for r in rows if r.get("done_reason") == "length" and r["arm"] in (base, "PRISM")}
+            kept = [r for r in rows if r["task"] not in cut]
+            entry["validity"]["tasks_cut"] = len(cut)
+            entry["validity"]["primary_without_cut"] = (
+                compare_items(kept, base, "PRISM", lambda r: {"x": bool(r.get(pmetric))}) if test == "items"
+                else compare_scores(kept, base, "PRISM", lambda r: float(r.get(pmetric) or 0.0)))
         if kind == "tests":
             entry["coverage"] = compare_scores(rows, "FILE", "PRISM", lambda r: float(r.get("coverage_vs_developer") or 0.0))
         if kind in ("bugs", "concepts"):
@@ -197,6 +228,13 @@ def analyze() -> dict:
             "coverage": compare_scores(salv, "FILE", "PRISM", lambda r: float(r.get("coverage_vs_developer") or 0.0)),
             "pass_share": compare_scores(salv, "FILE", "PRISM",
                                          lambda r: (r.get("passed") or 0) / r["ran"] if r.get("ran") else 0.0)}
+    fence = scores("newfn", "scores_fence.json")
+    if fence:  # sensitivity analysis decided after the run: a fence wrapping the whole code removed, every version alike
+        out["newfn_outer_fence"] = {
+            "arms": split(fence, {"reuse": lambda r: r["reuse"], "invented": lambda r: r["invented"],
+                                  "parses": lambda r: float(r["parses"])}),
+            "parses": compare_items(fence, "FILE", "PRISM", lambda r: {"x": bool(r.get("parses"))}),
+            "reuse": compare_scores(fence, "FILE", "PRISM", lambda r: float(r.get("reuse") or 0.0))}
     primaries = {k: v["primary"]["p"] for k, v in out["types"].items()
                  if k != "concepts" and isinstance(v, dict) and "primary" in v}
     out["holm"] = stats.holm(primaries) if primaries else {}
