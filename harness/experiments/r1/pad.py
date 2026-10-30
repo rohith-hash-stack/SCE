@@ -248,7 +248,8 @@ def freeze() -> int:
     for f in files:
         d = json.loads(f.read_text())
         recs = [r[v] for r in d["tasks"].values() for v in TYPES[d["type"]]["versions"]]
-        entries.append({"path": str(f), "sha256": hashlib.sha256(f.read_bytes()).hexdigest(), "type": d["type"],
+        entries.append({"path": os.path.relpath(f, HERE.parents[2]),  # relative to the repository root
+                        "sha256": hashlib.sha256(f.read_bytes()).hexdigest(), "type": d["type"],
                         "repo": d["repo"], "tasks": len(d["tasks"]), "within": sum(r["within"] for r in recs),
                         "padded": len(recs), "no_pad": sum(bool(r.get("empty")) for r in recs)})
     (PADS / "manifest.json").write_text(json.dumps({"status": "frozen", "files": entries}, indent=1) + "\n")
