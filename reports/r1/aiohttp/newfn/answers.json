@@ -125,6 +125,15 @@
   "seconds": 14.5,
   "seed": 42
  },
+ "aiohttp-newfn-015/FILE@42replay": {
+  "answer_tokens": 149,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2412,
+  "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy and not req.proxy.ssl:\\n        # Set Proxy-Authorization header for non-SSL proxy requests\\n        if req.proxy_auth:\\n            req.headers['Proxy-Authorization'] = req.proxy_auth.encode()\\n    elif req.proxy and req.proxy.ssl:\\n        # Build the proxy request for SSL proxy requests\\n        # This is a placeholder for the actual implementation\\n        # which would involve setting up the proxy tunnel.\\n        # For the sake of this example, we'll just return the request as is.\\n        pass\\n    return req\"\n}",
+  "seconds": 13.7,
+  "seed": 42
+ },
  "aiohttp-newfn-015/FILE_BM25PAD@42": {
   "answer_tokens": 574,
   "done_reason": "stop",
@@ -132,6 +141,15 @@
   "prompt_tokens": 8828,
   "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy is not None:\\n        if not req.is_ssl():\\n            # Set Proxy-Authorization header for non-SSL proxy requests\\n            if req.proxy_auth is not None:\\n                req.headers[hdrs.PROXY_AUTHORIZATION] = req.proxy_auth.encode()\\n        else:\\n            # Build the proxy request for SSL proxy requests\\n            headers: dict[str, str] = {}\\n            if req.proxy_headers is not None:\\n                headers = req.proxy_headers  # type: ignore[assignment]\\n            headers[hdrs.HOST] = req.headers[hdrs.HOST]\\n\\n            url = req.proxy\\n            assert url is not None\\n            proxy_req = ClientRequest(\\n                hdrs.METH_GET,\\n                url,\\n                headers=headers,\\n                auth=req.proxy_auth,\\n                loop=self._loop,\\n                ssl=req.ssl,\\n            )\\n\\n            # create connection to proxy server\\n            transport, proto = await self._create_direct_connection(\\n                proxy_req, [], timeout, client_error=ClientProxyConnectionError\\n            )\\n\\n            auth = proxy_req.headers.pop(hdrs.AUTHORIZATION, None)\\n            if auth is not None:\\n                if not req.is_ssl():\\n                    req.headers[hdrs.PROXY_AUTHORIZATION] = auth\\n                else:\\n                    proxy_req.headers[hdrs.PROXY_AUTHORIZATION] = auth\\n\\n            if req.is_ssl():\\n                if runtime_has_start_tls:\\n                    self._warn_about_tls_in_tls(transport, req)\\n\\n                # For HTTPS requests over HTTP proxy\\n                # we must notify proxy to tunnel connection\\n                # so we send CONNECT command:\\n                #   CONNECT www.python.org:443 HTTP/1.1\\n                #   Host: www.python.org\\n                #\\n                # next we must do TLS handshake and so on\\n                # to do this we must wrap raw socket into secure one\\n                # asyncio handles this perfectly\\n                proxy_req.method = hdrs.METH_CONNECT\\n                proxy_req.url = req.url\\n                key = req.connection_key._replace(\\n                    proxy=None, proxy_auth=None, proxy_headers_hash=None\\n                )\\n                conn = _ConnectTunnelConnection(self, key, proto, self._loop)\\n                proxy_resp = await proxy_req.send(conn)\\n                try:\\n                    protocol = conn._protocol\\n                    assert protocol is not None\\n\\n                    # read_until_eof=True will ensure the connection isn't closed\\n                    # once the response is received and processed allowing\\n\"\n}",
   "seconds": 54.5,
+  "seed": 42
+ },
+ "aiohttp-newfn-015/PRISM@42replay": {
+  "answer_tokens": 129,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8837,
+  "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy is None:\\n        return req\\n\\n    if not req.is_ssl():\\n        if req.proxy_auth:\\n            req.headers[hdrs.PROXY_AUTHORIZATION] = req.proxy_auth.credentials\\n\\n    proxy_req = ClientRequest(\\n        hdrs.METH_GET,\\n        req.proxy,\\n        headers=req.proxy_headers,\\n        auth=req.proxy_auth,\\n        loop=self._loop,\\n    )\\n\\n    return proxy_req\"\n}",
+  "seconds": 18.4,
   "seed": 42
  },
  "aiohttp-newfn-016/FILE_BM25PAD@42": {
