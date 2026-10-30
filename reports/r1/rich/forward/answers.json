@@ -17,6 +17,15 @@
   "seconds": 100.7,
   "seed": 42
  },
+ "rich-forward-002/FILE@42replay": {
+  "answer_tokens": 868,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2358,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_Line.expand\",\n      \"file\": \"rich/pretty.py\",\n      \"reason\": \"The signature of the `expand` method has changed to include an `indent_size` parameter.\",\n      \"new_code\": \"def expand(self, indent_size: int) -> Iterable['_Line']:\\n        node = self.node\\n        whitespace = self.whitespace\\n        yield _Line(\\n            text=node.open_brace, whitespace=whitespace, expanded=True,\\n        )\\n        child_whitespace = self.whitespace + ' ' * indent_size\\n        for child in self.node.children:\\n            line = _Line(node=child, whitespace=child_whitespace, suffix=',')\\n            yield line\\n\\n        yield _Line(\\n            text=node.close_brace, whitespace=whitespace, expanded=True,\\n        )\"\n    },\n    {\n      \"function\": \"pretty_repr\",\n      \"file\": \"rich/pretty.py\",\n      \"reason\": \"The `pretty_repr` function needs to pass the `indent_size` parameter to the `expand` method.\",\n      \"new_code\": \"def pretty_repr(\\n    _object: Any,\\n    *,\\n    max_width: Optional[int] = 80,\\n    indent_size: int = 4,\\n    highlighter: Highlighter = None,\\n    justify: 'JustifyMethod' = None,\\n    overflow: 'OverflowMethod' = None,\\n    no_wrap: bool = True,\\n) -> Text:\\n\\n    comma = ', '\\n    colon = ': '\\n\\n    def to_repr(obj: Any) -> str:\\n        try:\\n            obj_repr = repr(obj)\\n        except Exception as error:\\n            obj_repr = f'<repr error {error}>'\\n        return obj_repr\\n\\n    def traverse(obj: Any) -> _Node:\\n\\n        if isinstance(obj, _CONTAINERS):\\n            open_brace, close_brace, empty = _BRACES[type(obj)]\\n            if obj:\\n                node = _Node(\\n                    open_brace=open_brace, close_brace=close_brace, children=[]\\n                )\\n                children = node.children\\n                append = children.append\\n                if isinstance(obj, dict):\\n                    for key, child in obj.items():\\n                        child_node = traverse(child)\\n                        child_node.key_repr = to_repr(key)\\n                        append(child_node)\\n                        node.cell_len += child_node.cell_len\\n                else:\\n                    for child in obj:\\n                        child_node = traverse(child)\\n                        append(child_node)\\n                        node.cell_len += child_node.cell_len\\n                if children:\\n                    node.cell_len += cell_len(comma) * (len(children) - 1)\\n            else:\\n                node = _Node(value_repr=empty)\\n\\n        else:\\n            object_repr = to_repr(obj)\\n            node = _Node(value_repr=to_repr(obj), cell_len=cell_len(object_repr))\\n\\n        return node\\n\\n    node = traverse(_object)\\n\\n    def render(lines: List[_Line]):\\n        line_no = 0\\n        expanded = True\\n        while expanded:\\n            expanded = False\\n            while line_no < len(lines):\\n                line = lines[line_no]\\n                if line.node and not line.expanded:\\n                    cell_len = line.cell_len + indent_size * line.indent\\n                    if cell_len > max_width:\\n                        expanded = True\\n                        expand_lines = list(line.expand(indent_size))\\n                        lines[line_no:line_no] = expand_lines\\n                        line_no += len(expand_lines)\\n                line_no += 1\\n\\n    lines = [_Line(node=node, cell_len=node.cell_len)]\\n    render(lines)\\n    repr_str = '\\\\n'.join(\\n        f'{' ' * (line.indent * indent_size)}{line.text}' for line in lines\\n    )\\n    print('-' * max_width)\\n    return repr_str\"\n    }\n  ]\n}",
+  "seconds": 60.6,
+  "seed": 42
+ },
  "rich-forward-002/FILE_BM25PAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -33,6 +42,15 @@
   "prompt_tokens": 3644,
   "raw": "{\"changes\": []}",
   "seconds": 2.6,
+  "seed": 42
+ },
+ "rich-forward-002/PRISM@42replay": {
+  "answer_tokens": 203,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3648,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"render\",\n      \"file\": \"rich/pretty.py\",\n      \"reason\": \"The `render` function needs to be updated to handle the new parameters and logic introduced in the `_Line.expand` method.\",\n      \"new_code\": \"def render(lines: List[_Line], indent_size: int):\\n    line_no = 0\\n    expanded = True\\n    while expanded:\\n        expanded = False\\n        while line_no < len(lines):\\n            line = lines[line_no]\\n            if line.node and not line.expanded:\\n                cell_len = line.cell_len + indent_size * line.indent\\n                if cell_len > max_width:\\n                    expanded = True\\n                    expand_lines = list(line.expand(indent_size=indent_size))\\n                    lines[line_no:line_no] = expand_lines\\n                    line_no += len(expand_lines)\\n            line_no += 1\"\n    }\n  ]\n}",
+  "seconds": 15.8,
   "seed": 42
  },
  "rich-forward-003/FILE_BM25PAD@42": {
