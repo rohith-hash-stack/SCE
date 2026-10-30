@@ -121,21 +121,20 @@ def _fill(count, base: str, head: str, groups: list[tuple[str, list[tuple[str, s
     """Add items in order (each group opened by its title) while the whole prompt stays within the target, then the
     first lines of the next item when the prompt is still more than 5% short."""
     block, shown, partial = head, [], None
-    spent = count(base + "\n" + head)
+    total = lambda b: count(base + "\n" + b)  # the whole prompt, counted exactly (token counts do not add up)
     for title, items in groups:
         for n, (q, text) in enumerate(items):
             piece = (title if n == 0 and title else ("\n\n" if shown else "")) + text
-            cost = count(piece) + 1
-            if spent + cost <= target:
-                block, spent = block + piece, spent + cost
+            if total(block + piece) <= target:
+                block += piece
                 shown.append(q)
                 continue
-            if spent < (1 - BAND) * target:
+            if total(block) < (1 - BAND) * target:
                 lines = piece.splitlines()
                 lo, hi = 0, len(lines)
                 while lo < hi:
                     mid = (lo + hi + 1) // 2
-                    if spent + count("\n".join(lines[:mid]) + "\n```") + 1 <= target:
+                    if total(block + "\n".join(lines[:mid]) + "\n```") <= target:
                         lo = mid
                     else:
                         hi = mid - 1

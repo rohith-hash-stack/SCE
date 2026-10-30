@@ -139,11 +139,12 @@ def _load(path: Path) -> dict:
         return {}
 
 
-def ollama(base_url: str, model: str, text: str, timeout: int = 900, stats: dict | None = None) -> tuple[str, float]:
+def ollama(base_url: str, model: str, text: str, timeout: int = 900, stats: dict | None = None,
+           seed: int = 42) -> tuple[str, float]:
     """The model's reply and the seconds it took; `stats` receives Ollama's own counts (prompt and answer
     tokens) and why it stopped (`stop`, or `length` when the answer hit `num_predict`)."""
     body = json.dumps({"model": model, "prompt": text, "stream": False, "format": "json",
-                       "options": {"temperature": 0.2, "seed": 42, "num_ctx": NUM_CTX, "num_predict": 4096}}).encode()
+                       "options": {"temperature": 0.2, "seed": seed, "num_ctx": NUM_CTX, "num_predict": 4096}}).encode()
     req = urllib.request.Request(f"{base_url}/api/generate", data=body, headers={"Content-Type": "application/json"})
     t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as resp:
