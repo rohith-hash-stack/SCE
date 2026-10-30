@@ -33,7 +33,7 @@ filled until the whole prompt has PRISM's real token count for that task (Qwen2.
 | `GREP_PAD` | blast | GREP (its grep lines) | the code of the functions those lines are in, then BM25 functions if there is room |
 
 - **BM25 query:** forward: the changed function's name and its new code. newfn: the new function's signature and
-  description.
+  description. blast (top-up only): the anchor's name.
 - **Shown code:** each function as in the bugs type's BM25 version: its name and location, then up to 60 lines.
 - **Excluded:** the changed or anchor function itself, and functions already visible in the file window.
 - **What the padding never uses:** the call graph, PRISM's contexts or the answer key. Function boundaries come from
