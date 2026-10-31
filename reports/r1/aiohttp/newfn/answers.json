@@ -251,6 +251,24 @@
   "seconds": 23.4,
   "seed": 1001
  },
+ "aiohttp-newfn-008/FILE@1001": {
+  "answer_tokens": 274,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2277,
+  "raw": "{\n  \"code\": \"async def _wait_for_available_connection(self, key: \\\"ConnectionKey\\\", traces: List[\\\"Trace\\\"]) -> None:\\n        \\\"\\\"\\\"\\n        Wait until there is an available connection.\\n        \\\"\\\"\\\"\\n        while self._available_connections(key) <= 0:\\n            fut: asyncio.Future[None] = self._loop.create_future()\\n\\n            # This connection will now count towards the limit.\\n            self._waiters[key].append(fut)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_start()\\n\\n            try:\\n                await fut\\n            except BaseException as e:\\n                if key in self._waiters:\\n                    # remove a waiter even if it was cancelled, normally it's\\n                    #  removed when it's notified\\n                    try:\\n                        self._waiters[key].remove(fut)\\n                    except ValueError:  # fut may no longer be in list\\n                        pass\\n\\n                raise e\\n            finally:\\n                if key in self._waiters and not self._waiters[key]:\\n                    del self._waiters[key]\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_end()\"\n}",
+  "seconds": 21.7,
+  "seed": 1001
+ },
+ "aiohttp-newfn-008/FILE_BM25PAD@1001": {
+  "answer_tokens": 206,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8449,
+  "raw": "{\n  \"code\": \"async def _wait_for_available_connection(self, key: \\\"ConnectionKey\\\", traces: List[\\\"Trace\\\"]):\\n        while self._available_connections(key) <= 0:\\n            fut: asyncio.Future[None] = self._loop.create_future()\\n            self._waiters[key].append(fut)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_start()\\n\\n            try:\\n                await fut\\n            except BaseException as e:\\n                if key in self._waiters:\\n                    try:\\n                        self._waiters[key].remove(fut)\\n                    except ValueError:\\n                        pass\\n                raise e\\n            finally:\\n                if key in self._waiters and not self._waiters[key]:\\n                    del self._waiters[key]\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_end()\\n\"\n}",
+  "seconds": 24.4,
+  "seed": 1001
+ },
  "aiohttp-newfn-008/FILE_BM25PAD@42": {
   "answer_tokens": 214,
   "done_reason": "stop",
@@ -259,6 +277,33 @@
   "raw": "{\n  \"code\": \"async def _wait_for_available_connection(self, key: \\\"ConnectionKey\\\", traces: List[\\\"Trace\\\"]):\\n        while True:\\n            available = self._available_connections(key)\\n            if available > 0:\\n                break\\n            fut: asyncio.Future[None] = self._loop.create_future()\\n            self._waiters[key].append(fut)\\n            try:\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_connection_queued_start()\\n                await fut\\n            except BaseException as e:\\n                if key in self._waiters:\\n                    try:\\n                        self._waiters[key].remove(fut)\\n                    except ValueError:\\n                        pass\\n                raise e\\n            finally:\\n                if key in self._waiters and not self._waiters[key]:\\n                    del self._waiters[key]\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_connection_queued_end()\"\n}",
   "seconds": 26.9,
   "seed": 42
+ },
+ "aiohttp-newfn-008/PRISM@1001": {
+  "answer_tokens": 270,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8548,
+  "raw": "{\n  \"code\": \"async def _wait_for_available_connection(\\n        self, key: \\\"ConnectionKey\\\", traces: List[\\\"Trace\\\"]\\n    ) -> None:\\n        \\\"\\\"\\\"\\n        Wait until there is an available connection.\\n        \\\"\\\"\\\"\\n        while True:\\n            available = self._available_connections(key)\\n            if available > 0:\\n                return\\n\\n            if key not in self._waiters:\\n                self._waiters[key] = deque()\\n\\n            fut: asyncio.Future[None] = self._loop.create_future()\\n            self._waiters[key].append(fut)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_start()\\n\\n            try:\\n                await fut\\n            except BaseException as e:\\n                if key in self._waiters:\\n                    try:\\n                        self._waiters[key].remove(fut)\\n                    except ValueError:\\n                        pass\\n                raise e\\n            finally:\\n                if key in self._waiters and not self._waiters[key]:\\n                    del self._waiters[key]\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_connection_queued_end()\"\n}",
+  "seconds": 28.5,
+  "seed": 1001
+ },
+ "aiohttp-newfn-009/FILE@1001": {
+  "answer_tokens": 59,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2575,
+  "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n    self._set_closed()\\n    self._set_code_close_transport(WSCloseCode.ABNORMAL_CLOSURE)\\n    self._exception = exc\"\n}",
+  "seconds": 7.9,
+  "seed": 1001
+ },
+ "aiohttp-newfn-009/FILE_BM25PAD@1001": {
+  "answer_tokens": 58,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7549,
+  "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n        self._exception = exc\\n        self._set_closed()\\n        self._set_code_close_transport(WSCloseCode.ABNORMAL_CLOSURE)\"\n}",
+  "seconds": 11.6,
+  "seed": 1001
  },
  "aiohttp-newfn-009/FILE_BM25PAD@42": {
   "answer_tokens": 58,
@@ -269,6 +314,33 @@
   "seconds": 14.0,
   "seed": 42
  },
+ "aiohttp-newfn-009/PRISM@1001": {
+  "answer_tokens": 83,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7556,
+  "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n        \\\"\\\"\\\"Handle exceptions raised during ping/pong processing.\\\"\\\"\\\"\\n        self._cancel_heartbeat()\\n        self._set_closed()\\n        self._set_code_close_transport(WSCloseCode.ABNORMAL_CLOSURE)\\n        self._exception = exc\"\n}",
+  "seconds": 12.6,
+  "seed": 1001
+ },
+ "aiohttp-newfn-010/FILE@1001": {
+  "answer_tokens": 156,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1613,
+  "raw": "{\n  \"code\": \"```python\\n@pytest.yield_fixture\\ndef aiohttp_raw_server(loop):\\n    \\\"\\\"\\\"Factory to create a RawTestServer instance, given a web handler.\\n\\n    aiohttp_raw_server(handler, **kwargs)\\n    \\\"\\\"\\\"\\n    servers = []\\n\\n    async def go(handler, *, port=None, **kwargs):\\n        server = RawTestServer(handler, port=port)\\n        await server.start_server(loop=loop, **kwargs)\\n        servers.append(server)\\n        return server\\n\\n    yield go\\n\\n    async def finalize():\\n        while servers:\\n            await servers.pop().close()\\n\\n    loop.run_until_complete(finalize())\\n```\"\n}",
+  "seconds": 13.1,
+  "seed": 1001
+ },
+ "aiohttp-newfn-010/FILE_BM25PAD@1001": {
+  "answer_tokens": 156,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4454,
+  "raw": "{\n  \"code\": \"```python\\n@pytest.yield_fixture\\ndef aiohttp_raw_server(loop):\\n    \\\"\\\"\\\"Factory to create a RawTestServer instance, given a web handler.\\n\\n    aiohttp_raw_server(handler, **kwargs)\\n    \\\"\\\"\\\"\\n    servers = []\\n\\n    async def go(handler, *, port=None, **kwargs):\\n        server = RawTestServer(handler, port=port)\\n        await server.start_server(loop=loop, **kwargs)\\n        servers.append(server)\\n        return server\\n\\n    yield go\\n\\n    async def finalize():\\n        while servers:\\n            await servers.pop().close()\\n\\n    loop.run_until_complete(finalize())\\n```\"\n}",
+  "seconds": 14.9,
+  "seed": 1001
+ },
  "aiohttp-newfn-010/FILE_BM25PAD@42": {
   "answer_tokens": 156,
   "done_reason": "stop",
@@ -277,6 +349,33 @@
   "raw": "{\n  \"code\": \"```python\\n@pytest.yield_fixture\\ndef aiohttp_raw_server(loop):\\n    \\\"\\\"\\\"Factory to create a RawTestServer instance, given a web handler.\\n\\n    aiohttp_raw_server(handler, **kwargs)\\n    \\\"\\\"\\\"\\n    servers = []\\n\\n    async def go(handler, *, port=None, **kwargs):\\n        server = RawTestServer(handler, port=port)\\n        await server.start_server(loop=loop, **kwargs)\\n        servers.append(server)\\n        return server\\n\\n    yield go\\n\\n    async def finalize():\\n        while servers:\\n            await servers.pop().close()\\n\\n    loop.run_until_complete(finalize())\\n```\"\n}",
   "seconds": 16.5,
   "seed": 42
+ },
+ "aiohttp-newfn-010/PRISM@1001": {
+  "answer_tokens": 156,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4455,
+  "raw": "{\n  \"code\": \"```python\\n@pytest.yield_fixture\\ndef aiohttp_raw_server(loop):\\n    \\\"\\\"\\\"Factory to create a RawTestServer instance, given a web handler.\\n\\n    aiohttp_raw_server(handler, **kwargs)\\n    \\\"\\\"\\\"\\n    servers = []\\n\\n    async def go(handler, *, port=None, **kwargs):\\n        server = RawTestServer(handler, port=port)\\n        await server.start_server(loop=loop, **kwargs)\\n        servers.append(server)\\n        return server\\n\\n    yield go\\n\\n    async def finalize():\\n        while servers:\\n            await servers.pop().close()\\n\\n    loop.run_until_complete(finalize())\\n```\"\n}",
+  "seconds": 14.4,
+  "seed": 1001
+ },
+ "aiohttp-newfn-011/FILE@1001": {
+  "answer_tokens": 45,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1574,
+  "raw": "{\n  \"code\": \"def must_be_empty_body(method: str, code: int) -> bool:\\n    return method_must_be_empty_body(method) or status_code_must_be_empty_body(code)\"\n}",
+  "seconds": 5.5,
+  "seed": 1001
+ },
+ "aiohttp-newfn-011/FILE_BM25PAD@1001": {
+  "answer_tokens": 45,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5969,
+  "raw": "{\n  \"code\": \"def must_be_empty_body(method: str, code: int) -> bool:\\n    return method_must_be_empty_body(method) or status_code_must_be_empty_body(code)\"\n}",
+  "seconds": 9.5,
+  "seed": 1001
  },
  "aiohttp-newfn-011/FILE_BM25PAD@42": {
   "answer_tokens": 45,
@@ -287,6 +386,33 @@
   "seconds": 10.6,
   "seed": 42
  },
+ "aiohttp-newfn-011/PRISM@1001": {
+  "answer_tokens": 118,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6034,
+  "raw": "{\n  \"code\": \"def must_be_empty_body(method: str, code: int) -> bool:\\n    \\\"\\\"\\\"Check if a request must return an empty body.\\\"\\\"\\\"\\n    # https://datatracker.ietf.org/doc/html/rfc9112#section-6.3-2.1\\n    # https://datatracker.ietf.org/doc/html/rfc9112#section-6.3-2.2\\n    return method_must_be_empty_body(method) or status_code_must_be_empty_body(code)\"\n}",
+  "seconds": 14.0,
+  "seed": 1001
+ },
+ "aiohttp-newfn-012/FILE@1001": {
+  "answer_tokens": 103,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2485,
+  "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n    self._set_closed()\\n    self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n    self._exception = exc\\n    self._response.close()\\n    if self._waiting and not self._closing:\\n        self._reader.feed_data(\\n            WSMessage(WSMsgType.ERROR, self._exception, None)\\n        )\"\n}",
+  "seconds": 10.4,
+  "seed": 1001
+ },
+ "aiohttp-newfn-012/FILE_BM25PAD@1001": {
+  "answer_tokens": 104,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7860,
+  "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n        self._exception = exc\\n        self._set_closing()\\n        self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n        self._response.close()\\n        if self._waiting and not self._closing:\\n            self._reader.feed_data(\\n                WSMessage(WSMsgType.ERROR, self._exception, None)\\n            )\"\n}",
+  "seconds": 15.6,
+  "seed": 1001
+ },
  "aiohttp-newfn-012/FILE_BM25PAD@42": {
   "answer_tokens": 103,
   "done_reason": "stop",
@@ -295,6 +421,33 @@
   "raw": "{\n  \"code\": \"def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n        self._exception = exc\\n        self._set_closing()\\n        self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n        await self.close()\\n        if self._waiting and not self._closing:\\n            self._reader.feed_data(\\n                WSMessage(WSMsgType.ERROR, self._exception, None)\\n            )\"\n}",
   "seconds": 17.6,
   "seed": 42
+ },
+ "aiohttp-newfn-012/PRISM@1001": {
+  "answer_tokens": 120,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7913,
+  "raw": "{\n  \"code\": \"    def _handle_ping_pong_exception(self, exc: BaseException) -> None:\\n        \\\"\\\"\\\"Handle exceptions raised during ping/pong processing.\\\"\\\"\\\"\\n        self._set_closed()\\n        self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n        self._exception = exc\\n        self._response.close()\\n        if self._waiting and not self._closing:\\n            self._reader.feed_data(\\n                WSMessage(WSMsgType.ERROR, self._exception, None)\\n            )\"\n}",
+  "seconds": 16.1,
+  "seed": 1001
+ },
+ "aiohttp-newfn-013/FILE@1001": {
+  "answer_tokens": 88,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2748,
+  "raw": "{\n  \"code\": \"def get_env_proxy_for_url(url: URL) -> Tuple[URL, Optional[BasicAuth]]:\\n    proxies = proxies_from_env()\\n    proto = 'https' if url.scheme == 'https' else 'http'\\n    proxy_info = proxies.get(proto)\\n    if proxy_info:\\n        return proxy_info.proxy, proxy_info.proxy_auth\\n    return url, None\"\n}",
+  "seconds": 9.9,
+  "seed": 1001
+ },
+ "aiohttp-newfn-013/FILE_BM25PAD@1001": {
+  "answer_tokens": 88,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6275,
+  "raw": "{\n  \"code\": \"def get_env_proxy_for_url(url: URL) -> Tuple[URL, Optional[BasicAuth]]:\\n    proxies = proxies_from_env()\\n    proto = 'https' if url.scheme == 'https' else 'http'\\n    proxy_info = proxies.get(proto)\\n    if proxy_info:\\n        return proxy_info.proxy, proxy_info.proxy_auth\\n    return url, None\"\n}",
+  "seconds": 11.8,
+  "seed": 1001
  },
  "aiohttp-newfn-013/FILE_BM25PAD@42": {
   "answer_tokens": 88,
@@ -305,6 +458,33 @@
   "seconds": 14.4,
   "seed": 42
  },
+ "aiohttp-newfn-013/PRISM@1001": {
+  "answer_tokens": 107,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6276,
+  "raw": "{\n  \"code\": \"def get_env_proxy_for_url(url: URL) -> Tuple[URL, Optional[BasicAuth]]:\\n    \\\"\\\"\\\"Get a permitted proxy for the given URL from the env.\\\"\\\"\\\"\\n    proxies = proxies_from_env()\\n    proto = 'https' if url.scheme == 'https' else 'http'\\n    proxy_info = proxies.get(proto)\\n    if proxy_info:\\n        return proxy_info.proxy, proxy_info.proxy_auth\\n    return url, None\"\n}",
+  "seconds": 12.5,
+  "seed": 1001
+ },
+ "aiohttp-newfn-014/FILE@1001": {
+  "answer_tokens": 90,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1762,
+  "raw": "{\n  \"code\": \"def update_cookies_from_headers(self, headers: Sequence[str], response_url: URL) -> None:\\n        \\\"\\\"\\\"\\n        Update cookies from raw Set-Cookie headers.\\n\\n        Default implementation parses each header separately to preserve\\n        cookies with same name but different domain/path.\\n        \\\"\\\"\\\"\\n        for header in headers:\\n            self.update_cookies(BaseCookie(header), response_url)\"\n}",
+  "seconds": 8.8,
+  "seed": 1001
+ },
+ "aiohttp-newfn-014/FILE_BM25PAD@1001": {
+  "answer_tokens": 88,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6458,
+  "raw": "{\n  \"code\": \"def update_cookies_from_headers(self, headers: Sequence[str], response_url: URL) -> None:\\n        \\\"\\\"\\\"\\n        Update cookies from raw Set-Cookie headers.\\n\\n        Default implementation parses each header separately to preserve\\n        cookies with same name but different domain/path.\\n        \\\"\\\"\\\"\\n        for header in headers:\\n            self.update_cookies(header, response_url)\"\n}",
+  "seconds": 12.9,
+  "seed": 1001
+ },
  "aiohttp-newfn-014/FILE_BM25PAD@42": {
   "answer_tokens": 88,
   "done_reason": "stop",
@@ -313,6 +493,24 @@
   "raw": "{\n  \"code\": \"def update_cookies_from_headers(self, headers: Sequence[str], response_url: URL) -> None:\\n        \\\"\\\"\\\"\\n        Update cookies from raw Set-Cookie headers.\\n\\n        Default implementation parses each header separately to preserve\\n        cookies with same name but different domain/path.\\n        \\\"\\\"\\\"\\n        for header in headers:\\n            self.update_cookies(header, response_url)\"\n}",
   "seconds": 14.5,
   "seed": 42
+ },
+ "aiohttp-newfn-014/PRISM@1001": {
+  "answer_tokens": 96,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6513,
+  "raw": "{\n  \"code\": \"    @abstractmethod\\n    def update_cookies_from_headers(\\n            self, headers: Sequence[str], response_url: URL\\n        ) -> None:\\n        \\\"\\\"\\\"Update cookies from raw Set-Cookie headers.\\n\\n        Default implementation parses each header separately to preserve\\n        cookies with same name but different domain/path.\\n        \\\"\\\"\\\"\\n        for header in headers:\\n            self.update_cookies(header, response_url)\"\n}",
+  "seconds": 12.9,
+  "seed": 1001
+ },
+ "aiohttp-newfn-015/FILE@1001": {
+  "answer_tokens": 150,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2412,
+  "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy and not req.proxy.ssl:\\n        # Set Proxy-Authorization header for non-SSL proxy requests\\n        if req.proxy_auth:\\n            req.headers['Proxy-Authorization'] = req.proxy_auth.encode()\\n    elif req.proxy and req.proxy.ssl:\\n        # Build the proxy request for SSL proxy requests\\n        # This is a placeholder for the actual implementation\\n        # which would involve setting up the SSL tunneling.\\n        # For the sake of this example, we'll just return the request as is.\\n        pass\\n    return req\"\n}",
+  "seconds": 13.5,
+  "seed": 1001
  },
  "aiohttp-newfn-015/FILE@42replay": {
   "answer_tokens": 149,
@@ -323,6 +521,15 @@
   "seconds": 13.7,
   "seed": 42
  },
+ "aiohttp-newfn-015/FILE_BM25PAD@1001": {
+  "answer_tokens": 253,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8828,
+  "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy is not None:\\n        if not req.is_ssl():\\n            # Set Proxy-Authorization header for non-SSL proxy requests\\n            if req.proxy_auth is not None:\\n                req.headers[hdrs.PROXY_AUTHORIZATION] = req.proxy_auth.encode()\\n        else:\\n            # Build the proxy request for SSL proxy requests\\n            headers: dict[str, str] = {}\\n            if req.proxy_headers is not None:\\n                headers = req.proxy_headers  # type: ignore[assignment]\\n            headers[hdrs.HOST] = req.headers[hdrs.HOST]\\n\\n            proxy_req = ClientRequest(\\n                hdrs.METH_GET,\\n                req.proxy,\\n                headers=headers,\\n                auth=req.proxy_auth,\\n                loop=self._loop,\\n                ssl=req.ssl,\\n            )\\n\\n            # For HTTPS requests over HTTP proxy, send CONNECT command\\n            proxy_req.method = hdrs.METH_CONNECT\\n            proxy_req.url = req.url\\n            return proxy_req\\n    return req\"\n}",
+  "seconds": 28.4,
+  "seed": 1001
+ },
  "aiohttp-newfn-015/FILE_BM25PAD@42": {
   "answer_tokens": 574,
   "done_reason": "stop",
@@ -331,6 +538,15 @@
   "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy is not None:\\n        if not req.is_ssl():\\n            # Set Proxy-Authorization header for non-SSL proxy requests\\n            if req.proxy_auth is not None:\\n                req.headers[hdrs.PROXY_AUTHORIZATION] = req.proxy_auth.encode()\\n        else:\\n            # Build the proxy request for SSL proxy requests\\n            headers: dict[str, str] = {}\\n            if req.proxy_headers is not None:\\n                headers = req.proxy_headers  # type: ignore[assignment]\\n            headers[hdrs.HOST] = req.headers[hdrs.HOST]\\n\\n            url = req.proxy\\n            assert url is not None\\n            proxy_req = ClientRequest(\\n                hdrs.METH_GET,\\n                url,\\n                headers=headers,\\n                auth=req.proxy_auth,\\n                loop=self._loop,\\n                ssl=req.ssl,\\n            )\\n\\n            # create connection to proxy server\\n            transport, proto = await self._create_direct_connection(\\n                proxy_req, [], timeout, client_error=ClientProxyConnectionError\\n            )\\n\\n            auth = proxy_req.headers.pop(hdrs.AUTHORIZATION, None)\\n            if auth is not None:\\n                if not req.is_ssl():\\n                    req.headers[hdrs.PROXY_AUTHORIZATION] = auth\\n                else:\\n                    proxy_req.headers[hdrs.PROXY_AUTHORIZATION] = auth\\n\\n            if req.is_ssl():\\n                if runtime_has_start_tls:\\n                    self._warn_about_tls_in_tls(transport, req)\\n\\n                # For HTTPS requests over HTTP proxy\\n                # we must notify proxy to tunnel connection\\n                # so we send CONNECT command:\\n                #   CONNECT www.python.org:443 HTTP/1.1\\n                #   Host: www.python.org\\n                #\\n                # next we must do TLS handshake and so on\\n                # to do this we must wrap raw socket into secure one\\n                # asyncio handles this perfectly\\n                proxy_req.method = hdrs.METH_CONNECT\\n                proxy_req.url = req.url\\n                key = req.connection_key._replace(\\n                    proxy=None, proxy_auth=None, proxy_headers_hash=None\\n                )\\n                conn = _ConnectTunnelConnection(self, key, proto, self._loop)\\n                proxy_resp = await proxy_req.send(conn)\\n                try:\\n                    protocol = conn._protocol\\n                    assert protocol is not None\\n\\n                    # read_until_eof=True will ensure the connection isn't closed\\n                    # once the response is received and processed allowing\\n\"\n}",
   "seconds": 54.5,
   "seed": 42
+ },
+ "aiohttp-newfn-015/PRISM@1001": {
+  "answer_tokens": 165,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8837,
+  "raw": "{\n  \"code\": \"def _update_proxy_auth_header_and_build_proxy_req(self, req: ClientRequest) -> ClientRequest:\\n    if req.proxy and not req.is_ssl():\\n        if req.proxy_auth:\\n            req.headers[hdrs.PROXY_AUTHORIZATION] = req.proxy_auth.encode()\\n    elif req.proxy and req.is_ssl():\\n        headers = {hdrs.HOST: req.headers[hdrs.HOST]}\\n        if req.proxy_headers:\\n            headers.update(req.proxy_headers)\\n        proxy_req = ClientRequest(\\n            hdrs.METH_GET,\\n            req.proxy,\\n            headers=headers,\\n            auth=req.proxy_auth,\\n            loop=self._loop,\\n        )\\n        return proxy_req\\n    return req\"\n}",
+  "seconds": 20.9,
+  "seed": 1001
  },
  "aiohttp-newfn-015/PRISM@42replay": {
   "answer_tokens": 129,
@@ -341,6 +557,24 @@
   "seconds": 18.4,
   "seed": 42
  },
+ "aiohttp-newfn-016/FILE@1001": {
+  "answer_tokens": 279,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2845,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    \\\"\\\"\\\"Async generator that yields decoded data chunks.\\n\\n    Decodes data according the specified Content-Encoding\\n    or Content-Transfer-Encoding headers value.\\n\\n    This method offloads decompression to an executor for large payloads\\n    to avoid blocking the event loop.\\n    \\\"\\\"\\\"\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        async for chunk in self._decode_content_async_iter(data):\\n            yield chunk\\n    else:\\n        yield data\\n\\nasync def _decode_content_async_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    encoding = self.headers.get(CONTENT_ENCODING, \\\"\\\").lower()\\n    if encoding == \\\"identity\\\":\\n        yield data\\n    elif encoding in {\\\"deflate\\\", \\\"gzip\\\"}:\\n        decompressor = ZLibDecompressor(\\n            encoding=encoding,\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_async_iter(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        raise RuntimeError(f\\\"unknown content encoding: {encoding}\\\")\"\n}",
+  "seconds": 22.8,
+  "seed": 1001
+ },
+ "aiohttp-newfn-016/FILE_BM25PAD@1001": {
+  "answer_tokens": 186,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6127,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    \\\"\\\"\\\"Async generator that yields decoded data chunks.\\n\\n    Decodes data according the specified Content-Encoding\\n    or Content-Transfer-Encoding headers value.\\n\\n    This method offloads decompression to an executor for large payloads\\n    to avoid blocking the event loop.\\n    \\\"\\\"\\\"\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        decompressor = ZLibDecompressor(\\n            encoding=self.headers.get(CONTENT_ENCODING, \\\"\\\").lower(),\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_async(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        yield data\"\n}",
+  "seconds": 18.5,
+  "seed": 1001
+ },
  "aiohttp-newfn-016/FILE_BM25PAD@42": {
   "answer_tokens": 186,
   "done_reason": "stop",
@@ -349,6 +583,33 @@
   "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    \\\"\\\"\\\"Async generator that yields decoded data chunks.\\n\\n    Decodes data according the specified Content-Encoding\\n    or Content-Transfer-Encoding headers value.\\n\\n    This method offloads decompression to an executor for large payloads\\n    to avoid blocking the event loop.\\n    \\\"\\\"\\\"\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        decompressor = ZLibDecompressor(\\n            encoding=self.headers.get(CONTENT_ENCODING, \\\"\\\").lower(),\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_iter(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        yield data\"\n}",
   "seconds": 21.4,
   "seed": 42
+ },
+ "aiohttp-newfn-016/PRISM@1001": {
+  "answer_tokens": 121,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6348,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        decompressor = ZLibDecompressor(\\n            encoding=self.headers.get(CONTENT_ENCODING, '').lower(),\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_async(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        yield data\"\n}",
+  "seconds": 13.5,
+  "seed": 1001
+ },
+ "aiohttp-newfn-017/FILE@1001": {
+  "answer_tokens": 279,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2847,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    \\\"\\\"\\\"Async generator that yields decoded data chunks.\\n\\n    Decodes data according the specified Content-Encoding\\n    or Content-Transfer-Encoding headers value.\\n\\n    This method offloads decompression to an executor for large payloads\\n    to avoid blocking the event loop.\\n    \\\"\\\"\\\"\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        async for chunk in self._decode_content_async_iter(data):\\n            yield chunk\\n    else:\\n        yield data\\n\\nasync def _decode_content_async_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    encoding = self.headers.get(CONTENT_ENCODING, \\\"\\\").lower()\\n    if encoding == \\\"identity\\\":\\n        yield data\\n    elif encoding in {\\\"deflate\\\", \\\"gzip\\\"}:\\n        decompressor = ZLibDecompressor(\\n            encoding=encoding,\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_async_iter(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        raise RuntimeError(f\\\"unknown content encoding: {encoding}\\\")\"\n}",
+  "seconds": 22.4,
+  "seed": 1001
+ },
+ "aiohttp-newfn-017/FILE_BM25PAD@1001": {
+  "answer_tokens": 273,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6347,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    \\\"\\\"\\\"Async generator that yields decoded data chunks.\\n\\n    Decodes data according the specified Content-Encoding\\n    or Content-Transfer-Encoding headers value.\\n\\n    This method offloads decompression to an executor for large payloads\\n    to avoid blocking the event loop.\\n    \\\"\\\"\\\"\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        async for chunk in self._decode_content_async_iter(data):\\n            yield chunk\\n    else:\\n        yield data\\n\\nasync def _decode_content_async_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    encoding = self.headers.get(CONTENT_ENCODING, '').lower()\\n    if encoding == 'identity':\\n        yield data\\n    elif encoding in {'deflate', 'gzip'}:\\n        decompressor = ZLibDecompressor(\\n            encoding=encoding,\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_iter(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        raise RuntimeError(f'unknown content encoding: {encoding}')\"\n}",
+  "seconds": 24.9,
+  "seed": 1001
  },
  "aiohttp-newfn-017/FILE_BM25PAD@42": {
   "answer_tokens": 278,
@@ -359,6 +620,33 @@
   "seconds": 27.8,
   "seed": 42
  },
+ "aiohttp-newfn-017/PRISM@1001": {
+  "answer_tokens": 123,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6354,
+  "raw": "{\n  \"code\": \"async def decode_iter(self, data: bytes) -> AsyncIterator[bytes]:\\n    data = self._apply_content_transfer_decoding(data)\\n    if self._needs_content_decoding():\\n        decompressor = ZLibDecompressor(\\n            encoding=self.headers.get(CONTENT_ENCODING, \\\"\\\").lower(),\\n            suppress_deflate_header=True,\\n        )\\n        async for chunk in decompressor.decompress_iter(data, max_length=self._max_decompress_size):\\n            yield chunk\\n    else:\\n        yield data\"\n}",
+  "seconds": 13.6,
+  "seed": 1001
+ },
+ "aiohttp-newfn-018/FILE@1001": {
+  "answer_tokens": 312,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2572,
+  "raw": "{\n  \"code\": \"async def _resolve_host_with_throttle(\\n        self,\\n        key: Tuple[str, int],\\n        host: str,\\n        port: int,\\n        traces: Optional[List[\\\"Trace\\\"]],\\n    ) -> List[Dict[str, Any]]:\\n        if key in self._throttle_dns_events:\\n            event = self._throttle_dns_events[key]\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            await event.wait()\\n        else:\\n            self._throttle_dns_events[key] = EventResultOrError(self._loop)\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_miss(host)\\n            try:\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_start(host)\\n\\n                addrs = await self._resolver.resolve(host, port, family=self._family)\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_end(host)\\n\\n                self._cached_hosts.add(key, addrs)\\n                self._throttle_dns_events[key].set()\\n            except BaseException as e:\\n                self._throttle_dns_events[key].set(exc=e)\\n                raise\\n            finally:\\n                self._throttle_dns_events.pop(key)\\n\\n        return self._cached_hosts.next_addrs(key)\"\n}",
+  "seconds": 24.4,
+  "seed": 1001
+ },
+ "aiohttp-newfn-018/FILE_BM25PAD@1001": {
+  "answer_tokens": 523,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8249,
+  "raw": "{\n  \"code\": \"async def _resolve_host_with_throttle(\\n        self,\\n        key: Tuple[str, int],\\n        host: str,\\n        port: int,\\n        traces: Optional[List[\\\"Trace\\\"]],\\n    ) -> List[Dict[str, Any]]:\\n        if is_ip_address(host):\\n            return [\\n                {\\n                    \\\"hostname\\\": host,\\n                    \\\"host\\\": host,\\n                    \\\"port\\\": port,\\n                    \\\"family\\\": self._family,\\n                    \\\"proto\\\": 0,\\n                    \\\"flags\\\": 0,\\n                }\\n            ]\\n\\n        if not self._use_dns_cache:\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_start(host)\\n\\n            res = await self._resolver.resolve(host, port, family=self._family)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_end(host)\\n\\n            return res\\n\\n        if key in self._throttle_dns_events:\\n            # get event early, before any await (#4014)\\n            event = self._throttle_dns_events[key]\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            await event.wait()\\n        else:\\n            # update dict early, before any await (#4014)\\n            self._throttle_dns_events[key] = EventResultOrError(self._loop)\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_miss(host)\\n            try:\\n\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_start(host)\\n\\n                addrs = await self._resolver.resolve(host, port, family=self._family)\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_end(host)\\n\\n                self._cached_hosts.add(key, addrs)\\n                self._throttle_dns_events[key].set()\\n            except BaseException as e:\\n                # any DNS exception, independently of the implementation\\n                # is set for the waiters to raise the same exception.\\n                self._throttle_dns_events[key].set(exc=e)\\n                raise\\n            finally:\\n                self._throttle_dns_events.pop(key)\\n\\n        return self._cached_hosts.next_addrs(key)\"\n}",
+  "seconds": 47.3,
+  "seed": 1001
+ },
  "aiohttp-newfn-018/FILE_BM25PAD@42": {
   "answer_tokens": 599,
   "done_reason": "stop",
@@ -367,6 +655,15 @@
   "raw": "{\n  \"code\": \"async def _resolve_host_with_throttle(\\n        self,\\n        key: Tuple[str, int],\\n        host: str,\\n        port: int,\\n        traces: Optional[List[\\\"Trace\\\"]],\\n    ) -> List[Dict[str, Any]]:\\n        if is_ip_address(host):\\n            return [\\n                {\\n                    \\\"hostname\\\": host,\\n                    \\\"host\\\": host,\\n                    \\\"port\\\": port,\\n                    \\\"family\\\": self._family,\\n                    \\\"proto\\\": 0,\\n                    \\\"flags\\\": 0,\\n                }\\n            ]\\n\\n        if not self._use_dns_cache:\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_start(host)\\n\\n            res = await self._resolver.resolve(host, port, family=self._family)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_end(host)\\n\\n            return res\\n\\n        if key in self._cached_hosts and not self._cached_hosts.expired(key):\\n            # get result early, before any await (#4014)\\n            result = self._cached_hosts.next_addrs(key)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            return result\\n\\n        if key in self._throttle_dns_events:\\n            # get event early, before any await (#4014)\\n            event = self._throttle_dns_events[key]\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            await event.wait()\\n        else:\\n            # update dict early, before any await (#4014)\\n            self._throttle_dns_events[key] = EventResultOrError(self._loop)\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_miss(host)\\n            try:\\n\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_start(host)\\n\\n                addrs = await self._resolver.resolve(host, port, family=self._family)\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_end(host)\\n\\n                self._cached_hosts.add(key, addrs)\\n                self._throttle_dns_events[key].set()\\n            except BaseException as e:\\n                # any DNS exception, independently of the implementation\\n                # is set for the waiters to raise the same exception.\\n                self._throttle_dns_events[key].set(exc=e)\\n                raise\\n            finally:\\n                self._throttle_dns_events.pop(key)\\n\\n        return self._cached_hosts.next_addrs(key)\"\n}",
   "seconds": 55.2,
   "seed": 42
+ },
+ "aiohttp-newfn-018/PRISM@1001": {
+  "answer_tokens": 470,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8255,
+  "raw": "{\n  \"code\": \"```python\\nasync def _resolve_host_with_throttle(\\n        self,\\n        key: Tuple[str, int],\\n        host: str,\\n        port: int,\\n        traces: Optional[List[\\\"Trace\\\"]],\\n    ) -> List[Dict[str, Any]]:\\n        if is_ip_address(host):\\n            return [\\n                {\\n                    \\\"hostname\\\": host,\\n                    \\\"host\\\": host,\\n                    \\\"port\\\": port,\\n                    \\\"family\\\": self._family,\\n                    \\\"proto\\\": 0,\\n                    \\\"flags\\\": 0,\\n                }\\n            ]\\n\\n        if not self._use_dns_cache:\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_start(host)\\n\\n            res = await self._resolver.resolve(host, port, family=self._family)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_end(host)\\n\\n            return res\\n\\n        if key in self._throttle_dns_events:\\n            event = self._throttle_dns_events[key]\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            await event.wait()\\n        else:\\n            self._throttle_dns_events[key] = EventResultOrError(self._loop)\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_miss(host)\\n            try:\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_start(host)\\n\\n                addrs = await self._resolver.resolve(host, port, family=self._family)\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_end(host)\\n\\n                self._cached_hosts.add(key, addrs)\\n                self._throttle_dns_events[key].set()\\n            except BaseException as e:\\n                self._throttle_dns_events[key].set(exc=e)\\n                raise\\n            finally:\\n                self._throttle_dns_events.pop(key)\\n\\n        return self._cached_hosts.next_addrs(key)\\n```\"\n}",
+  "seconds": 42.4,
+  "seed": 1001
  },
  "aiohttp-newfn-019/FILE_BM25PAD@42": {
   "answer_tokens": 657,
