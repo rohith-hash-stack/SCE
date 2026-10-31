@@ -413,6 +413,15 @@
   "seconds": 3.3,
   "seed": 1001
  },
+ "fastify-forward-005/FILE_GREPPAD@2002": {
+  "answer_tokens": 3042,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3633,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Reply.prototype.send\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"Reply.prototype.send = function (payload) {\\n  if (this.sent) {\\n    this.res.log.warn(new Error('Reply already sent'))\\n    return\\n  }\\n\\n  this.sent = true\\n\\n  var _isError = this[isError]\\n\\n  if (payload === undefined && _isError !== true) {\\n    this.res.setHeader('Content-Length', '0')\\n    if (!this.res.getHeader('Content-Type')) {\\n      this.res.setHeader('Content-Type', 'text/plain')\\n    }\\n    handleReplyEnd(this, '')\\n    return\\n  }\\n\\n  if (payload && payload.isBoom) {\\n    this.res.log.error(payload)\\n    this.res.statusCode = payload.output.statusCode\\n\\n    this.headers(payload.output.headers)\\n\\n    handleReplyEnd(\\n      this,\\n      payload.output.payload\\n    )\\n    return\\n  }\\n\\n  if (payload instanceof Error || _isError === true) {\\n    handleError(this, payload, wrapHandleReplyEnd)\\n    return\\n  }\\n\\n  if (payload && payload._readableState) {\\n    if (!this.res.getHeader('Content-Type')) {\\n      this.res.setHeader('Content-Type', 'application/octet-stream')\\n    }\\n    pump(payload, this.res, wrapPumpCallback(this))\\n    return this.res\\n  }\\n\\n  handleReplyEnd(this, payload)\\n  return\\n}\"\n    },\n    {\n      \"function\": \"Reply.prototype.redirect\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"Reply.prototype.redirect = function (code, url) {\\n  if (typeof code === 'string') {\\n    url = code\\n    code = 302\\n  }\\n\\n  this.header('Location', url).code(code).send()\\n}\"\n    },\n    {\n      \"function\": \"wrapHandleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function wrapHandleReplyEnd (reply, payload) {\\n  handleReplyEnd(\\n    reply,\\n    payload\\n  )\\n}\"\n    },\n    {\n      \"function\": \"wrapPumpCallback\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function wrapPumpCallback (reply) {\\n  return function pumpCallback (err) {\\n    if (err) {\\n      reply.res.log.error(err)\\n      handleReplyEnd(reply, '')\\n    }\\n  }\\n}\"\n    },\n    {\n      \"function\": \"handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.context.onSend !== null) {\\n    reply.context.onSend(\\n      hookIterator.bind(reply),\\n      payload,\\n      wrapOnSendEnd.bind(reply)\\n    )\\n  } else {\\n    wrapOnSendEnd.call(reply, null, payload)\\n  }\\n}\"\n    },\n    {\n      \"function\": \"hookIterator\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function hookIterator (fn, payload, next) {\\n  return fn(this.request, this, payload, next)\\n}\"\n    },\n    {\n      \"function\": \"wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function wrapOnSendEnd (err, payload) {\\n  if (err) {\\n    handleError(this, err, onSendEnd)\\n    return\\n  }\\n  onSendEnd(this, payload)\\n}\"\n    },\n    {\n      \"function\": \"onSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function onSendEnd (reply, payload) {\\n  var contentType = reply.res.getHeader('Content-Type')\\n  if (payload && payload._readableState) {\\n    if (!contentType) {\\n      reply.res.setHeader('Content-Type', 'application/octet-stream')\\n    }\\n    pump(payload, reply.res, wrapPumpCallback(reply))\\n    return reply.res\\n  }\\n\\n  if (!contentType && typeof payload === 'string') {\\n    reply.res.setHeader('Content-Type', 'text/plain')\\n  } else if (!contentType || contentType === 'application/json') {\\n    reply.res.setHeader('Content-Type', 'application/json')\\n    // Here we are assuming that the custom serializer is a json serializer\\n    payload = reply._serializer ? reply._serializer(payload) : serialize(reply.context, payload, reply.res.statusCode)\\n    flatstr(payload)\\n  } else if (reply._serializer) { // All the code below must have a 'content-type' setted\\n    payload = reply._serializer(payload)\\n  }\\n\\n  if (!reply.res.getHeader('Content-Length')) {\\n    reply.res.setHeader('Content-Length', '' + Buffer.byteLength(payload))\\n  }\\n  reply.sent = true\\n  reply.res.end(payload)\\n}\"\n    },\n    {\n      \"function\": \"preHandlerCallback\",\n      \"file\": \"lib/handleRequest.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function preHandlerCallback (err, state) {\\n  if (err) {\\n    state.reply.send(err)\\n    return\\n  }\\n\\n  var result = state.context.handler(state.request, state.reply)\\n  if (result && typeof result.then === 'function') {\\n    result.then((payload) => {\\n      // this is for async functions that\\n      // are using reply.send directly\\n      if (payload !== undefined || (state.reply.res.statusCode === 204 && !state.reply.sent)) {\\n        state.reply.send(payload)\\n      }\\n    }).catch((err) => {\\n      state.reply[isError] = true\\n      state.reply.send(err)\\n    })\\n  }\\n}\"\n    },\n    {\n      \"function\": \"ContentTypeParser.prototype.run\",\n      \"file\": \"lib/ContentTypeParser.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"ContentTypeParser.prototype.run = function (contentType, handler, context, params, req, res, query) {\\n  var result = this.getHandler(contentType)(req, done)\\n  if (result && typeof result.then === 'function') {\\n    result.then(body => done(null, body)).catch(err => done(err, null))\\n  }\\n  function done (error, body) {\\n    if (error) {\\n      const request = new context.Request(params, req, null, query, req.headers, req.log)\\n      const reply = new context.Reply(res, context, request)\\n      return reply.send(error)\\n    }\\n    handler(context, params, req, res, body, query)\\n  }\\n}\"\n    },\n    {\n      \"function\": \"fastify.handleClientError\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function handleClientError (e, socket) {\\n  const body = JSON.stringify({\\n    error: http.STATUS_CODES['400'],\\n    message: 'Client Error',\\n    statusCode: 400\\n  })\\n  log.error(e, 'client error')\\n  socket.end(`HTTP/1.1 400 Bad Request\\r\\nContent-Length: ${body.length}\\r\\nContent-Type: 'application/json'\\r\\n\\r\\n${body}`)\\n}\"\n    },\n    {\n      \"function\": \"handleRequest\",\n      \"file\": \"lib/handleRequest.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function handleRequest (req, res, params, context) {\\n  var method = req.method\\n\\n  if (method === 'GET' || method === 'HEAD') {\\n    return handler(context, params, req, res, null, urlUtil.parse(req.url, true).query)\\n  }\\n\\n  if (method === 'POST' || method === 'PUT' || method === 'PATCH') {\\n    // application/json content type\\n    if (req.headers['content-type'] && req.headers['content-type'].indexOf('application/json') > -1) {\\n      return jsonBody(req, res, params, context)\\n    }\\n\\n    // custom parser for a given content type\\n    if (context.contentTypeParser.fastHasHeader(req.headers['content-type'])) {\\n      return context.contentTypeParser.run(req.headers['content-type'], handler, context, params, req, res, urlUtil.parse(req.url, true).query)\\n    }\\n\\n    wrapReplyEnd(context, req, res, 415, params, null, urlUtil.parse(req.url, true).query, null)\\n    return\\n  }\\n\\n  if (method === 'OPTIONS' || method === 'DELETE') {\\n    if (req.headers['content-type']) {\\n      // application/json content type\\n      if (req.headers['content-type'].indexOf('application/json') > -1) {\\n        return jsonBody(req, res, params, context)\\n      // custom parser for a given content type\\n      } else if (context.contentTypeParser.fastHasHeader(req.headers['content-type'])) {\\n        return context.contentTypeParser.run(req.headers['content-type'], handler, context, params, req, res, urlUtil.parse(req.url, true).query)\\n      }\\n\\n      wrapReplyEnd(context, req, res, 415, params, null, urlUtil.parse(req.url, true).query, null)\\n      return\\n    }\\n    return handler(context, params, req, res, null, urlUtil.parse(req.url, true).query)\\n  }\\n\\n  wrapReplyEnd(context, req, res, 405, params, null, urlUtil.parse(req.url, true).query, null)\\n  return\\n}\"\n    },\n    {\n      \"function\": \"fastify.build\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The new handleError function now sets the Content-Type header, so the old code that sets it should be removed to avoid duplicate headers.\",\n      \"new_code\": \"function build (options) {\\n  options = options || {}\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n  }\\n\\n  var log\\n  if (isValidLogger(options.logger)) {\\n    log = loggerUtils.createLogger({ logger: options.logger, serializers: loggerUtils.serializers })\\n  } else if (!options.logger) {\\n    log = Object.create(abstractLogging)\\n    log.child = () => log\\n  } else {\\n    options.logger = typeof options.logger === 'object' ? options.logger : {}\\n    options.logger.level = options.logger.level || 'info'\\n    options.logger.serializers = options.logger.serializers || loggerUtils.serializers\\n    log = loggerUtils.createLogger(options.logger)\\n  }\\n\\n  const ajv = new Ajv(Object.assign({ coerceTypes: true }, options.ajv))\\n\\n  const router = FindMyWay({ defaultRoute: defaultRoute })\\n  const map = new Map()\\n\\n  // logger utils\\n  const customGenReqId = options.logger ? options.logger.genReqId : null\\n  const genReqId = customGenReqId || loggerUtils.reqIdGenFactory()\\n  const now = loggerUtils.now\\n  const onResponseIterator = loggerUtils.onResponseIterator\\n  const onResponseCallback = loggerUtils.onResponseCallback\\n\\n  const app = avvio(fastify, {})\\n  // Override to allow the plugin incapsulation\\n  app.override = override\\n\\n  var listening = false\\n  // true when Fastify is ready to go\\n  var started = false\\n  app.on('start', () => {\\n    started = true\\n  })\\n\\n  var server\\n  if (options.https) {\\n    if (options.http2) {\\n      server = http2().createSecureServer(options.https, fastify)\\n    } else {\\n      server = https.createServer(options.https, fastify)\\n    }\\n  } else if (options.http2) {\\n    server = http2().createServer(fastify)\\n  } else {\\n    server = http.createServer(fastify)\\n  }\\n\\n  fastify.onClose((instance, done) => {\\n\"\n    }\n  ]\n}",
+  "seconds": 213.5,
+  "seed": 2002
+ },
  "fastify-forward-005/FILE_GREPPAD@42": {
   "answer_tokens": 1742,
   "done_reason": "stop",
@@ -449,6 +458,15 @@
   "seconds": 16.8,
   "seed": 1001
  },
+ "fastify-forward-006/FILE@2002": {
+  "answer_tokens": 215,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1944,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with only two arguments instead of three.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.store.onSend.length === 0) {\\n    return onSendEnd(reply, payload)\\n  }\\n  setImmediate(\\n    runHooks,\\n    new State(reply, payload),\\n    hookIterator,\\n    reply.store.onSend,\\n    wrapOnSendEnd\\n  )\\n}\"\n    },\n    {\n      \"function\": \"wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with only two arguments instead of three.\",\n      \"new_code\": \"function wrapOnSendEnd (err) {\\n  onSendEnd(this.reply, this.payload)\\n}\"\n    }\n  ]\n}",
+  "seconds": 17.1,
+  "seed": 2002
+ },
  "fastify-forward-006/FILE_BM25PAD@1001": {
   "answer_tokens": 543,
   "done_reason": "stop",
@@ -457,6 +475,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function `handleReplyEnd` now calls `onSendEnd` with only two arguments instead of three. The `err` argument is no longer passed.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.store.onSend.length === 0) {\\n    return onSendEnd(reply, payload)\\n  }\\n  setImmediate(\\n    runHooks,\\n    new State(reply, payload),\\n    hookIterator,\\n    reply.store.onSend,\\n    wrapOnSendEnd\\n  )\\n}\"\n    },\n    {\n      \"function\": \"wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function `wrapOnSendEnd` now calls `onSendEnd` with only two arguments instead of three. The `err` argument is no longer passed.\",\n      \"new_code\": \"function wrapOnSendEnd () {\\n  onSendEnd(this.reply, this.payload)\\n}\"\n    },\n    {\n      \"function\": \"wrapReplySend\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function `wrapReplySend` now calls `reply.send` with only one argument instead of two. The `payload` argument is no longer passed.\",\n      \"new_code\": \"function wrapReplySend (reply) {\\n  return function send (payload) {\\n    // reset sent so that we can call it again\\n    reply.sent = false\\n    return reply.send(payload)\\n  }\\n}\"\n    },\n    {\n      \"function\": \"handleClientError\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The function `handleClientError` now calls `socket.end` with a string that does not include the `err` argument, as it is no longer passed to `onSendEnd`.\",\n      \"new_code\": \"function handleClientError (e, socket) {\\n  const body = JSON.stringify({\\n    error: http.STATUS_CODES['400'],\\n    message: 'Client Error',\\n    statusCode: 400\\n  })\\n  logger.error(e, 'client error')\\n  socket.end(`HTTP/1.1 400 Bad Request\\\\r\\\\nContent-Length: ${body.length}\\\\r\\\\nContent-Type: 'application/json'\\\\r\\\\n\\\\r\\\\n${body}`)\\n}\"\n    }\n  ]\n}",
   "seconds": 38.7,
   "seed": 1001
+ },
+ "fastify-forward-006/FILE_BM25PAD@2002": {
+  "answer_tokens": 431,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3384,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function `handleReplyEnd` now calls `onSendEnd` with only two arguments instead of three. The `err` argument is no longer passed.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.store.onSend.length === 0) {\\n    return onSendEnd(reply, payload)\\n  }\\n  setImmediate(\\n    runHooks,\\n    new State(reply, payload),\\n    hookIterator,\\n    reply.store.onSend,\\n    wrapOnSendEnd\\n  )\\n}\"\n    },\n    {\n      \"function\": \"wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function `wrapOnSendEnd` now calls `onSendEnd` with only two arguments instead of three. The `err` argument is no longer passed.\",\n      \"new_code\": \"function wrapOnSendEnd () {\\n  onSendEnd(this.reply, this.payload)\\n}\"\n    },\n    {\n      \"function\": \"handleClientError\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The function `handleClientError` now calls `socket.end` with a string that does not include the `err` argument, as it is no longer passed to `onSendEnd`.\",\n      \"new_code\": \"function handleClientError (e, socket) {\\n  const body = JSON.stringify({\\n    error: http.STATUS_CODES['400'],\\n    message: 'Client Error',\\n    statusCode: 400\\n  })\\n  logger.error(e, 'client error')\\n  socket.end(`HTTP/1.1 400 Bad Request\\\\r\\\\nContent-Length: ${body.length}\\\\r\\\\nContent-Type: 'application/json'\\\\r\\\\n\\\\r\\\\n${body}`)\\n}\"\n    }\n  ]\n}",
+  "seconds": 31.2,
+  "seed": 2002
  },
  "fastify-forward-006/FILE_BM25PAD@42": {
   "answer_tokens": 712,
@@ -476,6 +503,15 @@
   "seconds": 16.8,
   "seed": 1001
  },
+ "fastify-forward-006/FILE_GREPPAD@2002": {
+  "answer_tokens": 215,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3388,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with only two arguments instead of three.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.store.onSend.length === 0) {\\n    return onSendEnd(reply, payload)\\n  }\\n  setImmediate(\\n    runHooks,\\n    new State(reply, payload),\\n    hookIterator,\\n    reply.store.onSend,\\n    wrapOnSendEnd\\n  )\\n}\"\n    },\n    {\n      \"function\": \"wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function now calls `onSendEnd` with only two arguments instead of three.\",\n      \"new_code\": \"function wrapOnSendEnd (err) {\\n  onSendEnd(this.reply, this.payload)\\n}\"\n    }\n  ]\n}",
+  "seconds": 16.7,
+  "seed": 2002
+ },
  "fastify-forward-006/FILE_GREPPAD@42": {
   "answer_tokens": 215,
   "done_reason": "stop",
@@ -494,6 +530,15 @@
   "seconds": 19.8,
   "seed": 1001
  },
+ "fastify-forward-006/PRISM@2002": {
+  "answer_tokens": 262,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3392,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"handleReplyEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function `handleReplyEnd` now needs to pass `null` as the first argument to `onSendEnd` since the error handling has been removed from `onSendEnd`.\",\n      \"new_code\": \"function handleReplyEnd (reply, payload) {\\n  if (reply.store.onSend.length === 0) {\\n    return onSendEnd(null, reply, payload)\\n  }\\n  setImmediate(\\n    runHooks,\\n    new State(reply, payload),\\n    hookIterator,\\n    reply.store.onSend,\\n    wrapOnSendEnd\\n  )\\n}\"\n    },\n    {\n      \"function\": \"wrapOnSendEnd\",\n      \"file\": \"lib/reply.js\",\n      \"reason\": \"The function `wrapOnSendEnd` now needs to pass `null` as the first argument to `onSendEnd` since the error handling has been removed from `onSendEnd`.\",\n      \"new_code\": \"function wrapOnSendEnd (err) {\\n  onSendEnd(null, this.reply, this.payload)\\n}\"\n    }\n  ]\n}",
+  "seconds": 19.9,
+  "seed": 2002
+ },
  "fastify-forward-007/FILE@1001": {
   "answer_tokens": 1205,
   "done_reason": "stop",
@@ -503,6 +548,15 @@
   "seconds": 83.7,
   "seed": 1001
  },
+ "fastify-forward-007/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2673,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.0,
+  "seed": 2002
+ },
  "fastify-forward-007/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -511,6 +565,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 3.9,
   "seed": 1001
+ },
+ "fastify-forward-007/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5061,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.0,
+  "seed": 2002
  },
  "fastify-forward-007/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -530,6 +593,15 @@
   "seconds": 3.9,
   "seed": 1001
  },
+ "fastify-forward-007/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5031,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.9,
+  "seed": 2002
+ },
  "fastify-forward-007/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -548,6 +620,15 @@
   "seconds": 4.1,
   "seed": 1001
  },
+ "fastify-forward-007/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5254,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.1,
+  "seed": 2002
+ },
  "fastify-forward-008/FILE@1001": {
   "answer_tokens": 173,
   "done_reason": "stop",
@@ -557,6 +638,15 @@
   "seconds": 12.4,
   "seed": 1001
  },
+ "fastify-forward-008/FILE@2002": {
+  "answer_tokens": 431,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 669,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Request\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The constructor function now needs to accept an additional 'trustProxy' parameter.\",\n      \"new_code\": \"function Request (id, params, req, query, headers, log, ip, ips, hostname, trustProxy) {\\n  this.id = id\\n  this.params = params\\n  this.raw = req\\n  this.query = query\\n  this.headers = headers\\n  this.log = log\\n  this.body = null\\n  this.ip = ip\\n  this.ips = ips\\n  this.hostname = hostname\\n  this.trustProxy = trustProxy\\n}\"\n    },\n    {\n      \"function\": \"buildRequestWithTrustProxy\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"A new function is needed to handle the case when 'trustProxy' is true.\",\n      \"new_code\": \"function buildRequestWithTrustProxy (R, trustProxy) {\\n  function _RequestWithTrustProxy (id, params, req, query, headers, log, ip, ips, hostname) {\\n    Request.call(this, id, params, req, query, headers, log, ip, ips, hostname, trustProxy)\\n  }\\n  _RequestWithTrustProxy.prototype = new R()\\n\\n  return _RequestWithTrustProxy\\n}\"\n    },\n    {\n      \"function\": \"buildRegularRequest\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"A new function is needed to handle the case when 'trustProxy' is false.\",\n      \"new_code\": \"function buildRegularRequest (R) {\\n  function _RegularRequest (id, params, req, query, headers, log, ip, ips, hostname) {\\n    Request.call(this, id, params, req, query, headers, log, ip, ips, hostname, false)\\n  }\\n  _RegularRequest.prototype = new R()\\n\\n  return _RegularRequest\\n}\"\n    }\n  ]\n}",
+  "seconds": 28.8,
+  "seed": 2002
+ },
  "fastify-forward-008/FILE_BM25PAD@1001": {
   "answer_tokens": 493,
   "done_reason": "stop",
@@ -565,6 +655,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"buildRouting.setup\",\n      \"file\": \"lib/route.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter, so `buildRouting.setup` must pass this parameter when calling `buildRequest`.\",\n      \"new_code\": \"setup (options, fastifyArgs) {\\n  avvio = fastifyArgs.avvio\\n  fourOhFour = fastifyArgs.fourOhFour\\n  logger = fastifyArgs.logger\\n  hasLogger = fastifyArgs.hasLogger\\n  setupResponseListeners = fastifyArgs.setupResponseListeners\\n  throwIfAlreadyStarted = fastifyArgs.throwIfAlreadyStarted\\n\\n  proxyFn = getTrustProxyFn(options)\\n  trustProxy = options.trustProxy\\n  requestIdHeader = options.requestIdHeader\\n  querystringParser = options.querystringParser\\n  requestIdLogLabel = options.requestIdLogLabel\\n  genReqId = options.genReqId\\n  disableRequestLogging = options.disableRequestLogging\\n  ignoreTrailingSlash = options.ignoreTrailingSlash\\n  return503OnClosing = Object.prototype.hasOwnProperty.call(options, 'return503OnClosing') ? options.return503OnClosing : true\\n  buildPerformanceValidator = ValidatorSelector()\\n\\n  // Pass trustProxy to buildRequest\\n  context.Request = buildRequest(R, trustProxy)\\n}\"\n    },\n    {\n      \"function\": \"routeHandler\",\n      \"file\": \"lib/route.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter, so `routeHandler` must pass this parameter when creating a new `Request` instance.\",\n      \"new_code\": \"function routeHandler (req, res, params, context) {\\n  if (closing === true) {\\n    if (req.httpVersionMajor !== 2) {\\n      res.once('finish', () => req.destroy())\\n      res.setHeader('Connection', 'close')\\n    }\\n\\n    if (return503OnClosing) {\\n      const headers = {\\n        'Content-Type': 'application/json',\\n        'Content-Length': '80'\\n      }\\n      res.writeHead(503, headers)\\n      res.end('{\"\n      }\n    ]\n  }",
   "seconds": 34.6,
   "seed": 1001
+ },
+ "fastify-forward-008/FILE_BM25PAD@2002": {
+  "answer_tokens": 551,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2061,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"buildRequest\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The function signature has changed to include a new parameter 'trustProxy'.\",\n      \"new_code\": \"function buildRequest (R, trustProxy) {\\n  if (trustProxy) {\\n    return buildRequestWithTrustProxy(R, trustProxy)\\n  }\\n\\n  return buildRegularRequest(R)\\n}\"\n    },\n    {\n      \"function\": \"setup\",\n      \"file\": \"lib/route.js\",\n      \"reason\": \"The function now needs to pass the 'trustProxy' option to 'buildRequest'.\",\n      \"new_code\": \"setup (options, fastifyArgs) {\\n  avvio = fastifyArgs.avvio\\n  fourOhFour = fastifyArgs.fourOhFour\\n  logger = fastifyArgs.logger\\n  hasLogger = fastifyArgs.hasLogger\\n  setupResponseListeners = fastifyArgs.setupResponseListeners\\n  throwIfAlreadyStarted = fastifyArgs.throwIfAlreadyStarted\\n\\n  proxyFn = getTrustProxyFn(options)\\n  trustProxy = options.trustProxy\\n  requestIdHeader = options.requestIdHeader\\n  querystringParser = options.querystringParser\\n  requestIdLogLabel = options.requestIdLogLabel\\n  genReqId = options.genReqId\\n  disableRequestLogging = options.disableRequestLogging\\n  ignoreTrailingSlash = options.ignoreTrailingSlash\\n  return503OnClosing = Object.prototype.hasOwnProperty.call(options, 'return503OnClosing') ? options.return503OnClosing : true\\n  buildPerformanceValidator = ValidatorSelector()\\n\\n  // Pass trustProxy to buildRequest\\n  context.Request = buildRequest(R, trustProxy)\\n}\"\n    },\n    {\n      \"function\": \"routeHandler\",\n      \"file\": \"lib/route.js\",\n      \"reason\": \"The function now needs to pass the 'trustProxy' option to 'buildRequest'.\",\n      \"new_code\": \"function routeHandler (req, res, params, context) {\\n  if (closing === true) {\\n    if (req.httpVersionMajor !== 2) {\\n      res.once('finish', () => req.destroy())\\n      res.setHeader('Connection', 'close')\\n    }\\n\\n    if (return503OnClosing) {\\n      const headers = {\\n        'Content-Type': 'application/json',\\n        'Content-Length': '80'\\n      }\\n      res.writeHead(503, headers)\\n      res.end('{\"\n    }\n  ]\n}",
+  "seconds": 38.4,
+  "seed": 2002
  },
  "fastify-forward-008/FILE_BM25PAD@42": {
   "answer_tokens": 959,
@@ -584,6 +683,15 @@
   "seconds": 94.1,
   "seed": 1001
  },
+ "fastify-forward-008/FILE_GREPPAD@2002": {
+  "answer_tokens": 1457,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2110,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.fastify\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter.\",\n      \"new_code\": \"function fastify (options) {\\n  // Options validations\\n  options = options || {}\\n\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n  }\\n\\n  if (options.querystringParser && typeof options.querystringParser !== 'function') {\\n    throw new Error(`querystringParser option should be a function, instead got '${typeof options.querystringParser}'`)\\n  }\\n\\n  validateBodyLimitOption(options.bodyLimit)\\n\\n  const requestIdHeader = options.requestIdHeader || defaultInitOptions.requestIdHeader\\n  const querystringParser = options.querystringParser || querystring.parse\\n  const genReqId = options.genReqId || reqIdGenFactory()\\n  const requestIdLogLabel = options.requestIdLogLabel || 'reqId'\\n  const bodyLimit = options.bodyLimit || defaultInitOptions.bodyLimit\\n  const disableRequestLogging = options.disableRequestLogging || false\\n  const ajvOptions = Object.assign({\\n    customOptions: {},\\n    plugins: []\\n  }, options.ajv)\\n  const frameworkErrors = options.frameworkErrors\\n\\n  // Ajv options\\n  if (!ajvOptions.customOptions || Object.prototype.toString.call(ajvOptions.customOptions) !== '[object Object]') {\\n    throw new Error(`ajv.customOptions option should be an object, instead got '${typeof ajvOptions.customOptions}'`)\\n  }\\n  if (!ajvOptions.plugins || !Array.isArray(ajvOptions.plugins)) {\\n    throw new Error(`ajv.plugins option should be an array, instead got '${typeof ajvOptions.plugins}'`)\\n  }\\n  ajvOptions.plugins = ajvOptions.plugins.map(plugin => {\\n    return Array.isArray(plugin) ? plugin : [plugin]\\n  })\\n\\n  // Instance Fastify components\\n  const { logger, hasLogger } = createLogger(options)\\n\\n  // Update the options with the fixed values\\n  options.connectionTimeout = options.connectionTimeout || defaultInitOptions.connectionTimeout\\n  options.keepAliveTimeout = options.keepAliveTimeout || defaultInitOptions.keepAliveTimeout\\n  options.logger = logger\\n  options.genReqId = genReqId\\n  options.requestIdHeader = requestIdHeader\\n  options.querystringParser = querystringParser\\n  options.requestIdLogLabel = requestIdLogLabel\\n  options.disableRequestLogging = disableRequestLogging\\n  options.ajv = ajvOptions\\n  options.clientErrorHandler = options.clientErrorHandler || defaultClientErrorHandler\\n\\n  const initialConfig = getSecuredInitialConfig(options)\\n\\n  // Default router\\n  const router = buildRouting({\\n    config: {\\n      defaultRoute: defaultRoute,\\n      onBadUrl: onBadUrl,\\n      ignoreTrailingSlash: options.ignoreTrailingSlash || defaultInitOptions.ignoreTrailingSlash,\\n      trustProxy: options.trustProxy,\\n      // Other configurations...\\n    }\\n  })\\n\\n  // Other code...\\n}\"\n    },\n    {\n      \"function\": \"fastify.override\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter.\",\n      \"new_code\": \"function override (old, fn, opts) {\\n  const shouldSkipOverride = pluginUtils.registerPlugin.call(old, fn)\\n\\n  if (shouldSkipOverride) {\\n    // after every plugin registration we will enter a new name\\n    old[kPluginNameChain].push(pluginUtils.getDisplayName(fn))\\n    return old\\n  }\\n\\n  const instance = Object.create(old)\\n  old[kChildren].push(instance)\\n  instance.ready = old[kAvvioBoot].bind(instance)\\n  instance[kChildren] = []\\n  instance[kReply] = Reply.buildReply(instance[kReply])\\n  instance[kRequest] = Request.buildRequest(instance[kRequest], opts.trustProxy)\\n  instance[kContentTypeParser] = ContentTypeParser.helpers.buildContentTypeParser(instance[kContentTypeParser])\\n  instance[kHooks] = buildHooks(instance[kHooks])\\n  instance[kRoutePrefix] = buildRoutePrefix(instance[kRoutePrefix], opts.prefix)\\n  instance[kLogLevel] = opts.logLevel || instance[kLogLevel]\\n  instance[kSchemas] = buildSchemas(old[kSchemas])\\n  instance.getSchema = instance[kSchemas].getSchema.bind(instance[kSchemas])\\n  instance.getSchemas = instance[kSchemas].getSchemas.bind(instance[kSchemas])\\n  instance[pluginUtils.registeredPlugins] = Object.create(instance[pluginUtils.registeredPlugins])\\n  instance[kPluginNameChain] = [pluginUtils.getPluginName(fn) || pluginUtils.getFuncPreview(fn)]\\n\\n  if (instance[kLogSerializers] || opts.logSerializers) {\\n    instance[kLogSerializers] = Object.assign(Object.create(instance[kLogSerializers]), opts.logSerializers)\\n  }\\n\\n  if (opts.prefix) {\\n    instance[kFourOhFour].arrange404(instance)\\n  }\\n\\n  for (const hook of instance[kHooks].onRegister) hook.call(this, instance, opts)\\n\\n  return instance\\n}\"\n    },\n    {\n      \"function\": \"lib.route.buildRouting.setup\",\n      \"file\": \"lib/route.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter.\",\n      \"new_code\": \"    setup (options, fastifyArgs) {\\n      avvio = fastifyArgs.avvio\\n      fourOhFour = fastifyArgs.fourOhFour\\n      logger = fastifyArgs.logger\\n      hasLogger = fastifyArgs.hasLogger\\n      setupResponseListeners = fastifyArgs.setupResponseListeners\\n      throwIfAlreadyStarted = fastifyArgs.throwIfAlreadyStarted\\n\\n      proxyFn = getTrustProxyFn(options)\\n      trustProxy = options.trustProxy\\n      requestIdHeader = options.requestIdHeader\\n      querystringParser = options.querystringParser\\n      requestIdLogLabel = options.requestIdLogLabel\\n      genReqId = options.genReqId\\n      disableRequestLogging = options.disableRequestLogging\\n      ignoreTrailingSlash = options.ignoreTrailingSlash\\n      return503OnClosing = Object.prototype.hasOwnProperty.call(options, 'return503OnClosing') ? options.return503OnClosing : true\\n      buildPerformanceValidator = ValidatorSelector()\\n\\n      // Pass trustProxy to buildRequest\\n      instance[kRequest] = Request.buildRequest(instance[kRequest], trustProxy)\\n    },\"\n    }\n  ]\n}",
+  "seconds": 98.5,
+  "seed": 2002
+ },
  "fastify-forward-008/FILE_GREPPAD@42": {
   "answer_tokens": 1400,
   "done_reason": "stop",
@@ -602,6 +710,15 @@
   "seconds": 54.6,
   "seed": 1001
  },
+ "fastify-forward-008/PRISM@2002": {
+  "answer_tokens": 802,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2114,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fastify.fastify\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter.\",\n      \"new_code\": \"function fastify (options) {\\n  // Options validations\\n  options = options || {}\\n\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n    # ... lines 55-144 not shown ...\\n    [kSerializerCompiler]: null,\\n    [kReplySerializerDefault]: null,\\n    [kContentTypeParser]: new ContentTypeParser(\\n      bodyLimit,\\n      (options.onProtoPoisoning || defaultInitOptions.onProtoPoisoning),\\n      (options.onConstructorPoisoning || defaultInitOptions.onConstructorPoisoning)\\n    ),\\n    [kReply]: Reply.buildReply(Reply),\\n    [kRequest]: Request.buildRequest(Request, options.trustProxy),\\n    [kFourOhFour]: fourOhFour,\\n    [pluginUtils.registeredPlugins]: [],\\n    [kPluginNameChain]: [],\\n    [kAvvioBoot]: null,\\n    // routes shorthand methods\\n    delete: function _delete (url, opts, handler) {\\n      return router.prepareRoute.call(this, 'DELETE', url, opts, handler)\\n    },\\n    # ... lines 162-529 not shown ...\"\n    },\n    {\n      \"function\": \"fastify.override\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `buildRequest` function now takes an additional `trustProxy` parameter.\",\n      \"new_code\": \"function override (old, fn, opts) {\\n  const shouldSkipOverride = pluginUtils.registerPlugin.call(old, fn)\\n\\n  if (shouldSkipOverride) {\\n    // after every plugin registration we will enter a new name\\n    old[kPluginNameChain].push(pluginUtils.getDisplayName(fn))\\n    return old\\n  }\\n\\n  const instance = Object.create(old)\\n  old[kChildren].push(instance)\\n  instance.ready = old[kAvvioBoot].bind(instance)\\n  instance[kChildren] = []\\n  instance[kReply] = Reply.buildReply(instance[kReply])\\n  instance[kRequest] = Request.buildRequest(instance[kRequest], opts.trustProxy)\\n  instance[kContentTypeParser] = ContentTypeParser.helpers.buildContentTypeParser(instance[kContentTypeParser])\\n  instance[kHooks] = buildHooks(instance[kHooks])\\n  instance[kRoutePrefix] = buildRoutePrefix(instance[kRoutePrefix], opts.prefix)\\n  instance[kLogLevel] = opts.logLevel || instance[kLogLevel]\\n  instance[kSchemas] = buildSchemas(old[kSchemas])\\n  instance.getSchema = instance[kSchemas].getSchema.bind(instance[kSchemas])\\n  instance.getSchemas = instance[kSchemas].getSchemas.bind(instance[kSchemas])\\n  instance[pluginUtils.registeredPlugins] = Object.create(instance[pluginUtils.registeredPlugins])\\n  instance[kPluginNameChain] = [pluginUtils.getPluginName(fn) || pluginUtils.getFuncPreview(fn)]\\n\\n  if (instance[kLogSerializers] || opts.logSerializers) {\\n    instance[kLogSerializers] = Object.assign(Object.create(instance[kLogSerializers]), opts.logSerializers)\\n  }\\n\\n  if (opts.prefix) {\\n    instance[kFourOhFour].arrange404(instance)\\n  }\\n\\n  for (const hook of instance[kHooks].onRegister) hook.call(this, instance, opts)\\n\\n  return instance\\n}\"\n    }\n  ]\n}",
+  "seconds": 54.7,
+  "seed": 2002
+ },
  "fastify-forward-009/FILE@1001": {
   "answer_tokens": 146,
   "done_reason": "stop",
@@ -611,6 +728,15 @@
   "seconds": 11.0,
   "seed": 1001
  },
+ "fastify-forward-009/FILE@2002": {
+  "answer_tokens": 226,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 885,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"createLogger\",\n      \"file\": \"lib/logger.js\",\n      \"reason\": \"The `createLogger` function needs to pass the `requestIdHeader` option to `reqIdGenFactory` if it is provided.\",\n      \"new_code\": \"function createLogger (opts, stream) {\\n  stream = stream || opts.stream\\n  delete opts.stream\\n\\n  var prevLogger = opts.logger\\n  var prevGenReqId = opts.genReqId\\n  var logger = null\\n\\n  if (prevLogger) {\\n    opts.logger = undefined\\n    opts.genReqId = undefined\\n    logger = prevLogger.child(opts)\\n    opts.logger = prevLogger\\n    opts.genReqId = prevGenReqId\\n  } else {\\n    logger = pino(opts, stream)\\n  }\\n\\n  if (opts.genReqId === undefined) {\\n    opts.genReqId = reqIdGenFactory(opts.requestIdHeader)\\n  }\\n\\n  return logger\\n}\"\n    }\n  ]\n}",
+  "seconds": 16.1,
+  "seed": 2002
+ },
  "fastify-forward-009/FILE_BM25PAD@1001": {
   "answer_tokens": 438,
   "done_reason": "stop",
@@ -619,6 +745,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fourOhFourFallBack\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The function `fourOhFourFallBack` uses `genReqId` which now requires a `requestIdHeader` parameter.\",\n      \"new_code\": \"function fourOhFourFallBack (req, res) {\\n  // if this happen, we have a very bad bug\\n  // we might want to do some hard debugging\\n  // here, let's print out as much info as\\n  // we can\\n  req.id = genReqId(req, 'request-id');\\n  req.log = res.log = log.child({ reqId: req.id });\\n  req.originalUrl = req.url;\\n\\n  req.log.info({ req }, 'incoming request');\\n\\n  res._startTime = now();\\n  res.on('finish', onResFinished);\\n  res.on('error', onResFinished);\\n\\n  req.log.warn('the default handler for 404 did not catch this, this is likely a fastify bug, please report it');\\n  req.log.warn(fourOhFour.prettyPrint());\\n  const request = new Request(null, req, null, req.headers, req.log);\\n  const reply = new Reply(res, { onSend: [] }, request);\\n  reply.code(404).send(new Error('Not Found'));\\n}\"\n    },\n    {\n      \"function\": \"routeHandler\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The function `routeHandler` uses `genReqId` which now requires a `requestIdHeader` parameter.\",\n      \"new_code\": \"function routeHandler (req, res, params, context) {\\n  if (closing === true) {\\n    res.writeHead(503, {\\n      'Content-Type': 'application/json',\\n      'Content-Length': '80',\\n      'Connection': 'close'\\n    });\\n    res.end('{\"}]}",
   "seconds": 30.5,
   "seed": 1001
+ },
+ "fastify-forward-009/FILE_BM25PAD@2002": {
+  "answer_tokens": 406,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1820,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"fourOhFourFallBack\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The function now requires a `requestIdHeader` parameter.\",\n      \"new_code\": \"function fourOhFourFallBack (req, res) {\\n  // if this happen, we have a very bad bug\\n  // we might want to do some hard debugging\\n  // here, let's print out as much info as\\n  // we can\\n  req.id = genReqId(req)\\n  req.log = res.log = log.child({ reqId: req.id })\\n  req.originalUrl = req.url\\n\\n  req.log.info({ req }, 'incoming request')\\n\\n  res._startTime = now()\\n  res.on('finish', onResFinished)\\n  res.on('error', onResFinished)\\n\\n  req.log.warn('the default handler for 404 did not catch this, this is likely a fastify bug, please report it')\\n  req.log.warn(fourOhFour.prettyPrint())\\n  const request = new Request(null, req, null, req.headers, req.log)\\n  const reply = new Reply(res, { onSend: [] }, request)\\n  reply.code(404).send(new Error('Not Found'))\\n}\"\n    },\n    {\n      \"function\": \"routeHandler\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The function now requires a `requestIdHeader` parameter.\",\n      \"new_code\": \"function routeHandler (req, res, params, context) {\\n  if (closing === true) {\\n    res.writeHead(503, {\\n      'Content-Type': 'application/json',\\n      'Content-Length': '80',\\n      'Connection': 'close'\\n    })\\n    res.end('{\"}]}",
+  "seconds": 28.4,
+  "seed": 2002
  },
  "fastify-forward-009/FILE_BM25PAD@42": {
   "answer_tokens": 421,
@@ -638,6 +773,15 @@
   "seconds": 16.8,
   "seed": 1001
  },
+ "fastify-forward-009/FILE_GREPPAD@2002": {
+  "answer_tokens": 998,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1818,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"build\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `reqIdGenFactory` function now takes an argument `requestIdHeader`, which needs to be passed when calling it.\",\n      \"new_code\": \"function build (options) {\\n  options = options || {}\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n  }\\n\\n  var log\\n  var hasLogger = true\\n  if (isValidLogger(options.logger)) {\\n    log = loggerUtils.createLogger({\\n      logger: options.logger,\\n      serializers: Object.assign({}, loggerUtils.serializers, options.logger.serializers)\\n    })\\n  } else if (!options.logger) {\\n    hasLogger = false\\n    log = Object.create(abstractLogging)\\n    log.child = () => log\\n  } else {\\n    options.logger = typeof options.logger === 'object' ? options.logger : {}\\n    options.logger.level = options.logger.level || 'info'\\n    options.logger.serializers = Object.assign({}, loggerUtils.serializers, options.logger.serializers)\\n    log = loggerUtils.createLogger(options.logger)\\n  }\\n\\n  const fastify = {\\n    [childrenKey]: []\\n  }\\n  const router = FindMyWay({\\n    defaultRoute: defaultRoute,\\n    ignoreTrailingSlash: options.ignoreTrailingSlash,\\n    maxParamLength: options.maxParamLength,\\n    caseSensitive: options.caseSensitive\\n  })\\n\\n  fastify.printRoutes = router.prettyPrint.bind(router)\\n\\n  // logger utils\\n  const customGenReqId = options.logger ? options.logger.genReqId : null\\n  const genReqId = customGenReqId || loggerUtils.reqIdGenFactory(options.logger ? options.logger.requestIdHeader : 'request-id')\\n  const now = loggerUtils.now\\n  const onResponseIterator = loggerUtils.onResponseIterator\\n  const onResponseCallback = hasLogger ? loggerUtils.onResponseCallback : noop\\n\\n  const app = avvio(fastify, {\\n    autostart: false\\n  })\\n  // Override to allow the plugin incapsulation\\n  app.override = override\\n\\n  var listening = false\\n  var closing = false\\n  // true when Fastify is ready to go\\n  var started = false\\n  app.on('start', () => {\\n    started = true\\n  })\\n\\n  function throwIfAlreadyStarted (msg) {\\n    if (started) throw new Error(msg)\\n  }\\n\"\n    },\n    {\n      \"function\": \"fourOhFourFallBack\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `reqIdGenFactory` function now takes an argument `requestIdHeader`, which needs to be passed when calling it.\",\n      \"new_code\": \"  function fourOhFourFallBack (req, res) {\\n    // if this happen, we have a very bad bug\\n    // we might want to do some hard debugging\\n    // here, let's print out as much info as\\n    // we can\\n    req.id = genReqId(req)\\n    req.log = res.log = log.child({ reqId: req.id })\\n    req.originalUrl = req.url\\n\\n    req.log.info({ req }, 'incoming request')\\n\\n    res._startTime = now()\\n    res.on('finish', onResFinished)\\n    res.on('error', onResFinished)\\n\\n    req.log.warn('the default handler for 404 did not catch this, this is likely a fastify bug, please report it')\\n    req.log.warn(fourOhFour.prettyPrint())\\n    const request = new Request(null, req, null, req.headers, req.log)\\n    const reply = new Reply(res, { onSend: [] }, request)\\n    reply.code(404).send(new Error('Not Found'))\\n  }\\n\"\n    },\n    {\n      \"function\": \"routeHandler\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `reqIdGenFactory` function now takes an argument `requestIdHeader`, which needs to be passed when calling it.\",\n      \"new_code\": \"  function routeHandler (req, res, params, context) {\\n    if (closing === true) {\\n      res.writeHead(503, {\\n        'Content-Type': 'application/json',\\n        'Content-Length': '80',\\n        'Connection': 'close'\\n      })\\n      res.end('{\"\n    }\n  ]\n}",
+  "seconds": 67.1,
+  "seed": 2002
+ },
  "fastify-forward-009/FILE_GREPPAD@42": {
   "answer_tokens": 228,
   "done_reason": "stop",
@@ -656,6 +800,15 @@
   "seconds": 20.5,
   "seed": 1001
  },
+ "fastify-forward-009/PRISM@2002": {
+  "answer_tokens": 290,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1821,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"build\",\n      \"file\": \"fastify.js\",\n      \"reason\": \"The `reqIdGenFactory` function now takes an additional parameter `requestIdHeader`, which must be passed when creating the request ID generator.\",\n      \"new_code\": \"function build (options) {\\n  options = options || {}\\n  if (typeof options !== 'object') {\\n    throw new TypeError('Options must be an object')\\n  }\\n\\n  const router = Router({\\n    prefix: options.prefix,\\n    maxParamLength: options.maxParamLength,\\n    caseSensitive: options.caseSensitive\\n  })\\n\\n  fastify.printRoutes = router.prettyPrint.bind(router)\\n\\n  // logger utils\\n  const customGenReqId = options.logger ? options.logger.genReqId : null\\n  const genReqId = customGenReqId || loggerUtils.reqIdGenFactory(options.logger ? options.logger.requestIdHeader : 'request-id')\\n  const now = loggerUtils.now\\n  const onResponseIterator = loggerUtils.onResponseIterator\\n  const onResponseCallback = hasLogger ? loggerUtils.onResponseCallback : noop\\n\\n  const app = avvio(fastify, {\\n    autostart: false\\n  })\\n  // Override to allow the plugin incapsulation\\n}\"\n    }\n  ]\n}",
+  "seconds": 20.6,
+  "seed": 2002
+ },
  "fastify-forward-010/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -664,6 +817,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 1.8,
   "seed": 1001
+ },
+ "fastify-forward-010/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 857,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.9,
+  "seed": 2002
  },
  "fastify-forward-010/FILE_BM25PAD@1001": {
   "answer_tokens": 82,
