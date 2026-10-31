@@ -404,6 +404,15 @@
   "seconds": 56.3,
   "seed": 1001
  },
+ "tornado-newfn-012/FILE_BM25PAD@1001": {
+  "answer_tokens": 881,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8349,
+  "raw": "{\n  \"code\": \"def read_into(self, buf, callback=None, partial=False):\\n        \\\"\\\"\\\"Asynchronously read a number of bytes.\\n\\n        ``buf`` must be a writable buffer into which data will be read.\\n        If a callback is given, it will be run with the number of read\\n        bytes as an argument; if not, this method returns a `.Future`.\\n\\n        If ``partial`` is true, the callback is run as soon as any bytes\\n        have been read.  Otherwise, it is run when the ``buf`` has been\\n        entirely filled with read data.\\n\\n        .. versionadded:: 5.0\\n        \\\"\\\"\\\"\\n        future = self._set_read_callback(callback)\\n        self._read_buf = buf\\n        self._read_partial = partial\\n        try:\\n            self._try_inline_read()\\n        except:\\n            if future is not None:\\n                future.add_done_callback(lambda f: f.exception())\\n            raise\\n        return future\\n\\n    def _read_to_buffer(self):\\n        \\\"\\\"\\\"Reads from the socket and appends the result to the read buffer.\\n\\n        Returns the number of bytes read.  Returns 0 if there is nothing\\n        to read (i.e. the read returns EWOULDBLOCK or equivalent).  On\\n        error closes the socket and raises an exception.\\n        \\\"\\\"\\\"\\n        try:\\n            while True:\\n                try:\\n                    bytes_read = self.read_from_fd(self._read_buf)\\n                except (socket.error, IOError, OSError) as e:\\n                    if errno_from_exception(e) == errno.EINTR:\\n                        continue\\n                    # ssl.SSLError is a subclass of socket.error\\n                    if self._is_connreset(e):\\n                        # Treat ECONNRESET as a connection close rather than\\n                        # an error to minimize log spam  (the exception will\\n                        # be available on self.error for apps that care).\\n                        self.close(exc_info=e)\\n                        return\\n                    self.close(exc_info=e)\\n                    raise\\n                break\\n            if bytes_read is None:\\n                return 0\\n            elif bytes_read == 0:\\n                self.close()\\n                return 0\\n            self._read_buffer_size += bytes_read\\n        finally:\\n            # Break the reference to buf so we don't waste a chunk's worth of\\n            # memory in case an exception hangs on to our stack frame.\\n            buf = None\\n        if self._read_buffer_size > self.max_buffer_size:\\n            gen_log.error(\\\"Reached maximum read buffer size\\\")\\n            self.close()\\n            raise StreamBufferFullError(\\\"Reached maximum read buffer size\\\")\\n        return bytes_read\\n\\n    def _read_from_buffer(self, pos):\\n        \\\"\\\"\\\"Attempts to complete the currently-pending read from the buffer.\\n\\n        The argument is either a position in the read buffer or None,\\n        as returned by _find_read_pos.\\n        \\\"\\\"\\\"\\n        self._read_bytes = self._read_delimiter = self._read_regex = None\\n        self._read_partial = False\\n        self._run_read_callback(pos, False)\\n\\n    def _run_read_callback(self, bytes_read, streaming):\\n        if self._read_callback is not None:\\n            cb = self._read_callback\\n            self._read_callback = None\\n            self._run_callback(cb, bytes_read)\\n        elif self._read_future is not None:\\n            future = self._read_future\\n            self._read_future = None\\n            future.set_result(bytes_read)\\n        if streaming:\\n            self._run_streaming_callback()\\n\\n    def _run_streaming_callback(self):\\n        if self._streaming_callback is not None and self._read_buffer_size:\\n            bytes_to_consume = self._read_buffer_size\\n            if self._read_bytes is not None:\\n                bytes_to_consume = min(self._read_bytes, bytes_to_consume)\\n                self._read_bytes -= bytes_to_consume\\n            self._run_read_callback(bytes_to_consume, True)\"\n}",
+  "seconds": 74.4,
+  "seed": 1001
+ },
  "tornado-newfn-012/FILE_BM25PAD@42": {
   "answer_tokens": 389,
   "done_reason": "stop",
@@ -422,6 +431,24 @@
   "seconds": 81.3,
   "seed": 1001
  },
+ "tornado-newfn-013/FILE@1001": {
+  "answer_tokens": 59,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2872,
+  "raw": "{\n  \"code\": \"def _set_timeout(self, msecs):\\n    \\\"\\\"\\\"Called by libcurl to schedule a timeout.\\\"\\\"\\\"\\n    self.io_loop.add_timeout(time.time() + msecs/1000.0, self._handle_timeout)\"\n}",
+  "seconds": 8.2,
+  "seed": 1001
+ },
+ "tornado-newfn-013/FILE_BM25PAD@1001": {
+  "answer_tokens": 43,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8404,
+  "raw": "{\n  \"code\": \"def _set_timeout(self, msecs):\\n    self.io_loop.add_timeout(time.time() + msecs/1000.0, self._handle_timeout)\"\n}",
+  "seconds": 11.7,
+  "seed": 1001
+ },
  "tornado-newfn-013/FILE_BM25PAD@42": {
   "answer_tokens": 43,
   "done_reason": "stop",
@@ -430,6 +457,33 @@
   "raw": "{\n  \"code\": \"def _set_timeout(self, msecs):\\n    self.io_loop.add_timeout(time.time() + msecs/1000.0, self._handle_timeout)\"\n}",
   "seconds": 14.2,
   "seed": 42
+ },
+ "tornado-newfn-013/PRISM@1001": {
+  "answer_tokens": 59,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8426,
+  "raw": "{\n  \"code\": \"def _set_timeout(self, msecs):\\n        \\\"\\\"\\\"Called by libcurl to schedule a timeout.\\\"\\\"\\\"\\n        self.io_loop.add_timeout(time.time() + msecs/1000.0, self._handle_timeout)\"\n}",
+  "seconds": 12.0,
+  "seed": 1001
+ },
+ "tornado-newfn-014/FILE@1001": {
+  "answer_tokens": 68,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1212,
+  "raw": "{\n  \"code\": \"def add_accept_handler(sock, callback, io_loop=None):\\n    if io_loop is None:\\n        io_loop = IOLoop.current()\\n    io_loop.add_handler(sock.fileno(),\\n                        lambda fd, events: callback(sock.accept()),\\n                        IOLoop.READ)\"\n}",
+  "seconds": 7.0,
+  "seed": 1001
+ },
+ "tornado-newfn-014/FILE_BM25PAD@1001": {
+  "answer_tokens": 136,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6350,
+  "raw": "{\n  \"code\": \"def add_accept_handler(sock, callback, io_loop=None):\\n    if io_loop is None:\\n        from tornado.ioloop import IOLoop\\n        io_loop = IOLoop.instance()\\n    def accept_callback(fd, events):\\n        while True:\\n            try:\\n                connection, address = sock.accept()\\n            except socket.error as e:\\n                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):\\n                    return\\n                raise\\n            callback(connection, address)\\n    io_loop.add_handler(sock.fileno(), accept_callback, IOLoop.READ)\"\n}",
+  "seconds": 16.9,
+  "seed": 1001
  },
  "tornado-newfn-014/FILE_BM25PAD@42": {
   "answer_tokens": 136,
@@ -440,6 +494,33 @@
   "seconds": 18.0,
   "seed": 42
  },
+ "tornado-newfn-014/PRISM@1001": {
+  "answer_tokens": 242,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6359,
+  "raw": "{\n  \"code\": \"def add_accept_handler(sock, callback, io_loop=None):\\n    \\\"\\\"\\\"Adds an ``IOLoop`` event handler to accept new connections on ``sock``.\\n\\n    When a connection is accepted, ``callback(connection, address)`` will\\n    be run (``connection`` is a socket object, and ``address`` is the\\n    address of the other end of the connection).  Note that this signature\\n    is different from the ``callback(fd, events)`` signature used for\\n    ``IOLoop`` handlers.\\n    \\\"\\\"\\\"\\n    if io_loop is None:\\n        from tornado.ioloop import IOLoop\\n        io_loop = IOLoop.instance()\\n\\n    def accept_callback(fd, events):\\n        while True:\\n            try:\\n                connection, address = sock.accept()\\n            except socket.error as e:\\n                if e.args[0] in (errno.EWOULDBLOCK, errno.EAGAIN):\\n                    return\\n                raise\\n            callback(connection, address)\\n\\n    io_loop.add_handler(sock.fileno(), accept_callback, io_loop.READ)\"\n}",
+  "seconds": 23.8,
+  "seed": 1001
+ },
+ "tornado-newfn-015/FILE@1001": {
+  "answer_tokens": 196,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 948,
+  "raw": "{\n  \"code\": \"def bind_unix_socket(file, mode=0600, backlog=128):\\n    \\\"\\\"\\\"Creates a listening unix socket.\\n\\n    If a socket with the given name already exists, it will be deleted.\\n    If any other file with that name exists, an exception will be\\n    raised.\\n\\n    Returns a socket object (not a list of socket objects like \\n    `bind_sockets`)\\n    \\\"\\\"\\\"\\n    import os\\n    if os.path.exists(file):\\n        if os.path.isdir(file):\\n            raise IOError(\\\"%s is a directory\\\" % file)\\n        os.unlink(file)\\n    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\\n    set_close_exec(sock.fileno())\\n    sock.bind(file)\\n    os.chmod(file, mode)\\n    sock.listen(backlog)\\n    return sock\\n\"\n}",
+  "seconds": 14.6,
+  "seed": 1001
+ },
+ "tornado-newfn-015/FILE_BM25PAD@1001": {
+  "answer_tokens": 215,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5084,
+  "raw": "{\n  \"code\": \"def bind_unix_socket(file, mode=0600, backlog=128):\\n    \\\"\\\"\\\"Creates a listening unix socket.\\n\\n    If a socket with the given name already exists, it will be deleted.\\n    If any other file with that name exists, an exception will be\\n    raised.\\n\\n    Returns a socket object (not a list of socket objects like \\n    `bind_sockets`)\\n    \\\"\\\"\\\"\\n    import os\\n    import stat\\n\\n    if os.path.exists(file):\\n        if stat.S_ISSOCK(os.stat(file).st_mode):\\n            os.unlink(file)\\n        else:\\n            raise IOError(\\\"File %s exists and is not a socket\\\" % file)\\n\\n    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\\n    set_close_exec(sock.fileno())\\n    sock.bind(file)\\n    sock.listen(backlog)\\n    os.chmod(file, mode)\\n    return sock\"\n}",
+  "seconds": 20.7,
+  "seed": 1001
+ },
  "tornado-newfn-015/FILE_BM25PAD@42": {
   "answer_tokens": 203,
   "done_reason": "stop",
@@ -448,6 +529,33 @@
   "raw": "{\n  \"code\": \"def bind_unix_socket(file, mode=0600, backlog=128):\\n    \\\"\\\"\\\"Creates a listening unix socket.\\n\\n    If a socket with the given name already exists, it will be deleted.\\n    If any other file with that name exists, an exception will be\\n    raised.\\n\\n    Returns a socket object (not a list of socket objects like \\n    `bind_sockets`)\\n    \\\"\\\"\\\"\\n    import os\\n    import errno\\n\\n    if os.path.exists(file):\\n        if os.path.isdir(file):\\n            raise IOError(errno.EISDIR, \\\"Is a directory\\\", file)\\n        os.unlink(file)\\n\\n    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\\n    set_close_exec(sock.fileno())\\n    sock.bind(file)\\n    os.chmod(file, mode)\\n    sock.listen(backlog)\\n    return sock\"\n}",
   "seconds": 20.7,
   "seed": 42
+ },
+ "tornado-newfn-015/PRISM@1001": {
+  "answer_tokens": 223,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5084,
+  "raw": "{\n  \"code\": \"def bind_unix_socket(file, mode=0600, backlog=128):\\n    \\\"\\\"\\\"Creates a listening unix socket.\\n\\n    If a socket with the given name already exists, it will be deleted.\\n    If any other file with that name exists, an exception will be\\n    raised.\\n\\n    Returns a socket object (not a list of socket objects like \\n    `bind_sockets`)\\n    \\\"\\\"\\\"\\n    import os\\n    if os.path.exists(file):\\n        if os.path.isdir(file):\\n            raise IOError(\\\"A directory with the same name as the socket file already exists: %s\\\" % file)\\n        os.unlink(file)\\n    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\\n    set_close_exec(sock.fileno())\\n    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\\n    sock.bind(file)\\n    os.chmod(file, mode)\\n    sock.listen(backlog)\\n    return sock\"\n}",
+  "seconds": 20.7,
+  "seed": 1001
+ },
+ "tornado-newfn-016/FILE@1001": {
+  "answer_tokens": 102,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2901,
+  "raw": "{\n  \"code\": \"def render_linked_js(self, js_files):\\n        \\\"\\\"\\\"\\n        Default method used to render the final js links for the\\n        rendered webpage.\\n\\n        Override this method in a sub-classed controller to change the output.\\n        \\\"\\\"\\\"\\n        js = ''.join('<script src=\\\"' + escape.xhtml_escape(p) + '\\\" type=\\\"text/javascript\\\"></script>'\\n                       for p in js_files)\\n        return js\"\n}",
+  "seconds": 10.8,
+  "seed": 1001
+ },
+ "tornado-newfn-016/FILE_BM25PAD@1001": {
+  "answer_tokens": 178,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7691,
+  "raw": "{\n  \"code\": \"def render_linked_js(self, js_files):\\n        \\\"\\\"\\\"\\n        Default method used to render the final js links for the\\n        rendered webpage.\\n\\n        Override this method in a sub-classed controller to change the output.\\n        \\\"\\\"\\\"\\n        if not js_files:\\n            return b''\\n\\n        paths = []\\n        unique_paths = set()\\n        for path in js_files:\\n            if not is_absolute(path):\\n                path = self.static_url(path)\\n            if path not in unique_paths:\\n                paths.append(path)\\n                unique_paths.add(path)\\n\\n        js = ''.join('<script src=\\\"' + escape.xhtml_escape(p) + '\\\" type=\\\"text/javascript\\\"></script>'\\n                     for p in paths)\\n        return utf8(js)\"\n}",
+  "seconds": 20.5,
+  "seed": 1001
  },
  "tornado-newfn-016/FILE_BM25PAD@42": {
   "answer_tokens": 217,
@@ -458,6 +566,33 @@
   "seconds": 25.5,
   "seed": 42
  },
+ "tornado-newfn-016/PRISM@1001": {
+  "answer_tokens": 179,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7700,
+  "raw": "{\n  \"code\": \"def render_linked_js(self, js_files):\\n    \\\"\\\"\\\"\\n    Default method used to render the final js links for the\\n    rendered webpage.\\n\\n    Override this method in a sub-classed controller to change the output.\\n    \\\"\\\"\\\"\\n    if not js_files:\\n        return b''\\n\\n    paths = []\\n    unique_paths = set()\\n    for path in js_files:\\n        if not self.is_absolute(path):\\n            path = self.static_url(path)\\n        if path not in unique_paths:\\n            paths.append(path)\\n            unique_paths.add(path)\\n\\n    js = ''.join('<script src=\\\"' + escape.xhtml_escape(p) + '\\\" type=\\\"text/javascript\\\"></script>'\\n                 for p in paths)\\n    return utf8(js)\"\n}",
+  "seconds": 19.8,
+  "seed": 1001
+ },
+ "tornado-newfn-017/FILE@1001": {
+  "answer_tokens": 76,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2607,
+  "raw": "{\n  \"code\": \"def _run_callback(self, callback, *args, **kwargs):\\n        try:\\n            callback(*args, **kwargs)\\n        except Exception:\\n            app_log.error(\\\"Uncaught exception in %s\\\", self.request.path, exc_info=True)\\n            self._abort()\\n            return False\\n        return True\"\n}",
+  "seconds": 9.0,
+  "seed": 1001
+ },
+ "tornado-newfn-017/FILE_BM25PAD@1001": {
+  "answer_tokens": 76,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6168,
+  "raw": "{\n  \"code\": \"def _run_callback(self, callback, *args, **kwargs):\\n        try:\\n            callback(*args, **kwargs)\\n        except Exception:\\n            app_log.error(\\\"Uncaught exception in %s\\\", self.request.path, exc_info=True)\\n            self._abort()\\n            return False\\n        return True\"\n}",
+  "seconds": 11.0,
+  "seed": 1001
+ },
  "tornado-newfn-017/FILE_BM25PAD@42": {
   "answer_tokens": 73,
   "done_reason": "stop",
@@ -466,6 +601,33 @@
   "raw": "{\n  \"code\": \"def _run_callback(self, callback, *args, **kwargs):\\n    try:\\n        return callback(*args, **kwargs)\\n    except Exception:\\n        app_log.error(\\\"Uncaught exception in %s\\\", self.request.path, exc_info=True)\\n        self._abort()\\n        return False\"\n}",
   "seconds": 13.2,
   "seed": 42
+ },
+ "tornado-newfn-017/PRISM@1001": {
+  "answer_tokens": 145,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6205,
+  "raw": "{\n  \"code\": \"    def _run_callback(self, callback, *args, **kwargs):\\n        \\\"\\\"\\\"Runs the given callback with exception handling.\\n\\n        On error, aborts the websocket connection and returns False.\\n        \\\"\\\"\\\"\\n        if args or kwargs:\\n            callback = functools.partial(callback, *args, **kwargs)\\n\\n        def wrapper(*args, **kwargs):\\n            try:\\n                return callback(*args, **kwargs)\\n            except Exception:\\n                app_log.error(\\\"Uncaught exception in %s\\\",\\n                              self.request.path, exc_info=True)\\n                self._abort()\\n                return False\\n        return wrapper()\"\n}",
+  "seconds": 15.3,
+  "seed": 1001
+ },
+ "tornado-newfn-018/FILE@1001": {
+  "answer_tokens": 97,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2889,
+  "raw": "{\n  \"code\": \"def _read_until(self, callback):\\n    \\\"\\\"\\\"Assign given read callback and initiate read to buffer\\n        unless stream has already been read or closed.\\n    \\\"\\\"\\\"\\n    self._check_closed()\\n    if self._read_callback is not None:\\n        raise Exception(\\\"Already reading\\\")\\n    self._read_callback = stack_context.wrap(callback)\\n    self._add_io_state(self.io_loop.READ)\"\n}",
+  "seconds": 10.5,
+  "seed": 1001
+ },
+ "tornado-newfn-018/FILE_BM25PAD@1001": {
+  "answer_tokens": 94,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8065,
+  "raw": "{\n  \"code\": \"def _read_until(self, callback):\\n    assert not self._read_callback, \\\"Already reading\\\"\\n    self._read_callback = stack_context.wrap(callback)\\n    while True:\\n        if self._read_from_buffer():\\n            return\\n        self._check_closed()\\n        if self._read_to_buffer() == 0:\\n            break\\n    self._add_io_state(self.io_loop.READ)\"\n}",
+  "seconds": 15.0,
+  "seed": 1001
  },
  "tornado-newfn-018/FILE_BM25PAD@42": {
   "answer_tokens": 94,
@@ -476,6 +638,33 @@
   "seconds": 17.1,
   "seed": 42
  },
+ "tornado-newfn-018/PRISM@1001": {
+  "answer_tokens": 136,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8193,
+  "raw": "{\n  \"code\": \"def _read_until(self, callback):\\n    \\\"\\\"\\\"Assign given read callback and initiate read to buffer\\n       unless stream has already been read or closed.\\\"\\\"\\\"\\n    assert not self._read_callback, \\\"Already reading\\\"\\n    self._read_callback = stack_context.wrap(callback)\\n    while True:\\n        # See if we've already got the data from a previous read\\n        if self._read_from_buffer():\\n            return\\n        self._check_closed()\\n        if self._read_to_buffer() == 0:\\n            break\\n    self._add_io_state(self.io_loop.READ)\"\n}",
+  "seconds": 17.4,
+  "seed": 1001
+ },
+ "tornado-newfn-019/FILE@1001": {
+  "answer_tokens": 159,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2002,
+  "raw": "{\n  \"code\": \"def ping(self, data=b''):\\n        \\\"\\\"\\\"Send ping frame to the remote end.\\n\\n        The data argument allows a small amount of data (up to 125\\n        bytes) to be sent as a part of the ping message. Note that not\\n        all websocket implementations expose this data to\\n        applications.\\n\\n        Consider using the ``ping_interval`` argument to\\n        `websocket_connect` instead of sending pings manually.\\n\\n        .. versionadded:: 5.1\\n        \\\"\\\"\\\"\\n        if len(data) > 125:\\n            raise ValueError(\\\"Ping data must be 125 bytes or less\\\")\\n        self.protocol.write_ping(data)\"\n}",
+  "seconds": 13.8,
+  "seed": 1001
+ },
+ "tornado-newfn-019/FILE_BM25PAD@1001": {
+  "answer_tokens": 144,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6405,
+  "raw": "{\n  \"code\": \"def ping(self, data=b''):\\n        \\\"\\\"\\\"Send ping frame to the remote end.\\n\\n        The data argument allows a small amount of data (up to 125\\n        bytes) to be sent as a part of the ping message. Note that not\\n        all websocket implementations expose this data to\\n        applications.\\n\\n        Consider using the ``ping_interval`` argument to\\n        `websocket_connect` instead of sending pings manually.\\n\\n        .. versionadded:: 5.1\\n        \\\"\\\"\\\"\\n        if self.protocol is None:\\n            raise WebSocketClosedError()\\n        self.protocol.write_ping(data)\"\n}",
+  "seconds": 16.8,
+  "seed": 1001
+ },
  "tornado-newfn-019/FILE_BM25PAD@42": {
   "answer_tokens": 144,
   "done_reason": "stop",
@@ -485,6 +674,33 @@
   "seconds": 18.6,
   "seed": 42
  },
+ "tornado-newfn-019/PRISM@1001": {
+  "answer_tokens": 144,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6415,
+  "raw": "{\n  \"code\": \"def ping(self, data=b''):\\n    \\\"\\\"\\\"Send ping frame to the remote end.\\n\\n    The data argument allows a small amount of data (up to 125\\n    bytes) to be sent as a part of the ping message. Note that not\\n    all websocket implementations expose this data to\\n    applications.\\n\\n    Consider using the ``ping_interval`` argument to\\n    `websocket_connect` instead of sending pings manually.\\n\\n    .. versionadded:: 5.1\\n    \\\"\\\"\\\"\\n    if self.protocol is None:\\n        raise WebSocketClosedError()\\n    self.protocol.write_ping(data)\"\n}",
+  "seconds": 16.1,
+  "seed": 1001
+ },
+ "tornado-newfn-020/FILE@1001": {
+  "answer_tokens": 55,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3139,
+  "raw": "{\n  \"code\": \"def _handle_force_timeout(self):\\n        \\\"\\\"\\\"Called by IOLoop periodically to ask libcurl to process any\\n        events it may have forgotten about.\\n        \\\"\\\"\\\"\\n        self._multi.socket_all()\"\n}",
+  "seconds": 8.1,
+  "seed": 1001
+ },
+ "tornado-newfn-020/FILE_BM25PAD@1001": {
+  "answer_tokens": 55,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8448,
+  "raw": "{\n  \"code\": \"def _handle_force_timeout(self):\\n        \\\"\\\"\\\"Called by IOLoop periodically to ask libcurl to process any\\n        events it may have forgotten about.\\n        \\\"\\\"\\\"\\n        self._multi.socket_all()\"\n}",
+  "seconds": 12.4,
+  "seed": 1001
+ },
  "tornado-newfn-020/FILE_BM25PAD@42": {
   "answer_tokens": 52,
   "done_reason": "stop",
@@ -493,5 +709,14 @@
   "raw": "{\n  \"code\": \"def _handle_force_timeout(self):\\n        \\\"\\\"\\\"Called by IOLoop periodically to ask libcurl to process any\\n        events it may have forgotten about.\\\"\\\"\\\"\\n        self._multi.socket_all()\"\n}",
   "seconds": 14.8,
   "seed": 42
+ },
+ "tornado-newfn-020/PRISM@1001": {
+  "answer_tokens": 132,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8612,
+  "raw": "{\n  \"code\": \"def _handle_force_timeout(self):\\n        \\\"\\\"\\\"Called by IOLoop periodically to ask libcurl to process any\\n        events it may have forgotten about.\\n        \\\"\\\"\\\"\\n        with stack_context.NullContext():\\n            while True:\\n                try:\\n                    ret, num_handles = self._socket_action(\\n                        pycurl.SOCKET_TIMEOUT, 0)\\n                except pycurl.error, e:\\n                    ret = e[0]\\n                if ret != pycurl.E_CALL_MULTI_PERFORM:\\n                    break\\n            self._finish_pending_requests()\"\n}",
+  "seconds": 17.5,
+  "seed": 1001
  }
 }
