@@ -8,6 +8,15 @@
   "seconds": 89.0,
   "seed": 1001
  },
+ "axios-forward-001/FILE@2002": {
+  "answer_tokens": 144,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3012,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"dispatchBeforeRedirect\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The `setProxy` function now requires an additional `isRedirect` parameter, so `dispatchBeforeRedirect` must pass `true` when calling `setProxy` for redirects.\",\n      \"new_code\": \"function dispatchBeforeRedirect(options, responseDetails) {\\n  if (options.beforeRedirects.proxy) {\\n    options.beforeRedirects.proxy(options, true);\\n  }\\n  if (options.beforeRedirects.config) {\\n    options.beforeRedirects.config(options, responseDetails);\\n  }\\n}\"\n    }\n  ]\n}",
+  "seconds": 13.9,
+  "seed": 2002
+ },
  "axios-forward-001/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -16,6 +25,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 4.1,
   "seed": 1001
+ },
+ "axios-forward-001/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5527,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.3,
+  "seed": 2002
  },
  "axios-forward-001/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -35,6 +53,15 @@
   "seconds": 302.0,
   "seed": 1001
  },
+ "axios-forward-001/FILE_GREPPAD@2002": {
+  "answer_tokens": 1533,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5536,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"setProxy\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function signature has changed to include an 'isRedirect' parameter.\",\n      \"new_code\": \"function setProxy(options, configProxy, location, isRedirect) {\\n  let proxy = configProxy;\\n  if (!proxy && proxy !== false) {\\n    const proxyUrl = getProxyForUrl(location);\\n    if (proxyUrl) {\\n      if (!shouldBypassProxy(location)) {\\n        proxy = new URL(proxyUrl);\\n      }\\n    }\\n  }\\n  // On redirect re-invocation, strip any stale Proxy-Authorization header carried\\n  // over from the prior request (e.g. new target no longer uses a proxy, or uses\\n  // a different proxy). Skip on the initial request so user-supplied headers are\\n  // preserved. Header names are case-insensitive, so remove every case variant.\\n  if (isRedirect && options.headers) {\\n    for (const name of Object.keys(options.headers)) {\\n      if (name.toLowerCase() === 'proxy-authorization') {\\n        delete options.headers[name];\\n      }\\n    }\\n  }\\n  if (proxy) {\\n    // Basic proxy authorization\\n    if (proxy.username) {\\n      proxy.auth = (proxy.username || '') + ':' + (proxy.password || '');\\n    }\\n\\n    if (proxy.auth) {\\n      // Support proxy auth object form\\n      const validProxyAuth = Boolean(proxy.auth.username || proxy.auth.password);\\n\\n      if (validProxyAuth) {\\n        proxy.auth = (proxy.auth.username || '') + ':' + (proxy.auth.password || '');\\n      } else if (typeof proxy.auth === 'object') {\\n        throw new AxiosError('Invalid proxy authorization', AxiosError.ERR_BAD_OPTION, { proxy });\\n      }\\n\\n      const base64 = Buffer.from(proxy.auth, 'utf8').toString('base64');\\n\\n      options.headers['Proxy-Authorization'] = 'Basic ' + base64;\\n    }\\n\\n    options.headers.host = options.hostname + (options.port ? ':' + options.port : '');\\n    const proxyHost = proxy.hostname || proxy.host;\\n    options.hostname = proxyHost;\\n    // Replace 'host' since options is not a URL object\\n    options.host = proxyHost;\\n    options.port = proxy.port;\\n    options.path = location;\\n    if (proxy.protocol) {\\n      options.protocol = proxy.protocol.includes(':') ? proxy.protocol : `${proxy.protocol}:`;\\n    }\\n  }\\n\\n  options.beforeRedirects.proxy = function beforeRedirect(redirectOptions) {\\n    // Configure proxy for redirected request, passing the original config proxy to apply\\n    // the exact same logic as if the redirected request was performed by axios directly.\\n    setProxy(redirectOptions, configProxy, redirectOptions.href, true);\\n  };\\n}\"\n    },\n    {\n      \"function\": \"dispatchBeforeRedirect\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function now needs to pass the 'isRedirect' parameter to the 'setProxy' function.\",\n      \"new_code\": \"function dispatchBeforeRedirect(options, responseDetails) {\\n  if (options.beforeRedirects.proxy) {\\n    options.beforeRedirects.proxy(options, true);\\n  }\\n  if (options.beforeRedirects.config) {\\n    options.beforeRedirects.config(options, responseDetails);\\n  }\\n}\"\n    },\n    {\n      \"function\": \"httpAdapter\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function now needs to pass the 'isRedirect' parameter to the 'setProxy' function.\",\n      \"new_code\": \"export default isHttpAdapterSupported &&\\n  function httpAdapter(config) {\\n    return wrapAsync(async function dispatchHttpRequest(resolve, reject, onDone) {\\n      const own = (key) => (utils.hasOwnProp(config, key) ? config[key] : undefined);\\n      let data = own('data');\\n      let lookup = own('lookup');\\n      let family = own('family');\\n      let httpVersion = own('httpVersion');\\n      if (httpVersion === undefined) httpVersion = 1;\\n      let http2Options = own('http2Options');\\n      const responseType = own('responseType');\\n      const responseEncoding = own('responseEncoding');\\n      const method = config.method.toUpperCase();\\n      let isDone;\\n      let rejected = false;\\n      let req;\\n\\n      httpVersion = +httpVersion;\\n\\n      if (Number.isNaN(httpVersion)) {\\n        throw TypeError(`Invalid protocol version: '${config.httpVersion}' is not a number`);\\n      }\\n\\n      if (httpVersion !== 1 && httpVersion !== 2) {\\n        throw TypeError(`Unsupported protocol version '${httpVersion}'`);\\n      }\\n\\n      const isHttp2 = httpVersion === 2;\\n\\n      if (lookup) {\\n        const _lookup = callbackify(lookup, (value) => (utils.isArray(value) ? value : [value]));\\n        // hotfix to support opt.all option which is required for node 20.x\\n        lookup = (hostname, opt, cb) => {\\n          opt.all = true;\\n          _lookup(hostname, opt, cb);\\n        };\\n      }\\n\\n      const url = new URL(config.url);\\n\\n      const options = {\\n        protocol: url.protocol,\\n        hostname: url.hostname,\\n        port: url.port,\\n        path: url.pathname + url.search,\\n        method: method,\\n        headers: config.headers,\\n        auth: config.auth,\\n        http2: isHttp2,\\n        lookup: lookup,\\n        family: family,\\n        http2Options: http2Options,\\n        responseType: responseType,\\n        responseEncoding: responseEncoding,\\n        beforeRedirects: {\\n          proxy: null,\\n          config: null,\\n        },\\n      };\\n\\n      if (config.proxy) {\\n        setProxy(options, config.proxy, config.url, false);\\n      }\\n\\n      if (config.beforeRedirects) {\\n        options.beforeRedirects = config.beforeRedirects;\\n      }\\n\\n      if (isHttp2) {\\n        req = http2Transport.request(options, (response) => {\\n          handleResponse(response, resolve, reject, onDone);\\n        });\\n      } else {\\n        req = http.request(options, (response) => {\\n          handleResponse(response, resolve, reject, onDone);\\n        });\\n      }\\n\\n      req.on('error', (error) => {\\n        if (!isDone) {\\n          isDone = true;\\n          reject(error);\\n        }\\n      });\\n\\n      if (data) {\\n        req.write(data);\\n      }\\n\\n      req.end();\\n    });\\n  };\\n}\"\n    }\n  ]\n}",
+  "seconds": 112.6,
+  "seed": 2002
+ },
  "axios-forward-001/FILE_GREPPAD@42": {
   "answer_tokens": 777,
   "done_reason": "stop",
@@ -53,6 +80,15 @@
   "seconds": 13.4,
   "seed": 1001
  },
+ "axios-forward-001/PRISM@2002": {
+  "answer_tokens": 140,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 5540,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"setProxy\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The new `setProxy` function now accepts an additional `isRedirect` parameter. The `beforeRedirect` function needs to pass this parameter when calling `setProxy`.\",\n      \"new_code\": \"function beforeRedirect(redirectOptions) {\\n  // Configure proxy for redirected request, passing the original config proxy to apply\\n  // the exact same logic as if the redirected request was performed by axios directly.\\n  setProxy(redirectOptions, configProxy, redirectOptions.href, true);\\n}\"\n    }\n  ]\n}",
+  "seconds": 13.6,
+  "seed": 2002
+ },
  "axios-forward-002/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -62,6 +98,15 @@
   "seconds": 4.6,
   "seed": 1001
  },
+ "axios-forward-002/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2785,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.4,
+  "seed": 2002
+ },
  "axios-forward-002/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -70,6 +115,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 3.8,
   "seed": 1001
+ },
+ "axios-forward-002/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4358,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.6,
+  "seed": 2002
  },
  "axios-forward-002/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -89,6 +143,15 @@
   "seconds": 3.0,
   "seed": 1001
  },
+ "axios-forward-002/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4400,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.0,
+  "seed": 2002
+ },
  "axios-forward-002/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -107,6 +170,15 @@
   "seconds": 184.9,
   "seed": 1001
  },
+ "axios-forward-002/PRISM@2002": {
+  "answer_tokens": 2142,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4400,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"httpAdapter\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The new `setProxy` function now uses `configProxy` instead of `proxy` directly, and it also sets the `protocol` property if available. The `httpAdapter` function needs to pass `configProxy` to `setProxy` and handle the `protocol` property.\",\n      \"new_code\": \"module.exports = function httpAdapter(config) {\\n  return new Promise(function dispatchHttpRequest(resolvePromise, rejectPromise) {\\n    var onCanceled;\\n    function done() {\\n      if (config.cancelToken) {\\n        config.cancelToken.unsubscribe(onCanceled);\\n      }\\n\\n      if (config.signal) {\\n        config.signal.removeEventListener('abort', onCanceled);\\n      }\\n    }\\n    var resolve = function resolve(value) {\\n      done();\\n      resolvePromise(value);\\n    };\\n    var rejected = false;\\n    var reject = function reject(value) {\\n      done();\\n      rejected = true;\\n      rejectPromise(value);\\n    };\\n    var data = config.data;\\n    var headers = config.headers;\\n    var headerNames = {};\\n\\n    Object.keys(headers).forEach(function storeLowerName(name) {\\n      headerNames[name.toLowerCase()] = name;\\n    });\\n\\n    // Set User-Agent (required by some servers)\\n    // See https://github.com/axios/axios/issues/69\\n    if ('user-agent' in headerNames) {\\n      // User-Agent is specified; handle case where no UA header is desired\\n      if (!headers[headerNames['user-agent']]) {\\n        delete headers[headerNames['user-agent']];\\n      }\\n      // Otherwise, use specified value\\n    } else {\\n      // Only set header if it hasn't been set in config\\n      headers['User-Agent'] = 'axios/' + VERSION;\\n    }\\n\\n    // support for https://www.npmjs.com/package/form-data api\\n    if (utils.isFormData(data) && utils.isFunction(data.getHeaders)) {\\n      Object.assign(headers, data.getHeaders());\\n    } else if (data && !utils.isStream(data)) {\\n      if (Buffer.isBuffer(data)) {\\n        // Nothing to do...\\n      } else if (utils.isArrayBuffer(data)) {\\n        data = Buffer.from(new Uint8Array(data));\\n      } else if (utils.isString(data)) {\\n        data = Buffer.from(data, 'utf-8');\\n      } else {\\n        return reject(new AxiosError(\\n          'Data after transformation must be a string, an ArrayBuffer, a Buffer, or a Stream',\\n          AxiosError.ERR_BAD_REQUEST,\\n          config\\n        ));\\n      }\\n\\n      if (config.maxBodyLength > -1 && data.length > config.maxBodyLength) {\\n        return reject(new AxiosError(\\n          'Request body larger than maxBodyLength limit',\\n          AxiosError.ERR_BAD_REQUEST,\\n          config\\n        ));\\n      }\\n\\n      // Add Content-Length header if data exists\\n      if (!headerNames['content-length']) {\\n        headers['Content-Length'] = data.length;\\n      }\\n    }\\n\\n    // HTTP basic authentication\\n    var auth = undefined;\\n    if (config.auth) {\\n      var username = config.auth.username || '';\\n      var password = config.auth.password || '';\\n      auth = username + ':' + password;\\n    }\\n\\n    // Parse url\\n    var fullPath = buildFullPath(config.baseURL, config.url);\\n    var parsed = url.parse(fullPath);\\n    var protocol = parsed.protocol || supportedProtocols[0];\\n\\n    if (supportedProtocols.indexOf(protocol) === -1) {\\n      return reject(new AxiosError(\\n        'Unsupported protocol ' + protocol,\\n        AxiosError.ERR_BAD_REQUEST,\\n        config\\n      ));\\n    }\\n\\n    if (!auth && parsed.auth) {\\n      var urlAuth = parsed.auth.split(':');\\n      var urlUsername = urlAuth[0] || '';\\n      var urlPassword = urlAuth[1] || '';\\n      auth = urlUsername + ':' + urlPassword;\\n    }\\n\\n    if (auth && headerNames.authorization) {\\n      delete headers[headerNames.authorization];\\n    }\\n\\n    var isHttpsRequest = isHttps.test(protocol);\\n    var agent = isHttpsRequest ? config.httpsAgent : config.httpAgent;\\n\\n    try {\\n      buildURL(parsed.path, config.params, config.paramsSerializer).replace(/^\\u003f/, '');\\n    } catch (err) {\\n      var customErr = new Error(err.message);\\n      customErr.config = config;\\n      customErr.url = config.url;\\n      customErr.exists = true;\\n      reject(customErr);\\n    }\\n\\n    var options = {\\n      path: buildURL(parsed.path, config.params, config.paramsSerializer).replace(/^\\u003f/, ''),\\n      method: config.method.toUpperCase(),\\n      headers: headers,\\n      agent: agent,\\n      agents: { http: config.httpAgent, https: config.httpsAgent },\\n      auth: auth\\n    };\\n\\n    if (config.socketPath) {\\n      options.socketPath = config.socketPath;\\n    } else {\\n      options.hostname = parsed.hostname;\\n      options.port = parsed.port;\\n    }\\n\\n    var proxy = config.proxy;\\n    if (!proxy && proxy !== false) {\\n      var proxyEnv = protocol.slice(0, -1) + '_proxy';\\n      var proxyUrl = process.env[proxyEnv] || process.env[proxyEnv.toUpperCase()];\\n      if (proxyUrl) {\\n        var parsedProxyUrl = url.parse(proxyUrl);\\n        var noProxyEnv = process.env.no_proxy || process.env.NO_PROXY;\\n        var shouldProxy = true;\\n\\n        if (noProxyEnv) {\\n          var noProxy = noProxyEnv.split(',').map(function trim(s) {\\n            return s.trim();\\n          });\\n\\n          shouldProxy = !noProxy.some(function proxyMatch(proxyElement) {\\n            if (!proxyElement) {\\n              return false;\\n            }\\n            if (proxyElement === '*') {\\n              return true;\\n            }\\n            if (proxyElement[0] === '.' &&\\n                parsed.hostname.slice(parsed.hostname.length - proxyElement.length) === proxyElement) {\\n              return true;\\n            }\\n\\n            return parsed.hostname === proxyElement;\\n          });\\n        }\\n\\n        if (shouldProxy) {\\n          proxy = {\\n            host: parsedProxyUrl.hostname,\\n            port: parsedProxyUrl.port,\\n            protocol: parsedProxyUrl.protocol\\n          };\\n\\n          if (parsedProxyUrl.auth) {\\n            var proxyUrlAuth = parsedProxyUrl.auth.split(':');\\n            proxy.auth = {\\n              username: proxyUrlAuth[0],\\n              password: proxyUrlAuth[1]\\n            };\\n          }\\n        }\\n      }\\n    }\\n\\n    if (proxy) {\\n      options.headers.host = parsed.hostname + (parsed.port ? ':' + parsed.port : '');\\n      setProxy(options, config.proxy, protocol + '//' + parsed.hostname + (parsed.port ? ':' + parsed.port : '') + options.path);\\n    }\\n\\n    var transport;\\n    var isHttpsProxy = isHttpsRequest && (proxy ? isHttps.test(proxy.protocol) : true);\\n    if (config.transport) {\\n      transport = config.transport;\\n    } else if (config.maxRedirects === 0) {\\n      transport = isHttpsProxy ? https : http;\\n    } else {\\n      if (config.maxRedirects) {\\n        options.maxRedirects = config.maxRedirects;\\n      }\\n      if (config.beforeRedirect) {\\n        options.beforeRedirect = config.beforeRedirect;\\n      }\\n      transport = isHttpsProxy ? httpsFollow : httpFollow;\\n    }\\n\\n    if (config.maxBodyLength > -1) {\\n      options.maxBodyLength = config.maxBodyLength;\\n    }\\n\\n    if (config.insecureHTTPParser) {\\n      options.insecureHTTPParser = config.insecureHTTPParser;\\n    }\\n\\n    // Create the request\\n    var req = transport.request(options, function handleResponse(res) {\\n      if (req.aborted) return;\\n\\n      // uncompress the response body transparently if required\\n      var stream = res;\\n\\n      // return the last request in case of redirects\\n      var lastRequest = res.req || req;\\n\\n\\n      // if no content, is HEAD request or decompress disabled we should not decompress\\n      if (res.statusCode !== 204 && lastRequest.method !== 'HEAD' && config.decompress !== false) {\\n        switch (res.headers['content-encoding']) {\\n        /*eslint default-case:0*/\\n        case 'gzip':\\n        case 'compress':\\n        case 'deflate':\\n          // add the unzipper to the body stream processing pipeline\\n          stream = stream.pipe(zlib.createUnzip());\\n\\n          // remove the content-encoding in order to not confuse downstream operations\\n          delete res.headers['content-encoding'];\\n          break;\\n        }\\n      }\\n\\n      var response = {\\n        status: res.statusCode,\\n        statusText: res.statusMessage,\\n        headers: res.headers,\\n        config: config,\\n        request: lastRequest\\n      };\\n\\n      if (config.responseType === 'stream') {\\n        response.data = stream;\\n        settle(resolve, reject, response);\\n      } else {\\n        var responseBuffer = [];\\n\"\n    }\n  ]\n}",
+  "seconds": 152.0,
+  "seed": 2002
+ },
  "axios-forward-003/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -116,6 +188,15 @@
   "seconds": 1.8,
   "seed": 1001
  },
+ "axios-forward-003/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 613,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.9,
+  "seed": 2002
+ },
  "axios-forward-003/FILE_BM25PAD@1001": {
   "answer_tokens": 659,
   "done_reason": "stop",
@@ -124,6 +205,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"abort\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The `abort` function now expects a `reason` parameter instead of a `cancel` parameter.\",\n      \"new_code\": \"function abort(reason) {\\n  emitter.emit('abort', !reason || reason.type ? new CanceledError(null, config, req) : reason);\\n}\"\n    },\n    {\n      \"function\": \"CancelToken.constructor\",\n      \"file\": \"lib/cancel/CancelToken.js\",\n      \"reason\": \"The `executor` function now expects a `reason` parameter instead of a `cancel` parameter.\",\n      \"new_code\": \"constructor(executor) {\\n  if (typeof executor !== 'function') {\\n    throw new TypeError('executor must be a function.');\\n  }\\n\\n  let resolvePromise;\\n\\n  this.promise = new Promise(function promiseExecutor(resolve) {\\n    resolvePromise = resolve;\\n  });\\n\\n  const token = this;\\n\\n  // eslint-disable-next-line func-names\\n  this.promise.then(cancel => {\\n    if (!token._listeners) return;\\n\\n    let i = token._listeners.length;\\n\\n    while (i-- > 0) {\\n      token._listeners[i](cancel);\\n    }\\n    token._listeners = null;\\n  });\\n\\n  // eslint-disable-next-line func-names\\n  this.promise.then = onfulfilled => {\\n    let _resolve;\\n    // eslint-disable-next-line func-names\\n    const promise = new Promise(resolve => {\\n      token.subscribe(resolve);\\n      _resolve = resolve;\\n    }).then(onfulfilled);\\n\\n    promise.cancel = function reject() {\\n      token.unsubscribe(_resolve);\\n    };\\n\\n    return promise;\\n  };\\n\\n  executor(function cancel(message, config, request) {\\n    if (token.reason) {\\n      // Cancellation has already been requested\\n      return;\\n    }\\n\\n    token.reason = new CanceledError(message, config, request);\\n    resolvePromise(token.reason);\\n  });\\n}\"\n    },\n    {\n      \"function\": \"trackStream.cancel\",\n      \"file\": \"lib/helpers/trackStream.js\",\n      \"reason\": \"The `cancel` function now expects a `reason` parameter instead of a `cancel` parameter.\",\n      \"new_code\": \"cancel(reason) {\\n  _onFinish(reason);\\n  return iterator.return();\\n}\"\n    },\n    {\n      \"function\": \"handleAbort\",\n      \"file\": \"lib/adapters/xhr.js\",\n      \"reason\": \"The `handleAbort` function now expects a `reason` parameter instead of a `cancel` parameter.\",\n      \"new_code\": \"request.onabort = function handleAbort() {\\n  if (!request) {\\n    return;\\n  }\\n\\n  reject(new AxiosError('Request aborted', AxiosError.ECONNABORTED, config, request));\\n\\n  // Clean up request\\n  request = null;\\n};\"\n    }\n  ]\n}",
   "seconds": 44.9,
   "seed": 1001
+ },
+ "axios-forward-003/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1781,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 2002
  },
  "axios-forward-003/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -143,6 +233,15 @@
   "seconds": 37.8,
   "seed": 1001
  },
+ "axios-forward-003/FILE_GREPPAD@2002": {
+  "answer_tokens": 459,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1749,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"handleAbort\",\n      \"file\": \"lib/adapters/xhr.js\",\n      \"reason\": \"The `onabort` function signature has changed from `(cancel)` to `(reason)`. The `handleAbort` function needs to be updated to match this new signature.\",\n      \"new_code\": \"request.onabort = function handleAbort(reason) {\\n  if (!request) {\\n    return;\\n  }\\n\\n  reject(new AxiosError('Request aborted', AxiosError.ECONNABORTED, config, request, reason));\\n\\n  // Clean up request\\n  request = null;\\n};\"\n    },\n    {\n      \"function\": \"abort\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The `onabort` function signature has changed from `(cancel)` to `(reason)`. The `abort` function needs to be updated to match this new signature.\",\n      \"new_code\": \"function abort(reason) {\\n  emitter.emit('abort', !reason || reason.type ? new CanceledError(null, config, req) : reason);\\n}\"\n    },\n    {\n      \"function\": \"executor\",\n      \"file\": \"lib/cancel/CancelToken.js\",\n      \"reason\": \"The `onabort` function signature has changed from `(cancel)` to `(reason)`. The `executor` function needs to be updated to match this new signature.\",\n      \"new_code\": \"executor(function cancel(message, config, request) {\\n  if (token.reason) {\\n    // Cancellation has already been requested\\n    return;\\n  }\\n\\n  token.reason = new CanceledError(message, config, request);\\n  resolvePromise(token.reason);\\n});\"\n    },\n    {\n      \"function\": \"cancel\",\n      \"file\": \"lib/helpers/trackStream.js\",\n      \"reason\": \"The `onabort` function signature has changed from `(cancel)` to `(reason)`. The `cancel` function needs to be updated to match this new signature.\",\n      \"new_code\": \"cancel(reason) {\\n  _onFinish(reason);\\n  return iterator.return();\\n}\"\n    }\n  ]\n}",
+  "seconds": 31.8,
+  "seed": 2002
+ },
  "axios-forward-003/FILE_GREPPAD@42": {
   "answer_tokens": 418,
   "done_reason": "stop",
@@ -161,6 +260,15 @@
   "seconds": 2.3,
   "seed": 1001
  },
+ "axios-forward-003/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1782,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.3,
+  "seed": 2002
+ },
  "axios-forward-004/FILE@1001": {
   "answer_tokens": 209,
   "done_reason": "stop",
@@ -170,6 +278,15 @@
   "seconds": 15.3,
   "seed": 1001
  },
+ "axios-forward-004/FILE@2002": {
+  "answer_tokens": 226,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1182,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"mergeDeepProperties\",\n      \"file\": \"lib/core/mergeConfig.js\",\n      \"reason\": \"The function signature has been updated to include a 'prop' parameter, which is used in the 'headers' merge function.\",\n      \"new_code\": \"function mergeDeepProperties(a, b, prop, caseless) {\\n  if (!utils.isUndefined(b)) {\\n    return getMergedValue(a, b, prop, caseless);\\n  } else if (!utils.isUndefined(a)) {\\n    return getMergedValue(undefined, a, prop, caseless);\\n  }\\n}\"\n    },\n    {\n      \"function\": \"headers\",\n      \"file\": \"lib/core/mergeConfig.js\",\n      \"reason\": \"The 'headers' merge function now needs to pass the 'prop' parameter to the 'mergeDeepProperties' function.\",\n      \"new_code\": \"headers: (a, b) => mergeDeepProperties(headersToObject(a), headersToObject(b), 'headers', true)\"\n    }\n  ]\n}",
+  "seconds": 16.5,
+  "seed": 2002
+ },
  "axios-forward-004/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -178,6 +295,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.6,
   "seed": 1001
+ },
+ "axios-forward-004/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2350,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.7,
+  "seed": 2002
  },
  "axios-forward-004/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -197,6 +323,15 @@
   "seconds": 48.3,
   "seed": 1001
  },
+ "axios-forward-004/FILE_GREPPAD@2002": {
+  "answer_tokens": 372,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2348,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"mergeDeepProperties\",\n      \"file\": \"lib/core/mergeConfig.js\",\n      \"reason\": \"The function signature has changed to include a new parameter 'prop'.\",\n      \"new_code\": \"function mergeDeepProperties(a, b, prop, caseless) {\\n  if (!utils.isUndefined(b)) {\\n    return getMergedValue(a, b, prop, caseless);\\n  } else if (!utils.isUndefined(a)) {\\n    return getMergedValue(undefined, a, prop, caseless);\\n  }\\n}\"\n    },\n    {\n      \"function\": \"mergeDirectKeys\",\n      \"file\": \"lib/core/mergeConfig.js\",\n      \"reason\": \"The function signature has changed to include a new parameter 'prop'.\",\n      \"new_code\": \"function mergeDirectKeys(a, b, prop) {\\n  if (prop in config2) {\\n    return getMergedValue(a, b);\\n  } else if (prop in config1) {\\n    return getMergedValue(undefined, a);\\n  }\\n}\"\n    },\n    {\n      \"function\": \"computeConfigValue\",\n      \"file\": \"lib/core/mergeConfig.js\",\n      \"reason\": \"The function signature has changed to include a new parameter 'prop'.\",\n      \"new_code\": \"utils.forEach(Object.keys(Object.assign({}, config1, config2)), function computeConfigValue(prop) {\\n  const merge = mergeMap[prop] || mergeDeepProperties;\\n  const configValue = merge(config1[prop], config2[prop], prop);\\n  (utils.isUndefined(configValue) && merge !== mergeDirectKeys) || (config[prop] = configValue);\\n});\"\n    }\n  ]\n}",
+  "seconds": 26.6,
+  "seed": 2002
+ },
  "axios-forward-004/FILE_GREPPAD@42": {
   "answer_tokens": 261,
   "done_reason": "stop",
@@ -215,6 +350,15 @@
   "seconds": 26.3,
   "seed": 1001
  },
+ "axios-forward-004/PRISM@2002": {
+  "answer_tokens": 911,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2367,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"mergeConfig\",\n      \"file\": \"lib/core/mergeConfig.js\",\n      \"reason\": \"The `mergeDeepProperties` function now takes an additional `prop` parameter, so the caller `mergeConfig` must pass this parameter when invoking `mergeDeepProperties`.\",\n      \"new_code\": \"export default function mergeConfig(config1, config2) {\\n  // eslint-disable-next-line no-param-reassign\\n  config2 = config2 || {};\\n  const config = {};\\n\\n  function getMergedValue(target, source, caseless) {\\n    if (utils.isPlainObject(target) && utils.isPlainObject(source)) {\\n      return utils.merge.call({caseless}, target, source);\\n    } else if (utils.isPlainObject(source)) {\\n      return utils.merge({}, source);\\n    } else if (utils.isArray(source)) {\\n      return source.slice();\\n    }\\n    return source;\\n  }\\n\\n  // eslint-disable-next-line consistent-return\\n  function mergeDeepProperties(a, b, prop, caseless) {\\n    if (!utils.isUndefined(b)) {\\n      return getMergedValue(a, b, prop, caseless);\\n    } else if (!utils.isUndefined(a)) {\\n      return getMergedValue(undefined, a, prop, caseless);\\n    }\\n  }\\n\\n  // eslint-disable-next-line consistent-return\\n  function valueFromConfig2(a, b) {\\n    if (!utils.isUndefined(b)) {\\n      return getMergedValue(undefined, b);\\n    }\\n  }\\n\\n  // eslint-disable-next-line consistent-return\\n  function defaultToConfig2(a, b) {\\n    if (!utils.isUndefined(b)) {\\n      return getMergedValue(undefined, b);\\n    } else if (!utils.isUndefined(a)) {\\n      return getMergedValue(undefined, a);\\n    }\\n  }\\n\\n  // eslint-disable-next-line consistent-return\\n  function mergeDirectKeys(a, b, prop) {\\n    if (prop in config2) {\\n      return getMergedValue(a, b);\\n    } else if (prop in config1) {\\n      return getMergedValue(undefined, a);\\n    }\\n  }\\n\\n  const mergeMap = {\\n    url: valueFromConfig2,\\n    method: valueFromConfig2,\\n    data: valueFromConfig2,\\n    baseURL: defaultToConfig2,\\n    transformRequest: defaultToConfig2,\\n    transformResponse: defaultToConfig2,\\n    paramsSerializer: defaultToConfig2,\\n    timeout: defaultToConfig2,\\n    timeoutMessage: defaultToConfig2,\\n    withCredentials: defaultToConfig2,\\n    withXSRFToken: defaultToConfig2,\\n    adapter: defaultToConfig2,\\n    responseType: defaultToConfig2,\\n    xsrfCookieName: defaultToConfig2,\\n    xsrfHeaderName: defaultToConfig2,\\n    onUploadProgress: defaultToConfig2,\\n    onDownloadProgress: defaultToConfig2,\\n    decompress: defaultToConfig2,\\n    maxContentLength: defaultToConfig2,\\n    maxBodyLength: defaultToConfig2,\\n    beforeRedirect: defaultToConfig2,\\n    transport: defaultToConfig2,\\n    httpAgent: defaultToConfig2,\\n    httpsAgent: defaultToConfig2,\\n    cancelToken: defaultToConfig2,\\n    socketPath: defaultToConfig2,\\n    responseEncoding: defaultToConfig2,\\n    validateStatus: mergeDirectKeys,\\n    headers: (a, b) => mergeDeepProperties(headersToObject(a), headersToObject(b), 'headers', true)\\n  };\\n\\n  utils.forEach(Object.keys(Object.assign({}, config1, config2)), function computeConfigValue(prop) {\\n    const merge = mergeMap[prop] || mergeDeepProperties;\\n    const configValue = merge(config1[prop], config2[prop], prop, prop);\\n    (utils.isUndefined(configValue) && merge !== mergeDirectKeys) || (config[prop] = configValue);\\n  });\\n\\n  return config;\\n}\"\n    }\n  ]\n}",
+  "seconds": 62.1,
+  "seed": 2002
+ },
  "axios-forward-005/FILE@1001": {
   "answer_tokens": 412,
   "done_reason": "stop",
@@ -223,6 +367,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"dispatchBeforeRedirect\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function `dispatchBeforeRedirect` needs to pass the `configHttpsAgent` parameter to the `setProxy` function.\",\n      \"new_code\": \"function dispatchBeforeRedirect(options, responseDetails, requestDetails) {\\n  if (options.beforeRedirects.proxy) {\\n    options.beforeRedirects.proxy(options, undefined, undefined, undefined, options.httpsAgent);\\n  }\\n  if (options.beforeRedirects.config) {\\n    options.beforeRedirects.config(options, responseDetails, requestDetails);\\n  }\\n}\"\n    },\n    {\n      \"function\": \"httpAdapter\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function `httpAdapter` needs to pass the `configHttpsAgent` parameter to the `setProxy` function.\",\n      \"new_code\": \"export default isHttpAdapterSupported &&\\n  function httpAdapter(config) {\\n    return wrapAsync(async function dispatchHttpRequest(resolve, reject, onDone) {\\n      const own = (key) => (utils.hasOwnProp(config, key) ? config[key] : undefined);\\n      let data = own('data');\\n      let lookup = own('lookup');\\n      let family = own('family');\\n      let httpVersion = own('httpVersion');\\n      if (httpVersion === undefined) httpVersion = 1;\\n      let http2Options = own('http2Options');\\n      const responseType = own('responseType');\\n      const configHttpsAgent = own('httpsAgent');\\n\\n      // ... existing code ...\\n\\n      if (proxy) {\\n        setProxy(options, configProxy, location, isRedirect, configHttpsAgent);\\n      }\\n\\n      // ... existing code ...\\n    });\\n  }\"\n    }\n  ]\n}",
   "seconds": 34.5,
   "seed": 1001
+ },
+ "axios-forward-005/FILE@2002": {
+  "answer_tokens": 423,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4906,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"dispatchBeforeRedirect\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function `dispatchBeforeRedirect` now needs to pass the `configHttpsAgent` parameter to the `setProxy` function.\",\n      \"new_code\": \"function dispatchBeforeRedirect(options, responseDetails, requestDetails) {\\n  if (options.beforeRedirects.proxy) {\\n    options.beforeRedirects.proxy(options, undefined, undefined, undefined, options.httpsAgent);\\n  }\\n  if (options.beforeRedirects.config) {\\n    options.beforeRedirects.config(options, responseDetails, requestDetails);\\n  }\\n}\"\n    },\n    {\n      \"function\": \"httpAdapter\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function `httpAdapter` now needs to pass the `configHttpsAgent` parameter to the `setProxy` function.\",\n      \"new_code\": \"export default isHttpAdapterSupported &&\\n  function httpAdapter(config) {\\n    return wrapAsync(async function dispatchHttpRequest(resolve, reject, onDone) {\\n      const own = (key) => (utils.hasOwnProp(config, key) ? config[key] : undefined);\\n      let data = own('data');\\n      let lookup = own('lookup');\\n      let family = own('family');\\n      let httpVersion = own('httpVersion');\\n      if (httpVersion === undefined) httpVersion = 1;\\n      let http2Options = own('http2Options');\\n      const responseType = own('responseType');\\n      const configHttpsAgent = own('httpsAgent');\\n\\n      // ... (rest of the function remains unchanged)\\n\\n      if (proxy) {\\n        setProxy(options, configProxy, location, false, configHttpsAgent);\\n      }\\n\\n      // ... (rest of the function remains unchanged)\\n    });\\n  }\"\n    }\n  ]\n}",
+  "seconds": 35.3,
+  "seed": 2002
  },
  "axios-forward-005/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
