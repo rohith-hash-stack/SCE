@@ -611,6 +611,15 @@
   "seconds": 121.6,
   "seed": 1001
  },
+ "aiohttp-forward-007/FILE_GREPPAD@2002": {
+  "answer_tokens": 2259,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4579,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"DeflateBuffer.feed_data\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The function signature has changed to remove the `size` parameter.\",\n      \"new_code\": \"def feed_data(self, chunk: bytes) -> None:\\n        if not chunk:\\n            return\\n\\n        self.size += len(chunk)\\n\\n        # RFC1950\\n        # bits 0..3 = CM = 0b1000 = 8 = \\\"deflate\\\"\\n        # bits 4..7 = CINFO = 1..7 = windows size.\\n        if (\\n            not self._started_decoding\\n            and self.encoding == \\\"deflate\\\"\\n            and chunk[0] & 0xF != 8\\n        ):\\n            # Change the decoder to decompress incorrectly compressed data\\n            # Actually we should issue a warning about non-RFC-compliant data.\\n            self.decompressor = ZLibDecompressor(\\n                encoding=self.encoding, suppress_deflate_header=True\\n            )\\n\\n        try:\\n            chunk = self.decompressor.decompress_sync(chunk)\\n        except Exception:\\n            raise ContentEncodingError(\\n                \\\"Can not decode content-encoding: %s\\\" % self.encoding\\n            )\\n\\n        self._started_decoding = True\\n\\n        if chunk:\\n            self.out.feed_data(chunk)\"\n    },\n    {\n      \"function\": \"StreamReader.feed_data\",\n      \"file\": \"aiohttp/streams.py\",\n      \"reason\": \"The function signature has changed to remove the `size` parameter.\",\n      \"new_code\": \"def feed_data(self, data: bytes, size: int = 0) -> None:\\n        assert not self._eof, \\\"feed_data after feed_eof\\\"\\n        if not data:\\n            return\\n        if size == 0:\\n            size = len(data)\\n        self._size += size\\n        self._buffer.append(data)\\n        self._wakeup_waiters()\\n        if self._eof:\\n            self._buffer.clear()\"\n    },\n    {\n      \"function\": \"DeflateBuffer.feed_eof\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The function signature has changed to remove the `size` parameter.\",\n      \"new_code\": \"def feed_eof(self) -> None:\\n        chunk = self.decompressor.flush()\\n\\n        if chunk or self.size > 0:\\n            self.out.feed_data(chunk)\\n            # decompressor is not brotli unless encoding is \\\"br\\\"\\n            if self.encoding == \\\"deflate\\\" and not self.decompressor.eof:  # type: ignore[union-attr]\\n                raise ContentEncodingError(\\\"deflate\\\")\\n\\n        self.out.feed_eof()\"\n    },\n    {\n      \"function\": \"ResponseHandler.data_received\",\n      \"file\": \"aiohttp/client_proto.py\",\n      \"reason\": \"The function signature has changed to remove the `size` parameter.\",\n      \"new_code\": \"def data_received(self, data: bytes) -> None:\\n        self._reschedule_timeout()\\n\\n        if not data:\\n            return\\n\\n        # custom payload parser\\n        if self._payload_parser is not None:\\n            eof, tail = self._payload_parser.feed_data(data)\\n            if eof:\\n                self._payload = None\\n                self._payload_parser = None\\n\\n                if tail:\\n                    self.data_received(tail)\\n            return\\n        else:\\n            if self._upgraded or self._parser is None:\\n                # i.e. websocket connection, websocket parser is not set yet\\n                self._tail += data\\n            else:\\n                # parse http messages\\n                try:\\n                    messages, upgraded, tail = self._parser.feed_data(data)\\n                except BaseException as underlying_exc:\\n                    if self.transport is not None:\\n                        # connection.release() could be called BEFORE\\n                        # data_received(), the transport is already\\n                        # closed in this case\\n                        self.transport.close()\\n                    # should_close is True after the call\\n                    self.set_exception(HttpProcessingError(), underlying_exc)\\n                    return\\n\\n                self._upgraded = upgraded\\n\\n                payload: Optional[StreamReader] = None\\n                for message, payload in messages:\\n                    if message.should_close:\\n                        self._should_close = True\\n\\n                    self._payload = payload\\n\\n                    if self._skip_payload or status_code_must_be_empty_body(\\n                        message.code\\n                    ):\\n                        self.feed_data((message, EMPTY_PAYLOAD))\\n                    else:\\n                        self.feed_data((message, payload))\\n                if payload is not None:\\n                    # new message(s) was processed\\n                    # register timeout handler unsubscribing\\n                    # either on end-of-stream or immediately for\\n                    # EMPTY_PAYLOAD\\n                    if payload is not EMPTY_PAYLOAD:\\n                        payload.on_eof(self._drop_timeout)\\n                    else:\\n                        self._drop_timeout()\\n\\n                if tail:\"\n    },\n    {\n      \"function\": \"ClientWebSocketResponse.close\",\n      \"file\": \"aiohttp/client_ws.py\",\n      \"reason\": \"The function signature has changed to remove the `size` parameter.\",\n      \"new_code\": \"async def close(self, *, code: int = WSCloseCode.OK, message: bytes = b\\\"\\\") -> bool:\\n        # we need to break `receive()` cycle first,\\n        # `close()` may be called from different task\\n        if self._waiting is not None and not self._closing:\\n            self._closing = True\\n            self._reader.feed_data(WS_CLOSING_MESSAGE)\\n            await self._waiting\\n\\n        if not self._closed:\\n            self._cancel_heartbeat()\\n            self._closed = True\\n            try:\\n                await self._writer.close(code, message)\\n            except asyncio.CancelledError:\\n                self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n                self._response.close()\\n                raise\\n            except Exception as exc:\\n                self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n                self._exception = exc\\n                self._response.close()\\n                return True\\n\\n            if self._close_code:\\n                self._response.close()\\n                return True\\n\\n            while True:\\n                try:\\n                    async with async_timeout.timeout(self._timeout.ws_close):\\n                        msg = await self._reader.read()\\n                except asyncio.CancelledError:\\n                    self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n                    self._response.close()\\n                    raise\\n                except Exception as exc:\\n                    self._close_code = WSCloseCode.ABNORMAL_CLOSURE\\n                    self._exception = exc\\n                    self._response.close()\\n                    return True\\n\\n                if msg.type == WSMsgType.CLOSE:\\n                    self._close_code = msg.data\\n                    self._response.close()\\n                    return True\\n        else:\\n            return False\"\n    },\n    {\n      \"function\": \"HttpParser.feed_data\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The function signature has changed to remove the `size` parameter.\",\n      \"new_code\": \"def feed_data(\\n        self,\\n        data: bytes,\\n        SEP: _SEP = b\\\"\\\\r\\\\n\\\",\\n        EMPTY: bytes = b\\\"\\\",\\n        CONTENT_LENGTH: istr = hdrs.CONTENT_LENGTH,\\n        METH_CONNECT: str = hdrs.METH_CONNECT,\\n        SEC_WEBSOCKET_KEY1: istr = hdrs.SEC_WEBSOCKET_KEY1,\\n    ) -> Tuple[List[Tuple[_MsgT, StreamReader]], bool, bytes]:\\n        messages = []\\n\\n        if self._tail:\\n            data, self._tail = self._tail + data, b\\\"\\\"\\n\\n        data_len = len(data)\\n        start_pos = 0\\n        loop = self.loop\\n\\n        while start_pos < data_len:\\n            # read HTTP message (request/response line + headers), \\\\r\\\\n\\\\r\\\\n\\n            # and split by lines\\n            if self._payload_parser is None and not self._upgraded:\\n                pos = data.find(SEP, start_pos)\\n                # consume \\\\r\\\\n\\n                if pos == start_pos and not self._lines:\\n                    start_pos = pos + len(SEP)\\n                    continue\\n\\n                if pos >= start_pos:\\n                    # line found\\n                    line = data[start_pos:pos]\\n                    if SEP == b\\\"\\\\n\\\":  # For lax response parsing\\n                        line = line.rstrip(b\\\"\\\\r\\\")\\n                    self._lines.append(line)\\n                    start_pos = pos + len(SEP)\\n\\n                    # \\\\r\\\\n\\\\r\\\\n found\\n                    if self._lines[-1] == EMPTY:\\n                        try:\\n                            msg: _MsgT = self.parse_message(self._lines)\\n                        finally:\\n                            self._lines.clear()\\n\\n                        def get_content_length() -> Optional[int]:\\n                            # payload length\\n                            length_hdr = msg.headers.get(CONTENT_LENGTH)\\n                            if length_hdr is None:\\n                                return None\\n\\n                            # Shouldn't allow +/- or other number formats.\\n                            # https://www.rfc-editor.org/rfc/rfc9110#section-8.6-2\\n                            # msg.headers is already stripped of leading/trailing wsp\\n                            if not DIGITS.fullmatch(length_hdr):\\n                                raise InvalidHeader(CONTENT_LENGTH)\\n\\n                            return int(length_hdr)\\n\\n                        length = get_content_length()\\n                        # do not support old websocket spec\\n                        if SEC_WEBSOCKET_KEY1 in msg.headers:\"\n    },\n    {\n      \"function\": \"HttpResponseParser.feed_data\",\n      \"file\": \"aiohttp/http_parser.py\",\n      \"reason\": \"The function signature has changed to remove the `size` parameter.\",\n      \"new_code\": \"def feed_data(\\n        self,\\n        data: bytes,\\n        SEP: Optional[_SEP] = None,\\n        *args: Any,\\n        **kwargs: Any,\\n    ) -> Tuple[List[Tuple[RawResponseMessage, StreamReader]], bool, bytes]:\\n        if SEP is None:\\n            SEP = b\\\"\\\\r\\\\n\\\" if DEBUG else b\\\"\\\\n\\\"\\n        return super().feed_data(data, SEP, *args, **kwargs)\"\n    }\n  ]\n}",
+  "seconds": 162.1,
+  "seed": 2002
+ },
  "aiohttp-forward-007/FILE_GREPPAD@42": {
   "answer_tokens": 1744,
   "done_reason": "stop",
@@ -647,6 +656,15 @@
   "seconds": 12.8,
   "seed": 1001
  },
+ "aiohttp-forward-008/FILE@2002": {
+  "answer_tokens": 121,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2102,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"TraceResponseChunkReceivedParams\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The constructor of TraceResponseChunkReceivedParams needs to be updated to accept the new parameters.\",\n      \"new_code\": \"class TraceResponseChunkReceivedParams:\\n    \\\"\\\"\\\" Parameters sent by the `on_response_chunk_received` signal\\\"\\\"\\\"\\n    method = attr.ib(type=str)\\n    url = attr.ib(type=URL)\\n    chunk = attr.ib(type=bytes)\"\n    }\n  ]\n}",
+  "seconds": 11.3,
+  "seed": 2002
+ },
  "aiohttp-forward-008/FILE_BM25PAD@1001": {
   "answer_tokens": 1511,
   "done_reason": "stop",
@@ -655,6 +673,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Trace.send_response_chunk_received\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The method signature has changed to include `method` and `url` parameters.\",\n      \"new_code\": \"async def send_response_chunk_received(self, method: str, url: URL, chunk: bytes) -> None:\\n        return await self._trace_config.on_response_chunk_received.send(\\n            self._session,\\n            self._trace_config_ctx,\\n            TraceResponseChunkReceivedParams(method, url, chunk)\\n        )\"\n    },\n    {\n      \"function\": \"TraceConfig.on_response_chunk_received\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The property signature has changed to include `method` and `url` parameters.\",\n      \"new_code\": \"@property\\ndef on_response_chunk_received(self) -> 'Signal[_SignalCallback[TraceResponseChunkReceivedParams]]':\\n    return self._on_response_chunk_received\"\n    },\n    {\n      \"function\": \"ClientSession._request\",\n      \"file\": \"aiohttp/client.py\",\n      \"reason\": \"The method signature has changed to include `method` and `url` parameters.\",\n      \"new_code\": \"async def _request(self, method: str, str_or_url: StrOrURL, *, params: Optional[Mapping[str, str]]=None, data: Any=None, json: Any=None, cookies: Optional[LooseCookies]=None, headers: LooseHeaders=None, skip_auto_headers: Optional[Iterable[str]]=None, auth: Optional[BasicAuth]=None, allow_redirects: bool=True, max_redirects: int=10, compress: Optional[str]=None, chunked: Optional[bool]=None, expect100: bool=False, raise_for_status: Optional[bool]=None, read_until_eof: bool=True, proxy: Optional[StrOrURL]=None, proxy_auth: Optional[BasicAuth]=None, timeout: Union[ClientTimeout, object]=sentinel, verify_ssl: Optional[bool]=None, fingerprint: Optional[bytes]=None, ssl_context: Optional[SSLContext]=None, ssl: Optional[Union[SSLContext, bool, Fingerprint]]=None, proxy_headers: Optional[LooseHeaders]=None, trace_request_ctx: Optional[SimpleNamespace]=None) -> ClientResponse:\\n\\n        # NOTE: timeout clamps existing connect and read timeouts.  We cannot\\n        # set the default to None because we need to detect if the user wants\\n        # to use the existing timeouts by setting timeout to None.\\n\\n        if self.closed:\\n            raise RuntimeError('Session is closed')\\n\\n        ssl = _merge_ssl_params(ssl, verify_ssl, ssl_context, fingerprint)\\n\\n        if data is not None and json is not None:\\n            raise ValueError(\\n                'data and json parameters can not be used at the same time')\\n        elif json is not None:\\n            data = payload.JsonPayload(json, dumps=self._json_serialize)\\n\\n        if not isinstance(chunked, bool) and chunked is not None:\\n            warnings.warn(\\n                'Chunk size is deprecated #1615', DeprecationWarning)\\n\\n        redirects = 0\\n        history = []\\n        version = self._version\\n\\n        # Merge with default headers and transform to CIMultiDict\\n        headers = self._prepare_headers(headers)\\n        proxy_headers = self._prepare_headers(proxy_headers)\\n\\n        try:\\n            url = URL(str_or_url)\\n        except ValueError:\\n            raise InvalidURL(str_or_url)\"\n    },\n    {\n      \"function\": \"TraceConfig.__init__\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The method signature has changed to include `method` and `url` parameters.\",\n      \"new_code\": \"def __init__(self, trace_config_ctx_factory: Type[SimpleNamespace]=SimpleNamespace) -> None:\\n        self._on_request_start = Signal(self)  # type: Signal[_SignalCallback[TraceRequestStartParams]]\\n        self._on_request_chunk_sent = Signal(self)  # type: Signal[_SignalCallback[TraceRequestChunkSentParams]]\\n        self._on_response_chunk_received = Signal(self)  # type: Signal[_SignalCallback[TraceResponseChunkReceivedParams]]\\n        self._on_request_end = Signal(self)  # type: Signal[_SignalCallback[TraceRequestEndParams]]\\n        self._on_request_exception = Signal(self)  # type: Signal[_SignalCallback[TraceRequestExceptionParams]]\\n        self._on_request_redirect = Signal(self)  # type: Signal[_SignalCallback[TraceRequestRedirectParams]]\\n        self._on_connection_queued_start = Signal(self)  # type: Signal[_SignalCallback[TraceConnectionQueuedStartParams]]\\n        self._on_connection_queued_end = Signal(self)  # type: Signal[_SignalCallback[TraceConnectionQueuedEndParams]]\\n        self._on_connection_create_start = Signal(self)  # type: Signal[_SignalCallback[TraceConnectionCreateStartParams]]\\n        self._on_connection_create_end = Signal(self)  # type: Signal[_SignalCallback[TraceConnectionCreateEndParams]]\\n        self._on_connection_reuseconn = Signal(self)  # type: Signal[_SignalCallback[TraceConnectionReuseconnParams]]\\n        self._on_dns_resolvehost_start = Signal(self)  # type: Signal[_SignalCallback[TraceDnsResolveHostStartParams]]\\n        self._on_dns_resolvehost_end = Signal(self)  # type: Signal[_SignalCallback[TraceDnsResolveHostEndParams]]\\n        self._on_dns_cache_hit = Signal(self)  # type: Signal[_SignalCallback[TraceDnsCacheHitParams]]\\n        self._on_dns_cache_miss = Signal(self)  # type: Signal[_SignalCallback[TraceDnsCacheMissParams]]\\n\\n        self._trace_config_ctx_factory = trace_config_ctx_factory\"\n    },\n    {\n      \"function\": \"request\",\n      \"file\": \"aiohttp/client.py\",\n      \"reason\": \"The method signature has changed to include `method` and `url` parameters.\",\n      \"new_code\": \"def request(method: str, url: StrOrURL, *, params: Optional[Mapping[str, str]]=None, data: Any=None, json: Any=None, headers: LooseHeaders=None, skip_auto_headers: Optional[Iterable[str]]=None, auth: Optional[BasicAuth]=None, allow_redirects: bool=True, max_redirects: int=10, compress: Optional[str]=None, chunked: Optional[bool]=None, expect100: bool=False, raise_for_status: Optional[bool]=None, read_until_eof: bool=True, proxy: Optional[StrOrURL]=None, proxy_auth: Optional[BasicAuth]=None, timeout: Union[ClientTimeout, object]=sentinel, cookies: Optional[LooseCookies]=None, version: HttpVersion=http.HttpVersion11,\"\n    }\n  ]\n}",
   "seconds": 104.8,
   "seed": 1001
+ },
+ "aiohttp-forward-008/FILE_BM25PAD@2002": {
+  "answer_tokens": 878,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3450,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Trace.send_response_chunk_received\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The method signature has changed to include `method` and `url` parameters.\",\n      \"new_code\": \"async def send_response_chunk_received(self, method: str, url: URL, chunk: bytes) -> None:\\n        return await self._trace_config.on_response_chunk_received.send(\\n            self._session,\\n            self._trace_config_ctx,\\n            TraceResponseChunkReceivedParams(method, url, chunk)\\n        )\"\n    },\n    {\n      \"function\": \"TraceResponseChunkReceivedParams\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The class now needs to accept `method` and `url` parameters.\",\n      \"new_code\": \"@attr.s(frozen=True, slots=True)\\nclass TraceResponseChunkReceivedParams:\\n    \\\"\\\"\\\" Parameters sent by the `on_response_chunk_received` signal\\\"\\\"\\\"\\n    method = attr.ib(type=str)\\n    url = attr.ib(type=URL)\\n    chunk = attr.ib(type=bytes)\"\n    },\n    {\n      \"function\": \"ClientSession._request\",\n      \"file\": \"aiohttp/client.py\",\n      \"reason\": \"The method needs to pass `method` and `url` to `send_response_chunk_received`.\",\n      \"new_code\": \"async def _request(\\n        self,\\n        method: str,\\n        str_or_url: StrOrURL, *,\\n        params: Optional[Mapping[str, str]]=None,\\n        data: Any=None,\\n        json: Any=None,\\n        cookies: Optional[LooseCookies]=None,\\n        headers: LooseHeaders=None,\\n        skip_auto_headers: Optional[Iterable[str]]=None,\\n        auth: Optional[BasicAuth]=None,\\n        allow_redirects: bool=True,\\n        max_redirects: int=10,\\n        compress: Optional[str]=None,\\n        chunked: Optional[bool]=None,\\n        expect100: bool=False,\\n        raise_for_status: Optional[bool]=None,\\n        read_until_eof: bool=True,\\n        proxy: Optional[StrOrURL]=None,\\n        proxy_auth: Optional[BasicAuth]=None,\\n        timeout: Union[ClientTimeout, object]=sentinel,\\n        verify_ssl: Optional[bool]=None,\\n        fingerprint: Optional[bytes]=None,\\n        ssl_context: Optional[SSLContext]=None,\\n        ssl: Optional[Union[SSLContext, bool, Fingerprint]]=None,\\n        proxy_headers: Optional[LooseHeaders]=None,\\n        trace_request_ctx: Optional[SimpleNamespace]=None\\n) -> ClientResponse:\\n\\n    # NOTE: timeout clamps existing connect and read timeouts.  We cannot\\n    # set the default to None because we need to detect if the user wants\\n    # to use the existing timeouts by setting timeout to None.\\n\\n    if self.closed:\\n        raise RuntimeError('Session is closed')\\n\\n    ssl = _merge_ssl_params(ssl, verify_ssl, ssl_context, fingerprint)\\n\\n    if data is not None and json is not None:\\n        raise ValueError(\\n            'data and json parameters can not be used at the same time')\\n    elif json is not None:\\n        data = payload.JsonPayload(json, dumps=self._json_serialize)\\n\\n    if not isinstance(chunked, bool) and chunked is not None:\\n        warnings.warn(\\n            'Chunk size is deprecated #1615', DeprecationWarning)\\n\\n    redirects = 0\\n    history = []\\n    version = self._version\\n\\n    # Merge with default headers and transform to CIMultiDict\\n    headers = self._prepare_headers(headers)\\n    proxy_headers = self._prepare_headers(proxy_headers)\\n\\n    try:\\n        url = URL(str_or_url)\\n    except ValueError:\\n        raise InvalidURL(str_or_url)\\n\\n    # ... (rest of the method remains unchanged)\"\n    }\n  ]\n}",
+  "seconds": 61.6,
+  "seed": 2002
  },
  "aiohttp-forward-008/FILE_BM25PAD@42": {
   "answer_tokens": 908,
@@ -674,6 +701,15 @@
   "seconds": 14.6,
   "seed": 1001
  },
+ "aiohttp-forward-008/FILE_GREPPAD@2002": {
+  "answer_tokens": 177,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3425,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"ClientResponse.read\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The `send_response_chunk_received` method now requires `method` and `url` parameters.\",\n      \"new_code\": \"async def read(self) -> bytes:\\n    \\\"\\\"\\\"Read response payload.\\\"\\\"\\\"\\n    if self._body is None:\\n        try:\\n            self._body = await self.content.read()\\n            for trace in self._traces:\\n                await trace.send_response_chunk_received(self.method, self.url, self._body)\\n        except BaseException:\\n            self.close()\\n            raise\\n    elif self._released:\\n        raise ClientConnectionError('Connection closed')\\n\\n    return self._body\"\n    }\n  ]\n}",
+  "seconds": 14.5,
+  "seed": 2002
+ },
  "aiohttp-forward-008/FILE_GREPPAD@42": {
   "answer_tokens": 177,
   "done_reason": "stop",
@@ -692,6 +728,15 @@
   "seconds": 14.5,
   "seed": 1001
  },
+ "aiohttp-forward-008/PRISM@2002": {
+  "answer_tokens": 182,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3452,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"ClientResponse.read\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The `read` method now needs to pass the HTTP method and URL to the `send_response_chunk_received` method.\",\n      \"new_code\": \"async def read(self) -> bytes:\\n        \\\"\\\"\\\"Read response payload.\\\"\\\"\\\"\\n        if self._body is None:\\n            try:\\n                self._body = await self.content.read()\\n                for trace in self._traces:\\n                    await trace.send_response_chunk_received(self.method, self.url, self._body)\\n            except BaseException:\\n                self.close()\\n                raise\\n        elif self._released:\\n            raise ClientConnectionError('Connection closed')\\n\\n        return self._body\"\n    }\n  ]\n}",
+  "seconds": 14.4,
+  "seed": 2002
+ },
  "aiohttp-forward-009/FILE@1001": {
   "answer_tokens": 145,
   "done_reason": "stop",
@@ -701,6 +746,15 @@
   "seconds": 9.5,
   "seed": 1001
  },
+ "aiohttp-forward-009/FILE@2002": {
+  "answer_tokens": 121,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2102,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"TraceResponseChunkReceivedParams\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The constructor of TraceResponseChunkReceivedParams needs to be updated to accept the new parameters.\",\n      \"new_code\": \"class TraceResponseChunkReceivedParams:\\n    \\\"\\\"\\\" Parameters sent by the `on_response_chunk_received` signal\\\"\\\"\\\"\\n    method = attr.ib(type=str)\\n    url = attr.ib(type=URL)\\n    chunk = attr.ib(type=bytes)\"\n    }\n  ]\n}",
+  "seconds": 8.0,
+  "seed": 2002
+ },
  "aiohttp-forward-009/FILE_BM25PAD@1001": {
   "answer_tokens": 893,
   "done_reason": "stop",
@@ -709,6 +763,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Trace.send_response_chunk_received\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The method signature has changed to include `method` and `url` parameters.\",\n      \"new_code\": \"async def send_response_chunk_received(self, method: str, url: URL, chunk: bytes) -> None:\\n        return await self._trace_config.on_response_chunk_received.send(\\n            self._session,\\n            self._trace_config_ctx,\\n            TraceResponseChunkReceivedParams(method, url, chunk)\\n        )\"\n    },\n    {\n      \"function\": \"TraceResponseChunkReceivedParams\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The class now needs to accept `method` and `url` parameters.\",\n      \"new_code\": \"@attr.s(frozen=True, slots=True)\\nclass TraceResponseChunkReceivedParams:\\n    \\\"\\\"\\\" Parameters sent by the `on_response_chunk_received` signal\\\"\\\"\\\"\\n    method = attr.ib(type=str)\\n    url = attr.ib(type=URL)\\n    chunk = attr.ib(type=bytes)\"\n    },\n    {\n      \"function\": \"ClientSession._request\",\n      \"file\": \"aiohttp/client.py\",\n      \"reason\": \"The method now needs to pass `method` and `url` parameters to `send_response_chunk_received`.\",\n      \"new_code\": \"async def _request(\\n        self,\\n        method: str,\\n        str_or_url: StrOrURL, *,\\n        params: Optional[Mapping[str, str]]=None,\\n        data: Any=None,\\n        json: Any=None,\\n        cookies: Optional[LooseCookies]=None,\\n        headers: LooseHeaders=None,\\n        skip_auto_headers: Optional[Iterable[str]]=None,\\n        auth: Optional[BasicAuth]=None,\\n        allow_redirects: bool=True,\\n        max_redirects: int=10,\\n        compress: Optional[str]=None,\\n        chunked: Optional[bool]=None,\\n        expect100: bool=False,\\n        raise_for_status: Union[None, bool, Callable[[ClientResponse], Awaitable[None]]]=None,  # noqa\\n        read_until_eof: bool=True,\\n        proxy: Optional[StrOrURL]=None,\\n        proxy_auth: Optional[BasicAuth]=None,\\n        timeout: Union[ClientTimeout, object]=sentinel,\\n        ssl: Optional[Union[SSLContext, bool, Fingerprint]]=None,\\n        proxy_headers: Optional[LooseHeaders]=None,\\n        trace_request_ctx: Optional[SimpleNamespace]=None\\n) -> ClientResponse:\\n\\n    # NOTE: timeout clamps existing connect and read timeouts.  We cannot\\n    # set the default to None because we need to detect if the user wants\\n    # to use the existing timeouts by setting timeout to None.\\n\\n    if self.closed:\\n        raise RuntimeError('Session is closed')\\n\\n    if not isinstance(ssl, SSL_ALLOWED_TYPES):\\n        raise TypeError(\\\"ssl should be SSLContext, bool, Fingerprint, \\\"\\n                        \\\"or None, got {!r} instead.\\\".format(ssl))\\n\\n    if data is not None and json is not None:\\n        raise ValueError(\\n            'data and json parameters can not be used at the same time')\\n    elif json is not None:\\n        data = payload.JsonPayload(json, dumps=self._json_serialize)\\n\\n    redirects = 0\\n    history = []\\n    version = self._version\\n\\n    # Merge with default headers and transform to CIMultiDict\\n    headers = self._prepare_headers(headers)\\n    proxy_headers = self._prepare_headers(proxy_headers)\\n\\n    try:\\n        url = URL(str_or_url)\\n    except ValueError:\\n        raise InvalidURL(str_or_url)\\n\\n    skip_headers = set(self._skip_auto_headers)\\n    if skip_auto_headers is not None:\\n        for i in skip_auto_headers:\\n            skip_headers.add(istr(i))\\n\\n    # ... (rest of the method remains unchanged)\"\n    }\n  ]\n}",
   "seconds": 62.5,
   "seed": 1001
+ },
+ "aiohttp-forward-009/FILE_BM25PAD@2002": {
+  "answer_tokens": 877,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3449,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Trace.send_response_chunk_received\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The method signature has changed to include `method` and `url` parameters.\",\n      \"new_code\": \"async def send_response_chunk_received(self, method: str, url: URL, chunk: bytes) -> None:\\n        return await self._trace_config.on_response_chunk_received.send(\\n            self._session,\\n            self._trace_config_ctx,\\n            TraceResponseChunkReceivedParams(method, url, chunk)\\n        )\"\n    },\n    {\n      \"function\": \"TraceResponseChunkReceivedParams\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The class constructor now requires `method` and `url` parameters.\",\n      \"new_code\": \"@attr.s(frozen=True, slots=True)\\nclass TraceResponseChunkReceivedParams:\\n    \\\"\\\"\\\" Parameters sent by the `on_response_chunk_received` signal\\\"\\\"\\\"\\n    method = attr.ib(type=str)\\n    url = attr.ib(type=URL)\\n    chunk = attr.ib(type=bytes)\"\n    },\n    {\n      \"function\": \"ClientSession._request\",\n      \"file\": \"aiohttp/client.py\",\n      \"reason\": \"The method now needs to pass `method` and `url` to `send_response_chunk_received`.\",\n      \"new_code\": \"async def _request(\\n        self,\\n        method: str,\\n        str_or_url: StrOrURL, *,\\n        params: Optional[Mapping[str, str]]=None,\\n        data: Any=None,\\n        json: Any=None,\\n        cookies: Optional[LooseCookies]=None,\\n        headers: LooseHeaders=None,\\n        skip_auto_headers: Optional[Iterable[str]]=None,\\n        auth: Optional[BasicAuth]=None,\\n        allow_redirects: bool=True,\\n        max_redirects: int=10,\\n        compress: Optional[str]=None,\\n        chunked: Optional[bool]=None,\\n        expect100: bool=False,\\n        raise_for_status: Union[None, bool, Callable[[ClientResponse], Awaitable[None]]]=None,  # noqa\\n        read_until_eof: bool=True,\\n        proxy: Optional[StrOrURL]=None,\\n        proxy_auth: Optional[BasicAuth]=None,\\n        timeout: Union[ClientTimeout, object]=sentinel,\\n        ssl: Optional[Union[SSLContext, bool, Fingerprint]]=None,\\n        proxy_headers: Optional[LooseHeaders]=None,\\n        trace_request_ctx: Optional[SimpleNamespace]=None\\n) -> ClientResponse:\\n\\n    # NOTE: timeout clamps existing connect and read timeouts.  We cannot\\n    # set the default to None because we need to detect if the user wants\\n    # to use the existing timeouts by setting timeout to None.\\n\\n    if self.closed:\\n        raise RuntimeError('Session is closed')\\n\\n    if not isinstance(ssl, SSL_ALLOWED_TYPES):\\n        raise TypeError(\\\"ssl should be SSLContext, bool, Fingerprint, \\\"\\n                        \\\"or None, got {!r} instead.\\\".format(ssl))\\n\\n    if data is not None and json is not None:\\n        raise ValueError(\\n            'data and json parameters can not be used at the same time')\\n    elif json is not None:\\n        data = payload.JsonPayload(json, dumps=self._json_serialize)\\n\\n    redirects = 0\\n    history = []\\n    version = self._version\\n\\n    # Merge with default headers and transform to CIMultiDict\\n    headers = self._prepare_headers(headers)\\n    proxy_headers = self._prepare_headers(proxy_headers)\\n\\n    try:\\n        url = URL(str_or_url)\\n    except ValueError:\\n        raise InvalidURL(str_or_url)\\n\\n    skip_headers = set(self._skip_auto_headers)\\n    if skip_auto_headers is not None:\\n        for i in skip_auto_headers:\\n            skip_headers.add(istr(i))\"\n    }\n  ]\n}",
+  "seconds": 61.4,
+  "seed": 2002
  },
  "aiohttp-forward-009/FILE_BM25PAD@42": {
   "answer_tokens": 252,
@@ -728,6 +791,15 @@
   "seconds": 14.5,
   "seed": 1001
  },
+ "aiohttp-forward-009/FILE_GREPPAD@2002": {
+  "answer_tokens": 177,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3435,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"ClientResponse.read\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The `send_response_chunk_received` method now requires `method` and `url` parameters.\",\n      \"new_code\": \"async def read(self) -> bytes:\\n    \\\"\\\"\\\"Read response payload.\\\"\\\"\\\"\\n    if self._body is None:\\n        try:\\n            self._body = await self.content.read()\\n            for trace in self._traces:\\n                await trace.send_response_chunk_received(self.method, self.url, self._body)\\n        except BaseException:\\n            self.close()\\n            raise\\n    elif self._released:\\n        raise ClientConnectionError('Connection closed')\\n\\n    return self._body\"\n    }\n  ]\n}",
+  "seconds": 14.5,
+  "seed": 2002
+ },
  "aiohttp-forward-009/FILE_GREPPAD@42": {
   "answer_tokens": 301,
   "done_reason": "stop",
@@ -746,6 +818,15 @@
   "seconds": 14.4,
   "seed": 1001
  },
+ "aiohttp-forward-009/PRISM@2002": {
+  "answer_tokens": 183,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3453,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"ClientResponse.read\",\n      \"file\": \"aiohttp/client_reqrep.py\",\n      \"reason\": \"The `send_response_chunk_received` method now requires `method` and `url` parameters, which are not currently passed.\",\n      \"new_code\": \"async def read(self) -> bytes:\\n    \\\"\\\"\\\"Read response payload.\\\"\\\"\\\"\\n    if self._body is None:\\n        try:\\n            self._body = await self.content.read()\\n            for trace in self._traces:\\n                await trace.send_response_chunk_received(self.method, self.url, self._body)\\n        except BaseException:\\n            self.close()\\n            raise\\n    elif self._released:\\n        raise ClientConnectionError('Connection closed')\\n\\n    return self._body\"\n    }\n  ]\n}",
+  "seconds": 14.5,
+  "seed": 2002
+ },
  "aiohttp-forward-010/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -755,6 +836,15 @@
   "seconds": 4.6,
   "seed": 1001
  },
+ "aiohttp-forward-010/FILE@2002": {
+  "answer_tokens": 580,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3271,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"BaseConnector._reused_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method introduces a new `_reused_connection` method that needs to be implemented to handle reused connections.\",\n      \"new_code\": \"async def _reused_connection(self, key: 'ConnectionKey', proto: ResponseHandler, traces: List['Trace']) -> Connection:\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_reuseconn()\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"BaseConnector._acquired_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method introduces a new `_acquired_connection` method that needs to be implemented to handle acquired connections.\",\n      \"new_code\": \"def _acquired_connection(self, proto: ResponseHandler, key: 'ConnectionKey') -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"BaseConnector._wait_for_available_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method introduces a new `_wait_for_available_connection` method that needs to be implemented to handle waiting for available connections.\",\n      \"new_code\": \"async def _wait_for_available_connection(self, key: 'ConnectionKey', traces: List['Trace']) -> None:\\n        fut: asyncio.Future[None] = self._loop.create_future()\\n\\n        # This connection will now count towards the limit.\\n        self._waiters[key].append(fut)\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_start()\\n\\n        try:\\n            await fut\\n        except BaseException as e:\\n            if key in self._waiters:\\n                # remove a waiter even if it was cancelled, normally it's\\n                #  removed when it's notified\\n                try:\\n                    self._waiters[key].remove(fut)\\n                except ValueError:  # fut may no longer be in list\\n                    pass\\n\\n            raise e\\n        finally:\\n            if key in self._waiters and not self._waiters[key]:\\n                del self._waiters[key]\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_end()\"\n    }\n  ]\n}",
+  "seconds": 43.2,
+  "seed": 2002
+ },
  "aiohttp-forward-010/FILE_BM25PAD@1001": {
   "answer_tokens": 541,
   "done_reason": "stop",
@@ -763,6 +853,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"BaseConnector.connect\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method introduces a new helper method `_reused_connection` that needs to be defined.\",\n      \"new_code\": \"async def _reused_connection(self, key: ConnectionKey, proto: ResponseHandler, traces: List[Trace]) -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"BaseConnector._wait_for_available_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method introduces a new helper method `_wait_for_available_connection` that needs to be defined.\",\n      \"new_code\": \"async def _wait_for_available_connection(self, key: ConnectionKey, traces: List[Trace]) -> None:\\n        fut: asyncio.Future[None] = self._loop.create_future()\\n\\n        # This connection will now count towards the limit.\\n        self._waiters[key].append(fut)\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_start()\\n\\n        try:\\n            await fut\\n        except BaseException as e:\\n            if key in self._waiters:\\n                # remove a waiter even if it was cancelled, normally it's\\n                #  removed when it's notified\\n                try:\\n                    self._waiters[key].remove(fut)\\n                except ValueError:  # fut may no longer be in list\\n                    pass\\n\\n                raise e\\n        finally:\\n            if key in self._waiters and not self._waiters[key]:\\n                del self._waiters[key]\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_end()\"\n    },\n    {\n      \"function\": \"BaseConnector._acquired_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method introduces a new helper method `_acquired_connection` that needs to be defined.\",\n      \"new_code\": \"def _acquired_connection(self, proto: ResponseHandler, key: ConnectionKey) -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    }\n  ]\n}",
   "seconds": 43.8,
   "seed": 1001
+ },
+ "aiohttp-forward-010/FILE_BM25PAD@2002": {
+  "answer_tokens": 544,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6376,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"BaseConnector.connect\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method includes a new `_reused_connection` method call, which must be defined.\",\n      \"new_code\": \"async def _reused_connection(self, key: 'ConnectionKey', proto: ResponseHandler, traces: List['Trace']) -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"BaseConnector._wait_for_available_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method includes a new `_wait_for_available_connection` method call, which must be defined.\",\n      \"new_code\": \"async def _wait_for_available_connection(self, key: 'ConnectionKey', traces: List['Trace']) -> None:\\n        fut: asyncio.Future[None] = self._loop.create_future()\\n\\n        # This connection will now count towards the limit.\\n        self._waiters[key].append(fut)\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_start()\\n\\n        try:\\n            await fut\\n        except BaseException as e:\\n            if key in self._waiters:\\n                # remove a waiter even if it was cancelled, normally it's\\n                #  removed when it's notified\\n                try:\\n                    self._waiters[key].remove(fut)\\n                except ValueError:  # fut may no longer be in list\\n                    pass\\n\\n            raise e\\n        finally:\\n            if key in self._waiters and not self._waiters[key]:\\n                del self._waiters[key]\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_end()\"\n    },\n    {\n      \"function\": \"BaseConnector._acquired_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `connect` method includes a new `_acquired_connection` method call, which must be defined.\",\n      \"new_code\": \"def _acquired_connection(self, proto: ResponseHandler, key: 'ConnectionKey') -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    }\n  ]\n}",
+  "seconds": 44.1,
+  "seed": 2002
  },
  "aiohttp-forward-010/FILE_BM25PAD@42": {
   "answer_tokens": 1103,
@@ -782,6 +881,15 @@
   "seconds": 5.9,
   "seed": 1001
  },
+ "aiohttp-forward-010/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6578,
+  "raw": "{\"changes\": []}",
+  "seconds": 6.0,
+  "seed": 2002
+ },
  "aiohttp-forward-010/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -800,6 +908,15 @@
   "seconds": 5.3,
   "seed": 1001
  },
+ "aiohttp-forward-010/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6709,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.4,
+  "seed": 2002
+ },
  "aiohttp-forward-011/FILE@1001": {
   "answer_tokens": 646,
   "done_reason": "stop",
@@ -809,6 +926,15 @@
   "seconds": 47.4,
   "seed": 1001
  },
+ "aiohttp-forward-011/FILE@2002": {
+  "answer_tokens": 646,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3219,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"BaseConnector._wait_for_available_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `_wait_for_available_connection` function is called from the `connect` method, so it must be defined.\",\n      \"new_code\": \"async def _wait_for_available_connection(self, key: 'ConnectionKey', traces: List['Trace']) -> None:\\n        fut: asyncio.Future[None] = self._loop.create_future()\\n\\n        # This connection will now count towards the limit.\\n        self._waiters[key].append(fut)\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_start()\\n\\n        try:\\n            await fut\\n        except BaseException as e:\\n            if key in self._waiters:\\n                # remove a waiter even if it was cancelled, normally it's\\n                #  removed when it's notified\\n                try:\\n                    self._waiters[key].remove(fut)\\n                except ValueError:  # fut may no longer be in list\\n                    pass\\n\\n            raise e\\n        finally:\\n            if key in self._waiters and not self._waiters[key]:\\n                del self._waiters[key]\\n\\n        if traces:\\n            for trace in traces:\\n                await trace.send_connection_queued_end()\"\n    },\n    {\n      \"function\": \"BaseConnector._reused_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `_reused_connection` function is called from the `connect` method, so it must be defined.\",\n      \"new_code\": \"async def _reused_connection(self, key: 'ConnectionKey', proto: ResponseHandler, traces: List['Trace']) -> Connection:\\n        if traces:\\n            # Acquire the connection to prevent race conditions with limits\\n            placeholder = cast(ResponseHandler, _TransportPlaceholder())\\n            self._acquired.add(placeholder)\\n            self._acquired_per_host[key].add(placeholder)\\n            for trace in traces:\\n                await trace.send_connection_reuseconn()\\n            self._acquired.remove(placeholder)\\n            self._drop_acquired_per_host(key, placeholder)\\n\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"BaseConnector._acquired_connection\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The new `_acquired_connection` function is called from the `connect` method, so it must be defined.\",\n      \"new_code\": \"def _acquired_connection(self, proto: ResponseHandler, key: 'ConnectionKey') -> Connection:\\n        self._acquired.add(proto)\\n        self._acquired_per_host[key].add(proto)\\n        return Connection(self, key, proto, self._loop)\"\n    }\n  ]\n}",
+  "seconds": 47.5,
+  "seed": 2002
+ },
  "aiohttp-forward-011/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -817,6 +943,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 5.6,
   "seed": 1001
+ },
+ "aiohttp-forward-011/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6220,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.6,
+  "seed": 2002
  },
  "aiohttp-forward-011/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -836,6 +971,15 @@
   "seconds": 5.0,
   "seed": 1001
  },
+ "aiohttp-forward-011/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6397,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.1,
+  "seed": 2002
+ },
  "aiohttp-forward-011/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -854,6 +998,15 @@
   "seconds": 5.2,
   "seed": 1001
  },
+ "aiohttp-forward-011/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6493,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.2,
+  "seed": 2002
+ },
  "aiohttp-forward-012/FILE@1001": {
   "answer_tokens": 170,
   "done_reason": "stop",
@@ -863,6 +1016,15 @@
   "seconds": 14.4,
   "seed": 1001
  },
+ "aiohttp-forward-012/FILE@2002": {
+  "answer_tokens": 177,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2150,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Application.make_handler\",\n      \"file\": \"aiohttp/web_app.py\",\n      \"reason\": \"The method `make_handler` has been deprecated and now calls a private method `_make_handler`. Other methods that directly call `make_handler` need to be updated to call `_make_handler` instead.\",\n      \"new_code\": \"def make_handler(self, *,\\n                     loop=None,\\n                     access_log_class=AccessLogger,\\n                     **kwargs):\\n\\n        warnings.warn(\\\"Application.make_handler(...) is deprecated, \\\"\\n                      \\\"use AppRunner API instead\\\",\\n                      DeprecationWarning,\\n                      stacklevel=2)\\n\\n        return self._make_handler(loop=loop,\\n                                  access_log_class=access_log_class,\\n                                  **kwargs)\"\n    }\n  ]\n}",
+  "seconds": 14.9,
+  "seed": 2002
+ },
  "aiohttp-forward-012/FILE_BM25PAD@1001": {
   "answer_tokens": 468,
   "done_reason": "stop",
@@ -871,6 +1033,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.web.run_app\",\n      \"file\": \"aiohttp/web.py\",\n      \"reason\": \"The function now uses AppRunner instead of directly calling make_handler.\",\n      \"new_code\": \"def run_app(app, *, host=None, port=None, path=None, sock=None,\\n            shutdown_timeout=60.0, ssl_context=None,\\n            print=print, backlog=128, access_log_class=helpers.AccessLogger,\\n            access_log_format=helpers.AccessLogger.LOG_FORMAT,\\n            access_log=access_logger, handle_signals=True,\\n            reuse_address=None, reuse_port=None):\\n    \\\"\\\"\\\"Run an app locally\\\"\\\"\\\"\\n    loop = asyncio.get_event_loop()\\n\\n    if asyncio.iscoroutine(app):\\n        app = loop.run_until_complete(app)\\n\\n    runner = AppRunner(app, handle_signals=handle_signals,\\n                       access_log_class=access_log_class,\\n                       access_log_format=access_log_format,\\n                       access_log=access_log)\\n\\n    loop.run_until_complete(runner.setup())\\n\\n    sites = []\\n\\n    try:\\n        if host is not None:\\n            if isinstance(host, (str, bytes, bytearray, memoryview)):\\n                sites.append(TCPSite(runner, host, port,\\n                                     shutdown_timeout=shutdown_timeout,\\n                                     ssl_context=ssl_context,\\n                                     backlog=backlog,\\n                                     reuse_address=reuse_address,\\n                                     reuse_port=reuse_port))\\n            else:\\n                for h in host:\\n                    sites.append(TCPSite(runner, h, port,\\n                                         shutdown_timeout=shutdown_timeout,\\n                                         ssl_context=ssl_context,\\n                                         backlog=backlog,\\n                                         reuse_address=reuse_address,\\n                                         reuse_port=reuse_port))\\n        elif path is None and sock is None or port is not None:\\n            sites.append(TCPSite(runner, port=port,\\n                                 shutdown_timeout=shutdown_timeout,\\n                                 ssl_context=ssl_context,\\n                                 backlog=backlog,\\n                                 reuse_address=reuse_address,\\n                                 reuse_port=reuse_port))\"\n    }\n  ]\n}",
   "seconds": 34.1,
   "seed": 1001
+ },
+ "aiohttp-forward-012/FILE_BM25PAD@2002": {
+  "answer_tokens": 467,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3757,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.web.run_app\",\n      \"file\": \"aiohttp/web.py\",\n      \"reason\": \"The function now uses AppRunner instead of Application.make_handler\",\n      \"new_code\": \"def run_app(app, *, host=None, port=None, path=None, sock=None,\\n            shutdown_timeout=60.0, ssl_context=None,\\n            print=print, backlog=128, access_log_class=helpers.AccessLogger,\\n            access_log_format=helpers.AccessLogger.LOG_FORMAT,\\n            access_log=access_logger, handle_signals=True,\\n            reuse_address=None, reuse_port=None):\\n    \\\"\\\"\\\"Run an app locally\\\"\\\"\\\"\\n    loop = asyncio.get_event_loop()\\n\\n    if asyncio.iscoroutine(app):\\n        app = loop.run_until_complete(app)\\n\\n    runner = AppRunner(app, handle_signals=handle_signals,\\n                       access_log_class=access_log_class,\\n                       access_log_format=access_log_format,\\n                       access_log=access_log)\\n\\n    loop.run_until_complete(runner.setup())\\n\\n    sites = []\\n\\n    try:\\n        if host is not None:\\n            if isinstance(host, (str, bytes, bytearray, memoryview)):\\n                sites.append(TCPSite(runner, host, port,\\n                                     shutdown_timeout=shutdown_timeout,\\n                                     ssl_context=ssl_context,\\n                                     backlog=backlog,\\n                                     reuse_address=reuse_address,\\n                                     reuse_port=reuse_port))\\n            else:\\n                for h in host:\\n                    sites.append(TCPSite(runner, h, port,\\n                                         shutdown_timeout=shutdown_timeout,\\n                                         ssl_context=ssl_context,\\n                                         backlog=backlog,\\n                                         reuse_address=reuse_address,\\n                                         reuse_port=reuse_port))\\n        elif path is None and sock is None or port is not None:\\n            sites.append(TCPSite(runner, port=port,\\n                                 shutdown_timeout=shutdown_timeout,\\n                                 ssl_context=ssl_context,\\n                                 backlog=backlog,\\n                                 reuse_address=reuse_address,\\n                                 reuse_port=reuse_port))\"\n    }\n  ]\n}",
+  "seconds": 34.1,
+  "seed": 2002
  },
  "aiohttp-forward-012/FILE_BM25PAD@42": {
   "answer_tokens": 740,
@@ -890,6 +1061,15 @@
   "seconds": 35.7,
   "seed": 1001
  },
+ "aiohttp-forward-012/FILE_GREPPAD@2002": {
+  "answer_tokens": 155,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3758,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AppRunner._make_server\",\n      \"file\": \"aiohttp/web_runner.py\",\n      \"reason\": \"The method now calls the deprecated `make_handler` method, which needs to be updated to use the new `AppRunner` API.\",\n      \"new_code\": \"async def _make_server(self):\\n        loop = asyncio.get_event_loop()\\n        self._app._set_loop(loop)\\n        self._app.on_startup.freeze()\\n        await self._app.startup()\\n        self._app.freeze()\\n\\n        # Updated to use the new AppRunner API\\n        return await self._make_handler(loop=loop, **self._kwargs)\"\n    }\n  ]\n}",
+  "seconds": 13.0,
+  "seed": 2002
+ },
  "aiohttp-forward-012/FILE_GREPPAD@42": {
   "answer_tokens": 388,
   "done_reason": "stop",
@@ -908,6 +1088,15 @@
   "seconds": 13.7,
   "seed": 1001
  },
+ "aiohttp-forward-012/PRISM@2002": {
+  "answer_tokens": 188,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3761,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"aiohttp.web_runner.AppRunner._make_server\",\n      \"file\": \"aiohttp/web_runner.py\",\n      \"reason\": \"The method now calls a deprecated function, which should be replaced with the new AppRunner API.\",\n      \"new_code\": \"async def _make_server(self):\\n        loop = asyncio.get_event_loop()\\n        self._app._set_loop(loop)\\n        self._app.on_startup.freeze()\\n        await self._app.startup()\\n        self._app.freeze()\\n\\n        # Replace the deprecated make_handler with the new AppRunner API\\n        runner = AppRunner(self._app, **self._kwargs)\\n        await runner.setup()\\n        site = TCPSite(runner, self._host, self._port)\\n        await site.start()\\n        return runner\"\n    }\n  ]\n}",
+  "seconds": 15.2,
+  "seed": 2002
+ },
  "aiohttp-forward-013/FILE@1001": {
   "answer_tokens": 113,
   "done_reason": "stop",
@@ -917,6 +1106,15 @@
   "seconds": 9.9,
   "seed": 1001
  },
+ "aiohttp-forward-013/FILE@2002": {
+  "answer_tokens": 125,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1694,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Trace.send_dns_cache_hit\",\n      \"file\": \"aiohttp/tracing.py\",\n      \"reason\": \"The function signature has been updated to accept a 'host' parameter, so the implementation must be updated to pass this parameter.\",\n      \"new_code\": \"async def send_dns_cache_hit(self, host):\\n        return await self._trace_config.on_dns_cache_hit.send(\\n            self._session,\\n            self._trace_config_ctx,\\n            TraceDnsCacheHitParams(host)\\n        )\"\n    }\n  ]\n}",
+  "seconds": 10.7,
+  "seed": 2002
+ },
  "aiohttp-forward-013/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -925,6 +1123,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.8,
   "seed": 1001
+ },
+ "aiohttp-forward-013/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3350,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.9,
+  "seed": 2002
  },
  "aiohttp-forward-013/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -944,6 +1151,15 @@
   "seconds": 2.9,
   "seed": 1001
  },
+ "aiohttp-forward-013/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3355,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.9,
+  "seed": 2002
+ },
  "aiohttp-forward-013/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -962,6 +1178,15 @@
   "seconds": 2.9,
   "seed": 1001
  },
+ "aiohttp-forward-013/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3357,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.9,
+  "seed": 2002
+ },
  "aiohttp-forward-014/FILE@1001": {
   "answer_tokens": 117,
   "done_reason": "stop",
@@ -971,6 +1196,15 @@
   "seconds": 10.7,
   "seed": 1001
  },
+ "aiohttp-forward-014/FILE@2002": {
+  "answer_tokens": 120,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2163,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"StreamWriter.release\",\n      \"file\": \"aiohttp/streams.py\",\n      \"reason\": \"The `release` method needs to call `set_transport` on the first waiter in the queue instead of directly calling the callback.\",\n      \"new_code\": \"def release(self):\\n        if self._waiters:\\n            self.available = False\\n            writer = self._waiters.pop(0)\\n            writer.set_transport(self.transport)\\n        else:\\n            self.available = True\"\n    }\n  ]\n}",
+  "seconds": 10.9,
+  "seed": 2002
+ },
  "aiohttp-forward-014/FILE_BM25PAD@1001": {
   "answer_tokens": 1591,
   "done_reason": "stop",
@@ -979,6 +1213,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"PayloadWriter.__init__\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"def __init__(self, stream, loop, acquire=True):\\n    if loop is None:\\n        loop = asyncio.get_event_loop()\\n\\n    self._stream = stream\\n    self._transport = None\\n\\n    self.loop = loop\\n    self.length = None\\n    self.chunked = False\\n    self.buffer_size = 0\\n    self.output_size = 0\\n\\n    self._buffer = []\\n    self._compress = None\\n    self._drain_waiter = None\\n\\n    self._replacement = None\\n\\n    if self._stream.available:\\n        self._transport = self._stream.transport\\n        self._stream.available = False\\n    elif acquire:\\n        self._stream.acquire(self)\"\n    },\n    {\n      \"function\": \"SendfilePayloadWriter.set_transport\",\n      \"file\": \"aiohttp/web_fileresponse.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"def set_transport(self, writer):\\n    self._transport = writer.transport\\n\\n    if self._drain_waiter is not None:\\n        waiter, self._drain_waiter = self._drain_waiter, None\\n        if not waiter.done():\\n            waiter.set_result(None)\"\n    },\n    {\n      \"function\": \"PayloadWriter.set_transport\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"def set_transport(self, writer):\\n    if self._replacement is not None:\\n        self._replacement.set_transport(writer)\\n        return\\n\\n    self._transport = writer.transport\\n\\n    chunk = b''.join(self._buffer)\\n    if chunk:\\n        writer.transport.write(chunk)\\n        self._buffer.clear()\\n\\n    if self._drain_waiter is not None:\\n        waiter, self._drain_waiter = self._drain_waiter, None\\n        if not waiter.done():\\n            waiter.set_result(None)\"\n    },\n    {\n      \"function\": \"PayloadWriter.drain\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"@asyncio.coroutine\\ndef drain(self, last=False):\\n    if self._transport is not None:\\n        if self._buffer:\\n            self._transport.write(b''.join(self._buffer))\\n            if not last:\\n                self._buffer.clear()\\n        yield from self._stream.drain()\\n    else:\\n        # wait for transport\\n        if self._drain_waiter is None:\\n            self._drain_waiter = create_future(self.loop)\\n\\n        yield from self._drain_waiter\"\n    },\n    {\n      \"function\": \"PayloadWriter.replace\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"def replace(self, factory):\\n    \\\"\\\"\\\"Hack: for internal use only \\\"\\\"\\\"\\n    if self._transport is not None:\\n        self._transport = None\\n        self._stream.available = True\\n        return factory(self._stream, self.loop)\\n    else:\\n        self._replacement = factory(self._stream, self.loop, False)\\n        return self._replacement\"\n    },\n    {\n      \"function\": \"BaseConnector.connect\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"@asyncio.coroutine\\ndef connect(self, req):\\n    \\\"\\\"\\\"Get from pool or create new connection.\\\"\\\"\\\"\\n    key = (req.host, req.port, req.ssl)\\n\\n    if self._limit:\\n        # total calc available connections\\n        available = self._limit - len(self._waiters) - len(self._acquired)\\n\\n        # check limit per host\\n        if (self._limit_per_host and available > 0 and\\n                key in self._acquired_per_host):\\n            available = self._limit_per_host - len(\\n                self._acquired_per_host.get(key))\\n\\n    elif self._limit_per_host and key in self._acquired_per_host:\\n        # check limit per host\\n        available = self._limit_per_host - len(\\n            self._acquired_per_host.get(key))\\n    else:\\n        available = 1\\n\\n    # Wait if there are no available connections.\\n    if available <= 0:\\n        fut = helpers.create_future(self._loop)\\n\\n        # This connection will now count towards the limit.\\n        waiters = self._waiters[key]\\n        waiters.append(fut)\\n        yield from fut\\n        waiters.remove(fut)\\n        if not waiters:\\n            del self._waiters[key]\\n\\n    proto = self._get(key)\\n    if proto is None:\\n        placeholder = _TransportPlaceholder()\\n        self._acquired.add(placeholder)\\n        self._acquired_per_host[key].add(placeholder)\\n        try:\\n            proto = yield from self._create_connection(req)\\n        except OSError as exc:\\n            raise ClientConnectorError(\\n                exc.errno,\\n                'Cannot connect to host {0[0]}:{0[1]} ssl:{0[2]} [{1}]'\\n                .format(key, exc.strerror)) from exc\\n        finally:\\n            self._acquired.remove(placeholder)\\n            self._acquired_per_host[key].remove(placeholder)\\n\\n    self._acquired.add(proto)\\n    self._acquired_per_host[key].add(proto)\\n    return Connection(self, key, proto, self._loop)\"\n    },\n    {\n      \"function\": \"BaseConnector._release_waiter\",\n      \"file\": \"aiohttp/connector.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"def _release_waiter(self):\\n    # always release only one waiter\\n\\n    if self._limit:\\n        # if we have limit and we have available\\n        if self._limit - len(self._acquired) > 0:\\n            for key, waiters in self._waiters.items():\\n                if waiters:\\n                    if not waiters[0].done():\\n                        waiters[0].set_result(None)\\n                    break\\n\\n    elif self._limit_per_host:\\n        # if we have dont have limit but have limit per host\\n        # then release first available\\n        for key, waiters in self._waiters.items():\\n            if waiters:\\n                if not waiters[0].done():\\n                    waiters[0].set_result(None)\\n                break\"\n    }\n  ]\n}",
   "seconds": 110.2,
   "seed": 1001
+ },
+ "aiohttp-forward-014/FILE_BM25PAD@2002": {
+  "answer_tokens": 824,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3447,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"PayloadWriter.__init__\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"def __init__(self, stream, loop, acquire=True):\\n        if loop is None:\\n            loop = asyncio.get_event_loop()\\n\\n        self._stream = stream\\n        self._transport = None\\n\\n        self.loop = loop\\n        self.length = None\\n        self.chunked = False\\n        self.buffer_size = 0\\n        self.output_size = 0\\n\\n        self._buffer = []\\n        self._compress = None\\n        self._drain_waiter = None\\n\\n        self._replacement = None\\n\\n        if self._stream.available:\\n            self._transport = self._stream.transport\\n            self._stream.available = False\\n        elif acquire:\\n            self._stream.acquire(self)\"\n    },\n    {\n      \"function\": \"SendfilePayloadWriter.set_transport\",\n      \"file\": \"aiohttp/web_fileresponse.py\",\n      \"reason\": \"The `set_transport` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"def set_transport(self, writer):\\n        self._transport = writer.transport\\n\\n        if self._drain_waiter is not None:\\n            waiter, self._drain_waiter = self._drain_waiter, None\\n            if not waiter.done():\\n                waiter.set_result(None)\"\n    },\n    {\n      \"function\": \"PayloadWriter.set_transport\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `set_transport` method now takes a `writer` object instead of a callback function.\",\n      \"new_code\": \"def set_transport(self, writer):\\n        if self._replacement is not None:\\n            self._replacement.set_transport(writer)\\n            return\\n\\n        self._transport = writer.transport\\n\\n        chunk = b''.join(self._buffer)\\n        if chunk:\\n            writer.transport.write(chunk)\\n            self._buffer.clear()\\n\\n        if self._drain_waiter is not None:\\n            waiter, self._drain_waiter = self._drain_waiter, None\\n            if not waiter.done():\\n                waiter.set_result(None)\"\n    },\n    {\n      \"function\": \"PayloadWriter.drain\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `drain` method now uses the `writer` object to access the transport.\",\n      \"new_code\": \"@asyncio.coroutine\\n    def drain(self, last=False):\\n        if self._transport is not None:\\n            if self._buffer:\\n                self._transport.write(b''.join(self._buffer))\\n                if not last:\\n                    self._buffer.clear()\\n            yield from self._stream.drain()\\n        else:\\n            # wait for transport\\n            if self._drain_waiter is None:\\n                self._drain_waiter = create_future(self.loop)\\n\\n            yield from self._drain_waiter\"\n    },\n    {\n      \"function\": \"PayloadWriter.replace\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `replace` method now uses the `writer` object to access the transport.\",\n      \"new_code\": \"def replace(self, factory):\\n        \\\"\\\"\\\"Hack: for internal use only \\\"\\\"\\\"\\n        if self._transport is not None:\\n            self._transport = None\\n            self._stream.available = True\\n            return factory(self._stream, self.loop)\\n        else:\\n            self._replacement = factory(self._stream, self.loop, False)\\n            return self._replacement\"\n    }\n  ]\n}",
+  "seconds": 57.8,
+  "seed": 2002
  },
  "aiohttp-forward-014/FILE_BM25PAD@42": {
   "answer_tokens": 824,
@@ -1015,6 +1258,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"PayloadWriter.__init__\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function, so the `PayloadWriter` class needs to be updated to use the new method signature.\",\n      \"new_code\": \"def __init__(self, stream, loop, acquire=True):\\n    if loop is None:\\n        loop = asyncio.get_event_loop()\\n\\n    self._stream = stream\\n    self._transport = None\\n\\n    self.loop = loop\\n    self.length = None\\n    self.chunked = False\\n    self.buffer_size = 0\\n    self.output_size = 0\\n\\n    self._buffer = []\\n    self._compress = None\\n    self._drain_waiter = None\\n\\n    self._replacement = None\\n\\n    if self._stream.available:\\n        self._transport = self._stream.transport\\n        self._stream.available = False\\n    elif acquire:\\n        self._stream.acquire(self)\"\n    }\n  ]\n}",
   "seconds": 18.3,
   "seed": 1001
+ },
+ "aiohttp-forward-014/PRISM@2002": {
+  "answer_tokens": 241,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3489,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"PayloadWriter.__init__\",\n      \"file\": \"aiohttp/http_message.py\",\n      \"reason\": \"The `acquire` method now takes a `writer` object instead of a callback function, so the `PayloadWriter` class needs to be updated to handle the new `writer` object.\",\n      \"new_code\": \"def __init__(self, stream, loop, acquire=True):\\n        if loop is None:\\n            loop = asyncio.get_event_loop()\\n\\n        self._stream = stream\\n        self._transport = None\\n\\n        self.loop = loop\\n        self.length = None\\n        self.chunked = False\\n        self.buffer_size = 0\\n        self.output_size = 0\\n\\n        self._buffer = []\\n        self._compress = None\\n        self._drain_waiter = None\\n\\n        self._replacement = None\\n\\n        if self._stream.available:\\n            self._transport = self._stream.transport\\n            self._stream.available = False\\n        elif acquire:\\n            self._stream.acquire(self)\"\n    }\n  ]\n}",
+  "seconds": 18.4,
+  "seed": 2002
  },
  "aiohttp-forward-015/FILE@1001": {
   "answer_tokens": 569,
