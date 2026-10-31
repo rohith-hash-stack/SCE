@@ -296,6 +296,15 @@
   "seconds": 146.5,
   "seed": 1001
  },
+ "hapi-forward-004/FILE_BM25PAD@2002": {
+  "answer_tokens": 159,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2202,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Obj\",\n      \"file\": \"lib/response/obj.js\",\n      \"reason\": \"The constructor now needs to pass an options object to the `update` method instead of separate `type` and `encoding` parameters.\",\n      \"new_code\": \"exports = module.exports = internals.Obj = function (object, type, encoding) {\\n\\n    Cacheable.call(this);\\n    this.variety = 'obj';\\n    this.varieties.obj = true;\\n\\n    // Convert immediately to snapshot content\\n\\n    this.raw = object;              // Can change if reference is modified\\n    this.update({ type: type, encoding: encoding });\\n};\"\n    }\n  ]\n}",
+  "seconds": 13.0,
+  "seed": 2002
+ },
  "hapi-forward-004/FILE_BM25PAD@42": {
   "answer_tokens": 742,
   "done_reason": "stop",
@@ -313,6 +322,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 3.1,
   "seed": 1001
+ },
+ "hapi-forward-004/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2186,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.9,
+  "seed": 2002
  },
  "hapi-forward-004/FILE_GREPPAD@42": {
   "answer_tokens": 6,
@@ -332,6 +350,15 @@
   "seconds": 70.6,
   "seed": 1001
  },
+ "hapi-forward-004/PRISM@2002": {
+  "answer_tokens": 1041,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2202,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Obj.prototype.update\",\n      \"file\": \"lib/response/obj.js\",\n      \"reason\": \"The function signature has changed to accept an options object instead of separate type and encoding parameters.\",\n      \"new_code\": \"internals.Obj.prototype.update = function (options) {\\n\\n    options = options || {};\\n    if (typeof options !== 'object') {\\n        options = {\\n            type: arguments[0],\\n            encoding: arguments[1]\\n        };\\n    }\\n\\n    this._payload = [JSON.stringify(this.raw, options.replacer, options.space)];\\n    this._headers['content-type'] = options.type || this._headers['content-type'] || 'application/json';\\n    this.encoding(options.encoding);\\n};\"\n    },\n    {\n      \"function\": \"internals.Scheme.prototype.responseHeader\",\n      \"file\": \"lib/auth/hawk.js\",\n      \"reason\": \"The function calls `response.update` with a single argument, which needs to be updated to an options object.\",\n      \"new_code\": \"internals.Scheme.prototype.responseHeader = function (request, response, callback) {\\n\\n    callback = Utils.nextTick(callback);\\n\\n    var payloadHash = Hawk.crypto.initializePayloadHash(request.auth.credentials.algorithm, response._headers['content-type']);\\n\\n    response.header('trailer', 'server-authorization');\\n    response.header('transfer-encoding', 'chunked');\\n\\n    response._preview.on('peek', function (chunk) {\\n\\n        payloadHash.update(chunk);\\n    });\\n\\n    response._preview.once('finish', function () {\\n\\n        var header = Hawk.server.header(request.auth.credentials, request.auth.artifacts, { hash: Hawk.crypto.finalizePayloadHash(payloadHash) });\\n        if (header) {\\n            request.raw.res.addTrailers({ 'server-authorization': header });\\n        }\\n    });\\n\\n    callback();\\n};\"\n    },\n    {\n      \"function\": \"internals.File.prototype._prepare\",\n      \"file\": \"lib/response/file.js\",\n      \"reason\": \"The function calls `response.update` with a single argument, which needs to be updated to an options object.\",\n      \"new_code\": \"internals.File.prototype._prepare = function (request, callback) {\\n\\n    var self = this;\\n\\n    this._wasPrepared = true;\\n\\n    Fs.stat(self._filePath, function (err, stat) {\\n\\n        if (err) {\\n            return callback(Boom.notFound());\\n        }\\n\\n        if (stat.isDirectory()) {\\n            return callback(Boom.forbidden());\\n        }\\n\\n        var fileName = Path.basename(self._filePath);\\n\\n        self._headers['content-type'] = Mime.lookup(self._filePath) || 'application/octet-stream';\\n        self._headers['content-length'] = stat.size;\\n        self._headers['last-modified'] = stat.mtime;\\n\\n        // Use stat info for an LRU cache key.\\n\\n        var cachekey = [self._filePath, stat.ino, stat.size, stat.mtime.getTime()].join('-');\\n\\n        // The etag must hash the file contents in order to be consistent across distributed deployments\\n\\n        if (internals.fileEtags.has(cachekey)) {\\n            self._headers.etag = JSON.stringify(internals.fileEtags.get(cachekey));\\n        }\\n        else {\\n            var hash = Crypto.createHash('sha1');\\n            self._preview.on('peek', function (chunk) {\\n\\n                hash.update(chunk);\\n            });\\n\\n            self._preview.once('finish', function () {\\n\\n                var etag = hash.digest('hex');\\n                internals.fileEtags.set(cachekey, etag);\\n            });\\n        }\\n\\n        if (self._mode) {\\n            self._headers['content-disposition'] = self._mode + '; filename=' + encodeURIComponent(fileName);\\n        }\\n\\n        return StreamResponse.prototype._prepare.call(self, request, callback);\\n    });\\n};\"\n    },\n    {\n      \"function\": \"internals.Obj\",\n      \"file\": \"lib/response/obj.js\",\n      \"reason\": \"The constructor calls `this.update` with separate type and encoding parameters, which needs to be updated to an options object.\",\n      \"new_code\": \"exports = module.exports = internals.Obj = function (object, type, encoding) {\\n\\n    Cacheable.call(this);\\n    this.variety = 'obj';\\n    this.varieties.obj = true;\\n\\n    // Convert immediately to snapshot content\\n\\n    this.raw = object;              // Can change if reference is modified\\n    this.update({ type: type, encoding: encoding });\\n};\"\n    }\n  ]\n}",
+  "seconds": 70.8,
+  "seed": 2002
+ },
  "hapi-forward-005/FILE@1001": {
   "answer_tokens": 1168,
   "done_reason": "stop",
@@ -341,6 +368,15 @@
   "seconds": 82.3,
   "seed": 1001
  },
+ "hapi-forward-005/FILE@2002": {
+  "answer_tokens": 1168,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3053,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Request\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The constructor now needs to pass the `stripTrailingSlash` option to `_setUrl`.\",\n      \"new_code\": \"internals.Request = function (server, req, res, options) {\\n\\n    this._bench = new Hoek.Bench();\\n    var now = Date.now();\\n\\n    // Public members\\n\\n    this.server = server;\\n    this.hapi = require('./');\\n\\n    this.url = null;\\n    this.query = null;\\n    this.path = null;\\n    this.method = null;\\n    this.mime = null;                       // Set if payload is parsed\\n\\n    this.setUrl = this._setUrl;             // Decoration removed after 'onRequest'\\n    this.setMethod = this._setMethod;\\n\\n    this._pathSegments = null;\\n    this._setUrl(req.url, options.stripTrailingSlash);                  // Sets: this.url, this.path, this.query, this._pathSegments\\n    this._setMethod(req.method);            // Sets: this.method\\n    this.headers = req.headers;\\n\\n    this.id = now + '-' + process.pid + '-' + Math.floor(Math.random() * 0x10000);\\n\\n    this.app = {};                          // Place for application-specific state without conflicts with hapi, should not be used by plugins\\n    this.plugins = {};                      // Place for plugins to store state without conflicts with hapi, should be namespaced using plugin name\\n\\n    this._route = this.server._router.notfound;             // Used prior to routing (only settings are used, not the handler)\\n    this.route = this._route.settings;\\n\\n    this.auth = {\\n        isAuthenticated: false,\\n        credentials: null,                  // Special keys: 'app', 'user', 'scope', 'tos'\\n        artifacts: null,                    // Scheme-specific artifacts\\n        session: null                       // Used by cookie auth { set(), clear() }\\n    };\\n\\n    this.session = null;                    // Special key reserved for plugins implementing session support\\n\\n    this.pre = {};                          // Pre raw values\\n    this.responses = {};                    // Pre response values\\n\\n    this.info = {\\n        received: now,\\n        remoteAddress: req.connection ? req.connection.remoteAddress : '',\\n        remotePort: req.connection ? req.connection.remotePort : '',\\n        referrer: req.headers.referrer || req.headers.referer || '',\\n        host: req.headers.host ? req.headers.host.replace(/\\n/g, '') : ''\\n    };\\n\\n    // Apply options\\n\\n    if (options.credentials) {\\n        this.auth.credentials = options.credentials;\\n    }\\n\\n    // Assigned elsewhere:\\n\\n    this.orig = {};\\n    this.params = {};\\n    this.payload = null;\\n    this.state = null;\\n    this.jsonp = null;\\n    this.response = null;\\n\\n    // Semi-public members\\n\\n    this.raw = {\\n        req: req,\\n        res: res\\n    };\\n\\n    this.tail = this.addTail = this._addTail;       // Removed once wagging\\n\\n    // Private members\\n\\n    this._states = {};\\n    this._logger = [];\\n    this._isBailed = false;             // true when lifecycle should end\\n    this._isReplied = false;            // true when response processing started\\n    this._isFinalized = false;          // true when request completed (may be waiting on tails to complete)\\n    this._tails = {};                   // tail id -> name (tracks pending tails)\\n    this._tailIds = 0;                  // Used to generate a unique tail id\\n    this._paramsArray = [];             // Array of path parameters in path order\\n    this._protect = new Protect(this);\\n    this.domain = this._protect.domain;\\n\\n    // Set socket timeout\\n\\n    if (req.socket &&\\n        server.settings.timeout.socket !== undefined) {\\n\\n        req.socket.setTimeout(server.settings.timeout.socket || 0);     // Value can be false or positive\\n    }\\n\\n    // Listen to request errors\\n\\n    this._onClose = function () {\\n\\n        self.log(['hapi', 'request', 'error', 'closed']);\\n        self._isBailed = true;\\n    };\\n\\n    this.raw.req.once('close', this._onClose);\\n\\n    this._onError = function (err) {\\n\\n        self.log(['hapi', 'request', 'error'], err);\\n    };\\n\\n    this.raw.req.once('error', this._onError);\\n\\n    this._onAborted = function () {\\n\\n        self.log(['hapi', 'request', 'error', 'aborted']);\\n    };\\n\\n    this.raw.req.once('aborted', this._onAborted);\\n\\n    // Log request\\n\\n    var about = {\\n        id: this.id,\\n        method: this.method,\\n        url: this.url.href,\\n        agent: this.raw.req.headers['user-agent']\\n    };\\n\\n    this.log(['hapi', 'received'], about, now);     // Must be last for object to be fully constructed\\n};\"\n    }\n  ]\n}",
+  "seconds": 82.4,
+  "seed": 2002
+ },
  "hapi-forward-005/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -349,6 +385,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 3.1,
   "seed": 1001
+ },
+ "hapi-forward-005/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4759,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.2,
+  "seed": 2002
  },
  "hapi-forward-005/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -368,6 +413,15 @@
   "seconds": 3.2,
   "seed": 1001
  },
+ "hapi-forward-005/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4761,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.2,
+  "seed": 2002
+ },
  "hapi-forward-005/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -386,6 +440,15 @@
   "seconds": 84.7,
   "seed": 1001
  },
+ "hapi-forward-005/PRISM@2002": {
+  "answer_tokens": 1186,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4765,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Request\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The constructor now needs to pass an additional parameter `stripTrailingSlash` to `_setUrl`.\",\n      \"new_code\": \"exports = module.exports = internals.Request = function (server, req, res, options) {\\n\\n    var self = this;\\n\\n    Events.EventEmitter.call(this);\\n\\n    this._bench = new Hoek.Bench();\\n    var now = Date.now();\\n\\n    // Public members\\n\\n    this.server = server;\\n    this.hapi = require('./');\\n\\n    this.url = null;\\n    this.query = null;\\n    this.path = null;\\n    this.method = null;\\n    this.mime = null;                       // Set if payload is parsed\\n\\n    this.setUrl = this._setUrl;             // Decoration removed after 'onRequest'\\n    this.setMethod = this._setMethod;\\n\\n    this._pathSegments = null;\\n    this._setUrl(req.url, true);                  // Sets: this.url, this.path, this.query, this._pathSegments\\n    this._setMethod(req.method);            // Sets: this.method\\n    this.headers = req.headers;\\n\\n    this.id = now + '-' + process.pid + '-' + Math.floor(Math.random() * 0x10000);\\n\\n    this.app = {};                          // Place for application-specific state without conflicts with hapi, should not be used by plugins\\n    this.plugins = {};                      // Place for plugins to store state without conflicts with hapi, should be namespaced using plugin name\\n\\n    this._route = this.server._router.notfound;             // Used prior to routing (only settings are used, not the handler)\\n    this.route = this._route.settings;\\n\\n    this.auth = {\\n        isAuthenticated: false,\\n        credentials: null,                  // Special keys: 'app', 'user', 'scope', 'tos'\\n        artifacts: null,                    // Scheme-specific artifacts\\n        session: null                       // Used by cookie auth { set(), clear() }\\n    };\\n\\n    this.session = null;                    // Special key reserved for plugins implementing session support\\n\\n    this.pre = {};                          // Pre raw values\\n    this.responses = {};                    // Pre response values\\n\\n    this.info = {\\n        received: now,\\n        remoteAddress: req.connection ? req.connection.remoteAddress : '',\\n        remotePort: req.connection ? req.connection.remotePort : '',\\n        referrer: req.headers.referrer || req.headers.referer || '',\\n        host: req.headers.host ? req.headers.host.replace(/\\n/g, '') : ''\\n    };\\n\\n    // Apply options\\n\\n    if (options.credentials) {\\n        this.auth.credentials = options.credentials;\\n    }\\n\\n    // Assigned elsewhere:\\n\\n    this.orig = {};\\n    this.params = {};\\n    this.payload = null;\\n    this.state = null;\\n    this.jsonp = null;\\n    this.response = null;\\n\\n    // Semi-public members\\n\\n    this.raw = {\\n        req: req,\\n        res: res\\n    };\\n\\n    this.tail = this.addTail = this._addTail;       // Removed once wagging\\n\\n    // Private members\\n\\n    this._states = {};\\n    this._logger = [];\\n    this._isBailed = false;             // true when lifecycle should end\\n    this._isReplied = false;            // true when response processing started\\n    this._isFinalized = false;          // true when request completed (may be waiting on tails to complete)\\n    this._tails = {};                   // tail id -> name (tracks pending tails)\\n    this._tailIds = 0;                  // Used to generate a unique tail id\\n    this._paramsArray = [];             // Array of path parameters in path order\\n    this._protect = new Protect(this);\\n    this.domain = this._protect.domain;\\n\\n    // Set socket timeout\\n\\n    if (req.socket &&\\n        server.settings.timeout.socket !== undefined) {\\n\\n        req.socket.setTimeout(server.settings.timeout.socket || 0);     // Value can be false or positive\\n    }\\n\\n    // Listen to request errors\\n\\n    this._onClose = function () {\\n\\n        self.log(['hapi', 'request', 'error', 'closed']);\\n        self._isBailed = true;\\n    };\\n\\n    this.raw.req.once('close', this._onClose);\\n\\n    this._onError = function (err) {\\n\\n        self.log(['hapi', 'request', 'error'], err);\\n    };\\n\\n    this.raw.req.once('error', this._onError);\\n\\n    this._onAborted = function () {\\n\\n        self.log(['hapi', 'request', 'error', 'aborted']);\\n    };\\n\\n    this.raw.req.once('aborted', this._onAborted);\\n\\n    // Log request\\n\\n    var about = {\\n        id: this.id,\\n        method: this.method,\\n        url: this.url.href,\\n        agent: this.raw.req.headers['user-agent']\\n    };\\n\\n    this.log(['hapi', 'received'], about, now);     // Must be last for object to be fully constructed\\n};\"\n    }\n  ]\n}",
+  "seconds": 85.3,
+  "seed": 2002
+ },
  "hapi-forward-006/FILE@1001": {
   "answer_tokens": 1088,
   "done_reason": "stop",
@@ -395,6 +458,15 @@
   "seconds": 72.7,
   "seed": 1001
  },
+ "hapi-forward-006/FILE@2002": {
+  "answer_tokens": 1099,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1330,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Proxy\",\n      \"file\": \"lib/proxy.js\",\n      \"reason\": \"The constructor now needs to handle the new signature of mapUri.\",\n      \"new_code\": \"exports = module.exports = internals.Proxy = function (options, route) {\\n\\n    var self = this;\\n\\n    Utils.assert(options, 'Missing options');\\n    Utils.assert(options.host || options.mapUri, 'Missing options.host and no options.mapUri');\\n    Utils.assert(!options.passThrough || !route.cache.isMode('server'), 'Cannot use pass-through proxy mode with caching');\\n    Utils.assert(!options.mapUri || typeof options.mapUri === 'function', 'options.mapUri must be a function');\\n    Utils.assert(!options.postResponse || typeof options.postResponse === 'function', 'options.postResponse must be a function');\\n    Utils.assert(!options.hasOwnProperty('isCustomPostResponse'), 'Cannot manually set options.isCustomPostResponse');\\n\\n    this.settings = Utils.clone(options);                                                           // Options can be reused\\n    this.settings.protocol = this.settings.protocol || 'http';\\n    this.settings.port = this.settings.port || (this.settings.protocol === 'http' ? 80 : 443);\\n    this.settings.xforward = this.settings.xforward || false;\\n    this.settings.passHeaders = this.settings.passThrough || false;\\n    this.settings.mapUri = this.settings.mapUri || internals.mapUri;                       // function (request, settings, function (err, uri, query))\\n    this.settings.isCustomPostResponse = !!this.settings.postResponse;\\n    this.settings.postResponse = this.settings.postResponse || internals.postResponse;     // function (request, settings, response, payload)\\n\\n    if (typeof this.settings.mapUri === 'function' && this.settings.mapUri.length === 3) {\\n        this.settings.mapUri = this.settings.mapUri(this.settings.protocol, this.settings.host, this.settings.port);\\n    }\\n\\n    return this;\\n};\"\n    },\n    {\n      \"function\": \"internals.Proxy.prototype.handler\",\n      \"file\": \"lib/proxy.js\",\n      \"reason\": \"The handler now needs to call the new mapUri function with the correct arguments.\",\n      \"new_code\": \"internals.Proxy.prototype.handler = function () {\\n\\n    var self = this;\\n\\n    return function (request) {\\n\\n        self.settings.mapUri(request, function (err, uri, query) {\\n\\n            if (err) {\\n                return request.reply(err);\\n            }\\n\\n            var req = request.raw.req;\\n\\n            var options = {\\n                url: uri,\\n                method: request.method,\\n                qs: query,\\n                headers: {}\\n            };\\n\\n            if (self.settings.passThrough) {                        // Never set with cache\\n                options.headers = Utils.clone(req.headers);\\n                delete options.headers.host;\\n            }\\n\\n            if (self.settings.xforward) {\\n                options.headers['x-forwarded-for'] = (options.headers['x-forwarded-for'] ? options.headers['x-forwarded-for'] + ',' : '') + req.connection.remoteAddress || req.socket.remoteAddress;\\n                options.headers['x-forwarded-port'] = (options.headers['x-forwarded-port'] ? options.headers['x-forwarded-port'] + ',' : '') + req.connection.remotePort || req.socket.remotePort;\\n                options.headers['x-forwarded-proto'] = (options.headers['x-forwarded-proto'] ? options.headers['x-forwarded-proto'] + ',' : '') + self.settings.protocol;\\n            }\\n\\n            var isGet = (request.method === 'get' || request.method === 'head');\\n\\n            if (self.settings.isCustomPostResponse ||                                       // Custom response method\\n                (isGet && request._route && request._route.cache.isMode('server'))) {       // GET/HEAD with Cache\\n\\n                // Callback interface\\n\\n                Request(options, function (err, response, payload) {\\n\\n                    // Request handles all redirect responses (3xx) and will return an err if redirection fails\\n\\n                    if (err) {\\n                        return request.reply(Err.internal('Proxy error', err));\\n                    }\\n\\n                    return self.settings.postResponse(request, self.settings, response, payload);\\n                });\\n            }\\n            else {\\n\\n                // Stream interface\\n\\n                if (!isGet &&\\n                    request.rawBody) {\\n\\n                    options.headers['Content-Type'] = req.headers['content-type'];\\n                    options.body = request.rawBody;\\n                }\\n\\n                var reqStream = Request(options);\\n\\n                if (!isGet &&\\n                    request._route &&\\n                    request._route.config.payload === 'stream') {\\n\\n                    request.raw.req.pipe(reqStream);\\n                }\\n\\n                reqStream.on('response', function (resStream) {\\n\\n                    request.reply.stream(resStream);                // Request._respond will pass-through headers and status code\\n                });\\n            }\\n        });\\n    };\\n};\"\n    }\n  ]\n}",
+  "seconds": 73.4,
+  "seed": 2002
+ },
  "hapi-forward-006/FILE_BM25PAD@1001": {
   "answer_tokens": 661,
   "done_reason": "stop",
@@ -403,6 +475,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"exports\",\n      \"file\": \"lib/proxy.js\",\n      \"reason\": \"The constructor now requires protocol, host, and port parameters.\",\n      \"new_code\": \"exports = module.exports = internals.Proxy = function (options, route) {\\n\\n    var self = this;\\n\\n    Utils.assert(options, 'Missing options');\\n    Utils.assert(options.host || options.mapUri, 'Missing options.host and no options.mapUri');\\n    Utils.assert(!options.passThrough || !route.cache.isMode('server'), 'Cannot use pass-through proxy mode with caching');\\n    Utils.assert(!options.mapUri || typeof options.mapUri === 'function', 'options.mapUri must be a function');\\n    Utils.assert(!options.postResponse || typeof options.postResponse === 'function', 'options.postResponse must be a function');\\n    Utils.assert(!options.hasOwnProperty('isCustomPostResponse'), 'Cannot manually set options.isCustomPostResponse');\\n\\n    this.settings = Utils.clone(options);                                                           // Options can be reused\\n    this.settings.protocol = this.settings.protocol || 'http';\\n    this.settings.port = this.settings.port || (this.settings.protocol === 'http' ? 80 : 443);\\n    this.settings.xforward = this.settings.xforward || false;\\n    this.settings.passHeaders = this.settings.passThrough || false;\\n    this.settings.mapUri = this.settings.mapUri || internals.mapUri(this.settings.protocol, this.settings.host, this.settings.port);                       // function (request, settings, function (err, uri, query))\\n    this.settings.isCustomPostResponse = !!this.settings.postResponse;\\n    this.settings.postResponse = this.settings.postResponse || internals.postResponse;     // function (request, settings, response, payload)\\n    this.settings.baseUrl = this.settings.protocol + '://' + this.settings.host + ':' + this.settings.port;\\n\\n    return this;\\n};\"\n    },\n    {\n      \"function\": \"internals.main\",\n      \"file\": \"examples/config/proxy.js\",\n      \"reason\": \"The proxy configuration now requires protocol, host, and port parameters.\",\n      \"new_code\": \"internals.main = function () {\\n\\n    // Create Hapi servers\\n    var http = new Hapi.Server('0.0.0.0', 8080);\\n\\n    // Set routes\\n    http.addRoute({ method: 'GET', path: '/', config: { proxy: { protocol: 'http', host: 'google.com', port: 80 } } });\\n    http.addRoute({ method: 'GET', path: '/images/srpr/logo3w.png', config: { proxy: { protocol: 'http', host: 'google.com', port: 80 } } });\\n    http.addRoute({ method: 'POST', path: '/', config: { proxy: { protocol: 'http', host: 'google.com', port: 80 } } });\\n\\n    // Start Hapi servers\\n    http.start();\\n};\"\n    }\n  ]\n}",
   "seconds": 46.7,
   "seed": 1001
+ },
+ "hapi-forward-006/FILE_BM25PAD@2002": {
+  "answer_tokens": 717,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2927,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Proxy\",\n      \"file\": \"lib/proxy.js\",\n      \"reason\": \"The constructor now needs to accept a new mapUri function that includes protocol, host, and port parameters.\",\n      \"new_code\": \"exports = module.exports = internals.Proxy = function (options, route) {\\n\\n    var self = this;\\n\\n    Utils.assert(options, 'Missing options');\\n    Utils.assert(options.host || options.mapUri, 'Missing options.host and no options.mapUri');\\n    Utils.assert(!options.passThrough || !route.cache.isMode('server'), 'Cannot use pass-through proxy mode with caching');\\n    Utils.assert(!options.mapUri || typeof options.mapUri === 'function', 'options.mapUri must be a function');\\n    Utils.assert(!options.postResponse || typeof options.postResponse === 'function', 'options.postResponse must be a function');\\n    Utils.assert(!options.hasOwnProperty('isCustomPostResponse'), 'Cannot manually set options.isCustomPostResponse');\\n\\n    this.settings = Utils.clone(options);                                                           // Options can be reused\\n    this.settings.protocol = this.settings.protocol || 'http';\\n    this.settings.port = this.settings.port || (this.settings.protocol === 'http' ? 80 : 443);\\n    this.settings.xforward = this.settings.xforward || false;\\n    this.settings.passHeaders = this.settings.passThrough || false;\\n    this.settings.mapUri = this.settings.mapUri || internals.mapUri(this.settings.protocol, this.settings.host, this.settings.port);                       // function (request, settings, function (err, uri, query))\\n    this.settings.isCustomPostResponse = !!this.settings.postResponse;\\n    this.settings.postResponse = this.settings.postResponse || internals.postResponse;     // function (request, settings, response, payload)\\n    this.settings.baseUrl = this.settings.protocol + '://' + this.settings.host + ':' + this.settings.port;\\n\\n    return this;\\n};\"\n    },\n    {\n      \"function\": \"internals.main\",\n      \"file\": \"examples/config/proxy.js\",\n      \"reason\": \"The proxy configuration now requires a mapUri function that includes protocol, host, and port parameters.\",\n      \"new_code\": \"internals.main = function () {\\n\\n    // Create Hapi servers\\n    var http = new Hapi.Server('0.0.0.0', 8080);\\n\\n    // Set routes\\n    http.addRoute({ method: 'GET', path: '/', config: { proxy: { host: 'google.com', port: 80, mapUri: internals.mapUri('http', 'google.com', 80) } } });\\n    http.addRoute({ method: 'GET', path: '/images/srpr/logo3w.png', config: { proxy: { host: 'google.com', port: 80, mapUri: internals.mapUri('http', 'google.com', 80) } } });\\n    http.addRoute({ method: 'POST', path: '/', config: { proxy: { host: 'google.com', port: 80, mapUri: internals.mapUri('http', 'google.com', 80) } } });\\n\\n    // Start Hapi servers\\n    http.start();\\n};\"\n    }\n  ]\n}",
+  "seconds": 50.5,
+  "seed": 2002
  },
  "hapi-forward-006/FILE_BM25PAD@42": {
   "answer_tokens": 656,
@@ -422,6 +503,15 @@
   "seconds": 75.5,
   "seed": 1001
  },
+ "hapi-forward-006/FILE_GREPPAD@2002": {
+  "answer_tokens": 1223,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2945,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Proxy\",\n      \"file\": \"lib/proxy.js\",\n      \"reason\": \"The constructor now needs to initialize the mapUri function with the new signature.\",\n      \"new_code\": \"internals.Proxy = function (options, route) {\\n\\n    var self = this;\\n\\n    Utils.assert(options, 'Missing options');\\n    Utils.assert(options.host || options.mapUri, 'Missing options.host and no options.mapUri');\\n    Utils.assert(!options.passThrough || !route.cache.isMode('server'), 'Cannot use pass-through proxy mode with caching');\\n    Utils.assert(!options.mapUri || typeof options.mapUri === 'function', 'options.mapUri must be a function');\\n    Utils.assert(!options.postResponse || typeof options.postResponse === 'function', 'options.postResponse must be a function');\\n    Utils.assert(!options.hasOwnProperty('isCustomPostResponse'), 'Cannot manually set options.isCustomPostResponse');\\n\\n    this.settings = Utils.clone(options);                                                           // Options can be reused\\n    this.settings.protocol = this.settings.protocol || 'http';\\n    this.settings.port = this.settings.port || (this.settings.protocol === 'http' ? 80 : 443);\\n    this.settings.xforward = this.settings.xforward || false;\\n    this.settings.passHeaders = this.settings.passThrough || false;\\n    this.settings.mapUri = this.settings.mapUri || internals.mapUri(this.settings.protocol, this.settings.host, this.settings.port);                       // function (request, settings, function (err, uri, query))\\n    this.settings.isCustomPostResponse = !!this.settings.postResponse;\\n    this.settings.postResponse = this.settings.postResponse || internals.postResponse;     // function (request, settings, response, payload)\\n    this.settings.baseUrl = this.settings.protocol + '://' + this.settings.host + ':' + this.settings.port;\\n\\n    return this;\\n};\"\n    },\n    {\n      \"function\": \"internals.Proxy.prototype.handler\",\n      \"file\": \"lib/proxy.js\",\n      \"reason\": \"The handler function needs to call the mapUri function with the correct arguments.\",\n      \"new_code\": \"internals.Proxy.prototype.handler = function () {\\n\\n    var self = this;\\n\\n    return function (request) {\\n\\n        self.settings.mapUri(request, function (err, uri, query) {\\n\\n            if (err) {\\n                return request.reply(err);\\n            }\\n\\n            var req = request.raw.req;\\n\\n            var options = {\\n                url: uri,\\n                method: request.method,\\n                qs: query,\\n                headers: {}\\n            };\\n\\n            if (self.settings.passThrough) {                        // Never set with cache\\n                options.headers = Utils.clone(req.headers);\\n                delete options.headers.host;\\n            }\\n\\n            if (self.settings.xforward) {\\n                options.headers['x-forwarded-for'] = (options.headers['x-forwarded-for'] ? options.headers['x-forwarded-for'] + ',' : '') + req.connection.remoteAddress || req.socket.remoteAddress;\\n                options.headers['x-forwarded-port'] = (options.headers['x-forwarded-port'] ? options.headers['x-forwarded-port'] + ',' : '') + req.connection.remotePort || req.socket.remotePort;\\n                options.headers['x-forwarded-proto'] = (options.headers['x-forwarded-proto'] ? options.headers['x-forwarded-proto'] + ',' : '') + self.settings.protocol;\\n            }\\n\\n            var isGet = (request.method === 'get' || request.method === 'head');\\n\\n            if (self.settings.isCustomPostResponse ||                                       // Custom response method\\n                (isGet && request._route && request._route.cache.isMode('server'))) {       // GET/HEAD with Cache\\n\\n                // Callback interface\\n\\n                Request(options, function (err, response, payload) {\\n\\n                    // Request handles all redirect responses (3xx) and will return an err if redirection fails\\n\\n                    if (err) {\\n                        return request.reply(Err.internal('Proxy error', err));\\n                    }\\n\\n                    return self.settings.postResponse(request, self.settings, response, payload);\\n                });\\n            }\\n            else {\\n\\n                // Stream interface\\n\\n                if (!isGet &&\\n                    request.rawBody) {\\n\\n                    options.headers['Content-Type'] = req.headers['content-type'];\\n                    options.body = request.rawBody;\\n                }\\n\\n                var reqStream = Request(options);\\n\\n                if (!isGet &&\\n                    request._route &&\\n                    request._route.config.payload === 'stream') {\\n\\n                    request.raw.req.pipe(reqStream);\\n                }\\n\\n                reqStream.on('response', function (resStream) {\\n\\n                    request.reply.stream(resStream);                // Request._respond will pass-through headers and status code\\n                });\\n            }\\n        });\\n    };\\n};\"\n    },\n    {\n      \"function\": \"internals.mapUri\",\n      \"file\": \"lib/proxy.js\",\n      \"reason\": \"The mapUri function needs to be updated to match the new signature.\",\n      \"new_code\": \"internals.mapUri = function (protocol, host, port) {\\n\\n    protocol = protocol || 'http';\\n    port = port || (protocol === 'http' ? 80 : 443);\\n    var baseUrl = protocol + '://' + host + ':' + port;\\n\\n    return function(request, callback) {\\n\\n        return callback(null, baseUrl + request.path, request.query);\\n    };\\n};\"\n    }\n  ]\n}",
+  "seconds": 84.6,
+  "seed": 2002
+ },
  "hapi-forward-006/FILE_GREPPAD@42": {
   "answer_tokens": 1084,
   "done_reason": "stop",
@@ -440,6 +530,15 @@
   "seconds": 30.9,
   "seed": 1001
  },
+ "hapi-forward-006/PRISM@2002": {
+  "answer_tokens": 410,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2945,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Proxy\",\n      \"file\": \"lib/proxy.js\",\n      \"reason\": \"The constructor now needs to initialize the mapUri function with the new signature.\",\n      \"new_code\": \"exports = module.exports = internals.Proxy = function (options, route) {\\n\\n    var self = this;\\n\\n    Utils.assert(options, 'Missing options');\\n    Utils.assert(options.host || options.mapUri, 'Missing options.host and no options.mapUri');\\n    Utils.assert(!options.passThrough || !route.cache.isMode('server'), 'Cannot use pass-through proxy mode with caching');\\n    Utils.assert(!options.mapUri || typeof options.mapUri === 'function', 'options.mapUri must be a function');\\n    Utils.assert(!options.postResponse || typeof options.postResponse === 'function', 'options.postResponse must be a function');\\n    Utils.assert(!options.hasOwnProperty('isCustomPostResponse'), 'Cannot manually set options.isCustomPostResponse');\\n\\n    this.settings = Utils.clone(options);                                                           // Options can be reused\\n    this.settings.protocol = this.settings.protocol || 'http';\\n    this.settings.port = this.settings.port || (this.settings.protocol === 'http' ? 80 : 443);\\n    this.settings.xforward = this.settings.xforward || false;\\n    this.settings.passHeaders = this.settings.passThrough || false;\\n    this.settings.mapUri = this.settings.mapUri || internals.mapUri(this.settings.protocol, this.settings.host, this.settings.port);\\n    this.settings.isCustomPostResponse = !!this.settings.postResponse;\\n    this.settings.postResponse = this.settings.postResponse || internals.postResponse;     // function (request, settings, response, payload)\\n    this.settings.baseUrl = this.settings.protocol + '://' + this.settings.host + ':' + this.settings.port;\\n\\n    return this;\\n};\"\n    }\n  ]\n}",
+  "seconds": 29.6,
+  "seed": 2002
+ },
  "hapi-forward-007/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -449,6 +548,15 @@
   "seconds": 3.0,
   "seed": 1001
  },
+ "hapi-forward-007/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1689,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.0,
+  "seed": 2002
+ },
  "hapi-forward-007/FILE_BM25PAD@1001": {
   "answer_tokens": 2043,
   "done_reason": "stop",
@@ -457,6 +565,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Request.prototype._cleanup\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The event listener for 'close' on the request raw object needs to be updated to match the new event parameter in the 'end' function.\",\n      \"new_code\": \"internals.Request.prototype._cleanup = function () {\\n\\n    this.raw.req.removeListener('close', this._onClose);\\n    this.raw.req.removeListener('error', this._onError);\\n    this.raw.req.removeListener('aborted', this._onAborted);\\n};\"\n    },\n    {\n      \"function\": \"internals.Request.prototype._reply\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The 'process' function within '_reply' needs to handle the new event parameter in the 'end' function.\",\n      \"new_code\": \"internals.Request.prototype._reply = function (exit) {\\n\\n    var self = this;\\n\\n    if (this._isReplied) {                                      // Prevent any future responses to this request\\n        return;\\n    }\\n\\n    this._isReplied = true;\\n\\n    clearTimeout(this._serverTimeoutId);\\n\\n    var process = function () {\\n\\n        if (self.response &&                                   // Can be null if response coming from exit\\n            self.response.closed) {\\n\\n            if (self.response.end) {\\n                self.raw.res.end();                             // End the response in case it wasn't already closed\\n            }\\n            return finalize();\\n        }\\n\\n        if (exit) {\\n            self._setResponse(Response.wrap(exit, self));\\n        }\\n\\n        self.server._ext.invoke(self, 'onPreResponse', function (err) {\\n\\n            if (err) {                                         // err can be valid response or error\\n                self._setResponse(Response.wrap(err, self));\\n            }\\n\\n            Response.send(self, finalize);\\n        });\\n    };\\n\\n    var finalize = function () {\\n\\n        self.server._dtrace.report('request.finalize', self.response);\\n        self.server.emit('response', self);\\n\\n        self._isWagging = true;\\n        self.addTail = undefined;\\n        self.tail = undefined;\\n\\n        if (Object.keys(self._tails).length === 0) {\\n            self.server.emit('tail', self);\\n        }\\n\\n        self._cleanup();\\n    };\\n\\n    process();\\n};\"\n    },\n    {\n      \"function\": \"internals.Request.prototype._setResponse\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The '_setResponse' function does not need to change as it does not interact with the 'end' function directly.\",\n      \"new_code\": \"internals.Request.prototype._setResponse = function (response) {\\n\\n    var self = this;\\n\\n    if (this.response &&\\n        !this.response.isBoom &&\\n        this.response !== response &&\\n        (response.isBoom || this.response.source !== response.source)) {\\n\\n        this.response._close();\\n    }\\n\\n    this.response = response;\\n\\n    if (response.isBoom &&\\n        response.output.statusCode === 500) {\\n\\n        this.server.emit('internalError', this, response);\\n        this.log(response.isDeveloperError ? ['hapi', 'internal', 'implementation', 'error'] : ['hapi', 'internal', 'error'], response);\\n    }\\n};\"\n    },\n    {\n      \"function\": \"internals.Response.prototype._marshall\",\n      \"file\": \"lib/file.js\",\n      \"reason\": \"The '_marshall' function does not need to change as it does not interact with the 'end' function directly.\",\n      \"new_code\": \"internals.Response.prototype._marshall = function (request, callback) {\\n\\n    var self = this;\\n\\n    // Prepare Stream response\\n\\n    var path = this.source.path;\\n    var fileStream = Fs.createReadStream(path);\\n    fileStream.once('error', callback);\\n    fileStream.once('open', function () {\\n\\n        fileStream.removeListener('error', callback);\\n\\n        self._payload = fileStream;\\n\\n        if (!self.source.settings.lookupCompressed) {\\n            return callback();\\n        }\\n\\n        var gzFile = path + '.gz';\\n        Fs.stat(gzFile, function (err, stat) {\\n\\n            if (!err &&\\n                !stat.isDirectory()) {\\n\\n                var gzipped = Fs.createReadStream(gzFile);\\n                fileStream._hapi = { gzipped: gzipped };\\n            }\\n\\n            return callback();\\n        });\\n    });\\n};\"\n    },\n    {\n      \"function\": \"internals.writeFile\",\n      \"file\": \"lib/payload.js\",\n      \"reason\": \"The 'writeFile' function does not need to change as it does not interact with the 'end' function directly.\",\n      \"new_code\": \"internals.writeFile = function (stream, dest, callback) {\\n\\n    var path = internals.uniqueFilename(dest);\\n    var file = Fs.createWriteStream(path, { flags: 'wx' });\\n    var counter = new internals.Counter();\\n\\n    var finalize = Utils.once(function (err) {\\n\\n        file.removeAllListeners();\\n\\n        if (!err) {\\n            return callback(null, path, counter.bytes);\\n        }\\n\\n        file.destroy();\\n        Fs.unlink(path, function (fsErr) {      // Ignore unlink errors\\n\\n            return callback(err);\\n        });\\n    });\\n\\n    file.once('close', finalize);\\n    file.once('error', finalize);\\n\\n    stream.pipe(counter).pipe(file);\\n};\"\n    },\n    {\n      \"function\": \"internals.Server.prototype.inject\",\n      \"file\": \"lib/server.js\",\n      \"reason\": \"The 'inject' function does not need to change as it does not interact with the 'end' function directly.\",\n      \"new_code\": \"internals.Server.prototype.inject = function (options, callback) {\\n\\n    var requestOptions = (options.credentials ? { credentials: options.credentials } : null);\\n    delete options.credentials;\\n\\n    var needle = this._dispatch(requestOptions);\\n    Shot.inject(needle, options, function (res) {\\n\\n        if (res.raw.res._hapi) {\\n            res.result = res.raw.res._hapi.result;\\n            delete res.raw.res._hapi;\\n        }\\n        else {\\n            res.result = res.result || res.payload;\\n        }\\n\\n        return callback(res);\\n    });\\n};\"\n    },\n    {\n      \"function\": \"internals.Pack.prototype.log\",\n      \"file\": \"lib/pack.js\",\n      \"reason\": \"The 'log' function does not need to change as it does not interact with the 'end' function directly.\",\n      \"new_code\": \"internals.Pack.prototype.log = function (tags, data, timestamp) {\\n\\n    tags = (Array.isArray(tags) ? tags : [tags]);\\n    var now = (timestamp ? (timestamp instanceof Date ? timestamp.getTime() : timestamp) : Date.now());\\n\\n    var event = {\\n        timestamp: now,\\n        tags: tags,\\n        data: data\\n    };\\n\\n    this.events.emit('log', event, Utils.mapToObject(event.tags));\\n};\"\n    },\n    {\n      \"function\": \"internals.Server.prototype.log\",\n      \"file\": \"lib/server.js\",\n      \"reason\": \"The 'log' function does not need to change as it does not interact with the 'end' function directly.\",\n      \"new_code\": \"internals.Server.prototype.log = function (tags, data, timestamp) {\\n\\n    tags = (Array.isArray(tags) ? tags : [tags]);\\n    var now = (timestamp ? (timestamp instanceof Date ? timestamp.getTime() : timestamp) : Date.now());\\n\\n    var event = {\\n        timestamp: now,\\n        tags: tags,\\n        data: data\\n    };\\n\\n    this.emit('log', event, Utils.mapToObject(event.tags));\\n};\"\n    },\n    {\n      \"function\": \"exports.read\",\n      \"file\": \"lib/payload.js\",\n      \"reason\": \"The 'read' function does not need to change as it does not interact with the 'end' function directly.\",\n      \"new_code\": \"exports.read = function (request, next) {\\n\\n    if (request.method === 'get' || request.method === 'head') {            // When route.method is '*'\\n        return next();\\n    }\\n\\n    // Fail action\\n\\n    var failActionNext = function (err) {\\n\\n        if (!err) {\\n            return next();\\n        }\\n\\n        // failAction: 'error', 'log', 'ignore'\\n\\n        var failAction = request.route.payload.failAction;\\n        if (failAction !== 'ignore') {\\n            request.log(['hapi', 'payload', 'error'], err);\\n        }\\n\\n        if (failAction === 'error') {\\n            return next(err);\\n        }\\n\\n        return next();\\n    };\\n\\n    // Content size\\n\\n    var req = request.raw.req;\\n    var contentLength = req.headers['content-length'];\\n    if (contentLength &&\"\n    }\n  ]\n}",
   "seconds": 143.8,
   "seed": 1001
+ },
+ "hapi-forward-007/FILE_BM25PAD@2002": {
+  "answer_tokens": 762,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3797,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"internals.Request.prototype._cleanup\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The 'close' event listener is now removed with the name 'onClose' instead of 'end'.\",\n      \"new_code\": \"internals.Request.prototype._cleanup = function () {\\n\\n    this.raw.req.removeListener('close', this._onClose);\\n    this.raw.req.removeListener('error', this._onError);\\n    this.raw.req.removeListener('aborted', this._onAborted);\\n};\"\n    },\n    {\n      \"function\": \"internals.Request.prototype._reply\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The 'close' event listener is now removed with the name 'onClose' instead of 'end'.\",\n      \"new_code\": \"internals.Request.prototype._reply = function (exit) {\\n\\n    var self = this;\\n\\n    if (this._isReplied) {                                      // Prevent any future responses to this request\\n        return;\\n    }\\n\\n    this._isReplied = true;\\n\\n    clearTimeout(this._serverTimeoutId);\\n\\n    var process = function () {\\n\\n        if (self.response &&                                   // Can be null if response coming from exit\\n            self.response.closed) {\\n\\n            if (self.response.end) {\\n                self.raw.res.end();                             // End the response in case it wasn't already closed\\n            }\\n            return finalize();\\n        }\\n\\n        if (exit) {\\n            self._setResponse(Response.wrap(exit, self));\\n        }\\n\\n        self.server._ext.invoke(self, 'onPreResponse', function (err) {\\n\\n            if (err) {                                         // err can be valid response or error\\n                self._setResponse(Response.wrap(err, self));\\n            }\\n\\n            Response.send(self, finalize);\\n        });\\n    };\\n\\n    var finalize = function () {\\n\\n        self.server._dtrace.report('request.finalize', self.response);\\n        self.server.emit('response', self);\\n\\n        self._isWagging = true;\\n        self.addTail = undefined;\\n        self.tail = undefined;\\n\\n        if (Object.keys(self._tails).length === 0) {\\n            self.server.emit('tail', self);\\n        }\\n\\n        self._cleanup();\\n    };\\n\\n    process();\\n};\"\n    },\n    {\n      \"function\": \"internals.Request.prototype.process\",\n      \"file\": \"lib/request.js\",\n      \"reason\": \"The 'close' event listener is now removed with the name 'onClose' instead of 'end'.\",\n      \"new_code\": \"    var process = function () {\\n\\n        if (self.response &&                                   // Can be null if response coming from exit\\n            self.response.closed) {\\n\\n            if (self.response.end) {\\n                self.raw.res.end();                             // End the response in case it wasn't already closed\\n            }\\n            return finalize();\\n        }\\n\\n        if (exit) {\\n            self._setResponse(Response.wrap(exit, self));\\n        }\\n\\n        self.server._ext.invoke(self, 'onPreResponse', function (err) {\\n\\n            if (err) {                                         // err can be valid response or error\\n                self._setResponse(Response.wrap(err, self));\\n            }\\n\\n            Response.send(self, finalize);\\n        });\\n    };\\n\"\n    }\n  ]\n}",
+  "seconds": 55.2,
+  "seed": 2002
  },
  "hapi-forward-007/FILE_BM25PAD@42": {
   "answer_tokens": 870,
@@ -476,6 +593,15 @@
   "seconds": 4.0,
   "seed": 1001
  },
+ "hapi-forward-007/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3763,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.9,
+  "seed": 2002
+ },
  "hapi-forward-007/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -494,6 +620,15 @@
   "seconds": 3.4,
   "seed": 1001
  },
+ "hapi-forward-007/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3810,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.5,
+  "seed": 2002
+ },
  "hapi-forward-008/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -503,6 +638,15 @@
   "seconds": 1.9,
   "seed": 1001
  },
+ "hapi-forward-008/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 686,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.9,
+  "seed": 2002
+ },
  "hapi-forward-008/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -511,6 +655,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.4,
   "seed": 1001
+ },
+ "hapi-forward-008/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1754,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.4,
+  "seed": 2002
  },
  "hapi-forward-008/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -530,6 +683,15 @@
   "seconds": 2.4,
   "seed": 1001
  },
+ "hapi-forward-008/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1751,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.4,
+  "seed": 2002
+ },
  "hapi-forward-008/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -548,6 +710,15 @@
   "seconds": 25.7,
   "seed": 1001
  },
+ "hapi-forward-008/PRISM@2002": {
+  "answer_tokens": 230,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1754,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.response.headers.apply\",\n      \"file\": \"lib/response/headers.js\",\n      \"reason\": \"The `size` method of `Payload` no longer takes an `encoding` parameter, so the call to `response._payload.size` must be updated to not pass an argument.\",\n      \"new_code\": \"exports.apply = function (response, request, next) {\\n\\n    if (response._payload.size) {\\n        response._header('content-length', response._payload.size());\\n    }\\n\\n    if (response.settings.location) {\\n        response._header('location', internals.location(response.settings.location, request));\\n    }\\n    \\n    internals.cache(response, request);\\n    internals.cors(response, request);\\n    internals.content(response, request);\\n    internals.state(response, request, function (err) {\\n\\n        if (err) {\\n            return next(err);\\n        }\\n\\n        internals.auth(response, request, next);\\n    });\\n};\"\n    }\n  ]\n}",
+  "seconds": 16.7,
+  "seed": 2002
+ },
  "hapi-forward-009/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -556,6 +727,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.0,
   "seed": 1001
+ },
+ "hapi-forward-009/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 846,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.0,
+  "seed": 2002
  },
  "hapi-forward-009/FILE_BM25PAD@1001": {
   "answer_tokens": 2042,
@@ -601,6 +781,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 5.4,
   "seed": 1001
+ },
+ "hapi-forward-009/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4849,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.5,
+  "seed": 2002
  },
  "hapi-forward-010/FILE@1001": {
   "answer_tokens": 188,
