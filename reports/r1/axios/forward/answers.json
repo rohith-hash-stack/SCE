@@ -953,6 +953,15 @@
   "seconds": 75.9,
   "seed": 1001
  },
+ "axios-forward-011/FILE_GREPPAD@2002": {
+  "answer_tokens": 1298,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 4031,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"visit\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `visit` function in `lib/core/AxiosError.js` needs to be updated to use a `Set` for tracking visited objects instead of an array.\",\n      \"new_code\": \"const visit = (source) => {\\n  if (source === null || typeof source !== 'object') return source;\\n  if (utils.isBuffer(source)) return source;\\n  if (visited.has(source)) return undefined;\\n\\n  if (source instanceof AxiosHeaders) {\\n    source = source.toJSON();\\n  }\\n\\n  visited.add(source);\\n\\n  let result;\\n  if (utils.isArray(source)) {\\n    result = [];\\n    source.forEach((v, i) => {\\n      const reducedValue = visit(v);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[i] = reducedValue;\\n      }\\n    });\\n  } else {\\n    if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n      visited.delete(source);\\n      return source;\\n    }\\n\\n    result = Object.create(null);\\n    for (const [key, value] of Object.entries(source)) {\\n      const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[key] = reducedValue;\\n      }\\n    }\\n  }\\n\\n  visited.delete(source);\\n  return result;\\n};\"\n    },\n    {\n      \"function\": \"redactConfig\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `redactConfig` function in `lib/core/AxiosError.js` needs to be updated to use a `Set` for tracking visited objects instead of an array.\",\n      \"new_code\": \"function redactConfig(config, redactKeys) {\\n  const lowerKeys = new Set(redactKeys.map((k) => String(k).toLowerCase()));\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (source === null || typeof source !== 'object') return source;\\n    if (utils.isBuffer(source)) return source;\\n    if (visited.has(source)) return undefined;\\n\\n    if (source instanceof AxiosHeaders) {\\n      source = source.toJSON();\\n    }\\n\\n    visited.add(source);\\n\\n    let result;\\n    if (utils.isArray(source)) {\\n      result = [];\\n      source.forEach((v, i) => {\\n        const reducedValue = visit(v);\\n        if (!utils.isUndefined(reducedValue)) {\\n          result[i] = reducedValue;\\n        }\\n      });\\n    } else {\\n      if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n        visited.delete(source);\\n        return source;\\n      }\\n\\n      result = Object.create(null);\\n      for (const [key, value] of Object.entries(source)) {\\n        const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n        if (!utils.isUndefined(reducedValue)) {\\n          result[key] = reducedValue;\\n        }\\n      }\\n    }\\n\\n    visited.delete(source);\\n    return result;\\n  };\\n\\n  return visit(config);\\n}\"\n    },\n    {\n      \"function\": \"toFormData\",\n      \"file\": \"lib/helpers/toFormData.js\",\n      \"reason\": \"The `toFormData` function in `lib/helpers/toFormData.js` needs to be updated to use a `Set` for tracking visited objects instead of an array.\",\n      \"new_code\": \"function toFormData(obj, formData, options) {\\n  if (!utils.isObject(obj)) {\\n    throw new TypeError('target must be an object');\\n  }\\n\\n  // eslint-disable-next-line no-param-reassign\\n  formData = formData || new (PlatformFormData || FormData)();\\n\\n  // eslint-disable-next-line no-param-reassign\\n  options = utils.toFlatObject(\\n    options,\\n    {\\n      metaTokens: true,\\n      dots: false,\\n      indexes: false,\\n    },\\n    false,\\n    function defined(option, source) {\\n      // eslint-disable-next-line no-eq-null,eqeqeq\\n      return !utils.isUndefined(source[option]);\\n    }\\n  );\\n\\n  const metaTokens = options.metaTokens;\\n  // eslint-disable-next-line no-use-before-define\\n  const visitor = options.visitor || defaultVisitor;\\n  const dots = options.dots;\\n  const indexes = options.indexes;\\n  const _Blob = options.Blob || (typeof Blob !== 'undefined' && Blob);\\n  const maxDepth = options.maxDepth === undefined ? 100 : options.maxDepth;\\n  const useBlob = _Blob && utils.isSpecCompliantForm(formData);\\n  const visited = new Set();\\n\\n  if (!utils.isFunction(visitor)) {\\n    throw new TypeError('visitor must be a function');\\n  }\\n\\n  function convertValue(value) {\\n    if (value === null) return '';\\n\\n    if (utils.isDate(value)) {\\n      return value.toISOString();\\n    }\\n\\n    if (utils.isBoolean(value)) {\\n      return value.toString();\\n    }\\n\\n    if (!useBlob && utils.isBlob(value)) {\\n      throw new AxiosError('Blob is not supported. Use a Buffer instead.');\\n    }\\n\\n    if (utils.isArrayBuffer(value) || utils.isTypedArray(value)) {\\n      return useBlob && typeof Blob === 'function' ? new Blob([value]) : Buffer.from(value);\\n    }\\n\\n    return value;\\n  }\\n\\n  /**\\n   * Default visitor.\\n   */\"\n    }\n  ]\n}",
+  "seconds": 92.4,
+  "seed": 2002
+ },
  "axios-forward-011/FILE_GREPPAD@42": {
   "answer_tokens": 1517,
   "done_reason": "stop",
@@ -989,6 +998,15 @@
   "seconds": 2.6,
   "seed": 1001
  },
+ "axios-forward-012/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 989,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 2002
+ },
  "axios-forward-012/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -997,6 +1015,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 4.1,
   "seed": 1001
+ },
+ "axios-forward-012/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3573,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.1,
+  "seed": 2002
  },
  "axios-forward-012/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -1016,6 +1043,15 @@
   "seconds": 4.0,
   "seed": 1001
  },
+ "axios-forward-012/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3419,
+  "raw": "{\"changes\": []}",
+  "seconds": 4.0,
+  "seed": 2002
+ },
  "axios-forward-012/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -1033,5 +1069,14 @@
   "raw": "{\"changes\": []}",
   "seconds": 3.7,
   "seed": 1001
+ },
+ "axios-forward-012/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3578,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.8,
+  "seed": 2002
  }
 }
