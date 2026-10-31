@@ -476,6 +476,15 @@
   "seconds": 51.0,
   "seed": 1001
  },
+ "mocha-forward-006/FILE_BM25PAD@2002": {
+  "answer_tokens": 726,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3395,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"exports.requireOrImport\",\n      \"file\": \"lib/nodejs/esm-utils.js\",\n      \"reason\": \"The function now accepts an additional 'esmDecorator' parameter, which must be passed to the 'formattedImport' function.\",\n      \"new_code\": \"exports.requireOrImport = async (file, esmDecorator = forward) => {\\n  if (path.extname(file) === '.mjs') {\\n    return formattedImport(file, esmDecorator);\\n  }\\n  try {\\n    return dealWithExports(await formattedImport(file, esmDecorator));\\n  } catch (err) {\\n    if (\\n      err.code === 'ERR_MODULE_NOT_FOUND' ||\\n      err.code === 'ERR_UNKNOWN_FILE_EXTENSION' ||\\n      err.code === 'ERR_UNSUPPORTED_DIR_IMPORT'\\n    ) {\\n      try {\\n        // Importing a file usually works, but the resolution of `import` is the ESM\\n        // resolution algorithm, and not the CJS resolution algorithm. We may have\\n        // failed because we tried the ESM resolution, so we try to `require` it.\\n        return require(file);\\n      } catch (requireErr) {\\n        if (\\n          requireErr.code === 'ERR_REQUIRE_ESM' ||\\n          (requireErr instanceof SyntaxError &&\\n            requireErr\\n              .toString()\\n              .includes('Cannot use import statement outside a module'))\\n        ) {\\n          // ERR_REQUIRE_ESM happens when the test file is a JS file, but via type:module is actually ESM,\\n          // AND has an import to a file that doesn't exist.\\n          // This throws an `ERR_MODULE_NOT_FOUND` error above,\\n          // and when we try to `require` it here, it throws an `ERR_REQUIRE_ESM`.\\n          // What we want to do is throw the original error (the `ERR_MODULE_NOT_FOUND`),\\n          // and not the `ERR_REQUIRE_ESM` error, which is a red herring.\\n          //\\n          // SyntaxError happens when in an edge case: when we're using an ESM loader that loads\\n          // a `test.ts` file (i.e. unrecognized extension), and that file includes an unknown\\n          // import (which throws an ERR_MODULE_NOT_FOUND). `require`-ing it will throw the\\n          // syntax error, because we cannot require a file that has `import`-s.\\n          throw err;\\n        } else {\\n          throw requireErr;\\n        }\\n      }\\n    } else {\\n      throw err;\\n    }\\n  }\\n};\"\n    },\n    {\n      \"function\": \"exports.loadFilesAsync\",\n      \"file\": \"lib/nodejs/esm-utils.js\",\n      \"reason\": \"The function now calls 'exports.requireOrImport' with an additional 'esmDecorator' parameter, which must be passed to the 'formattedImport' function.\",\n      \"new_code\": \"exports.loadFilesAsync = async (files, preLoadFunc, postLoadFunc, esmDecorator = forward) => {\\n  for (const file of files) {\\n    preLoadFunc(file);\\n    const result = await exports.requireOrImport(path.resolve(file), esmDecorator);\\n    postLoadFunc(file, result);\\n  }\\n};\"\n    }\n  ]\n}",
+  "seconds": 52.2,
+  "seed": 2002
+ },
  "mocha-forward-006/FILE_BM25PAD@42": {
   "answer_tokens": 712,
   "done_reason": "stop",
@@ -493,6 +502,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"exports.requireOrImport\",\n      \"file\": \"lib/nodejs/esm-utils.js\",\n      \"reason\": \"The function now accepts an additional `esmDecorator` parameter which must be passed to `formattedImport`.\",\n      \"new_code\": \"exports.requireOrImport = async (file, esmDecorator = forward) => {\\n  if (path.extname(file) === '.mjs') {\\n    return formattedImport(file, esmDecorator);\\n  }\\n  try {\\n    return dealWithExports(await formattedImport(file, esmDecorator));\\n  } catch (err) {\\n    if (\\n      err.code === 'ERR_MODULE_NOT_FOUND' ||\\n      err.code === 'ERR_UNKNOWN_FILE_EXTENSION' ||\\n      err.code === 'ERR_UNSUPPORTED_DIR_IMPORT'\\n    ) {\\n      try {\\n        // Importing a file usually works, but the resolution of `import` is the ESM\\n        // resolution algorithm, and not the CJS resolution algorithm. We may have\\n        // failed because we tried the ESM resolution, so we try to `require` it.\\n        return require(file);\\n      } catch (requireErr) {\\n        if (\\n          requireErr.code === 'ERR_REQUIRE_ESM' ||\\n          (requireErr instanceof SyntaxError &&\\n            requireErr\\n              .toString()\\n              .includes('Cannot use import statement outside a module'))\\n        ) {\\n          // ERR_REQUIRE_ESM happens when the test file is a JS file, but via type:module is actually ESM,\\n          // AND has an import to a file that doesn't exist.\\n          // This throws an `ERR_MODULE_NOT_FOUND` error above,\\n          // and when we try to `require` it here, it throws an `ERR_REQUIRE_ESM`.\\n          // What we want to do is throw the original error (the `ERR_MODULE_NOT_FOUND`),\\n          // and not the `ERR_REQUIRE_ESM` error, which is a red herring.\\n          //\\n          // SyntaxError happens when in an edge case: when we're using an ESM loader that loads\\n          // a `test.ts` file (i.e. unrecognized extension), and that file includes an unknown\\n          // import (which throws an ERR_MODULE_NOT_FOUND). `require`-ing it will throw the\\n          // syntax error, because we cannot require a file that has `import`-s.\\n          throw err;\\n        } else {\\n          throw requireErr;\\n        }\\n      }\\n    } else {\\n      throw err;\\n    }\\n  }\\n};\"\n    }\n  ]\n}",
   "seconds": 42.0,
   "seed": 1001
+ },
+ "mocha-forward-006/FILE_GREPPAD@2002": {
+  "answer_tokens": 576,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3421,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"exports.requireOrImport\",\n      \"file\": \"lib/nodejs/esm-utils.js\",\n      \"reason\": \"The `formattedImport` function now takes an additional `esmDecorator` parameter, so `exports.requireOrImport` must be updated to pass this parameter.\",\n      \"new_code\": \"exports.requireOrImport = async file => {\\n  if (path.extname(file) === '.mjs') {\\n    return formattedImport(file, forward);\\n  }\\n  try {\\n    return dealWithExports(await formattedImport(file, forward));\\n  } catch (err) {\\n    if (\\n      err.code === 'ERR_MODULE_NOT_FOUND' ||\\n      err.code === 'ERR_UNKNOWN_FILE_EXTENSION' ||\\n      err.code === 'ERR_UNSUPPORTED_DIR_IMPORT'\\n    ) {\\n      try {\\n        // Importing a file usually works, but the resolution of `import` is the ESM\\n        // resolution algorithm, and not the CJS resolution algorithm. We may have\\n        // failed because we tried the ESM resolution, so we try to `require` it.\\n        return require(file);\\n      } catch (requireErr) {\\n        if (\\n          requireErr.code === 'ERR_REQUIRE_ESM' ||\\n          (requireErr instanceof SyntaxError &&\\n            requireErr\\n              .toString()\\n              .includes('Cannot use import statement outside a module'))\\n        ) {\\n          // ERR_REQUIRE_ESM happens when the test file is a JS file, but via type:module is actually ESM,\\n          // AND has an import to a file that doesn't exist.\\n          // This throws an `ERR_MODULE_NOT_FOUND` error above,\\n          // and when we try to `require` it here, it throws an `ERR_REQUIRE_ESM`.\\n          // What we want to do is throw the original error (the `ERR_MODULE_NOT_FOUND`),\\n          // and not the `ERR_REQUIRE_ESM` error, which is a red herring.\\n          //\\n          // SyntaxError happens when in an edge case: when we're using an ESM loader that loads\\n          // a `test.ts` file (i.e. unrecognized extension), and that file includes an unknown\\n          // import (which throws an ERR_MODULE_NOT_FOUND). `require`-ing it will throw the\\n          // syntax error, because we cannot require a file that has `import`-s.\\n          throw err;\\n        } else {\\n          throw requireErr;\\n        }\\n      }\\n    } else {\\n      throw err;\\n    }\\n  }\\n};\"\n    }\n  ]\n}",
+  "seconds": 42.1,
+  "seed": 2002
  },
  "mocha-forward-006/FILE_GREPPAD@42": {
   "answer_tokens": 710,
@@ -530,6 +548,15 @@
   "seconds": 51.9,
   "seed": 1001
  },
+ "mocha-forward-007/FILE@2002": {
+  "answer_tokens": 764,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2110,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"inlineDiff\",\n      \"file\": \"lib/reporters/base.js\",\n      \"reason\": \"The function signature has changed to remove the 'escape' parameter, so any calls to this function must be updated to remove the second argument.\",\n      \"new_code\": \"function inlineDiff (err) {\\n  var msg = errorDiff(err);\\n\\n  // linenos\\n  var lines = msg.split('\\\\n');\\n  if (lines.length > 4) {\\n    var width = String(lines.length).length;\\n    msg = lines.map(function (str, i) {\\n      return pad(++i, width) + ' |' + ' ' + str;\\n    }).join('\\\\n');\\n  }\\n\\n  // legend\\n  msg = '\\\\n' +\\n    color('diff removed', 'actual') +\\n    ' ' +\\n    color('diff added', 'expected') +\\n    '\\\\n\\\\n' +\\n    msg +\\n    '\\\\n';\\n\\n  // indent\\n  msg = msg.replace(/^/gm, '      ');\\n  return msg;\\n}\"\n    },\n    {\n      \"function\": \"unifiedDiff\",\n      \"file\": \"lib/reporters/base.js\",\n      \"reason\": \"The function signature has changed to remove the 'escape' parameter, so any calls to this function must be updated to remove the second argument.\",\n      \"new_code\": \"function unifiedDiff (err) {\\n  var indent = '      ';\\n  function cleanUp (line) {\\n    line = escapeInvisibles(line);\\n    if (line[0] === '+') {\\n      return indent + colorLines('diff added', line);\\n    }\\n    if (line[0] === '-') {\\n      return indent + colorLines('diff removed', line);\\n    }\\n    if (line.match(/@@/)) {\\n      return '--';\\n    }\\n    if (line.match(/\\\\\\\\ No newline/)) {\\n      return null;\\n    }\\n    return indent + line;\\n  }\\n  function notBlank (line) {\\n    return typeof line !== 'undefined' && line !== null;\\n  }\\n  var msg = diff.createPatch('string', err.actual, err.expected);\\n  var lines = msg.split('\\\\n').splice(5);\\n  return '\\\\n      ' +\\n    colorLines('diff added', '+ expected') + ' ' +\\n    colorLines('diff removed', '- actual') +\\n    '\\\\n\\\\n' +\\n    lines.map(cleanUp).filter(notBlank).join('\\\\n');\\n}\"\n    },\n    {\n      \"function\": \"errorDiff\",\n      \"file\": \"lib/reporters/base.js\",\n      \"reason\": \"The function signature has changed to remove the 'escape' parameter, so any calls to this function must be updated to remove the third argument.\",\n      \"new_code\": \"function errorDiff (err, type) {\\n  var actual = escapeInvisibles(err.actual);\\n  var expected = escapeInvisibles(err.expected);\\n  return diff['diff' + type](actual, expected).map(function (str) {\\n    if (str.added) {\\n      return colorLines('diff added', str.value);\\n    }\\n    if (str.removed) {\\n      return colorLines('diff removed', str.value);\\n    }\\n    return str.value;\\n  }).join('');\\n}\"\n    }\n  ]\n}",
+  "seconds": 53.2,
+  "seed": 2002
+ },
  "mocha-forward-007/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -538,6 +565,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 3.4,
   "seed": 1001
+ },
+ "mocha-forward-007/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3808,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.0,
+  "seed": 2002
  },
  "mocha-forward-007/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -557,6 +593,15 @@
   "seconds": 44.5,
   "seed": 1001
  },
+ "mocha-forward-007/FILE_GREPPAD@2002": {
+  "answer_tokens": 598,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3643,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"exports.list\",\n      \"file\": \"lib/reporters/base.js\",\n      \"reason\": \"The `inlineDiff` function signature has changed, removing the `escape` parameter.\",\n      \"new_code\": \"exports.list = function (failures) {\\n  console.log();\\n  failures.forEach(function (test, i) {\\n    // format\\n    var fmt = color('error title', '  %s) %s:\\n') +\\n      color('error message', '     %s') +\\n      color('error stack', '\\n%s\\n');\\n\\n    // msg\\n    var msg;\\n    var err = test.err;\\n    var message;\\n    if (err.message && typeof err.message.toString === 'function') {\\n      message = err.message + '';\\n    } else if (typeof err.inspect === 'function') {\\n      message = err.inspect() + '';\\n    } else {\\n      message = '';\\n    }\\n    var stack = err.stack || message;\\n    var index = message ? stack.indexOf(message) : -1;\\n    var actual = err.actual;\\n    var expected = err.expected;\\n    var escape = true;\\n\\n    if (index === -1) {\\n      msg = message;\\n    } else {\\n      index += message.length;\\n      msg = stack.slice(0, index);\\n      // remove msg from stack\\n      stack = stack.slice(index + 1);\\n    }\\n\\n    // uncaught\\n    if (err.uncaught) {\\n      msg = 'Uncaught ' + msg;\\n    }\\n    // explicitly show diff\\n    if (err.showDiff !== false && sameType(actual, expected) && expected !== undefined) {\\n      escape = false;\\n      if (!(utils.isString(actual) && utils.isString(expected))) {\\n        err.actual = actual = utils.stringify(actual);\\n        err.expected = expected = utils.stringify(expected);\\n      }\\n\\n      fmt = color('error title', '  %s) %s:\\n%s') + color('error stack', '\\n%s\\n');\\n      var match = message.match(/^([^:]+): expected/);\\n      msg = '\\n      ' + color('error message', match ? match[1] : msg);\\n\\n      if (exports.inlineDiffs) {\\n        msg += inlineDiff(err);\\n      } else {\\n        msg += unifiedDiff(err, escape);\\n      }\\n    }\\n\\n    // indent stack trace\\n    stack = stack.replace(/^/gm, '  ');\\n\\n    console.log(fmt, (i + 1), test.title, msg, stack);\\n  });\\n};\"\n    }\n  ]\n}",
+  "seconds": 42.8,
+  "seed": 2002
+ },
  "mocha-forward-007/FILE_GREPPAD@42": {
   "answer_tokens": 623,
   "done_reason": "stop",
@@ -575,6 +620,15 @@
   "seconds": 51.0,
   "seed": 1001
  },
+ "mocha-forward-007/PRISM@2002": {
+  "answer_tokens": 112,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3808,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"exports.list\",\n      \"file\": \"lib/reporters/base.js\",\n      \"reason\": \"The `inlineDiff` function no longer accepts the `escape` parameter, so the call to `inlineDiff` in `exports.list` must be updated to remove this parameter.\",\n      \"new_code\": \"if (exports.inlineDiffs) {\\n  msg += inlineDiff(err);\\n} else {\\n  msg += unifiedDiff(err, escape);\\n}\"\n    }\n  ]\n}",
+  "seconds": 10.2,
+  "seed": 2002
+ },
  "mocha-forward-008/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -584,6 +638,15 @@
   "seconds": 2.3,
   "seed": 1001
  },
+ "mocha-forward-008/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 911,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.2,
+  "seed": 2002
+ },
  "mocha-forward-008/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -592,6 +655,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.4,
   "seed": 1001
+ },
+ "mocha-forward-008/FILE_BM25PAD@2002": {
+  "answer_tokens": 2021,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2026,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Test.prototype.run\",\n      \"file\": \"lib/test.js\",\n      \"reason\": \"The new implementation of `Test.prototype.run` includes a try-catch block to handle synchronous errors. Other functions that call `Test.prototype.run` should also include error handling to maintain consistency.\",\n      \"new_code\": \"Test.prototype.run = function(fn){\\n  var timer\\n    , self = this\\n    , ms = this._timeout\\n    , start = new Date;\\n\\n  // timeout\\n  if (this.async) {\\n    timer = setTimeout(function(){\\n      fn(new Error('timeout of ' + ms + 'ms exceeded'));\\n    }, ms);\\n  }\\n\\n  // async\\n  if (this.async) {\\n    try {\\n      this.fn(function(err){\\n        clearTimeout(timer);\\n        self.duration = new Date - start;\\n        fn(err);\\n        self.finished = true;\\n      });\\n    } catch (err) {\\n      clearTimeout(timer);\\n      fn(err);\\n      this.finished = true;\\n    }\\n    return;\\n  }\\n  \\n  // sync\\n  try {\\n    if (!this.pending) this.fn();\\n    this.duration = new Date - start;\\n    fn();\\n  } catch (err) {\\n    fn(err);\\n  }\\n};\"\n    },\n    {\n      \"function\": \"mocha.run#2\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The new implementation of `Test.prototype.run` includes a try-catch block to handle synchronous errors. Other functions that call `Test.prototype.run` should also include error handling to maintain consistency.\",\n      \"new_code\": \"Test.prototype.run = function(fn){\\n  var timer\\n    , self = this\\n    , ms = this._timeout\\n    , start = new Date;\\n\\n  // timeout\\n  if (this.async) {\\n    timer = setTimeout(function(){\\n      fn(new Error('timeout of ' + ms + 'ms exceeded'));\\n    }, ms);\\n  }\\n\\n  // async\\n  if (this.async) {\\n    try {\\n      this.fn(function(err){\\n        clearTimeout(timer);\\n        self.duration = new Date - start;\\n        fn(err);\\n        self.finished = true;\\n      });\\n    } catch (err) {\\n      clearTimeout(timer);\\n      fn(err);\\n      this.finished = true;\\n    }\\n    return;\\n  }\\n  \\n  // sync\\n  try {\\n    if (!this.pending) this.fn();\\n    this.duration = new Date - start;\\n    fn();\\n  } catch (err) {\\n    fn(err);\\n  }\\n};\"\n    },\n    {\n      \"function\": \"mocha.next\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The new implementation of `Test.prototype.run` includes a try-catch block to handle synchronous errors. Other functions that call `Test.prototype.run` should also include error handling to maintain consistency.\",\n      \"new_code\": \"function next(i) {\\n  var callback = callbacks[i];\\n  if (!callback) return fn();\\n\\n  // async\\n  if (1 == callback.length) {\\n    // timeout\\n    timer = setTimeout(function(){\\n      fn(new Error('timeout of ' + ms + 'ms exceeded'));\\n    }, ms);\\n\\n    // async\\n    try {\\n      callback(function(err){\\n        clearTimeout(timer);\\n        if (err) return fn(err);\\n        next(++i);\\n      });\\n    } catch (err) {\\n      fn(err);\\n    }\\n    return;\\n  }\\n\\n  // serial\\n  try {\\n    callback();\\n    process.nextTick(function(){\\n      next(++i);\\n    });\\n  } catch (err) {\\n    fn(err);\\n  }\\n}\"\n    },\n    {\n      \"function\": \"lib.runner.next\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new implementation of `Test.prototype.run` includes a try-catch block to handle synchronous errors. Other functions that call `Test.prototype.run` should also include error handling to maintain consistency.\",\n      \"new_code\": \"function next(i) {\\n  var callback = callbacks[i];\\n  if (!callback) return fn();\\n\\n  // async\\n  if (1 == callback.length) {\\n    // timeout\\n    timer = setTimeout(function(){\\n      fn(new Error('timeout of ' + ms + 'ms exceeded'));\\n    }, ms);\\n\\n    // async\\n    try {\\n      callback(function(err){\\n        clearTimeout(timer);\\n        if (err) return fn(err);\\n        next(++i);\\n      });\\n    } catch (err) {\\n      fn(err);\\n    }\\n    return;\\n  }\\n\\n  // serial\\n  try {\\n    callback();\\n    process.nextTick(function(){\\n      next(++i);\\n    });\\n  } catch (err) {\\n    fn(err);\\n  }\\n}\"\n    },\n    {\n      \"function\": \"mocha.hook\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The new implementation of `Test.prototype.run` includes a try-catch block to handle synchronous errors. Other functions that call `Test.prototype.run` should also include error handling to maintain consistency.\",\n      \"new_code\": \"Runner.prototype.hook = function(name, fn){\\n  var suite = this.suite\\n    , callbacks = suite[name + 'Callbacks']\\n    , ms = suite._timeout\\n    , timer;\\n\\n  function next(i) {\\n    var callback = callbacks[i];\\n    if (!callback) return fn();\\n\\n    // async\\n    if (1 == callback.length) {\\n      // timeout\\n      timer = setTimeout(function(){\\n        fn(new Error('timeout of ' + ms + 'ms exceeded'));\\n      }, ms);\\n\\n      // async\\n      try {\\n        callback(function(err){\\n          clearTimeout(timer);\\n          if (err) return fn(err);\\n          next(++i);\\n        });\\n      } catch (err) {\\n        fn(err);\\n      }\\n      return;\\n    }\\n\\n    // serial\\n    try {\\n      callback();\\n      process.nextTick(function(){\\n        next(++i);\\n      });\\n    } catch (err) {\\n      fn(err);\\n    }\\n  }\\n\\n  process.nextTick(function(){\\n    next(0);\\n  });\\n};\"\n    },\n    {\n      \"function\": \"lib.runner.hook\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new implementation of `Test.prototype.run` includes a try-catch block to handle synchronous errors. Other functions that call `Test.prototype.run` should also include error handling to maintain consistency.\",\n      \"new_code\": \"Runner.prototype.hook = function(name, fn){\\n  var suite = this.suite\\n    , callbacks = suite[name + 'Callbacks']\\n    , ms = suite._timeout\\n    , timer;\\n\\n  function next(i) {\\n    var callback = callbacks[i];\\n    if (!callback) return fn();\\n\\n    // async\\n    if (1 == callback.length) {\\n      // timeout\\n      timer = setTimeout(function(){\\n        fn(new Error('timeout of ' + ms + 'ms exceeded'));\\n      }, ms);\\n\\n      // async\\n      try {\\n        callback(function(err){\\n          clearTimeout(timer);\\n          if (err) return fn(err);\\n          next(++i);\\n        });\\n      } catch (err) {\\n        fn(err);\\n      }\\n      return;\\n    }\\n\\n    // serial\\n    try {\\n      callback();\\n      process.nextTick(function(){\\n        next(++i);\\n      });\\n    } catch (err) {\\n      fn(err);\\n    }\\n  }\\n\\n  process.nextTick(function(){\\n    next(0);\\n  });\\n};\"\n    },\n    {\n      \"function\": \"mocha.runTest\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The new implementation of `Test.prototype.run` includes a try-catch block to handle synchronous errors. Other functions that call `Test.prototype.run` should also include error handling to maintain consistency.\",\n      \"new_code\": \"Runner.prototype.runTest = function(fn){\\n  var test = this.test\\n    , self = this;\\n\\n  // async\\n  if (test.async) {\\n    try {\\n      test.run(function(err){\\n        if (test.finished) {\\n          self.fail(test, new Error('done() called multiple times'));\\n          return;\\n        }\\n        fn(err);\\n      });\\n    } catch (err) {\\n      fn(err);\\n    }\\n\\n    return;\\n  }\\n\\n  // sync  \\n  process.nextTick(function(){\\n    try {\\n      test.run();\\n      fn();\\n    } catch (err) {\\n      fn(err);\\n    }\\n  });\\n};\"\n    }\n  ]\n}",
+  "seconds": 136.0,
+  "seed": 2002
  },
  "mocha-forward-008/FILE_BM25PAD@42": {
   "answer_tokens": 1746,
@@ -611,6 +683,15 @@
   "seconds": 2.6,
   "seed": 1001
  },
+ "mocha-forward-008/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2096,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.7,
+  "seed": 2002
+ },
  "mocha-forward-008/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -629,6 +710,15 @@
   "seconds": 2.3,
   "seed": 1001
  },
+ "mocha-forward-008/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2119,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.3,
+  "seed": 2002
+ },
  "mocha-forward-009/FILE@1001": {
   "answer_tokens": 357,
   "done_reason": "stop",
@@ -638,6 +728,15 @@
   "seconds": 24.7,
   "seed": 1001
  },
+ "mocha-forward-009/FILE@2002": {
+  "answer_tokens": 165,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1192,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"exports.unparseNodeFlags\",\n      \"file\": \"lib/cli/node-flags.js\",\n      \"reason\": \"The new `isNodeFlag` function now accepts an optional `bareword` parameter, which may affect how flags are processed. The `unparseNodeFlags` function should be updated to handle this change appropriately.\",\n      \"new_code\": \"exports.unparseNodeFlags = opts => {\\n  var args = unparse(opts);\\n  return args.length\\n    ? args\\n        .join(' ')\\n        .split(/\\b/)\\n        .map(arg => (arg === ' ' ? '=' : arg))\\n        .join('')\\n    : [];\\n};\"\n    }\n  ]\n}",
+  "seconds": 12.6,
+  "seed": 2002
+ },
  "mocha-forward-009/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -646,6 +745,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.8,
   "seed": 1001
+ },
+ "mocha-forward-009/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2530,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.8,
+  "seed": 2002
  },
  "mocha-forward-009/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -665,6 +773,15 @@
   "seconds": 32.4,
   "seed": 1001
  },
+ "mocha-forward-009/FILE_GREPPAD@2002": {
+  "answer_tokens": 455,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2520,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"parse\",\n      \"file\": \"lib/cli/options.js\",\n      \"reason\": \"The new `isNodeFlag` function now takes an additional `bareword` parameter, which the `parse` function must pass.\",\n      \"new_code\": \"const parse = (args = [], ...configObjects) => {\\n  // save node-specific args for special handling.\\n  // 1. when these args have a \\\"=\\\" they should be considered to have values\\n  // 2. if they don't, they just boolean flags\\n  // 3. to avoid explicitly defining the set of them, we tell yargs-parser they\\n  //    are ALL boolean flags.\\n  // 4. we can then reapply the values after yargs-parser is done.\\n  const nodeArgs = (Array.isArray(args) ? args : args.split(' ')).reduce(\\n    (acc, arg) => {\\n      const pair = arg.split('=');\\n      const flag = pair[0].replace(/^--?/, '');\\n      if (isNodeFlag(flag, false)) {\\n        return arg.includes('=')\\n          ? acc.concat([[flag, pair[1]]])\\n          : acc.concat([[flag, true]]);\\n      }\\n      return acc;\\n    },\\n    []\\n  );\\n\\n  const result = yargsParser.detailed(args, {\\n    configuration,\\n    configObjects,\\n    coerce: coerceOpts,\\n    narg: nargOpts,\\n    alias: aliases,\\n    string: types.string,\\n    array: types.array,\\n    number: types.number,\\n    boolean: types.boolean.concat(nodeArgs.map(pair => pair[0]))\\n  });\\n  if (result.error) {\\n    throw createMissingArgumentError(result.error.message);\\n  }\\n\\n  // reapply \\\"=\\\" arg values from above\\n  nodeArgs.forEach(([key, value]) => {\\n    result.argv[key] = value;\\n  });\\n\\n  return result.argv;\\n};\"\n    }\n  ]\n}",
+  "seconds": 32.3,
+  "seed": 2002
+ },
  "mocha-forward-009/FILE_GREPPAD@42": {
   "answer_tokens": 457,
   "done_reason": "stop",
@@ -683,6 +800,15 @@
   "seconds": 31.7,
   "seed": 1001
  },
+ "mocha-forward-009/PRISM@2002": {
+  "answer_tokens": 471,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2536,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.cli.options.parse\",\n      \"file\": \"lib/cli/options.js\",\n      \"reason\": \"The new `isNodeFlag` function now accepts an additional `bareword` parameter, which affects how flags are processed. The `parse` function needs to be updated to handle this new parameter.\",\n      \"new_code\": \"const parse = (args = [], ...configObjects) => {\\n  // save node-specific args for special handling.\\n  // 1. when these args have a \\\"=\\\" they should be considered to have values\\n  // 2. if they don't, they just boolean flags\\n  // 3. to avoid explicitly defining the set of them, we tell yargs-parser they\\n  //    are ALL boolean flags.\\n  // 4. we can then reapply the values after yargs-parser is done.\\n  const nodeArgs = (Array.isArray(args) ? args : args.split(' ')).reduce(\\n    (acc, arg) => {\\n      const pair = arg.split('=');\\n      const flag = pair[0].replace(/^--?/, '');\\n      if (isNodeFlag(flag, false)) {\\n        return arg.includes('=')\\n          ? acc.concat([[flag, pair[1]]])\\n          : acc.concat([[flag, true]]);\\n      }\\n      return acc;\\n    },\\n    []\\n  );\\n\\n  const result = yargsParser.detailed(args, {\\n    configuration,\\n    configObjects,\\n    coerce: coerceOpts,\\n    narg: nargOpts,\\n    alias: aliases,\\n    string: types.string,\\n    array: types.array,\\n    number: types.number,\\n    boolean: types.boolean.concat(nodeArgs.map(pair => pair[0]))\\n  });\\n  if (result.error) {\\n    throw createMissingArgumentError(result.error.message);\\n  }\\n\\n  // reapply \\\"=\\\" arg values from above\\n  nodeArgs.forEach(([key, value]) => {\\n    result.argv[key] = value;\\n  });\\n\\n  return result.argv;\\n};\"\n    }\n  ]\n}",
+  "seconds": 33.2,
+  "seed": 2002
+ },
  "mocha-forward-010/FILE@1001": {
   "answer_tokens": 525,
   "done_reason": "stop",
@@ -692,6 +818,15 @@
   "seconds": 36.8,
   "seed": 1001
  },
+ "mocha-forward-010/FILE@2002": {
+  "answer_tokens": 350,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1934,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"exports.runMocha\",\n      \"file\": \"lib/cli/run-helpers.js\",\n      \"reason\": \"The new `handleRequires` function is now asynchronous and returns an array of hooks, which needs to be handled in `runMocha`.\",\n      \"new_code\": \"exports.runMocha = async (mocha, options) => {\\n  const {\\n    watch = false,\\n    extension = [],\\n    exit = false,\\n    ignore = [],\\n    file = [],\\n    recursive = false,\\n    sort = false,\\n    spec = [],\\n    watchFiles,\\n    watchIgnore\\n  } = options;\\n\\n  const fileCollectParams = {\\n    ignore,\\n    extension,\\n    file,\\n    recursive,\\n    sort,\\n    spec\\n  };\\n\\n  const hooks = await exports.handleRequires(options.require);\\n  mocha.suite.on('pre-require', (context, file, mocha) => {\\n    hooks.forEach(hook => {\\n      if (typeof hook === 'function') {\\n        hook(context, file, mocha);\\n      } else {\\n        Object.keys(hook).forEach(key => {\\n          context[key] = hook[key];\\n        });\\n      }\\n    });\\n  });\\n\\n  if (watch) {\\n    watchRun(mocha, {watchFiles, watchIgnore}, fileCollectParams);\\n  } else {\\n    await singleRun(mocha, {exit}, fileCollectParams);\\n  }\\n};\"\n    }\n  ]\n}",
+  "seconds": 25.5,
+  "seed": 2002
+ },
  "mocha-forward-010/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -700,6 +835,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.4,
   "seed": 1001
+ },
+ "mocha-forward-010/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3116,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 2002
  },
  "mocha-forward-010/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -719,6 +863,15 @@
   "seconds": 2.4,
   "seed": 1001
  },
+ "mocha-forward-010/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3041,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.4,
+  "seed": 2002
+ },
  "mocha-forward-010/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -737,6 +890,15 @@
   "seconds": 21.2,
   "seed": 1001
  },
+ "mocha-forward-010/PRISM@2002": {
+  "answer_tokens": 295,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3147,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.cli.run.builder\",\n      \"file\": \"lib/cli/run.js\",\n      \"reason\": \"The `handleRequires` function now returns an array of `mochaHooks`, which may need to be handled by the caller.\",\n      \"new_code\": \"exports.builder = yargs =>\\n  yargs\\n    .options({\\n      'allow-uncaught': {\\n        description: 'Allow uncaught errors to propagate',\\n        group: GROUPS.RULES\\n    # ... lines 51-280 not shown ...\\n      if (argv.opts) {\\n        throw createUnsupportedError(\\n          `--opts: configuring Mocha via 'mocha.opts' is DEPRECATED and no longer supported.\\n          Please use a configuration file instead.`\\n        );\\n      }\\n\\n      // load requires first, because it can impact \\\"plugin\\\" validation\\n      const mochaHooks = handleRequires(argv.require);\\n      validatePlugin(argv, 'reporter', Mocha.reporters);\\n      validatePlugin(argv, 'ui', Mocha.interfaces);\\n\\n      return { mochaHooks };\\n    })\\n    .array(types.array)\\n    .boolean(types.boolean)\\n    .string(types.string)\\n    # ... lines 298-299 not shown ...\"\n    }\n  ]\n}",
+  "seconds": 21.8,
+  "seed": 2002
+ },
  "mocha-forward-011/FILE@1001": {
   "answer_tokens": 115,
   "done_reason": "stop",
@@ -746,6 +908,15 @@
   "seconds": 11.3,
   "seed": 1001
  },
+ "mocha-forward-011/FILE@2002": {
+  "answer_tokens": 199,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2838,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner.prototype.hookDown\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The change in `lib.runner.next` affects how hooks are handled, specifically in the `hookDown` method where a new error is thrown when a hook is skipped.\",\n      \"new_code\": \"Runner.prototype.hookDown = function(name, fn) {\\n  var suites = [this.suite].concat(this.parents());\\n  this.hooks(name, suites, function(err, errSuite) {\\n    if (err && err.message === 'abort hookDown') {\\n      // Handle the specific error thrown when a hook is skipped\\n      self.emit(constants.EVENT_HOOK_END, hook);\\n      delete hook.ctx.currentTest;\\n      next(++i);\\n    } else {\\n      fn(err, errSuite);\\n    }\\n  });\\n};\"\n    }\n  ]\n}",
+  "seconds": 16.8,
+  "seed": 2002
+ },
  "mocha-forward-011/FILE_BM25PAD@1001": {
   "answer_tokens": 175,
   "done_reason": "stop",
@@ -754,6 +925,15 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner.prototype.hookDown\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The change in `lib.runner.next` introduces a new error handling mechanism for `beforeEach` hooks, which requires adjustments in `hookDown` to handle the new error correctly.\",\n      \"new_code\": \"Runner.prototype.hookDown = function(name, fn) {\\n  var suites = [this.suite].concat(this.parents());\\n  this.hooks(name, suites, function(err, errSuite) {\\n    if (err && err.message === 'abort hookDown') {\\n      // Handle the specific error introduced in the change\\n      return fn(err);\\n    }\\n    fn(err, errSuite);\\n  });\\n};\"\n    }\n  ]\n}",
   "seconds": 18.4,
   "seed": 1001
+ },
+ "mocha-forward-011/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6731,
+  "raw": "{\"changes\": []}",
+  "seconds": 6.5,
+  "seed": 2002
  },
  "mocha-forward-011/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -773,6 +953,15 @@
   "seconds": 6.7,
   "seed": 1001
  },
+ "mocha-forward-011/FILE_GREPPAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6852,
+  "raw": "{\"changes\": []}",
+  "seconds": 6.8,
+  "seed": 2002
+ },
  "mocha-forward-011/FILE_GREPPAD@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -791,6 +980,15 @@
   "seconds": 6.0,
   "seed": 1001
  },
+ "mocha-forward-011/PRISM@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 6864,
+  "raw": "{\"changes\": []}",
+  "seconds": 6.1,
+  "seed": 2002
+ },
  "mocha-forward-012/FILE@1001": {
   "answer_tokens": 298,
   "done_reason": "stop",
@@ -800,6 +998,15 @@
   "seconds": 23.2,
   "seed": 1001
  },
+ "mocha-forward-012/FILE@2002": {
+  "answer_tokens": 387,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2346,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The Mocha constructor now needs to accept an additional 'reporterOptions' parameter to pass options to the reporter.\",\n      \"new_code\": \"function Mocha(options) {\\n  options = options || {};\\n  this.files = [];\\n  this.options = options;\\n  this.grep(options.grep);\\n  this.suite = new exports.Suite('', new exports.Context);\\n  this.ui(options.ui);\\n  this.bail(options.bail);\\n  this.reporter(options.reporter, options.reporterOptions);\\n  if (null != options.timeout) this.timeout(options.timeout);\\n  this.useColors(options.useColors)\\n  if (options.enableTimeouts !== null) this.enableTimeouts(options.enableTimeouts);\\n  if (options.slow) this.slow(options.slow);\\n\\n  this.suite.on('pre-require', function (context) {\\n    exports.afterEach = context.afterEach || context.teardown;\\n    exports.after = context.after || context.suiteTeardown;\\n    exports.beforeEach = context.beforeEach || context.setup;\\n    exports.before = context.before || context.suiteSetup;\\n    exports.describe = context.describe || context.suite;\\n    exports.it = context.it || context.test;\\n    exports.setup = context.setup || context.beforeEach;\\n    exports.suiteSetup = context.suiteSetup || context.before;\\n    exports.suiteTeardown = context.suiteTeardown || context.after;\\n    exports.suite = context.suite || context.describe;\\n    exports.teardown = context.teardown || context.afterEach;\\n    exports.test = context.test || context.it;\\n  });\\n}\"\n    }\n  ]\n}",
+  "seconds": 29.0,
+  "seed": 2002
+ },
  "mocha-forward-012/FILE_BM25PAD@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -808,6 +1015,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.7,
   "seed": 1001
+ },
+ "mocha-forward-012/FILE_BM25PAD@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3765,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.8,
+  "seed": 2002
  },
  "mocha-forward-012/FILE_BM25PAD@42": {
   "answer_tokens": 6,
@@ -827,6 +1043,15 @@
   "seconds": 47.1,
   "seed": 1001
  },
+ "mocha-forward-012/FILE_GREPPAD@2002": {
+  "answer_tokens": 385,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3800,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha\",\n      \"file\": \"lib/mocha.js\",\n      \"reason\": \"The constructor now needs to pass `options.reporterOptions` to the `reporter` method.\",\n      \"new_code\": \"function Mocha(options) {\\n  options = options || {};\\n  this.files = [];\\n  this.options = options;\\n  this.grep(options.grep);\\n  this.suite = new exports.Suite('', new exports.Context);\\n  this.ui(options.ui);\\n  this.bail(options.bail);\\n  this.reporter(options.reporter, options.reporterOptions);\\n  if (null != options.timeout) this.timeout(options.timeout);\\n  this.useColors(options.useColors)\\n  if (options.enableTimeouts !== null) this.enableTimeouts(options.enableTimeouts);\\n  if (options.slow) this.slow(options.slow);\\n\\n  this.suite.on('pre-require', function (context) {\\n    exports.afterEach = context.afterEach || context.teardown;\\n    exports.after = context.after || context.suiteTeardown;\\n    exports.beforeEach = context.beforeEach || context.setup;\\n    exports.before = context.before || context.suiteSetup;\\n    exports.describe = context.describe || context.suite;\\n    exports.it = context.it || context.test;\\n    exports.setup = context.setup || context.beforeEach;\\n    exports.suiteSetup = context.suiteSetup || context.before;\\n    exports.suiteTeardown = context.suiteTeardown || context.after;\\n    exports.suite = context.suite || context.describe;\\n    exports.teardown = context.teardown || context.afterEach;\\n    exports.test = context.test || context.it;\\n  });\\n}\"\n    }\n  ]\n}",
+  "seconds": 28.4,
+  "seed": 2002
+ },
  "mocha-forward-012/FILE_GREPPAD@42": {
   "answer_tokens": 389,
   "done_reason": "stop",
@@ -845,6 +1070,15 @@
   "seconds": 27.9,
   "seed": 1001
  },
+ "mocha-forward-012/PRISM@2002": {
+  "answer_tokens": 379,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 3811,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The Mocha constructor now needs to pass reporterOptions to the reporter method.\",\n      \"new_code\": \"function Mocha(options) {\\n  options = options || {};\\n  this.files = [];\\n  this.options = options;\\n  this.grep(options.grep);\\n  this.suite = new exports.Suite('', new exports.Context);\\n  this.ui(options.ui);\\n  this.bail(options.bail);\\n  this.reporter(options.reporter, options.reporterOptions);\\n  if (null != options.timeout) this.timeout(options.timeout);\\n  this.useColors(options.useColors);\\n  if (options.enableTimeouts !== null) this.enableTimeouts(options.enableTimeouts);\\n  if (options.slow) this.slow(options.slow);\\n\\n  this.suite.on('pre-require', function (context) {\\n    exports.afterEach = context.afterEach || context.teardown;\\n    exports.after = context.after || context.suiteTeardown;\\n    exports.beforeEach = context.beforeEach || context.setup;\\n    exports.before = context.before || context.suiteSetup;\\n    exports.describe = context.describe || context.suite;\\n    exports.it = context.it || context.test;\\n    exports.setup = context.setup || context.beforeEach;\\n    exports.suiteSetup = context.suiteSetup || context.before;\\n    exports.suiteTeardown = context.suiteTeardown || context.after;\\n    exports.suite = context.suite || context.describe;\\n    exports.teardown = context.teardown || context.afterEach;\\n    exports.test = context.test || context.it;\\n  });\\n}\"\n    }\n  ]\n}",
+  "seconds": 28.0,
+  "seed": 2002
+ },
  "mocha-forward-013/FILE@1001": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -853,6 +1087,15 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.6,
   "seed": 1001
+ },
+ "mocha-forward-013/FILE@2002": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1171,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 2002
  },
  "mocha-forward-013/FILE_BM25PAD@1001": {
   "answer_tokens": 850,
