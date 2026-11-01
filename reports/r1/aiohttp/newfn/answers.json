@@ -1115,6 +1115,15 @@
   "seconds": 47.3,
   "seed": 1001
  },
+ "aiohttp-newfn-018/FILE_BM25PAD@2002": {
+  "answer_tokens": 523,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8249,
+  "raw": "{\n  \"code\": \"async def _resolve_host_with_throttle(\\n        self,\\n        key: Tuple[str, int],\\n        host: str,\\n        port: int,\\n        traces: Optional[List[\\\"Trace\\\"]],\\n    ) -> List[Dict[str, Any]]:\\n        if is_ip_address(host):\\n            return [\\n                {\\n                    \\\"hostname\\\": host,\\n                    \\\"host\\\": host,\\n                    \\\"port\\\": port,\\n                    \\\"family\\\": self._family,\\n                    \\\"proto\\\": 0,\\n                    \\\"flags\\\": 0,\\n                }\\n            ]\\n\\n        if not self._use_dns_cache:\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_start(host)\\n\\n            res = await self._resolver.resolve(host, port, family=self._family)\\n\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_resolvehost_end(host)\\n\\n            return res\\n\\n        if key in self._throttle_dns_events:\\n            # get event early, before any await (#4014)\\n            event = self._throttle_dns_events[key]\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_hit(host)\\n            await event.wait()\\n        else:\\n            # update dict early, before any await (#4014)\\n            self._throttle_dns_events[key] = EventResultOrError(self._loop)\\n            if traces:\\n                for trace in traces:\\n                    await trace.send_dns_cache_miss(host)\\n            try:\\n\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_start(host)\\n\\n                addrs = await self._resolver.resolve(host, port, family=self._family)\\n                if traces:\\n                    for trace in traces:\\n                        await trace.send_dns_resolvehost_end(host)\\n\\n                self._cached_hosts.add(key, addrs)\\n                self._throttle_dns_events[key].set()\\n            except BaseException as e:\\n                # any DNS exception, independently of the implementation\\n                # is set for the waiters to raise the same exception.\\n                self._throttle_dns_events[key].set(exc=e)\\n                raise\\n            finally:\\n                self._throttle_dns_events.pop(key)\\n\\n        return self._cached_hosts.next_addrs(key)\"\n}",
+  "seconds": 47.9,
+  "seed": 2002
+ },
  "aiohttp-newfn-018/FILE_BM25PAD@42": {
   "answer_tokens": 599,
   "done_reason": "stop",
@@ -1151,6 +1160,15 @@
   "seconds": 47.7,
   "seed": 1001
  },
+ "aiohttp-newfn-019/FILE@2002": {
+  "answer_tokens": 655,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 1874,
+  "raw": "{\n  \"code\": \"def _write_websocket_frame(self, message: bytes, opcode: int, rsv: int) -> None:\\n    \\\"\\\"\\\"Write a websocket frame to the transport.\\n\\n    This method handles frame header construction, masking, and writing to transport.\\n    It does not handle compression or flow control - those are the responsibility\\n    of the caller.\\n    \\\"\\\"\\\"\\n    if self._closing and not (opcode & WSMsgType.CLOSE):\\n        raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n    msg_length = len(message)\\n\\n    use_mask = self.use_mask\\n    mask_bit = 0x80 if use_mask else 0\\n\\n    # Depending on the message length, the header is assembled differently.\\n    # The first byte is reserved for the opcode and the RSV bits.\\n    first_byte = 0x80 | rsv | opcode\\n    if msg_length < 126:\\n        header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n        header_len = 2\\n    elif msg_length < 65536:\\n        header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n        header_len = 4\\n    else:\\n        header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n        header_len = 10\\n\\n    if self.transport.is_closing():\\n        raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n    # If we are using a mask, we need to generate it randomly\\n    # and apply it to the message before sending it. A mask is\\n    # a 32-bit value that is applied to the message using a\\n    # bitwise XOR operation. It is used to prevent certain types\\n    # of attacks on the websocket protocol. The mask is only used\\n    # when aiohttp is acting as a client. Servers do not use a mask.\\n    if use_mask:\\n        mask = PACK_RANDBITS(self.get_random_bits())\\n        message_arr = bytearray(message)\\n        websocket_mask(mask, message_arr)\\n        self.transport.write(header + mask + message_arr)\\n        self._output_size += MASK_LEN\\n    elif msg_length > MSG_SIZE:\\n        self.transport.write(header)\\n        self.transport.write(message)\\n    else:\\n        self.transport.write(header + message)\\n\\n    self._output_size += header_len + msg_length\\n\\n    # Once we have written output_size up to the limit, we call the\\n    # drain helper which waits for the transport to be ready to accept\\n    # more data. This is a flow control mechanism to prevent the buffer\\n    # from growing too large. The drain helper will return right away\\n    # if the writer is not paused.\\n    if self._output_size > self._limit:\\n        self._output_size = 0\\n        if self.protocol._paused:\\n            await self.protocol._drain_helper()\"\n}",
+  "seconds": 46.3,
+  "seed": 2002
+ },
  "aiohttp-newfn-019/FILE_BM25PAD@1001": {
   "answer_tokens": 657,
   "done_reason": "stop",
@@ -1159,6 +1177,15 @@
   "raw": "{\n  \"code\": \"def _write_websocket_frame(self, message: bytes, opcode: int, rsv: int) -> None:\\n        \\\"\\\"\\\"\\n        Write a websocket frame to the transport.\\n\\n        This method handles frame header construction, masking, and writing to transport.\\n        It does not handle compression or flow control - those are the responsibility\\n        of the caller.\\n        \\\"\\\"\\\"\\n        if self._closing and not (opcode & WSMsgType.CLOSE):\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        msg_length = len(message)\\n\\n        use_mask = self.use_mask\\n        mask_bit = 0x80 if use_mask else 0\\n\\n        # Depending on the message length, the header is assembled differently.\\n        # The first byte is reserved for the opcode and the RSV bits.\\n        first_byte = 0x80 | rsv | opcode\\n        if msg_length < 126:\\n            header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n            header_len = 2\\n        elif msg_length < 65536:\\n            header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n            header_len = 4\\n        else:\\n            header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n            header_len = 10\\n\\n        if self.transport.is_closing():\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        # If we are using a mask, we need to generate it randomly\\n        # and apply it to the message before sending it. A mask is\\n        # a 32-bit value that is applied to the message using a\\n        # bitwise XOR operation. It is used to prevent certain types\\n        # of attacks on the websocket protocol. The mask is only used\\n        # when aiohttp is acting as a client. Servers do not use a mask.\\n        if use_mask:\\n            mask = PACK_RANDBITS(self.get_random_bits())\\n            message_arr = bytearray(message)\\n            websocket_mask(mask, message_arr)\\n            self.transport.write(header + mask + message_arr)\\n            self._output_size += MASK_LEN\\n        elif msg_length > MSG_SIZE:\\n            self.transport.write(header)\\n            self.transport.write(message)\\n        else:\\n            self.transport.write(header + message)\\n\\n        self._output_size += header_len + msg_length\\n\\n        # Once we have written output_size up to the limit, we call the\\n        # drain helper which waits for the transport to be ready to accept\\n        # more data. This is a flow control mechanism to prevent the buffer\\n        # from growing too large. The drain helper will return right away\\n        # if the writer is not paused.\\n        if self._output_size > self._limit:\\n            self._output_size = 0\\n            if self.protocol._paused:\\n                await self.protocol._drain_helper()\"\n}",
   "seconds": 56.8,
   "seed": 1001
+ },
+ "aiohttp-newfn-019/FILE_BM25PAD@2002": {
+  "answer_tokens": 655,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7688,
+  "raw": "{\n  \"code\": \"def _write_websocket_frame(self, message: bytes, opcode: int, rsv: int) -> None:\\n        \\\"\\\"\\\"Write a websocket frame to the transport.\\n\\n        This method handles frame header construction, masking, and writing to transport.\\n        It does not handle compression or flow control - those are the responsibility\\n        of the caller.\\n        \\\"\\\"\\\"\\n        if self._closing and not (opcode & WSMsgType.CLOSE):\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        msg_length = len(message)\\n\\n        use_mask = self.use_mask\\n        mask_bit = 0x80 if use_mask else 0\\n\\n        # Depending on the message length, the header is assembled differently.\\n        # The first byte is reserved for the opcode and the RSV bits.\\n        first_byte = 0x80 | rsv | opcode\\n        if msg_length < 126:\\n            header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n            header_len = 2\\n        elif msg_length < 65536:\\n            header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n            header_len = 4\\n        else:\\n            header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n            header_len = 10\\n\\n        if self.transport.is_closing():\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        # If we are using a mask, we need to generate it randomly\\n        # and apply it to the message before sending it. A mask is\\n        # a 32-bit value that is applied to the message using a\\n        # bitwise XOR operation. It is used to prevent certain types\\n        # of attacks on the websocket protocol. The mask is only used\\n        # when aiohttp is acting as a client. Servers do not use a mask.\\n        if use_mask:\\n            mask = PACK_RANDBITS(self.get_random_bits())\\n            message_arr = bytearray(message)\\n            websocket_mask(mask, message_arr)\\n            self.transport.write(header + mask + message_arr)\\n            self._output_size += MASK_LEN\\n        elif msg_length > MSG_SIZE:\\n            self.transport.write(header)\\n            self.transport.write(message)\\n        else:\\n            self.transport.write(header + message)\\n\\n        self._output_size += header_len + msg_length\\n\\n        # Once we have written output_size up to the limit, we call the\\n        # drain helper which waits for the transport to be ready to accept\\n        # more data. This is a flow control mechanism to prevent the buffer\\n        # from growing too large. The drain helper will return right away\\n        # if the writer is not paused.\\n        if self._output_size > self._limit:\\n            self._output_size = 0\\n            if self.protocol._paused:\\n                await self.protocol._drain_helper()\"\n}",
+  "seconds": 57.2,
+  "seed": 2002
  },
  "aiohttp-newfn-019/FILE_BM25PAD@42": {
   "answer_tokens": 657,
@@ -1178,6 +1205,15 @@
   "seconds": 56.9,
   "seed": 1001
  },
+ "aiohttp-newfn-019/PRISM@2002": {
+  "answer_tokens": 659,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 7998,
+  "raw": "{\n  \"code\": \"\\n    def _write_websocket_frame(self, message: bytes, opcode: int, rsv: int) -> None:\\n        \\\"\\\"\\\"Write a websocket frame to the transport.\\n\\n        This method handles frame header construction, masking, and writing to transport.\\n        It does not handle compression or flow control - those are the responsibility\\n        of the caller.\\n        \\\"\\\"\\\"\\n        if self._closing and not (opcode & WSMsgType.CLOSE):\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        msg_length = len(message)\\n\\n        use_mask = self.use_mask\\n        mask_bit = 0x80 if use_mask else 0\\n\\n        # Depending on the message length, the header is assembled differently.\\n        # The first byte is reserved for the opcode and the RSV bits.\\n        first_byte = 0x80 | rsv | opcode\\n        if msg_length < 126:\\n            header = PACK_LEN1(first_byte, msg_length | mask_bit)\\n            header_len = 2\\n        elif msg_length < 65536:\\n            header = PACK_LEN2(first_byte, 126 | mask_bit, msg_length)\\n            header_len = 4\\n        else:\\n            header = PACK_LEN3(first_byte, 127 | mask_bit, msg_length)\\n            header_len = 10\\n\\n        if self.transport.is_closing():\\n            raise ClientConnectionResetError(\\\"Cannot write to closing transport\\\")\\n\\n        # If we are using a mask, we need to generate it randomly\\n        # and apply it to the message before sending it. A mask is\\n        # a 32-bit value that is applied to the message using a\\n        # bitwise XOR operation. It is used to prevent certain types\\n        # of attacks on the websocket protocol. The mask is only used\\n        # when aiohttp is acting as a client. Servers do not use a mask.\\n        if use_mask:\\n            mask = PACK_RANDBITS(self.get_random_bits())\\n            message_arr = bytearray(message)\\n            websocket_mask(mask, message_arr)\\n            self.transport.write(header + mask + message_arr)\\n            self._output_size += MASK_LEN\\n        elif msg_length > MSG_SIZE:\\n            self.transport.write(header)\\n            self.transport.write(message)\\n        else:\\n            self.transport.write(header + message)\\n\\n        self._output_size += header_len + msg_length\\n\\n        # Once we have written output_size up to the limit, we call the\\n        # drain helper which waits for the transport to be ready to accept\\n        # more data. This is a flow control mechanism to prevent the buffer\\n        # from growing too large. The drain helper will return right away\\n        # if the writer is not paused.\\n        if self._output_size > self._limit:\\n            self._output_size = 0\\n            if self.protocol._paused:\\n                await self.protocol._drain_helper()\\n\"\n}",
+  "seconds": 57.3,
+  "seed": 2002
+ },
  "aiohttp-newfn-020/FILE@1001": {
   "answer_tokens": 51,
   "done_reason": "stop",
@@ -1187,6 +1223,15 @@
   "seconds": 7.3,
   "seed": 1001
  },
+ "aiohttp-newfn-020/FILE@2002": {
+  "answer_tokens": 51,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 2558,
+  "raw": "{\n  \"code\": \"def _replay_message_tail(self) -> None:\\n    if self._message_tail:\\n        self._payload_parser.feed_data(self._message_tail)\\n        self._message_tail = b\\\"\\\"\"\n}",
+  "seconds": 7.4,
+  "seed": 2002
+ },
  "aiohttp-newfn-020/FILE_BM25PAD@1001": {
   "answer_tokens": 50,
   "done_reason": "stop",
@@ -1195,6 +1240,15 @@
   "raw": "{\n  \"code\": \"def _replay_message_tail(self) -> None:\\n        if self._message_tail:\\n            self._parser.feed_data(self._message_tail)\\n            self._message_tail = b\\\"\\\"\"\n}",
   "seconds": 12.3,
   "seed": 1001
+ },
+ "aiohttp-newfn-020/FILE_BM25PAD@2002": {
+  "answer_tokens": 50,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8360,
+  "raw": "{\n  \"code\": \"def _replay_message_tail(self) -> None:\\n        if self._message_tail:\\n            self._parser.feed_data(self._message_tail)\\n            self._message_tail = b\\\"\\\"\"\n}",
+  "seconds": 12.6,
+  "seed": 2002
  },
  "aiohttp-newfn-020/FILE_BM25PAD@42": {
   "answer_tokens": 50,
@@ -1213,5 +1267,14 @@
   "raw": "{\n  \"code\": \"def _replay_message_tail(self) -> None:\\n        if self._message_tail:\\n            self.data_received(self._message_tail)\\n            self._message_tail = b\\\"\\\"\"\n}",
   "seconds": 11.7,
   "seed": 1001
+ },
+ "aiohttp-newfn-020/PRISM@2002": {
+  "answer_tokens": 48,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_tokens": 8659,
+  "raw": "{\n  \"code\": \"def _replay_message_tail(self) -> None:\\n        if self._message_tail:\\n            self.data_received(self._message_tail)\\n            self._message_tail = b\\\"\\\"\"\n}",
+  "seconds": 12.0,
+  "seed": 2002
  }
 }
