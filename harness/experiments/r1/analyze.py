@@ -75,6 +75,8 @@ def compare(rs, a: str, b: str, metric, seeds, langs=None, only=None, exclude=fr
     tasks = sorted(t for t in set(xa) & set(xb) if (langs is None or lang[t] in langs)
                    and (only is None or t in only) and t not in exclude)
     va, vb = [xa[t] for t in tasks], [xb[t] for t in tasks]
+    if not tasks:  # e.g. blast has no JavaScript tasks
+        return {"a": a, "b": b, "tasks": 0, "a_mean": None, "b_mean": None, "p": None, "bootstrap": None}
     w = stats.wilcoxon(va, vb)
     boot = stats.bootstrap_diff(va, vb, tasks)
     return {"a": a, "b": b, "tasks": len(tasks), "a_mean": round(statistics.mean(va), 3) if va else None,
@@ -113,6 +115,8 @@ def matched_k(rs, a: str, b: str, seeds, exclude=frozenset()) -> dict:
             pb.append(sum(rb["hits_in_order"][:k]) / rb["gold_n"] if rb["gold_n"] else 0.0)
         else:
             va.append(statistics.mean(pa)); vb.append(statistics.mean(pb)); tasks.append(t)
+    if not tasks:
+        return {"a": a, "b": b, "tasks": 0, "a_mean": None, "b_mean": None, "p": None, "bootstrap": None}
     w = stats.wilcoxon(va, vb)
     return {"a": a, "b": b, "tasks": len(tasks), "a_mean": round(statistics.mean(va), 3) if va else None,
             "b_mean": round(statistics.mean(vb), 3) if vb else None, "p": w["p"] if w else 1.0,
@@ -145,11 +149,9 @@ def hidden(kind: str) -> dict[str, set[str]]:
 
 
 def hidden_metric(kind: str, hid: dict[str, set[str]]):
-    if kind == "forward":
-        return lambda r: len(hid[r["task"]] & set(r["found"])) / len(hid[r["task"]])
-    if kind == "blast":
-        return lambda r: len(hid[r["task"]] & set(r["found"])) / len(hid[r["task"]])
-    return lambda r: len(hid[r["task"]] & set(r.get("helpers_used", []))) / len(hid[r["task"]])
+    """Share of the task's hidden items the answer got (0 for a task with none; such tasks are filtered out)."""
+    got = (lambda r: set(r.get("helpers_used", []))) if kind == "newfn" else (lambda r: set(r["found"]))
+    return lambda r: len(hid[r["task"]] & got(r)) / len(hid[r["task"]]) if hid[r["task"]] else 0.0
 
 
 def label(kind: str, e: dict, p_adj: float) -> str:
