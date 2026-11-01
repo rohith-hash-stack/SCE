@@ -83,8 +83,9 @@ commit `feac1f4`, made before any R1 answer was scored). Numbers come from `RESU
 | parses, outer fence removed | 97.1% | 96.4% | 97.9% |
 
 - **Keyword-search code at PRISM's size raises reuse exactly as much as PRISM** (+0.12 over FILE, p = 1e-5).
-- **Invented calls are PRISM's own cost:** the padded version keeps FILE's 0.21, PRISM has 0.29. The difference is
-  +0.076 [−0.003, +0.174], so it is unresolved.
+- ~~**Invented calls are PRISM's own cost:** the padded version keeps FILE's 0.21, PRISM has 0.29. The difference is
+  +0.076 [−0.003, +0.174], so it is unresolved.~~ **Withdrawn** (post-hoc §5): most "invented" calls are scorer
+  errors.
 - **Helpers hidden from the padded prompt** (exploratory, 159 helpers): 0.59 against 0.60, no difference.
 - No task was excluded; the same reuse holds for every seed and both languages.
 
@@ -103,7 +104,8 @@ commit `feac1f4`, made before any R1 answer was scored). Numbers come from `RESU
 > PRISM finds callers that text search cannot.
 >
 > **blast and newfn:** no advantage over an equal-size baseline was shown.
-> - For newfn, the suite's reuse gain is explained by prompt size, and PRISM's extra invented calls remain.
+> - For newfn, the suite's reuse gain is explained by prompt size. ("PRISM's extra invented calls remain" is
+>   withdrawn: post-hoc §5.)
 > - For blast, PRISM's advantage is in naming more of the transitive callers. That is reported as exploratory.
 
 None of this shows that the results hold on other repositories or other models, or which section of the context
@@ -112,3 +114,255 @@ does the work. Those need held-out repositories, a second model, and the R2 abla
 **What follows, by the committed rules:**
 - R2 (section ablation) enters for **forward** only, the one type labelled `pass` or `below_floor`.
 - PRISM's search ranking, the newfn helper list and the blast list are not re-tuned on these tasks.
+
+## Post-hoc investigation of blast and newfn (not pre-registered)
+
+Everything here uses R1's existing answers, with no new model calls. It is secondary to the pre-registered labels
+above, which stand as computed. Where it changes how a result should be read, that is said explicitly.
+- Scripts are in `harness/experiments/r1/investigate/`.
+- Their outputs are in `reports/r1/investigation/`.
+- Paired comparisons use the 67 blast tasks left after the truncation rule, and the mean over the three seeds
+  unless a seed is named.
+
+### 1. Test-file exclusion is symmetric
+
+| what | test code | where |
+|---|---|---|
+| answer key: the tracer | excluded: only production frames are recorded; test and library frames between two production functions are skipped | `harness/experiments/suite/trace_edges.py:5-7, 42` |
+| answer key: planning | excluded: the key and its direct callers keep production functions only | `harness/experiments/suite/blast.py:147, 165, 174` |
+| PRISM's context | excluded: `prism_blast_radius(..., include_tests=False)` | `blast.py:166-167` |
+| GREP's lines | excluded: grep runs over production files only | `blast.py:155, 175` |
+| GREP_PAD's functions | excluded: production functions only (spans, BM25 results, nearby fill) | `harness/experiments/r1/pad.py:90, 106-107, 109` |
+| scorer | names are not filtered. A test function can never match the production-only key, so it counts as a named function, never a found one. The same rule applies to every version. | `blast.py:212-223`; `run.py:111-117` |
+| the answers, checked | GREP named 0 test functions of 1,556 names, GREP_PAD 0 of 1,983, PRISM 28 of 4,659 (0.6%) | `investigate/` |
+
+**Verdict: symmetric.** No version is shown test code, the key has none, and the 28 test names in PRISM's answers can
+only lower PRISM's precision. No re-scoring is needed.
+
+### 2. What each blast version actually does: werkzeug-blast-002, anchor `wsgi._get_server`
+
+**The answer key** is 6 traced callers:
+- `Request.__init__` (1 hop), `Request.application` (2), `ProxyMiddleware.proxy_to` (3), and three WSGI `__call__`
+  methods (4).
+- Only `Request.__init__` is direct.
+- The rest are reached through WSGI dispatch: one application calling the next through the server.
+
+**PRISM's version** (`prism_blast_radius`):
+1. Walks the static call graph upward from the anchor, up to 6 hops (`UPSTREAM_WALK_MAX_HOPS`), and lists every
+   caller nearest first.
+2. Then shows the callers' code, cut to the 6,000-token budget.
+3. Here it lists 17 callers, hops 1 to 4.
+
+The model's answer is that list, copied in order: 17 names. Two are in the key: `Request.__init__` and
+`Response.__call__`. Most of the other 15 are real static callers the tests did not reach on this path. For example,
+`wsgi._get_host` calls `_get_server` directly (`wsgi.py:135`), but it is not in the key. PRISM also cannot list
+`ProxyMiddleware.proxy_to`: the graph has no edge through WSGI dispatch.
+
+**GREP_PAD's version:**
+1. Shows 4 grep lines mentioning `_get_server`.
+2. Then the code of the one production function containing a call (`Request.__init__`).
+3. Then the functions keyword search ranks highest for `_get_server`: functions about "server" and "host", including
+   6 from the `examples/` folder. These are filled until the prompt matches PRISM's size (6,980 tokens).
+
+The model names 6 functions: `Request.__init__` (in the key), then neighbours by name such as `Request.host`,
+`MapAdapter.get_host` and `BaseWSGIServer.log_startup`.
+
+**Are they naming the same kind of thing?** No.
+- PRISM names static transitive callers.
+- The padded version names the grep caller plus functions with similar names.
+- The key holds runtime callers, 86% of them 3 or more hops away (§4).
+
+This is the pattern across all tasks, as the classification shows (every name, all seeds):
+
+| named function is | GREP | GREP_PAD | PRISM |
+|---|---|---|---|
+| a traced caller (in the key) | 19% | 28% | 26% |
+| a real static caller, not traced | 8% | 14% | **70%** |
+| an existing function that is not a caller | 31% | **46%** | 3% |
+| not found in the repository by name | 43% | 12% | 0.6% |
+
+- **97% of PRISM's names are real callers** (traced or static).
+- **58% of the padded version's names are not callers at all.**
+- Precision against the traced key (0.41 against 0.43) hides this: the key cannot credit a caller the tests did not
+  run.
+- "Not found by name" also includes names written in a form the matcher cannot resolve, so it is an upper bound on
+  invented names.
+
+### 3. Ranking or volume
+
+| measure (traced key) | seed 42 | seed 1001 | seed 2002 | all seeds | p (all seeds) |
+|---|---|---|---|---|---|
+| precision of the first 9 names (P@9): GREP_PAD vs PRISM | 0.441 / 0.463 | 0.451 / 0.463 | 0.448 / 0.461 | 0.447 / 0.462 | 0.75 |
+| recall within the first 9 names | 0.185 / 0.214 | 0.190 / 0.214 | 0.180 / 0.214 | 0.185 / 0.214 | 0.54 |
+| recall within the first 20 names (R@20) | 0.193 / 0.246 | 0.198 / 0.246 | 0.187 / 0.246 | 0.193 / 0.246 | 0.28 |
+| recall over all names | 0.193 / 0.293 | 0.199 / 0.290 | 0.187 / 0.291 | 0.193 / 0.291 | 0.028 |
+
+**The two versions name about 9 and 21 functions on average, but the medians are 6.5 and 3.5.** A few tasks with
+very long PRISM lists carry the mean.
+
+**Audit of PRISM's names beyond the padded answer's length** (every task and seed: 3,462 names, classified by rule):
+
+| | share |
+|---|---|
+| traced callers | 23% |
+| real static callers, not traced | 77% |
+| existing non-callers | 0.5% |
+| not found | 0.2% |
+
+**Verdict: volume, not spam.**
+- Within the first 9 or 20 names, PRISM does not rank traced callers better.
+- Its recall advantage comes from naming more functions.
+- 99% of those extra functions are real callers. Most are callers the traced key cannot credit.
+- The matched-length cut was not wrong, but under this key it can only show a tie.
+
+**For future rounds:** blast needs a relevance-grade key (§4). Any length-matched measure must be scored against it,
+not against the trace alone.
+
+### 4. The blast key measures test coverage, not relevance
+
+The question's comparison ("callers changed in the same commit") does not apply. Blast anchors are not taken from
+commits: each repository was traced at one fixed commit, and the anchors were drawn from what its tests ran. What the
+key does show:
+
+| | blast key (traced) | forward key (developer-verified) |
+|---|---|---|
+| callers per anchor | median 13, mean 48, max 199 | median 1 changed caller |
+| direct callers | median 1 | — |
+| callers 3 or more hops away | 86% | — |
+| largest | tornado `BaseAsyncIOLoop.add_callback` (199) and template code generation (159, 160) | — |
+
+- Of the key's callers, a median of 15% are on PRISM's static list.
+- Of PRISM's static callers, a median of 48% are in the key.
+- **24 of the 76 anchors have no static callers at all.** They are reached only through dynamic dispatch (event
+  loops, WSGI, callbacks).
+
+**Verdict: coverage-grade.**
+- The key is "every production frame above the anchor on some test's call stack". It is dominated by deep frames,
+  and depends on what the tests happen to run.
+- It is a valid record of what can reach the anchor at runtime, but not of what a developer would need to look at.
+- **Blast cannot pass against a padded baseline under this key unless the static and runtime pictures happen to
+  agree.**
+
+**For future rounds:** a relevance-grade key, either
+- the callers a developer changed together with the anchor, mined from history as forward does; or
+- the union of traced and static callers, scored with the traced-only result reported beside it.
+
+### 5. newfn: what each version shows, and the invented calls
+
+**What each version does: tornado-newfn-006** (write `gen.coroutine`; the key is 8 helpers the developer's body
+calls).
+
+- **PRISM:**
+  1. Ranks helpers by its search over the name, signature and purpose, then by nearness (same class, file,
+     directory).
+  2. Lists the top 12 with signature and digest only, not code. For example: `return_future` (calls
+     `ArgReplacer`, defines `wrapper`), `gen.engine`, `wrapper`, `handle_exception`.
+  3. Then the group's conventions, and the code of the two closest functions.
+- **FILE_BM25PAD:**
+  1. Ranks functions by plain BM25 over function code for the signature and purpose.
+  2. Shows them with full code (up to 60 lines each), 7 of them, to 4,684 tokens.
+  3. Five of the seven are on PRISM's list too: `return_future`, `wrapper`, `_auth_return_future`, `send_error`,
+     `IOLoop.stop`.
+- **What each prompt shows of the developer's helpers:** PRISM `handle_exception` and `wrapper`; the padded version
+  those two and `add_future`.
+- **Reuse at seed 42:** 0.50 for PRISM and 0.38 for the padded version.
+
+**"The same 199 of 358 helpers"** is the same count, not the same set:
+- 167 are shown by both;
+- 32 only by PRISM, 32 only by the padded version;
+- 127 by neither.
+
+Across tasks, a median of 42% of PRISM's helper list is also in the padded block. **The two versions largely show the
+same functions, PRISM as digests and the padded version as code.** The tie in reuse is consistent with that.
+
+**The invented calls are mostly scorer errors.** All 271 "invented" calls (every version, all seeds), checked against
+the answer code:
+
+| what the "invented" call really is | FILE | FILE_BM25PAD | PRISM |
+|---|---|---|---|
+| a call to one of the function's own parameters (`func(...)`, `cls(...)`) | 34 | 30 | 37 |
+| a call to a local variable | 11 | 17 | 15 |
+| a method on an expression, misread as a bare call (`"…".join(`) | 15 | 13 | **26** |
+| a library function the file does not import (`cast`) | 2 | 1 | 6 |
+| `self.x` not defined on the class (inherited, or invented) | 7 | 8 | 10 |
+| left: candidates for a real invention | 11 | 12 | 16 |
+| **total** | 80 | 81 | 110 |
+
+- **At least 71% of the "invented" calls are not inventions.** These are the first four rows: calls the scorer
+  cannot resolve.
+- PRISM's excess over the padded version (110 against 81) is mostly expression-method misreads (+13) and library
+  calls (+5). PRISM's answers use more chained calls.
+- **Of 12 candidates sampled from PRISM** (5 distinct names), 4 names exist in the repository:
+  - `websocket_mask`, a module-level alias in aiohttp's `_websocket/helpers.py`;
+  - `self._socket_action`, an instance attribute holding a callable (tornado `httpclient.py:135`);
+  - `self.get`, inherited, since werkzeug's `Authorization` subclasses `dict`;
+  - `a`, a variable.
+- One is genuinely invented: `parse_ansi` in rich (rich has `Text.from_ansi`, so this is a pattern copy, cause (a)).
+- So nearly all the invented calls are scorer errors (calls to the code's own parameters, local variables, methods
+  on expressions, aliases, attributes, inherited methods), not names the model made up.
+- **No sampled case came from digest text** (cause (c)). Cause (b), real names outside the shown list, is what most of
+  the remaining candidates turned out to be.
+
+**Correction to the results above:** "PRISM's extra invented calls are its own cost" is withdrawn. The measure cannot
+support it. The same applies to the suite's newfn cost (0.19 → 0.30) and to A3's `fails_invented_calls` rule, which
+rely on this scorer.
+
+**For future rounds (a scorer fix, before any model run):** invented calls exclude calls to the function's
+parameters and local variables, method calls on any expression, module-level aliases and instance attributes
+assigned a callable, inherited methods (including those of built-in base classes), and names imported anywhere in the
+repository.
+
+### 6. Callers hidden from the padded prompt: robust
+
+The traced callers GREP_PAD's prompt does not show cover 3,450 callers in 67 tasks.
+
+| | GREP_PAD | PRISM | difference [95% CI] | p |
+|---|---|---|---|---|
+| seed 42 | 0.104 | 0.273 | +0.169 [+0.091, +0.247] | 5.7e-5 |
+| seed 1001 | 0.109 | 0.270 | +0.161 [+0.085, +0.237] | 9.0e-5 |
+| seed 2002 | 0.095 | 0.271 | +0.176 [+0.105, +0.251] | 2.7e-5 |
+| all seeds | 0.103 | 0.271 | +0.168 [+0.094, +0.244] | 4.6e-5 |
+| without the top 2 tasks | 0.106 | 0.251 | +0.145 [+0.075, +0.217] | 1.3e-4 |
+| without the top 5 tasks | 0.108 | 0.223 | +0.115 [+0.051, +0.182] | 6.5e-4 |
+
+- PRISM is better on 32 tasks, equal on 26, worse on 9.
+- **The hidden callers are mostly transitive:** 3,120 transitive and 86 direct.
+- Of the hidden callers each version found (seed-pooled), PRISM found 796 transitive and 141 direct, the padded
+  version 65 and 83.
+
+**Verdict:** large, stable at every seed, not carried by a few tasks, and about transitive callers. It is the real
+blast finding. It stays exploratory in R1 because it was not a primary. **It is the candidate primary for blast in the
+next round,** on fresh tasks, with the relevance-grade key from §4.
+
+### 7. Power: blast is underpowered, not null
+
+- The per-task difference has mean +0.097 and standard deviation 0.307 (67 tasks).
+- Holm's correction put blast second of three tests, so it needed raw p < 0.025.
+- **With 80% power to detect +0.10:**
+  - the normal approximation (paired, Wilcoxon efficiency 0.864) needs about 104 tasks, or 114 at p < 0.0167;
+  - resampling the observed differences, power is 0.54 at 76 tasks, 0.68 at 100, 0.87 at 150, 0.94 at 200 and
+    0.99 at 300.
+- **R1's blast test had about a 54% chance of passing if the true effect is +0.10.**
+- This power is computed at the observed effect, so it is optimistic if the true effect is smaller.
+
+**For future rounds:** at least 150 blast tasks, or a primary with less variance (the hidden-caller measure's
+interval is tighter).
+
+### 8. Verdicts after the investigation
+
+**forward:** accepted. Nothing here touches it.
+
+**blast:** `not shown` is the correct pre-registered label. The test-file filter is symmetric and the scoring is
+valid. Its reading changes, though: the result is **underpowered** (54% power), and judged against a
+**coverage-grade key** that cannot credit the 70% of PRISM's names that are real but untraced static callers. Within
+the first 9 or 20 names, PRISM does not rank traced callers better; its advantage is naming more real callers. On
+callers the padded prompt did not show, mostly transitive ones, PRISM is clearly ahead: +0.17, stable and robust. So
+the blast claim is unresolved, not refuted. The next round should use a relevance-grade key, at least 150 tasks, and
+the hidden-caller measure as primary.
+
+**newfn:** `not shown` for reuse is correct and stands. Both versions largely show the same functions (about half of
+PRISM's list is in the padded block), as digests or as code, and reuse ties at every seed and in both languages. The
+investigation **withdraws the invented-call cost**: at least 71% of the "invented" calls are not inventions, and
+PRISM's excess comes mostly from method calls on expressions that the scorer misreads. Genuine inventions are rare,
+and the one found is a pattern copy of a real name. The scorer needs the fix in §5 before invented calls can be used
+as a side condition again.
