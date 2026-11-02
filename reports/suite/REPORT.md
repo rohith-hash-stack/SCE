@@ -15,7 +15,7 @@ Ten repositories, six task types, 742 tasks, 2,036 model calls. The design was p
 |---|---|---|---|---|---|
 | 1 forward | callers of a change updated | FILE 92/298 (31%) | **214/298 (72%)** | 1.5e-26 | PRISM better |
 | 4 blast | traced callers named (recall) | GREP 0.129 | **0.302** | 2.4e-4 | PRISM better |
-| 2 newfn | existing helpers reused | FILE 0.591 | **0.708** | 1.1e-3 | PRISM better, with costs (below) |
+| 2 newfn | existing helpers reused | FILE 0.591 | **0.708** | 1.1e-3 | PRISM better, ~~with costs (below)~~ (cost withdrawn; R1 shows the gain is prompt size) |
 | 3 bugs | a bug function in top 5 | BM25 97/184 (53%) | 92/184 (50%) | 0.77 | no difference |
 | 6 tests | all written tests pass | FILE 0/62 | 2/62 | 0.77 | no difference (format-bound) |
 | 5 concepts | an answer function in top 5 | BM25 93/100 | 95/100 | 0.69 (raw) | no difference; not a decision test |
@@ -67,7 +67,7 @@ Ten repositories, six task types, 742 tasks, 2,036 model calls. The design was p
 | | FILE | PRISM |
 |---|---|---|
 | helper reuse | 0.591 | 0.708 |
-| invented calls per task | 0.19 | 0.30 |
+| invented calls per task | ~~0.19~~ 0.008 (v2) | ~~0.30~~ 0.008 (v2) |
 | the code parses | 96% | 88% |
 | prompt tokens | 2,174 | 6,144 |
 
@@ -76,11 +76,14 @@ Ten repositories, six task types, 742 tasks, 2,036 model calls. The design was p
 - Difference: +0.12 [0.06, 0.18].
 - Reuse rises in every repository with more than one task.
 
-**The costs.** PRISM's context makes the model call more names that do not exist, and break the syntax
-more often.
-- Invented calls rise in 6 of 8 repositories. On mocha they go from 0 to 0.38.
-- Parse failures concentrate in rich (80% → 67%), scrapy (100% → 85%) and aiohttp (95% → 85%).
-- So `newcode`'s helper list helps reuse but needs work on invented calls (see product issues).
+**The costs.** ~~PRISM's context makes the model call more names that do not exist, and break the syntax
+more often.~~
+- ~~Invented calls rise in 6 of 8 repositories. On mocha they go from 0 to 0.38.~~ **Withdrawn** (R1 post-hoc §5):
+  the v1 scorer counted parameters, locals, comments, methods on expressions and inherited methods as inventions.
+  With scorer v2 both versions invent 0.008 calls per task.
+- Parse failures concentrate in rich (80% → 67%), scrapy (100% → 85%) and aiohttp (95% → 85%). Most were a fence
+  around the code ("Validity checks").
+- ~~So `newcode`'s helper list helps reuse but needs work on invented calls (see product issues).~~
 
 ## Type 3: bugs (which functions must change to fix this bug)
 
@@ -243,7 +246,9 @@ cuts more than 10% of its answers at the answer cap, or the two versions differ 
    "Validity checks".
 2. **`prism.ask` ranking gives no gain over BM25** on bug localisation (type 3) or concept questions
    (type 5). Its value is in the structured contexts (change context, blast radius), not in search ranking.
-3. **`newcode` raises invented calls** (0.19 → 0.30) along with reuse. The parse failures (4% → 12%) were mostly
+3. ~~**`newcode` raises invented calls** (0.19 → 0.30) along with reuse.~~ **Withdrawn:** with the fixed scorer
+   (v2, R1 post-hoc §5) the rate is 0.008 in both versions; v1 counted parameters, locals, comments, methods on
+   expressions and inherited methods as inventions. The parse failures (4% → 12%) were mostly
    a fence around the code (98% vs 97% parse once it is removed).
    The helper list should mark which names are real and callable from the target's scope.
 4. **The break section** (wording 2) points the right way but is not proven; it stays opt-in.
@@ -273,7 +278,8 @@ commit message.
   same callers given as raw code.** It cannot measure access to callers the model could not otherwise see. With 9
   hidden callers, that question has no power in R1.
 - **Blast:** the reverse. The padded prompt shows few traced callers, so blast does test access.
-- **Newfn:** both prompts show the same number of the developer's helpers (199 of 358).
+- **Newfn:** both prompts show the same number of the developer's helpers (199 of 358). **Correction (R1
+  post-hoc §5):** the same count, not the same set: 167 shown by both, 32 only by PRISM, 32 only by FILE_BM25PAD.
 
 ### A1. Added reports (analysis only)
 

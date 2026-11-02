@@ -139,6 +139,8 @@ above, which stand as computed. Where it changes how a result should be read, th
 **Verdict: symmetric.** No version is shown test code, the key has none, and the 28 test names in PRISM's answers can
 only lower PRISM's precision. No re-scoring is needed.
 
+**Valid scoring against the stated key ≠ the right key: 86% of key callers are 3+ hops away, the median anchor has 1 direct caller, and 24/76 anchors have no static callers. The key measures test coverage, not relevance. 70% of PRISM's names are real callers the key can't credit.**
+
 ### 2. What each blast version actually does: werkzeug-blast-002, anchor `wsgi._get_server`
 
 **The answer key** is 6 traced callers:
@@ -267,7 +269,8 @@ calls).
   those two and `add_future`.
 - **Reuse at seed 42:** 0.50 for PRISM and 0.38 for the padded version.
 
-**"The same 199 of 358 helpers"** is the same count, not the same set:
+**Correction:** ~~"the same 199 of 358 helpers"~~. Both versions show 199 of the developer's 358 helpers: the same
+count, a different set.
 - 167 are shown by both;
 - 32 only by PRISM, 32 only by the padded version;
 - 127 by neither.
@@ -296,7 +299,8 @@ the answer code:
   - `websocket_mask`, a module-level alias in aiohttp's `_websocket/helpers.py`;
   - `self._socket_action`, an instance attribute holding a callable (tornado `httpclient.py:135`);
   - `self.get`, inherited, since werkzeug's `Authorization` subclasses `dict`;
-  - `a`, a variable.
+  - ~~`a`, a variable~~ **corrected:** `a` is the word "a" in a comment ("a (`user`, …) tuple"), which the old scorer
+    read as a call.
 - One is genuinely invented: `parse_ansi` in rich (rich has `Text.from_ansi`, so this is a pattern copy, cause (a)).
 - So nearly all the invented calls are scorer errors (calls to the code's own parameters, local variables, methods
   on expressions, aliases, attributes, inherited methods), not names the model made up.
@@ -311,6 +315,32 @@ rely on this scorer.
 parameters and local variables, method calls on any expression, module-level aliases and instance attributes
 assigned a callable, inherited methods (including those of built-in base classes), and names imported anywhere in the
 repository.
+
+**Scorer v2 (done):** `harness/experiments/suite/invented.py`, used by `newfn.score_task`.
+- The rules are in its docstring. The repository names for the existing tasks are in
+  `harness/experiments/suite/repos/*/newfn_names.json`; new task sets carry them as `repo_names`.
+- Helper reuse (`calls()`) is unchanged.
+- The regression tests are in `tests/test_newfn_invented.py`: the four real-code cases are not flagged, and
+  `parse_ansi` still is.
+- Re-scored on all 1,152 saved answers (`reports/suite/newfn_invented_v2.json`). Only invented calls are recomputed;
+  no pre-registered result changes.
+
+| | FILE | FILE_BM25PAD | PRISM |
+|---|---|---|---|
+| calls flagged, v1 | 80 | 81 | 110 |
+| calls flagged, v2 | 4 | 3 | 4 |
+| per task, suite seed 42 (v1 → v2) | 0.19 → **0.008** | — | 0.30 → **0.008** |
+| per task, R1 three seeds (v1 → v2) | 0.21 → 0.010 | 0.21 → **0.008** | 0.29 → **0.010** |
+
+- PRISM vs FILE_BM25PAD under v2: +0.003 [−0.016, +0.023], p = 0.66.
+- PRISM vs FILE at suite seed 42 under v2: +0.000, p = 1.
+- **With a correct scorer there is no invented-call cost:** about 1 invented call per 100 answers in every version.
+- Of v1's 271 flags, v2 clears:
+  - 134 as names bound in the answer (parameters, locals, its own outside imports);
+  - 74 as not bare calls once parsed (methods on expressions, comments, strings);
+  - 27 as module-level names; 18 as inherited; 6 as imported elsewhere; 3 as attributes.
+- **9 remain flagged:** `parse_ansi`, aiohttp `_create_direct_connection` and `_warn_about_tls_in_tls` called without
+  `self.`, rich `cls` and `accumulate`, werkzeug `wraps` (not imported anywhere at that revision) and `responder`.
 
 ### 6. Callers hidden from the padded prompt: robust
 
@@ -353,7 +383,7 @@ interval is tighter).
 **forward:** accepted. Nothing here touches it.
 
 **blast:** `not shown` is the correct pre-registered label. The test-file filter is symmetric and the scoring is
-valid. Its reading changes, though: the result is **underpowered** (54% power), and judged against a
+valid. **Valid scoring against the stated key ≠ the right key: 86% of key callers are 3+ hops away, the median anchor has 1 direct caller, and 24/76 anchors have no static callers. The key measures test coverage, not relevance. 70% of PRISM's names are real callers the key can't credit.** Its reading changes, though: the result is **underpowered** (54% power), and judged against a
 **coverage-grade key** that cannot credit the 70% of PRISM's names that are real but untraced static callers. Within
 the first 9 or 20 names, PRISM does not rank traced callers better; its advantage is naming more real callers. On
 callers the padded prompt did not show, mostly transitive ones, PRISM is clearly ahead: +0.17, stable and robust. So

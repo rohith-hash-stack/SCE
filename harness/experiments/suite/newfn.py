@@ -143,6 +143,8 @@ def plan_one(task: dict, work: str) -> dict | None:
     helpers = existing_helpers(task["code"], leaves, methods)
     if len(helpers) < 2:
         return None
+    from harness.experiments.suite.invented import repo_names_in
+    repo_names = repo_names_in(work, cls)
     before = functions(task["file"], old_text.encode())
     at = before[task["after"]]["end"] + 1 if task.get("after") in before else (
         before[next(iter(sorted(before, key=lambda q: before[q]["end"])))]["start"] if before else 1)
@@ -151,7 +153,7 @@ def plan_one(task: dict, work: str) -> dict | None:
         f"near line {at}"
     ctx = NewFunctionContextBuilder(b, work).build(task["file"], task["name"].rsplit(".", 1)[-1],
                                                    signature=task["signature"], purpose=task["purpose"], cls=cls)
-    return {**task, "class_qname": cls, "existing_helpers": helpers, "repo_leaves": sorted(leaves),
+    return {**task, "class_qname": cls, "existing_helpers": helpers, "repo_leaves": sorted(leaves), "repo_names": repo_names,
             "file_window": text, "window": [lo, hi], "position": position, "insert_line": at,
             "class_methods": sorted(methods), "prism_context": render(ctx), "prism_helpers": [h.qname for h in ctx.helpers],
             "file_imports": sorted(set(re.findall(r"(?m)^\s*(?:from\s+[\w.]+\s+)?import\s+(.+)$", old_text)) |
@@ -215,11 +217,6 @@ def _parses(code: str, file: str) -> bool:
     return parsed is not None and parsed.root_node is not None and not parsed.root_node.has_error
 
 
-def _defined_locally(code: str) -> set[str]:
-    return set(re.findall(r"\b(?:def|function|class)\s+([A-Za-z_$][\w$]*)", code)) | \
-        set(re.findall(r"\b([A-Za-z_$][\w$]*)\s*=\s*(?:lambda|function|\(|async)", code))
-
-
 _BUILTINS = frozenset(dir(__import__("builtins"))) | frozenset((
     "require setTimeout setInterval clearTimeout clearInterval setImmediate process console Buffer Promise Error "
     "TypeError RangeError Object Array String Number Boolean JSON Math Date RegExp Symbol Map Set WeakMap parseInt "
@@ -228,10 +225,10 @@ _BUILTINS = frozenset(dir(__import__("builtins"))) | frozenset((
 
 
 def score_task(task: dict, raw: str, outer_fence: bool = False) -> dict:
-    """reuse: share of the developer's existing helpers the answer also calls. invented: calls to names that
-    exist nowhere - `self.x(` with no method `x` in the class, or a bare `x(` that is not in the repository,
-    not imported, not a builtin and not defined in the answer itself. With `outer_fence` (a sensitivity analysis,
-    the same for every version): a fence wrapping the whole answer or the whole code is removed first."""
+    """reuse: share of the developer's existing helpers the answer also calls. invented: calls that resolve to
+    nothing (scorer v2, `harness.experiments.suite.invented`; v1 counted parameters, locals, comments, method calls
+    on expressions, aliases, attributes and inherited methods). With `outer_fence` (a sensitivity analysis, the same
+    for every version): a fence wrapping the whole answer or the whole code is removed first."""
     try:
         got = json.loads(strip_outer_fence(raw) if outer_fence else raw)
         code = got.get("code", "") if isinstance(got, dict) else ""
@@ -241,22 +238,15 @@ def score_task(task: dict, raw: str, outer_fence: bool = False) -> dict:
         code = ""
     if not isinstance(code, str) or not code.strip():
         return {"answered": False, "reuse": 0.0, "invented": 0, "parses": False}
+    from harness.experiments.suite.invented import invented as invented_calls
     used = {name for _recv, name in calls(code)}
     reuse = sum(h in used for h in task["existing_helpers"]) / len(task["existing_helpers"])
-    local = _defined_locally(code)
-    methods = set(task["class_methods"])
-    imports = " ".join(task.get("file_imports", []))
-    repo = set(task.get("repo_leaves", []))
-    invented = 0
-    for recv, name in calls(code):
-        if recv in ("self", "cls", "this"):
-            if task.get("class_qname") and name not in methods and name not in local:
-                invented += 1
-        elif recv is None and name not in repo and name not in local and name not in _BUILTINS \
-                and not re.search(rf"\b{re.escape(name)}\b", imports) and name[:1].islower():
-            invented += 1
-    return {"answered": True, "reuse": reuse, "invented": invented, "parses": _parses(code, task["file"]),
-            "helpers_used": sorted(h for h in task["existing_helpers"] if h in used), "imports_seen": bool(imports)}
+    inv = invented_calls(task, code)
+    return {"answered": True, "reuse": reuse, "invented": len(inv["invented"]), "invented_names": inv["invented"],
+            "invented_unresolved": len(inv["unresolved"]), "invented_read_as": inv["read_as"],
+            "parses": _parses(code, task["file"]),
+            "helpers_used": sorted(h for h in task["existing_helpers"] if h in used),
+            "imports_seen": bool(task.get("file_imports"))}
 
 
 def main(argv=None) -> int:
