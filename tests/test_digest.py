@@ -615,7 +615,7 @@ def test_budget_keeps_high_rank_facts_and_counts_the_rest(tmp_path):
     _b, ds = digests(tmp_path, {"big.py": f"def big(x):\n{body}    if x:\n        raise ValueError(x)\n    return x\n"},
                      max_facts=10)
     d = ds["big.big"]
-    assert len(d.facts) == 10 and d.omitted == {"assign": 52}
+    assert len(d.facts) == 11 and d.omitted == {"assign": 52}  # 10 body facts + the signature, which the budget does not count
     assert one(d, "raise").when == ("x",) and one(d, "return").text == "x"
     assert d.render().endswith("omitted: 52 assign")
 

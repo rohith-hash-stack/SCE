@@ -1,20 +1,24 @@
 ## app.dyn.Visitor.named
 Digest (lines 15-16)
+L15 parameters (self)
 L16 dynamic: looks up attribute 'visit_a' of self by name -> app.dyn.Visitor.visit_a
 L16 return getattr(self, "visit_a")
 
 ## app.dyn.Visitor.opaque
 Digest (lines 18-19)
+L18 parameters (self, obj, name)
 L19 dynamic: looks up an attribute of obj named at runtime -> unknown | code: return getattr(obj, name)
 L19 return getattr(obj, name)
 
 ## app.dyn.Visitor.poke
 Digest (lines 21-22)
+L21 parameters (self, name, value)
 L22 dynamic: sets an attribute of self named at runtime -> unknown | code: setattr(self, name, value)
 L22 sets an attribute of self by name (own state)
 
 ## app.dyn.Visitor.visit
 Digest (lines 5-7)
+L5 parameters (self, node, kind)
 L6 dynamic: looks up an attribute of self named at runtime (starts with 'visit_') -> one of: app.dyn.Visitor.visit_a, app.dyn.Visitor.visit_b | code: handler = getattr(self, "visit_" + kind)
 L6 handler = getattr(self, "visit_" + kind)
 L7 dynamic: calls handler, the attribute looked up by name above -> one of: app.dyn.Visitor.visit_a, app.dyn.Visitor.visit_b | code: return handler(node)
@@ -22,51 +26,62 @@ L7 return handler(node)
 
 ## app.dyn.Visitor.visit_a
 Digest (lines 9-10)
+L9 parameters (self, node)
 L10 return 1
 
 ## app.dyn.Visitor.visit_b
 Digest (lines 12-13)
+L12 parameters (self, node)
 L13 return 2
 
 ## app.dyn.apply
 Digest (lines 38-39)
+L38 parameters (fn, value)
 L39 dynamic: calls the function passed as argument fn -> one of: app.dyn.on_a | code: return fn(value)
 L39 return fn(value)
 
 ## app.dyn.load
 Digest (lines 50-51)
+L50 parameters (name)
 L51 dynamic: imports a module named at runtime -> unknown | code: return importlib.import_module(name)
 L51 return importlib.import_module(name)
 
 ## app.dyn.load_fixed
 Digest (lines 54-55)
+L54 parameters ()
 L55 dynamic: imports module 'json' at runtime -> json
 L55 return importlib.import_module("json")
 
 ## app.dyn.on_a
 Digest (lines 25-26)
+L25 parameters ()
 L26 return "a"
 
 ## app.dyn.on_b
 Digest (lines 29-30)
+L29 parameters ()
 L30 return "b"
 
 ## app.dyn.route
 Digest (lines 33-35)
+L33 parameters (key)
 L34 table = {"a": on_a, "b": on_b}
 L35 dynamic: calls the entry of table selected by key -> one of: app.dyn.on_a, app.dyn.on_b | code: return table[key]()
 L35 return table[key]()
 
 ## app.dyn.run_code
 Digest (lines 46-47)
+L46 parameters (src)
 L47 dynamic: evaluates code built at runtime -> unknown | code: exec(src)
 
 ## app.dyn.use_apply
 Digest (lines 42-43)
+L42 parameters ()
 L43 return apply(on_a, 3) [calls: apply() -> app.dyn.apply]
 
 ## app.ports.classify
 Digest (lines 15-21)
+L15 parameters (n)
 when n < 0:
   L17 return "negative"
 when not (n < 0):
@@ -77,6 +92,7 @@ when not (n < 0):
 
 ## app.ports.match_kind
 Digest (lines 62-67)
+L62 parameters (k)
 when k matches "a":
   L65 return 1
 when k matches no other case:
@@ -84,6 +100,7 @@ when k matches no other case:
 
 ## app.ports.normalize_port
 Digest (lines 5-12)
+L5 parameters (port, scheme)
 when port is None or port == "":
   L7 return None
 L9 value = int(port)
@@ -94,10 +111,12 @@ L12 return None if value == {"http": 80}.get(scheme) else value
 
 ## app.ports.parse
 Digest (lines 58-59)
+L58 parameters (raw)
 L59 return loads(raw)
 
 ## app.ports.quiet
 Digest (lines 24-30)
+L24 parameters (path)
 L26 call os.remove(path) -> library os.remove
 L27-28 catches OSError: ignores the error
 when finally (always):
@@ -105,6 +124,7 @@ when finally (always):
 
 ## app.ports.scan
 Digest (lines 33-41)
+L33 parameters (items, seen)
 when for each item in items:
   when not item:
     L36 skip to the next iteration
@@ -116,6 +136,7 @@ when while seen:
 
 ## app.ports.settings_user
 Digest (lines 51-55)
+L51 parameters (settings, request)
 L52 read environment DEBUG
 L52 debug = os.environ.get("DEBUG")
 L53 read environment SECRET
@@ -127,6 +148,7 @@ L55 read setting TIMEOUT
 
 ## app.ports.with_lock
 Digest (lines 44-48)
+L44 parameters (lock, data)
 when within with lock:
   L46 data["k"] = 1 (argument data)
 L47 assert data, "empty"
@@ -134,40 +156,48 @@ L48 yield data
 
 ## app.store.Store.__init__
 Digest (lines 6-8)
+L6 parameters (self)
 L7 self.items = [] (own state)
 L8 self.total = 0 (own state)
 
 ## app.store.Store.add
 Digest (lines 10-13)
+L10 parameters (self, item)
 L11 self.items.append(item) changes self.items (own state)
 L12 self.total += 1 (own state)
 L13 REGISTRY[item] = self (module constant REGISTRY)
 
 ## app.store.Store.caller
 Digest (lines 23-25)
+L23 parameters (self)
 L24 call self.helper() -> app.store.Store.helper
 L25 return self.total
 
 ## app.store.Store.helper
 Digest (lines 20-21)
+L20 parameters (self)
 L21 raise RuntimeError("helper fails")
 
 ## app.store.Store.make
 Digest (lines 32-33)
+L32 parameters ()
 L32 staticmethod: static method
 L33 return Store() [calls: Store() -> app.store.Store]
 
 ## app.store.Store.reset
 Digest (lines 15-18)
+L15 parameters (self)
 L17 COUNTER = 0 (global COUNTER)
 L18 deletes self.items[:] (own state)
 
 ## app.store.Store.size
 Digest (lines 28-29)
+L28 parameters (self)
 L28 property: read as an attribute
 L29 return len(self.items)
 
 ## app.store.Store.wrapped
 Digest (lines 36-37)
+L36 parameters (self)
 L36 unknown_wrapper: wraps or registers the function; its effect is defined by the decorator
 L37 return 1

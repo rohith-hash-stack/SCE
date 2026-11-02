@@ -5,6 +5,8 @@ JavaScript / TypeScript / TSX, Java, C#, Go), the same procedure for every
 function whatever its length or subject. Each fact is a construct of the
 language, not a guess about intent:
 
+    signature           the parameter list as written (names, order, defaults, type annotations, `*args` /
+                        `**kwargs`, optional `?` markers) and the return annotation, on the definition's line
     return / yield      the returned / yielded expression
     raise               `raise` / `throw` / `panic(...)` / `assert` / `abort(...)` / process exit
     catch               an except / catch clause and what its body does with the error
@@ -61,14 +63,14 @@ from prism.parser.lang_config import (
 )
 from prism.parser.tree_sitter_loader import LanguageID
 
-DIGEST_VERSION = 1
+DIGEST_VERSION = 2  # 2: the `signature` fact (parameter list and return annotation)
 
 CERTAIN, POSSIBLE, RUNTIME, UNKNOWN = "certain", "possible", "runtime", "unknown"
 CERTAINTIES = (CERTAIN, POSSIBLE, RUNTIME, UNKNOWN)
-KINDS = ("entry", "decorator", "dynamic", "raise", "catch", "return", "yield", "flow", "state", "read", "call",
+KINDS = ("signature", "entry", "decorator", "dynamic", "raise", "catch", "return", "yield", "flow", "state", "read", "call",
          "calls", "define", "assign", "runtime")
 #: lower ranks are kept first when a digest is over budget
-_RANK = {"dynamic": 0, "entry": 0, "runtime": 0, "raise": 1, "catch": 1, "decorator": 1, "return": 2,
+_RANK = {"signature": 0, "dynamic": 0, "entry": 0, "runtime": 0, "raise": 1, "catch": 1, "decorator": 1, "return": 2,
          "yield": 2, "flow": 2, "state": 2, "read": 3, "call": 4, "calls": 4, "define": 4, "assign": 5}
 MAX_FACTS = 40
 EXPR_CAP = 90       # characters of one expression kept in a fact
@@ -1671,6 +1673,36 @@ def _decorator_facts(ex: _Extractor) -> None:
             ex.facts.append(Fact("decorator", f"{_short(text, 60)}: {effect}", _span(ex.node)[:1] * 2, POSSIBLE))
 
 
+_RETURN_FIELDS = ("return_type", "result", "returns")  # Python / TS, Go, C#; Java's is `type` on a method
+
+
+def _function_node(node):
+    """The function itself when `node` is what binds it (`const f = () => ...`, `key: function () {}`)."""
+    if node.type in ("variable_declarator", "pair", "public_field_definition", "field_definition", "assignment"):
+        value = node.child_by_field_name("value") or node.child_by_field_name("right")
+        return value if value is not None else node
+    return node
+
+
+def _signature_fact(ex: _Extractor) -> None:
+    """The parameter list exactly as written, with the return annotation: a signature change is a digest change
+    even when the body is untouched."""
+    fn = _function_node(ex.node)
+    params = fn.child_by_field_name("parameters") or fn.child_by_field_name("parameter")
+    if params is None:
+        return
+    src = ex.parsed.source
+    text = " ".join(src[params.start_byte:params.end_byte].decode("utf8", "replace").split())
+    if not text.startswith("("):  # a single bare arrow-function parameter: `x => ...`
+        text = f"({text})"
+    ret = next((r for f in _RETURN_FIELDS if (r := fn.child_by_field_name(f)) is not None), None)
+    if ret is None and fn.type == "method_declaration" and ex.lang == LanguageID.JAVA:
+        ret = fn.child_by_field_name("type")
+    if ret is not None:
+        text += " -> " + " ".join(src[ret.start_byte:ret.end_byte].decode("utf8", "replace").split()).lstrip(":").strip()
+    ex.facts.append(Fact("signature", f"parameters {text}", _span(params)[:1] * 2))
+
+
 def _entry_fact(ex: _Extractor) -> None:
     entry = ex.entry
     if not entry:
@@ -1776,17 +1808,20 @@ class DigestBuilder:
         ex = _Extractor(b, qname, node, parsed, self._imports[sym.file], entry, self.runtime.get(qname),
                         self._indexed[sym.file], self._modules, self._classes, self._leaves,
                         self._aliases.get(sym.file))
+        _signature_fact(ex)
         _entry_fact(ex)
         _decorator_facts(ex)
         ex.run()
         _runtime_facts(ex)
         note = None
+        signature = [f for f in ex.facts if f.kind == "signature"]  # always kept, outside the fact budget
+        body_facts = [f for f in ex.facts if f.kind != "signature"]
         if _body(node) is None:
             note = "declaration only (no body)"
-        elif not ex.facts:
+        elif not body_facts:
             note = "empty body"
-        facts = sorted(ex.facts, key=lambda f: (f.lines, _RANK.get(f.kind, 9)))
-        facts, omitted = _budget(facts, self.max_facts)
+        facts, omitted = _budget(sorted(body_facts, key=lambda f: (f.lines, _RANK.get(f.kind, 9))), self.max_facts)
+        facts = sorted(signature + facts, key=lambda f: (f.lines, _RANK.get(f.kind, 9)))
         return Digest(qname, str(parsed.language_id), _span(node), facts, omitted, note)
 
 
