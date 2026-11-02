@@ -232,14 +232,18 @@ before the validity gate):
 | `pallets/werkzeug` | used | 280 | 1 | **16** | 1 | 2 |
 | `tornadoweb/tornado` | used | 314 | 0 | **7** | 1 | 2 |
 
-**Short for every family, so dropped:** structlog, loguru, more-itertools, pendulum, arrow, tomlkit, pluggy,
-ts-pattern, neverthrow, ofetch, cattrs, c12, p-queue (new); marshmallow, rich, fastify (used). The 11 repositories
-added in their place are the "yes" rows above that were not in the first pool: litestar, yarl, multidict, poetry,
-unstorage, nitro, vitest, unplugin, plus cattrs, c12 and p-queue, which were also short.
+**Dropped (short for every family):**
+- new: structlog, loguru, more-itertools, pendulum, arrow, tomlkit, pluggy, ts-pattern, neverthrow, ofetch, cattrs,
+  c12, p-queue;
+- used: marshmallow, rich, fastify.
+
+**Added after the first scan**, as replacements from the same language families: litestar, yarl, multidict and
+poetry (Python); unstorage, nitro, vitest and unplugin (JavaScript/TypeScript). cattrs, c12 and p-queue were scanned
+as replacements too, and were short.
 
 **Family B: confirmed.**
-- 18 repositories qualify: 14 Python and 4 JavaScript/TypeScript by count, and 7 JS/TS once nitro, vitest and h3
-  are counted as such.
+- 18 repositories qualify: 11 Python (sqlglot, poetry, litestar, packaging, multidict, yarl, typer, scrapy, aiohttp,
+  werkzeug, tornado) and 7 JavaScript/TypeScript (vitest, nitro, h3, execa, unstorage, msw, unplugin).
 - With at most 10 tasks per repository there are 165 candidates, 128 of them from new repositories.
 - Reaching 80 gated tasks needs about half the candidates to pass the gate.
 - **Family N: not confirmed. [TBD — team]**
