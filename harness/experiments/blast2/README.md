@@ -162,3 +162,10 @@ The cell checks every hash before any model call. No answer is opened before the
 - A `pass` here supports R3's blast mechanism, and a `not_shown` weakens it. Neither settles whether PRISM helps a
   blast workflow.
 - Everything above this amendment (key, tasks, primary, floor, labels, freezing, stopping) is unchanged.
+
+## Amendment 2: timing (after the R3 decisions, before any B2 data; no rule changed)
+
+- **B2 runs after R3, to explain mechanism.** It does not gate R3, and it is not built before R3.
+- R3's Family B is blast-as-action, the blast verdict. B2 then asks why: whether PRISM's retrieval names the callers a
+  text search cannot show.
+- Its rules above are unchanged.

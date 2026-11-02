@@ -197,11 +197,11 @@ def score_one(task: dict, raw: str) -> dict:
     pos = {f: i for i, f in enumerate(order)}
     pairs = [(task["file_of"][v], task["file_of"][u]) for u, v in task["edges"]]  # (callee file, caller file)
     pairs = [(a, b) for a, b in pairs if a != b and a in pos and b in pos]
-    alpha = {f: i for i, f in enumerate(sorted(files))}
     dirs = lambda fs: {f.rsplit("/", 1)[0] if "/" in f else "" for f in fs}
     return {"answered": bool(subs), "subtasks": len(subs), "commits": task["commits"],
             "count_within_2x": bool(subs) and 0.5 <= len(subs) / task["commits"] <= 2.0,
             "first_file_hit": bool(order) and order[0] in first_commit,
+            "first_file_hit_alphabetical": sorted(files)[0] in first_commit,
             "tau": kendall(order, truth), "tau_alphabetical": kendall(sorted(files), truth),
             "files_named": len(order), "files_total": len(files),
             "dependency_respected": (sum(pos[a] <= pos[b] for a, b in pairs) / len(pairs)) if pairs else None,
@@ -211,27 +211,33 @@ def score_one(task: dict, raw: str) -> dict:
 
 
 def summary(rows: dict, first_file_base: dict) -> dict:
-    """The rubric's verdicts (README): bootstrap 95% intervals over tasks, 10,000 resamples, seed 5501."""
+    """The rubric's verdicts (README; primary since amendment 2: the first-file hit). Bootstrap 95% intervals over
+    tasks, 10,000 resamples, seed 5501."""
     from harness.experiments.suite import stats
     ids = sorted(rows)
-    tau = [rows[i]["tau"] or 0.0 for i in ids]                      # no measurable order counts as 0
-    alpha = [rows[i]["tau_alphabetical"] or 0.0 for i in ids]
-    zero = [0.0] * len(ids)
-    t_vs_0, t_vs_alpha = stats.bootstrap_diff(zero, tau, ids), stats.bootstrap_diff(alpha, tau, ids)
+    mean = lambda xs: round(sum(xs) / len(xs), 3) if xs else None
     hit = [float(rows[i]["first_file_hit"]) for i in ids]
+    random_base = [first_file_base[i] for i in ids]
+    alpha_hit = [float(rows[i]["first_file_hit_alphabetical"]) for i in ids]
+    vs_random, vs_alpha = stats.bootstrap_diff(random_base, hit, ids), stats.bootstrap_diff(alpha_hit, hit, ids)
+    tau = [rows[i]["tau"] or 0.0 for i in ids]                      # exploratory; no measurable order counts as 0
+    alpha = [rows[i]["tau_alphabetical"] or 0.0 for i in ids]
+    t_vs_0, t_vs_alpha = stats.bootstrap_diff([0.0] * len(ids), tau, ids), stats.bootstrap_diff(alpha, tau, ids)
     dep_ids = [i for i in ids if rows[i]["dependency_respected"] is not None]
     dep = stats.bootstrap_diff([0.5] * len(dep_ids), [rows[i]["dependency_respected"] for i in dep_ids], dep_ids) if dep_ids else None
-    mean = lambda xs: round(sum(xs) / len(xs), 3) if xs else None
     return {"tasks": len(ids), "answered": sum(rows[i]["answered"] for i in ids),
-            "tau_mean": mean(tau), "tau_interval": [t_vs_0["low"], t_vs_0["high"]],
-            "tau_alphabetical_mean": mean(alpha), "tau_minus_alphabetical": [t_vs_alpha["mean"], t_vs_alpha["low"], t_vs_alpha["high"]],
-            "first_file_hit_rate": mean(hit), "first_file_base_rate": mean([first_file_base[i] for i in ids]),
+            "primary_first_file_hit": mean(hit), "random_base_rate": mean(random_base), "alphabetical_hit": mean(alpha_hit),
+            "hit_minus_random": [vs_random["mean"], vs_random["low"], vs_random["high"]],
+            "hit_minus_alphabetical": [vs_alpha["mean"], vs_alpha["low"], vs_alpha["high"]],
+            "verdict_digests_support_planning": vs_random["low"] > 0 and vs_alpha["low"] > 0,
+            "exploratory_tau_mean": mean(tau), "exploratory_tau_interval": [t_vs_0["low"], t_vs_0["high"]],
+            "exploratory_tau_alphabetical_mean": mean(alpha),
+            "exploratory_tau_minus_alphabetical": [t_vs_alpha["mean"], t_vs_alpha["low"], t_vs_alpha["high"]],
             "count_within_2x": mean([float(rows[i]["count_within_2x"]) for i in ids]),
             "dependency_respected_mean": mean([rows[i]["dependency_respected"] for i in dep_ids]),
             "dependency_interval_vs_half": [dep["low"], dep["high"]] if dep else None, "dependency_tasks": len(dep_ids),
-            "single_directory_subtasks": mean([rows[i]["single_directory_subtasks"] for i in ids if rows[i]["single_directory_subtasks"] is not None]),
-            "verdict_digests_support_planning": t_vs_0["low"] > 0 and t_vs_alpha["low"] > 0
-                                                and mean(hit) > mean([first_file_base[i] for i in ids]),
+            "single_directory_subtasks": mean([rows[i]["single_directory_subtasks"] for i in ids
+                                               if rows[i]["single_directory_subtasks"] is not None]),
             "verdict_dependency_visible": bool(dep) and dep["low"] > 0}
 
 

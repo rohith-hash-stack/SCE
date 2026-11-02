@@ -64,3 +64,16 @@ functions resolvable at the base, and the 4-per-repository cap left no replaceme
   file-order tau 0.74 (the ceiling under ties), first-file hit 1.0 (base rate 0.35), and dependency order 0.56,
   with an interval reaching below 0.5. So developers do not work callees-first. The dependency verdict is reported
   beside this 0.56 reference, not as a target the truth itself meets.
+
+**Amendment 2 (before any call):**
+- **The primary is now the first-file hit, not tau.** The PRs' own commit order scores tau 0.74 against itself:
+  work-in-progress commits, fix-ups and review rounds make the commit sequence a noisy reference. Agreement with a
+  noisy sequence is not a clean measure of a plan. The first file is the decision that matters most for an agent.
+- **Decision:** digests support planning if the first-file hit rate is above both baselines, with both bootstrap
+  intervals (95%, 10,000 resamples over tasks, seed 5501) of the per-task difference above 0. The baselines are:
+  - **random:** per task, the share of the PR's files its first commit touched;
+  - **alphabetical:** whether the alphabetically first file was touched by the first commit.
+- **Exploratory, beside it:** tau and its alphabetical baseline. Unchanged as **secondaries:** subtask count within
+  2×, dependency order (with the truth-order reference 0.56), and directory grouping.
+- **The tasks are rebuilt with digest v2,** which adds the parameter list. R3 will use v2, so A3 must test v2. It is
+  the same 19 PRs by the same seeded draw; only the digest text in the prompts changes.
