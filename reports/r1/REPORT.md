@@ -500,6 +500,14 @@ line numbers are ignored.
 
 ### A3. Planning a multi-file change from digests alone (20 model calls)
 
-The rubric was committed before any call (`harness/experiments/r3pre/README.md`, commit `390ecd0`). The 20 tasks are
-frozen in `harness/experiments/r3pre/tasks/planner.json`. **Pending:** the 20 calls run on Kaggle with the suite's
-model. The result and its verdict follow here, scored by the rubric.
+The rubric was committed before any call (`harness/experiments/r3pre/README.md`, commit `390ecd0`, with amendments
+before any call in `e57d8c8`). **19 tasks**, not 20 (the candidate pool ran out), are frozen in
+`harness/experiments/r3pre/tasks/planner.json`.
+
+**Pending:** the 19 calls, run on Kaggle with the suite's model (`kaggle/r3pre_planner_cell.py`). The result and its
+verdict follow here, scored by `planner.py score`.
+
+Reference, from the scorer's self-test on the PRs' own commit order:
+- file-order tau 0.74 (the ceiling under ties);
+- first-file hit 1.0 (base rate 0.35);
+- dependency order 0.56, so developers do not work callees-first.
