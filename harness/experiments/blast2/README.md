@@ -152,3 +152,13 @@ The cell checks every hash before any model call. No answer is opened before the
 - **R1's anchors and its hidden-caller numbers:** they motivate B2 and are not pooled with it.
 - **R1's "named" means** (21 against 9): replaced by the name-quality breakdown. The means were carried by a few
   long lists, with medians 3.5 and 6.5.
+
+## Amendment 1: scope (after the R1 reframe, before any B2 data; no rule changed)
+
+- **B2 is a single-shot component test** of blast's retrieval: does PRISM's context let a model name the callers a
+  text-search prompt cannot show?
+- **It is not the blast verdict.** Blast's natural form is multi-step (change, run the tests, follow the failures),
+  and that is tested in R3.
+- A `pass` here supports R3's blast mechanism, and a `not_shown` weakens it. Neither settles whether PRISM helps a
+  blast workflow.
+- Everything above this amendment (key, tasks, primary, floor, labels, freezing, stopping) is unchanged.

@@ -9,6 +9,10 @@ Ten repositories, six task types, 742 tasks, 2,036 model calls. The design was p
 - Temperature 0.2, seed 42, 20,480-token window, 4,096-token answer cap.
 - Code pinned at `793c40a`.
 
+**Scope:** every type here was tested single-shot. Blast, newfn and tests have multi-step natural structures and
+are re-tested in R3. See "Scope" in `reports/r1/REPORT.md`, which also lists bugs as not scheduled. No number or
+label below changes.
+
 ## Summary
 
 | type | task | baseline | PRISM | p (Holm) | verdict |

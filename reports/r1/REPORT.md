@@ -11,6 +11,29 @@ commit `feac1f4`, made before any R1 answer was scored). Numbers come from `RESU
 - Each task's value is the mean over the three seeds.
 - Primary tests exclude tasks where either version was cut off. The all-tasks result is shown beside each.
 
+## Scope: every result here is single-shot
+
+**Every task type tested so far was tested single-shot:** one prompt, one answer, no tools, no iteration. That covers
+the suite's six types and R1's three (forward, blast, newfn). The results, labels and rules in this report are valid
+for that framing and are not changed by what follows.
+
+| type | its natural structure | tested | workflow equivalent |
+|---|---|---|---|
+| forward | single-shot fits: find and update the callers of one change | suite, R1 | none needed; R3 keeps it as a secondary |
+| concepts | single-shot fits: answer a question | suite | none |
+| blast | multi-step: change, run the tests, follow the failures | suite, R1 | R3 (primary) |
+| newfn | multi-step: draft, run, iterate | suite, R1 | R3 (primary) |
+| tests | multi-step: write, run, fix | suite (invalid: truncation) | R3, if included |
+| bugs | multi-step: search, read, narrow down | suite | not scheduled [TBD team] |
+
+**This is a limitation of the method that R1 revealed, not a finding R1 produced.** R1 does not show that PRISM
+helps more, or less, in multi-step work. It shows what PRISM's context does in one shot. R3 tests the multi-step
+form.
+
+- Blast2 (`harness/experiments/blast2/README.md`) is a single-shot **component test** of blast's retrieval. It is
+  not the blast verdict.
+- R2 stays the forward bundle ablation, single-shot, as pre-registered in Amendment R1-A, A6.
+
 ## Outcome (pre-registered labels)
 
 | type | padded baseline | baseline | PRISM | difference [95% CI] | Holm p | label |
@@ -29,6 +52,8 @@ commit `feac1f4`, made before any R1 answer was scored). Numbers come from `RESU
   newfn gain (0.59 → 0.71) is explained by prompt size.
 
 ## forward
+
+*Scope: single-shot. Natural structure matches; no workflow equivalent needed (R3 keeps forward as a secondary).*
 
 | | FILE | FILE_BM25PAD | FILE_GREPPAD | PRISM |
 |---|---|---|---|---|
@@ -52,6 +77,9 @@ commit `feac1f4`, made before any R1 answer was scored). Numbers come from `RESU
 
 ## blast
 
+*Scope: single-shot. Workflow equivalent: R3. Blast2 is a single-shot component test of the retrieval, not the
+blast verdict.*
+
 | | GREP | GREP_PAD | PRISM |
 |---|---|---|---|
 | traced-caller recall | 0.114 | 0.197 | **0.299** |
@@ -74,6 +102,8 @@ commit `feac1f4`, made before any R1 answer was scored). Numbers come from `RESU
   correction.
 
 ## newfn
+
+*Scope: single-shot. Workflow equivalent: R3.*
 
 | | FILE | FILE_BM25PAD | PRISM |
 |---|---|---|---|
@@ -396,3 +426,80 @@ investigation **withdraws the invented-call cost**: at least 71% of the "invente
 PRISM's excess comes mostly from method calls on expressions that the scorer misreads. Genuine inventions are rare,
 and the one found is a pattern copy of a real name. The scorer needs the fix in §5 before invented calls can be used
 as a side condition again.
+
+## Before R3: three analyses (post hoc; not pre-registered results)
+
+Scripts: `harness/experiments/r3pre/`. These inform R3's design (`harness/experiments/r3/README.md`). They change no
+R1 label.
+
+### A1. Does forward's advantage grow with the number of callers? (no model calls)
+
+R1 forward: callers found, PRISM vs FILE_GREPPAD, by how many callers the developer changed. The two cut-off tasks
+are excluded.
+
+| callers | tasks | seed 42 | seed 1001 | seed 2002 | all seeds: pad → PRISM | difference [95% CI] | p |
+|---|---|---|---|---|---|---|---|
+| 1 | 136 | +0.18 | +0.12 | +0.14 | 0.50 → 0.64 | +0.15 [+0.08, +0.22] | 7.3e-5 |
+| 2 | 28 | +0.21 | +0.18 | +0.18 | 0.43 → 0.62 | +0.19 [+0.07, +0.31] | 0.013 |
+| 3-4 | 18 | +0.43 | +0.39 | +0.24 | 0.31 → 0.66 | +0.35 [+0.09, +0.59] | 0.021 |
+| 5+ | 8 | +0.26 | +0.38 | +0.41 | 0.58 → 0.93 | +0.35 [+0.13, +0.58] | 0.062 |
+| all | 190 | +0.21 | +0.16 | +0.17 | 0.47 → 0.65 | +0.18 [+0.12, +0.24] | 4.8e-8 |
+
+The rank correlation between a task's number of callers and its gap is ρ = 0.22, p = 0.003.
+
+**Verdict:** the advantage grows with the number of callers, about doubling from 1 caller (+0.15) to 3 or more
+(+0.35), and the direction holds at every seed. It is post hoc. The two deepest strata hold 26 tasks, and caller
+count overlaps with R1's tier, so this is a preview of R3's scaling prediction, not a test of it.
+
+### A2. The digest before and after the developer's change (no model calls)
+
+For 20 R1 forward tasks (seed 5501, from the 9 repositories with full clones), the anchor and every changed caller
+were indexed at the parent and at the commit, and their digests diffed. A fact is its kind, text and conditions;
+line numbers are ignored.
+
+| what the anchor's digest delta shows | tasks |
+|---|---|
+| a behaviour change: a raise, catch, state change or dynamic call added or removed, or a new condition | 14 |
+| a textual change only: the same facts with renamed or re-written arguments | 5 |
+| no change at all: a signature-only change | 1 |
+
+- **Facts changed, all 20 anchors:** assign 51, call 40, return 36, state 25, call targets 22, dynamic 16, raise 13,
+  catch 10.
+- 16 of 20 anchors changed their signature.
+- 24 of the 29 changed callers show a digest change at their call to the anchor.
+
+**Worked examples:**
+1. **tornado-forward-016, `_finish_read(self, size, streaming)` → `(self, size)`:** the anchor's digest does not
+   change, because **the digest has no signature field**. The caller's digest shows it:
+   `self._finish_read(pos, False)` → `self._finish_read(pos)`. That is the same information as the line diff.
+2. **marshmallow-forward-012, `load(..., unknown=None)`:** return fact
+   `self._do_load(data, many, partial=partial, postprocess=True)` → `…, unknown=unknown, …`. The caller
+   `Nested._deserialize` changes `self.schema.load(value)` → `load(value, unknown=self.unknown)`. Textual: the digest
+   restates the diff.
+3. **mocha-forward-006, `formattedImport(file)` → `(file, esmDecorator = forward)`:** the digest adds "calls the
+   function passed as argument `esmDecorator`" (a new dynamic call), under the condition `path.isAbsolute(file)`, and
+   both returns change. The caller `requireOrImport` passes the new argument. A behaviour change that a reader of the
+   caller would not see in the caller's own diff.
+4. **werkzeug-forward-019, `get_current_traceback(..., skip=0)`:** a new loop `for each x in xrange(skip)` skips
+   frames. The behaviour depends on a new parameter, visible as a new condition.
+5. **Raise obligations:** 5 anchors gained a `raise`; in only 1 of those tasks did the changed caller add a `catch`.
+   A rule "a new raise means the caller must catch" would be wrong 4 times out of 5, because errors usually
+   propagate.
+
+**Verdict:**
+- **As a change summary, the digest is real:** 14 of 20 deltas state a behaviour change compactly, with its
+  conditions, for callers in other files.
+- **As a verifier of edits, it is not shown:**
+  - it is blind to signature changes, the most common forward change (16 of 20);
+  - at call sites it carries the same information as the diff;
+  - its one obligation-like signal (raise → catch) would mostly raise false alarms.
+- **Whether a digest check catches a wrong edit that a diff misses cannot be answered without running edits through
+  a check loop.** R3 must measure it: report, per run, whether a digest comparison of the agent's edited callers
+  flagged the runs that failed their tests.
+- **Fix before relying on it:** add the parameter list to the digest, so a signature change is a fact.
+
+### A3. Planning a multi-file change from digests alone (20 model calls)
+
+The rubric was committed before any call (`harness/experiments/r3pre/README.md`, commit `390ecd0`). The 20 tasks are
+frozen in `harness/experiments/r3pre/tasks/planner.json`. **Pending:** the 20 calls run on Kaggle with the suite's
+model. The result and its verdict follow here, scored by the rubric.
