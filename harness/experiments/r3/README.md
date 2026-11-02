@@ -37,7 +37,8 @@ post hoc, and the higher strata have few tasks (18 and 8).
 - **Source:** a commit that adds one function and tests for it, using suite type 2's miner joined with type 6's
   gate.
 - **Start state:** the parent revision.
-- **Prompt:** the signature and the docstring or JSDoc; the developer's new tests stay hidden.
+- **Prompt:** the signature and the docstring or JSDoc, and the file (and class) where the function goes, as in suite
+  type 2. The developer's new tests stay hidden.
 - **Validity gate:** the hidden tests fail at the start state (the function is missing) and pass at the commit.
 - **Depth strata:** the number of existing repository functions the developer's body calls (2, 3-4, 5+).
 
@@ -103,6 +104,49 @@ Both versions run the same agent loop, as fixed below.
   sides, is bound by the same per-call cap and the same total budget, so neither version can see more tokens.
 - **Note (A3):** in R3 the agent can request a function's digest as part of its exploration. A3's dump-based plan step
   is not included, because it tested ordering a pre-selected list, not planning from a request.
+
+## Scope: the AI is the planner (after A3; no pass/fail rule changed)
+
+**What each family gives the agent, and what it leaves to it:**
+
+| family | given | left to the agent |
+|---|---|---|
+| B | the start state (the parent, plus the developer's change to one function), the prompt "Function X was changed as shown. Update the rest of the project so its tests pass.", and the project's test command | which callers break; in what order to fix them; how to fix each; when it is done |
+| N | the signature, the docstring, and the file (and class) where the function goes, as in suite type 2 | which existing functions to reuse, how to structure the body, which tests to run, when it is done |
+
+- No caller list, plan or approach is supplied in either family.
+- **Note (pre-registration):** R3 tests the AI as the planner, using PRISM's primitives, which is the architecture.
+- **Limit:** each task starts from a given root: a change already made (B), or a function already specified (N).
+  Deciding *what* to change from a feature request, before any root exists, is not tested. It is a separate
+  question for a future round.
+
+## Tool audit: which primitives are generic, and which task flavors R3 covers
+
+| tool | generic or task-specific | what it gives |
+|---|---|---|
+| `prism_digest(symbols)` | **generic** | any function's facts and signature |
+| `prism_ask(question)` | **generic** | search |
+| `prism_blast_radius(symbol)` | **generic**: any change to, or removal of, an existing symbol | every transitive caller |
+| `prism_change_context(symbol)` | **generic for existing symbols**: updates, interface changes, refactors, moves, deletions; not for new code | callers with per-call-site facts, callees, conventions, callers' code, wider impact |
+| `prism_new_function_context(file, name, signature, purpose)` | **task-specific**: creating a new function only | helpers, siblings, conventions |
+
+| task flavor | tasks in R3 | PRISM tools that serve it | covered |
+|---|---|---|---|
+| update the callers of a changed function | Family B | change context, blast radius, digest, ask | **yes** |
+| change an interface (signature) and propagate | Family B (most anchors change signature) | as above | **yes** |
+| create a new function to a spec | Family N | new-function context, digest, ask | **yes**; its result is partly about a task-specific tool |
+| refactor without changing behaviour | none | change context, blast radius (generic) | **no**: the tools would apply, but there are no tasks |
+| move code between files or modules | none | blast radius lists callers, but no tool lists import sites | **no** |
+| delete code | none | blast radius (generic) | **no** |
+| add tests | none (test writing is out) | no test tool in R3 (`prism.impact.testcontext` exists but is not given) | **no** |
+| a feature spanning several new functions | none (Family N adds one) | new-function context, once per function | **no** |
+
+- **R3's results apply to the flavors marked "yes".**
+- **Family N's result is partly a result about `prism_new_function_context`.** It is the one task-specific tool, and
+  only Family N can use it.
+- R3 does not test refactoring, moving, deleting, adding tests, or multi-function features.
+- No tool is added for those now.
+
 
 ## Answer key and scoring
 

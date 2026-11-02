@@ -109,9 +109,25 @@ functions resolvable at the base, and the 4-per-repository cap left no replaceme
   including 0).
 - **What it does not support:** any claim about planning from a request, planning that explores the code, or
   planning that can consult digests along the way. It does not show that digests are useless for planning.
-- **The null, restated:** ~~"digests alone did not let this model choose where a multi-file change starts better than
-  chance"~~ → **"ordering a pre-selected list of changed functions from their digests, in one shot, did not beat
-  chance."**
+- **The null, restated (first correction):** ~~"digests alone did not let this model choose where a multi-file
+  change starts better than chance"~~ → ~~"ordering a pre-selected list of changed functions from their digests, in
+  one shot, did not beat chance."~~ → **"ordering a pre-selected list of node updates from digests, in one shot,
+  without tools and without the ability to explore or revise, does not beat chance."**
+- **Second correction: A3 asked the wrong question.**
+  - A3 also tested PRISM as the planner. That is not the architecture. **The AI is the planner; PRISM provides
+    primitives the AI uses:** look up a digest, see who calls a function, see what breaks, search.
+  - A3 did not test whether the AI can plan a multi-step task using PRISM's primitives. It tested whether PRISM's
+    summaries, given as a one-shot static input, could plan, which is not PRISM's job.
+  - The correct question, whether the AI as planner benefits from PRISM's primitives, is tested in R3.
+- **Scope correction:** A3 tested one flavor of multi-step work, ordering a pre-selected list of node updates.
+  - Multi-step tasks also include creating, refactoring, moving, deleting, changing interfaces and adding tests.
+    A3 tested none of them.
+  - A3's null should not be read as evidence about those flavors.
+- **A3 does not support anything about:**
+  - the AI planning with PRISM's primitives;
+  - creating, refactoring, moving, deleting, changing interfaces or adding tests;
+  - planning from a user request;
+  - iterative planning, with tools and with revision.
 - **The R3 decision stands, for a different reason.** R3's agent plans the way real planning works: it starts from
   the request, explores with tools (including, by R3's amendment, a digest on request), drills in, and revises.
   - A dump-based plan step would add the kind of planning A3 tested, which is not the kind R3's loop already does.

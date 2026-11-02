@@ -532,8 +532,16 @@ and the primary is now the first-file hit (rubric amendment 2).
 - **Exploratory, tau:** 0.001.
 - **Secondaries:** dependency order 0.45, subtask count within 2× 0.42, single-directory subtasks 0.60.
 - **Verdict:** ~~digests alone did not let this model choose where a multi-file change starts better than chance.~~
-  **Corrected (the claim was broader than the design):** ordering a **pre-selected** list of changed functions from
-  their digests, in one shot, did not beat chance.
+  ~~**Corrected (the claim was broader than the design):** ordering a **pre-selected** list of changed functions
+  from their digests, in one shot, did not beat chance.~~
+  **Corrected again (two levels):**
+  - **Scope:** ordering a pre-selected list of node updates from digests, in one shot, without tools and without the
+    ability to explore or revise, does not beat chance.
+    - That is one flavor of multi-step work. A3 says nothing about creating, refactoring, moving, deleting, changing
+      interfaces or adding tests.
+  - **Question:** A3 tested PRISM as the planner, which is not the architecture. The AI is the planner, and PRISM
+    provides primitives the AI uses. Whether the AI as planner benefits from PRISM's primitives is R3's question; A3
+    did not test it.
   - A3 gave the model exactly the functions the PR changed, and their files, with no tools and no exploration. It did
     not test planning from a request, or planning that explores and consults digests.
   - R3 runs without a plan-from-digests step, because that one-shot ordering is the wrong shape of planning for an
