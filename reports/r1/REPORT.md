@@ -523,8 +523,16 @@ before any call in `e57d8c8`). **19 tasks**, not 20 (the candidate pool ran out)
 `harness/experiments/r3pre/tasks/planner.json`. They were rebuilt with digest v2 before any call (commit `538949b`),
 and the primary is now the first-file hit (rubric amendment 2).
 
-**Pending:** the 19 calls, run on Kaggle with the suite's model (`kaggle/r3pre_planner_cell.py`). The result and its
-verdict follow here, scored by `planner.py score`.
+**Result** (19 calls on Kaggle, the same model):
+- **First-file hit, the primary:** 0.42.
+  - Against random (0.35): +0.07 [−0.05, +0.20].
+  - Against alphabetical (0.26): +0.16 [−0.11, +0.42].
+  - **Not shown (flat).**
+  - On the 11 PRs where a random first pick rarely hits, the plan hit once.
+- **Exploratory, tau:** 0.001.
+- **Secondaries:** dependency order 0.45, subtask count within 2× 0.42, single-directory subtasks 0.60.
+- **Verdict:** digests alone did not let this model choose where a multi-file change starts better than chance. R3
+  runs without a plan-from-digests step.
 
 Reference, from the scorer's self-test on the PRs' own commit order:
 - file-order tau 0.74 (the ceiling under ties);

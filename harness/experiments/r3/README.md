@@ -3,7 +3,7 @@
 Every earlier round was single-shot. Blast, newfn and tests are multi-step by nature (`reports/r1/REPORT.md`,
 "Scope"). R3 tests them as an agent works them: read, edit, run the tests, iterate. R1's labels stay the answers to
 the single-shot question. The open items are decided in "Decisions" below. The one decision that waits for A3's result
-(the plan-from-digests step) is marked there. This file is hash-committed once it is filled in, before any R3 build.
+(the plan-from-digests step) was settled by A3: no planning step. This file is hash-committed once it is filled in, before any R3 build.
 
 ## Hypothesis
 
@@ -187,7 +187,7 @@ test runs; the first turn at which every F2P test passes.
 | test writing | out | as above |
 | skill file | **out of scope**, recorded as a known limit | Agents in practice often get a repository skill file. R3 measures PRISM's tools without one, in both versions alike. A skill-file round is separate. |
 | blast | Family B is blast-as-action; no separate family; blast2 is post-R3 explanatory | as above |
-| plan-from-digests first step | **pending A3's result** (first-file hit, the primary since amendment 2 of `harness/experiments/r3pre/README.md`) | If A3 passes: both versions start with a planning turn, and PRISM's gets digests. If A3 is flat or negative: no planning step. Recorded here as an amendment before the hash. |
+| plan-from-digests first step | **none: A3 was flat** | A3's first-file hit was 0.42, against 0.35 random and 0.26 alphabetical; both intervals include 0 (`harness/experiments/r3pre/README.md`, "A3 result"). Neither version has a planning turn; the loop starts at the task. No pass/fail rule changed. |
 | equivalence margin, floor, Holm family, negative branch | unchanged | not open items |
 
 **Repository candidate pool** (in order; a repository joins a family if it has at least 3 gated tasks there, and

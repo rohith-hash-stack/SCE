@@ -77,3 +77,22 @@ functions resolvable at the base, and the 4-per-repository cap left no replaceme
   2×, dependency order (with the truth-order reference 0.56), and directory grouping.
 - **The tasks are rebuilt with digest v2,** which adds the parameter list. R3 will use v2, so A3 must test v2. It is
   the same 19 PRs by the same seeded draw; only the digest text in the prompts changes.
+
+## A3 result (19 calls, `qwen2.5-coder:14b-instruct-q8_0` on Kaggle, run against `538949b`)
+
+- No errors. 2 answers were cut at the answer cap and unparseable; by the rubric they count as plans with no files.
+- **Primary, the first-file hit:** 8 of 19 = **0.42**.
+  - Against random (base rate 0.35): +0.07 [−0.05, +0.20].
+  - Against alphabetical (0.26): +0.16 [−0.11, +0.42].
+  - **Both intervals include 0. Verdict: not shown (flat).** The point estimates are above both baselines, so this is
+    a null, not a falsification.
+  - On the 11 PRs where a random first pick rarely hits (base rate below 0.30), the plan hit **1** time. Nearly all its
+    hits came where most files were in the first commit anyway.
+- **Exploratory, tau:** 0.001 [−0.08, +0.08], against the developers' own order at 0.74 and alphabetical at −0.09.
+- **Secondaries (context):**
+  - subtask count within 2× of the PR's commits: 0.42;
+  - dependency order: 0.45 [interval vs 0.5: −0.21, +0.12], against the developers' 0.56;
+  - single-directory subtasks: 0.60.
+- **Dependency structure visible:** not shown.
+- **Decision for R3:** flat. R3 runs **without** a plan-from-digests step (recorded in
+  `harness/experiments/r3/README.md`).
