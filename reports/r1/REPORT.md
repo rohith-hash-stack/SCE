@@ -531,8 +531,14 @@ and the primary is now the first-file hit (rubric amendment 2).
   - On the 11 PRs where a random first pick rarely hits, the plan hit once.
 - **Exploratory, tau:** 0.001.
 - **Secondaries:** dependency order 0.45, subtask count within 2× 0.42, single-directory subtasks 0.60.
-- **Verdict:** digests alone did not let this model choose where a multi-file change starts better than chance. R3
-  runs without a plan-from-digests step.
+- **Verdict:** ~~digests alone did not let this model choose where a multi-file change starts better than chance.~~
+  **Corrected (the claim was broader than the design):** ordering a **pre-selected** list of changed functions from
+  their digests, in one shot, did not beat chance.
+  - A3 gave the model exactly the functions the PR changed, and their files, with no tools and no exploration. It did
+    not test planning from a request, or planning that explores and consults digests.
+  - R3 runs without a plan-from-digests step, because that one-shot ordering is the wrong shape of planning for an
+    agent. R3's agent plans by exploring, and can request digests as it goes
+    (`harness/experiments/r3pre/README.md`, "What A3 tested").
 
 Reference, from the scorer's self-test on the PRs' own commit order:
 - file-order tau 0.74 (the ceiling under ties);

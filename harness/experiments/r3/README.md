@@ -86,13 +86,23 @@ Both versions run the same agent loop, as fixed below.
 | system prompt | identical, except the list of tool descriptions |
 | skill file | none in either version |
 
-- **PRISM version:** the shared tools plus `prism_change_context`, `prism_blast_radius`, `prism_new_function_context`
-  and `prism_ask`, from the code frozen for R3.
+- **PRISM version:** the shared tools plus five PRISM tools, from the code frozen for R3:
+  - `prism_change_context`, `prism_blast_radius`, `prism_new_function_context` and `prism_ask`;
+  - **`prism_digest(symbols)`**, added by amendment: the digest (v2, with the signature) of up to 10 named functions
+    per call, under the 4,000-token cap.
+
+  So the agent can consult a function's digest whenever it explores, not only as part of a bundled context. Without
+  it, digests reach the agent only inside the change context (the anchor and its callers) and the new-function
+  context (helpers). R3 would then test the call graph, but not the digest as an exploration aid.
 - **Baseline version:** the shared tools plus `related_code`. It returns the functions a BM25 search over the
-  repository's functions ranks highest for a query, as code, cut to the same 4,000-token cap. It matches PRISM's
-  tool count and per-call size with ordinary keyword search (R1's control, moved into the loop).
+  repository's functions ranks highest for a query, as code, cut to the same 4,000-token cap: R1's control, moved
+  into the loop. Its counterpart to `prism_digest` is `read_file`, which already gives any function's code.
 - **Parity is fixed by:** the same model, seeds, loop, window rule, total budget, per-call cap, shared tools and test
-  command, and one extra search-type tool on each side. Nothing else differs.
+  command. ~~"and one extra search-type tool on each side"~~ **Corrected:** the tool count is not matched. PRISM's
+  version has five extra tools and the baseline one, and that difference is the treatment. Every tool, on both
+  sides, is bound by the same per-call cap and the same total budget, so neither version can see more tokens.
+- **Note (A3):** in R3 the agent can request a function's digest as part of its exploration. A3's dump-based plan step
+  is not included, because it tested ordering a pre-selected list, not planning from a request.
 
 ## Answer key and scoring
 
@@ -201,7 +211,8 @@ test runs; the first turn at which every F2P test passes.
 | test writing | out | as above |
 | skill file | **out of scope**, recorded as a known limit | Agents in practice often get a repository skill file. R3 measures PRISM's tools without one, in both versions alike. A skill-file round is separate. |
 | blast | Family B is blast-as-action; no separate family; blast2 is post-R3 explanatory | as above |
-| plan-from-digests first step | **none: A3 was flat** | A3's first-file hit was 0.42, against 0.35 random and 0.26 alphabetical; both intervals include 0 (`harness/experiments/r3pre/README.md`, "A3 result"). Neither version has a planning turn; the loop starts at the task. No pass/fail rule changed. |
+| plan-from-digests first step | **none** | A3 (first-file hit 0.42 vs 0.35 random, 0.26 alphabetical; intervals include 0) tested ordering a pre-selected list of changed functions in one shot, not planning from a request (`harness/experiments/r3pre/README.md`, "What A3 tested"). R3's agent plans by exploring, with `prism_digest` available. A one-shot ordering step would be the wrong shape of planning, so neither version has one. No pass/fail rule changed. |
+| digest on request | **added: `prism_digest(symbols)`** | without it, R3 could not test the digest as an exploration aid; tools are a design parameter, not a scoring rule |
 | equivalence margin, floor, Holm family, negative branch | unchanged | not open items |
 
 **Repository pool, confirmed against the cutoff** (`pool_scan.py`, 34 repositories; counts are candidates
@@ -263,3 +274,33 @@ as replacements too, and were short.
 "Never used" means the `owner/repo` name appears nowhere in this repository's benchmarks, harness, reports or
 docs, as checked when this file was written. The half-new rule is enforced on the tasks, not on the repositories:
 mining stops taking used repositories once they would hold more than half of a family's tasks.
+
+## Recommendations awaiting team approval (recorded before the hash; no pass/fail rule changed)
+
+| item | recommendation | why |
+|---|---|---|
+| budget | **Family B at 80. Family N at 80 under the relaxed rule if the gated pool reaches 80; otherwise as below.** About 11-36 Kaggle sessions with both families, 6-18 with Family B alone. | R1's blast test was underpowered (about 54%), and 80 gives 80% power for the +0.10 floor. Family B's pool (165 candidates) supports 80 if about half pass the gate. |
+| Family N | **Option 1: the relaxed rule, at most 20 tasks per repository, target 80.** If 50-79 pass the gate, it runs at that size, with its power statement amended before any model call ("effects below about +0.15 to +0.20 are not detectable at this size; a `not_shown` result for Family N is underpowered"). If fewer than 50 pass, it is dropped from R3 and run as its own round with a wider pool. | It keeps the post-cutoff rule, which rules out memorization, rather than reopening it (option 2). The relaxed rule changes only which commits are candidates, not how they are scored. |
+| JS/TS builder contingency | **One-week rule.** If the builder does not pass its own check within 5 working days of starting, on all 7 JS/TS repositories (it installs, finds the tests, and runs a named test at two revisions), R3 round 1 is Python-only, and the JS/TS tasks are R3b under these same rules. | A slipping builder should not hold up the Python half. |
+
+**What Python-only round 1 would be:**
+- Family B from the 11 Python repositories: about 98 candidates before the gate, at most 10 per repository; 61 of
+  them from new repositories, so the half-new rule holds.
+  - Target 80, minimum 50, with the same power amendment as Family N if it lands between 50 and 79.
+- Family N Python-only: about 36 candidates under the relaxed rule, below 50, so it would not run in round 1. It
+  waits for R3b, or its own round.
+
+**Also to fix before the hash:**
+1. **Pilot-only tasks:**
+   - commits from the same pool repositories dated **2024-10-01 to 2024-11-30**, so they never overlap the main
+     tasks;
+   - gated the same way;
+   - 10 per family, drawn with seed 6601;
+   - never reported as results.
+2. **Gate attrition:** the number of candidates mined, gated and passed is reported per repository and family, so a
+   family's final size is traceable.
+3. **The model's release date:** 2024-11-12 is to be checked against the model card at freeze, as written above. If
+   the card shows a later date, the cutoff moves to the first day of the month after it, before any mining.
+
+**Not blocking the hash, but gating the build:** R2's two open items (held-out repositories, language mix) must be
+decided and R2 run, because R3's PRISM tools are frozen after R2 (step 3).

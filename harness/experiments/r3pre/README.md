@@ -96,3 +96,24 @@ functions resolvable at the base, and the 4-per-repository cap left no replaceme
 - **Dependency structure visible:** not shown.
 - **Decision for R3:** flat. R3 runs **without** a plan-from-digests step (recorded in
   `harness/experiments/r3/README.md`).
+
+## What A3 tested, and what it did not (interpretation, after the result; no number changed)
+
+- **The design:** each prompt gave the PR's title and **exactly the functions the PR changed**, each with its file
+  and digest ("These N existing functions will be changed"), in a random order. It was one call, with no tools,
+  no code, and no chance to explore or revise.
+  - So the model was handed the answer set, functions and files, and asked to order it.
+  - Discovery (from a request to the functions that matter) was removed entirely.
+- **What it supports:** given a pre-selected set of changed functions as static digests, this model, in one shot,
+  could not pick the PR's first file better than chance (0.42 vs 0.35 random and 0.26 alphabetical, intervals
+  including 0).
+- **What it does not support:** any claim about planning from a request, planning that explores the code, or
+  planning that can consult digests along the way. It does not show that digests are useless for planning.
+- **The null, restated:** ~~"digests alone did not let this model choose where a multi-file change starts better than
+  chance"~~ → **"ordering a pre-selected list of changed functions from their digests, in one shot, did not beat
+  chance."**
+- **The R3 decision stands, for a different reason.** R3's agent plans the way real planning works: it starts from
+  the request, explores with tools (including, by R3's amendment, a digest on request), drills in, and revises.
+  - A dump-based plan step would add the kind of planning A3 tested, which is not the kind R3's loop already does.
+  - So it is left out, not because A3 showed digests do not help planning, but because a one-shot ordering of a
+    given list is the wrong shape of planning for an agent.
