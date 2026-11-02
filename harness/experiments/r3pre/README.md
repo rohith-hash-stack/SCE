@@ -53,3 +53,14 @@ Unparseable answers count as plans with no files.
 - There is **no version with code**, so "digests support planning" means better than plans that ignore the content.
   It does not mean as good as planning with the code. That comparison belongs in R3.
 - The truth is one developer's order, and other orders can be valid. So tau measures agreement, not correctness.
+
+**Amendment (after building, before any call):** 19 tasks, not 20. Of the 24 candidate PRs, 5 kept fewer than 30
+functions resolvable at the base, and the 4-per-repository cap left no replacements.
+- A plan that names fewer than 3 of a task's files has no measurable order: its tau counts as 0 in the mean.
+- Ties in the truth order (files first touched in the same commit) cap the best possible tau below 1. The scorer's
+  self-test gives 0.86 for a plan in exactly the truth order on the first task.
+- The rubric is otherwise unchanged. The summary and verdict are computed by `planner.py score`.
+- **Reference (from the scorer's self-test, before any call):** the PRs' own commit order, scored as a plan, gives
+  file-order tau 0.74 (the ceiling under ties), first-file hit 1.0 (base rate 0.35), and dependency order 0.56,
+  with an interval reaching below 0.5. So developers do not work callees-first. The dependency verdict is reported
+  beside this 0.56 reference, not as a target the truth itself meets.

@@ -210,6 +210,31 @@ def score_one(task: dict, raw: str) -> dict:
                                                         if _norm_path(p, files)])) == 1 for s in subs) / len(subs)) if subs else None}
 
 
+def summary(rows: dict, first_file_base: dict) -> dict:
+    """The rubric's verdicts (README): bootstrap 95% intervals over tasks, 10,000 resamples, seed 5501."""
+    from harness.experiments.suite import stats
+    ids = sorted(rows)
+    tau = [rows[i]["tau"] or 0.0 for i in ids]                      # no measurable order counts as 0
+    alpha = [rows[i]["tau_alphabetical"] or 0.0 for i in ids]
+    zero = [0.0] * len(ids)
+    t_vs_0, t_vs_alpha = stats.bootstrap_diff(zero, tau, ids), stats.bootstrap_diff(alpha, tau, ids)
+    hit = [float(rows[i]["first_file_hit"]) for i in ids]
+    dep_ids = [i for i in ids if rows[i]["dependency_respected"] is not None]
+    dep = stats.bootstrap_diff([0.5] * len(dep_ids), [rows[i]["dependency_respected"] for i in dep_ids], dep_ids) if dep_ids else None
+    mean = lambda xs: round(sum(xs) / len(xs), 3) if xs else None
+    return {"tasks": len(ids), "answered": sum(rows[i]["answered"] for i in ids),
+            "tau_mean": mean(tau), "tau_interval": [t_vs_0["low"], t_vs_0["high"]],
+            "tau_alphabetical_mean": mean(alpha), "tau_minus_alphabetical": [t_vs_alpha["mean"], t_vs_alpha["low"], t_vs_alpha["high"]],
+            "first_file_hit_rate": mean(hit), "first_file_base_rate": mean([first_file_base[i] for i in ids]),
+            "count_within_2x": mean([float(rows[i]["count_within_2x"]) for i in ids]),
+            "dependency_respected_mean": mean([rows[i]["dependency_respected"] for i in dep_ids]),
+            "dependency_interval_vs_half": [dep["low"], dep["high"]] if dep else None, "dependency_tasks": len(dep_ids),
+            "single_directory_subtasks": mean([rows[i]["single_directory_subtasks"] for i in ids if rows[i]["single_directory_subtasks"] is not None]),
+            "verdict_digests_support_planning": t_vs_0["low"] > 0 and t_vs_alpha["low"] > 0
+                                                and mean(hit) > mean([first_file_base[i] for i in ids]),
+            "verdict_dependency_visible": bool(dep) and dep["low"] > 0}
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     p.add_argument("cmd", choices=("mine", "build", "generate", "score"))
@@ -265,8 +290,11 @@ def main(argv=None) -> int:
         tasks = json.loads(Path(a.args[0]).read_text())["tasks"]
         answers = json.loads((Path(a.args[1]) / "answers.json").read_text())
         rows = {t["id"]: score_one(t, answers.get(t["id"], {}).get("raw", "")) for t in tasks}
-        (Path(a.args[1]) / "scores.json").write_text(json.dumps(rows, indent=1, sort_keys=True) + "\n")
-        print(json.dumps(rows, indent=1)[:3000])
+        base = {t["id"]: len({o["file"] for o in t["file_order"] if o["commit_index"] == min(x["commit_index"] for x in t["file_order"])})
+                / len(t["files"]) for t in tasks}
+        res = {"rows": rows, "summary": summary(rows, base)}
+        (Path(a.args[1]) / "scores.json").write_text(json.dumps(res, indent=1, sort_keys=True) + "\n")
+        print(json.dumps(res["summary"], indent=1))
     return 0
 
 
