@@ -169,10 +169,24 @@ test runs; the first turn at which every F2P test passes.
 3. **R2 run and its result in hand.** R3's PRISM version uses the full change context; if R2 shows a section is dead
    weight, R3 still keeps it, and that is recorded. R2 gates the R3 build only so that R3's PRISM tools are frozen
    once, after R2.
-4. **The harness built** (loop, tools, environment builder, budget accounting) and **the pilot run on pilot-only
-   tasks.** Pilot findings may change the harness, as a recorded amendment, but not this file's rules.
-5. **Tasks mined, gated and frozen** with a manifest of sha256 hashes.
-6. **The Kaggle runs,** pinned to the frozen commit and manifest. **Then the analysis code,** committed before any
+4. **The JavaScript/TypeScript environment builder (named schedule item, does not exist yet).**
+   - **What exists:** `harness/experiments/suite/execute.py` builds a `uv` environment per Python repository and
+     revision and runs selected tests. Layer 4 runs Node tests only on corpora prepared by hand (express, tRPC), with
+     a fixed command each.
+   - **What is needed:**
+     - per repository and revision: install from the repository's lockfile (npm, pnpm or yarn), pick the Node version
+       from `engines` or `.nvmrc`, run any build step;
+     - detect the test runner (vitest, jest, mocha, node:test, tap) and run selected tests with a machine-readable
+       reporter;
+     - flake detection for the validity gate, and caching between tasks of one repository;
+     - installing Node in the Kaggle cell.
+   - **Estimate:** about 2-4 days, most of it on the per-repository quirks of the 7 JavaScript/TypeScript repositories
+     in the pool.
+   - The validity gate for those repositories cannot run until it works.
+5. **The harness built** (loop, tools, budget accounting, truncation and cap-hit logging from the start) and **the
+   pilot run on pilot-only tasks.** Pilot findings may change the harness, as a recorded amendment, but not this file's rules.
+6. **Tasks mined, gated and frozen** with a manifest of sha256 hashes.
+7. **The Kaggle runs,** pinned to the frozen commit and manifest. **Then the analysis code,** committed before any
    answer is opened.
 
 ## Decisions (the draft's open items)
@@ -190,13 +204,57 @@ test runs; the first turn at which every F2P test passes.
 | plan-from-digests first step | **none: A3 was flat** | A3's first-file hit was 0.42, against 0.35 random and 0.26 alphabetical; both intervals include 0 (`harness/experiments/r3pre/README.md`, "A3 result"). Neither version has a planning turn; the loop starts at the task. No pass/fail rule changed. |
 | equivalence margin, floor, Holm family, negative branch | unchanged | not open items |
 
-**Repository candidate pool** (in order; a repository joins a family if it has at least 3 gated tasks there, and
-mining takes repositories in this order until the family is full):
+**Repository pool, confirmed against the cutoff** (`pool_scan.py`, 34 repositories; counts are candidates
+before the validity gate):
+- "Since cutoff" counts non-merge commits on or after 2024-12-01.
+- "30-50" counts commits changing 30-50 existing functions.
+- B and N are the candidates defined in `pool_scan.py`.
+- A repository qualifies for a family with at least 5 candidates.
 
-| | never used before | used in the suite or R1 |
-|---|---|---|
-| Python | `hynek/structlog`, `Delgan/loguru`, `more-itertools/more-itertools`, `tobymao/sqlglot`, `sdispater/pendulum`, `arrow-py/arrow`, `python-poetry/tomlkit`, `pytest-dev/pluggy`, `fastapi/typer`, `pypa/packaging` | `pallets/werkzeug`, `marshmallow-code/marshmallow`, `Textualize/rich`, `scrapy/scrapy`, `aio-libs/aiohttp`, `tornadoweb/tornado` |
-| TypeScript / JavaScript | `gvergnaud/ts-pattern`, `supermacro/neverthrow`, `sindresorhus/execa`, `unjs/ofetch`, `unjs/h3`, `mswjs/msw` | `fastify/fastify` |
+| repository | new | since cutoff | 30-50 | B | N strict | N relaxed |
+|---|---|---|---|---|---|---|
+| `tobymao/sqlglot` | yes | 3,773 | 2 | **66** | 2 | **5** |
+| `vitest-dev/vitest` | yes | 2,189 | 2 | **106** | **6** | **32** |
+| `unjs/nitro` | yes | 1,619 | 0 | **40** | 3 | **21** |
+| `unjs/h3` | yes | 746 | 0 | **21** | 2 | **6** |
+| `sindresorhus/execa` | yes | 117 | 0 | **20** | 0 | 0 |
+| `python-poetry/poetry` | yes | 490 | 0 | **18** | 2 | 4 |
+| `unjs/unstorage` | yes | 276 | 0 | **17** | 0 | 0 |
+| `litestar-org/litestar` | yes | 597 | 0 | **14** | 1 | 4 |
+| `pypa/packaging` | yes | 444 | 1 | **10** | 1 | **5** |
+| `mswjs/msw` | yes | 227 | 0 | **10** | 0 | 0 |
+| `aio-libs/multidict` | yes | 700 | 3 | **10** | 0 | 1 |
+| `unjs/unplugin` | yes | 244 | 0 | **7** | 0 | 0 |
+| `aio-libs/yarl` | yes | 464 | 1 | **6** | 0 | 0 |
+| `fastapi/typer` | yes | 933 | 1 | **5** | 0 | 0 |
+| `scrapy/scrapy` | used | 1,065 | 4 | **62** | **6** | **22** |
+| `aio-libs/aiohttp` | used | 3,229 | 2 | **41** | 1 | **6** |
+| `pallets/werkzeug` | used | 280 | 1 | **16** | 1 | 2 |
+| `tornadoweb/tornado` | used | 314 | 0 | **7** | 1 | 2 |
+
+**Short for every family, so dropped:** structlog, loguru, more-itertools, pendulum, arrow, tomlkit, pluggy,
+ts-pattern, neverthrow, ofetch, cattrs, c12, p-queue (new); marshmallow, rich, fastify (used). The 11 repositories
+added in their place are the "yes" rows above that were not in the first pool: litestar, yarl, multidict, poetry,
+unstorage, nitro, vitest, unplugin, plus cattrs, c12 and p-queue, which were also short.
+
+**Family B: confirmed.**
+- 18 repositories qualify: 14 Python and 4 JavaScript/TypeScript by count, and 7 JS/TS once nitro, vitest and h3
+  are counted as such.
+- With at most 10 tasks per repository there are 165 candidates, 128 of them from new repositories.
+- Reaching 80 gated tasks needs about half the candidates to pass the gate.
+- **Family N: not confirmed. [TBD — team]**
+  - Under the strict rule, 2 repositories qualify, with 12 candidates.
+  - Under the relaxed rule (any new function a changed test names; `pool_scan.py`), 7 qualify, with 52 candidates
+    at 10 per repository before the gate. After the gate this falls short of the minimum of 50, so under the current
+    rules Family N would not run.
+  - **Options:**
+    1. the relaxed rule with at most 20 tasks per repository: about 82 candidates before the gate, from 7
+       repositories;
+    2. allow commits before the cutoff for Family N, with a pre/post-cutoff stratum and the primary on
+       post-cutoff tasks only;
+    3. drop Family N from R3, and run it as its own round.
+  - **Recommendation: option 1**, with option 3 as the fallback if fewer than 50 tasks pass the gate. Option 2
+    reopens the memorization question that the cutoff rule closes.
 
 "Never used" means the `owner/repo` name appears nowhere in this repository's benchmarks, harness, reports or
 docs, as checked when this file was written. The half-new rule is enforced on the tasks, not on the repositories:
