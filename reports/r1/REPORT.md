@@ -490,7 +490,7 @@ line numbers are ignored.
 - **As a change summary, the digest is real:** 14 of 20 deltas state a behaviour change compactly, with its
   conditions, for callers in other files.
 - **As a verifier of edits, it is not shown:**
-  - it is blind to signature changes, the most common forward change (16 of 20);
+  - ~~it is blind to signature changes, the most common forward change (16 of 20);~~ **fixed, see below**;
   - at call sites it carries the same information as the diff;
   - its one obligation-like signal (raise → catch) would mostly raise false alarms.
 - **Whether a digest check catches a wrong edit that a diff misses cannot be answered without running edits through
@@ -498,11 +498,30 @@ line numbers are ignored.
   flagged the runs that failed their tests.
 - **Fix before relying on it:** add the parameter list to the digest, so a signature change is a fact.
 
+**Correction after the digest fix (digest v2, commit `71b975c`; a primitive fix, not a re-scoring).**
+- **What changed:** every function's digest now carries `parameters (...) -> ...` as written. That covers names,
+  order, defaults, type annotations, `*args`/`**kwargs` and optional markers, in Python, JavaScript/TypeScript,
+  Java, Go and C#. The fact is always kept, outside the fact budget.
+- **Same 20 tasks, re-run:** **17** anchors changed their signature, not 16. A2 compared only the first line, which
+  missed werkzeug-forward-013, whose multi-line signature changed on a later line.
+  - **All 17 now produce a different digest** before vs after; none is still invisible.
+  - With v1, 15 of the 17 differed at all, and only through body facts.
+  - Example, tornado-forward-016: `parameters (self, size: int, streaming: bool) -> None` →
+    `parameters (self, size: int) -> None`.
+- **Restated verdict:** the digest is now a **change summary and a signature-aware detector.** It records every
+  signature change with the exact parameter difference, which is the R3 Family B case.
+  - It is still **not shown to be a verifier of edits.** At call sites it says what the diff says, the raise →
+    catch signal would mostly raise false alarms, and whether it catches a wrong edit a diff misses is for R3 to
+    measure.
+- **R1 is unaffected:** its prompts are frozen in the task files, so no R1 number, label or rule changes. The newfn
+  scorer fix and the withdrawn claims stay as they are.
+
 ### A3. Planning a multi-file change from digests alone (20 model calls)
 
 The rubric was committed before any call (`harness/experiments/r3pre/README.md`, commit `390ecd0`, with amendments
 before any call in `e57d8c8`). **19 tasks**, not 20 (the candidate pool ran out), are frozen in
-`harness/experiments/r3pre/tasks/planner.json`.
+`harness/experiments/r3pre/tasks/planner.json`. They were rebuilt with digest v2 before any call (commit `538949b`),
+and the primary is now the first-file hit (rubric amendment 2).
 
 **Pending:** the 19 calls, run on Kaggle with the suite's model (`kaggle/r3pre_planner_cell.py`). The result and its
 verdict follow here, scored by `planner.py score`.
