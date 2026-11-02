@@ -9,6 +9,10 @@ For every non-merge commit on the default branch dated on or after CUTOFF that t
 - **Family N candidate:** it adds exactly one non-test function of 6-60 lines whose body calls at least 2 functions
   defined in the repository at the parent, and a test file it changes mentions the new function's name.
 
+- **Family N candidate, relaxed** (`family_n_relaxed`): it adds at least one non-test, non-nested function of 6-80
+  lines that a changed test file mentions by name and whose body calls at least 2 repository functions; the first
+  such function is the candidate.
+
 These are candidates before R3's validity gate (the tests must fail at the start state and pass at the commit),
 which needs the environments. A repository qualifies for a family with at least MIN_CANDIDATES candidates.
 """
@@ -50,7 +54,8 @@ def scan(name: str, clone: str) -> dict:
     from harness.experiments.change_history.mine import functions
     head = git(clone, "rev-parse", "HEAD").strip()
     commits = git(clone, "rev-list", "--no-merges", f"--since={CUTOFF}T00:00:00", head).split()
-    res = {"repo": name, "commits_since_cutoff": len(commits), "changed_30_50": 0, "family_b": [], "family_n": []}
+    res = {"repo": name, "commits_since_cutoff": len(commits), "changed_30_50": 0, "family_b": [], "family_n": [],
+           "family_n_relaxed": []}
     for c in commits:
         parent = git(clone, "rev-parse", f"{c}^").strip()
         if not parent or parent.startswith("fatal") or len(parent) != 40:
@@ -88,7 +93,22 @@ def scan(name: str, clone: str) -> dict:
             mentioned = any(leaf in (show(clone, c, t) or b"").decode("utf8", "replace") for t in tests)
             if len(used) >= 2 and mentioned:
                 res["family_n"].append({"commit": c, "function": q, "file": f, "helpers": sorted(used)[:10]})
+        loose = [(f, q, d) for f, q, d in added if 6 <= d["end"] - d["start"] + 1 <= 80 and "." not in q.split(".")[-1]]
+        if tests and loose:
+            texts = " ".join((show(clone, c, t) or b"").decode("utf8", "replace") for t in tests)
+            known = None
+            for f, q, d in loose:
+                leaf = q.rsplit(".", 1)[-1]
+                if not re.search(rf"\b{re.escape(leaf)}\b", texts):
+                    continue
+                known = known if known is not None else repo_functions(clone, parent)
+                used = {m.group(1) for m in CALL.finditer(d["code"])} & known - {leaf}
+                if len(used) >= 2:
+                    res["family_n_relaxed"].append({"commit": c, "function": q, "file": f, "helpers": sorted(used)[:10]})
+                    break
     res["b_candidates"], res["n_candidates"] = len(res["family_b"]), len(res["family_n"])
+    res["n_relaxed_candidates"] = len(res["family_n_relaxed"])
+    res["qualifies_n_relaxed"] = res["n_relaxed_candidates"] >= MIN_CANDIDATES
     res["qualifies_b"] = res["b_candidates"] >= MIN_CANDIDATES
     res["qualifies_n"] = res["n_candidates"] >= MIN_CANDIDATES
     return res
@@ -102,7 +122,8 @@ def main(argv=None) -> int:
         results.append(scan(name, clone))
         r = results[-1]
         print(f"{name:16} since-cutoff {r['commits_since_cutoff']:5}  30-50 {r['changed_30_50']:3}  "
-              f"B {r['b_candidates']:3}{'' if r['qualifies_b'] else ' SHORT'}  N {r['n_candidates']:3}{'' if r['qualifies_n'] else ' SHORT'}",
+              f"B {r['b_candidates']:3}{'' if r['qualifies_b'] else ' SHORT'}  N {r['n_candidates']:3}{'' if r['qualifies_n'] else ' SHORT'}  "
+              f"N-relaxed {r['n_relaxed_candidates']:3}{'' if r['qualifies_n_relaxed'] else ' SHORT'}",
               flush=True)
     with open(out, "w") as fh:
         json.dump({"cutoff": CUTOFF, "min_candidates": MIN_CANDIDATES, "repos": results}, fh, indent=1)
