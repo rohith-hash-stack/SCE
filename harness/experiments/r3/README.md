@@ -220,8 +220,8 @@ test runs; the first turn at which every F2P test passes.
 
 1. **A1, A2 and A3 reported** (A3 needs its 20 calls run). They inform this design; they do not gate it.
 2. **The open items decided (below), A3's step decided, and this file hash-committed.** This gates everything after it.
-3. **R2 run and its result in hand.** R3's PRISM version uses the full change context; if R2 shows a section is dead
-   weight, R3 still keeps it, and that is recorded. R2 gates the R3 build only so that R3's PRISM tools are frozen
+3. **R2 run and its result in hand.** ~~R3's PRISM version uses the full change context; if R2 shows a section is dead
+   weight, R3 still keeps it, and that is recorded.~~ → R3's tools follow amendment R3-2, item 1. R2 gates the R3 build only so that R3's PRISM tools are frozen
    once, after R2.
 4. **The JavaScript/TypeScript environment builder (named schedule item, does not exist yet).**
    - **What exists:** `harness/experiments/suite/execute.py` builds a `uv` environment per Python repository and
@@ -249,7 +249,7 @@ test runs; the first turn at which every F2P test passes.
 |---|---|---|
 | model | `qwen2.5-coder:14b-instruct-q8_0`, fixed | R3 must be comparable with R1 and the suite. A second model is a separate cross-model round (~~R4~~ → R5, amendment R3-1, item 7), never a substitution into R3. |
 | task count | 80 per family, minimum 50 (see "Size and selection") | power for the +0.10 floor |
-| budget for 80 per family | **[TBD — team]: approval of about 11-36 Kaggle sessions** | the cost section below. If it is not approved, the fallback (fixed now) is 50 per family, with the power statement that only about +0.20 is detectable. That is decided before any mining, never after. |
+| budget for 80 per family | ~~**[TBD — team]: approval of about 11-36 Kaggle sessions**~~ → **approved** (amendment R3-2) | the cost section below. If it is not approved, the fallback (fixed now) is 50 per family, with the power statement that only about +0.20 is detectable. That is decided before any mining, never after. |
 | training cutoff | commits on or after 2024-12-01; the release date is checked at freeze | no memorization of the change itself |
 | repositories | the candidate pool below, in its order | at least half never used before |
 | test writing | out | as above |
@@ -301,7 +301,7 @@ as replacements too, and were short.
   werkzeug, tornado) and 7 JavaScript/TypeScript (vitest, nitro, h3, execa, unstorage, msw, unplugin).
 - With at most 10 tasks per repository there are 165 candidates, 128 of them from new repositories.
 - Reaching 80 gated tasks needs about half the candidates to pass the gate.
-- **Family N: not confirmed. [TBD — team]**
+- **Family N: ~~not confirmed. [TBD — team]~~ → option 1 approved (amendment R3-2).**
   - Under the strict rule, 2 repositories qualify, with 12 candidates.
   - Under the relaxed rule (any new function a changed test names; `pool_scan.py`), 7 qualify, with 52 candidates
     at 10 per repository before the gate. After the gate this falls short of the minimum of 50, so under the current
@@ -359,7 +359,7 @@ No pass/fail rule changes: not the +0.10 floor, the Holm family, the labels or t
    is the mean over the two seeds. McNemar runs per seed.
    - **Cost, restated:** 160 tasks × 2 versions × 2 seeds = **640 runs** (fallback, 100 tasks: 400 runs).
 2. **Turn cap: set from the pilot.** The cap is the **90th percentile of observed turns in the 20 pilot runs
-   (both versions pooled), plus a buffer of [TBD — team: 25% (recommended) or +5 turns], rounded up**. It is never
+   (both versions pooled), plus a buffer of ~~[TBD — team: 25% (recommended) or +5 turns]~~ → **+5 turns** (amendment R3-2), rounded up**. It is never
    above 30.
    - It is recorded in this file, as a dated line, **before any main-run call**, and is the same for both versions.
    - A run that hits the cap counts as unresolved, as above. The cap-hit rule for `invalid` (a gap above 20 points)
@@ -409,7 +409,7 @@ No pass/fail rule changes: not the +0.10 floor, the Holm family, the labels or t
 7. **R4: named, not scheduled.** "User query → plan": the agent starts from a natural-language request, not from a
    failing test or a function stub. It is the round that tests planning from a request, which A3 did not test and
    R3 does not test either. It needs its own pre-registration. The cross-model round, previously called R4 in the
-   decisions table, is renamed **R5** [TBD — team: confirm the numbering].
+   decisions table, is renamed **R5** (~~[TBD — team: confirm the numbering]~~ → confirmed, amendment R3-2).
 8. **No vLLM.** The runtime is Ollama on Kaggle T4 ×2, the same setup as R1 and R2, with the model fixed
    (`qwen2.5-coder:14b-instruct-q8_0`). A runtime change would need its own amendment, made before any main-run call.
 9. **"No R3" stop condition.** R3a does not run, and is reported as **not run** (it is not a null result), when
@@ -417,7 +417,7 @@ No pass/fail rule changes: not the +0.10 floor, the Holm family, the labels or t
    - the JS/TS environment builder fails the one-week rule; and
    - the Python-only Family B pool has fewer than 50 tasks after the validity gate.
 
-   Then the team decides between two options [TBD — team]:
+   Then the team decides between two options (the condition itself is confirmed, amendment R3-2; the choice is made only if it triggers):
    1. approve mining more Python repositories (same cutoff and rules; the list is appended before any mining), and
       re-gate;
    2. accept deferral of R3a.
@@ -439,12 +439,39 @@ No pass/fail rule changes: not the +0.10 floor, the Holm family, the labels or t
 | 9 | R4: not scheduled | its own pre-registration |
 
 **Tool-freeze rule, if R2 is unstable (fixed now, before the hash):**
-- R3's PRISM version uses **the full change context, whatever R2 shows**. This is already the rule above, under
-  "Order and gates", step 3.
+- ~~R3's PRISM version uses **the full change context, whatever R2 shows**. This is already the rule above, under
+  "Order and gates", step 3.~~ → **replaced by amendment R3-2, item 1** (prune only on dead weight everywhere).
 - So R3's tools depend on **no** R2 result: dead weight, load-bearing, inconclusive, or unstable across seeds or
   between the development and held-out sets. R2's outcome is recorded beside R3, and never edits R3's tools.
 - R2 gates R3 for one reason only: so that PRISM's code is frozen **once**. If R2's run surfaces a bug, its fix lands
   before step 3, with a dated note here.
-- **Alternative** [TBD — team; not recommended]: a section is removed from R3's tools only if R2 labels it dead
+- **Alternative** (~~[TBD — team; not recommended]~~ → **adopted**, amendment R3-2, item 1): a section is removed from R3's tools only if R2 labels it dead
   weight on **both** the development and the held-out sets, at every seed. Any other outcome keeps it. This would
   make R3's tools depend on R2's labels, and needs that dependency recorded before the hash.
+
+## Amendment R3-2: team resolutions (2026-11-03; written before R2's mining; **not hash-committed**)
+
+All R3 decisions above were approved by the team, with two corrections. The items marked [TBD — team] are resolved
+as follows. No pass/fail rule changes.
+
+1. **Tool-freeze rule (corrects amendment R3-1).** A section of the change context is removed from R3's PRISM tools
+   **only if R2 reports it as dead weight** (the TOST equivalence test passes) **on the development set AND on the
+   held-out set AND at every seed.**
+   - Any other R2 outcome keeps the full bundle: load-bearing, inconclusive, unstable across seeds, or dead weight
+     on one set only.
+   - So R3's tools now depend on R2's labels. This dependency is recorded here, before the hash.
+   - Which sections are removed, if any, is written here as a dated line at step 3 (the tool freeze), before the
+     hash.
+2. **R3a = Families B and N only.** Refactoring and deleting are R3b candidates (the tool audit above already marks
+   them as not covered by R3a). They are decided with R3b, after R3a's result is read.
+   - If the team instead wants 4 families in R3a (B, N, refactor, delete), this file is corrected before the hash:
+     families, Holm family size, alpha-spending rows and cost.
+3. **Turn-cap buffer: +5 turns**, not +25%. The cap is the pilot's p90 plus 5, never above 30.
+4. **Numbering:** R4 = user query → plan; R5 = cross-model (previously named R4).
+5. **Family N:** option 1, the relaxed rule, at most 20 tasks per repository, target 80. It runs at 50-79 tasks with
+   the power amendment, and moves to R3b if fewer than 50 pass the gate.
+6. **Budget:** approved for 80 tasks per family, at 2 seeds.
+7. **No vLLM:** confirmed. Ollama on Kaggle.
+8. **The "No R3" stop condition:** confirmed as written in amendment R3-1, item 9.
+9. **Sequencing:** confirmed as written in amendment R3-1: mining check → R2 run → R2 review → R3 tool freeze →
+   R3 hash → harness and JS/TS builder → pilot → R3a → R3b (deferred) → R4 (not scheduled).
