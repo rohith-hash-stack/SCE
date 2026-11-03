@@ -78,8 +78,8 @@ Both versions run the same agent loop, as fixed below.
 
 | | both versions |
 |---|---|
-| model | `qwen2.5-coder:14b-instruct-q8_0` (fixed: the model of R1 and the suite), temperature 0.2, seeds 42, 1001, 2002 |
-| loop | at most 30 turns; each turn is one model call that returns one tool call or `done` |
+| model | `qwen2.5-coder:14b-instruct-q8_0` (fixed: the model of R1 and the suite), temperature 0.2, ~~seeds 42, 1001, 2002~~ → seeds 42 and 1001 (amendment R3-1, item 1) |
+| loop | at most 30 turns (a lower cap is set from the pilot: amendment R3-1, item 2); each turn is one model call that returns one tool call or `done` |
 | window | 20,480 tokens per call; the history is kept by the same rule in both versions: keep the system prompt, the task and the last turns that fit; older tool outputs are replaced by one-line stubs |
 | total budget | 300,000 input+output tokens per run, counted with the Qwen2.5 tokenizer; at the cap, the run ends as if `done` |
 | per-call tool output cap | 4,000 tokens for every tool, in both versions |
@@ -154,7 +154,7 @@ Both versions run the same agent loop, as fixed below.
 - Family B: every F2P and every P2P test;
 - Family N: every hidden test, and every test that passed at the start.
 
-It is binary per run. The per-task value is the mean over the three seeds.
+It is binary per run. The per-task value is the mean over ~~the three seeds~~ → the two seeds (amendment R3-1).
 
 **Diff quality (secondary, deterministic, no model judge):**
 - the F1 of the set of files the agent changed against the merged commit;
@@ -203,7 +203,7 @@ test runs; the first turn at which every F2P test passes.
 
 ## Cost (estimate, for the build decision)
 
-- **Runs:** 160 tasks × 2 versions × 3 seeds = 960 runs (fallback: 100 tasks, 600 runs).
+- **Runs:** ~~160 tasks × 2 versions × 3 seeds = 960 runs (fallback: 100 tasks, 600 runs)~~ → 640 runs at 2 seeds (fallback 400); the call and session estimates below scale by 2/3, before the turn cap and early stop (amendment R3-1).
 - **Calls:** about 15-25 turns per run, so about 14,400-24,000 model calls (fallback 9,000-15,000). R1 had 3,378.
 - **Call time:** with contexts of 8,000-20,000 tokens, about 30-60 s per call on Kaggle's T4 ×2. That is about
   120-400 GPU-hours, or **11-36 Kaggle sessions of 11 hours** (fallback: 7-23).
@@ -247,7 +247,7 @@ test runs; the first turn at which every F2P test passes.
 
 | item | decision | why |
 |---|---|---|
-| model | `qwen2.5-coder:14b-instruct-q8_0`, fixed | R3 must be comparable with R1 and the suite. A second model is a separate cross-model round (R4), never a substitution into R3. |
+| model | `qwen2.5-coder:14b-instruct-q8_0`, fixed | R3 must be comparable with R1 and the suite. A second model is a separate cross-model round (~~R4~~ → R5, amendment R3-1, item 7), never a substitution into R3. |
 | task count | 80 per family, minimum 50 (see "Size and selection") | power for the +0.10 floor |
 | budget for 80 per family | **[TBD — team]: approval of about 11-36 Kaggle sessions** | the cost section below. If it is not approved, the fallback (fixed now) is 50 per family, with the power statement that only about +0.20 is detectable. That is decided before any mining, never after. |
 | training cutoff | commits on or after 2024-12-01; the release date is checked at freeze | no memorization of the change itself |
@@ -346,5 +346,105 @@ mining stops taking used repositories once they would hold more than half of a f
 3. **The model's release date:** 2024-11-12 is to be checked against the model card at freeze, as written above. If
    the card shows a later date, the cutoff moves to the first day of the month after it, before any mining.
 
-**Not blocking the hash, but gating the build:** R2's two open items (held-out repositories, language mix) must be
+~~**Not blocking the hash, but gating the build:**~~ → **Gating the hash (amendment R3-1, sequencing):** R2's two open items (held-out repositories, language mix) must be
 decided and R2 run, because R3's PRISM tools are frozen after R2 (step 3).
+
+## Amendment R3-1: the call-reduction plan and stop conditions (draft, written before R2; **not hash-committed**)
+
+This file is hash-committed only after R2's result is read and R3's tools are frozen (see "Sequencing" below).
+Where this amendment conflicts with text above, this amendment holds; the replaced text is struck through in place.
+No pass/fail rule changes: not the +0.10 floor, the Holm family, the labels or the negative branch.
+
+1. **Seeds: 2 per task, in every family.** Seeds 42 and 1001. A single seed was never the plan. The per-task value
+   is the mean over the two seeds. McNemar runs per seed.
+   - **Cost, restated:** 160 tasks × 2 versions × 2 seeds = **640 runs** (fallback, 100 tasks: 400 runs).
+2. **Turn cap: set from the pilot.** The cap is the **90th percentile of observed turns in the 20 pilot runs
+   (both versions pooled), plus a buffer of [TBD — team: 25% (recommended) or +5 turns], rounded up**. It is never
+   above 30.
+   - It is recorded in this file, as a dated line, **before any main-run call**, and is the same for both versions.
+   - A run that hits the cap counts as unresolved, as above. The cap-hit rule for `invalid` (a gap above 20 points)
+     is unchanged.
+   - If more than 20% of pilot runs reach 30 turns, the p90 is not informative. The cap stays at 30, and that is
+     recorded.
+3. **Early stop: Family B only.** Family N stays fixed-N.
+   - **Look:** one interim look when **40 of Family B's 80 tasks** (information fraction 0.5) have both seeds
+     complete in both versions. Tasks run in the frozen seeded order, so the first 40 are fixed before the run.
+   - **Spending:** Lan-DeMets, O'Brien-Fleming type, two-sided. The test statistic is the Wilcoxon signed-rank's
+     normal z, on the per-task means.
+
+     | Family B's local α (Holm, below) | interim: stop if two-sided p < | final: reject if two-sided p < |
+     |---|---|---|
+     | 0.025 (first Holm step) | **0.0008** (z 3.34) | 0.0247 (z 2.25) |
+     | 0.05 (after Family N is rejected) | **0.0031** (z 2.96) | 0.0490 (z 1.97) |
+
+     If the interim lands at another fraction, the boundaries are recomputed from the same spending function for
+     the fraction actually observed.
+   - **Holm:** the two families keep one Holm family (Maurer and Bretz, 2013). Family B's interim uses its local α
+     at that point, **0.025**, because Family N is not finished.
+     - If B stops at the interim, it is rejected. Family N is then tested at its end at 0.05.
+     - If B continues, both are tested at the end with Holm. B's final boundary is the 0.025 row, or the 0.05 row
+       once N is rejected.
+   - **A stop happens in either direction** (PRISM ahead, or the baseline ahead). The label then comes from the
+     interim data by the usual table, the floor included. A stop with a gap under +0.10 is `below_floor`, not
+     `pass`.
+   - There is **no futility stop**.
+   - The interim check for `invalid` (cap-hit gap, infrastructure deaths) runs at the look. Breaching it stops the
+     family as `invalid`.
+   - The interim is computed by the frozen analysis code, and nobody reads per-task answers at the look.
+4. **Per-seed reporting, mandatory.** Every primary and every secondary is reported for seed 42 and seed 1001
+   separately, beside the two-seed result.
+   - A family is flagged **unstable** if the PRISM-minus-baseline difference on the primary has opposite signs on
+     the two seeds: PRISM wins on one, and loses on the other.
+   - The flag is printed beside the label. It does not change the label, but no claim beyond the label's wording
+     is made for an unstable family.
+   - The same flag is printed for each secondary.
+5. **pass@2 (secondary, no extra calls).** A task counts as resolved at pass@2 when either seed's run resolves it.
+   It is computed from the main runs, compared per family with the same bootstrap, and **labelled a lower bound on
+   the value of a retry**. Two independent seeds are not a retry that sees the first failure. It never rescues a
+   primary.
+6. **R3b: deferred.** It is decided and built only after R3a's result is read, and nothing for it is built before.
+   - "R3a" is the round this file pre-registers.
+   - The one-week rule's JS/TS tasks (above, "R3b under these same rules") become part of that deferred decision.
+     They are not pre-committed to run.
+7. **R4: named, not scheduled.** "User query → plan": the agent starts from a natural-language request, not from a
+   failing test or a function stub. It is the round that tests planning from a request, which A3 did not test and
+   R3 does not test either. It needs its own pre-registration. The cross-model round, previously called R4 in the
+   decisions table, is renamed **R5** [TBD — team: confirm the numbering].
+8. **No vLLM.** The runtime is Ollama on Kaggle T4 ×2, the same setup as R1 and R2, with the model fixed
+   (`qwen2.5-coder:14b-instruct-q8_0`). A runtime change would need its own amendment, made before any main-run call.
+9. **"No R3" stop condition.** R3a does not run, and is reported as **not run** (it is not a null result), when
+   **both** of these hold:
+   - the JS/TS environment builder fails the one-week rule; and
+   - the Python-only Family B pool has fewer than 50 tasks after the validity gate.
+
+   Then the team decides between two options [TBD — team]:
+   1. approve mining more Python repositories (same cutoff and rules; the list is appended before any mining), and
+      re-gate;
+   2. accept deferral of R3a.
+
+   In both cases, no model call is made on the existing tasks.
+
+### Sequencing (fixed by this amendment)
+
+| step | what | gate |
+|---|---|---|
+| 1 | **R2 in full** (A6's development set, plus the held-out confirmation set), with no directional shortcut | R2's open items approved (`harness/experiments/r2/HELDOUT_PROPOSAL.md`) |
+| 2 | R2's results reviewed | step 1 complete |
+| 3 | **R3's tools frozen** from the code at R2's commit (rule below) | step 2 |
+| 4 | **this file hash-committed**, with amendment R3-1 | step 3 |
+| 5 | the harness built, together with the JS/TS builder (one-week rule) | step 4 |
+| 6 | pilot: 20 runs on pilot-only tasks. The turn cap is recorded from it (item 2). | step 5 |
+| 7 | **R3a:** tasks mined, gated and frozen. Then 2 seeds in all families, with Family B's interim look (item 3). | step 6, plus the stop condition (item 9) not met |
+| 8 | R3b: deferred | R3a's result read |
+| 9 | R4: not scheduled | its own pre-registration |
+
+**Tool-freeze rule, if R2 is unstable (fixed now, before the hash):**
+- R3's PRISM version uses **the full change context, whatever R2 shows**. This is already the rule above, under
+  "Order and gates", step 3.
+- So R3's tools depend on **no** R2 result: dead weight, load-bearing, inconclusive, or unstable across seeds or
+  between the development and held-out sets. R2's outcome is recorded beside R3, and never edits R3's tools.
+- R2 gates R3 for one reason only: so that PRISM's code is frozen **once**. If R2's run surfaces a bug, its fix lands
+  before step 3, with a dated note here.
+- **Alternative** [TBD — team; not recommended]: a section is removed from R3's tools only if R2 labels it dead
+  weight on **both** the development and the held-out sets, at every seed. Any other outcome keeps it. This would
+  make R3's tools depend on R2's labels, and needs that dependency recorded before the hash.
