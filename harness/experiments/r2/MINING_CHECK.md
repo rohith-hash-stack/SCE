@@ -98,3 +98,36 @@ it does not change effect's pass.
     one-bad-revision rule);
   - R2-2's seeded draw takes effect's 5 tasks from those 7.
 - **Limit:** effect's tasks are its most recent forward changes, not a draw from its whole history.
+
+**Resupply result** (all mining finished; effect stopped by the rule above):
+
+| repository | language | qualifying (easy/medium/hard) | result |
+|---|---|---|---|
+| immerjs/immer | TS | 29 (20/3/6) | pass |
+| mobxjs/mobx | TS | 51 (34/11/6) | pass |
+| pmndrs/zustand | TS | 6 (5/0/1) | pass |
+| ReactiveX/rxjs | TS | 15 (14/1/0) | pass |
+| effect-ts/effect | TS | 7 (7/0/0), from the 8 newest candidates | pass |
+| sinclairzx81/typebox | TS | 11 (9/2/0) | pass |
+
+No commit was skipped for an error in any resupply log. effect's out-of-memory revision is the one exception, and it
+is recorded above.
+
+## Held-out list, frozen (R2-3, branch 2)
+
+- **15 repositories, 75 tasks: 45 Python, 30 TypeScript repositories.**
+  - Python (9 × 5): loguru, more-itertools, pendulum, tomlkit, pluggy, cattrs, lark, boltons, funcy.
+  - TypeScript (6 × 5): immer, mobx, zustand, rxjs, effect, typebox.
+- **Draw:** `harness/experiments/r2/select_heldout.py`, as in R2-2 (seed 5501).
+- **Output:** `harness/experiments/r2/tasks/heldout_mined.json`, sha256
+  `efa600c77fbc23c55e9c22691d873e6c2d9928d172667601e6b7940fc10a8e49`.
+- **Tiers:** 47 easy, 19 medium, 9 hard.
+- **Limit, stated after the draw; no rule changed:** 5 of the 30 TypeScript-repository tasks have JavaScript anchor
+  files.
+  - immer: `immer-es5.js`, `src/common.js` and `immer.js`, from before its TypeScript port;
+  - zustand: `rollup.config.js`, twice.
+
+  They qualify under the unchanged miner and filter, and stay in. Language is reported both by repository and by
+  anchor file. By file, the TypeScript share is 25 of 75.
+- Planning these tasks (adding the break context) and the pads are part of R2's harness build, and are frozen with
+  it.
