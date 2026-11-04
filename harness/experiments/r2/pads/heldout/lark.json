@@ -1,0 +1,271 @@
+{
+ "repo": "lark",
+ "split": "heldout",
+ "tasks": {
+  "lark-heldout-001": {
+   "NO4": {
+    "base_tokens": 2527,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 2544,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 2474,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 2491,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 2327,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`lark.parsers.lalr_parser._Parser.parse` (lark/parsers/lalr_parser.py:45)\n```\n    def parse(self, seq, set_state=None):\n        token = None\n        stream = iter(seq)\n        states = self.states\n\n        state_stack = [self.start_state]\n        value_stack = []\n\n        if set_state: set_state(self.start_state)\n\n        def get_action(token):\n            state = state_stack[-1]\n            try:\n                return states[state][token.type]\n            except KeyError:\n                expected = [s for s in states[state].keys() if s.isupper()]\n                raise UnexpectedToken(token, expected, state=state)\n\n        def reduce(rule):\n            size = len(rule.expansion)\n            if size:\n                s = value_stack[-size:]\n                del state_stack[-size:]\n                del value_stack[-size:]\n            else:\n                s = []\n\n            value = self.callbacks[rule](s)\n\n            _action, new_state = states[state_stack[-1]][rule.origin.name]\n            assert _action is Shift\n            state_stack.append(new_state)\n            value_stack.append(value)\n\n```",
+    "items": [],
+    "partial": "lark.parsers.lalr_parser._Parser.parse",
+    "tokens": 2578,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 2533,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 2550,
+    "within": true
+   },
+   "context": "# Change context: `lark.parsers.lalr_analysis.ParseTable.serialize`\nlark/parsers/lalr_analysis.py, lines 36-52\n\n## 1. Codebase\n519 functions in 6 directories; 0 registered entry points; languages: python 519\n\nLargest directories (functions, entry points):\n- `lark`: 262 functions\n- `lark/parsers`: 131 functions\n- `examples/standalone`: 69 functions\n- `examples`: 37 functions\n- `lark/tools`: 19 functions\n- `examples/relative-imports`: 1 functions\n\nStrongest calls between directories:\n- `lark/parsers` -> `lark`: 50 calls\n- `examples` -> `lark`: 23 calls\n- `lark` -> `lark/parsers`: 16 calls\n- `lark/tools` -> `lark`: 5 calls\n- `examples/relative-imports` -> `lark`: 1 calls\n\n## 2. Group `lark/parsers`\n131 functions, 27 classes in 8 files.\nCalled from other directories (its API): `lark.parsers.earley.Parser.parse` (3), `lark.parsers.grammar_analysis.RulePtr.next` (3), `lark.parsers.cyk.Parser.parse` (1), `lark.parsers.lalr_parser.LALR_Parser.deserialize` (1)\nDepends on: `lark` (50 calls)\nUsed by: `lark` (16 calls)\n\n## 3. Anchor\n```python\n    def serialize(self):\n        tokens = Enumerator()\n        rules = Enumerator()\n\n        states = {\n            state: {tokens.get(token): ((1, rules.get(arg)) if action is Reduce else (0, arg))\n                    for token, (action, arg) in actions.items()}\n            for state, actions in self.states.items()\n        }\n\n        return {\n            'tokens': tokens.reversed(),\n            'rules': {idx: r.serialize() for idx, r in rules.reversed().items()},\n            'states': states,\n            'start_state': self.start_state,\n            'end_state': self.end_state,\n        }\n```\n\nDigest (what its code does, line by line):\n```\nL36 parameters (self)\nL37 tokens = Enumerator() [calls: Enumerator() -> lark.utils.Enumerator]\nL38 rules = Enumerator() [calls: Enumerator() -> lark.utils.Enumerator]\nL40-44 states = { state: {tokens.get(token): ((1, rules.get(arg)) if action is Reduce else (0, arg)) for\u2026 [calls: get() -> lark.utils.Enumerator.get]\nL46-52 return { 'tokens': tokens.reversed(), 'rules': {idx: r.serialize() for idx, r in rules.reversed(\u2026 [calls: reversed() -> lark.utils.Enumerator.reversed; serialize() -> lark.utils.SerializeMemoizer.serialize?]\n```\n\n## 4. Who depends on it\n- `lark.parsers.lalr_parser.LALR_Parser.serialize` (lark/parsers/lalr_parser.py) - linked by name only, possible\n  - L32 result: returns the result to its own callers\n\n## 5. What it depends on\n- L41 result: `lark.utils.Enumerator.get` changes state: self.enums[item] = len(self.enums) (own state)\n\n## 6. Style to follow\nConventions in `lark/parsers`:\n- errors are raised as `ParseError` (4 of 9 raises here)\n- function names are snake_case (101 of 101 multi-word names)\n\nSibling `lark.parsers.lalr_analysis.ParseTable.deserialize` (lark/parsers/lalr_analysis.py:54; same class):\n```python\n    @classmethod\n    def deserialize(cls, data, memo):\n        tokens = data['tokens']\n        rules = data['rules']\n        states = {\n            state: {tokens[token]: ((Reduce, rules[arg]) if action==1 else (Shift, arg))\n                    for token, (action, arg) in actions.items()}\n            for state, actions in data['states'].items()\n        }\n        return cls(states, data['start_state'], data['end_state'])\n```\n\nSibling `lark.parsers.lalr_analysis.ParseTable.__init__` (lark/parsers/lalr_analysis.py:31; same class):\n```python\n    def __init__(self, states, start_state, end_state):\n        self.states = states\n        self.start_state = start_state\n        self.end_state = end_state\n```\n\n## 7. Callers' code\n`lark.parsers.lalr_parser.LALR_Parser.serialize` (lark/parsers/lalr_parser.py):\n```python\n    def serialize(self):\n        return self._parse_table.serialize()\n```\n\n## 8. Wider impact\n1 transitive callers; by distance: 1 hop: 1\n",
+   "context_sha": "9c63c8f16074ceb7f0f6ddb5606717a9bbde1ddb2b7ad48ba28de74d62395869",
+   "context_tokens_prism": 1321,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 2586
+  },
+  "lark-heldout-003": {
+   "NO4": {
+    "base_tokens": 5308,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 5326,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 5161,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 5179,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 4769,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`examples.standalone.json_parser._create_unless` (examples/standalone/json_parser.py:1063)\n```\ndef _create_unless(terminals):\n    tokens_by_type = classify(terminals, lambda t: type(t.pattern))\n    assert len(tokens_by_type) <= 2, tokens_by_type.keys()\n    embedded_strs = set()\n    callback = {}\n    for retok in tokens_by_type.get(PatternRE, []):\n        unless = [] # {}\n        for strtok in tokens_by_type.get(PatternStr, []):\n            if strtok.priority > retok.priority:\n                continue\n            s = strtok.pattern.value\n            m = re.match(retok.pattern.to_regexp(), s)\n            if m and m.group(0) == s:\n                unless.append(strtok)\n                if strtok.pattern.flags <= retok.pattern.flags:\n                    embedded_strs.add(strtok)\n        if unless:\n            callback[retok.name] = UnlessCallback(build_mres(unless, match_whole=True))\n\n    terminals = [t for t in terminals if t not in embedded_strs]\n    return terminals, callback\n```\n\n`examples.standalone.json_parser._build_mres` (examples/standalone/json_parser.py:1086)\n```\ndef _build_mres(terminals, max_size, match_whole):\n    # Python sets an unreasonable group limit (currently 100) in its re module\n    # Worse, the only way to know we reached it is by catching an AssertionError!\n    # This function recursively tries less and less groups until it's successful.\n    postfix = '$' if match_whole else ''\n    mres = []\n    while terminals:\n        try:\n            mre = re.compile(u'|'.join(u'(?P<%s>%s)'%(t.name, t.pattern.to_regexp()+postfix) for t in terminals[:max_size]))\n        except AssertionError:  # Yes, this is what Python provides us.. :/\n            return _build_mres(terminals, max_size//2, match_whole)\n\n        # terms_from_name = {t.name: t for t in terminals[:max_size]}\n        mres.append((mre, {i:n for n,i in mre.groupindex.items()} ))\n        terminals = terminals[max_size:]\n    return mres\n```",
+    "items": [
+     "examples.standalone.json_parser._create_unless",
+     "examples.standalone.json_parser._build_mres"
+    ],
+    "partial": null,
+    "tokens": 5268,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 5222,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 5240,
+    "within": true
+   },
+   "context": "# Change context: `lark.lexer._create_unless`\nlark/lexer.py, lines 236-256\n\n## 1. Codebase\n720 functions in 7 directories; 0 registered entry points; languages: python 720\n\nLargest directories (functions, entry points):\n- `lark`: 299 functions\n- `examples/standalone`: 211 functions\n- `lark/parsers`: 140 functions\n- `examples`: 47 functions\n- `lark/tools`: 21 functions\n- `examples/relative-imports`: 1 functions\n- `lark/__pyinstaller`: 1 functions\n\nStrongest calls between directories:\n- `lark/parsers` -> `lark`: 56 calls\n- `examples` -> `lark`: 25 calls\n- `lark` -> `lark/parsers`: 13 calls\n- `lark/tools` -> `lark`: 6 calls\n- `lark` -> `examples`: 4 calls\n- `examples/standalone` -> `lark`: 2 calls\n- `examples/relative-imports` -> `lark`: 1 calls\n\n## 2. Group `lark`\n299 functions, 86 classes in 14 files.\nCalled from other directories (its API): `lark.lark.Lark.parse` (14), `lark.tree.Tree.set` (14), `lark.load_grammar.PrepareLiterals.range` (3), `lark.utils.Enumerator.reversed` (3), `lark.reconstruct.Reconstructor.reconstruct` (2), `lark.utils.Enumerator.get` (2), `lark.utils.Serialize.memo_serialize` (2), `lark.utils.bfs` (2)\nDepends on: `lark/parsers` (13 calls), `examples` (4 calls)\nUsed by: `lark/parsers` (56 calls), `examples` (25 calls), `lark/tools` (6 calls), `examples/standalone` (2 calls), `examples/relative-imports` (1 calls)\n\n## 3. Anchor\n```python\ndef _create_unless(terminals, g_regex_flags):\n    tokens_by_type = classify(terminals, lambda t: type(t.pattern))\n    assert len(tokens_by_type) <= 2, tokens_by_type.keys()\n    embedded_strs = set()\n    callback = {}\n    for retok in tokens_by_type.get(PatternRE, []):\n        unless = [] # {}\n        for strtok in tokens_by_type.get(PatternStr, []):\n            if strtok.priority > retok.priority:\n                continue\n            s = strtok.pattern.value\n            m = re.match(retok.pattern.to_regexp(), s, g_regex_flags)\n            if m and m.group(0) == s:\n                unless.append(strtok)\n                if strtok.pattern.flags <= retok.pattern.flags:\n                    embedded_strs.add(strtok)\n        if unless:\n            callback[retok.name] = UnlessCallback(build_mres(unless, g_regex_flags, match_whole=True))\n\n    terminals = [t for t in terminals if t not in embedded_strs]\n    return terminals, callback\n```\n\nDigest (what its code does, line by line):\n```\nL236 parameters (terminals, g_regex_flags)\nwhen in a callback passed to classify:\n  L237 call type(t.pattern) -> builtin\nL237 tokens_by_type = classify(terminals, lambda t: type(t.pattern)) [calls: classify() -> lark.utils.classify]\nL238 assert len(tokens_by_type) <= 2, tokens_by_type.keys()\nL239 embedded_strs = set() [calls: set() -> lark.tree.Tree.set?]\nL240 callback = {}\nL241 calls inside: get() -> lark.utils.Enumerator.get?\nwhen for each retok in tokens_by_type.get(PatternRE, []):\n  L242 unless = []\n  L243 calls inside: get() -> lark.utils.Enumerator.get?\n  when for each strtok in tokens_by_type.get(PatternStr, []):\n    when strtok.priority > retok.priority:\n      L245 skip to the next iteration\n    L246 s = strtok.pattern.value\n    L247 m = re.match(retok.pattern.to_regexp(), s, g_regex_flags) [calls: to_regexp() -> lark.lexer.Pattern.to_regexp?]\n    when m and m.group(0) == s:\n      L249 call unless.append(strtok) -> ?\n      when strtok.pattern.flags <= retok.pattern.flags:\n        L251 call embedded_strs.add(strtok) -> ?\n  when unless:\n    L253 callback[retok.name] = UnlessCallback(build_mres(unless, g_regex_flags, match_whole=True)) [calls: UnlessCallback() -> lark.lexer.UnlessCallback; build_mres() -> lark.lexer.build_mres]\nL255 terminals = [t for t in terminals if t not in embedded_strs]\nL256 return terminals, callback\n```\n\n## 4. Who depends on it\n- `lark.lexer.TraditionalLexer.build` (lark/lexer.py)\n  - L327 result: stores the result in `terminals, self.callback`\n  - L327 arguments: passes 2 positional arguments\n\n## 5. What it depends on\n- L247 errors: `lark.lexer.Pattern.to_regexp` can raise `NotImplementedError`; this function does not catch it (possible target)\n- L239 result: `lark.tree.Tree.set` changes state: self.data = data (own state); self.children = children (own state) (possible target)\n- L241 result: `lark.utils.Enumerator.get` changes state: self.enums[item] = len(self.enums) (own state) (possible target)\n\n## 6. Style to follow\nConventions in `lark`:\n- errors are raised as `GrammarError` (11 of 33 raises here)\n- errors are raised as `ValueError` (9 of 33 raises here)\n- function names are snake_case (203 of 203 multi-word names)\n\nSibling `lark.lexer.TraditionalLexer.__init__` (lark/lexer.py:300; same file, shares 2 callees):\n```python\n    def __init__(self, terminals, ignore=(), user_callbacks={}, g_regex_flags=0):\n        assert all(isinstance(t, TerminalDef) for t in terminals), terminals\n\n        terminals = list(terminals)\n\n        # Sanitization\n        for t in terminals:\n            try:\n                re.compile(t.pattern.to_regexp(), g_regex_flags)\n            except re.error:\n                raise LexError(\"Cannot compile token %s: %s\" % (t.name, t.pattern))\n\n            if t.pattern.min_width == 0:\n                raise LexError(\"Lexer does not allow zero-width terminals. (%s: %s)\" % (t.name, t.pattern))\n\n        assert set(ignore) <= {t.name for t in terminals}\n\n        # Init\n        self.newline_types = [t.name for t in terminals if _regexp_has_newline(t.pattern.to_regexp())]\n        self.ignore_types = list(ignore)\n\n        terminals.sort(key=lambda x:(-x.priority, -x.pattern.max_width, -len(x.pattern.value), x.name))\n        self.terminals = terminals\n        self.user_callbacks = user_callbacks\n        self.build(g_regex_flags)\n```\n\nSibling `lark.lexer.ContextualLexer.__init__` (lark/lexer.py:353; same file, shares 1 callee):\n```python\n    def __init__(self, terminals, states, ignore=(), always_accept=(), user_callbacks={}, g_regex_flags=0):\n        tokens_by_name = {}\n        for t in terminals:\n            assert t.name not in tokens_by_name, t\n            tokens_by_name[t.name] = t\n\n        lexer_by_tokens = {}\n        self.lexers = {}\n        for state, accepts in states.items():\n            key = frozenset(accepts)\n            try:\n                lexer = lexer_by_tokens[key]\n            except KeyError:\n                accepts = set(accepts) | set(ignore) | set(always_accept)\n                state_tokens = [tokens_by_name[n] for n in accepts if n and n in tokens_by_name]\n                lexer = TraditionalLexer(state_tokens, ignore=ignore, user_callbacks=user_callbacks, g_regex_flags=g_regex_flags)\n                lexer_by_tokens[key] = lexer\n\n            self.lexers[state] = lexer\n\n        self.root_lexer = TraditionalLexer(terminals, ignore=ignore, user_callbacks=user_callbacks, g_regex_flags=g_regex_flags)\n```\n\n## 7. Callers' code\n`lark.lexer.TraditionalLexer.build` (lark/lexer.py):\n```python\n    def build(self, g_regex_flags=0):\n        terminals, self.callback = _create_unless(self.terminals, g_regex_flags)\n        assert all(self.callback.values())\n\n        for type_, f in self.user_callbacks.items():\n            if type_ in self.callback:\n                # Already a callback there, probably UnlessCallback\n                self.callback[type_] = CallChain(self.callback[type_], f, lambda t: t.type == type_)\n            else:\n                self.callback[type_] = f\n\n        self.mres = build_mres(terminals, g_regex_flags)\n```\n\n## 8. Wider impact\n25 transitive callers; by distance: 1 hop: 1, 2 hops: 1, 3 hops: 4, 4 hops: 6, 5 hops: 10, 6 hops: 3\nTests that reach it (3): `tests.test_parser.CustomLexer.__init__`, `tests.test_parser._Lark`, `tests.test_parser._Lark#2`\n",
+   "context_sha": "ca2f6c8c701cecc313c6f781486322b5fdd1f49aaffa530967ae97346a578cd4",
+   "context_tokens_prism": 2707,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 5369
+  },
+  "lark-heldout-004": {
+   "NO4": {
+    "base_tokens": 3813,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 3830,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 3177,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`lark.load_grammar.EBNF_to_BNF._generate_repeats` (lark/load_grammar.py:284)\n```\n    def _generate_repeats(self, rule, mn, mx):\n        \"\"\"\n        We treat rule~mn..mx as rule~mn rule~0..(diff=mx-mn).\n        We then use small_factors to split up mn and diff up into values [(a, b), ...]\n        This values are used with the help of _add_repeat_rule and _add_repeat_rule_opt\n        to generate a complete rule/expression that matches the corresponding number of repeats\n        \"\"\"\n        mn_factors = small_factors(mn)\n        mn_target = rule\n        for a, b in mn_factors:\n            mn_target = self._add_repeat_rule(a, b, mn_target, rule)\n        if mx == mn:\n            return mn_target\n\n        diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\n        diff_factors = small_factors(diff)\n        diff_target = rule  # Match rule 1 times\n        diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\n        for a, b in diff_factors[:-1]:\n            new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\n            diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\n            diff_target = new_diff_target\n\n        a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\n\n        return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\n```\n\n`lark.load_grammar.EBNF_to_BNF.maybe` (lark/load_grammar.py:343)\n```\n    def maybe(self, rule):\n        keep_all_tokens = self.rule_options and self.rule_options.keep_all_tokens\n\n        def will_not_get_removed(sym):\n            if isinstance(sym, NonTerminal):\n                return not sym.name.startswith('_')\n            if isinstance(sym, Terminal):\n                return keep_all_tokens or not sym.filter_out\n            assert False\n\n        if any(rule.scan_values(will_not_get_removed)):\n            empty = _EMPTY\n        else:\n            empty = ST('expansion', [])\n\n        return ST('expansions', [rule, empty])\n```\n\n`lark.exceptions.UnexpectedInput.get_context` (lark/exceptions.py:48)\n```\n    def get_context(self, text, span=40):\n        \"\"\"Returns a pretty string pinpointing the error in the text,\n        with span amount of context characters around it.\n\n        Note:\n            The parser doesn't hold a copy of the text it has to parse,\n            so you have to provide it again\n        \"\"\"\n        assert self.pos_in_stream is not None, self\n        pos = self.pos_in_stream\n        start = max(pos - span, 0)\n        end = pos + span\n        if not isinstance(text, bytes):\n            before = text[start:pos].rsplit('\\n', 1)[-1]\n            after = text[pos:end].split('\\n', 1)[0]\n            return before + after + '\\n' + ' ' * len(before.expandtabs()) + '^\\n'\n        else:\n            before = text[start:pos].rsplit(b'\\n', 1)[-1]\n```",
+    "items": [
+     "lark.load_grammar.EBNF_to_BNF._generate_repeats",
+     "lark.load_grammar.EBNF_to_BNF.maybe"
+    ],
+    "partial": "lark.exceptions.UnexpectedInput.get_context",
+    "tokens": 3957,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 3459,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`lark.load_grammar.EBNF_to_BNF._generate_repeats` (lark/load_grammar.py:284)\n```\n    def _generate_repeats(self, rule, mn, mx):\n        \"\"\"\n        We treat rule~mn..mx as rule~mn rule~0..(diff=mx-mn).\n        We then use small_factors to split up mn and diff up into values [(a, b), ...]\n        This values are used with the help of _add_repeat_rule and _add_repeat_rule_opt\n        to generate a complete rule/expression that matches the corresponding number of repeats\n        \"\"\"\n        mn_factors = small_factors(mn)\n        mn_target = rule\n        for a, b in mn_factors:\n            mn_target = self._add_repeat_rule(a, b, mn_target, rule)\n        if mx == mn:\n            return mn_target\n\n        diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\n        diff_factors = small_factors(diff)\n        diff_target = rule  # Match rule 1 times\n        diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\n        for a, b in diff_factors[:-1]:\n            new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\n            diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\n            diff_target = new_diff_target\n\n        a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\n\n        return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\n```",
+    "items": [
+     "lark.load_grammar.EBNF_to_BNF._generate_repeats"
+    ],
+    "partial": null,
+    "tokens": 3880,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 3330,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`lark.load_grammar.EBNF_to_BNF._generate_repeats` (lark/load_grammar.py:284)\n```\n    def _generate_repeats(self, rule, mn, mx):\n        \"\"\"\n        We treat rule~mn..mx as rule~mn rule~0..(diff=mx-mn).\n        We then use small_factors to split up mn and diff up into values [(a, b), ...]\n        This values are used with the help of _add_repeat_rule and _add_repeat_rule_opt\n        to generate a complete rule/expression that matches the corresponding number of repeats\n        \"\"\"\n        mn_factors = small_factors(mn)\n        mn_target = rule\n        for a, b in mn_factors:\n            mn_target = self._add_repeat_rule(a, b, mn_target, rule)\n        if mx == mn:\n            return mn_target\n\n        diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\n        diff_factors = small_factors(diff)\n        diff_target = rule  # Match rule 1 times\n        diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\n        for a, b in diff_factors[:-1]:\n            new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\n            diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\n            diff_target = new_diff_target\n\n        a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\n\n        return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\n```\n\n`lark.load_grammar.EBNF_to_BNF.maybe` (lark/load_grammar.py:343)\n```\n    def maybe(self, rule):\n        keep_all_tokens = self.rule_options and self.rule_options.keep_all_tokens\n\n        def will_not_get_removed(sym):\n            if isinstance(sym, NonTerminal):\n                return not sym.name.startswith('_')\n            if isinstance(sym, Terminal):\n                return keep_all_tokens or not sym.filter_out\n            assert False\n\n        if any(rule.scan_values(will_not_get_removed)):\n            empty = _EMPTY\n        else:\n            empty = ST('expansion', [])\n\n        return ST('expansions', [rule, empty])\n```",
+    "items": [
+     "lark.load_grammar.EBNF_to_BNF._generate_repeats",
+     "lark.load_grammar.EBNF_to_BNF.maybe"
+    ],
+    "partial": null,
+    "tokens": 3894,
+    "within": true
+   },
+   "context": "# Change context: `lark.utils.small_factors`\nlark/utils.py, lines 369-390\n\n## 1. Codebase\n1148 functions in 10 directories; 0 registered entry points; languages: python 1144, javascript 4\n\nLargest directories (functions, entry points):\n- `docs/ide/app`: 464 functions\n- `lark`: 387 functions\n- `lark/parsers`: 189 functions\n- `examples/advanced`: 55 functions\n- `lark/tools`: 31 functions\n- `examples`: 15 functions\n- `docs/ide`: 4 functions\n- `examples/relative-imports`: 1 functions\n- `examples/standalone`: 1 functions\n- `lark/__pyinstaller`: 1 functions\n\nStrongest calls between directories:\n- `lark/parsers` -> `lark`: 73 calls\n- `examples/advanced` -> `lark`: 27 calls\n- `lark` -> `lark/parsers`: 20 calls\n- `examples` -> `lark`: 7 calls\n- `lark/tools` -> `lark`: 6 calls\n- `lark` -> `examples/advanced`: 4 calls\n- `docs/ide/app` -> `lark`: 2 calls\n- `examples/advanced` -> `lark/parsers`: 2 calls\n- `examples/relative-imports` -> `lark`: 1 calls\n- `lark/parsers` -> `examples/advanced`: 1 calls\n\n## 2. Group `lark`\n387 functions, 92 classes in 16 files.\nCalled from other directories (its API): `lark.lark.Lark.parse` (19), `lark.tree.Tree.set` (16), `lark.load_grammar.PrepareLiterals.range` (3), `lark.reconstruct.Reconstructor.reconstruct` (3), `lark.lexer.Token.new_borrow_pos` (2), `lark.utils.Enumerator.reversed` (2), `lark.utils.Serialize.memo_serialize` (2), `lark.utils.bfs` (2)\nDepends on: `lark/parsers` (20 calls), `examples/advanced` (4 calls)\nUsed by: `lark/parsers` (73 calls), `examples/advanced` (27 calls), `examples` (7 calls), `lark/tools` (6 calls), `docs/ide/app` (2 calls), `examples/relative-imports` (1 calls)\n\n## 3. Anchor\n```python\ndef small_factors(n):\n    \"\"\"\n    Splits n up into smaller factors and summands <= SMALL_FACTOR_THRESHOLD.\n    Returns a list of [(a, b), ...]\n    so that the following code returns n:\n\n    n = 1\n    for a, b in values:\n        n = n * a + b\n\n    Currently, we also keep a + b <= SMALL_FACTOR_THRESHOLD, but that might change\n    \"\"\"\n    assert n >= 0\n    if n <= SMALL_FACTOR_THRESHOLD:\n        return [(n, 0)]\n    # While this does not provide an optimal solution, it produces a pretty good one.\n    # See above comment and PR #949\n    for a in range(SMALL_FACTOR_THRESHOLD, 1, -1):\n        r, b = divmod(n, a)\n        if a + b <= SMALL_FACTOR_THRESHOLD:\n            return small_factors(r) + [(a, b)]\n    assert False, \"Failed to factorize %s\" % n\n```\n\nDigest (what its code does, line by line):\n```\nL369 parameters (n)\nL381 assert n >= 0\nwhen n <= SMALL_FACTOR_THRESHOLD:\n  L383 return [(n, 0)]\nL386 calls inside: range() -> lark.load_grammar.PrepareLiterals.range?\nwhen for each a in range(SMALL_FACTOR_THRESHOLD, 1, -1):\n  L387 r, b = divmod(n, a)\n  when a + b <= SMALL_FACTOR_THRESHOLD:\n    L389 return small_factors(r) + [(a, b)] [calls: small_factors() -> lark.utils.small_factors]\nL390 assert False, \"Failed to factorize %s\" % n\n```\n\n## 4. Who depends on it\n- `lark.load_grammar.EBNF_to_BNF._generate_repeats` (lark/load_grammar.py)\n  - L291 result: stores the result in `mn_factors`, then iterates over it\n  - L291 arguments: passes 1 positional argument\n  - L299 result: stores the result in `diff_factors`, then indexes [-1], [:-1]\n  - L299 arguments: passes 1 positional argument\n- `lark.utils.small_factors` (lark/utils.py)\n  - L389 result: uses the result in an expression\n  - L389 arguments: passes 1 positional argument\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `lark`:\n- errors are raised as `GrammarError` (17 of 46 raises here)\n- logging goes through `logger.debug`, `logger.info` (7 calls)\n- function names are snake_case (278 of 278 multi-word names)\n\nSibling `lark.utils.Serialize.deserialize` (lark/utils.py:80; same file):\n```python\n    @classmethod\n    def deserialize(cls, data, memo):\n        namespace = getattr(cls, '__serialize_namespace__', [])\n        namespace = {c.__name__:c for c in namespace}\n\n        fields = getattr(cls, '__serialize_fields__')\n\n        if '@' in data:\n            return memo[data['@']]\n\n        inst = cls.__new__(cls)\n        for f in fields:\n            try:\n                setattr(inst, f, _deserialize(data[f], namespace, memo))\n            except KeyError as e:\n                raise KeyError(\"Cannot find key for class\", cls, e)\n\n        if hasattr(inst, '_deserialize'):\n            inst._deserialize()\n\n        return inst\n```\n\nSibling `lark.utils.get_regexp_width` (lark/utils.py:167; same file):\n```python\ndef get_regexp_width(expr):\n    if regex:\n        # Since `sre_parse` cannot deal with Unicode categories of the form `\\p{Mn}`, we replace these with\n        # a simple letter, which makes no difference as we are only trying to get the possible lengths of the regex\n        # match here below.\n        regexp_final = re.sub(categ_pattern, 'A', expr)\n    else:\n        if re.search(categ_pattern, expr):\n            raise ImportError('`regex` module must be installed in order to use Unicode categories.', expr)\n        regexp_final = expr\n    try:\n        return [int(x) for x in sre_parse.parse(regexp_final).getwidth()]\n    except sre_constants.error:\n        if not regex:\n            raise ValueError(expr)\n        else:\n            # sre_parse does not support the new features in regex. To not completely fail in that case,\n            # we manually test for the most important info (whether the empty string is matched)\n            c = regex.compile(regexp_final)\n            if c.match('') is None:\n                return 1, sre_constants.MAXREPEAT\n            else:\n                return 0, sre_constants.MAXREPEAT\n```\n\n## 7. Callers' code\n`lark.load_grammar.EBNF_to_BNF._generate_repeats` (lark/load_grammar.py):\n```python\n    def _generate_repeats(self, rule, mn, mx):\n        \"\"\"\n        We treat rule~mn..mx as rule~mn rule~0..(diff=mx-mn).\n        We then use small_factors to split up mn and diff up into values [(a, b), ...]\n        This values are used with the help of _add_repeat_rule and _add_repeat_rule_opt\n        to generate a complete rule/expression that matches the corresponding number of repeats\n        \"\"\"\n        mn_factors = small_factors(mn)\n        mn_target = rule\n        for a, b in mn_factors:\n            mn_target = self._add_repeat_rule(a, b, mn_target, rule)\n        if mx == mn:\n            return mn_target\n\n        diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\n        diff_factors = small_factors(diff)\n        diff_target = rule  # Match rule 1 times\n        diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\n        for a, b in diff_factors[:-1]:\n            new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\n            diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\n            diff_target = new_diff_target\n\n        a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\n\n        return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\n```\n`lark.utils.small_factors` (lark/utils.py):\n```python\ndef small_factors(n):\n    \"\"\"\n    Splits n up into smaller factors and summands <= SMALL_FACTOR_THRESHOLD.\n    Returns a list of [(a, b), ...]\n    so that the following code returns n:\n\n    n = 1\n    for a, b in values:\n        n = n * a + b\n\n    Currently, we also keep a + b <= SMALL_FACTOR_THRESHOLD, but that might change\n    \"\"\"\n    assert n >= 0\n    if n <= SMALL_FACTOR_THRESHOLD:\n        return [(n, 0)]\n    # While this does not provide an optimal solution, it produces a pretty good one.\n    # See above comment and PR #949\n    for a in range(SMALL_FACTOR_THRESHOLD, 1, -1):\n        r, b = divmod(n, a)\n        if a + b <= SMALL_FACTOR_THRESHOLD:\n            return small_factors(r) + [(a, b)]\n    assert False, \"Failed to factorize %s\" % n\n```\n\n## 8. Wider impact\n2 transitive callers; by distance: 1 hop: 1, 2 hops: 1\n",
+   "context_sha": "b36c9d12eee40012e63f1f706c741e03c6f3e24f2b5e3f236e4b9431654b01c8",
+   "context_tokens_prism": 2851,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 1,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 1,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 1,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 3966
+  },
+  "lark-heldout-005": {
+   "NO4": {
+    "base_tokens": 3208,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 3225,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 2410,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`lark.parse_tree_builder.ParseTreeBuilder.create_tree_builder` (lark/parse_tree_builder.py:58)\n```\n    def create_tree_builder(self, rules, transformer):\n        callback = Callback()\n        new_rules = []\n\n        filter_out = set()\n        for origin, (expansions, options) in rules.items():\n            if options and options.filter_out:\n                assert origin.startswith('_')   # Just to make sure\n                filter_out.add(origin)\n\n        for origin, (expansions, options) in rules.items():\n            keep_all_tokens = options.keep_all_tokens if options else False\n            expand1 = options.expand1 if options else False\n            create_token = options.create_token if options else False\n\n            _origin = origin\n\n            for expansion, alias in expansions:\n                if alias and origin.startswith('_'):\n                    raise Exception(\"Rule %s is marked for expansion (it starts with an underscore) and isn't allowed to have aliases (alias=%s)\" % (origin, alias))\n\n                try:\n                    f = transformer._get_func(alias or _origin)\n                except AttributeError:\n                    if alias:\n                        f = self._create_tree_builder_function(alias)\n                    else:\n                        f = self._create_tree_builder_function(_origin)\n                        if expand1:\n                            f = create_expand1_tree_builder_function(f)\n\n                    if create_token:\n                        f = create_token_wrapper(f, create_token)\n\n\n                alias_handler = create_rule_handler(expansion, f, keep_all_tokens, filter_out)\n\n                callback_name = 'autoalias_%s_%s' % (_origin, '_'.join(expansion))\n                if hasattr(callback, callback_name):\n                    raise GrammarError(\"Rule expansion '%s' already exists in rule %s\" % (' '.join(expansion), origin))\n                setattr(callback, callback_name, alias_handler)\n\n                new_rules.append(( _origin, expansion, callback_name ))\n\n        return new_rules, callback\n```\n\n`lark.utils.inline_args` (lark/utils.py:54)\n```\ndef inline_args(f):\n    # print '@@', f.__name__, type(f), isinstance(f, types.FunctionType), isinstance(f, types.TypeType), isinstance(f, types.BuiltinFunctionType)\n    if isinstance(f, types.FunctionType):\n        @functools.wraps(f)\n        def _f_func(self, args):\n            return f(self, *args)\n        return _f_func\n    elif isinstance(f, (type, types.BuiltinFunctionType)):\n        @functools.wraps(f)\n        def _f_builtin(_self, args):\n            return f(*args)\n        return _f_builtin\n    else:\n        @functools.wraps(f)\n        def _f(self, args):\n            return f.__func__(self, *args)\n        return _f\n```\n\n`lark.parsers.nearley.Parser.__init__` (lark/parsers/nearley.py:109)\n```\n    def __init__(self, rules, start=None):\n        self.rules = [Rule(r['name'], r['symbols'], r.get('postprocess', None)) for r in rules]\n        self.rules_by_name = classify(self.rules, lambda r: r.name)\n        self.start = start or self.rules[0].name\n```\n\n`lark.tree.Transformer.transform` (lark/tree.py:88)\n```\n    def transform(self, tree):\n        items = [self.transform(c) if isinstance(c, Tree) else c for c in tree.children]\n        try:\n            f = self._get_func(tree.data)\n        except AttributeError:\n            return self.__default__(tree.data, items)\n        else:\n            return f(items)\n```\n\n`lark.load_grammar.GrammarLoader.load_grammar` (lark/load_grammar.py:539)\n```\n    def load_grammar(self, grammar_text, name='<?>'):\n        try:\n            tree = self.simplify_tree.transform( self.parser.parse(grammar_text+'\\n') )\n        except UnexpectedInput as e:\n            raise GrammarError(\"Unexpected input %r at line %d column %d in %s\" % (e.context, e.line, e.column, name))\n        except UnexpectedToken as e:\n            if e.expected == ['_COLON']:\n                raise GrammarError(\"Missing colon at line %s column %s\" % (e.line, e.column))\n            elif e.expected == ['RULE']:\n                raise GrammarError(\"Missing alias at line %s column %s\" % (e.line, e.column))\n            elif 'STRING' in e.expected:\n```",
+    "items": [
+     "lark.parse_tree_builder.ParseTreeBuilder.create_tree_builder",
+     "lark.utils.inline_args",
+     "lark.parsers.nearley.Parser.__init__",
+     "lark.tree.Transformer.transform"
+    ],
+    "partial": "lark.load_grammar.GrammarLoader.load_grammar",
+    "tokens": 3373,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 3150,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`lark.parse_tree_builder.ParseTreeBuilder.create_tree_builder` (lark/parse_tree_builder.py:58)\n```\n    def create_tree_builder(self, rules, transformer):\n        callback = Callback()\n        new_rules = []\n\n        filter_out = set()\n        for origin, (expansions, options) in rules.items():\n            if options and options.filter_out:\n                assert origin.startswith('_')   # Just to make sure\n                filter_out.add(origin)\n\n        for origin, (expansions, options) in rules.items():\n            keep_all_tokens = options.keep_all_tokens if options else False\n            expand1 = options.expand1 if options else False\n            create_token = options.create_token if options else False\n\n            _origin = origin\n\n            for expansion, alias in expansions:\n                if alias and origin.startswith('_'):\n                    raise Exception(\"Rule %s is marked for expansion (it starts with an underscore) and isn't allowed to have aliases (alias=%s)\" % (origin, alias))\n\n                try:\n```",
+    "items": [],
+    "partial": "lark.parse_tree_builder.ParseTreeBuilder.create_tree_builder",
+    "tokens": 3378,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 2584,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`lark.parse_tree_builder.ParseTreeBuilder.create_tree_builder` (lark/parse_tree_builder.py:58)\n```\n    def create_tree_builder(self, rules, transformer):\n        callback = Callback()\n        new_rules = []\n\n        filter_out = set()\n        for origin, (expansions, options) in rules.items():\n            if options and options.filter_out:\n                assert origin.startswith('_')   # Just to make sure\n                filter_out.add(origin)\n\n        for origin, (expansions, options) in rules.items():\n            keep_all_tokens = options.keep_all_tokens if options else False\n            expand1 = options.expand1 if options else False\n            create_token = options.create_token if options else False\n\n            _origin = origin\n\n            for expansion, alias in expansions:\n                if alias and origin.startswith('_'):\n                    raise Exception(\"Rule %s is marked for expansion (it starts with an underscore) and isn't allowed to have aliases (alias=%s)\" % (origin, alias))\n\n                try:\n                    f = transformer._get_func(alias or _origin)\n                except AttributeError:\n                    if alias:\n                        f = self._create_tree_builder_function(alias)\n                    else:\n                        f = self._create_tree_builder_function(_origin)\n                        if expand1:\n                            f = create_expand1_tree_builder_function(f)\n\n                    if create_token:\n                        f = create_token_wrapper(f, create_token)\n\n\n                alias_handler = create_rule_handler(expansion, f, keep_all_tokens, filter_out)\n\n                callback_name = 'autoalias_%s_%s' % (_origin, '_'.join(expansion))\n                if hasattr(callback, callback_name):\n                    raise GrammarError(\"Rule expansion '%s' already exists in rule %s\" % (' '.join(expansion), origin))\n                setattr(callback, callback_name, alias_handler)\n\n                new_rules.append(( _origin, expansion, callback_name ))\n\n        return new_rules, callback\n```\n\n`lark.utils.inline_args` (lark/utils.py:54)\n```\ndef inline_args(f):\n    # print '@@', f.__name__, type(f), isinstance(f, types.FunctionType), isinstance(f, types.TypeType), isinstance(f, types.BuiltinFunctionType)\n    if isinstance(f, types.FunctionType):\n        @functools.wraps(f)\n        def _f_func(self, args):\n            return f(self, *args)\n        return _f_func\n    elif isinstance(f, (type, types.BuiltinFunctionType)):\n        @functools.wraps(f)\n        def _f_builtin(_self, args):\n            return f(*args)\n        return _f_builtin\n    else:\n        @functools.wraps(f)\n        def _f(self, args):\n            return f.__func__(self, *args)\n        return _f\n```\n\n`lark.parsers.nearley.Parser.__init__` (lark/parsers/nearley.py:109)\n```\n    def __init__(self, rules, start=None):\n        self.rules = [Rule(r['name'], r['symbols'], r.get('postprocess', None)) for r in rules]\n        self.rules_by_name = classify(self.rules, lambda r: r.name)\n        self.start = start or self.rules[0].name\n```\n\n`lark.tree.Transformer.transform` (lark/tree.py:88)\n```\n    def transform(self, tree):\n        items = [self.transform(c) if isinstance(c, Tree) else c for c in tree.children]\n        try:\n            f = self._get_func(tree.data)\n        except AttributeError:\n            return self.__default__(tree.data, items)\n        else:\n            return f(items)\n```",
+    "items": [
+     "lark.parse_tree_builder.ParseTreeBuilder.create_tree_builder",
+     "lark.utils.inline_args",
+     "lark.parsers.nearley.Parser.__init__",
+     "lark.tree.Transformer.transform"
+    ],
+    "partial": null,
+    "tokens": 3362,
+    "within": true
+   },
+   "context": "# Change context: `lark.tools.nearley.nearley_to_lark`\nlark/tools/nearley.py, lines 90-93\n\n## 1. Codebase\n263 functions in 4 directories; 0 registered entry points; languages: python 263\n\nLargest directories (functions, entry points):\n- `lark`: 160 functions\n- `lark/parsers`: 73 functions\n- `examples`: 15 functions\n- `lark/tools`: 15 functions\n\nStrongest calls between directories:\n- `lark/parsers` -> `lark`: 43 calls\n- `lark` -> `lark/parsers`: 18 calls\n- `examples` -> `lark`: 11 calls\n- `lark/tools` -> `lark`: 6 calls\n\n## 2. Group `lark/tools`\n15 functions, 1 classes in 1 files.\nDepends on: `lark` (6 calls)\n\n## 3. Anchor\n```python\ndef nearley_to_lark(g, builtin_path):\n    parser = Lark(nearley_grammar, parser='earley', lexer='standard')\n    tree = parser.parse(g)\n    return NearleyToLark(builtin_path).transform(tree)\n```\n\nDigest (what its code does, line by line):\n```\nL90 parameters (g, builtin_path)\nL91 parser = Lark(nearley_grammar, parser='earley', lexer='standard') [calls: Lark() -> lark.lark.Lark]\nL92 tree = parser.parse(g) [calls: parse() -> lark.lark.Lark.parse]\nL93 return NearleyToLark(builtin_path).transform(tree) [calls: transform() -> one of lark.tree.Transformer.transform|lark.tree.Transformer_NoRecurse.transform; NearleyToLark() -> lark.tools.nearley.NearleyToLark]\n```\n\n## 4. Who depends on it\n- `lark.tools.nearley.NearleyToLark.directive` (lark/tools/nearley.py)\n  - L81 result: returns the result to its own callers\n  - L81 arguments: passes 2 positional arguments\n- `lark.tools.nearley.main` (lark/tools/nearley.py)\n  - L149 result: passes the result to `print()`\n  - L149 arguments: passes 2 positional arguments\n- `lark.tools.nearley.test` (lark/tools/nearley.py)\n  - L132 result: stores the result in `converted_grammar`, then passes it to `Lark()`, `print()`\n  - L132 arguments: passes 2 positional arguments\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `lark/tools`:\n- `lark.tools.nearley.nearley_to_lark` is a shared helper here: called by 3 of 15 functions\n- function names are snake_case (3 of 3 multi-word names)\n\nSibling `lark.tools.nearley.NearleyToLark.rule` (lark/tools/nearley.py:46; same file):\n```python\n    def rule(self, name):\n        # return {'_': '_WS?', '__':'_WS'}.get(name, name)\n        return {'_': '_ws_maybe', '__':'_ws'}.get(name, name)\n```\n\nSibling `lark.tools.nearley.NearleyToLark.ruledef` (lark/tools/nearley.py:50; same file):\n```python\n    def ruledef(self, name, exps):\n        name = {'_': '_ws_maybe', '__':'_ws'}.get(name, name)\n        return '%s: %s' % (name, exps)\n```\n\n## 7. Callers' code\n`lark.tools.nearley.NearleyToLark.directive` (lark/tools/nearley.py):\n```python\n    def directive(self, name, *args):\n        if name == 'builtin':\n            arg = args[0][1:-1]\n            with open(os.path.join(self.builtin_path, arg)) as f:\n                text = f.read()\n            return nearley_to_lark(text, self.builtin_path)\n        elif name == 'preprocessor':\n            return ''\n\n        raise Exception('Unknown directive: %s' % name)\n```\n`lark.tools.nearley.main` (lark/tools/nearley.py):\n```python\ndef main():\n    try:\n        nearley_lib = sys.argv[1]\n    except IndexError:\n        print(\"Reads Nearley grammar from stdin and outputs a lark grammar.\")\n        print(\"Usage: %s <nearley_lib_path>\" % sys.argv[0])\n        return\n\n    grammar = sys.stdin.read()\n    print(nearley_to_lark(grammar, os.path.join(nearley_lib, 'builtin')))\n```\n`lark.tools.nearley.test` (lark/tools/nearley.py):\n```python\ndef test():\n    css_example_grammar = \"\"\"\n# http://www.w3.org/TR/css3-color/#colorunits\n\n    @builtin \"whitespace.ne\"\n    @builtin \"number.ne\"\n    @builtin \"postprocessors.ne\"\n\n    csscolor -> \"#\" hexdigit hexdigit hexdigit hexdigit hexdigit hexdigit {%\n        function(d) {\n            return {\n                \"r\": parseInt(d[1]+d[2], 16),\n                \"g\": parseInt(d[3]+d[4], 16),\n                \"b\": parseInt(d[5]+d[6], 16),\n            }\n        }\n    %}\n              | \"#\" hexdigit hexdigit hexdigit {%\n        function(d) {\n            return {\n                \"r\": parseInt(d[1]+d[1], 16),\n                \"g\": parseInt(d[2]+d[2], 16),\n                \"b\": parseInt(d[3]+d[3], 16),\n            }\n        }\n    %}\n              | \"rgb\"  _ \"(\" _ colnum _ \",\" _ colnum _ \",\" _ colnum _ \")\" {% $({\"r\": 4, \"g\": 8, \"b\": 12}) %}\n              | \"hsl\"  _ \"(\" _ colnum _ \",\" _ colnum _ \",\" _ colnum _ \")\" {% $({\"h\": 4, \"s\": 8, \"l\": 12}) %}\n              | \"rgba\" _ \"(\" _ colnum _ \",\" _ colnum _ \",\" _ colnum _ \",\" _ decimal _ \")\" {% $({\"r\": 4, \"g\": 8, \"b\": 12, \"a\": 16}) %}\n              | \"hsla\" _ \"(\" _ colnum _ \",\" _ colnum _ \",\" _ colnum _ \",\" _ decimal _ \")\" {% $({\"h\": 4, \"s\": 8, \"l\": 12, \"a\": 16}) %}\n\n    hexdigit -> [a-fA-F0-9]\n    colnum -> unsigned_int {% id %} | percentage {%\n        function(d) {return Math.floor(d[0]*255); }\n    %}\n    \"\"\"\n    converted_grammar = nearley_to_lark(css_example_grammar, '/home/erez/nearley/builtin')\n    print(converted_grammar)\n\n    l = Lark(converted_grammar, start='csscolor')\n    print(l.parse('#a199ff').pretty())\n    print(l.parse('rgb(255, 70%, 3)').pretty())\n```\n\n## 8. Wider impact\n3 transitive callers; by distance: 1 hop: 3\n",
+   "context_sha": "80c1fb1cfc761f15297c1a0bbc0d0cc720b447fcce0de84ccfde6030cd3f71fc",
+   "context_tokens_prism": 1837,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 3382
+  }
+ }
+}

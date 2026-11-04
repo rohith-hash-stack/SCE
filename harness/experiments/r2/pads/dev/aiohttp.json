@@ -2,6 +2,69 @@
  "repo": "aiohttp",
  "split": "dev",
  "tasks": {
+  "aiohttp-forward-001": {
+   "NO4": {
+    "base_tokens": 2748,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 2765,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 2675,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 2692,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 2317,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`aiohttp.multipart.MultipartWriter.append_form` (aiohttp/multipart.py:788)\n```\n    def append_form(self, obj, headers=None):\n        \"\"\"Helper to append form urlencoded part.\"\"\"\n        assert isinstance(obj, (Sequence, Mapping))\n\n        if headers is None:\n            headers = CIMultiDict()\n\n        if isinstance(obj, Mapping):\n            obj = list(obj.items())\n        data = urlencode(obj, doseq=True)\n\n        return self.append_payload(\n            StringPayload(data, headers=headers,\n                          content_type='application/x-www-form-urlencoded'))\n```\n\n`aiohttp.web_request.BaseRequest.post` (aiohttp/web_request.py:360)\n```\n    @asyncio.coroutine\n    def post(self):\n        \"\"\"Return POST parameters.\"\"\"\n        if self._post is not None:\n            return self._post\n        if self._method not in self.POST_METHODS:\n            self._post = MultiDictProxy(MultiDict())\n            return self._post\n\n        content_type = self.content_type\n        if (content_type not in ('',\n                                 'application/x-www-form-urlencoded',\n                                 'multipart/form-data')):\n            self._post = MultiDictProxy(MultiDict())\n            return self._post\n\n        out = MultiDict()\n\n        if content_type == 'multipart/form-data':\n            multipart = yield from self.multipart()\n\n            field = yield from multipart.next()\n            while field is not None:\n                size = 0\n                max_size = self._client_max_size\n                content_type = field.headers.get(hdrs.CONTENT_TYPE)\n\n                if field.filename:\n                    # store file in temp file\n                    tmp = tempfile.TemporaryFile()\n                    chunk = yield from field.read_chunk(size=2**16)\n                    while chunk:\n                        chunk = field.decode(chunk)\n                        tmp.write(chunk)\n                        size += len(chunk)\n                        if max_size > 0 and size > max_size:\n                            raise ValueError(\n                                'Maximum request body size exceeded')\n                        chunk = yield from field.read_chunk(size=2**16)\n                    tmp.seek(0)\n\n                    ff = FileField(field.name, field.filename,\n                                   tmp, content_type, field.headers)\n                    out.add(field.name, ff)\n                else:\n                    value = yield from field.read(decode=True)\n```",
+    "items": [
+     "aiohttp.multipart.MultipartWriter.append_form"
+    ],
+    "partial": "aiohttp.web_request.BaseRequest.post",
+    "tokens": 2803,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 2735,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 2752,
+    "within": true
+   },
+   "context": "# Change context: `aiohttp.formdata.FormData._gen_form_urlencoded`\naiohttp/formdata.py, lines 86-95\n\n## 1. Codebase\n1023 functions in 9 directories; 2 registered entry points; languages: python 1023\n\nLargest directories (functions, entry points):\n- `aiohttp`: 895 functions\n- `examples`: 57 functions, 2 entry points\n- `benchmark`: 23 functions\n- `examples/legacy`: 20 functions\n- `demos/polls/aiohttpdemo_polls`: 17 functions\n- `demos/chat/aiohttpdemo_chat`: 5 functions\n- `.`: 4 functions\n- `demos/chat`: 1 functions\n- `demos/polls`: 1 functions\n\nStrongest calls between directories:\n- `examples` -> `aiohttp`: 62 calls\n- `examples/legacy` -> `aiohttp`: 12 calls\n- `benchmark` -> `aiohttp`: 9 calls\n- `demos/polls/aiohttpdemo_polls` -> `aiohttp`: 7 calls\n- `demos/chat/aiohttpdemo_chat` -> `aiohttp`: 6 calls\n- `aiohttp` -> `examples`: 1 calls\n- `aiohttp` -> `examples/legacy`: 1 calls\n\n## 2. Group `aiohttp`\n895 functions, 202 classes in 37 files.\nCalled from other directories (its API): `aiohttp.web_response.json_response` (4), `aiohttp.client.ClientSession.get` (3), `aiohttp.web_ws.WebSocketResponse.prepare` (3), `aiohttp.client.ClientSession.close` (2), `aiohttp.file_sender.SendfilePayloadWriter.write_eof` (2), `aiohttp.http_message.HttpMessage.add_header` (2), `aiohttp.http_message.HttpMessage.send_headers` (2), `aiohttp.http_message.PayloadWriter.write` (2)\nDepends on: `examples` (1 calls), `examples/legacy` (1 calls)\nUsed by: `examples` (62 calls), `examples/legacy` (12 calls), `benchmark` (9 calls), `demos/polls/aiohttpdemo_polls` (7 calls), `demos/chat/aiohttpdemo_chat` (6 calls)\n\n## 3. Anchor\n```python\n    def _gen_form_urlencoded(self, encoding):\n        # form data (x-www-form-urlencoded)\n        data = []\n        for type_options, _, value in self._fields:\n            data.append((type_options['name'], value))\n\n        encoding = encoding if encoding is not None else 'utf-8'\n        return payload.BytesPayload(\n            urlencode(data, doseq=True).encode(encoding),\n            content_type='application/x-www-form-urlencoded')\n```\n\nDigest (what its code does, line by line):\n```\nL86 parameters (self, encoding)\nL88 data = []\nwhen for each type_options, _, value in self._fields:\n  L90 call data.append((type_options['name'], value)) -> ?\nL92 encoding = encoding if encoding is not None else 'utf-8'\nL93-95 return payload.BytesPayload( urlencode(data, doseq=True).encode(encoding), content_type='applica\u2026 [calls: BytesPayload() -> aiohttp.payload.BytesPayload]\n```\n\n## 4. Who depends on it\n- `aiohttp.formdata.FormData.__call__` (aiohttp/formdata.py)\n  - L130 result: returns the result to its own callers\n  - L130 arguments: passes 1 positional argument\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `aiohttp`:\n- logging goes through `self.logger.exception`, `self.logger.debug`, `self.logger.info` (4 calls)\n- function names are snake_case (399 of 399 multi-word names)\n- `@asyncio.coroutine` is used on 125 of 600 functions\n- `@property` is used on 70 of 600 functions\n\nSibling `aiohttp.formdata.FormData._gen_form_data` (aiohttp/formdata.py:97; same class, name words: form, gen):\n```python\n    def _gen_form_data(self, encoding):\n        \"\"\"Encode a list of fields using the multipart/form-data MIME format\"\"\"\n        for dispparams, headers, value in self._fields:\n            try:\n                if hdrs.CONTENT_TYPE in headers:\n                    part = payload.get_payload(\n                        value, content_type=headers[hdrs.CONTENT_TYPE],\n                        headers=headers, encoding=encoding)\n                else:\n                    part = payload.get_payload(\n                        value, headers=headers, encoding=encoding)\n            except Exception as exc:\n                raise ValueError(\n                    'Can not serialize value type: %r\\n '\n                    'headers: %r\\n value: %r' % (\n                        type(value), headers, value)) from exc\n\n            if dispparams:\n                part.set_content_disposition(\n                    'form-data', quote_fields=self._quote_fields, **dispparams\n                )\n                # FIXME cgi.FieldStorage doesn't likes body parts with\n                # Content-Length which were sent via chunked transfer encoding\n                part.headers.pop(hdrs.CONTENT_LENGTH, None)\n\n            self._writer.append_payload(part)\n\n        return self._writer\n```\n\nSibling `aiohttp.formdata.FormData.__init__` (aiohttp/formdata.py:16; same class):\n```python\n    def __init__(self, fields=(), quote_fields=True):\n        self._writer = multipart.MultipartWriter('form-data')\n        self._fields = []\n        self._is_multipart = False\n        self._quote_fields = quote_fields\n\n        if isinstance(fields, dict):\n            fields = list(fields.items())\n        elif not isinstance(fields, (list, tuple)):\n            fields = (fields,)\n        self.add_fields(*fields)\n```\n\n## 7. Callers' code\n`aiohttp.formdata.FormData.__call__` (aiohttp/formdata.py):\n```python\n    def __call__(self, encoding):\n        if self._is_multipart:\n            return self._gen_form_data(encoding)\n        else:\n            return self._gen_form_urlencoded(encoding)\n```\n\n## 8. Wider impact\n1 transitive callers; by distance: 1 hop: 1\n",
+   "context_sha": "0f2ab5aa0b1fc03bed44e77995a63c82716d81b5722012d5f14b6982c884135e",
+   "context_tokens_prism": 1848,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": false,
+   "target": 2808
+  },
   "aiohttp-forward-002": {
    "NO4": {
     "base_tokens": 4092,
