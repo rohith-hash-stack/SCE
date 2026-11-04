@@ -163,3 +163,41 @@ These fill in what A6 and R3-3 leave open. They change no margin, floor, α or s
 | unstable | the mean drop has opposite signs at the two seeds |
 | language | reported by repository and by anchor file (the JavaScript files in the TypeScript slots) |
 | sections 1, 2, 3, 5, 8 | not removed in R2 (A6, order step 3, is not run), so never pruned |
+
+## R2 build result and freeze (2026-11-04; before any R2 call)
+
+**Built:**
+- 267 tasks: 192 development and 75 held-out.
+- 1,068 pads, one per removed version per task. 1,065 are within ±5% of the full version's real token count.
+- **Out of band:** the 3 pads of `fastify-forward-004` (NO6 −12.7%, NO7 −7.9%, NO47 −10.8%). At that revision the
+  repository is one file, all of it already shown, so there is nothing left to pad with. This is the same case R1
+  documented. It runs as built and is reported.
+
+**Contexts:**
+- Every held-out context rebuilt with the current code equals the mined one byte for byte (the R2-4 determinism
+  check).
+- All 192 development contexts differ from R1's by the digest v2 line (R2-4).
+
+**Model-free measures** (A6: reported first, before any model result; never pooled with them):
+
+| | development (298 changed callers) | held-out (116) |
+|---|---|---|
+| changed callers listed in section 4 | 1.000 | 1.000 |
+| listed in section 7 | 0.997 | 0.905 |
+| listed in section 2 / 5 / 6 | 0.027 / 0.010 / 0.003 | 0.060 / 0.026 / 0.000 |
+| still listed after removing 4 | 0.997 | 0.905 |
+| still listed after removing 7 | 1.000 | 1.000 |
+| still listed after removing 4 and 7 | 0.044 | 0.086 |
+| re-added by the pad: NO4 / NO6 / NO7 / NO47 | 0.017 / 0.067 / 0.087 / 0.144 | 0.017 / 0.052 / 0.060 / 0.086 |
+
+**What this means, stated before any model call:**
+- Sections 4 and 7 each list nearly every changed caller. So removing either one alone leaves the callers named in
+  the other.
+- Only the pair NO47 removes the caller list: 4-9% remain, from section 2, the group's API.
+- Whether section 4 is load-bearing therefore turns on whether its per-call-site facts add anything beyond section
+  7's callers' code. Its list of names is duplicated in section 7.
+- No rule changes. This is the model-free context A6 asks to be reported first.
+
+**Frozen:** `harness/experiments/r2/manifest.json`, with the sha256 of the 2 task files and the 25 pad files. The
+Kaggle cell is pinned to the freeze commit and checks every hash, the code trees and the 2,670-call plan before any
+call.
