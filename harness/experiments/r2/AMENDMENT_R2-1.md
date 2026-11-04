@@ -80,3 +80,30 @@ known):
 - **At the time of this correction:**
   - TypeScript usable was 20 (immer, zustand, mobx, effect), and Python usable 45, so the total was 65;
   - typebox and rxjs were still being mined.
+
+## R2-3, branch 2: power note (2026-11-04; written before any R2 call; no rule changed)
+
+**Branch:** 2, fixed mechanically.
+- TypeScript usable ≥ 20 (immer, zustand, mobx, effect), and Python usable 45.
+- The held-out size is 65, 70 or 75, as typebox and rxjs finish.
+- It is still 50/30 in intent; the actual mix is 45 Python against 20-30 TypeScript.
+
+**Power (normal approximation; per-task SD of the full-minus-section difference unknown before R2, so shown over a
+range):**
+
+| per-task SD | TOST at ±0.03, true difference 0: development (192) | held-out 65 | held-out 80 | same direction on held-out, true drop 0.05: 65 / 80 |
+|---|---|---|---|---|
+| 0.15 | 0.74 | 0.00 | 0.11 | — |
+| 0.20 | 0.34 | 0.00 | 0.00 | 0.98 / 0.99 |
+| 0.30 | 0.00 | 0.00 | 0.00 | 0.91 / 0.93 |
+| 0.41 (R1 forward, PRISM vs pad) | 0.00 | 0.00 | 0.00 | 0.84 / 0.86 |
+
+**What this means, stated before the run:**
+- **"Dead weight" on the held-out set is essentially unreachable** at the locked ±0.03 margin, at 65-75 tasks and
+  also at the full 80. A 90% interval narrower than ±0.03 needs a per-task SD near 0.1 at 80 tasks.
+  - So R3-3's route (a) will very probably prune nothing.
+  - **A held-out TOST that fails is reported as "equivalence not shown (underpowered)",** never as evidence that a
+    section matters.
+- **"Load-bearing" and R3-3's route (b), harmful,** need only the direction to replicate on the held-out set. That
+  has power 0.84-0.99 for a true change of 0.05. These routes remain informative.
+- The development set's TOST is informative only if the per-task SD is about 0.15 or less.
