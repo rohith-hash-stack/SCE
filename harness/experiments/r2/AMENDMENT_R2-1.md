@@ -123,3 +123,43 @@ range):**
     25, still branch 2. Team confirms keep; the protocol outcome is unchanged either way."
 - **R3-3 verified:** committed in `2b321db4` (2026-11-04 01:52 UTC). That was before the resupply check, the held-out
   freeze (`80f78aba`), any harness code and any R2 call.
+
+## Amendment R2-4: the contexts are built with the current code, for both sets (2026-11-04; before any R2 call)
+
+- **Why:** PRISM's code changed after R1's development contexts were frozen at `793c40a`.
+  - `71b975ce` digest v2 added the signature fact.
+  - `c4455ee0` and `7e72f8ad` index only git-visible files.
+- The held-out contexts were mined with the current code. A6 says no section, wording or budget changes between the
+  development and held-out sets, so both must come from the same code.
+- **The choice: the current code for both,** for three reasons:
+  - R3 runs the current code, and R2 freezes R3's tools;
+  - R2's bug check must exercise the renderer R3 will use;
+  - the held-out set already uses it.
+- **Effect measured:** every development context differs from R1's frozen one by exactly the digest v2 line
+  (`L<n> parameters (...)` in the anchor's digest). The build records this per task (`stored_context_equal`).
+- **A determinism check on the held-out set:** each context rebuilt from the same code must equal the mined one byte
+  for byte, or the build stops.
+- **What this does not change:** R1's results and R1's frozen contexts. R2's FULL version is not R1's PRISM prompt
+  byte for byte (it carries digest v2), so R2's FULL numbers are not pooled with R1's PRISM numbers.
+- No other rule changes: the budget (6,000), tests excluded, the prompt text, the scorer, the answer key and the
+  model settings are all R1's.
+
+## Amendment R2-5: analysis details (2026-11-04; before any R2 call; `harness/experiments/r2/analyze.py`)
+
+These fill in what A6 and R3-3 leave open. They change no margin, floor, α or seed.
+
+| item | fixed as |
+|---|---|
+| measure | forward callers found (`found / changed`, R1's H-TM1 measure), per task the mean over seeds 42 and 1001 |
+| removal effect | drop = FULL − version, per task |
+| directional test | Wilcoxon signed-rank, two-sided; bootstrap 95% interval (10,000 resamples, seed 5501) |
+| TOST | two one-sided paired t-tests against ±0.03, p = the larger; a 90% bootstrap interval reported beside it |
+| A6 family (development) | Holm across R2-H4 (directional, NO4), R2-H6 (TOST, NO6), R2-H7 (TOST, NO7) and R2-H47 (p = the larger of the Wilcoxon p of NO47 vs NO4 and NO47 vs NO7; both intervals must lie above 0) |
+| R3-3, "Holm-adjusted within forward" | **directional:** Holm across the three single-section removals (4, 6, 7). **Equivalence:** Holm across their three TOSTs. The pair NO47 is not a section and never prunes. |
+| load-bearing (A6) | development: directional adjusted p < 0.05, interval above 0, drop ≥ 0.05; held-out mean drop > 0 |
+| dead weight (R3-3a) | development: equivalence adjusted p < 0.05; held-out TOST p < 0.05; TOST p < 0.05 at each seed, on both sets |
+| harmful (R3-3b) | development: directional adjusted p < 0.05, interval below 0, mean drop < 0 at each seed; held-out mean drop < 0 |
+| truncation (A1) | per comparison, tasks cut at the answer cap in either version at any seed are excluded; more than 20% makes the comparison invalid, and an invalid comparison never prunes |
+| unstable | the mean drop has opposite signs at the two seeds |
+| language | reported by repository and by anchor file (the JavaScript files in the TypeScript slots) |
+| sections 1, 2, 3, 5, 8 | not removed in R2 (A6, order step 3, is not run), so never pruned |
