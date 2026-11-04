@@ -249,6 +249,67 @@
    },
    "stored_context_equal": true,
    "target": 3298
+  },
+  "more-itertools-heldout-005": {
+   "NO4": {
+    "base_tokens": 3840,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 3857,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 3721,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 3738,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 3498,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`more_itertools.recipes.convolve` (more_itertools/recipes.py:766)\n```\ndef convolve(signal, kernel):\n    \"\"\"Discrete linear convolution of two iterables.\n    Equivalent to polynomial multiplication.\n\n    For example, multiplying ``(x\u00b2 -x - 20)`` by ``(x - 3)``\n    gives ``(x\u00b3 -4x\u00b2 -17x + 60)``.\n\n        >>> list(convolve([1, -1, -20], [1, -3]))\n        [1, -4, -17, 60]\n\n    Examples of popular kinds of kernels:\n\n    * The kernel ``[0.25, 0.25, 0.25, 0.25]`` computes a moving average.\n      For image data, this blurs the image and reduces noise.\n    * The kernel ``[1/2, 0, -1/2]`` estimates the first derivative of\n      a function evaluated at evenly spaced inputs.\n    * The kernel ``[1, -2, 1]`` estimates the second derivative of a\n      function evaluated at evenly spaced inputs.\n\n    Convolutions are mathematically commutative; however, the inputs are\n    evaluated differently.  The signal is consumed lazily and can be\n    infinite. The kernel is fully consumed before the calculations begin.\n\n    Supports all numeric types: int, float, complex, Decimal, Fraction.\n\n    References:\n\n    * Article:  https://betterexplained.com/articles/intuitive-convolution/\n    * Video by 3Blue1Brown:  https://www.youtube.com/watch?v=KuXjwB4LzSA\n\n    \"\"\"\n    # This implementation comes from an older version of the itertools\n```",
+    "items": [],
+    "partial": "more_itertools.recipes.convolve",
+    "tokens": 3891,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 3781,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 3798,
+    "within": true
+   },
+   "context": "# Change context: `more_itertools.recipes._sorted_window`\nmore_itertools/recipes.py, lines 1368-1393\n\n## 1. Codebase\n253 functions in 1 directories; 0 registered entry points; languages: python 253\n\nLargest directories (functions, entry points):\n- `more_itertools`: 253 functions\n\n## 2. Group `more_itertools`\n253 functions, 12 classes in 3 files.\n\n## 3. Anchor\n```python\ndef _sorted_window(iterator, k):  # pragma: no cover\n    \"Yield windows in sorted order\"\n\n    # This simple implementation is reasonably fast with two O(1) deque\n    # updates and two O(log k) data comparisons per iteration.  However,\n    # it also has two O(k) steps, a list insertion and a list deletion.\n\n    # Grant Jenks' work on SortedCollections showed that those two steps\n    # have a very low constant factor because they are implemented with\n    # highly optimized C memmoves that shift the data pointers without\n    # needing to touch the underlying data with reference counts.\n\n    # This function could be reimplemented with SortedCollections, blist\n    # some other binary tree, or an IndexableSkipList all of which have\n    # O(k) insertions and deletions, albeit with a larger constant\n    # factor. For very large window sizes, this might matter.\n\n    history = deque()\n    window = []\n    for x in iterator:\n        history.append(x)\n        insort(window, x)\n        if len(window) > k:\n            i = bisect_left(window, history.popleft())\n            del window[i]\n        yield window\n```\n\nDigest (what its code does, line by line):\n```\nL1368 parameters (iterator, k)\nL1385 history = deque()\nL1386 window = []\nwhen for each x in iterator:\n  L1388 call history.append(x) -> ?\n  L1389 call insort(window, x) -> library bisect.insort\n  when len(window) > k:\n    L1391 i = bisect_left(window, history.popleft())\n  L1393 yield window\n```\n\n## 4. Who depends on it\n- `more_itertools.recipes._running_median_windowed` (more_itertools/recipes.py)\n  - L1399 result: iterates over the result\n  - L1399 arguments: passes 2 positional arguments\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `more_itertools`:\n- errors are raised as `ValueError` (44 of 64 raises here)\n- function names are snake_case (157 of 157 multi-word names)\n\nSibling `more_itertools.recipes.sliding_window` (more_itertools/recipes.py:861; same file, name words: window):\n```python\ndef sliding_window(iterable, n):\n    \"\"\"Return a sliding window of width *n* over *iterable*.\n\n        >>> list(sliding_window(range(6), 4))\n        [(0, 1, 2, 3), (1, 2, 3, 4), (2, 3, 4, 5)]\n\n    If *iterable* has fewer than *n* items, then nothing is yielded:\n\n        >>> list(sliding_window(range(3), 4))\n        []\n\n    For a variant with more features, see :func:`windowed`.\n    \"\"\"\n    if n > 20:\n        return _sliding_window_deque(iterable, n)\n    elif n > 2:\n        return _sliding_window_islice(iterable, n)\n    elif n == 2:\n        return pairwise(iterable)\n    elif n == 1:\n        return zip(iterable)\n    else:\n        raise ValueError(f'n should be at least one, not {n}')\n```\n\nSibling `more_itertools.recipes._sliding_window_deque` (more_itertools/recipes.py:852; same file, name words: window):\n```python\ndef _sliding_window_deque(iterable, n):\n    # Normal path for other values of n.\n    iterator = iter(iterable)\n    window = deque(islice(iterator, n - 1), maxlen=n)\n    for x in iterator:\n        window.append(x)\n        yield tuple(window)\n```\n\n## 7. Callers' code\n`more_itertools.recipes._running_median_windowed` (more_itertools/recipes.py):\n```python\ndef _running_median_windowed(iterator, k):\n    \"Yield median of values in a sliding window.\"\n\n    for data in _sorted_window(iterator, k):\n        n = len(data)\n        if n % 2 == 1:\n            yield data[n // 2]\n        else:\n            i = n // 2\n            yield (data[i - 1] + data[i]) / 2\n```\n\n## 8. Wider impact\n2 transitive callers; by distance: 1 hop: 1, 2 hops: 1\n",
+   "context_sha": "517a5b142864f5cfeb17cab85f5e8d91dff9b07d3f19e071f33624f28464427b",
+   "context_tokens_prism": 1367,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 3900
   }
  }
 }
