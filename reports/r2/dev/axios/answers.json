@@ -239,6 +239,16 @@
   "seconds": 25.4,
   "seed": 42
  },
+ "axios-forward-005/FULL@1001": {
+  "answer_tokens": 2017,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "f317a083cb686ae8",
+  "prompt_tokens": 8140,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.adapters.http.setProxy\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function signature has changed to include a new parameter `configHttpsAgent`, which is used to handle HTTPS proxying.\",\n      \"new_code\": \"function setProxy(options, configProxy, location, isRedirect, configHttpsAgent) {\\n  let proxy = configProxy;\\n  if (!proxy && proxy !== false) {\\n    const proxyUrl = getProxyForUrl(location);\\n    if (proxyUrl) {\\n      if (!shouldBypassProxy(location)) {\\n        proxy = new URL(proxyUrl);\\n      }\\n    }\\n  }\\n  // On redirect re-invocation, strip any stale Proxy-Authorization header carried\\n  // over from the prior request (e.g. new target no longer uses a proxy, or uses\\n  // a different proxy). Skip on the initial request so user-supplied headers are\\n  // preserved. Header names are case-insensitive, so remove every case variant.\\n  if (isRedirect && options.headers) {\\n    for (const name of Object.keys(options.headers)) {\\n      if (name.toLowerCase() === 'proxy-authorization') {\\n        delete options.headers[name];\\n      }\\n    }\\n  }\\n  // Strip any tunneling agent we installed for the previous hop so a redirect\\n  // that drops the proxy or crosses an HTTPS\u2194HTTP boundary doesn't reuse a\\n  // stale one. Match on our Symbol marker so a user-supplied HttpsProxyAgent\\n  // (which won't carry the marker) is left alone.\\n  if (isRedirect && options.agent && options.agent[kAxiosInstalledTunnel]) {\\n    options.agent = undefined;\\n  }\\n  if (proxy) {\\n    // Read proxy fields without traversing the prototype chain. URL instances expose\\n    // username/password/hostname/host/port/protocol via getters on URL.prototype (so\\n    // direct reads are shielded), but plain object proxies \u2014 and the `auth` field\\n    // (which URL does not expose) \u2014 must be guarded so a polluted Object.prototype\\n    // (e.g. Object.prototype.auth = { username, password }) cannot inject\\n    // attacker-controlled credentials into the Proxy-Authorization header or\\n    // redirect proxying to an attacker-controlled host.\\n    const isProxyURL = proxy instanceof URL;\\n    const readProxyField = (key) =>\\n      isProxyURL || utils.hasOwnProp(proxy, key) ? proxy[key] : undefined;\\n\\n    const proxyUsername = readProxyField('username');\\n    const proxyPassword = readProxyField('password');\\n    let proxyAuth = utils.hasOwnProp(proxy, 'auth') ? proxy.auth : undefined;\\n\\n    // Basic proxy authorization\\n    if (proxyUsername) {\\n      proxyAuth = (proxyUsername || '') + ':' + (proxyPassword || '');\\n    }\\n\\n    if (proxyAuth) {\\n      // Support proxy auth object form. Read sub-fields via own-prop checks so a\\n      // plain object inheriting from polluted Object.prototype cannot leak creds.\\n      const authIsObject = typeof proxyAuth === 'object';\\n      const authUsername =\\n        authIsObject && utils.hasOwnProp(proxyAuth, 'username') ? proxyAuth.username : undefined;\\n      const authPassword =\\n        authIsObject && utils.hasOwnProp(proxyAuth, 'password') ? proxyAuth.password : undefined;\\n      const validProxyAuth = Boolean(authUsername || authPassword);\\n\\n      if (validProxyAuth) {\\n        proxyAuth = (authUsername || '') + ':' + (authPassword || '');\\n      } else if (authIsObject) {\\n        throw new AxiosError('Invalid proxy authorization', AxiosError.ERR_BAD_OPTION, { proxy });\\n      }\\n    }\\n\\n    const targetIsHttps = isHttps.test(options.protocol);\\n\\n    if (targetIsHttps) {\\n      // CONNECT-tunneling path for HTTPS targets. Preserves end-to-end TLS to\\n      // the origin so the proxy cannot inspect the URL, headers, or body \u2014 the\\n      // behavior already promised by THREATMODEL.md (T-R9). HttpsProxyAgent\\n      // sends Proxy-Authorization on the CONNECT request only, never on the\\n      // wrapped TLS request, which is why we don't stamp it onto\\n      // options.headers here. If the user already supplied an HttpsProxyAgent,\\n      // they own tunneling end-to-end and we leave them alone; otherwise we\\n      // install our own tunneling agent and forward their TLS options (if any)\\n      // so a custom httpsAgent for cert pinning / rejectUnauthorized still\\n      // applies to the origin TLS upgrade.\\n      if (!(configHttpsAgent instanceof HttpsProxyAgent)) {\\n        const proxyHost = readProxyField('hostname') || readProxyField('host');\\n        const proxyPort = readProxyField('port');\\n        const rawProxyProtocol = readProxyField('protocol');\\n        const normalizedProtocol = rawProxyProtocol\\n          ? rawProxyProtocol.includes(':')\\n            ? rawProxyProtocol\\n            : `${rawProxyProtocol}:`\\n          : 'http:';\\n        // Bracket IPv6 literals for URL parsing; URL.hostname strips the\\n        // brackets again on read so the agent receives the raw form.\\n        const proxyHostForURL =\\n          proxyHost && proxyHost.includes(':') && !proxyHost.startsWith('[')\\n            ? `[${proxyHost}]`\\n            : proxyHost;\\n        const proxyURL = new URL(\\n          `${normalizedProtocol}//${proxyHostForURL}${proxyPort ? ':' + proxyPort : ''}`\\n        );\\n        const agentOptions = {\\n          protocol: proxyURL.protocol,\\n          hostname: proxyURL.hostname.replace(/^\\n|\\\\]$/g, ''),\\n          port: proxyURL.port,\\n          auth: proxyAuth && typeof proxyAuth === 'string' ? proxyAuth : undefined,\\n        };\\n        if (proxyURL.protocol === 'https:') {\\n          agentOptions.ALPNProtocols = ['http/1.1'];\\n        }\\n        const tunnelingAgent = getTunnelingAgent(agentOptions, configHttpsAgent);\\n        // Set both: `options.agent` is consumed by the native https.request path\\n        // (config.maxRedirects === 0); `options.agents.https` is consumed by\\n        // follow-redirects, which ignores `options.agent` when `options.agents`\\n        // is present.\\n        options.agent = tunnelingAgent;\\n        if (options.agents) {\\n          options.agents.https = tunnelingAgent;\\n        }\\n      }\\n    } else {\\n      // Forward-proxy mode for plaintext HTTP targets. The request line carries\\n      // the absolute URL and the proxy sees everything \u2014 acceptable for plain\\n      // HTTP since the wire was already plaintext.\\n      if (proxyAuth) {\\n        const base64 = Buffer.from(proxyAuth, 'utf8').toString('base64');\\n        options.headers['Proxy-Authorization'] = 'Basic ' + base64;\\n      }\\n\\n      // Preserve a user-supplied Host header (case-insensitive) so callers can override\\n      // the value forwarded to the proxy; otherwise default to the request URL's host.\\n      let hasUserHostHeader = false;\\n      for (const name of Object.keys(options.headers)) {\\n        if (name.toLowerCase() === 'host') {\\n          hasUserHostHeader = true;\\n          break;\\n        }\\n      }\\n      if (!hasUserHostHeader) {\\n        options.headers.host = options.hostname + (options.port ? ':' + options.port : '');\\n      }\\n      const proxyHost = readProxyField('hostname') || readProxyField('host');\\n      options.hostname = proxyHost;\\n      // Replace 'host' since options is not a URL object\\n      options.host = proxyHost;\\n      options.port = readProxyField('port');\\n      options.path = location;\\n      const proxyProtocol = readProxyField('protocol');\\n      if (proxyProtocol) {\\n        options.protocol = proxyProtocol.includes(':') ? proxyProtocol : `${proxyProtocol}:`;\\n      }\\n    }\\n  }\\n\\n  options.beforeRedirects.proxy = function beforeRedirect(redirectOptions) {\\n    // Configure proxy for redirected request, passing the original config proxy to apply\\n    // the exact same logic as if the redirected request was performed by axios directly.\\n    setProxy(redirectOptions, configProxy, redirectOptions.href, true, configHttpsAgent);\\n  };\\n}\"\n    },\n    {\n      \"function\": \"lib.adapters.http.beforeRedirect\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function now needs to pass the new `configHttpsAgent` parameter to the `setProxy` function.\",\n      \"new_code\": \"function beforeRedirect(options, responseDetails, requestDetails) {\\n  if (options.beforeRedirects.proxy) {\\n    options.beforeRedirects.proxy(options, responseDetails.config.httpsAgent);\\n  }\\n  if (options.beforeRedirects.config) {\\n    options.beforeRedirects.config(options, responseDetails, requestDetails);\\n  }\\n}\"\n    }\n  ]\n}",
+  "seconds": 153.6,
+  "seed": 1001
+ },
  "axios-forward-005/FULL@42": {
   "answer_tokens": 2025,
   "done_reason": "stop",
@@ -248,6 +258,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.adapters.http.setProxy\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function signature has been updated to include a new parameter `configHttpsAgent`, which is used to handle HTTPS proxy tunneling.\",\n      \"new_code\": \"function setProxy(options, configProxy, location, isRedirect, configHttpsAgent) {\\n  let proxy = configProxy;\\n  if (!proxy && proxy !== false) {\\n    const proxyUrl = getProxyForUrl(location);\\n    if (proxyUrl) {\\n      if (!shouldBypassProxy(location)) {\\n        proxy = new URL(proxyUrl);\\n      }\\n    }\\n  }\\n  // On redirect re-invocation, strip any stale Proxy-Authorization header carried\\n  // over from the prior request (e.g. new target no longer uses a proxy, or uses\\n  // a different proxy). Skip on the initial request so user-supplied headers are\\n  // preserved. Header names are case-insensitive, so remove every case variant.\\n  if (isRedirect && options.headers) {\\n    for (const name of Object.keys(options.headers)) {\\n      if (name.toLowerCase() === 'proxy-authorization') {\\n        delete options.headers[name];\\n      }\\n    }\\n  }\\n  // Strip any tunneling agent we installed for the previous hop so a redirect\\n  // that drops the proxy or crosses an HTTPS\u2194HTTP boundary doesn't reuse a\\n  // stale one. Match on our Symbol marker so a user-supplied HttpsProxyAgent\\n  // (which won't carry the marker) is left alone.\\n  if (isRedirect && options.agent && options.agent[kAxiosInstalledTunnel]) {\\n    options.agent = undefined;\\n  }\\n  if (proxy) {\\n    // Read proxy fields without traversing the prototype chain. URL instances expose\\n    // username/password/hostname/host/port/protocol via getters on URL.prototype (so\\n    // direct reads are shielded), but plain object proxies \u2014 and the `auth` field\\n    // (which URL does not expose) \u2014 must be guarded so a polluted Object.prototype\\n    // (e.g. Object.prototype.auth = { username, password }) cannot inject\\n    // attacker-controlled credentials into the Proxy-Authorization header or\\n    // redirect proxying to an attacker-controlled host.\\n    const isProxyURL = proxy instanceof URL;\\n    const readProxyField = (key) =>\\n      isProxyURL || utils.hasOwnProp(proxy, key) ? proxy[key] : undefined;\\n\\n    const proxyUsername = readProxyField('username');\\n    const proxyPassword = readProxyField('password');\\n    let proxyAuth = utils.hasOwnProp(proxy, 'auth') ? proxy.auth : undefined;\\n\\n    // Basic proxy authorization\\n    if (proxyUsername) {\\n      proxyAuth = (proxyUsername || '') + ':' + (proxyPassword || '');\\n    }\\n\\n    if (proxyAuth) {\\n      // Support proxy auth object form. Read sub-fields via own-prop checks so a\\n      // plain object inheriting from polluted Object.prototype cannot leak creds.\\n      const authIsObject = typeof proxyAuth === 'object';\\n      const authUsername =\\n        authIsObject && utils.hasOwnProp(proxyAuth, 'username') ? proxyAuth.username : undefined;\\n      const authPassword =\\n        authIsObject && utils.hasOwnProp(proxyAuth, 'password') ? proxyAuth.password : undefined;\\n      const validProxyAuth = Boolean(authUsername || authPassword);\\n\\n      if (validProxyAuth) {\\n        proxyAuth = (authUsername || '') + ':' + (authPassword || '');\\n      } else if (authIsObject) {\\n        throw new AxiosError('Invalid proxy authorization', AxiosError.ERR_BAD_OPTION, { proxy });\\n      }\\n    }\\n\\n    const targetIsHttps = isHttps.test(options.protocol);\\n\\n    if (targetIsHttps) {\\n      // CONNECT-tunneling path for HTTPS targets. Preserves end-to-end TLS to\\n      // the origin so the proxy cannot inspect the URL, headers, or body \u2014 the\\n      // behavior already promised by THREATMODEL.md (T-R9). HttpsProxyAgent\\n      // sends Proxy-Authorization on the CONNECT request only, never on the\\n      // wrapped TLS request, which is why we don't stamp it onto\\n      // options.headers here. If the user already supplied an HttpsProxyAgent,\\n      // they own tunneling end-to-end and we leave them alone; otherwise we\\n      // install our own tunneling agent and forward their TLS options (if any)\\n      // so a custom httpsAgent for cert pinning / rejectUnauthorized still\\n      // applies to the origin TLS upgrade.\\n      if (!(configHttpsAgent instanceof HttpsProxyAgent)) {\\n        const proxyHost = readProxyField('hostname') || readProxyField('host');\\n        const proxyPort = readProxyField('port');\\n        const rawProxyProtocol = readProxyField('protocol');\\n        const normalizedProtocol = rawProxyProtocol\\n          ? rawProxyProtocol.includes(':')\\n            ? rawProxyProtocol\\n            : `${rawProxyProtocol}:`\\n          : 'http:';\\n        // Bracket IPv6 literals for URL parsing; URL.hostname strips the\\n        // brackets again on read so the agent receives the raw form.\\n        const proxyHostForURL =\\n          proxyHost && proxyHost.includes(':') && !proxyHost.startsWith('[')\\n            ? `[${proxyHost}]`\\n            : proxyHost;\\n        const proxyURL = new URL(\\n          `${normalizedProtocol}//${proxyHostForURL}${proxyPort ? ':' + proxyPort : ''}`\\n        );\\n        const agentOptions = {\\n          protocol: proxyURL.protocol,\\n          hostname: proxyURL.hostname.replace(/^\\u005B|\\u005D$/g, ''),\\n          port: proxyURL.port,\\n          auth: proxyAuth && typeof proxyAuth === 'string' ? proxyAuth : undefined,\\n        };\\n        if (proxyURL.protocol === 'https:') {\\n          agentOptions.ALPNProtocols = ['http/1.1'];\\n        }\\n        const tunnelingAgent = getTunnelingAgent(agentOptions, configHttpsAgent);\\n        // Set both: `options.agent` is consumed by the native https.request path\\n        // (config.maxRedirects === 0); `options.agents.https` is consumed by\\n        // follow-redirects, which ignores `options.agent` when `options.agents`\\n        // is present.\\n        options.agent = tunnelingAgent;\\n        if (options.agents) {\\n          options.agents.https = tunnelingAgent;\\n        }\\n      }\\n    } else {\\n      // Forward-proxy mode for plaintext HTTP targets. The request line carries\\n      // the absolute URL and the proxy sees everything \u2014 acceptable for plain\\n      // HTTP since the wire was already plaintext.\\n      if (proxyAuth) {\\n        const base64 = Buffer.from(proxyAuth, 'utf8').toString('base64');\\n        options.headers['Proxy-Authorization'] = 'Basic ' + base64;\\n      }\\n\\n      // Preserve a user-supplied Host header (case-insensitive) so callers can override\\n      // the value forwarded to the proxy; otherwise default to the request URL's host.\\n      let hasUserHostHeader = false;\\n      for (const name of Object.keys(options.headers)) {\\n        if (name.toLowerCase() === 'host') {\\n          hasUserHostHeader = true;\\n          break;\\n        }\\n      }\\n      if (!hasUserHostHeader) {\\n        options.headers.host = options.hostname + (options.port ? ':' + options.port : '');\\n      }\\n      const proxyHost = readProxyField('hostname') || readProxyField('host');\\n      options.hostname = proxyHost;\\n      // Replace 'host' since options is not a URL object\\n      options.host = proxyHost;\\n      options.port = readProxyField('port');\\n      options.path = location;\\n      const proxyProtocol = readProxyField('protocol');\\n      if (proxyProtocol) {\\n        options.protocol = proxyProtocol.includes(':') ? proxyProtocol : `${proxyProtocol}:`;\\n      }\\n    }\\n  }\\n\\n  options.beforeRedirects.proxy = function beforeRedirect(redirectOptions) {\\n    // Configure proxy for redirected request, passing the original config proxy to apply\\n    // the exact same logic as if the redirected request was performed by axios directly.\\n    setProxy(redirectOptions, configProxy, redirectOptions.href, true, configHttpsAgent);\\n  };\\n}\"\n    },\n    {\n      \"function\": \"lib.adapters.http.beforeRedirect\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The function now needs to pass the new `configHttpsAgent` parameter to the `setProxy` function.\",\n      \"new_code\": \"options.beforeRedirects.proxy = function beforeRedirect(redirectOptions) {\\n  // Configure proxy for redirected request, passing the original config proxy to apply\\n  // the exact same logic as if the redirected request was performed by axios directly.\\n  setProxy(redirectOptions, configProxy, redirectOptions.href, true, configHttpsAgent);\\n};\"\n    }\n  ]\n}",
   "seconds": 161.5,
   "seed": 42
+ },
+ "axios-forward-005/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "cc4e1c43bc809382",
+  "prompt_tokens": 8004,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 1001
  },
  "axios-forward-005/NO4@42": {
   "answer_tokens": 6,
@@ -259,6 +279,16 @@
   "seconds": 2.6,
   "seed": 42
  },
+ "axios-forward-005/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "48195f5dd94d744b",
+  "prompt_tokens": 7998,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 1001
+ },
  "axios-forward-005/NO6@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -268,6 +298,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.6,
   "seed": 42
+ },
+ "axios-forward-006/FULL@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "12799d2652cf2630",
+  "prompt_tokens": 3770,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 1001
  },
  "axios-forward-006/FULL@42": {
   "answer_tokens": 1258,
@@ -279,6 +319,16 @@
   "seconds": 90.6,
   "seed": 42
  },
+ "axios-forward-006/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "7e78e295d4092110",
+  "prompt_tokens": 3637,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.8,
+  "seed": 1001
+ },
  "axios-forward-006/NO4@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -288,6 +338,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 1.8,
   "seed": 42
+ },
+ "axios-forward-006/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "21d13764715a7d28",
+  "prompt_tokens": 3751,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.1,
+  "seed": 1001
  },
  "axios-forward-006/NO6@42": {
   "answer_tokens": 6,
@@ -299,6 +359,16 @@
   "seconds": 2.1,
   "seed": 42
  },
+ "axios-forward-007/FULL@1001": {
+  "answer_tokens": 518,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "064598b6a0ee2e94",
+  "prompt_tokens": 3400,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AxiosHeaders.clear\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `clear` method. This change is necessary to maintain the correct behavior of the `clear` method.\",\n      \"new_code\": \"clear(matcher) {\\n  const keys = Object.keys(this);\\n  let i = keys.length;\\n  let deleted = false;\\n\\n  while (i--) {\\n    const key = keys[i];\\n    if(!matcher || matchHeaderValue(this, this[key], key, matcher, false)) {\\n      delete this[key];\\n      deleted = true;\\n    }\\n  }\\n\\n  return deleted;\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.deleteHeader\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `deleteHeader` method. This change is necessary to maintain the correct behavior of the `deleteHeader` method.\",\n      \"new_code\": \"function deleteHeader(_header) {\\n  _header = normalizeHeader(_header);\\n\\n  if (_header) {\\n    const key = utils.findKey(self, _header);\\n\\n    if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher, false))) {\\n      delete self[key];\\n\\n      deleted = true;\\n    }\\n  }\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.has\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `has` method. This change is necessary to maintain the correct behavior of the `has` method.\",\n      \"new_code\": \"has(header, matcher) {\\n  header = normalizeHeader(header);\\n\\n  if (header) {\\n    const key = utils.findKey(this, header);\\n\\n    return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher, false)));\\n  }\\n\\n  return false;\\n}\"\n    }\n  ]\n}",
+  "seconds": 36.5,
+  "seed": 1001
+ },
  "axios-forward-007/FULL@42": {
   "answer_tokens": 498,
   "done_reason": "stop",
@@ -308,6 +378,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AxiosHeaders.clear\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `clear` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function clear(matcher) {\\n  const keys = Object.keys(this);\\n  let i = keys.length;\\n  let deleted = false;\\n\\n  while (i--) {\\n    const key = keys[i];\\n    if(!matcher || matchHeaderValue(this, this[key], key, matcher, false)) {\\n      delete this[key];\\n      deleted = true;\\n    }\\n  }\\n\\n  return deleted;\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.deleteHeader\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `deleteHeader` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function deleteHeader(_header) {\\n  _header = normalizeHeader(_header);\\n\\n  if (_header) {\\n    const key = utils.findKey(self, _header);\\n\\n    if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher, false))) {\\n      delete self[key];\\n\\n      deleted = true;\\n    }\\n  }\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.has\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `has` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function has(header, matcher) {\\n  header = normalizeHeader(header);\\n\\n  if (header) {\\n    const key = utils.findKey(this, header);\\n\\n    return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher, false)));\\n  }\\n\\n  return false;\\n}\"\n    }\n  ]\n}",
   "seconds": 37.6,
   "seed": 42
+ },
+ "axios-forward-007/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "de118721c40aa6ce",
+  "prompt_tokens": 3395,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.1,
+  "seed": 1001
  },
  "axios-forward-007/NO4@42": {
   "answer_tokens": 6,
@@ -319,6 +399,16 @@
   "seconds": 2.1,
   "seed": 42
  },
+ "axios-forward-007/NO6@1001": {
+  "answer_tokens": 489,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6f8eded44c742872",
+  "prompt_tokens": 3256,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AxiosHeaders.clear\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `clear` method. This will cause a TypeError.\",\n      \"new_code\": \"function clear(matcher) {\\n  const keys = Object.keys(this);\\n  let i = keys.length;\\n  let deleted = false;\\n\\n  while (i--) {\\n    const key = keys[i];\\n    if(!matcher || matchHeaderValue(this, this[key], key, matcher, false)) {\\n      delete this[key];\\n      deleted = true;\\n    }\\n  }\\n\\n  return deleted;\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.deleteHeader\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `deleteHeader` method. This will cause a TypeError.\",\n      \"new_code\": \"function deleteHeader(_header) {\\n  _header = normalizeHeader(_header);\\n\\n  if (_header) {\\n    const key = utils.findKey(self, _header);\\n\\n    if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher, false))) {\\n      delete self[key];\\n\\n      deleted = true;\\n    }\\n  }\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.has\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now takes an additional `isHeaderNameFilter` parameter, which is not provided in the `has` method. This will cause a TypeError.\",\n      \"new_code\": \"function has(header, matcher) {\\n  header = normalizeHeader(header);\\n\\n  if (header) {\\n    const key = utils.findKey(this, header);\\n\\n    return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher, false)));\\n  }\\n\\n  return false;\\n}\"\n    }\n  ]\n}",
+  "seconds": 34.0,
+  "seed": 1001
+ },
  "axios-forward-007/NO6@42": {
   "answer_tokens": 495,
   "done_reason": "stop",
@@ -328,6 +418,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AxiosHeaders.clear\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now includes an additional parameter `isHeaderNameFilter`, which is not provided in the `clear` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function clear(matcher) {\\n  const keys = Object.keys(this);\\n  let i = keys.length;\\n  let deleted = false;\\n\\n  while (i--) {\\n    const key = keys[i];\\n    if(!matcher || matchHeaderValue(this, this[key], key, matcher, false)) {\\n      delete this[key];\\n      deleted = true;\\n    }\\n  }\\n\\n  return deleted;\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.deleteHeader\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now includes an additional parameter `isHeaderNameFilter`, which is not provided in the `deleteHeader` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function deleteHeader(_header) {\\n  _header = normalizeHeader(_header);\\n\\n  if (_header) {\\n    const key = utils.findKey(self, _header);\\n\\n    if (key && (!matcher || matchHeaderValue(self, self[key], key, matcher, false))) {\\n      delete self[key];\\n\\n      deleted = true;\\n    }\\n  }\\n}\"\n    },\n    {\n      \"function\": \"AxiosHeaders.has\",\n      \"file\": \"lib/core/AxiosHeaders.js\",\n      \"reason\": \"The new `matchHeaderValue` function now includes an additional parameter `isHeaderNameFilter`, which is not provided in the `has` method. This will cause a TypeError if not handled.\",\n      \"new_code\": \"function has(header, matcher) {\\n  header = normalizeHeader(header);\\n\\n  if (header) {\\n    const key = utils.findKey(this, header);\\n\\n    return !!(key && this[key] !== undefined && (!matcher || matchHeaderValue(this, this[key], key, matcher, false)));\\n  }\\n\\n  return false;\\n}\"\n    }\n  ]\n}",
   "seconds": 34.5,
   "seed": 42
+ },
+ "axios-forward-008/FULL@1001": {
+  "answer_tokens": 568,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "12981951bc2b291a",
+  "prompt_tokens": 3616,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"httpAdapter\",\n      \"file\": \"lib/adapters/http.js\",\n      \"reason\": \"The change in `isFormData` function affects how `httpAdapter` checks if `data` is a FormData instance.\",\n      \"new_code\": \"module.exports = function httpAdapter(config) {\\n  return new Promise(function dispatchHttpRequest(resolvePromise, rejectPromise) {\\n    var onCanceled;\\n    function done() {\\n      if (config.cancelToken) {\\n        config.cancelToken.unsubscribe(onCanceled);\\n    # ... lines 53-81 not shown ...\\n        delete headers[headerNames['user-agent']];\\n      }\\n      // Otherwise, use specified value\\n    } else {\\n      // Only set header if it hasn't been set in config\\n      headers['User-Agent'] = 'axios/' + VERSION;\\n    }\\n\\n    if (utils.isFormData(data)) {\\n      Object.assign(headers, data.getHeaders());\\n    } else if (data && !utils.isStream(data)) {\\n      if (Buffer.isBuffer(data)) {\\n        // Nothing to do...\\n      } else if (utils.isArrayBuffer(data)) {\\n        data = Buffer.from(new Uint8Array(data));\\n      } else if (utils.isString(data)) {\\n        data = Buffer.from(data, 'utf-8');\\n    # ... lines 99-406 not shown ...\\n\"\n    },\n    {\n      \"function\": \"xhrAdapter\",\n      \"file\": \"lib/adapters/xhr.js\",\n      \"reason\": \"The change in `isFormData` function affects how `xhrAdapter` checks if `requestData` is a FormData instance.\",\n      \"new_code\": \"module.exports = function xhrAdapter(config) {\\n  return new Promise(function dispatchXhrRequest(resolve, reject) {\\n    var requestData = config.data;\\n    var requestHeaders = config.headers;\\n    var responseType = config.responseType;\\n    var onCanceled;\\n    # ... lines 20-21 not shown ...\\n        config.cancelToken.unsubscribe(onCanceled);\\n      }\\n\\n      if (config.signal) {\\n        config.signal.removeEventListener('abort', onCanceled);\\n      }\\n    }\\n\\n    if (utils.isFormData(requestData)) {\\n      delete requestHeaders['Content-Type']; // Let the browser set it\\n    }\\n\\n    var request = new XMLHttpRequest();\\n\\n    // HTTP basic authentication\\n    if (config.auth) {\\n      var username = config.auth.username || '';\\n    # ... lines 39-212 not shown ...\\n\"\n    }\n  ]\n}",
+  "seconds": 39.9,
+  "seed": 1001
  },
  "axios-forward-008/FULL@42": {
   "answer_tokens": 554,
@@ -339,6 +439,16 @@
   "seconds": 41.8,
   "seed": 42
  },
+ "axios-forward-008/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d6cb839bcf93140c",
+  "prompt_tokens": 3520,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.7,
+  "seed": 1001
+ },
  "axios-forward-008/NO4@42": {
   "answer_tokens": 88,
   "done_reason": "stop",
@@ -348,6 +458,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"isFormData\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The implementation of isFormData has been simplified, so other functions that rely on the previous implementation may need to be updated.\",\n      \"new_code\": \"function isFormData(val) {\\n  return toString.call(val) === '[object FormData]';\\n}\"\n    }\n  ]\n}",
   "seconds": 7.2,
   "seed": 42
+ },
+ "axios-forward-008/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "da9fecb1fdb10224",
+  "prompt_tokens": 3470,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.6,
+  "seed": 1001
  },
  "axios-forward-008/NO6@42": {
   "answer_tokens": 6,
@@ -359,6 +479,16 @@
   "seconds": 1.6,
   "seed": 42
  },
+ "axios-forward-009/FULL@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "dadaa39a97fb66d2",
+  "prompt_tokens": 4640,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.9,
+  "seed": 1001
+ },
  "axios-forward-009/FULL@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -368,6 +498,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 6.0,
   "seed": 42
+ },
+ "axios-forward-009/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "e580d174432b7a52",
+  "prompt_tokens": 4500,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.5,
+  "seed": 1001
  },
  "axios-forward-009/NO4@42": {
   "answer_tokens": 6,
@@ -379,6 +519,16 @@
   "seconds": 1.6,
   "seed": 42
  },
+ "axios-forward-009/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "06aed7b6b652a445",
+  "prompt_tokens": 4567,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.7,
+  "seed": 1001
+ },
  "axios-forward-009/NO6@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -388,6 +538,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 1.7,
   "seed": 42
+ },
+ "axios-forward-010/FULL@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "009a9118c505d384",
+  "prompt_tokens": 2898,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.9,
+  "seed": 1001
  },
  "axios-forward-010/FULL@42": {
   "answer_tokens": 6,
@@ -399,6 +559,16 @@
   "seconds": 4.3,
   "seed": 42
  },
+ "axios-forward-010/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "8e88423b40491cf4",
+  "prompt_tokens": 2851,
+  "raw": "{\"changes\": []}",
+  "seconds": 0.8,
+  "seed": 1001
+ },
  "axios-forward-010/NO4@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -408,6 +578,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.9,
   "seed": 42
+ },
+ "axios-forward-010/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "ad56825e4cd320a2",
+  "prompt_tokens": 2799,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.7,
+  "seed": 1001
  },
  "axios-forward-010/NO6@42": {
   "answer_tokens": 6,
@@ -419,6 +599,16 @@
   "seconds": 2.7,
   "seed": 42
  },
+ "axios-forward-011/FULL@1001": {
+  "answer_tokens": 297,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "1905ff256fd98d7d",
+  "prompt_tokens": 4234,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.utils.toJSONObject\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The `visit` function signature has changed from accepting two parameters to one. The `toJSONObject` function needs to be updated to reflect this change.\",\n      \"new_code\": \"const toJSONObject = (obj) => {\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (isObject(source)) {\\n      if (visited.has(source)) {\\n        return;\\n      }\\n\\n      //Buffer check\\n      if (isBuffer(source)) {\\n        return source;\\n      }\\n\\n      if (!('toJSON' in source)) {\\n        // add-on descent / delete-on-ascent: preserves path semantics, so DAG nodes serialise at every occurrence (see #7230).\\n        visited.add(source);\\n        const target = isArray(source) ? [] : {};\\n\\n        forEach(source, (value, key) => {\\n          const reducedValue = visit(value);\\n          !isUndefined(reducedValue) && (target[key] = reducedValue);\\n        });\\n\\n        visited.delete(source);\\n\\n        return target;\\n      }\\n    }\\n\\n    return source;\\n  };\\n\\n  return visit(obj);\\n};\"\n    }\n  ]\n}",
+  "seconds": 22.6,
+  "seed": 1001
+ },
  "axios-forward-011/FULL@42": {
   "answer_tokens": 265,
   "done_reason": "stop",
@@ -428,6 +618,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"toJSONObject\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The `visit` function signature has changed from `(source, i)` to `(source)`, so `toJSONObject` must be updated to reflect this change.\",\n      \"new_code\": \"const toJSONObject = (obj) => {\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (isObject(source)) {\\n      if (visited.has(source)) {\\n        return;\\n      }\\n\\n      //Buffer check\\n      if (isBuffer(source)) {\\n        return source;\\n      }\\n\\n      if (!('toJSON' in source)) {\\n        visited.add(source);\\n        const target = isArray(source) ? [] : {};\\n\\n        forEach(source, (value, key) => {\\n          const reducedValue = visit(value);\\n          !isUndefined(reducedValue) && (target[key] = reducedValue);\\n        });\\n\\n        visited.delete(source);\\n\\n        return target;\\n      }\\n    }\\n\\n    return source;\\n  };\\n\\n  return visit(obj);\\n};\"\n    }\n  ]\n}",
   "seconds": 23.1,
   "seed": 42
+ },
+ "axios-forward-011/NO4@1001": {
+  "answer_tokens": 276,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "c16805f06fa77981",
+  "prompt_tokens": 4109,
+  "raw": "{\"changes\": [{\"function\": \"lib.utils.toJSONObject\", \"file\": \"lib/utils.js\", \"reason\": \"The function `lib.utils.toJSONObject` uses the `visit` function, which has been updated to use a `Set` instead of an array for tracking visited objects. Therefore, `toJSONObject` needs to be updated to use the new `visit` function signature.\", \"new_code\": \"const toJSONObject = (obj) => {\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (isObject(source)) {\\n      if (visited.has(source)) {\\n        return;\\n      }\\n\\n      //Buffer check\\n      if (isBuffer(source)) {\\n        return source;\\n      }\\n\\n      if (!('toJSON' in source)) {\\n        visited.add(source);\\n        const target = isArray(source) ? [] : {};\\n\\n        forEach(source, (value, key) => {\\n          const reducedValue = visit(value);\\n          !isUndefined(reducedValue) && (target[key] = reducedValue);\\n        });\\n\\n        visited.delete(source);\\n\\n        return target;\\n      }\\n    }\\n\\n    return source;\\n  };\\n\\n  return visit(obj);\\n};\"}]}",
+  "seconds": 20.7,
+  "seed": 1001
  },
  "axios-forward-011/NO4@42": {
   "answer_tokens": 271,
@@ -439,6 +639,16 @@
   "seconds": 20.4,
   "seed": 42
  },
+ "axios-forward-011/NO6@1001": {
+  "answer_tokens": 1023,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "5dffafa36bbb5d0b",
+  "prompt_tokens": 4223,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.utils.toJSONObject\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The `visit` function signature has changed from accepting two parameters to one. The `toJSONObject` function needs to be updated to reflect this change.\",\n      \"new_code\": \"const toJSONObject = (obj) => {\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (isObject(source)) {\\n      if (visited.has(source)) {\\n        return;\\n      }\\n\\n      //Buffer check\\n      if (isBuffer(source)) {\\n        return source;\\n      }\\n\\n      if (!('toJSON' in source)) {\\n        visited.add(source);\\n        const target = isArray(source) ? [] : {};\\n\\n        forEach(source, (value, key) => {\\n          const reducedValue = visit(value);\\n          !isUndefined(reducedValue) && (target[key] = reducedValue);\\n        });\\n\\n        visited.delete(source);\\n\\n        return target;\\n      }\\n    }\\n\\n    return source;\\n  };\\n\\n  return visit(obj);\\n};\"\n    },\n    {\n      \"function\": \"lib.core.AxiosError.visit\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `visit` function signature has changed from accepting two parameters to one. The `AxiosError.visit` function needs to be updated to reflect this change.\",\n      \"new_code\": \"const visit = (source) => {\\n  if (source === null || typeof source !== 'object') return source;\\n  if (utils.isBuffer(source)) return source;\\n  if (seen.indexOf(source) !== -1) return undefined;\\n\\n  if (source instanceof AxiosHeaders) {\\n    source = source.toJSON();\\n  }\\n\\n  seen.push(source);\\n\\n  let result;\\n  if (utils.isArray(source)) {\\n    result = [];\\n    source.forEach((v, i) => {\\n      const reducedValue = visit(v);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[i] = reducedValue;\\n      }\\n    });\\n  } else {\\n    if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n      seen.pop();\\n      return source;\\n    }\\n\\n    result = Object.create(null);\\n    for (const [key, value] of Object.entries(source)) {\\n      const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[key] = reducedValue;\\n      }\\n    }\\n  }\\n\\n  seen.pop();\\n  return result;\\n};\"\n    },\n    {\n      \"function\": \"lib.core.AxiosError.redactConfig\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `visit` function signature has changed from accepting two parameters to one. The `redactConfig` function needs to be updated to reflect this change.\",\n      \"new_code\": \"function redactConfig(config, redactKeys) {\\n  const lowerKeys = new Set(redactKeys.map((k) => String(k).toLowerCase()));\\n  const seen = [];\\n\\n  const visit = (source) => {\\n    if (source === null || typeof source !== 'object') return source;\\n    if (utils.isBuffer(source)) return source;\\n    if (seen.indexOf(source) !== -1) return undefined;\\n\\n    if (source instanceof AxiosHeaders) {\\n      source = source.toJSON();\\n    }\\n\\n    seen.push(source);\\n\\n    let result;\\n    if (utils.isArray(source)) {\\n      result = [];\\n      source.forEach((v, i) => {\\n        const reducedValue = visit(v);\\n        if (!utils.isUndefined(reducedValue)) {\\n          result[i] = reducedValue;\\n        }\\n      });\\n    } else {\\n      if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n        seen.pop();\\n        return source;\\n      }\\n\\n      result = Object.create(null);\\n      for (const [key, value] of Object.entries(source)) {\\n        const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n        if (!utils.isUndefined(reducedValue)) {\\n          result[key] = reducedValue;\\n        }\\n      }\\n    }\\n\\n    seen.pop();\\n    return result;\\n  };\\n\\n  return visit(config);\\n}\"\n    }\n  ]\n}",
+  "seconds": 72.1,
+  "seed": 1001
+ },
  "axios-forward-011/NO6@42": {
   "answer_tokens": 768,
   "done_reason": "stop",
@@ -448,6 +658,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"AxiosError.visit\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `visit` function in `AxiosError` now takes only one argument, so the call to `visit` must be updated to remove the second argument.\",\n      \"new_code\": \"const visit = (source) => {\\n  if (source === null || typeof source !== 'object') return source;\\n  if (utils.isBuffer(source)) return source;\\n  if (seen.indexOf(source) !== -1) return undefined;\\n\\n  if (source instanceof AxiosHeaders) {\\n    source = source.toJSON();\\n  }\\n\\n  seen.push(source);\\n\\n  let result;\\n  if (utils.isArray(source)) {\\n    result = [];\\n    source.forEach((v, i) => {\\n      const reducedValue = visit(v);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[i] = reducedValue;\\n      }\\n    });\\n  } else {\\n    if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n      seen.pop();\\n      return source;\\n    }\\n\\n    result = Object.create(null);\\n    for (const [key, value] of Object.entries(source)) {\\n      const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[key] = reducedValue;\\n      }\\n    }\\n  }\\n\\n  seen.pop();\\n  return result;\\n};\"\n    },\n    {\n      \"function\": \"AxiosError.redactConfig\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `visit` function in `AxiosError.redactConfig` now takes only one argument, so the call to `visit` must be updated to remove the second argument.\",\n      \"new_code\": \"function redactConfig(config, redactKeys) {\\n  const lowerKeys = new Set(redactKeys.map((k) => String(k).toLowerCase()));\\n  const seen = [];\\n\\n  const visit = (source) => {\\n    if (source === null || typeof source !== 'object') return source;\\n    if (utils.isBuffer(source)) return source;\\n    if (seen.indexOf(source) !== -1) return undefined;\\n\\n    if (source instanceof AxiosHeaders) {\\n      source = source.toJSON();\\n    }\\n\\n    seen.push(source);\\n\\n    let result;\\n    if (utils.isArray(source)) {\\n      result = [];\\n      source.forEach((v, i) => {\\n        const reducedValue = visit(v);\\n        if (!utils.isUndefined(reducedValue)) {\\n          result[i] = reducedValue;\\n        }\\n      });\\n    } else {\\n      if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n        seen.pop();\\n        return source;\\n      }\\n\\n      result = Object.create(null);\\n      for (const [key, value] of Object.entries(source)) {\\n        const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n        if (!utils.isUndefined(reducedValue)) {\\n          result[key] = reducedValue;\\n        }\\n      }\\n    }\\n\\n    seen.pop();\\n    return result;\\n  };\\n\\n  return visit(config);\\n}\"\n    }\n  ]\n}",
   "seconds": 54.6,
   "seed": 42
+ },
+ "axios-forward-012/FULL@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "44d8e394cdce841f",
+  "prompt_tokens": 3588,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.1,
+  "seed": 1001
  },
  "axios-forward-012/FULL@42": {
   "answer_tokens": 6,
@@ -459,6 +679,16 @@
   "seconds": 5.0,
   "seed": 42
  },
+ "axios-forward-012/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "65e4f127227d9b52",
+  "prompt_tokens": 3461,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 1001
+ },
  "axios-forward-012/NO4@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -468,6 +698,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.6,
   "seed": 42
+ },
+ "axios-forward-012/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "37c6de320d778224",
+  "prompt_tokens": 3515,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 1001
  },
  "axios-forward-012/NO6@42": {
   "answer_tokens": 6,
