@@ -509,3 +509,25 @@ rejected as a protocol amendment not driven by new evidence about R2's design va
 **Confirmations locked (2026-11-04):**
 - R2 runs at 2 seeds, so amendment R2-1 applies.
 - R3a = Families B and N only (R3-2, item 2).
+
+## Amendment R3-4: the redundancy clause (2026-11-04; before R2's first model call; **not hash-committed**)
+
+**Text (drafted from the team's rationale, since the clause itself was not in the request; the team may reword it
+before R2's first call):**
+
+"Sections 4 and 7 are a redundant pair on caller naming. Neither is pruned from R3's context on its own R2 result.
+Section 4 or section 7 meets R3-3's dead-weight criterion (a) only if the pair removal (−§4+§7, version NO47) also
+meets criterion (a), and meets the harmful criterion (b) only if NO47 also meets criterion (b). If NO47 is neither
+dead weight nor harmful, both sections stay in the full bundle, whatever their single-section results. Section 6 is
+not in the pair, and its own result decides. The pair is tested in the same Holm families as the sections: four
+removal arms, for both the directional and the equivalence tests."
+
+**Rationale:** "The pad check found §4 and §7 overlap on the caller-naming dimension. Single-arm dead-weight results
+would otherwise suggest pruning both, removing the mechanism behind forward's +18. R3-4 requires the pair to be
+tested before either is pruned."
+
+**Implementation:**
+- `harness/experiments/r2/analyze.py` (`ARMS`, `PAIR`). The single-section results are kept beside the decision, as
+  `dead_weight_single` and `harmful_single`.
+- Tests: `tests/test_r2.py`, the two `test_r3_4_*` tests.
+- R2-5's Holm families for the pruning decision grow from three arms to four. No margin, floor, α or seed changes.

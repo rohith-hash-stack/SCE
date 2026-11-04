@@ -19,8 +19,8 @@ Development hypotheses (A6), one Holm family, alpha 0.05:
   the adjusted p < 0.05 and both bootstrap intervals are above 0.
 
 Sections 4, 6, 7 (R3-3; the pruning decision):
-- directional: Wilcoxon of drop(N<s>), Holm across the three sections;
-- equivalence: TOST of drop(N<s>), Holm across the three sections;
+- directional: Wilcoxon of drop(N<s>), Holm across the removal arms (R3-4: four);
+- equivalence: TOST of drop(N<s>), Holm across the removal arms (R3-4: four);
 - `load_bearing` (A6): directional adjusted p < 0.05, interval above 0, drop >= 0.05 on development, and the held-out
   mean drop > 0;
 - `dead_weight` (R3-3a): equivalence adjusted p < 0.05 on development, TOST p < 0.05 on held-out, and TOST
@@ -28,6 +28,9 @@ Sections 4, 6, 7 (R3-3; the pruning decision):
 - `harmful` (R3-3b): directional adjusted p < 0.05 with the interval below 0 on development, the mean drop < 0 at
   each seed on development, and the held-out mean drop < 0;
 - `prune` = dead_weight or harmful. Sections not removed in R2 (1, 2, 3, 5, 8) are never pruned.
+- R3-4 (redundancy): the directional and equivalence Holm families hold four arms: sections 4, 6, 7 and the pair 4+7
+  (NO47). Section 4 or 7 meets dead_weight (or harmful) only if the pair NO47 also meets dead_weight (or harmful),
+  by the same criteria. The single-arm results are kept as `dead_weight_single` and `harmful_single`.
 
 Per seed: every comparison is also reported at each seed; `unstable` when the mean drop has opposite signs at the
 two seeds. Model-free measures (from the pads) come first and are never pooled with the model results.
@@ -52,6 +55,8 @@ FLOOR = 0.05
 ALPHA = 0.05
 MAX_CUT_SHARE = 0.20
 SECTIONS = {4: "NO4", 6: "NO6", 7: "NO7"}
+PAIR, PAIR_MEMBERS = "4+7", (4, 7)          # amendment R3-4: the redundant pair, tested with the sections
+ARMS = {**SECTIONS, PAIR: "NO47"}
 METRICS = {"callers": lambda r: len(r["found"]) / max(1, r["changed"]),
            "wrong": lambda r: float(len(r["extra"])),
            "all_found": lambda r: float(not r["missed"])}
@@ -197,11 +202,12 @@ def analyze() -> dict:
                      "label": "pass" if adj.get("R2-H47", 1.0) < ALPHA and ok47 else "not_shown"}
     res["hypotheses"] = hyp
 
-    direc = stats.holm({s: dev[v]["primary"]["p"] for s, v in SECTIONS.items() if dev[v]["primary"]["p"] is not None})
-    equiv = stats.holm({s: dev[v]["primary"]["tost"]["p"] for s, v in SECTIONS.items()
+    # R3-3 criteria for each removal arm; Holm across the four arms (R3-4: the pair 4+7 is tested with the sections)
+    direc = stats.holm({s: dev[v]["primary"]["p"] for s, v in ARMS.items() if dev[v]["primary"]["p"] is not None})
+    equiv = stats.holm({s: dev[v]["primary"]["tost"]["p"] for s, v in ARMS.items()
                         if dev[v]["primary"]["tost"]["p"] is not None})
-    sections = {}
-    for s, v in SECTIONS.items():
+    arms = {}
+    for s, v in ARMS.items():
         d, h = dev[v], held[v]
         db, hb = d["primary"]["bootstrap"], h["primary"]["bootstrap"]
         held_mean = hb["mean"] if hb else None
@@ -215,13 +221,23 @@ def analyze() -> dict:
         harm = bool(db) and direc.get(s, 1.0) < ALPHA and db["high"] < 0 \
             and all(m is not None and m < 0 for m in seed_dev_means) and held_mean is not None and held_mean < 0
         invalid = d["validity"]["invalid"] or h["validity"]["invalid"]
-        sections[s] = {"version": v, "p_directional_holm": direc.get(s), "p_equivalence_holm": equiv.get(s),
-                       "heldout_mean_drop": held_mean, "heldout_tost_p": h["primary"]["tost"]["p"],
-                       "seed_tost_p": seed_tost, "dev_seed_mean_drop": seed_dev_means,
-                       "load_bearing": load and not invalid, "dead_weight": dead and not invalid,
-                       "harmful": harm and not invalid, "invalid": invalid,
-                       "unstable": d["unstable"] or h["unstable"]}
-        sections[s]["prune"] = sections[s]["dead_weight"] or sections[s]["harmful"]
+        arms[s] = {"version": v, "p_directional_holm": direc.get(s), "p_equivalence_holm": equiv.get(s),
+                   "heldout_mean_drop": held_mean, "heldout_tost_p": h["primary"]["tost"]["p"],
+                   "seed_tost_p": seed_tost, "dev_seed_mean_drop": seed_dev_means,
+                   "load_bearing": load and not invalid, "dead_weight": dead and not invalid,
+                   "harmful": harm and not invalid, "invalid": invalid,
+                   "unstable": d["unstable"] or h["unstable"]}
+    pair_arm = arms[PAIR]
+    sections = {}
+    for s in SECTIONS:
+        x = dict(arms[s])
+        if s in PAIR_MEMBERS:  # R3-4: a member of the redundant pair is pruned only if the pair meets the same criterion
+            x["dead_weight_single"], x["harmful_single"] = x["dead_weight"], x["harmful"]
+            x["dead_weight"] = x["dead_weight"] and pair_arm["dead_weight"]
+            x["harmful"] = x["harmful"] and pair_arm["harmful"]
+        x["prune"] = x["dead_weight"] or x["harmful"]
+        sections[s] = x
+    res["pair_4_7"] = pair_arm
     res["sections"] = sections
     res["prune"] = sorted(s for s, x in sections.items() if x["prune"])
     return res

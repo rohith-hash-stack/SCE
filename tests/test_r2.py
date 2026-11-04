@@ -142,3 +142,20 @@ def test_truncation_over_20_percent_makes_a_comparison_invalid(synthetic, tmp_pa
 def test_tost_rejects_a_clear_difference():
     assert analyze.tost([0.2] * 30 + [0.3] * 30)["p"] > 0.05
     assert analyze.tost([0.0] * 30 + [0.01, -0.01] * 15)["p"] < 0.05
+
+
+def test_r3_4_redundant_pair_blocks_pruning_when_removing_both_hurts(synthetic):
+    """4 and 7 each look like dead weight alone, but removing both loses callers: neither is pruned (R3-4)."""
+    res = synthetic({"NO47": 0.5})
+    for s in (4, 7):
+        assert res["sections"][s]["dead_weight_single"]
+        assert not res["sections"][s]["dead_weight"] and not res["sections"][s]["prune"]
+    assert res["pair_4_7"]["load_bearing"]
+    assert res["sections"][6]["prune"]          # section 6 is not in the pair: its own result decides
+    assert res["prune"] == [6]
+
+
+def test_r3_4_pair_dead_weight_lets_both_be_pruned(synthetic):
+    res = synthetic({})
+    assert res["pair_4_7"]["dead_weight"]
+    assert res["prune"] == [4, 6, 7]

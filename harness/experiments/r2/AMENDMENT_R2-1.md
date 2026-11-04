@@ -201,3 +201,20 @@ These fill in what A6 and R3-3 leave open. They change no margin, floor, α or s
 **Frozen:** `harness/experiments/r2/manifest.json`, with the sha256 of the 2 task files and the 25 pad files. The
 Kaggle cell is pinned to the freeze commit and checks every hash, the code trees and the 2,670-call plan before any
 call.
+
+## R2-4: team sign-off (2026-11-04; before any R2 call)
+
+**Keep digest v2.**
+
+"R2's full-context numbers are not pooled with R1's. R2's conclusions are internally consistent (all five arms on
+the same code) and R3-comparable. The one-(...) per-task difference is not a confounding variable worth a day of
+rebuild. R1's forward result is unchanged."
+
+## Pre-run note: the pad finding (2026-11-04; before any R2 call; not a rule change)
+
+"§4 and §7 are largely redundant on caller naming. Single-section effects will be small. This is expected, not
+evidence that the rule failed. The −§4+§7 arm is the real test of whether caller information matters."
+
+- The pruning consequence is fixed by amendment R3-4, in `harness/experiments/r3/README.md`.
+- R3-4 changes only `analyze.py` and its tests. The tasks, pads and manifest are unchanged. The Kaggle cell is
+  re-pinned to the commit that carries R3-4.
