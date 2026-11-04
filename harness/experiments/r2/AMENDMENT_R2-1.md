@@ -4,7 +4,7 @@ R2's pre-registration is Amendment R1-A, A6 (`reports/suite/REPORT.md`). These a
 hash-commit after R2 completes. They change no rule except the seed count in R2-1, and only if confirmation item A
 is answered "2 seeds".
 
-## Amendment R2-1: seeds (**conditional: applies only if the team answers item A = 2 seeds**)
+## Amendment R2-1: seeds (~~conditional: applies only if the team answers item A = 2 seeds~~ → **in force: the team confirmed 2 seeds, 2026-11-04**)
 
 - **Change:** A6's development seeds, ~~42, 1001 and 2002~~ → **42 and 1001**, for the development set **and** the
   held-out set. The per-task value is the mean over the two seeds.
@@ -39,3 +39,36 @@ If item A is answered "3 seeds", R2-1 is void, and R2 runs at seeds 42, 1001 and
   - up to 2 easy, 2 medium and 1 hard (the suite's 7 : 7 : 6 quota, scaled to 5);
   - a short tier is filled from the others: hard, then medium, then easy.
 - **Repository HEADs:** pinned at the commits recorded in `MINING_CHECK.md`.
+
+## Amendment R2-3: held-out contingency (**committed after the failed mining check, before the resupply check**)
+
+**Timing:**
+- This contingency was **not** drafted or committed before the first mining check (`MINING_CHECK.md`, commit
+  `7099f2cc`). No earlier version exists in this repository's history.
+- It is committed now, after that check failed (Python 45 of 50, TypeScript 0 usable), and **before** the resupply
+  check on the candidates below is run.
+- Its thresholds were set by the team, knowing the first check's result.
+
+**Resupply candidates** (R1's forward miner and filter, unchanged, full history, no model calls):
+- TypeScript: `mobxjs/mobx`, `immerjs/immer`, `ReactiveX/rxjs`, `pmndrs/zustand`, `sinclairzx81/typebox`,
+  `effect-ts/effect`;
+- Python: `pallets/itsdangerous` or `jazzband/tablib`, as named by the team. Both were already screened in the
+  first check: 2 and 4 qualifying tasks.
+
+**Counting (fixed now):**
+- A repository counts only with **at least 5 qualifying tasks**, and contributes **5** (the locked 5-per-repository
+  rule).
+- TypeScript usable = 5 × the TypeScript repositories reaching 5, across the first check and the resupply.
+- The raw qualifying total (17 from the first check, plus the resupply) is reported beside it, but does not choose
+  the branch.
+
+**Branch, chosen mechanically by the yield** (not by team preference after seeing it):
+
+| branch | condition | action |
+|---|---|---|
+| 1 | TypeScript usable ≥ 30, and held-out total 80 at 50/30 | build R2's harness at 2 seeds; run |
+| 2 | TypeScript usable 20-29, and held-out total ≥ 62 | add a power note to R2's pre-registration for the smaller confirmation set; build; run |
+| 3 | TypeScript usable < 20, or held-out total < 62 | do not build. Report; the team chooses among the options in `MINING_CHECK.md`. |
+
+**Python:** 9 repositories at 5 = 45, unless the resupply adds one reaching 5. The held-out total is Python usable
+plus TypeScript usable.

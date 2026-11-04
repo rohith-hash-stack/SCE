@@ -454,7 +454,7 @@ No pass/fail rule changes: not the +0.10 floor, the Holm family, the labels or t
 All R3 decisions above were approved by the team, with two corrections. The items marked [TBD — team] are resolved
 as follows. No pass/fail rule changes.
 
-1. **Tool-freeze rule (corrects amendment R3-1).** A section of the change context is removed from R3's PRISM tools
+1. **Tool-freeze rule (corrects amendment R3-1; ~~this item~~ → widened by amendment R3-3).** A section of the change context is removed from R3's PRISM tools
    **only if R2 reports it as dead weight** (the TOST equivalence test passes) **on the development set AND on the
    held-out set AND at every seed.**
    - Any other R2 outcome keeps the full bundle: load-bearing, inconclusive, unstable across seeds, or dead weight
@@ -475,3 +475,37 @@ as follows. No pass/fail rule changes.
 8. **The "No R3" stop condition:** confirmed as written in amendment R3-1, item 9.
 9. **Sequencing:** confirmed as written in amendment R3-1: mining check → R2 run → R2 review → R3 tool freeze →
    R3 hash → harness and JS/TS builder → pilot → R3a → R3b (deferred) → R4 (not scheduled).
+
+## Amendment R3-3: the pruning rule, widened (2026-11-04; before R2's resupply mining; **not hash-committed**)
+
+**Replaces R3-2, item 1.**
+- ~~"A section is pruned only if R2 reports it as dead weight on the development set, the held-out set and every
+  seed."~~
+- → "A section is pruned from R3's context if R2 reports it as either of these:
+  - **(a) dead weight:** within the pre-registered equivalence margin, on the development set, the held-out set,
+    and every seed; or
+  - **(b) harmful:** a statistically significant reduction in forward accuracy with the section present, versus
+    absent, on the development set at every seed, with the direction replicated on the held-out set.
+
+  Dead-weight pruning removes sections that don't help; harmful pruning removes sections that hurt. A section that
+  is neither dead weight nor harmful stays in the full bundle. The pruning decision is made once, from R2's
+  pre-registered results, before R3's hash."
+
+**Rationale:** "The original rule only caught sections that failed to help. A section that actively hurts every seed
+would have stayed in R3 — the wrong outcome. Widening to harm is a correctness fix to the rule, not a change to any
+pass/fail rule, and it makes R2 a genuine design gate rather than a code freeze."
+
+**How (b) is computed**, from R2's existing pre-registered tests, with no new test:
+- "Significant" is R2's Wilcoxon on the full context versus that section's removal, Holm-adjusted within forward as
+  A6 specifies, with the difference favouring removal.
+- "At every seed" means the per-seed difference favours removal on both seeds (R2-1).
+- "Replicated" means the held-out difference has the same sign.
+
+**Why R2 comes first:** "R2 gates R3 both as a code freeze and as a design gate: sections that are dead weight or
+harmful are pruned before R3's hash. The order is R2 first because a rendering bug in any section would contaminate
+10–15k R3 calls, and because if R3 loses we need R2's results to diagnose why. Swapping the order was considered and
+rejected as a protocol amendment not driven by new evidence about R2's design value."
+
+**Confirmations locked (2026-11-04):**
+- R2 runs at 2 seeds, so amendment R2-1 applies.
+- R3a = Families B and N only (R3-2, item 2).
