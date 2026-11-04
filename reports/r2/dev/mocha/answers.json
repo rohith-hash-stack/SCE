@@ -819,6 +819,16 @@
   "seconds": 194.4,
   "seed": 42
  },
+ "mocha-forward-014/NO6@1001": {
+  "answer_tokens": 2701,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "3c40fcc616c7e1ff",
+  "prompt_tokens": 5979,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner.prototype.fail\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `checkGlobals` function.\",\n      \"new_code\": \"Runner.prototype.checkGlobals = function(test) {\\n  if (!this.checkLeaks) {\\n    return;\\n  }\\n  var ok = this._globals;\\n\\n  var globals = this.globalProps();\\n  var leaks;\\n\\n  if (test) {\\n    ok = ok.concat(test._allowedGlobals || []);\\n  }\\n\\n  if (this.prevGlobalsLength === globals.length) {\\n    return;\\n  }\\n  this.prevGlobalsLength = globals.length;\\n\\n  leaks = filterLeaks(ok, globals);\\n  this._globals = this._globals.concat(leaks);\\n\\n  if (leaks.length) {\\n    var format = ngettext(\\n      leaks.length,\\n      'global leak detected: %s',\\n      'global leaks detected: %s'\\n    );\\n    var error = new Error(util.format(format, leaks.map(sQuote).join(', ')));\\n    this.fail(test, error, true);\\n  }\\n};\"\n    },\n    {\n      \"function\": \"Runner.prototype.error\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `error` function.\",\n      \"new_code\": \"test.on('error', function(err) {\\n  if (err instanceof Pending) {\\n    return;\\n  }\\n  self.fail(test, err, true);\\n});\"\n    },\n    {\n      \"function\": \"Runner.prototype.failHook\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `failHook` function.\",\n      \"new_code\": \"Runner.prototype.failHook = function(hook, err) {\\n  hook.originalTitle = hook.originalTitle || hook.title;\\n  if (hook.ctx && hook.ctx.currentTest) {\\n    hook.title =\\n      hook.originalTitle + ' for ' + dQuote(hook.ctx.currentTest.title);\\n  } else {\\n    var parentTitle;\\n    if (hook.parent.title) {\\n      parentTitle = hook.parent.title;\\n    } else {\\n      parentTitle = hook.parent.root ? '{root}' : '';\\n    }\\n    hook.title = hook.originalTitle + ' in ' + dQuote(parentTitle);\\n  }\\n\\n  this.fail(hook, err, true);\\n};\"\n    },\n    {\n      \"function\": \"Runner.prototype.next\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `next` function.\",\n      \"new_code\": \"function next(i) {\\n  var hook = hooks[i];\\n  if (!hook) {\\n    return fn();\\n  }\\n  self.currentRunnable = hook;\\n\\n  if (name === HOOK_TYPE_BEFORE_ALL) {\\n    hook.ctx.currentTest = hook.parent.tests[0];\\n  } else if (name === HOOK_TYPE_AFTER_ALL) {\\n    hook.ctx.currentTest = hook.parent.tests[hook.parent.tests.length - 1];\\n  } else {\\n    hook.ctx.currentTest = self.test;\\n  }\\n\\n  hook.allowUncaught = self.allowUncaught;\\n\\n  self.emit(constants.EVENT_HOOK_BEGIN, hook);\\n\\n  if (!hook.listeners('error').length) {\\n    hook.on('error', function(err) {\\n      self.failHook(hook, err);\\n    });\\n  }\\n\\n  hook.run(function(err) {\\n    var testError = hook.error();\\n    if (testError) {\\n      self.fail(self.test, testError, true);\\n    }\\n    // conditional skip\\n    if (hook.pending) {\\n      if (name === HOOK_TYPE_AFTER_EACH) {\\n        // TODO define and implement use case\\n        if (self.test) {\\n          self.test.pending = true;\\n        }\\n      } else if (name === HOOK_TYPE_BEFORE_EACH) {\\n        if (self.test) {\\n          self.test.pending = true;\\n        }\\n        self.emit(constants.EVENT_HOOK_END, hook);\\n        hook.pending = false; // activates hook for next test\\n        return fn(new Error('abort hookDown'));\\n      } else if (name === HOOK_TYPE_BEFORE_ALL) {\\n        suite.tests.forEach(function(test) {\\n          test.pending = true;\\n        });\\n        suite.suites.forEach(function(suite) {\\n          suite.pending = true;\\n        });\\n      } else {\\n        hook.pending = false;\\n        var errForbid = createUnsupportedError('`this.skip` forbidden');\\n        self.failHook(hook, errForbid);\\n        return fn(errForbid);\\n      }\\n    } else if (err) {\\n      self.failHook(hook, err);\\n      // stop executing hooks, notify callee of hook err\\n      return fn(err);\\n    }\\n    self.emit(constants.EVENT_HOOK_END, hook);\\n    delete hook.ctx.currentTest;\\n    next(++i);\\n  });\\n}\"\n    },\n    {\n      \"function\": \"Runner.prototype.next#3\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `next` function.\",\n      \"new_code\": \"function next(err, errSuite) {\\n  // if we bail after first err\\n  if (self.failures && suite._bail) {\\n    tests = [];\\n  }\\n\\n  # ... lines 596-629 not shown ...\\n    }\\n    return;\\n  }\\n\\n  // static skip, no hooks are executed\\n  if (test.isPending()) {\\n    if (self.forbidPending) {\\n      test.isPending = alwaysFalse;\\n      self.fail(test, new Error('Pending test forbidden'), true);\\n      delete test.isPending;\\n    } else {\\n      self.emit(constants.EVENT_TEST_PENDING, test);\\n    }\\n    self.emit(constants.EVENT_TEST_END, test);\\n    return next();\\n  }\\n\\n  // execute test and hook(s)\\n  self.emit(constants.EVENT_TEST_BEGIN, (self.test = test));\\n  self.hookDown(HOOK_TYPE_BEFORE_EACH, function(err, errSuite) {\\n    // conditional skip within beforeEach\\n    if (test.isPending()) {\\n      if (self.forbidPending) {\\n        test.isPending = alwaysFalse;\\n        self.fail(test, new Error('Pending test forbidden'), true);\\n        delete test.isPending;\\n      } else {\\n        self.emit(constants.EVENT_TEST_PENDING, test);\\n      }\\n      self.emit(constants.EVENT_TEST_END, test);\\n      // skip inner afterEach hooks below errSuite level\\n      var origSuite = self.suite;\\n      self.suite = errSuite || self.suite;\\n  # ... lines 663-669 not shown ...\\n    }\\n    self.currentRunnable = self.test;\\n    self.runTest(function(err) {\\n      test = self.test;\\n      // conditional skip within it\\n      if (test.pending) {\\n        if (self.forbidPending) {\\n          test.isPending = alwaysFalse;\\n          self.fail(test, new Error('Pending test forbidden'), true);\\n          delete test.isPending;\\n        } else {\\n          self.emit(constants.EVENT_TEST_PENDING, test);\\n        }\\n        self.emit(constants.EVENT_TEST_END, test);\\n        return self.hookUp(HOOK_TYPE_AFTER_EACH, next);\\n      } else if (err) {\\n        var retry = test.currentRetry();\\n  # ... lines 687-689 not shown ...\\n          tests.unshift(clonedTest);\\n\\n          self.emit(constants.EVENT_TEST_RETRY, test, err);\\n\\n          // Early return + hook trigger so that it doesn't\\n          // increment the count wrong\\n          return self.hookUp(HOOK_TYPE_AFTER_EACH, next);\\n        } else {\\n          self.fail(test, err, true);\\n        }\\n        self.emit(constants.EVENT_TEST_END, test);\\n        return self.hookUp(HOOK_TYPE_AFTER_EACH, next);\\n      }\\n\\n      test.state = STATE_PASSED;\\n      self.emit(constants.EVENT_TEST_PASS, test);\\n      self.emit(constants.EVENT_TEST_END, test);\\n  # ... lines 707-710 not shown ...\\n}\"\n    },\n    {\n      \"function\": \"Runner.prototype.runTest\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `runTest` function.\",\n      \"new_code\": \"Runner.prototype.runTest = function(fn) {\\n  var self = this;\\n  var test = this.test;\\n\\n  if (!test) {\\n    return;\\n  }\\n\\n  var suite = this.parents().reverse()[0] || this.suite;\\n  if (this.forbidOnly && suite.hasOnly()) {\\n    fn(new Error('`.only` forbidden'));\\n    return;\\n  }\\n  if (this.asyncOnly) {\\n    test.asyncOnly = true;\\n  }\\n  test.on('error', function(err) {\\n    if (err instanceof Pending) {\\n      return;\\n    }\\n    self.fail(test, err, true);\\n  });\\n  if (this.allowUncaught) {\\n    test.allowUncaught = true;\\n    return test.run(fn);\\n  }\\n  try {\\n    test.run(fn);\\n  } catch (err) {\\n    fn(err);\\n  }\\n};\"\n    },\n    {\n      \"function\": \"Runner.prototype.uncaught\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `uncaught` function.\",\n      \"new_code\": \"Runner.prototype.uncaught = function(err) {\\n  if (err instanceof Pending) {\\n    return;\\n  }\\n  // browser does not exit script when throwing in global.onerror()\\n  if (this.allowUncaught && !process.browser) {\\n    throw err;\\n  }\\n\\n  if (err) {\\n    debug('uncaught exception %O', err);\\n  } else {\\n    debug('uncaught undefined/falsy exception');\\n    err = createInvalidExceptionError(\\n      'Caught falsy/undefined exception which would otherwise be uncaught. No stack trace found; try a debugger',\\n      err\\n    );\\n  }\\n\\n  if (!isError(err)) {\\n    err = thrown2Error(err);\\n  }\\n  err.uncaught = true;\\n\\n  var runnable = this.currentRunnable;\\n\\n  if (!runnable) {\\n    runnable = new Runnable('Uncaught error outside test suite');\\n    runnable.parent = this.suite;\\n\\n    if (this.started) {\\n      this.fail(runnable, err, true);\\n    } else {\\n      // Can't recover from this failure\\n      this.emit(constants.EVENT_RUN_BEGIN);\\n      this.fail(runnable, err, true);\\n      this.emit(constants.EVENT_RUN_END);\\n    }\\n\\n    return;\\n  }\\n\\n  runnable.clearTimeout();\\n\\n  if (runnable.isFailed()) {\\n    // Ignore error if already failed\\n    return;\\n  } else if (runnable.isPending()) {\\n    // report 'pending test' retrospectively as failed\\n    runnable.isPending = alwaysFalse;\\n    this.fail(runnable, err, true);\\n    delete runnable.isPending;\\n    return;\\n  }\\n\\n  // we cannot recover gracefully if a Runnable has already passed\\n  // then fails asynchronously\\n  if (runnable.isPassed()) {\\n    this.fail(runnable, err, true);\\n    this.abort();\\n  } else {\\n    debug(runnable);\\n    return runnable.callback(err);\\n  }\\n};\"\n    }\n  ]\n}",
+  "seconds": 199.2,
+  "seed": 1001
+ },
  "mocha-forward-014/NO6@42": {
   "answer_tokens": 2701,
   "done_reason": "stop",
@@ -828,6 +838,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner.prototype.fail\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `checkGlobals` function.\",\n      \"new_code\": \"Runner.prototype.checkGlobals = function(test) {\\n  if (!this.checkLeaks) {\\n    return;\\n  }\\n  var ok = this._globals;\\n\\n  var globals = this.globalProps();\\n  var leaks;\\n\\n  if (test) {\\n    ok = ok.concat(test._allowedGlobals || []);\\n  }\\n\\n  if (this.prevGlobalsLength === globals.length) {\\n    return;\\n  }\\n  this.prevGlobalsLength = globals.length;\\n\\n  leaks = filterLeaks(ok, globals);\\n  this._globals = this._globals.concat(leaks);\\n\\n  if (leaks.length) {\\n    var format = ngettext(\\n      leaks.length,\\n      'global leak detected: %s',\\n      'global leaks detected: %s'\\n    );\\n    var error = new Error(util.format(format, leaks.map(sQuote).join(', ')));\\n    this.fail(test, error, true);\\n  }\\n};\"\n    },\n    {\n      \"function\": \"Runner.prototype.error\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `error` function.\",\n      \"new_code\": \"test.on('error', function(err) {\\n  if (err instanceof Pending) {\\n    return;\\n  }\\n  self.fail(test, err, true);\\n});\"\n    },\n    {\n      \"function\": \"Runner.prototype.failHook\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `failHook` function.\",\n      \"new_code\": \"Runner.prototype.failHook = function(hook, err) {\\n  hook.originalTitle = hook.originalTitle || hook.title;\\n  if (hook.ctx && hook.ctx.currentTest) {\\n    hook.title =\\n      hook.originalTitle + ' for ' + dQuote(hook.ctx.currentTest.title);\\n  } else {\\n    var parentTitle;\\n    if (hook.parent.title) {\\n      parentTitle = hook.parent.title;\\n    } else {\\n      parentTitle = hook.parent.root ? '{root}' : '';\\n    }\\n    hook.title = hook.originalTitle + ' in ' + dQuote(parentTitle);\\n  }\\n\\n  this.fail(hook, err, true);\\n};\"\n    },\n    {\n      \"function\": \"Runner.prototype.next\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `next` function.\",\n      \"new_code\": \"function next(i) {\\n  var hook = hooks[i];\\n  if (!hook) {\\n    return fn();\\n  }\\n  self.currentRunnable = hook;\\n\\n  if (name === HOOK_TYPE_BEFORE_ALL) {\\n    hook.ctx.currentTest = hook.parent.tests[0];\\n  } else if (name === HOOK_TYPE_AFTER_ALL) {\\n    hook.ctx.currentTest = hook.parent.tests[hook.parent.tests.length - 1];\\n  } else {\\n    hook.ctx.currentTest = self.test;\\n  }\\n\\n  hook.allowUncaught = self.allowUncaught;\\n\\n  self.emit(constants.EVENT_HOOK_BEGIN, hook);\\n\\n  if (!hook.listeners('error').length) {\\n    hook.on('error', function(err) {\\n      self.failHook(hook, err);\\n    });\\n  }\\n\\n  hook.run(function(err) {\\n    var testError = hook.error();\\n    if (testError) {\\n      self.fail(self.test, testError, true);\\n    }\\n    // conditional skip\\n    if (hook.pending) {\\n      if (name === HOOK_TYPE_AFTER_EACH) {\\n        // TODO define and implement use case\\n        if (self.test) {\\n          self.test.pending = true;\\n        }\\n      } else if (name === HOOK_TYPE_BEFORE_EACH) {\\n        if (self.test) {\\n          self.test.pending = true;\\n        }\\n        self.emit(constants.EVENT_HOOK_END, hook);\\n        hook.pending = false; // activates hook for next test\\n        return fn(new Error('abort hookDown'));\\n      } else if (name === HOOK_TYPE_BEFORE_ALL) {\\n        suite.tests.forEach(function(test) {\\n          test.pending = true;\\n        });\\n        suite.suites.forEach(function(suite) {\\n          suite.pending = true;\\n        });\\n      } else {\\n        hook.pending = false;\\n        var errForbid = createUnsupportedError('`this.skip` forbidden');\\n        self.failHook(hook, errForbid);\\n        return fn(errForbid);\\n      }\\n    } else if (err) {\\n      self.failHook(hook, err);\\n      // stop executing hooks, notify callee of hook err\\n      return fn(err);\\n    }\\n    self.emit(constants.EVENT_HOOK_END, hook);\\n    delete hook.ctx.currentTest;\\n    next(++i);\\n  });\\n}\"\n    },\n    {\n      \"function\": \"Runner.prototype.next#3\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `next` function.\",\n      \"new_code\": \"function next(err, errSuite) {\\n  // if we bail after first err\\n  if (self.failures && suite._bail) {\\n    tests = [];\\n  }\\n\\n  # ... lines 596-629 not shown ...\\n    }\\n    return;\\n  }\\n\\n  // static skip, no hooks are executed\\n  if (test.isPending()) {\\n    if (self.forbidPending) {\\n      test.isPending = alwaysFalse;\\n      self.fail(test, new Error('Pending test forbidden'), true);\\n      delete test.isPending;\\n    } else {\\n      self.emit(constants.EVENT_TEST_PENDING, test);\\n    }\\n    self.emit(constants.EVENT_TEST_END, test);\\n    return next();\\n  }\\n\\n  // execute test and hook(s)\\n  self.emit(constants.EVENT_TEST_BEGIN, (self.test = test));\\n  self.hookDown(HOOK_TYPE_BEFORE_EACH, function(err, errSuite) {\\n    // conditional skip within beforeEach\\n    if (test.isPending()) {\\n      if (self.forbidPending) {\\n        test.isPending = alwaysFalse;\\n        self.fail(test, new Error('Pending test forbidden'), true);\\n        delete test.isPending;\\n      } else {\\n        self.emit(constants.EVENT_TEST_PENDING, test);\\n      }\\n      self.emit(constants.EVENT_TEST_END, test);\\n      // skip inner afterEach hooks below errSuite level\\n      var origSuite = self.suite;\\n      self.suite = errSuite || self.suite;\\n  # ... lines 663-669 not shown ...\\n    }\\n    self.currentRunnable = self.test;\\n    self.runTest(function(err) {\\n      test = self.test;\\n      // conditional skip within it\\n      if (test.pending) {\\n        if (self.forbidPending) {\\n          test.isPending = alwaysFalse;\\n          self.fail(test, new Error('Pending test forbidden'), true);\\n          delete test.isPending;\\n        } else {\\n          self.emit(constants.EVENT_TEST_PENDING, test);\\n        }\\n        self.emit(constants.EVENT_TEST_END, test);\\n        return self.hookUp(HOOK_TYPE_AFTER_EACH, next);\\n      } else if (err) {\\n        var retry = test.currentRetry();\\n  # ... lines 687-689 not shown ...\\n          tests.unshift(clonedTest);\\n\\n          self.emit(constants.EVENT_TEST_RETRY, test, err);\\n\\n          // Early return + hook trigger so that it doesn't\\n          // increment the count wrong\\n          return self.hookUp(HOOK_TYPE_AFTER_EACH, next);\\n        } else {\\n          self.fail(test, err, true);\\n        }\\n        self.emit(constants.EVENT_TEST_END, test);\\n        return self.hookUp(HOOK_TYPE_AFTER_EACH, next);\\n      }\\n\\n      test.state = STATE_PASSED;\\n      self.emit(constants.EVENT_TEST_PASS, test);\\n      self.emit(constants.EVENT_TEST_END, test);\\n  # ... lines 707-710 not shown ...\\n}\"\n    },\n    {\n      \"function\": \"Runner.prototype.runTest\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `runTest` function.\",\n      \"new_code\": \"Runner.prototype.runTest = function(fn) {\\n  var self = this;\\n  var test = this.test;\\n\\n  if (!test) {\\n    return;\\n  }\\n\\n  var suite = this.parents().reverse()[0] || this.suite;\\n  if (this.forbidOnly && suite.hasOnly()) {\\n    fn(new Error('`.only` forbidden'));\\n    return;\\n  }\\n  if (this.asyncOnly) {\\n    test.asyncOnly = true;\\n  }\\n  test.on('error', function(err) {\\n    if (err instanceof Pending) {\\n      return;\\n    }\\n    self.fail(test, err, true);\\n  });\\n  if (this.allowUncaught) {\\n    test.allowUncaught = true;\\n    return test.run(fn);\\n  }\\n  try {\\n    test.run(fn);\\n  } catch (err) {\\n    fn(err);\\n  }\\n};\"\n    },\n    {\n      \"function\": \"Runner.prototype.uncaught\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The new `fail` function now accepts a third parameter `force`, which must be handled in the `uncaught` function.\",\n      \"new_code\": \"Runner.prototype.uncaught = function(err) {\\n  if (err instanceof Pending) {\\n    return;\\n  }\\n  // browser does not exit script when throwing in global.onerror()\\n  if (this.allowUncaught && !process.browser) {\\n    throw err;\\n  }\\n\\n  if (err) {\\n    debug('uncaught exception %O', err);\\n  } else {\\n    debug('uncaught undefined/falsy exception');\\n    err = createInvalidExceptionError(\\n      'Caught falsy/undefined exception which would otherwise be uncaught. No stack trace found; try a debugger',\\n      err\\n    );\\n  }\\n\\n  if (!isError(err)) {\\n    err = thrown2Error(err);\\n  }\\n  err.uncaught = true;\\n\\n  var runnable = this.currentRunnable;\\n\\n  if (!runnable) {\\n    runnable = new Runnable('Uncaught error outside test suite');\\n    runnable.parent = this.suite;\\n\\n    if (this.started) {\\n      this.fail(runnable, err, true);\\n    } else {\\n      // Can't recover from this failure\\n      this.emit(constants.EVENT_RUN_BEGIN);\\n      this.fail(runnable, err, true);\\n      this.emit(constants.EVENT_RUN_END);\\n    }\\n\\n    return;\\n  }\\n\\n  runnable.clearTimeout();\\n\\n  if (runnable.isFailed()) {\\n    // Ignore error if already failed\\n    return;\\n  } else if (runnable.isPending()) {\\n    // report 'pending test' retrospectively as failed\\n    runnable.isPending = alwaysFalse;\\n    this.fail(runnable, err, true);\\n    delete runnable.isPending;\\n    return;\\n  }\\n\\n  // we cannot recover gracefully if a Runnable has already passed\\n  // then fails asynchronously\\n  if (runnable.isPassed()) {\\n    this.fail(runnable, err, true);\\n    this.abort();\\n  } else {\\n    debug(runnable);\\n    return runnable.callback(err);\\n  }\\n};\"\n    }\n  ]\n}",
   "seconds": 199.4,
   "seed": 42
+ },
+ "mocha-forward-015/FULL@1001": {
+  "answer_tokens": 595,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "7b68e0910ce55b87",
+  "prompt_tokens": 3974,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha\",\n      \"file\": \"lib/mocha.js\",\n      \"reason\": \"The Mocha constructor now needs to pass reporterOptions to the reporter function.\",\n      \"new_code\": \"function Mocha(options) {\\n  options = options || {};\\n  this.files = [];\\n  this.options = options;\\n  this.grep(options.grep);\\n  this.suite = new exports.Suite('', new exports.Context);\\n  this.ui(options.ui);\\n  this.bail(options.bail);\\n  this.reporter(options.reporter, options.reporterOptions);\\n  if (null != options.timeout) this.timeout(options.timeout);\\n  this.useColors(options.useColors);\\n  if (options.slow) this.slow(options.slow);\\n\\n  this.suite.on('pre-require', function (context) {\\n    exports.afterEach = context.afterEach || context.teardown;\\n    exports.after = context.after || context.suiteTeardown;\\n    exports.beforeEach = context.beforeEach || context.setup;\\n    exports.before = context.before || context.suiteSetup;\\n    exports.describe = context.describe || context.suite;\\n    exports.it = context.it || context.test;\\n    exports.setup = context.setup || context.beforeEach;\\n    exports.suiteSetup = context.suiteSetup || context.before;\\n    exports.suiteTeardown = context.suiteTeardown || context.after;\\n    exports.suite = context.suite || context.describe;\\n    exports.teardown = context.teardown || context.afterEach;\\n    exports.test = context.test || context.it;\\n  });\\n}\"\n    },\n    {\n      \"function\": \"run\",\n      \"file\": \"lib/mocha.js\",\n      \"reason\": \"The run function now needs to pass reporterOptions to the reporter function.\",\n      \"new_code\": \"Mocha.prototype.run = function(fn){\\n  if (this.files.length) this.loadFiles();\\n  var suite = this.suite;\\n  var options = this.options;\\n  options.files = this.files;\\n  var runner = new exports.Runner(suite);\\n  var reporter = new this._reporter(runner, options.reporterOptions);\\n  runner.ignoreLeaks = false !== options.ignoreLeaks;\\n  runner.asyncOnly = options.asyncOnly;\\n  if (options.grep) runner.grep(options.grep, options.invert);\\n  if (options.globals) runner.globals(options.globals);\\n  if (options.growl) this._growl(runner, reporter);\\n  exports.reporters.Base.useColors = options.useColors;\\n  exports.reporters.Base.inlineDiffs = options.useInlineDiffs;\\n  return runner.run(fn);\\n};\"\n    }\n  ]\n}",
+  "seconds": 45.6,
+  "seed": 1001
  },
  "mocha-forward-015/FULL@42": {
   "answer_tokens": 628,
@@ -839,6 +859,16 @@
   "seconds": 47.8,
   "seed": 42
  },
+ "mocha-forward-015/NO4@1001": {
+  "answer_tokens": 256,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b7490cbc177ea0ff",
+  "prompt_tokens": 3916,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha.prototype.run\",\n      \"file\": \"lib/mocha.js\",\n      \"reason\": \"The `run` method needs to pass the `reporterOptions` to the reporter constructor.\",\n      \"new_code\": \"Mocha.prototype.run = function(fn){\\n  if (this.files.length) this.loadFiles();\\n  var suite = this.suite;\\n  var options = this.options;\\n  options.files = this.files;\\n  var runner = new exports.Runner(suite);\\n  var reporter = new this._reporter(runner, options, this.options.reporterOptions);\\n  runner.ignoreLeaks = false !== options.ignoreLeaks;\\n  runner.asyncOnly = options.asyncOnly;\\n  if (options.grep) runner.grep(options.grep, options.invert);\\n  if (options.globals) runner.globals(options.globals);\\n  if (options.growl) this._growl(runner, reporter);\\n  exports.reporters.Base.useColors = options.useColors;\\n  exports.reporters.Base.inlineDiffs = options.useInlineDiffs;\\n  return runner.run(fn);\\n};\"\n    }\n  ]\n}",
+  "seconds": 19.0,
+  "seed": 1001
+ },
  "mocha-forward-015/NO4@42": {
   "answer_tokens": 256,
   "done_reason": "stop",
@@ -848,6 +878,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha.prototype.run\",\n      \"file\": \"lib/mocha.js\",\n      \"reason\": \"The `run` method now needs to pass `reporterOptions` to the reporter constructor.\",\n      \"new_code\": \"Mocha.prototype.run = function(fn){\\n  if (this.files.length) this.loadFiles();\\n  var suite = this.suite;\\n  var options = this.options;\\n  options.files = this.files;\\n  var runner = new exports.Runner(suite);\\n  var reporter = new this._reporter(runner, options, this.options.reporterOptions);\\n  runner.ignoreLeaks = false !== options.ignoreLeaks;\\n  runner.asyncOnly = options.asyncOnly;\\n  if (options.grep) runner.grep(options.grep, options.invert);\\n  if (options.globals) runner.globals(options.globals);\\n  if (options.growl) this._growl(runner, reporter);\\n  exports.reporters.Base.useColors = options.useColors;\\n  exports.reporters.Base.inlineDiffs = options.useInlineDiffs;\\n  return runner.run(fn);\\n};\"\n    }\n  ]\n}",
   "seconds": 19.0,
   "seed": 42
+ },
+ "mocha-forward-015/NO6@1001": {
+  "answer_tokens": 360,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "877bf47e66a8a6de",
+  "prompt_tokens": 3914,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha\",\n      \"file\": \"lib/mocha.js\",\n      \"reason\": \"The Mocha constructor now needs to pass reporterOptions to the reporter method.\",\n      \"new_code\": \"function Mocha(options) {\\n  options = options || {};\\n  this.files = [];\\n  this.options = options;\\n  this.grep(options.grep);\\n  this.suite = new exports.Suite('', new exports.Context);\\n  this.ui(options.ui);\\n  this.bail(options.bail);\\n  this.reporter(options.reporter, options.reporterOptions);\\n  if (null != options.timeout) this.timeout(options.timeout);\\n  this.useColors(options.useColors)\\n  if (options.slow) this.slow(options.slow);\\n\\n  this.suite.on('pre-require', function (context) {\\n    exports.afterEach = context.afterEach || context.teardown;\\n    exports.after = context.after || context.suiteTeardown;\\n    exports.beforeEach = context.beforeEach || context.setup;\\n    exports.before = context.before || context.suiteSetup;\\n    exports.describe = context.describe || context.suite;\\n    exports.it = context.it || context.test;\\n    exports.setup = context.setup || context.beforeEach;\\n    exports.suiteSetup = context.suiteSetup || context.before;\\n    exports.suiteTeardown = context.suiteTeardown || context.after;\\n    exports.suite = context.suite || context.describe;\\n    exports.teardown = context.teardown || context.afterEach;\\n    exports.test = context.test || context.it;\\n  });\\n}\"\n    }\n  ]\n}",
+  "seconds": 26.0,
+  "seed": 1001
  },
  "mocha-forward-015/NO6@42": {
   "answer_tokens": 288,
@@ -859,6 +899,16 @@
   "seconds": 21.2,
   "seed": 42
  },
+ "mocha-forward-016/FULL@1001": {
+  "answer_tokens": 200,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "de2c22258149aefa",
+  "prompt_tokens": 3002,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The constructor now needs to initialize `check_global_leaks` to `false` by default to match the new behavior of `checkGlobals`.\",\n      \"new_code\": \"function Runner(suite) {\\n  var self = this;\\n  this._globals = [];\\n  this.suite = suite;\\n  this.total = suite.total();\\n  this.check_global_leaks = false; // Initialize to false by default\\n  if(this.check_global_leaks){\\n    this.on('test end', function(test){ self.checkGlobals(test); });\\n    this.on('hook end', function(hook){ self.checkGlobals(hook); });\\n  }\\n  this.grep(/.*/);\\n  this.globals(Object.keys(global).concat(['errno']));\\n}\"\n    }\n  ]\n}",
+  "seconds": 17.3,
+  "seed": 1001
+ },
  "mocha-forward-016/FULL@42": {
   "answer_tokens": 200,
   "done_reason": "stop",
@@ -868,6 +918,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The constructor now needs to initialize `check_global_leaks` to `false` by default to match the new behavior of `checkGlobals`.\",\n      \"new_code\": \"function Runner(suite) {\\n  var self = this;\\n  this._globals = [];\\n  this.suite = suite;\\n  this.total = suite.total();\\n  this.check_global_leaks = false; // Initialize to false by default\\n  if(this.check_global_leaks){\\n    this.on('test end', function(test){ self.checkGlobals(test); });\\n    this.on('hook end', function(hook){ self.checkGlobals(hook); });\\n  }\\n  this.grep(/.*/);\\n  this.globals(Object.keys(global).concat(['errno']));\\n}\"\n    }\n  ]\n}",
   "seconds": 17.3,
   "seed": 42
+ },
+ "mocha-forward-016/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "f494cfad1624aa15",
+  "prompt_tokens": 2947,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.3,
+  "seed": 1001
  },
  "mocha-forward-016/NO4@42": {
   "answer_tokens": 196,
@@ -879,6 +939,16 @@
   "seconds": 13.9,
   "seed": 42
  },
+ "mocha-forward-016/NO6@1001": {
+  "answer_tokens": 196,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "3315e273aea9a676",
+  "prompt_tokens": 3001,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The constructor now needs to check if `check_global_leaks` is true before setting up event listeners for `test end` and `hook end`.\",\n      \"new_code\": \"function Runner(suite) {\\n  var self = this;\\n  this._globals = [];\\n  this.suite = suite;\\n  this.total = suite.total();\\n  if(this.check_global_leaks){\\n    this.on('test end', function(test){ self.checkGlobals(test); });\\n    this.on('hook end', function(hook){ self.checkGlobals(hook); });\\n  }\\n  this.grep(/.*/);\\n  this.globals(Object.keys(global).concat(['errno']));\\n  this.check_global_leaks = true;\\n}\"\n    }\n  ]\n}",
+  "seconds": 13.9,
+  "seed": 1001
+ },
  "mocha-forward-016/NO6@42": {
   "answer_tokens": 196,
   "done_reason": "stop",
@@ -888,6 +958,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The constructor now needs to check if `check_global_leaks` is true before setting up event listeners for `test end` and `hook end`.\",\n      \"new_code\": \"function Runner(suite) {\\n  var self = this;\\n  this._globals = [];\\n  this.suite = suite;\\n  this.total = suite.total();\\n  if(this.check_global_leaks){\\n    this.on('test end', function(test){ self.checkGlobals(test); });\\n    this.on('hook end', function(hook){ self.checkGlobals(hook); });\\n  }\\n  this.grep(/.*/);\\n  this.globals(Object.keys(global).concat(['errno']));\\n  this.check_global_leaks = true;\\n}\"\n    }\n  ]\n}",
   "seconds": 13.9,
   "seed": 42
+ },
+ "mocha-forward-017/FULL@1001": {
+  "answer_tokens": 115,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "fab25983b95cce7a",
+  "prompt_tokens": 2616,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner.prototype.runSuite\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The `done` function now takes an `errSuite` parameter, which needs to be passed to it.\",\n      \"new_code\": \"function done() {\\n  self.suite = suite;\\n  self.hook('afterAll', function(errSuite){\\n    self.emit('suite end', suite);\\n    fn(errSuite);\\n  });\\n}\"\n    }\n  ]\n}",
+  "seconds": 11.0,
+  "seed": 1001
  },
  "mocha-forward-017/FULL@42": {
   "answer_tokens": 115,
@@ -899,6 +979,16 @@
   "seconds": 10.9,
   "seed": 42
  },
+ "mocha-forward-017/NO4@1001": {
+  "answer_tokens": 115,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "a2267b6d40632efb",
+  "prompt_tokens": 2594,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner.prototype.runSuite\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The `done` function now takes an `errSuite` parameter, which needs to be passed to it.\",\n      \"new_code\": \"function done() {\\n  self.suite = suite;\\n  self.hook('afterAll', function(errSuite){\\n    self.emit('suite end', suite);\\n    fn(errSuite);\\n  });\\n}\"\n    }\n  ]\n}",
+  "seconds": 8.4,
+  "seed": 1001
+ },
  "mocha-forward-017/NO4@42": {
   "answer_tokens": 115,
   "done_reason": "stop",
@@ -908,6 +998,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Runner.prototype.runSuite\",\n      \"file\": \"lib/runner.js\",\n      \"reason\": \"The `done` function now takes an `errSuite` parameter, which needs to be passed to it.\",\n      \"new_code\": \"function done() {\\n  self.suite = suite;\\n  self.hook('afterAll', function(errSuite){\\n    self.emit('suite end', suite);\\n    fn(errSuite);\\n  });\\n}\"\n    }\n  ]\n}",
   "seconds": 8.4,
   "seed": 42
+ },
+ "mocha-forward-017/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "baa00daed67aaf21",
+  "prompt_tokens": 2612,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.2,
+  "seed": 1001
  },
  "mocha-forward-017/NO6@42": {
   "answer_tokens": 6,
@@ -919,6 +1019,16 @@
   "seconds": 1.2,
   "seed": 42
  },
+ "mocha-forward-018/FULL@1001": {
+  "answer_tokens": 204,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "2561ff6607609d43",
+  "prompt_tokens": 3235,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha.prototype.run\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The `growl` function no longer takes arguments and now sets `this.options.growl` to `true`. The `run` function needs to be updated to reflect this change.\",\n      \"new_code\": \"Mocha.prototype.run = function(fn){\\n  this.loadFiles();\\n  var suite = this.suite;\\n  var options = this.options;\\n  var runner = new exports.Runner(suite);\\n  var reporter = new this._reporter(runner);\\n  runner.ignoreLeaks = options.ignoreLeaks;\\n  if (options.grep) runner.grep(options.grep);\\n  if (options.globals) runner.globals(options.globals);\\n  if (options.growl) this.growl();\\n  return runner.run(fn);\\n};\"\n    }\n  ]\n}",
+  "seconds": 17.6,
+  "seed": 1001
+ },
  "mocha-forward-018/FULL@42": {
   "answer_tokens": 204,
   "done_reason": "stop",
@@ -928,6 +1038,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha.prototype.run\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The `growl` function no longer accepts parameters and now sets `this.options.growl` to `true`. The `run` function needs to be updated to reflect this change.\",\n      \"new_code\": \"Mocha.prototype.run = function(fn){\\n  this.loadFiles();\\n  var suite = this.suite;\\n  var options = this.options;\\n  var runner = new exports.Runner(suite);\\n  var reporter = new this._reporter(runner);\\n  runner.ignoreLeaks = options.ignoreLeaks;\\n  if (options.grep) runner.grep(options.grep);\\n  if (options.globals) runner.globals(options.globals);\\n  if (options.growl) this.growl();\\n  return runner.run(fn);\\n};\"\n    }\n  ]\n}",
   "seconds": 17.7,
   "seed": 42
+ },
+ "mocha-forward-018/NO4@1001": {
+  "answer_tokens": 211,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "969efe7fb8846816",
+  "prompt_tokens": 3203,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha.prototype.run\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The `growl` function no longer takes parameters and now sets `this.options.growl` to `true`. The `run` function needs to be updated to call the new `growl` function without parameters.\",\n      \"new_code\": \"Mocha.prototype.run = function(fn){\\n  this.loadFiles();\\n  var suite = this.suite;\\n  var options = this.options;\\n  var runner = new exports.Runner(suite);\\n  var reporter = new this._reporter(runner);\\n  runner.ignoreLeaks = options.ignoreLeaks;\\n  if (options.grep) runner.grep(options.grep);\\n  if (options.globals) runner.globals(options.globals);\\n  if (options.growl) this.growl();\\n  return runner.run(fn);\\n};\"\n    }\n  ]\n}",
+  "seconds": 15.2,
+  "seed": 1001
  },
  "mocha-forward-018/NO4@42": {
   "answer_tokens": 221,
@@ -939,6 +1059,16 @@
   "seconds": 15.8,
   "seed": 42
  },
+ "mocha-forward-018/NO6@1001": {
+  "answer_tokens": 207,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "cd80a1c392caad8c",
+  "prompt_tokens": 3176,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha.prototype.run\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The `growl` function no longer takes parameters and directly sets `this.options.growl` to `true`. The `run` function should be updated to reflect this change.\",\n      \"new_code\": \"Mocha.prototype.run = function(fn){\\n  this.loadFiles();\\n  var suite = this.suite;\\n  var options = this.options;\\n  var runner = new exports.Runner(suite);\\n  var reporter = new this._reporter(runner);\\n  runner.ignoreLeaks = options.ignoreLeaks;\\n  if (options.grep) runner.grep(options.grep, options.invert);\\n  if (options.globals) runner.globals(options.globals);\\n  if (options.growl) this.growl();\\n  return runner.run(fn);\\n};\"\n    }\n  ]\n}",
+  "seconds": 14.9,
+  "seed": 1001
+ },
  "mocha-forward-018/NO6@42": {
   "answer_tokens": 219,
   "done_reason": "stop",
@@ -948,6 +1078,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Mocha.prototype.run\",\n      \"file\": \"mocha.js\",\n      \"reason\": \"The `growl` function no longer takes arguments and directly sets `this.options.growl` to `true`. The `run` function should no longer pass `runner` and `reporter` to `this.growl`.\",\n      \"new_code\": \"Mocha.prototype.run = function(fn){\\n  this.loadFiles();\\n  var suite = this.suite;\\n  var options = this.options;\\n  var runner = new exports.Runner(suite);\\n  var reporter = new this._reporter(runner);\\n  runner.ignoreLeaks = options.ignoreLeaks;\\n  if (options.grep) runner.grep(options.grep, options.invert);\\n  if (options.globals) runner.globals(options.globals);\\n  if (options.growl) this.growl();\\n  return runner.run(fn);\\n};\"\n    }\n  ]\n}",
   "seconds": 15.7,
   "seed": 42
+ },
+ "mocha-forward-019/FULL@1001": {
+  "answer_tokens": 432,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "691ef1e2a681d22c",
+  "prompt_tokens": 3473,
+  "raw": "{\"changes\": [{\"function\": \"NyanCat.prototype.drawNyanCat\", \"file\": \"lib/reporters/nyan.js\", \"reason\": \"The function now calls `this.face()` instead of directly using a switch statement to determine the face based on the status. Therefore, a new method `face` must be added to the `NyanCat` prototype to return the appropriate face string.\", \"new_code\": \"NyanCat.prototype.face = function() {\\n  var face;\\n  switch (this.stats.currentTest.state) {\\n    case 'passed':\\n      face = '( ^ .^)';\\n      break;\\n    case 'failed':\\n      face = '( o .o)';\\n      break;\\n    default:\\n      face = '( - .-)';\\n  }\\n  return face;\\n};\\n\\nNyanCat.prototype.drawNyanCat = function() {\\n  var self = this;\\n  var startWidth = this.scoreboardWidth + this.trajectories[0].length;\\n  var color = '\\u001b[' + startWidth + 'C';\\n  var padding = '';\\n  \\n  write(color);\\n  write('_,------,');\\n  write('\\\\n');\\n  \\n  write(color);\\n  padding = self.tick ? '  ' : '   ';\\n  write('_|' + padding + '/\\\\_/\\\\ ');\\n  write('\\\\n');\\n  \\n  write(color);\\n  padding = self.tick ? '_' : '__';\\n  var tail = self.tick ? '~' : '^';\\n  write(tail + '|' + padding + this.face() + ' ');\\n  write('\\\\n');\\n  \\n  write(color);\\n  padding = self.tick ? ' ' : '  ';\\n  write(padding + '\\\"\\\"  \\\"\\\" ');\\n  write('\\\\n');\\n\\n  this.cursorUp(this.numberOfLines);\\n};\"}]}",
+  "seconds": 33.3,
+  "seed": 1001
  },
  "mocha-forward-019/FULL@42": {
   "answer_tokens": 738,
@@ -959,6 +1099,16 @@
   "seconds": 53.9,
   "seed": 42
  },
+ "mocha-forward-019/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "781180fd19a095f2",
+  "prompt_tokens": 3438,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.4,
+  "seed": 1001
+ },
  "mocha-forward-019/NO4@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -968,6 +1118,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 1.4,
   "seed": 42
+ },
+ "mocha-forward-019/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "990fac99b349da9f",
+  "prompt_tokens": 3401,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.3,
+  "seed": 1001
  },
  "mocha-forward-019/NO6@42": {
   "answer_tokens": 6,
@@ -979,6 +1139,16 @@
   "seconds": 1.3,
   "seed": 42
  },
+ "mocha-forward-020/FULL@1001": {
+  "answer_tokens": 220,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "8d6aaab888fa3bef",
+  "prompt_tokens": 1946,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"context.suite.only\",\n      \"file\": \"lib/interfaces/qunit.js\",\n      \"reason\": \"The function signature has changed from accepting two parameters (title and fn) to accepting only one parameter (title).\",\n      \"new_code\": \"context.suite.only = function(title) {\\n      if (suites.length > 1) {\\n        suites.shift();\\n      }\\n      return common.suite.only({\\n        title: title,\\n        file: file\\n      });\\n    };\"\n    },\n    {\n      \"function\": \"context.test.only\",\n      \"file\": \"lib/interfaces/qunit.js\",\n      \"reason\": \"The function signature has changed from accepting two parameters (title and fn) to accepting only one parameter (title).\",\n      \"new_code\": \"context.test.only = function(title) {\\n      return common.test.only({\\n        title: title,\\n        file: file\\n      });\\n    };\"\n    }\n  ]\n}",
+  "seconds": 17.0,
+  "seed": 1001
+ },
  "mocha-forward-020/FULL@42": {
   "answer_tokens": 220,
   "done_reason": "stop",
@@ -989,6 +1159,16 @@
   "seconds": 17.0,
   "seed": 42
  },
+ "mocha-forward-020/NO4@1001": {
+  "answer_tokens": 230,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "31efbd3870a73570",
+  "prompt_tokens": 1934,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"context.suite.only\",\n      \"file\": \"lib/interfaces/qunit.js\",\n      \"reason\": \"The function signature has changed from accepting a title and a function to only accepting a title. The implementation must be updated to reflect this change.\",\n      \"new_code\": \"context.suite.only = function(title) {\\n      if (suites.length > 1) {\\n        suites.shift();\\n      }\\n      return common.suite.only({\\n        title: title,\\n        file: file\\n      });\\n    };\"\n    },\n    {\n      \"function\": \"context.test.only\",\n      \"file\": \"lib/interfaces/qunit.js\",\n      \"reason\": \"The function signature has changed from accepting a title and a function to only accepting a title. The implementation must be updated to reflect this change.\",\n      \"new_code\": \"context.test.only = function(title) {\\n      return common.test.only({\\n        title: title,\\n        file: file\\n      });\\n    };\"\n    }\n  ]\n}",
+  "seconds": 16.3,
+  "seed": 1001
+ },
  "mocha-forward-020/NO4@42": {
   "answer_tokens": 238,
   "done_reason": "stop",
@@ -998,6 +1178,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"context.suite.only\",\n      \"file\": \"lib/interfaces/qunit.js\",\n      \"reason\": \"The function signature has changed from accepting two parameters (title, fn) to accepting only one parameter (title). The implementation must be updated to reflect this change.\",\n      \"new_code\": \"context.suite.only = function(title) {\\n      if (suites.length > 1) {\\n        suites.shift();\\n      }\\n      return common.suite.only({\\n        title: title,\\n        file: file\\n      });\\n    };\"\n    },\n    {\n      \"function\": \"context.test.only\",\n      \"file\": \"lib/interfaces/qunit.js\",\n      \"reason\": \"The function signature has changed from accepting two parameters (title, fn) to accepting only one parameter (title). The implementation must be updated to reflect this change.\",\n      \"new_code\": \"context.test.only = function(title) {\\n      return common.test.only({\\n        title: title,\\n        file: file\\n      });\\n    };\"\n    }\n  ]\n}",
   "seconds": 16.8,
   "seed": 42
+ },
+ "mocha-forward-020/NO6@1001": {
+  "answer_tokens": 220,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "fa225dd7f0b41ecf",
+  "prompt_tokens": 1946,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"context.suite.only\",\n      \"file\": \"lib/interfaces/qunit.js\",\n      \"reason\": \"The function signature has changed from accepting two parameters (title, fn) to accepting only one parameter (title).\",\n      \"new_code\": \"context.suite.only = function(title) {\\n      if (suites.length > 1) {\\n        suites.shift();\\n      }\\n      return common.suite.only({\\n        title: title,\\n        file: file\\n      });\\n    };\"\n    },\n    {\n      \"function\": \"context.test.only\",\n      \"file\": \"lib/interfaces/qunit.js\",\n      \"reason\": \"The function signature has changed from accepting two parameters (title, fn) to accepting only one parameter (title).\",\n      \"new_code\": \"context.test.only = function(title) {\\n      return common.test.only({\\n        title: title,\\n        file: file\\n      });\\n    };\"\n    }\n  ]\n}",
+  "seconds": 15.7,
+  "seed": 1001
  },
  "mocha-forward-020/NO6@42": {
   "answer_tokens": 522,
