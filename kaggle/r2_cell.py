@@ -27,9 +27,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "0e64bffcb62231b47d128aeac99811f7e2d616ec"
+CODE_COMMIT = "415a931af1b95e35f4b043c4cc78c6c1e373e593"
 CODE_TREES = {"src": "891bde9dbc849c48de5d4a3129e165987fea5dfb",
-              "harness": "38e8af39693b43fcf991e46e8ec736ab52b1a0f1"}
+              "harness": "11b506e83b601d7b29b49a4cc6fd74b376ca94eb"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 SUMMARIZER = "qwen2.5-coder:14b-instruct-q8_0"   # the locked model
