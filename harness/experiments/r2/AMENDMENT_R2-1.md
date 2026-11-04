@@ -107,3 +107,19 @@ range):**
 - **"Load-bearing" and R3-3's route (b), harmful,** need only the direction to replicate on the held-out set. That
   has power 0.84-0.99 for a true change of 0.05. These routes remain informative.
 - The development set's TOST is informative only if the per-task SD is about 0.15 or less.
+
+## R2-3: branch classification, recorded precisely (2026-11-04; team-confirmed; no rule changed)
+
+- **Classification:**
+  - "Branch 1 on TS count (≥30 met at exactly 30), branch 2 on total size (75 < 80). R2-3's branch 2 outcome
+    applies: run at achieved mix, no rules relaxed, power note added. The classification is boundary-by-count,
+    branch-2-by-total."
+- **Added to the power note:**
+  - "Held-out set is 75, not 80. Dead-weight equivalence test at ±0.03 is underpowered. R2's design-gate value
+    rests on (a) the harm test under R3-3 and (b) catching rendering bugs before R3 spends 10–15k calls."
+- **The JavaScript files in the TypeScript slots: team confirms keep.**
+  - "5 of the 30 TS-slot tasks are JS files (immer early history, zustand rollup.config.js). They pass the
+    unchanged miner and filter. Kept under the R2-2 draw, not removed after seeing the draw. If dropped, TS count is
+    25, still branch 2. Team confirms keep; the protocol outcome is unchanged either way."
+- **R3-3 verified:** committed in `2b321db4` (2026-11-04 01:52 UTC). That was before the resupply check, the held-out
+  freeze (`80f78aba`), any harness code and any R2 call.
