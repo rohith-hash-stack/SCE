@@ -67,8 +67,16 @@ If item A is answered "3 seeds", R2-1 is void, and R2 runs at seeds 42, 1001 and
 | branch | condition | action |
 |---|---|---|
 | 1 | TypeScript usable ≥ 30, and held-out total 80 at 50/30 | build R2's harness at 2 seeds; run |
-| 2 | TypeScript usable 20-29, and held-out total ≥ 62 | add a power note to R2's pre-registration for the smaller confirmation set; build; run |
+| 2 | TypeScript usable ~~20-29~~ → ≥ 20, and held-out total ≥ 62, and not branch 1 | add a power note to R2's pre-registration for the smaller confirmation set; build; run |
 | 3 | TypeScript usable < 20, or held-out total < 62 | do not build. Report; the team chooses among the options in `MINING_CHECK.md`. |
 
 **Python:** 9 repositories at 5 = 45, unless the resupply adds one reaching 5. The held-out total is Python usable
 plus TypeScript usable.
+
+**Correction to the branch table** (2026-11-04, after effect reached 5 and before typebox's and rxjs's yields were
+known):
+- As first written, TypeScript usable = 30 with a held-out total below 80 (Python at 45) fell in no branch.
+- Branch 2 now covers it. "≥ 20, total ≥ 62, not branch 1" is the only reading consistent with the table's intent.
+- **At the time of this correction:**
+  - TypeScript usable was 20 (immer, zustand, mobx, effect), and Python usable 45, so the total was 65;
+  - typebox and rxjs were still being mined.
