@@ -72,3 +72,29 @@
 4. **Run with what exists:** 45 Python tasks and up to 17 TypeScript tasks without a cap, 62 in all. This breaks the
    locked 80 per version.
    - Not recommended.
+
+## Resupply check (R2-3; 2026-11-04; no model calls)
+
+**HEADs:**
+- mobx 22fc7d2a46ff
+- immer 75a290e44ba1
+- rxjs 54796b38a57e
+- zustand 382d29c485e6
+- typebox 8509cf82d64b
+- effect 2968901d2964
+
+**Python:** tablib (4) and itsdangerous (2) were already mined at the same HEADs in the first check. The miner is
+deterministic, so they are not re-run; Python stays at 45.
+
+**effect: stopped early, by a fixed rule.** The rule was recorded here before typebox's and rxjs's yields were known;
+it does not change effect's pass.
+- Indexing an effect revision takes about 12 GB, against the container's 15 GB limit. The miner was killed twice
+  for memory.
+- 8 of 249 candidates were processed in several hours, so the rest would take about 40 hours or more.
+- **The rule:**
+  - effect's pool is the candidates processed when it was stopped: the 8 newest, in the miner's newest-first order,
+    giving 7 qualifying tasks;
+  - the revision killed for memory, `0c24a8fd670622237ad8a9ab66a3ea7c93533b83`, counts as skipped (the miner's
+    one-bad-revision rule);
+  - R2-2's seeded draw takes effect's 5 tasks from those 7.
+- **Limit:** effect's tasks are its most recent forward changes, not a draw from its whole history.
