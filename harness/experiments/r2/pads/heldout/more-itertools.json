@@ -2,6 +2,67 @@
  "repo": "more-itertools",
  "split": "heldout",
  "tasks": {
+  "more-itertools-heldout-001": {
+   "NO4": {
+    "base_tokens": 3894,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n",
+    "items": [],
+    "partial": null,
+    "tokens": 3911,
+    "within": true
+   },
+   "NO47": {
+    "base_tokens": 3643,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`more_itertools.more._islice_helper` (more_itertools/more.py:2618)\n```\ndef _islice_helper(it, s):\n    start = s.start\n    stop = s.stop\n    if s.step == 0:\n        raise ValueError('step argument must be a non-zero integer or None.')\n    step = s.step or 1\n\n    if step > 0:\n        start = 0 if (start is None) else start\n\n        if start < 0:\n            # Consume all but the last -start items\n            cache = deque(enumerate(it, 1), maxlen=-start)\n            len_iter = cache[-1][0] if cache else 0\n\n            # Adjust start to be positive\n            i = max(len_iter + start, 0)\n\n            # Adjust stop to be positive\n            if stop is None:\n                j = len_iter\n            elif stop >= 0:\n                j = min(stop, len_iter)\n            else:\n                j = max(len_iter + stop, 0)\n\n            # Slice the cache\n            n = j - i\n            if n <= 0:\n                return\n\n            for index in range(n):\n                if index % step == 0:\n                    # pop and yield the item.\n                    # We don't want to use an intermediate variable\n                    # it would extend the lifetime of the current item\n                    yield cache.popleft()[1]\n                else:\n                    # just pop and discard the item\n                    cache.popleft()\n        elif (stop is not None) and (stop < 0):\n            # Advance to the start position\n```",
+    "items": [],
+    "partial": "more_itertools.more._islice_helper",
+    "tokens": 4000,
+    "within": true
+   },
+   "NO6": {
+    "base_tokens": 3582,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`more_itertools.more._islice_helper` (more_itertools/more.py:2618)\n```\ndef _islice_helper(it, s):\n    start = s.start\n    stop = s.stop\n    if s.step == 0:\n        raise ValueError('step argument must be a non-zero integer or None.')\n    step = s.step or 1\n\n    if step > 0:\n        start = 0 if (start is None) else start\n\n        if start < 0:\n            # Consume all but the last -start items\n            cache = deque(enumerate(it, 1), maxlen=-start)\n            len_iter = cache[-1][0] if cache else 0\n\n            # Adjust start to be positive\n            i = max(len_iter + start, 0)\n\n            # Adjust stop to be positive\n            if stop is None:\n                j = len_iter\n            elif stop >= 0:\n                j = min(stop, len_iter)\n            else:\n                j = max(len_iter + stop, 0)\n\n            # Slice the cache\n            n = j - i\n            if n <= 0:\n                return\n\n            for index in range(n):\n                if index % step == 0:\n                    # pop and yield the item.\n                    # We don't want to use an intermediate variable\n                    # it would extend the lifetime of the current item\n                    yield cache.popleft()[1]\n                else:\n                    # just pop and discard the item\n                    cache.popleft()\n        elif (stop is not None) and (stop < 0):\n            # Advance to the start position\n            next(islice(it, start, start), None)\n\n            # When stop is negative, we have to carry -stop items while\n            # iterating\n            cache = deque(islice(it, -stop), maxlen=-stop)\n\n            for index, item in enumerate(it):\n                if index % step == 0:\n```",
+    "items": [],
+    "partial": "more_itertools.more._islice_helper",
+    "tokens": 4004,
+    "within": true
+   },
+   "NO7": {
+    "base_tokens": 3760,
+    "block": "Other code from the repository (the functions a keyword search ranks highest for this change):\n\n`more_itertools.more._islice_helper` (more_itertools/more.py:2618)\n```\ndef _islice_helper(it, s):\n    start = s.start\n    stop = s.stop\n    if s.step == 0:\n        raise ValueError('step argument must be a non-zero integer or None.')\n    step = s.step or 1\n\n    if step > 0:\n        start = 0 if (start is None) else start\n\n        if start < 0:\n            # Consume all but the last -start items\n            cache = deque(enumerate(it, 1), maxlen=-start)\n            len_iter = cache[-1][0] if cache else 0\n\n            # Adjust start to be positive\n            i = max(len_iter + start, 0)\n\n            # Adjust stop to be positive\n            if stop is None:\n                j = len_iter\n            elif stop >= 0:\n                j = min(stop, len_iter)\n            else:\n                j = max(len_iter + stop, 0)\n\n            # Slice the cache\n            n = j - i\n```",
+    "items": [],
+    "partial": "more_itertools.more._islice_helper",
+    "tokens": 4011,
+    "within": true
+   },
+   "context": "# Change context: `more_itertools.more._extract_buffered`\nmore_itertools/more.py, lines 5273-5297\n\n## 1. Codebase\n260 functions in 1 directories; 0 registered entry points; languages: python 260\n\nLargest directories (functions, entry points):\n- `more_itertools`: 260 functions\n\n## 2. Group `more_itertools`\n260 functions, 13 classes in 3 files.\n\n## 3. Anchor\n```python\ndef _extract_buffered(iterator, indices):\n    'Arbitrary index order, greedily consumed'\n    index_and_position = sorted(zip(indices, count()))\n\n    if index_and_position and index_and_position[0][0] < 0:\n        raise ValueError('Indices must be non-negative')\n\n    buffer = {}\n    iterator_position = -1\n    next_to_emit = 0\n\n    for index, order in index_and_position:\n        advance = index - iterator_position\n        if advance:\n            try:\n                value = next(islice(iterator, advance - 1, None))\n            except StopIteration:\n                raise IndexError(index)\n            iterator_position = index\n\n        buffer[order] = value\n\n        while next_to_emit in buffer:\n            yield buffer.pop(next_to_emit)\n            next_to_emit += 1\n```\n\nDigest (what its code does, line by line):\n```\nL5273 parameters (iterator, indices)\nL5275 index_and_position = sorted(zip(indices, count()))\nwhen index_and_position and index_and_position[0][0] < 0:\n  L5278 raise ValueError('Indices must be non-negative')\nL5280 buffer = {}\nL5281 iterator_position = -1\nL5282 next_to_emit = 0\nwhen for each index, order in index_and_position:\n  L5285 advance = index - iterator_position\n  when advance:\n    L5288 value = next(islice(iterator, advance - 1, None))\n    L5289-5290 catches StopIteration: raises\n    when on StopIteration:\n      L5290 raise IndexError(index)\n    L5291 iterator_position = index\n  L5293 buffer[order] = value\n  when while next_to_emit in buffer:\n    L5296 yield buffer.pop(next_to_emit)\n    L5297 next_to_emit += 1\n```\n\n## 4. Who depends on it\n- `more_itertools.more.extract` (more_itertools/more.py)\n  - L5324 result: returns the result to its own callers\n  - L5324 errors: does not catch `ValueError` raised by it: the error propagates to this function's callers\n  - L5324 errors: does not catch `IndexError` raised by it: the error propagates to this function's callers\n  - L5324 arguments: passes 2 positional arguments\n\n## 5. What it depends on\nNo resolved callee raises, returns nothing or changes state.\n\n## 6. Style to follow\nConventions in `more_itertools`:\n- errors are raised as `ValueError` (47 of 67 raises here)\n- function names are snake_case (165 of 165 multi-word names)\n\nSibling `more_itertools.more._extract_monotonic` (more_itertools/more.py:5256; same file, name words: extract):\n```python\ndef _extract_monotonic(iterator, indices):\n    'Non-decreasing indices, lazily consumed'\n    num_read = 0\n    for index in indices:\n        advance = index - num_read\n        try:\n            value = next(islice(iterator, advance, None))\n        except ValueError:\n            if advance != -1 or index < 0:\n                raise ValueError(f'Invalid index: {index}') from None\n        except StopIteration:\n            raise IndexError(index) from None\n        else:\n            num_read += advance + 1\n        yield value\n```\n\nSibling `more_itertools.more.bucket._get_values` (more_itertools/more.py:1149; same file):\n```python\n    def _get_values(self, value):\n        \"\"\"\n        Helper to yield items from the parent iterator that match *value*.\n        Items that don't match are stored in the local cache as they\n        are encountered.\n        \"\"\"\n        while True:\n            # If we've cached some items that match the target value, emit\n            # the first one and evict it from the cache.\n            if self._cache[value]:\n                yield self._cache[value].popleft()\n            # Otherwise we need to advance the parent iterator to search for\n            # a matching item, caching the rest.\n            else:\n                while True:\n                    try:\n                        item = next(self._it)\n                    except StopIteration:\n                        return\n                    item_value = self._key(item)\n                    if item_value == value:\n                        yield item\n                        break\n                    elif self._validator(item_value):\n                        self._cache[item_value].append(item)\n```\n\n## 7. Callers' code\n`more_itertools.more.extract` (more_itertools/more.py):\n```python\ndef extract(iterable, indices, *, monotonic=False):\n    \"\"\"Yield values at the specified indices.\n\n    Example:\n\n        >>> data = 'abcdefghijklmnopqrstuvwxyz'\n        >>> list(extract(data, [7, 4, 11, 11, 14]))\n        ['h', 'e', 'l', 'l', 'o']\n\n    The *iterable* is consumed lazily and can be infinite.\n\n    When *monotonic* is false, the *indices* are consumed immediately\n    and must be finite. When *monotonic* is true, *indices* are consumed\n    lazily and can be infinite but must be non-decreasing.\n\n    Raises ``IndexError`` if an index lies beyond the iterable.\n    Raises ``ValueError`` for a negative index or for a decreasing\n    index when *monotonic* is true.\n    \"\"\"\n\n    iterator = iter(iterable)\n    indices = iter(indices)\n    if monotonic:\n        return _extract_monotonic(iterator, indices)\n    return _extract_buffered(iterator, indices)\n```\n\n## 8. Wider impact\n1 transitive callers; by distance: 1 hop: 1\n",
+   "context_sha": "60e2e867b40c9a7e0a3c98cd7a5e3e80cd8e91d429a87e195fce4869e925b4f4",
+   "context_tokens_prism": 1867,
+   "measures": {
+    "NO47_listed_in_context": 0,
+    "NO47_readded_by_pad": 0,
+    "NO4_listed_in_context": 1,
+    "NO4_readded_by_pad": 0,
+    "NO6_listed_in_context": 1,
+    "NO6_readded_by_pad": 0,
+    "NO7_listed_in_context": 1,
+    "NO7_readded_by_pad": 0,
+    "changed_callers": 1,
+    "listed_anywhere": 1,
+    "listed_in_section": {
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 1,
+     "5": 0,
+     "6": 0,
+     "7": 1,
+     "8": 0
+    }
+   },
+   "stored_context_equal": true,
+   "target": 4011
+  },
   "more-itertools-heldout-004": {
    "NO4": {
     "base_tokens": 3213,
