@@ -19,6 +19,16 @@
   "seconds": 16.9,
   "seed": 42
  },
+ "pluggy-heldout-001/NO47@1001": {
+  "answer_tokens": 502,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "eebe0b36e90cd82d",
+  "prompt_tokens": 2937,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_multicall\",\n      \"file\": \"src/pluggy/callers.py\",\n      \"reason\": \"The function signature has changed to include a new parameter `hook_name`, which is used in the function body.\",\n      \"new_code\": \"def _multicall(hook_name, hook_impls, caller_kwargs, firstresult=False):\\n    \\\"\\\"\\\"Execute a call into multiple python functions/methods and return the\\n    result(s).\\n\\n    ``caller_kwargs`` comes from _HookCaller.__call__().\\n    \\\"\\\"\\\"\\n    __tracebackhide__ = True\\n    results = []\\n    excinfo = None\\n    try:  # run impl and wrapper setup functions in a loop\\n        teardowns = []\\n        try:\\n            for hook_impl in reversed(hook_impls):\\n                try:\\n                    args = [caller_kwargs[argname] for argname in hook_impl.argnames]\\n                except KeyError:\\n                    for argname in hook_impl.argnames:\\n                        if argname not in caller_kwargs:\\n                            raise HookCallError(\\n                                \\\"hook call must provide argument %r\\\" % (argname,)\\n                            )\\n\\n                if hook_impl.hookwrapper:\\n                    try:\\n                        gen = hook_impl.function(*args)\\n                        next(gen)  # first yield\\n                        teardowns.append(gen)\\n                    except StopIteration:\\n                        _raise_wrapfail(gen, \\\"did not yield\\\")\\n                else:\\n                    res = hook_impl.function(*args)\\n                    if res is not None:\\n                        results.append(res)\\n                        if firstresult:  # halt further impl calls\\n                            break\\n        except BaseException:\\n            excinfo = sys.exc_info()\\n    finally:\\n        if firstresult:  # first result hooks return a single value\\n            outcome = _Result(results[0] if results else None, excinfo)\\n        else:\\n            outcome = _Result(results, excinfo)\\n\\n        # run all wrapper post-yield blocks\\n        for gen in reversed(teardowns):\\n            try:\\n                gen.send(outcome)\\n                _raise_wrapfail(gen, \\\"has second yield\\\")\\n            except StopIteration:\\n                pass\\n\\n        return outcome.get_result()\"\n    }\n  ]\n}",
+  "seconds": 34.3,
+  "seed": 1001
+ },
  "pluggy-heldout-001/NO47@42": {
   "answer_tokens": 264,
   "done_reason": "stop",
@@ -49,6 +59,16 @@
   "seconds": 14.9,
   "seed": 42
  },
+ "pluggy-heldout-001/NO6@1001": {
+  "answer_tokens": 201,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "57aaf06ab546ba5d",
+  "prompt_tokens": 2939,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"PluginManager.__init__\",\n      \"file\": \"src/pluggy/manager.py\",\n      \"reason\": \"The `PluginManager.__init__` method calls `_multicall` with a different number of arguments after the change.\",\n      \"new_code\": \"def __init__(self, project_name):\\n        self.project_name = project_name\\n        self._name2plugin = {}\\n        self._plugin2hookcallers = {}\\n        self._plugin_distinfo = []\\n        self.trace = _tracing.TagTracer().get(\\\"pluginmanage\\\")\\n        self.hook = _HookRelay()\\n        self._inner_hookexec = lambda hook, methods, kwargs: _multicall(\\n            hook.name, methods, kwargs,\\n            firstresult=hook.spec.opts.get(\\\"firstresult\\\") if hook.spec else False,\\n        )\"\n    }\n  ]\n}",
+  "seconds": 14.2,
+  "seed": 1001
+ },
  "pluggy-heldout-001/NO6@42": {
   "answer_tokens": 218,
   "done_reason": "stop",
@@ -58,6 +78,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"PluginManager.__init__\",\n      \"file\": \"src/pluggy/manager.py\",\n      \"reason\": \"The `PluginManager.__init__` method calls `_multicall` with the new `hook_name` parameter, which must be added to the call.\",\n      \"new_code\": \"def __init__(self, project_name):\\n        self.project_name = project_name\\n        self._name2plugin = {}\\n        self._plugin2hookcallers = {}\\n        self._plugin_distinfo = []\\n        self.trace = _tracing.TagTracer().get(\\\"pluginmanage\\\")\\n        self.hook = _HookRelay()\\n        self._inner_hookexec = lambda hook, methods, kwargs: _multicall(\\n            hook.name,  # Add hook_name parameter\\n            methods,\\n            kwargs,\\n            firstresult=hook.spec.opts.get(\\\"firstresult\\\") if hook.spec else False,\\n        )\"\n    }\n  ]\n}",
   "seconds": 15.2,
   "seed": 42
+ },
+ "pluggy-heldout-001/NO7@1001": {
+  "answer_tokens": 355,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "490c18099e9b1979",
+  "prompt_tokens": 3027,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"PluginManager.__init__\",\n      \"file\": \"src/pluggy/manager.py\",\n      \"reason\": \"The `__init__` method now needs to pass the `hook_name` argument to `_multicall`.\",\n      \"new_code\": \"def __init__(self, *args, **kwargs):\\n    # existing code\\n    result = _multicall(hook_name, hook_impls, caller_kwargs, firstresult)\\n    # existing code\"\n    },\n    {\n      \"function\": \"PluginManager.after\",\n      \"file\": \"src/pluggy/manager.py\",\n      \"reason\": \"The `after` method now needs to accept the `hook_name` argument.\",\n      \"new_code\": \"def after(self, outcome, hook_name, methods, kwargs):\\n    if outcome.excinfo is None:\\n        hooktrace(\\\"finish\\\", hook_name, \\\"-->\\\", outcome.get_result())\\n    hooktrace.root.indent -= 1\"\n    },\n    {\n      \"function\": \"PluginManager.traced_hookexec\",\n      \"file\": \"src/pluggy/manager.py\",\n      \"reason\": \"The `traced_hookexec` method now needs to pass the `hook_name` argument to `_multicall`.\",\n      \"new_code\": \"def traced_hookexec(self, hook, hook_impls, kwargs):\\n    before(hook.name, hook_impls, kwargs)\\n    outcome = _Result.from_call(lambda: oldcall(hook, hook_impls, kwargs))\\n    after(outcome, hook.name, hook_impls, kwargs)\\n    return outcome.get_result()\"\n    }\n  ]\n}",
+  "seconds": 24.4,
+  "seed": 1001
  },
  "pluggy-heldout-001/NO7@42": {
   "answer_tokens": 122,
@@ -69,6 +99,16 @@
   "seconds": 8.8,
   "seed": 42
  },
+ "pluggy-heldout-002/FULL@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "a3e4128800547237",
+  "prompt_tokens": 4783,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.2,
+  "seed": 1001
+ },
  "pluggy-heldout-002/FULL@42": {
   "answer_tokens": 746,
   "done_reason": "stop",
@@ -78,6 +118,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The parameter name for the second argument in the _verify_hook method has changed from 'hookmethod' to 'hookimpl'.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            hookimpl_opts = self.get_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookmethod = _HookFunction(plugin, getattr(plugin, name), hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookmethod)\\n                    hook._maybe_apply_history(hookmethod)\\n                hook._add_hookmethod(hookmethod)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    },\n    {\n      \"function\": \"pluggy.PluginManager.addhooks\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The parameter name for the second argument in the _verify_hook method has changed from 'hookmethod' to 'hookimpl'.\",\n      \"new_code\": \"def addhooks(self, module_or_class):\\n        \\\"\\\"\\\" add new hook definitions from the given module_or_class using\\n        the prefix/excludefunc with which the PluginManager was initialized. \\\"\\\"\\\"\\n        names = []\\n        for name in dir(module_or_class):\\n            spec_opts = self.get_hookspec_opts(module_or_class, name)\\n            if spec_opts is not None:\\n                hc = getattr(self.hook, name, None)\\n                if hc is None:\\n                    hc = _HookCaller(name, self._hookexec, module_or_class, spec_opts)\\n                    setattr(self.hook, name, hc)\\n                else:\\n                    # plugins registered this hook without knowing the spec\\n                    hc.set_specification(module_or_class, spec_opts)\\n                    for hookfunction in (hc._wrappers + hc._nonwrappers):\\n                        self._verify_hook(hc, hookfunction)\\n                names.append(name)\\n\\n        if not names:\\n            raise ValueError(\\\"did not find any %r hooks in %r\\\" %\\n                             (self.system_name, module_or_class))\"\n    }\n  ]\n}",
   "seconds": 57.5,
   "seed": 42
+ },
+ "pluggy-heldout-002/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "349bfb7cb3c06d35",
+  "prompt_tokens": 4728,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.7,
+  "seed": 1001
  },
  "pluggy-heldout-002/NO47@42": {
   "answer_tokens": 6,
@@ -89,6 +139,16 @@
   "seconds": 2.7,
   "seed": 42
  },
+ "pluggy-heldout-002/NO4@1001": {
+  "answer_tokens": 734,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "83d650ce1acb9318",
+  "prompt_tokens": 4652,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The parameter name for the hook method has changed from `hookmethod` to `hookimpl`.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            hookimpl_opts = self.get_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookFunction(plugin, getattr(plugin, name), hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookmethod(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    },\n    {\n      \"function\": \"pluggy.PluginManager.addhooks\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The parameter name for the hook method has changed from `hookfunction` to `hookimpl`.\",\n      \"new_code\": \"def addhooks(self, module_or_class):\\n        \\\"\\\"\\\" add new hook definitions from the given module_or_class using\\n        the prefix/excludefunc with which the PluginManager was initialized. \\\"\\\"\\\"\\n        names = []\\n        for name in dir(module_or_class):\\n            spec_opts = self.get_hookspec_opts(module_or_class, name)\\n            if spec_opts is not None:\\n                hc = getattr(self.hook, name, None)\\n                if hc is None:\\n                    hc = _HookCaller(name, self._hookexec, module_or_class, spec_opts)\\n                    setattr(self.hook, name, hc)\\n                else:\\n                    # plugins registered this hook without knowing the spec\\n                    hc.set_specification(module_or_class, spec_opts)\\n                    for hookimpl in (hc._wrappers + hc._nonwrappers):\\n                        self._verify_hook(hc, hookimpl)\\n                names.append(name)\\n\\n        if not names:\\n            raise ValueError(\\\"did not find any %r hooks in %r\\\" %\\n                             (self.system_name, module_or_class))\"\n    }\n  ]\n}",
+  "seconds": 52.9,
+  "seed": 1001
+ },
  "pluggy-heldout-002/NO4@42": {
   "answer_tokens": 734,
   "done_reason": "stop",
@@ -98,6 +158,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The parameter name for the hook method has changed from `hookmethod` to `hookimpl`.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            hookimpl_opts = self.get_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookmethod = _HookFunction(plugin, getattr(plugin, name), hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookmethod)\\n                    hook._maybe_apply_history(hookmethod)\\n                hook._add_hookmethod(hookmethod)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    },\n    {\n      \"function\": \"pluggy.PluginManager.addhooks\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The parameter name for the hook method has changed from `hookfunction` to `hookimpl`.\",\n      \"new_code\": \"def addhooks(self, module_or_class):\\n        \\\"\\\"\\\" add new hook definitions from the given module_or_class using\\n        the prefix/excludefunc with which the PluginManager was initialized. \\\"\\\"\\\"\\n        names = []\\n        for name in dir(module_or_class):\\n            spec_opts = self.get_hookspec_opts(module_or_class, name)\\n            if spec_opts is not None:\\n                hc = getattr(self.hook, name, None)\\n                if hc is None:\\n                    hc = _HookCaller(name, self._hookexec, module_or_class, spec_opts)\\n                    setattr(self.hook, name, hc)\\n                else:\\n                    # plugins registered this hook without knowing the spec\\n                    hc.set_specification(module_or_class, spec_opts)\\n                    for hookimpl in (hc._wrappers + hc._nonwrappers):\\n                        self._verify_hook(hc, hookimpl)\\n                names.append(name)\\n\\n        if not names:\\n            raise ValueError(\\\"did not find any %r hooks in %r\\\" %\\n                             (self.system_name, module_or_class))\"\n    }\n  ]\n}",
   "seconds": 52.9,
   "seed": 42
+ },
+ "pluggy-heldout-002/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "177fd129750a2948",
+  "prompt_tokens": 4702,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 1001
  },
  "pluggy-heldout-002/NO6@42": {
   "answer_tokens": 6,
@@ -109,6 +179,16 @@
   "seconds": 2.6,
   "seed": 42
  },
+ "pluggy-heldout-002/NO7@1001": {
+  "answer_tokens": 732,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "dd3a1f3ed9fa3aa4",
+  "prompt_tokens": 4551,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The function now uses `hookimpl` instead of `hookmethod` as the second argument.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            hookimpl_opts = self.get_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookFunction(plugin, getattr(plugin, name), hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookmethod(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    },\n    {\n      \"function\": \"pluggy.PluginManager.addhooks\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The function now uses `hookimpl` instead of `hookmethod` as the second argument.\",\n      \"new_code\": \"def addhooks(self, module_or_class):\\n        \\\"\\\"\\\" add new hook definitions from the given module_or_class using\\n        the prefix/excludefunc with which the PluginManager was initialized. \\\"\\\"\\\"\\n        names = []\\n        for name in dir(module_or_class):\\n            spec_opts = self.get_hookspec_opts(module_or_class, name)\\n            if spec_opts is not None:\\n                hc = getattr(self.hook, name, None)\\n                if hc is None:\\n                    hc = _HookCaller(name, self._hookexec, module_or_class, spec_opts)\\n                    setattr(self.hook, name, hc)\\n                else:\\n                    # plugins registered this hook without knowing the spec\\n                    hc.set_specification(module_or_class, spec_opts)\\n                    for hookimpl in (hc._wrappers + hc._nonwrappers):\\n                        self._verify_hook(hc, hookimpl)\\n                names.append(name)\\n\\n        if not names:\\n            raise ValueError(\\\"did not find any %r hooks in %r\\\" %\\n                             (self.system_name, module_or_class))\"\n    }\n  ]\n}",
+  "seconds": 52.3,
+  "seed": 1001
+ },
  "pluggy-heldout-002/NO7@42": {
   "answer_tokens": 732,
   "done_reason": "stop",
@@ -118,6 +198,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The function now uses `hookimpl` instead of `hookmethod` as the second argument.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            hookimpl_opts = self.get_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookFunction(plugin, getattr(plugin, name), hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookmethod(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    },\n    {\n      \"function\": \"pluggy.PluginManager.addhooks\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The function now uses `hookimpl` instead of `hookmethod` as the second argument.\",\n      \"new_code\": \"def addhooks(self, module_or_class):\\n        \\\"\\\"\\\" add new hook definitions from the given module_or_class using\\n        the prefix/excludefunc with which the PluginManager was initialized. \\\"\\\"\\\"\\n        names = []\\n        for name in dir(module_or_class):\\n            spec_opts = self.get_hookspec_opts(module_or_class, name)\\n            if spec_opts is not None:\\n                hc = getattr(self.hook, name, None)\\n                if hc is None:\\n                    hc = _HookCaller(name, self._hookexec, module_or_class, spec_opts)\\n                    setattr(self.hook, name, hc)\\n                else:\\n                    # plugins registered this hook without knowing the spec\\n                    hc.set_specification(module_or_class, spec_opts)\\n                    for hookimpl in (hc._wrappers + hc._nonwrappers):\\n                        self._verify_hook(hc, hookimpl)\\n                names.append(name)\\n\\n        if not names:\\n            raise ValueError(\\\"did not find any %r hooks in %r\\\" %\\n                             (self.system_name, module_or_class))\"\n    }\n  ]\n}",
   "seconds": 52.3,
   "seed": 42
+ },
+ "pluggy-heldout-003/FULL@1001": {
+  "answer_tokens": 353,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "39b15fc3d46f01a8",
+  "prompt_tokens": 5252,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.HookImpl.__init__\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `varnames` function no longer accepts a `startindex` parameter, so the call to `varnames` in `HookImpl.__init__` must be updated to remove this argument.\",\n      \"new_code\": \"def __init__(self, plugin, plugin_name, function, hook_impl_opts):\\n        self.function = function\\n        self.argnames = varnames(self.function)\\n        self.plugin = plugin\\n        self.opts = hook_impl_opts\\n        self.plugin_name = plugin_name\\n        self.__dict__.update(hook_impl_opts)\"\n    },\n    {\n      \"function\": \"pluggy._HookCaller.set_specification\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `varnames` function no longer accepts a `startindex` parameter, so the call to `varnames` in `_HookCaller.set_specification` must be updated to remove this argument.\",\n      \"new_code\": \"def set_specification(self, specmodule_or_class, spec_opts):\\n        assert not self.has_spec()\\n        self._specmodule_or_class = specmodule_or_class\\n        specfunc = getattr(specmodule_or_class, self.name)\\n        argnames = varnames(specfunc)\\n        assert \\\"self\\\" not in argnames  # sanity check\\n        self.argnames = [\\\"__multicall__\\\"] + list(argnames)\\n        self.spec_opts = spec_opts\\n        if spec_opts.get(\\\"historic\\\"):\\n            self._call_history = []\"\n    }\n  ]\n}",
+  "seconds": 27.5,
+  "seed": 1001
  },
  "pluggy-heldout-003/FULL@42": {
   "answer_tokens": 353,
@@ -129,6 +219,16 @@
   "seconds": 31.1,
   "seed": 42
  },
+ "pluggy-heldout-003/NO47@1001": {
+  "answer_tokens": 159,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "2ba46634c5457731",
+  "prompt_tokens": 5251,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HookImpl.__init__\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `varnames` function no longer accepts a `startindex` parameter, so the call to `varnames` in `HookImpl.__init__` must be updated to remove this parameter.\",\n      \"new_code\": \"class HookImpl:\\n    def __init__(self, plugin, plugin_name, function, hook_impl_opts):\\n        self.function = function\\n        self.argnames = varnames(self.function)\\n        self.plugin = plugin\\n        self.opts = hook_impl_opts\\n        self.plugin_name = plugin_name\\n        self.__dict__.update(hook_impl_opts)\"\n    }\n  ]\n}",
+  "seconds": 13.4,
+  "seed": 1001
+ },
  "pluggy-heldout-003/NO47@42": {
   "answer_tokens": 160,
   "done_reason": "stop",
@@ -138,6 +238,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HookImpl.__init__\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `varnames` function signature has changed, removing the `startindex` parameter. The `HookImpl` class calls `varnames` without providing `startindex`, so no changes are needed.\",\n      \"new_code\": \"class HookImpl:\\n    def __init__(self, plugin, plugin_name, function, hook_impl_opts):\\n        self.function = function\\n        self.argnames = varnames(self.function)\\n        self.plugin = plugin\\n        self.opts = hook_impl_opts\\n        self.plugin_name = plugin_name\\n        self.__dict__.update(hook_impl_opts)\"\n    }\n  ]\n}",
   "seconds": 13.5,
   "seed": 42
+ },
+ "pluggy-heldout-003/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "f5ef2814fec01c62",
+  "prompt_tokens": 5146,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.7,
+  "seed": 1001
  },
  "pluggy-heldout-003/NO4@42": {
   "answer_tokens": 6,
@@ -149,6 +259,16 @@
   "seconds": 2.7,
   "seed": 42
  },
+ "pluggy-heldout-003/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "77f95ad723b7ba68",
+  "prompt_tokens": 5163,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.7,
+  "seed": 1001
+ },
  "pluggy-heldout-003/NO6@42": {
   "answer_tokens": 355,
   "done_reason": "stop",
@@ -158,6 +278,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.HookImpl.__init__\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `varnames` function no longer accepts a `startindex` parameter, so the call to `varnames` in `HookImpl.__init__` must be updated to remove this argument.\",\n      \"new_code\": \"    def __init__(self, plugin, plugin_name, function, hook_impl_opts):\\n        self.function = function\\n        self.argnames = varnames(self.function)\\n        self.plugin = plugin\\n        self.opts = hook_impl_opts\\n        self.plugin_name = plugin_name\\n        self.__dict__.update(hook_impl_opts)\"\n    },\n    {\n      \"function\": \"pluggy._HookCaller.set_specification\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `varnames` function no longer accepts a `startindex` parameter, so the call to `varnames` in `_HookCaller.set_specification` must be updated to remove this argument.\",\n      \"new_code\": \"    def set_specification(self, specmodule_or_class, spec_opts):\\n        assert not self.has_spec()\\n        self._specmodule_or_class = specmodule_or_class\\n        specfunc = getattr(specmodule_or_class, self.name)\\n        argnames = varnames(specfunc)\\n        assert \\\"self\\\" not in argnames  # sanity check\\n        self.argnames = [\\\"__multicall__\\\"] + list(argnames)\\n        self.spec_opts = spec_opts\\n        if spec_opts.get(\\\"historic\\\"):\\n            self._call_history = []\"\n    }\n  ]\n}",
   "seconds": 27.0,
   "seed": 42
+ },
+ "pluggy-heldout-003/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b2fb5487b12f8929",
+  "prompt_tokens": 5032,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 1001
  },
  "pluggy-heldout-003/NO7@42": {
   "answer_tokens": 6,
@@ -169,6 +299,16 @@
   "seconds": 2.5,
   "seed": 42
  },
+ "pluggy-heldout-004/FULL@1001": {
+  "answer_tokens": 273,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6e276fca34d3d815",
+  "prompt_tokens": 2334,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_format_message\",\n      \"file\": \"src/pluggy/_tracing.py\",\n      \"reason\": \"The function `_format_message` now needs to pass a list of strings to `_format_block` instead of a single string.\",\n      \"new_code\": \"def _format_message(self, tags: Sequence[str], args: Sequence[object]) -> str:\\n    if isinstance(args[-1], dict):\\n        extra = args[-1]\\n        args = args[:-1]\\n    else:\\n        extra = {}\\n\\n    content = \\\" \\\".join(map(_safe_str, args))\\n    indent = \\\"  \\\" * self.indent\\n\\n    lines = [f\\\"{indent}{content} [{':'.join(tags)}]\\\\n\\\"]\\n\\n    for name, value in extra.items():\\n        rendered = _render_value(value)\\n        if \\\"\\\\n\\\" in rendered:\\n            lines.append(f\\\"{indent}    {name}:\\\\n\\\")\\n            lines.extend(_format_block(indent, rendered.split('\\\\n')))\\n        else:\\n            lines.append(f\\\"{indent}    {name}: {rendered}\\\\n\\\")\\n\\n    return \\\"\\\".join(lines)\"\n    }\n  ]\n}",
+  "seconds": 19.5,
+  "seed": 1001
+ },
  "pluggy-heldout-004/FULL@42": {
   "answer_tokens": 275,
   "done_reason": "stop",
@@ -178,6 +318,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_format_message\",\n      \"file\": \"src/pluggy/_tracing.py\",\n      \"reason\": \"The function `_format_message` now needs to pass a list of strings to `_format_block` instead of a single string.\",\n      \"new_code\": \"def _format_message(self, tags: Sequence[str], args: Sequence[object]) -> str:\\n    if isinstance(args[-1], dict):\\n        extra = args[-1]\\n        args = args[:-1]\\n    else:\\n        extra = {}\\n\\n    content = \\\" \\\".join(map(_safe_str, args))\\n    indent = \\\"  \\\" * self.indent\\n\\n    lines = [f\\\"{indent}{content} [{':'.join(tags)}]\\\\n\\\"]\\n\\n    for name, value in extra.items():\\n        rendered = _render_value(value)\\n        if \\\"\\\\n\\\" in rendered:\\n            lines.append(f\\\"{indent}    {name}:\\\\n\\\")\\n            lines.extend(_format_block(indent, rendered.split(\\\"\\\\n\\\")))\\n        else:\\n            lines.append(f\\\"{indent}    {name}: {rendered}\\\\n\\\")\\n\\n    return \\\"\\\".join(lines)\"\n    }\n  ]\n}",
   "seconds": 21.4,
   "seed": 42
+ },
+ "pluggy-heldout-004/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "c85acc66e4623c73",
+  "prompt_tokens": 2326,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.4,
+  "seed": 1001
  },
  "pluggy-heldout-004/NO47@42": {
   "answer_tokens": 6,
@@ -189,6 +339,16 @@
   "seconds": 1.4,
   "seed": 42
  },
+ "pluggy-heldout-004/NO4@1001": {
+  "answer_tokens": 264,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "ffc99a96bcc8a1d7",
+  "prompt_tokens": 2287,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_format_message\",\n      \"file\": \"src/pluggy/_tracing.py\",\n      \"reason\": \"The function now expects a list of strings instead of a single string.\",\n      \"new_code\": \"def _format_message(self, tags: Sequence[str], args: Sequence[object]) -> str:\\n    if isinstance(args[-1], dict):\\n        extra = args[-1]\\n        args = args[:-1]\\n    else:\\n        extra = {}\\n\\n    content = \\\" \\\".join(map(_safe_str, args))\\n    indent = \\\"  \\\" * self.indent\\n\\n    lines = [f\\\"{indent}{content} [{':'.join(tags)}]\\\\n\\\"]\\n\\n    for name, value in extra.items():\\n        rendered = _render_value(value)\\n        if \\\"\\\\n\\\" in rendered:\\n            lines.append(f\\\"{indent}    {name}:\\\\n\\\")\\n            lines.extend(_format_block(indent, rendered.split(\\\"\\\\n\\\")))\\n        else:\\n            lines.append(f\\\"{indent}    {name}: {rendered}\\\\n\\\")\\n\\n    return \\\"\\\".join(lines)\"\n    }\n  ]\n}",
+  "seconds": 18.2,
+  "seed": 1001
+ },
  "pluggy-heldout-004/NO4@42": {
   "answer_tokens": 264,
   "done_reason": "stop",
@@ -198,6 +358,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_format_message\",\n      \"file\": \"src/pluggy/_tracing.py\",\n      \"reason\": \"The function now expects a list of strings instead of a single string.\",\n      \"new_code\": \"def _format_message(self, tags: Sequence[str], args: Sequence[object]) -> str:\\n    if isinstance(args[-1], dict):\\n        extra = args[-1]\\n        args = args[:-1]\\n    else:\\n        extra = {}\\n\\n    content = \\\" \\\".join(map(_safe_str, args))\\n    indent = \\\"  \\\" * self.indent\\n\\n    lines = [f\\\"{indent}{content} [{':'.join(tags)}]\\\\n\\\"]\\n\\n    for name, value in extra.items():\\n        rendered = _render_value(value)\\n        if \\\"\\\\n\\\" in rendered:\\n            lines.append(f\\\"{indent}    {name}:\\\\n\\\")\\n            lines.extend(_format_block(indent, rendered.split(\\\"\\\\n\\\")))\\n        else:\\n            lines.append(f\\\"{indent}    {name}: {rendered}\\\\n\\\")\\n\\n    return \\\"\\\".join(lines)\"\n    }\n  ]\n}",
   "seconds": 18.2,
   "seed": 42
+ },
+ "pluggy-heldout-004/NO6@1001": {
+  "answer_tokens": 264,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "9dcd6fa70812ee54",
+  "prompt_tokens": 2252,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_format_message\",\n      \"file\": \"src/pluggy/_tracing.py\",\n      \"reason\": \"The function now expects a list of strings instead of a single string.\",\n      \"new_code\": \"def _format_message(self, tags: Sequence[str], args: Sequence[object]) -> str:\\n        if isinstance(args[-1], dict):\\n            extra = args[-1]\\n            args = args[:-1]\\n        else:\\n            extra = {}\\n\\n        content = \\\" \\\".join(map(_safe_str, args))\\n        indent = \\\"  \\\" * self.indent\\n\\n        lines = [f\\\"{indent}{content} [{':'.join(tags)}]\\\\n\\\"]\\n\\n        for name, value in extra.items():\\n            rendered = _render_value(value)\\n            if \\\"\\\\n\\\" in rendered:\\n                lines.append(f\\\"{indent}    {name}:\\\\n\\\")\\n                lines.extend(_format_block(indent, rendered.split(\\\"\\\\n\\\")))\\n            else:\\n                lines.append(f\\\"{indent}    {name}: {rendered}\\\\n\\\")\\n\\n        return \\\"\\\".join(lines)\"\n    }\n  ]\n}",
+  "seconds": 18.1,
+  "seed": 1001
  },
  "pluggy-heldout-004/NO6@42": {
   "answer_tokens": 264,
@@ -209,6 +379,16 @@
   "seconds": 18.2,
   "seed": 42
  },
+ "pluggy-heldout-004/NO7@1001": {
+  "answer_tokens": 262,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "a43f517c20eebc9d",
+  "prompt_tokens": 2250,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_format_message\",\n      \"file\": \"src/pluggy/_tracing.py\",\n      \"reason\": \"The function now expects a list of strings instead of a single string.\",\n      \"new_code\": \"def _format_message(self, tags: Sequence[str], args: Sequence[object]) -> str:\\n    if isinstance(args[-1], dict):\\n        extra = args[-1]\\n        args = args[:-1]\\n    else:\\n        extra = {}\\n\\n    content = \\\" \\\".join(map(_safe_str, args))\\n    indent = \\\"  \\\" * self.indent\\n\\n    lines = [f\\\"{indent}{content} [{':'.join(tags)}]\\\\n\\\"]\\n\\n    for name, value in extra.items():\\n        rendered = _render_value(value)\\n        if \\\"\\\\n\\\" in rendered:\\n            lines.append(f\\\"{indent}    {name}:\\\\n\\\")\\n            lines.extend(_format_block(indent, rendered.split('\\\\n')))\\n        else:\\n            lines.append(f\\\"{indent}    {name}: {rendered}\\\\n\\\")\\n\\n    return \\\"\\\".join(lines)\"\n    }\n  ]\n}",
+  "seconds": 17.8,
+  "seed": 1001
+ },
  "pluggy-heldout-004/NO7@42": {
   "answer_tokens": 262,
   "done_reason": "stop",
@@ -218,6 +398,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"_format_message\",\n      \"file\": \"src/pluggy/_tracing.py\",\n      \"reason\": \"The function now expects a list of strings instead of a single string.\",\n      \"new_code\": \"def _format_message(self, tags: Sequence[str], args: Sequence[object]) -> str:\\n    if isinstance(args[-1], dict):\\n        extra = args[-1]\\n        args = args[:-1]\\n    else:\\n        extra = {}\\n\\n    content = \\\" \\\".join(map(_safe_str, args))\\n    indent = \\\"  \\\" * self.indent\\n\\n    lines = [f\\\"{indent}{content} [{':'.join(tags)}]\\\\n\\\"]\\n\\n    for name, value in extra.items():\\n        rendered = _render_value(value)\\n        if \\\"\\\\n\\\" in rendered:\\n            lines.append(f\\\"{indent}    {name}:\\\\n\\\")\\n            lines.extend(_format_block(indent, rendered.split('\\\\n')))\\n        else:\\n            lines.append(f\\\"{indent}    {name}: {rendered}\\\\n\\\")\\n\\n    return \\\"\\\".join(lines)\"\n    }\n  ]\n}",
   "seconds": 17.8,
   "seed": 42
+ },
+ "pluggy-heldout-005/FULL@1001": {
+  "answer_tokens": 463,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "33e163c6d7eb5c83",
+  "prompt_tokens": 3971,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `parse_hookimpl_opts` method now takes two arguments (`plugin` and `name`), so the caller `register` must be updated to pass these arguments.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            method = getattr(plugin, name)\\n            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookImpl(plugin, plugin_name, method, hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookimpl(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    }\n  ]\n}",
+  "seconds": 33.4,
+  "seed": 1001
  },
  "pluggy-heldout-005/FULL@42": {
   "answer_tokens": 463,
@@ -229,6 +419,16 @@
   "seconds": 36.3,
   "seed": 42
  },
+ "pluggy-heldout-005/NO47@1001": {
+  "answer_tokens": 456,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "c0c69fd6cec78dc4",
+  "prompt_tokens": 3965,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `register` method now needs to pass the plugin and method name to `parse_hookimpl_opts` instead of just the method.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            method = getattr(plugin, name)\\n            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookImpl(plugin, plugin_name, method, hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookimpl(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    }\n  ]\n}",
+  "seconds": 32.5,
+  "seed": 1001
+ },
  "pluggy-heldout-005/NO47@42": {
   "answer_tokens": 456,
   "done_reason": "stop",
@@ -238,6 +438,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `register` method now needs to pass the plugin and method name to `parse_hookimpl_opts` instead of just the method.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            method = getattr(plugin, name)\\n            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookImpl(plugin, plugin_name, method, hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookimpl(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    }\n  ]\n}",
   "seconds": 32.5,
   "seed": 42
+ },
+ "pluggy-heldout-005/NO4@1001": {
+  "answer_tokens": 463,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "de60f0bd7d4d7e53",
+  "prompt_tokens": 3917,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `parse_hookimpl_opts` method now takes two arguments (`plugin` and `name`), so the caller `register` must be updated to pass these arguments.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            method = getattr(plugin, name)\\n            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookImpl(plugin, plugin_name, method, hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookimpl(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    }\n  ]\n}",
+  "seconds": 32.9,
+  "seed": 1001
  },
  "pluggy-heldout-005/NO4@42": {
   "answer_tokens": 463,
@@ -249,6 +459,16 @@
   "seconds": 32.9,
   "seed": 42
  },
+ "pluggy-heldout-005/NO6@1001": {
+  "answer_tokens": 673,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "efbc275aa4dff859",
+  "prompt_tokens": 3904,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `parse_hookimpl_opts` method now takes two arguments (`plugin` and `name`), so the caller `register` must be updated to pass these arguments.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            method = getattr(plugin, name)\\n            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookImpl(plugin, plugin_name, method, hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookimpl(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    },\n    {\n      \"function\": \"pluggy._HookCaller.call_extra\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `parse_hookimpl_opts` method now takes two arguments (`plugin` and `name`), so the caller `call_extra` must be updated to pass these arguments.\",\n      \"new_code\": \"def call_extra(self, methods, kwargs):\\n        \\\"\\\"\\\" Call the hook with some additional temporarily participating\\n        methods using the specified kwargs as call parameters. \\\"\\\"\\\"\\n        old = list(self._nonwrappers), list(self._wrappers)\\n        for method in methods:\\n            opts = dict(hookwrapper=False, trylast=False, tryfirst=False)\\n            hookimpl = _HookImpl(None, \\\"<temp>\\\", method, opts)\\n            self._add_hookimpl(hookimpl)\\n        try:\\n            return self(**kwargs)\\n        finally:\\n            self._nonwrappers, self._wrappers = old\"\n    }\n  ]\n}",
+  "seconds": 47.2,
+  "seed": 1001
+ },
  "pluggy-heldout-005/NO6@42": {
   "answer_tokens": 463,
   "done_reason": "stop",
@@ -258,6 +478,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `parse_hookimpl_opts` method now takes two arguments (`plugin` and `name`), so the caller `register` must be updated to pass these arguments.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            method = getattr(plugin, name)\\n            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookImpl(plugin, plugin_name, method, hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookimpl(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    }\n  ]\n}",
   "seconds": 32.8,
   "seed": 42
+ },
+ "pluggy-heldout-005/NO7@1001": {
+  "answer_tokens": 463,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "7409275ebdd37f7c",
+  "prompt_tokens": 3958,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"pluggy.PluginManager.register\",\n      \"file\": \"pluggy.py\",\n      \"reason\": \"The `parse_hookimpl_opts` method now takes two arguments (`plugin` and `name`), so the caller `register` must be updated to pass these arguments.\",\n      \"new_code\": \"def register(self, plugin, name=None):\\n        \\\"\\\"\\\" Register a plugin and return its canonical name or None if the name\\n        is blocked from registering.  Raise a ValueError if the plugin is already\\n        registered. \\\"\\\"\\\"\\n        plugin_name = name or self.get_canonical_name(plugin)\\n\\n        if plugin_name in self._name2plugin or plugin in self._plugin2hookcallers:\\n            if self._name2plugin.get(plugin_name, -1) is None:\\n                return  # blocked plugin, return None to indicate no registration\\n            raise ValueError(\\\"Plugin already registered: %s=%s\\\\n%s\\\" %\\n                            (plugin_name, plugin, self._name2plugin))\\n\\n        # XXX if an error happens we should make sure no state has been\\n        # changed at point of return\\n        self._name2plugin[plugin_name] = plugin\\n\\n        # register matching hook implementations of the plugin\\n        self._plugin2hookcallers[plugin] = hookcallers = []\\n        for name in dir(plugin):\\n            method = getattr(plugin, name)\\n            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)\\n            if hookimpl_opts is not None:\\n                hookimpl = _HookImpl(plugin, plugin_name, method, hookimpl_opts)\\n                hook = getattr(self.hook, name, None)\\n                if hook is None:\\n                    hook = _HookCaller(name, self._hookexec)\\n                    setattr(self.hook, name, hook)\\n                elif hook.has_spec():\\n                    self._verify_hook(hook, hookimpl)\\n                    hook._maybe_apply_history(hookimpl)\\n                hook._add_hookimpl(hookimpl)\\n                hookcallers.append(hook)\\n        return plugin_name\"\n    }\n  ]\n}",
+  "seconds": 32.7,
+  "seed": 1001
  },
  "pluggy-heldout-005/NO7@42": {
   "answer_tokens": 463,
