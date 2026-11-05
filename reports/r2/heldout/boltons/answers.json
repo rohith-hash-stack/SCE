@@ -1,4 +1,14 @@
 {
+ "boltons-heldout-001/FULL@1001": {
+  "answer_tokens": 211,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "042269dc91686d83",
+  "prompt_tokens": 4312,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.treeutils.Tree.__init__\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The function now expects two arguments, `key_size` and `val_size`, instead of `index` and `val_index`. The code needs to be updated to pass these new arguments.\",\n      \"new_code\": \"def __init__(self, **kw):\\n        self._dbg_nodes = []\\n        self.root = None\\n        self.node_count = 0\\n        ki, vs = _get_indices(kw.pop('key_size', 1), kw.pop('val_size', 0))\\n        self._ki_vs_lrh = (ki, vs, -3, -2, -1)\\n        if kw:\\n            raise TypeError('unexpected keyword arguments: %r' % kw)\\n        # ki = key index; vs = val start; left, right, height\"\n    }\n  ]\n}",
+  "seconds": 16.5,
+  "seed": 1001
+ },
  "boltons-heldout-001/FULL@42": {
   "answer_tokens": 214,
   "done_reason": "stop",
@@ -8,6 +18,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Tree.__init__\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The function signature of _get_indices has changed from accepting two parameters (index, val_index) to accepting two parameters (key_size, val_size). The Tree class needs to be updated to reflect this change.\",\n      \"new_code\": \"def __init__(self, **kw):\\n        self._dbg_nodes = []\\n        self.root = None\\n        self.node_count = 0\\n        ki, vs = _get_indices(kw.pop('key_size', 1),\\n                              kw.pop('val_size', 0))\\n        self._ki_vs_lrh = (ki, vs, -3, -2, -1)\\n        if kw:\\n            raise TypeError('unexpected keyword arguments: %r' % kw)\\n        # ki = key index; vs = val start; left, right, height\"\n    }\n  ]\n}",
   "seconds": 20.3,
   "seed": 42
+ },
+ "boltons-heldout-001/NO47@1001": {
+  "answer_tokens": 688,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "9b9c474d4bc8df30",
+  "prompt_tokens": 4098,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.treeutils.Tree.__init__\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The `__init__` method now needs to use the new `_get_indices` function signature.\",\n      \"new_code\": \"def __init__(self, **kw):\\n        self._dbg_nodes = []\\n        self.root = None\\n        self.node_count = 0\\n        ki, vs = _get_indices(kw.pop('key_size', 1), kw.pop('val_size', 0))\\n        self._ki_vs_lrh = (ki, vs, -3, -2, -1)\\n        if kw:\\n            raise TypeError('unexpected keyword arguments: %r' % kw)\"\n    },\n    {\n      \"function\": \"boltons.treeutils.Tree.insert\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The `insert` method now needs to use the new `_get_indices` function signature.\",\n      \"new_code\": \"def insert(self, *a):\\n        KI, VS, L, R, _ = self._ki_vs_lrh\\n        for key_item in a[:VS]:\\n            hash(key_item)  # mutable items will break the tree invariant\\n        item = list(a)\\n        key = item[KI]\\n        item.extend([None, None, 1])\\n        self._dbg_nodes.append(item)\\n        cur = self.root\\n        if not cur:\\n            self.root = item\\n            self.node_count += 1\\n            return\\n        stack = []\\n        while 1:\\n            stack.append(cur)\\n            if key < cur[KI]:\\n                cur = cur[L]\\n            else:\\n                cur = cur[R]\\n            if not cur:\\n                break\\n        cur = stack[-1]\\n        if key < cur[KI]:\\n            cur[L] = item\\n        else:\\n            cur[R] = item\\n        self.node_count += 1\\n        self._rebalance(stack)\\n        return\"\n    },\n    {\n      \"function\": \"boltons.treeutils.Tree.delete\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The `delete` method now needs to use the new `_get_indices` function signature.\",\n      \"new_code\": \"def delete(self, *a):\\n        KI, _, L, R, _ = self._ki_vs_lrh\\n        old_len, old_list_len = len(self), len(list(self))\\n        key, cur, stack = list(a)[KI], self.root, []\\n        child_side = None  # search target side relative to parent\\n        while cur:\\n            stack.append(cur)\\n            if key == cur[KI]:\\n                while cur[R] and key == cur[R][KI]:\\n                    cur = cur[R]\\n                    stack.append(cur)\\n                break\\n            if key < cur[KI]:\\n                cur, child_side = cur[L], L\\n            else:\\n                cur, child_side = cur[R], R\\n        if not cur:\\n            raise KeyError(\"    }\n  ]\n}",
+  "seconds": 48.3,
+  "seed": 1001
  },
  "boltons-heldout-001/NO47@42": {
   "answer_tokens": 192,
@@ -19,6 +39,16 @@
   "seconds": 14.0,
   "seed": 42
  },
+ "boltons-heldout-001/NO4@1001": {
+  "answer_tokens": 207,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "f27ed4b87ff2f79a",
+  "prompt_tokens": 4245,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Tree.__init__\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The function signature of _get_indices has changed, so the call to _get_indices in Tree.__init__ must be updated to match the new parameters.\",\n      \"new_code\": \"def __init__(self, **kw):\\n        self._dbg_nodes = []\\n        self.root = None\\n        self.node_count = 0\\n        key_size, val_size = _get_indices(kw.pop('key_size', 1),\\n                                       kw.pop('val_size', 0))\\n        self._ki_vs_lrh = (key_size, val_size, -3, -2, -1)\\n        if kw:\\n            raise TypeError('unexpected keyword arguments: %r' % kw)\\n        # ki = key index; vs = val start; left, right, height\"\n    }\n  ]\n}",
+  "seconds": 15.5,
+  "seed": 1001
+ },
  "boltons-heldout-001/NO4@42": {
   "answer_tokens": 201,
   "done_reason": "stop",
@@ -28,6 +58,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Tree.__init__\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The function signature of _get_indices has changed, so the call to _get_indices in the __init__ method must be updated to match the new parameters.\",\n      \"new_code\": \"def __init__(self, **kw):\\n        self._dbg_nodes = []\\n        self.root = None\\n        self.node_count = 0\\n        ki, vs = _get_indices(kw.pop('key_size', 1), kw.pop('val_size', 0))\\n        self._ki_vs_lrh = (ki, vs, -3, -2, -1)\\n        if kw:\\n            raise TypeError('unexpected keyword arguments: %r' % kw)\\n        # ki = key index; vs = val start; left, right, height\"\n    }\n  ]\n}",
   "seconds": 15.3,
   "seed": 42
+ },
+ "boltons-heldout-001/NO6@1001": {
+  "answer_tokens": 196,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d389198f095f2467",
+  "prompt_tokens": 4307,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.treeutils.Tree.__init__\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The function now expects two arguments, key_size and val_size, instead of index and val_index.\",\n      \"new_code\": \"def __init__(self, **kw):\\n        self._dbg_nodes = []\\n        self.root = None\\n        self.node_count = 0\\n        ki, vs = _get_indices(kw.pop('key_size', 1),\\n                              kw.pop('val_size', 0))\\n        self._ki_vs_lrh = (ki, vs, -3, -2, -1)\\n        if kw:\\n            raise TypeError('unexpected keyword arguments: %r' % kw)\\n        # ki = key index; vs = val start; left, right, height\"\n    }\n  ]\n}",
+  "seconds": 14.9,
+  "seed": 1001
  },
  "boltons-heldout-001/NO6@42": {
   "answer_tokens": 193,
@@ -39,6 +79,16 @@
   "seconds": 14.8,
   "seed": 42
  },
+ "boltons-heldout-001/NO7@1001": {
+  "answer_tokens": 203,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "31df39ea6219afa8",
+  "prompt_tokens": 4182,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.treeutils.Tree.__init__\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The function now expects two arguments, `key_size` and `val_size`, instead of `index` and `val_index`.\",\n      \"new_code\": \"def __init__(self, **kw):\\n        self._dbg_nodes = []\\n        self.root = None\\n        self.node_count = 0\\n        ki, vs = _get_indices(kw.pop('key_size', 1),\\n                              kw.pop('val_size', 0))\\n        self._ki_vs_lrh = (ki, vs, -3, -2, -1)\\n        if kw:\\n            raise TypeError('unexpected keyword arguments: %r' % kw)\\n        # ki = key index; vs = val start; left, right, height\"\n    }\n  ]\n}",
+  "seconds": 14.9,
+  "seed": 1001
+ },
  "boltons-heldout-001/NO7@42": {
   "answer_tokens": 203,
   "done_reason": "stop",
@@ -48,6 +98,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.treeutils.Tree.__init__\",\n      \"file\": \"boltons/treeutils.py\",\n      \"reason\": \"The function now expects two arguments, `key_size` and `val_size`, instead of `index` and `val_index`.\",\n      \"new_code\": \"def __init__(self, **kw):\\n        self._dbg_nodes = []\\n        self.root = None\\n        self.node_count = 0\\n        ki, vs = _get_indices(kw.pop('key_size', 1),\\n                              kw.pop('val_size', 0))\\n        self._ki_vs_lrh = (ki, vs, -3, -2, -1)\\n        if kw:\\n            raise TypeError('unexpected keyword arguments: %r' % kw)\\n        # ki = key index; vs = val start; left, right, height\"\n    }\n  ]\n}",
   "seconds": 14.8,
   "seed": 42
+ },
+ "boltons-heldout-002/FULL@1001": {
+  "answer_tokens": 639,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "002cb3d38daca3c3",
+  "prompt_tokens": 6883,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.statsutils.Stats.format_histogram\",\n      \"file\": \"boltons/statsutils.py\",\n      \"reason\": \"The `_get_bin_bounds` method no longer accepts the `trim` and `with_max` parameters, so these parameters need to be removed from the calls.\",\n      \"new_code\": \"def format_histogram(self, bins=None, width=None, **kwargs):\\n        lines = []\\n        if not width:\\n            try:\\n                import shutil\\n                width = shutil.get_terminal_size()[0]\\n            except Exception:\\n                width = 80\\n        format_value = kwargs.pop('format_value', lambda v: v)\\n        edge_bin_size = kwargs.pop('edge_bin_size', 0.0)\\n        round_bin_digits = kwargs.pop('bin_digits', 1)\\n\\n        if not bins:\\n            bins = self._get_bin_bounds(with_max=False)\\n        else:\\n            try:\\n                bin_count = int(bins)\\n                edge_bin_size = 1 / (bin_count * 4.0) if edge_bin_size is None else edge_bin_size\\n            except TypeError:\\n                try:\\n                    bins = sorted([float(x) for x in bins])\\n                except Exception:\\n                    raise ValueError('bins expected integer bin count or list of'\\n                                     ' float bin boundaries, not %r' % bins)\\n                if self.min < bins[0]:\\n                    bins = [self.min] + bins\\n            else:\\n                bins = self._get_bin_bounds(bin_count, with_max=False)\\n\\n        bins = [round(float(b), round_bin_digits) for b in bins]\\n\\n        idx_counter = Counter([bisect.bisect(bins, d) - 1 for d in self.data])\\n        bin_counts = [(b, idx_counter.get(i, 0)) for i, b in enumerate(bins)]\\n\\n        count_max = max(idx_counter.values())\\n        count_cols = len(str(count_max))\\n\\n        labels = ['%s' % format_value(b) for b in bins]\\n        label_cols = max([len(l) for l in labels])\\n        tmp_line = '%s: %s #' % ('x' * label_cols, count_max)\\n\\n        bar_cols = max(width - len(tmp_line), 3)\\n        line_k = float(bar_cols) / max(idx_counter.values())\\n        tmpl = \\\"{:<{}}: {:>{}} {}\\\"\\n        for label, (bin_val, count) in zip(labels, bin_counts):\\n            bar_len = int(round(count * line_k))\\n            text = format_value(float(bin_val))\\n            bar = ('#' * bar_len) or '|'\\n            line = tmpl.format(text, label_cols, count, count_cols, bar)\\n            lines.append(line)\\n\\n        return '\\\\n'.join(lines)\"\n    }\n  ]\n}",
+  "seconds": 50.2,
+  "seed": 1001
  },
  "boltons-heldout-002/FULL@42": {
   "answer_tokens": 639,
@@ -59,6 +119,16 @@
   "seconds": 54.9,
   "seed": 42
  },
+ "boltons-heldout-002/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "de183f00c24f699b",
+  "prompt_tokens": 6883,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.6,
+  "seed": 1001
+ },
  "boltons-heldout-002/NO47@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -68,6 +138,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 3.6,
   "seed": 42
+ },
+ "boltons-heldout-002/NO4@1001": {
+  "answer_tokens": 640,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "68731e0d6fe7fee7",
+  "prompt_tokens": 6696,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.statsutils.Stats.format_histogram\",\n      \"file\": \"boltons/statsutils.py\",\n      \"reason\": \"The `trim` parameter is no longer used in `_get_bin_bounds`, so it should be removed from the call.\",\n      \"new_code\": \"def format_histogram(self, bins=None, width=None, **kwargs):\\n        lines = []\\n        if not width:\\n            try:\\n                import shutil\\n                width = shutil.get_terminal_size()[0]\\n            except Exception:\\n                width = 80\\n        format_value = kwargs.pop('format_value', lambda v: v)\\n        edge_bin_size = kwargs.pop('edge_bin_size', 0.0)\\n        round_bin_digits = kwargs.pop('bin_digits', 1)\\n\\n        if not bins:\\n            bins = self._get_bin_bounds(with_max=False)\\n        else:\\n            try:\\n                bin_count = int(bins)\\n                edge_bin_size = 1 / (bin_count * 4.0) if edge_bin_size is None else edge_bin_size\\n            except TypeError:\\n                try:\\n                    bins = sorted([float(x) for x in bins])\\n                except Exception:\\n                    raise ValueError('bins expected integer bin count or list of'\\n                                     ' float bin boundaries, not %r' % bins)\\n                if self.min < bins[0]:\\n                    bins = [self.min] + bins\\n            else:\\n                bins = self._get_bin_bounds(bin_count,\\n                                            trim=edge_bin_size,\\n                                            with_max=False)\\n\\n        bins = [round(float(b), round_bin_digits) for b in bins]\\n\\n        idx_counter = Counter([bisect.bisect(bins, d) - 1 for d in self.data])\\n        bin_counts = [(b, idx_counter.get(i, 0)) for i, b in enumerate(bins)]\\n\\n        count_max = max(idx_counter.values())\\n        count_cols = len(str(count_max))\\n\\n        labels = ['%s' % format_value(b) for b in bins]\\n        label_cols = max([len(l) for l in labels])\\n        tmp_line = '%s: %s #' % ('x' * label_cols, count_max)\\n\\n        bar_cols = max(width - len(tmp_line), 3)\\n        line_k = float(bar_cols) / max(idx_counter.values())\\n        tmpl = \\\"{:<{}}: {:>{}} {}\\\"\\n        for label, (bin_val, count) in zip(labels, bin_counts):\\n            bar_len = int(round(count * line_k))\\n            text = format_value(float(bin_val))\\n            bar = ('#' * bar_len) or '|'\\n            line = tmpl.format(text, label_cols, count, count_cols, bar)\\n            lines.append(line)\\n\\n        return '\\\\n'.join(lines)\"\n    }\n  ]\n}",
+  "seconds": 49.1,
+  "seed": 1001
  },
  "boltons-heldout-002/NO4@42": {
   "answer_tokens": 6,
@@ -79,6 +159,16 @@
   "seconds": 3.3,
   "seed": 42
  },
+ "boltons-heldout-002/NO6@1001": {
+  "answer_tokens": 639,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d16f36e7b68ad041",
+  "prompt_tokens": 6768,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.statsutils.Stats.format_histogram\",\n      \"file\": \"boltons/statsutils.py\",\n      \"reason\": \"The `_get_bin_bounds` method no longer accepts the `trim` and `with_max` parameters, so these parameters need to be removed from the calls.\",\n      \"new_code\": \"def format_histogram(self, bins=None, width=None, **kwargs):\\n        lines = []\\n        if not width:\\n            try:\\n                import shutil\\n                width = shutil.get_terminal_size()[0]\\n            except Exception:\\n                width = 80\\n        format_value = kwargs.pop('format_value', lambda v: v)\\n        edge_bin_size = kwargs.pop('edge_bin_size', 0.0)\\n        round_bin_digits = kwargs.pop('bin_digits', 1)\\n\\n        if not bins:\\n            bins = self._get_bin_bounds(with_max=False)\\n        else:\\n            try:\\n                bin_count = int(bins)\\n                edge_bin_size = 1 / (bin_count * 4.0) if edge_bin_size is None else edge_bin_size\\n            except TypeError:\\n                try:\\n                    bins = sorted([float(x) for x in bins])\\n                except Exception:\\n                    raise ValueError('bins expected integer bin count or list of'\\n                                     ' float bin boundaries, not %r' % bins)\\n                if self.min < bins[0]:\\n                    bins = [self.min] + bins\\n            else:\\n                bins = self._get_bin_bounds(bin_count, with_max=False)\\n\\n        bins = [round(float(b), round_bin_digits) for b in bins]\\n\\n        idx_counter = Counter([bisect.bisect(bins, d) - 1 for d in self.data])\\n        bin_counts = [(b, idx_counter.get(i, 0)) for i, b in enumerate(bins)]\\n\\n        count_max = max(idx_counter.values())\\n        count_cols = len(str(count_max))\\n\\n        labels = ['%s' % format_value(b) for b in bins]\\n        label_cols = max([len(l) for l in labels])\\n        tmp_line = '%s: %s #' % ('x' * label_cols, count_max)\\n\\n        bar_cols = max(width - len(tmp_line), 3)\\n        line_k = float(bar_cols) / max(idx_counter.values())\\n        tmpl = \\\"{:<{}}: {:>{}} {}\\\"\\n        for label, (bin_val, count) in zip(labels, bin_counts):\\n            bar_len = int(round(count * line_k))\\n            text = format_value(float(bin_val))\\n            bar = ('#' * bar_len) or '|'\\n            line = tmpl.format(text, label_cols, count, count_cols, bar)\\n            lines.append(line)\\n\\n        return '\\\\n'.join(lines)\"\n    }\n  ]\n}",
+  "seconds": 49.2,
+  "seed": 1001
+ },
  "boltons-heldout-002/NO6@42": {
   "answer_tokens": 632,
   "done_reason": "stop",
@@ -88,6 +178,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.statsutils.Stats.format_histogram\",\n      \"file\": \"boltons/statsutils.py\",\n      \"reason\": \"The `_get_bin_bounds` method no longer accepts the `trim` and `with_max` parameters, so these parameters need to be removed from the calls.\",\n      \"new_code\": \"def format_histogram(self, bins=None, width=None, **kwargs):\\n        lines = []\\n        if not width:\\n            try:\\n                import shutil\\n                width = shutil.get_terminal_size()[0]\\n            except Exception:\\n                width = 80\\n        format_value = kwargs.pop('format_value', lambda v: v)\\n        edge_bin_size = kwargs.pop('edge_bin_size', 0.0)\\n        round_bin_digits = kwargs.pop('bin_digits', 1)\\n\\n        if not bins:\\n            bins = self._get_bin_bounds()\\n        else:\\n            try:\\n                bin_count = int(bins)\\n                edge_bin_size = 1 / (bin_count * 4.0) if edge_bin_size is None else edge_bin_size\\n            except TypeError:\\n                try:\\n                    bins = sorted([float(x) for x in bins])\\n                except Exception:\\n                    raise ValueError('bins expected integer bin count or list of'\\n                                     ' float bin boundaries, not %r' % bins)\\n                if self.min < bins[0]:\\n                    bins = [self.min] + bins\\n            else:\\n                bins = self._get_bin_bounds(bin_count)\\n\\n        bins = [round(float(b), round_bin_digits) for b in bins]\\n\\n        idx_counter = Counter([bisect.bisect(bins, d) - 1 for d in self.data])\\n        bin_counts = [(b, idx_counter.get(i, 0)) for i, b in enumerate(bins)]\\n\\n        count_max = max(idx_counter.values())\\n        count_cols = len(str(count_max))\\n\\n        labels = ['%s' % format_value(b) for b in bins]\\n        label_cols = max([len(l) for l in labels])\\n        tmp_line = '%s: %s #' % ('x' * label_cols, count_max)\\n\\n        bar_cols = max(width - len(tmp_line), 3)\\n        line_k = float(bar_cols) / max(idx_counter.values())\\n        tmpl = \\\"{:<{}}: {:>{}} {}\\\"\\n        for label, (bin_val, count) in zip(labels, bin_counts):\\n            bar_len = int(round(count * line_k))\\n            text = format_value(float(bin_val))\\n            bar = ('#' * bar_len) or '|'\\n            line = tmpl.format(text, label_cols, count, count_cols, bar)\\n            lines.append(line)\\n\\n        return '\\\\n'.join(lines)\"\n    }\n  ]\n}",
   "seconds": 48.6,
   "seed": 42
+ },
+ "boltons-heldout-002/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "e995e8f830664429",
+  "prompt_tokens": 6636,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.0,
+  "seed": 1001
  },
  "boltons-heldout-002/NO7@42": {
   "answer_tokens": 6,
@@ -99,6 +199,16 @@
   "seconds": 3.0,
   "seed": 42
  },
+ "boltons-heldout-003/FULL@1001": {
+  "answer_tokens": 503,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "f6b599237e97c8e9",
+  "prompt_tokens": 3925,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"FunctionBuilder.get_func\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The argument name for `get_sig_str` has changed from `stringify_annotations` to `with_annotations`. The code must be updated to reflect this change.\",\n      \"new_code\": \"def get_func(self, execdict=None, add_source=True, with_dict=True):\\n        \\\"\\\"\\\"Compile and return a new function based on the current values of\\n        the FunctionBuilder.\\n\\n        Args:\\n            execdict (dict): The dictionary representing the scope in\\n                which the compilation should take place. Defaults to an empty\\n                dict.\\n            add_source (bool): Whether to add the source used to a\\n                special ``__source__`` attribute on the resulting\\n                function. Defaults to True.\\n            with_dict (bool): Add any custom attributes, if\\n                applicable. Defaults to True.\\n\\n        To see an example of usage, see the implementation of\\n        :func:`~boltons.funcutils.wraps`.\\n        \\\"\\\"\\\"\\n        execdict = execdict or {}\\n        body = self.body or self._default_body\\n\\n        tmpl = 'def {name}{sig_str}:'\\n        tmpl += '\\\\n{body}'\\n\\n        if self.is_async:\\n            tmpl = 'async ' + tmpl\\n\\n        body = _indent(self.body, ' ' * self.indent)\\n\\n        name = self.name.replace('<', '_').replace('>', '_')  # lambdas\\n        src = tmpl.format(name=name, sig_str=self.get_sig_str(with_annotations=True),\\n                          doc=self.doc, body=body)\\n        self._compile(src, execdict)\\n        func = execdict[name]\\n\\n        func.__name__ = self.name\\n        func.__doc__ = self.doc\\n        func.__defaults__ = self.defaults\\n        if not _IS_PY2:\\n            func.__kwdefaults__ = self.kwonlydefaults\\n            func.__annotations__ = self.annotations\\n\\n        if with_dict:\\n            func.__dict__.update(self.dict)\\n        func.__module__ = self.module\\n        # TODO: caller module fallback?\\n\\n        if add_source:\\n            func.__source__ = src\\n\\n        return func\"\n    }\n  ]\n}",
+  "seconds": 36.9,
+  "seed": 1001
+ },
  "boltons-heldout-003/FULL@42": {
   "answer_tokens": 500,
   "done_reason": "stop",
@@ -108,6 +218,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.funcutils.FunctionBuilder.get_func\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The argument name for `stringify_annotations` has changed from `stringify_annotations=False` to `with_annotations=True`.\",\n      \"new_code\": \"def get_func(self, execdict=None, add_source=True, with_dict=True):\\n        \\\"\\\"\\\"Compile and return a new function based on the current values of\\n        the FunctionBuilder.\\n\\n        Args:\\n            execdict (dict): The dictionary representing the scope in\\n                which the compilation should take place. Defaults to an empty\\n                dict.\\n            add_source (bool): Whether to add the source used to a\\n                special ``__source__`` attribute on the resulting\\n                function. Defaults to True.\\n            with_dict (bool): Add any custom attributes, if\\n                applicable. Defaults to True.\\n\\n        To see an example of usage, see the implementation of\\n        :func:`~boltons.funcutils.wraps`.\\n        \\\"\\\"\\\"\\n        execdict = execdict or {}\\n        body = self.body or self._default_body\\n\\n        tmpl = 'def {name}{sig_str}:'\\n        tmpl += '\\\\n{body}'\\n\\n        if self.is_async:\\n            tmpl = 'async ' + tmpl\\n\\n        body = _indent(self.body, ' ' * self.indent)\\n\\n        name = self.name.replace('<', '_').replace('>', '_')  # lambdas\\n        src = tmpl.format(name=name, sig_str=self.get_sig_str(with_annotations=True),\\n                          doc=self.doc, body=body)\\n        self._compile(src, execdict)\\n        func = execdict[name]\\n\\n        func.__name__ = self.name\\n        func.__doc__ = self.doc\\n        func.__defaults__ = self.defaults\\n        if not _IS_PY2:\\n            func.__kwdefaults__ = self.kwonlydefaults\\n            func.__annotations__ = self.annotations\\n\\n        if with_dict:\\n            func.__dict__.update(self.dict)\\n        func.__module__ = self.module\\n        # TODO: caller module fallback?\\n\\n        if add_source:\\n            func.__source__ = src\\n\\n        return func\"\n    }\n  ]\n}",
   "seconds": 39.3,
   "seed": 42
+ },
+ "boltons-heldout-003/NO47@1001": {
+  "answer_tokens": 201,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "5dc22add09acbf85",
+  "prompt_tokens": 3919,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"FunctionBuilder.get_sig_str\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The parameter name has changed from `stringify_annotations` to `with_annotations`, so the function signature must be updated to reflect this change.\",\n      \"new_code\": \"def get_sig_str(self, with_annotations=True):\\n            return inspect.formatargspec(self.args, self.varargs,\\n                                         self.varkw, [])\"\n    },\n    {\n      \"function\": \"FunctionBuilder.get_func\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The call to `get_sig_str` within `get_func` must be updated to use the new parameter name `with_annotations`.\",\n      \"new_code\": \"src = tmpl.format(name=name, sig_str=self.get_sig_str(with_annotations=True),\\n                          doc=self.doc, body=body)\"\n    }\n  ]\n}",
+  "seconds": 15.4,
+  "seed": 1001
  },
  "boltons-heldout-003/NO47@42": {
   "answer_tokens": 201,
@@ -119,6 +239,16 @@
   "seconds": 15.4,
   "seed": 42
  },
+ "boltons-heldout-003/NO4@1001": {
+  "answer_tokens": 516,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "47eba38130cfd9ef",
+  "prompt_tokens": 3885,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.funcutils.FunctionBuilder.get_func\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The `get_func` method calls `get_sig_str` with the `stringify_annotations` parameter, which has been renamed to `with_annotations`. The method signature must be updated to reflect this change.\",\n      \"new_code\": \"def get_func(self, execdict=None, add_source=True, with_dict=True):\\n        \\\"\\\"\\\"Compile and return a new function based on the current values of\\n        the FunctionBuilder.\\n\\n        Args:\\n            execdict (dict): The dictionary representing the scope in\\n                which the compilation should take place. Defaults to an empty\\n                dict.\\n            add_source (bool): Whether to add the source used to a\\n                special ``__source__`` attribute on the resulting\\n                function. Defaults to True.\\n            with_dict (bool): Add any custom attributes, if\\n                applicable. Defaults to True.\\n\\n        To see an example of usage, see the implementation of\\n        :func:`~boltons.funcutils.wraps`.\\n        \\\"\\\"\\\"\\n        execdict = execdict or {}\\n        body = self.body or self._default_body\\n\\n        tmpl = 'def {name}{sig_str}:'\\n        tmpl += '\\\\n{body}'\\n\\n        if self.is_async:\\n            tmpl = 'async ' + tmpl\\n\\n        body = _indent(self.body, ' ' * self.indent)\\n\\n        name = self.name.replace('<', '_').replace('>', '_')  # lambdas\\n        src = tmpl.format(name=name, sig_str=self.get_sig_str(with_annotations=True),\\n                          doc=self.doc, body=body)\\n        self._compile(src, execdict)\\n        func = execdict[name]\\n\\n        func.__name__ = self.name\\n        func.__doc__ = self.doc\\n        func.__defaults__ = self.defaults\\n        if not _IS_PY2:\\n            func.__kwdefaults__ = self.kwonlydefaults\\n            func.__annotations__ = self.annotations\\n\\n        if with_dict:\\n            func.__dict__.update(self.dict)\\n        func.__module__ = self.module\\n        # TODO: caller module fallback?\\n\\n        if add_source:\\n            func.__source__ = src\\n\\n        return func\"\n    }\n  ]\n}",
+  "seconds": 36.9,
+  "seed": 1001
+ },
  "boltons-heldout-003/NO4@42": {
   "answer_tokens": 504,
   "done_reason": "stop",
@@ -128,6 +258,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.funcutils.FunctionBuilder.get_func\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The `get_func` method calls `get_sig_str` with `stringify_annotations=True`, which now expects a `with_annotations` parameter.\",\n      \"new_code\": \"def get_func(self, execdict=None, add_source=True, with_dict=True):\\n        \\\"\\\"\\\"Compile and return a new function based on the current values of\\n        the FunctionBuilder.\\n\\n        Args:\\n            execdict (dict): The dictionary representing the scope in\\n                which the compilation should take place. Defaults to an empty\\n                dict.\\n            add_source (bool): Whether to add the source used to a\\n                special ``__source__`` attribute on the resulting\\n                function. Defaults to True.\\n            with_dict (bool): Add any custom attributes, if\\n                applicable. Defaults to True.\\n\\n        To see an example of usage, see the implementation of\\n        :func:`~boltons.funcutils.wraps`.\\n        \\\"\\\"\\\"\\n        execdict = execdict or {}\\n        body = self.body or self._default_body\\n\\n        tmpl = 'def {name}{sig_str}:'\\n        tmpl += '\\\\n{body}'\\n\\n        if self.is_async:\\n            tmpl = 'async ' + tmpl\\n\\n        body = _indent(self.body, ' ' * self.indent)\\n\\n        name = self.name.replace('<', '_').replace('>', '_')  # lambdas\\n        src = tmpl.format(name=name, sig_str=self.get_sig_str(with_annotations=True),\\n                          doc=self.doc, body=body)\\n        self._compile(src, execdict)\\n        func = execdict[name]\\n\\n        func.__name__ = self.name\\n        func.__doc__ = self.doc\\n        func.__defaults__ = self.defaults\\n        if not _IS_PY2:\\n            func.__kwdefaults__ = self.kwonlydefaults\\n            func.__annotations__ = self.annotations\\n\\n        if with_dict:\\n            func.__dict__.update(self.dict)\\n        func.__module__ = self.module\\n        # TODO: caller module fallback?\\n\\n        if add_source:\\n            func.__source__ = src\\n\\n        return func\"\n    }\n  ]\n}",
   "seconds": 35.9,
   "seed": 42
+ },
+ "boltons-heldout-003/NO6@1001": {
+  "answer_tokens": 509,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b01ccf731ebe806e",
+  "prompt_tokens": 3922,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.funcutils.FunctionBuilder.get_func\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The `get_sig_str` method's parameter name has changed from `stringify_annotations` to `with_annotations`, so the caller must be updated to reflect this change.\",\n      \"new_code\": \"def get_func(self, execdict=None, add_source=True, with_dict=True):\\n        \\\"\\\"\\\"Compile and return a new function based on the current values of\\n        the FunctionBuilder.\\n\\n        Args:\\n            execdict (dict): The dictionary representing the scope in\\n                which the compilation should take place. Defaults to an empty\\n                dict.\\n            add_source (bool): Whether to add the source used to a\\n                special ``__source__`` attribute on the resulting\\n                function. Defaults to True.\\n            with_dict (bool): Add any custom attributes, if\\n                applicable. Defaults to True.\\n\\n        To see an example of usage, see the implementation of\\n        :func:`~boltons.funcutils.wraps`.\\n        \\\"\\\"\\\"\\n        execdict = execdict or {}\\n        body = self.body or self._default_body\\n\\n        tmpl = 'def {name}{sig_str}:'\\n        tmpl += '\\\\n{body}'\\n\\n        if self.is_async:\\n            tmpl = 'async ' + tmpl\\n\\n        body = _indent(self.body, ' ' * self.indent)\\n\\n        name = self.name.replace('<', '_').replace('>', '_')  # lambdas\\n        src = tmpl.format(name=name, sig_str=self.get_sig_str(with_annotations=True),\\n                          doc=self.doc, body=body)\\n        self._compile(src, execdict)\\n        func = execdict[name]\\n\\n        func.__name__ = self.name\\n        func.__doc__ = self.doc\\n        func.__defaults__ = self.defaults\\n        if not _IS_PY2:\\n            func.__kwdefaults__ = self.kwonlydefaults\\n            func.__annotations__ = self.annotations\\n\\n        if with_dict:\\n            func.__dict__.update(self.dict)\\n        func.__module__ = self.module\\n        # TODO: caller module fallback?\\n\\n        if add_source:\\n            func.__source__ = src\\n\\n        return func\"\n    }\n  ]\n}",
+  "seconds": 36.5,
+  "seed": 1001
  },
  "boltons-heldout-003/NO6@42": {
   "answer_tokens": 506,
@@ -139,6 +279,16 @@
   "seconds": 36.2,
   "seed": 42
  },
+ "boltons-heldout-003/NO7@1001": {
+  "answer_tokens": 506,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "7e4db97d97a8233a",
+  "prompt_tokens": 3923,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.funcutils.FunctionBuilder.get_func\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The `get_func` method calls `get_sig_str` with the `stringify_annotations` parameter, which has been renamed to `with_annotations`.\",\n      \"new_code\": \"def get_func(self, execdict=None, add_source=True, with_dict=True):\\n        \\\"\\\"\\\"Compile and return a new function based on the current values of\\n        the FunctionBuilder.\\n\\n        Args:\\n            execdict (dict): The dictionary representing the scope in\\n                which the compilation should take place. Defaults to an empty\\n                dict.\\n            add_source (bool): Whether to add the source used to a\\n                special ``__source__`` attribute on the resulting\\n                function. Defaults to True.\\n            with_dict (bool): Add any custom attributes, if\\n                applicable. Defaults to True.\\n\\n        To see an example of usage, see the implementation of\\n        :func:`~boltons.funcutils.wraps`.\\n        \\\"\\\"\\\"\\n        execdict = execdict or {}\\n        body = self.body or self._default_body\\n\\n        tmpl = 'def {name}{sig_str}:'\\n        tmpl += '\\\\n{body}'\\n\\n        if self.is_async:\\n            tmpl = 'async ' + tmpl\\n\\n        body = _indent(self.body, ' ' * self.indent)\\n\\n        name = self.name.replace('<', '_').replace('>', '_')  # lambdas\\n        src = tmpl.format(name=name, sig_str=self.get_sig_str(with_annotations=True),\\n                          doc=self.doc, body=body)\\n        self._compile(src, execdict)\\n        func = execdict[name]\\n\\n        func.__name__ = self.name\\n        func.__doc__ = self.doc\\n        func.__defaults__ = self.defaults\\n        if not _IS_PY2:\\n            func.__kwdefaults__ = self.kwonlydefaults\\n            func.__annotations__ = self.annotations\\n\\n        if with_dict:\\n            func.__dict__.update(self.dict)\\n        func.__module__ = self.module\\n        # TODO: caller module fallback?\\n\\n        if add_source:\\n            func.__source__ = src\\n\\n        return func\"\n    }\n  ]\n}",
+  "seconds": 36.1,
+  "seed": 1001
+ },
  "boltons-heldout-003/NO7@42": {
   "answer_tokens": 506,
   "done_reason": "stop",
@@ -148,6 +298,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.funcutils.FunctionBuilder.get_func\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The `get_func` method calls `get_sig_str` with the `stringify_annotations` argument, which has been renamed to `with_annotations`.\",\n      \"new_code\": \"def get_func(self, execdict=None, add_source=True, with_dict=True):\\n        \\\"\\\"\\\"Compile and return a new function based on the current values of\\n        the FunctionBuilder.\\n\\n        Args:\\n            execdict (dict): The dictionary representing the scope in\\n                which the compilation should take place. Defaults to an empty\\n                dict.\\n            add_source (bool): Whether to add the source used to a\\n                special ``__source__`` attribute on the resulting\\n                function. Defaults to True.\\n            with_dict (bool): Add any custom attributes, if\\n                applicable. Defaults to True.\\n\\n        To see an example of usage, see the implementation of\\n        :func:`~boltons.funcutils.wraps`.\\n        \\\"\\\"\\\"\\n        execdict = execdict or {}\\n        body = self.body or self._default_body\\n\\n        tmpl = 'def {name}{sig_str}:'\\n        tmpl += '\\\\n{body}'\\n\\n        if self.is_async:\\n            tmpl = 'async ' + tmpl\\n\\n        body = _indent(self.body, ' ' * self.indent)\\n\\n        name = self.name.replace('<', '_').replace('>', '_')  # lambdas\\n        src = tmpl.format(name=name, sig_str=self.get_sig_str(with_annotations=True),\\n                          doc=self.doc, body=body)\\n        self._compile(src, execdict)\\n        func = execdict[name]\\n\\n        func.__name__ = self.name\\n        func.__doc__ = self.doc\\n        func.__defaults__ = self.defaults\\n        if not _IS_PY2:\\n            func.__kwdefaults__ = self.kwonlydefaults\\n            func.__annotations__ = self.annotations\\n\\n        if with_dict:\\n            func.__dict__.update(self.dict)\\n        func.__module__ = self.module\\n        # TODO: caller module fallback?\\n\\n        if add_source:\\n            func.__source__ = src\\n\\n        return func\"\n    }\n  ]\n}",
   "seconds": 35.9,
   "seed": 42
+ },
+ "boltons-heldout-004/FULL@1001": {
+  "answer_tokens": 362,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "63cb5db944e265e1",
+  "prompt_tokens": 3972,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"boltons.funcutils.wraps\",\n      \"file\": \"boltons/funcutils.py\",\n      \"reason\": \"The `remove_arg` method now raises a custom `MissingArgument` exception instead of a generic `ValueError`. The `wraps` function should catch this new exception to maintain compatibility.\",\n      \"new_code\": \"def wraps(func, injected=None, **kw):\\n    \\\"\\\"\\\"Modeled after the built-in :func:`functools.wraps`, this function is\\n    used to make your decorator's wrapper functions reflect the\\n    wrapped function's:\\n\\n      * Name\\n    # ... lines 222-281 not shown ...\\n                        % (getattr(func, '__func__', None),))\\n\\n    update_dict = kw.pop('update_dict', True)\\n    if kw:\\n        raise TypeError('unexpected kwargs: %r' % kw.keys())\\n\\n    fb = FunctionBuilder.from_func(func)\\n    for arg in injected:\\n        try:\\n            fb.remove_arg(arg)\\n        except MissingArgument as e:\\n            # Handle the missing argument exception\\n            print(f\\\"Warning: {e.arg_name} is not a valid argument to remove.\\\")\\n\\n    fb.body = 'return _call(%s)' % fb.get_invocation_str()\\n\\n    def wrapper_wrapper(wrapper_func):\\n        execdict = dict(_call=wrapper_func, _func=func)\\n        fully_wrapped = fb.get_func(execdict, with_dict=update_dict)\\n\\n        return fully_wrapped\\n    # ... lines 299-300 not shown ...\"\n    }\n  ]\n}",
+  "seconds": 27.3,
+  "seed": 1001
  },
  "boltons-heldout-004/FULL@42": {
   "answer_tokens": 371,
@@ -159,6 +319,16 @@
   "seconds": 30.3,
   "seed": 42
  },
+ "boltons-heldout-004/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b198294f05729d55",
+  "prompt_tokens": 3777,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.1,
+  "seed": 1001
+ },
  "boltons-heldout-004/NO47@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -168,6 +338,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.1,
   "seed": 42
+ },
+ "boltons-heldout-004/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "091fc8892b8898a0",
+  "prompt_tokens": 3899,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.4,
+  "seed": 1001
  },
  "boltons-heldout-004/NO4@42": {
   "answer_tokens": 6,
@@ -179,6 +359,16 @@
   "seconds": 2.4,
   "seed": 42
  },
+ "boltons-heldout-004/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "3200725ef38c4ac4",
+  "prompt_tokens": 3958,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 1001
+ },
  "boltons-heldout-004/NO6@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -188,6 +378,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.5,
   "seed": 42
+ },
+ "boltons-heldout-004/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "9568c77582be6742",
+  "prompt_tokens": 3867,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.6,
+  "seed": 1001
  },
  "boltons-heldout-004/NO7@42": {
   "answer_tokens": 6,
@@ -199,6 +399,16 @@
   "seconds": 1.6,
   "seed": 42
  },
+ "boltons-heldout-005/FULL@1001": {
+  "answer_tokens": 846,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "28730ac49e627528",
+  "prompt_tokens": 4830,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"SpooledStringIO.seek\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `seek` method needs to use this new value to calculate the correct position.\",\n      \"new_code\": \"def seek(self, pos, mode=0):\\n        \\\"\\\"\\\"Traverse from offset to the specified codepoint\\\"\\\"\\\"\\n        # Seek to position from the start of the file\\n        if mode == os.SEEK_SET:\\n            self.buffer.seek(0)\\n            return self._traverse_codepoints(0, pos)\\n        # Seek to new position relative to current position\\n        elif mode == os.SEEK_CUR:\\n            start_pos = self.tell()\\n            return self._traverse_codepoints(start_pos, pos)\\n        elif mode == os.SEEK_END:\\n            self.buffer.seek(0)\\n            dest_position = self.len - pos\\n            return self._traverse_codepoints(0, dest_position)\\n        else:\\n            raise ValueError(\\n                \\\"Invalid whence ({0}, should be 0, 1, or 2)\\\".format(mode)\\n            )\"\n    },\n    {\n      \"function\": \"SpooledStringIO.write\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `write` method needs to use this new value to check if the maximum size has been reached.\",\n      \"new_code\": \"def write(self, s):\\n        if not isinstance(s, text_type):\\n            raise TypeError(\\\"{0} expected, got {1}\\\".format(\\n                text_type.__name__,\\n                type(s).__name__\\n            ))\\n\\n        self.buffer.write(s.encode('utf-8'))\\n        if self.tell() >= self._max_size:\\n            self.rollover()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.getvalue\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `getvalue` method needs to use this new value to restore the original position after reading the entire file.\",\n      \"new_code\": \"def getvalue(self):\\n        \\\"\\\"\\\"Return the entire files contents\\\"\\\"\\\"\\n        pos = self.tell()\\n        self.seek(0)\\n        val = self.read()\\n        self.seek(pos)\\n        return val\"\n    },\n    {\n      \"function\": \"SpooledIOBase.pos\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `pos` property can simply return this value.\",\n      \"new_code\": \"@property\\ndef pos(self):\\n    return self.tell()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.truncate\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `truncate` method needs to use this new value to restore the original position after truncating the file.\",\n      \"new_code\": \"def truncate(self, size=None):\\n        \\\"\\\"\\\"\\n        Custom version of truncate that takes either no arguments (like the\\n        real SpooledTemporaryFile) or a single argument that truncates the\\n        value to a certain index location.\\n        \\\"\\\"\\\"\\n        if size is None:\\n            return self.buffer.truncate()\\n\\n        if size < 0:\\n            raise IOError(EINVAL, \\\"Negative size not allowed\\\")\\n\\n        # Emulate truncation to a particular location\\n        pos = self.tell()\\n        self.seek(size)\\n        self.buffer.truncate(size)\\n        if pos < size:\\n            self.seek(pos)\"\n    }\n  ]\n}",
+  "seconds": 62.3,
+  "seed": 1001
+ },
  "boltons-heldout-005/FULL@42": {
   "answer_tokens": 851,
   "done_reason": "stop",
@@ -208,6 +418,26 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"SpooledStringIO.seek\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `seek` method no longer needs to call `tell` to determine the current position.\",\n      \"new_code\": \"def seek(self, pos, mode=0):\\n        \\\"\\\"\\\"Traverse from offset to the specified codepoint\\\"\\\"\\\"\\n        # Seek to position from the start of the file\\n        if mode == os.SEEK_SET:\\n            self.buffer.seek(0)\\n            return self._traverse_codepoints(0, pos)\\n        # Seek to new position relative to current position\\n        elif mode == os.SEEK_CUR:\\n            start_pos = self._tell\\n            return self._traverse_codepoints(self._tell, pos)\\n        elif mode == os.SEEK_END:\\n            self.buffer.seek(0)\\n            dest_position = self.len - pos\\n            return self._traverse_codepoints(0, dest_position)\\n        else:\\n            raise ValueError(\\n                \\\"Invalid whence ({0}, should be 0, 1, or 2)\\\".format(mode)\\n            )\"\n    },\n    {\n      \"function\": \"SpooledStringIO.write\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `write` method no longer needs to call `tell` to determine the current position.\",\n      \"new_code\": \"def write(self, s):\\n        if not isinstance(s, text_type):\\n            raise TypeError(\\\"{0} expected, got {1}\\\".format(\\n                text_type.__name__,\\n                type(s).__name__\\n            ))\\n\\n        self.buffer.write(s.encode('utf-8'))\\n        if self._tell >= self._max_size:\\n            self.rollover()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.getvalue\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `getvalue` method no longer needs to call `tell` to determine the current position.\",\n      \"new_code\": \"def getvalue(self):\\n        \\\"\\\"\\\"Return the entire files contents\\\"\\\"\\\"\\n        pos = self._tell\\n        self.seek(0)\\n        val = self.read()\\n        self.seek(pos)\\n        return val\"\n    },\n    {\n      \"function\": \"SpooledIOBase.pos\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `pos` property no longer needs to call `tell` to determine the current position.\",\n      \"new_code\": \"@property\\ndef pos(self):\\n    return self._tell\"\n    },\n    {\n      \"function\": \"SpooledIOBase.truncate\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `truncate` method no longer needs to call `tell` to determine the current position.\",\n      \"new_code\": \"def truncate(self, size=None):\\n        \\\"\\\"\\\"\\n        Custom version of truncate that takes either no arguments (like the\\n        real SpooledTemporaryFile) or a single argument that truncates the\\n        value to a certain index location.\\n        \\\"\\\"\\\"\\n        if size is None:\\n            return self.buffer.truncate()\\n\\n        if size < 0:\\n            raise IOError(EINVAL, \\\"Negative size not allowed\\\")\\n\\n        # Emulate truncation to a particular location\\n        pos = self._tell\\n        self.seek(size)\\n        self.buffer.truncate(size)\\n        if pos < size:\\n            self.seek(pos)\"\n    }\n  ]\n}",
   "seconds": 65.2,
   "seed": 42
+ },
+ "boltons-heldout-005/NO47@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "bb780107b8082b14",
+  "prompt_tokens": 4590,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.8,
+  "seed": 42
+ },
+ "boltons-heldout-005/NO4@1001": {
+  "answer_tokens": 476,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "9706026b9a141865",
+  "prompt_tokens": 4698,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"SpooledIOBase.tell\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The `tell` method in `SpooledStringIO` has been simplified to return a cached value. To maintain consistency, the `tell` method in `SpooledIOBase` should also return a cached value if available.\",\n      \"new_code\": \"def tell(self):\\n        return self._tell if hasattr(self, '_tell') else self.buffer.tell()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.getvalue\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The `getvalue` method relies on `tell` to determine the current position. Since `tell` now returns a cached value, `getvalue` should use this cached value to ensure consistency.\",\n      \"new_code\": \"def getvalue(self):\\n        pos = self.tell()\\n        self.seek(0)\\n        val = self.read()\\n        self.seek(pos)\\n        return val\"\n    },\n    {\n      \"function\": \"SpooledIOBase.pos\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The `pos` property relies on `tell` to determine the current position. Since `tell` now returns a cached value, `pos` should use this cached value to ensure consistency.\",\n      \"new_code\": \"@property\\ndef pos(self):\\n    return self.tell()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.truncate\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The `truncate` method relies on `tell` to determine the current position. Since `tell` now returns a cached value, `truncate` should use this cached value to ensure consistency.\",\n      \"new_code\": \"def truncate(self, size=None):\\n        if size is None:\\n            return self.buffer.truncate()\\n\\n        if size < 0:\\n            raise IOError(EINVAL, \\\"Negative size not allowed\\\")\\n\\n        pos = self.tell()\\n        self.seek(size)\\n        self.buffer.truncate(size)\\n        if pos < size:\\n            self.seek(pos)\"\n    }\n  ]\n}",
+  "seconds": 35.6,
+  "seed": 1001
  },
  "boltons-heldout-005/NO4@42": {
   "answer_tokens": 841,
@@ -227,6 +457,16 @@
   "prompt_tokens": 4748,
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"SpooledStringIO.seek\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `seek` method needs to adjust its logic to handle this change.\",\n      \"new_code\": \"def seek(self, pos, mode=0):\\n        \\\"\\\"\\\"Traverse from offset to the specified codepoint\\\"\\\"\\\"\\n        # Seek to position from the start of the file\\n        if mode == os.SEEK_SET:\\n            self.buffer.seek(0)\\n            return self._traverse_codepoints(0, pos)\\n        # Seek to new position relative to current position\\n        elif mode == os.SEEK_CUR:\\n            start_pos = self.tell()\\n            return self._traverse_codepoints(start_pos, pos)\\n        elif mode == os.SEEK_END:\\n            self.buffer.seek(0)\\n            dest_position = self.len - pos\\n            return self._traverse_codepoints(0, dest_position)\\n        else:\\n            raise ValueError(\\n                \\\"Invalid whence ({0}, should be 0, 1, or 2)\\\".format(mode)\\n            )\"\n    },\n    {\n      \"function\": \"SpooledStringIO.write\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `write` method needs to adjust its logic to handle this change.\",\n      \"new_code\": \"def write(self, s):\\n        if not isinstance(s, text_type):\\n            raise TypeError(\\\"{0} expected, got {1}\\\".format(\\n                text_type.__name__,\\n                type(s).__name__\\n            ))\\n\\n        self.buffer.write(s.encode('utf-8'))\\n        if self.tell() >= self._max_size:\\n            self.rollover()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.getvalue\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `getvalue` method needs to adjust its logic to handle this change.\",\n      \"new_code\": \"def getvalue(self):\\n        \\\"\\\"\\\"Return the entire files contents\\\"\\\"\\\"\\n        pos = self.tell()\\n        self.seek(0)\\n        val = self.read()\\n        self.seek(pos)\\n        return val\"\n    },\n    {\n      \"function\": \"SpooledIOBase.pos\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `pos` property needs to adjust its logic to handle this change.\",\n      \"new_code\": \"@property\\ndef pos(self):\\n    return self.tell()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.truncate\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `truncate` method needs to adjust its logic to handle this change.\",\n      \"new_code\": \"def truncate(self, size=None):\\n        \\\"\\\"\\\"\\n        Custom version of truncate that takes either no arguments (like the\\n        real SpooledTemporaryFile) or a single argument that truncates the\\n        value to a certain index location.\\n        \\\"\\\"\\\"\\n        if size is None:\\n            return self.buffer.truncate()\\n\\n        if size < 0:\\n            raise IOError(EINVAL, \\\"Negative size not allowed\\\")\\n\\n        # Emulate truncation to a particular location\\n        pos = self.tell()\\n        self.seek(size)\\n        self.buffer.truncate(size)\\n        if pos < size:\\n            self.seek(pos)\"\n    }\n  ]\n}",
   "seconds": 60.0,
+  "seed": 42
+ },
+ "boltons-heldout-005/NO7@42": {
+  "answer_tokens": 734,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "50e28657641ebd11",
+  "prompt_tokens": 4818,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"SpooledStringIO.seek\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `seek` method needs to use this new value to ensure correct behavior.\",\n      \"new_code\": \"def seek(self, pos, mode=0):\\n        \\\"\\\"\\\"Traverse from offset to the specified codepoint\\\"\\\"\\\"\\n        # Seek to position from the start of the file\\n        if mode == os.SEEK_SET:\\n            self.buffer.seek(0)\\n            return self._traverse_codepoints(0, pos)\\n        # Seek to new position relative to current position\\n        elif mode == os.SEEK_CUR:\\n            start_pos = self.tell()\\n            return self._traverse_codepoints(start_pos, pos)\\n        elif mode == os.SEEK_END:\\n            self.buffer.seek(0)\\n            dest_position = self.len - pos\\n            return self._traverse_codepoints(0, dest_position)\\n        else:\\n            raise ValueError(\\n                \\\"Invalid whence ({0}, should be 0, 1, or 2)\\\".format(mode)\\n            )\"\n    },\n    {\n      \"function\": \"SpooledStringIO.write\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `write` method needs to use this new value to ensure correct behavior.\",\n      \"new_code\": \"def write(self, s):\\n        if not isinstance(s, text_type):\\n            raise TypeError(\\\"{0} expected, got {1}\\\".format(\\n                text_type.__name__,\\n                type(s).__name__\\n            ))\\n\\n        self.buffer.write(s.encode('utf-8'))\\n        if self.tell() >= self._max_size:\\n            self.rollover()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.getvalue\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `getvalue` method needs to use this new value to ensure correct behavior.\",\n      \"new_code\": \"def getvalue(self):\\n        pos = self.tell()\\n        self.seek(0)\\n        val = self.read()\\n        self.seek(pos)\\n        return val\"\n    },\n    {\n      \"function\": \"SpooledIOBase.pos\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `pos` property needs to use this new value to ensure correct behavior.\",\n      \"new_code\": \"@property\\ndef pos(self):\\n    return self.tell()\"\n    },\n    {\n      \"function\": \"SpooledIOBase.truncate\",\n      \"file\": \"boltons/ioutils.py\",\n      \"reason\": \"The new `tell` method returns the codepoint position directly, so the `truncate` method needs to use this new value to ensure correct behavior.\",\n      \"new_code\": \"def truncate(self, size=None):\\n        if size is None:\\n            size = self.tell()\\n        if size < 0:\\n            raise ValueError(\\\"Negative size not allowed\\\")\\n        self.seek(size)\\n        self.buffer.truncate()\"\n    }\n  ]\n}",
+  "seconds": 53.2,
   "seed": 42
  }
 }
