@@ -299,6 +299,16 @@
   "seconds": 34.9,
   "seed": 42
  },
+ "mobx-heldout-004/FULL@1001": {
+  "answer_tokens": 310,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "75e835e74a82024a",
+  "prompt_tokens": 4557,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"extendObservable\",\n      \"file\": \"src/api/extendobservable.ts\",\n      \"reason\": \"The function signature has changed to make the 'properties' parameter optional.\",\n      \"new_code\": \"function extendObservable<A extends Object, B extends Object>(\\n    target: A,\\n    properties?: B,\\n    decorators?: { [K in keyof B]?: Function },\\n    options?: CreateObservableOptions\\n): A & B {\\n    if (process.env.NODE_ENV !== \\\"production\\\") {\\n        invariant(\\n            arguments.length >= 2 && arguments.length <= 4,\\n            \\\"'extendObservable' expected 2-4 arguments\\\"\\n        )\\n        invariant(\\n            typeof target === \\\"object\\\",\\n            \\\"'extendObservable' expects an object as first argument\\\"\\n        )\\n        invariant(\\n            !isObservableMap(target),\\n            \\\"'extendObservable' should not be used on maps, use map.merge instead\\\"\\n        )\\n    }\\n\\n    options = asCreateObservableOptions(options)\\n    const defaultDecorator = getDefaultDecoratorFromObjectOptions(options)\\n    asObservableObject(target, options.name, defaultDecorator.enhancer) // make sure object is observable, even without initial props\\n    if (properties)\\n        extendObservableObjectWithProperties(target, properties, decorators, defaultDecorator)\\n    return target as any\\n}\"\n    }\n  ]\n}",
+  "seconds": 24.4,
+  "seed": 1001
+ },
  "mobx-heldout-004/FULL@42": {
   "answer_tokens": 310,
   "done_reason": "stop",
@@ -308,6 +318,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"extendObservable\",\n      \"file\": \"src/api/extendobservable.ts\",\n      \"reason\": \"The function signature has changed to make the 'properties' parameter optional.\",\n      \"new_code\": \"function extendObservable<A extends Object, B extends Object>(\\n    target: A,\\n    properties?: B,\\n    decorators?: { [K in keyof B]?: Function },\\n    options?: CreateObservableOptions\\n): A & B {\\n    if (process.env.NODE_ENV !== \\\"production\\\") {\\n        invariant(\\n            arguments.length >= 2 && arguments.length <= 4,\\n            \\\"'extendObservable' expected 2-4 arguments\\\"\\n        )\\n        invariant(\\n            typeof target === \\\"object\\\",\\n            \\\"'extendObservable' expects an object as first argument\\\"\\n        )\\n        invariant(\\n            !isObservableMap(target),\\n            \\\"'extendObservable' should not be used on maps, use map.merge instead\\\"\\n        )\\n    }\\n\\n    options = asCreateObservableOptions(options)\\n    const defaultDecorator = getDefaultDecoratorFromObjectOptions(options)\\n    asObservableObject(target, options.name, defaultDecorator.enhancer) // make sure object is observable, even without initial props\\n    if (properties)\\n        extendObservableObjectWithProperties(target, properties, decorators, defaultDecorator)\\n    return target as any\\n}\"\n    }\n  ]\n}",
   "seconds": 27.3,
   "seed": 42
+ },
+ "mobx-heldout-004/NO47@1001": {
+  "answer_tokens": 521,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "136eb36f3e9132bc",
+  "prompt_tokens": 4552,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"getDefaultDecoratorFromObjectOptions\",\n      \"file\": \"src/api/extendobservable.ts\",\n      \"reason\": \"The new implementation of extendObservable relies on a new function getDefaultDecoratorFromObjectOptions to determine the default decorator.\",\n      \"new_code\": \"function getDefaultDecoratorFromObjectOptions(options: CreateObservableOptions): IObservableDecorator {\\n    return options.defaultDecorator || (options.deep === false ? refDecorator : deepDecorator);\\n}\"\n    },\n    {\n      \"function\": \"extendObservableObjectWithProperties\",\n      \"file\": \"src/api/extendobservable.ts\",\n      \"reason\": \"The new implementation of extendObservable relies on a new function extendObservableObjectWithProperties to handle the extension of observable properties.\",\n      \"new_code\": \"function extendObservableObjectWithProperties<A extends Object, B extends Object>(\\n    target: A,\\n    properties: B,\\n    decorators?: { [K in keyof B]?: Function },\\n    defaultDecorator: IObservableDecorator\\n): void {\\n    startBatch();\\n    try {\\n        for (let key in properties) {\\n            const descriptor = Object.getOwnPropertyDescriptor(properties, key)!;\\n            if (process.env.NODE_ENV !== \\\"production\\\") {\\n                if (Object.getOwnPropertyDescriptor(target, key))\\n                    fail(\\n                        `'extendObservable' can only be used to introduce new properties. Use 'set' or 'decorate' instead. The property '${key}' already exists on '${target}'`\\n                    );\\n                if (isComputed(descriptor.value))\\n                    fail(\\n                        `Passing a 'computed' as initial property value is no longer supported by extendObservable. Use a getter or decorator instead`\\n                    );\\n            }\\n            const decorator =\\n                decorators && key in decorators\\n                    ? decorators[key]\\n                    : descriptor.get\\n                        ? computedDecorator\\n                        : defaultDecorator;\\n            if (process.env.NODE_ENV !== \\\"production\\\" && typeof decorator !== \\\"function\\\")\\n                return fail(`Not a valid decorator for '${key}', got: ${decorator}`);\\n\\n            const resultDescriptor = decorator!(target, key, descriptor, true);\\n            if (\\n                resultDescriptor // otherwise, assume already applied, due to `applyToInstance`\\n            )\\n                Object.defineProperty(target, key, resultDescriptor);\\n        }\\n    } finally {\\n        endBatch();\\n    }\\n}\"\n    }\n  ]\n}",
+  "seconds": 38.5,
+  "seed": 1001
  },
  "mobx-heldout-004/NO47@42": {
   "answer_tokens": 525,
@@ -319,6 +339,16 @@
   "seconds": 38.8,
   "seed": 42
  },
+ "mobx-heldout-004/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "23b3b41b53e2c028",
+  "prompt_tokens": 4452,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.7,
+  "seed": 1001
+ },
  "mobx-heldout-004/NO4@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -328,6 +358,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.7,
   "seed": 42
+ },
+ "mobx-heldout-004/NO6@1001": {
+  "answer_tokens": 218,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "f28dfccb99659b9d",
+  "prompt_tokens": 4519,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"extendObservable\",\n      \"file\": \"src/api/observable.ts\",\n      \"reason\": \"The `extendObservable` function now accepts an optional `properties` parameter, which requires changes in how it is called.\",\n      \"new_code\": \"object<T = any>(\\n    props: T,\\n    decorators?: { [K in keyof T]: Function },\\n    options?: CreateObservableOptions\\n): T & IObservableObject {\\n    if (typeof arguments[1] === \\\"string\\\") incorrectlyUsedAsDecorator(\\\"object\\\")\\n    const o = asCreateObservableOptions(options)\\n    if (o.proxy === false) {\\n        return extendObservable({}, props, decorators, o) as any\\n    } else {\\n        const base = extendObservable({}, EMPTY_OBJECT, EMPTY_OBJECT, o) as any\\n        const proxy = createDynamicObservableObject(base)\\n        return extendObservable(proxy, props, decorators, o)\\n    }\\n},\"\n    }\n  ]\n}",
+  "seconds": 17.4,
+  "seed": 1001
  },
  "mobx-heldout-004/NO6@42": {
   "answer_tokens": 218,
@@ -339,6 +379,16 @@
   "seconds": 17.4,
   "seed": 42
  },
+ "mobx-heldout-004/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "2e162448149ab090",
+  "prompt_tokens": 4410,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 1001
+ },
  "mobx-heldout-004/NO7@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -348,6 +398,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.5,
   "seed": 42
+ },
+ "mobx-heldout-005/FULL@1001": {
+  "answer_tokens": 241,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "632566258ed3363e",
+  "prompt_tokens": 3147,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"observeObservable\",\n      \"file\": \"src/api/observe.ts\",\n      \"reason\": \"The `observeObservable` function needs to be updated to reflect the change in the `observeObservableObject` function's signature.\",\n      \"new_code\": \"function observeObservable(thing, listener, fireImmediately: boolean) {\\n    if (isObservableArray(thing))\\n        return thing.observe(listener);\\n    if (isObservableMap(thing))\\n        return thing.observe(listener);\\n    if (isObservableObject(thing))\\n        return observeObservableObject(listener, fireImmediately);\\n    if (thing instanceof ObservableValue || thing instanceof ComputedValue)\\n        return thing.observe(listener, fireImmediately);\\n    if (isPlainObject(thing)) {\\n        deprecated(\\\"Passing plain objects to intercept / observe is deprecated and will be removed in 3.0\\\");\\n        return observeObservable(observable(<Object> thing), listener, fireImmediately);\\n    }\\n    invariant(false, \\\"first argument of observe should be some observable value or plain object\\\");\\n}\"\n    }\n  ]\n}",
+  "seconds": 18.2,
+  "seed": 1001
  },
  "mobx-heldout-005/FULL@42": {
   "answer_tokens": 241,
@@ -359,6 +419,16 @@
   "seconds": 20.5,
   "seed": 42
  },
+ "mobx-heldout-005/NO47@1001": {
+  "answer_tokens": 247,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "38f4d741d29c572e",
+  "prompt_tokens": 3085,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"ObservableMap.observe\",\n      \"file\": \"src/types/observablemap.ts\",\n      \"reason\": \"The `observe` method in `ObservableMap` has the same signature as the changed `observeObservableObject` function and should be updated to match the new style.\",\n      \"new_code\": \"observe(listener: (changes: IMapChange<V>) => void, fireImmediately?: boolean): Lambda {\\n\\tinvariant(fireImmediately !== true, \\\"`observe` doesn't support the fire immediately property for observable maps.\\\");\\n\\treturn registerListener(this, listener);\\n}\"\n    },\n    {\n      \"function\": \"ObservableValue.observe\",\n      \"file\": \"src/types/observablevalue.ts\",\n      \"reason\": \"The `observe` method in `ObservableValue` has a similar signature and should be updated to match the new style.\",\n      \"new_code\": \"observe(listener: (newValue: T, oldValue: T) => void, fireImmediately?: boolean): Lambda {\\n\\tif (fireImmediately)\\n\\t\\tlistener(this.value, undefined);\\n\\treturn registerListener(this, listener);\\n}\"\n    }\n  ]\n}",
+  "seconds": 17.9,
+  "seed": 1001
+ },
  "mobx-heldout-005/NO47@42": {
   "answer_tokens": 264,
   "done_reason": "stop",
@@ -368,6 +438,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"src.types.observablemap.ObservableMap.observe\",\n      \"file\": \"src/types/observablemap.ts\",\n      \"reason\": \"The function signature of `observeObservableObject` has changed, and `ObservableMap.observe` has a similar structure that needs to be updated to match the new signature.\",\n      \"new_code\": \"observe(listener: (changes: IMapChange<V>) => void, fireImmediately?: boolean): Lambda {\\n\\tinvariant(fireImmediately !== true, \\\"`observe` doesn't support the fire immediately property for observable maps.\\\");\\n\\treturn registerListener(this, listener);\\n}\"\n    },\n    {\n      \"function\": \"src.types.observablevalue.ObservableValue.observe\",\n      \"file\": \"src/types/observablevalue.ts\",\n      \"reason\": \"The function signature of `observeObservableObject` has changed, and `ObservableValue.observe` has a similar structure that needs to be updated to match the new signature.\",\n      \"new_code\": \"observe(listener: (newValue: T, oldValue: T) => void, fireImmediately?: boolean): Lambda {\\n\\tif (fireImmediately)\\n\\t\\tlistener(this.value, undefined);\\n\\treturn registerListener(this, listener);\\n}\"\n    }\n  ]\n}",
   "seconds": 19.0,
   "seed": 42
+ },
+ "mobx-heldout-005/NO4@1001": {
+  "answer_tokens": 248,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "8cab93ce4528ebef",
+  "prompt_tokens": 3112,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"observeObservable\",\n      \"file\": \"src/api/observe.ts\",\n      \"reason\": \"The `observeObservable` function needs to be updated to reflect the change in the `observeObservableObject` function's signature.\",\n      \"new_code\": \"function observeObservable(thing, listener, fireImmediately: boolean) {\\n\\tif (isObservableArray(thing))\\n\\t\\treturn thing.observe(listener);\\n\\tif (isObservableMap(thing))\\n\\t\\treturn thing.observe(listener);\\n\\tif (isObservableObject(thing))\\n\\t\\treturn observeObservableObject(listener, fireImmediately);\\n\\tif (thing instanceof ObservableValue || thing instanceof ComputedValue)\\n\\t\\treturn thing.observe(listener, fireImmediately);\\n\\tif (isPlainObject(thing)) {\\n\\t\\tdeprecated(\\\"Passing plain objects to intercept / observe is deprecated and will be removed in 3.0\\\");\\n\\t\\treturn observeObservable(observable(<Object> thing), listener, fireImmediately);\\n\\t}\\n\\tinvariant(false, \\\"first argument of observe should be some observable value or plain object\\\");\\n}\"\n    }\n  ]\n}",
+  "seconds": 18.0,
+  "seed": 1001
  },
  "mobx-heldout-005/NO4@42": {
   "answer_tokens": 248,
@@ -379,6 +459,16 @@
   "seconds": 18.0,
   "seed": 42
  },
+ "mobx-heldout-005/NO6@1001": {
+  "answer_tokens": 251,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "1d1f4c9ff1b4379f",
+  "prompt_tokens": 3085,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"observeObservable\",\n      \"file\": \"src/api/observe.ts\",\n      \"reason\": \"The `observeObservable` function now needs to pass `this` instead of `thing` to `observeObservableObject`.\",\n      \"new_code\": \"function observeObservable(thing, listener, fireImmediately: boolean) {\\n\\tif (isObservableArray(thing))\\n\\t\\treturn thing.observe(listener);\\n\\tif (isObservableMap(thing))\\n\\t\\treturn thing.observe(listener);\\n\\tif (isObservableObject(thing))\\n\\t\\treturn observeObservableObject.call(thing, listener, fireImmediately);\\n\\tif (thing instanceof ObservableValue || thing instanceof ComputedValue)\\n\\t\\treturn thing.observe(listener, fireImmediately);\\n\\tif (isPlainObject(thing)) {\\n\\t\\tdeprecated(\\\"Passing plain objects to intercept / observe is deprecated and will be removed in 3.0\\\");\\n\\t\\treturn observeObservable(observable(<Object> thing), listener, fireImmediately);\\n\\t}\\n\\tinvariant(false, \\\"first argument of observe should be some observable value or plain object\\\");\\n}\"\n    }\n  ]\n}",
+  "seconds": 18.1,
+  "seed": 1001
+ },
  "mobx-heldout-005/NO6@42": {
   "answer_tokens": 254,
   "done_reason": "stop",
@@ -388,6 +478,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"src.api.observe.observeObservable\",\n      \"file\": \"src/api/observe.ts\",\n      \"reason\": \"The `observeObservableObject` function no longer takes the `object` parameter, so the caller must be updated to pass the correct arguments.\",\n      \"new_code\": \"function observeObservable(thing, listener, fireImmediately: boolean) {\\n\\tif (isObservableArray(thing))\\n\\t\\treturn thing.observe(listener);\\n\\tif (isObservableMap(thing))\\n\\t\\treturn thing.observe(listener);\\n\\tif (isObservableObject(thing))\\n\\t\\treturn observeObservableObject(listener, fireImmediately);\\n\\tif (thing instanceof ObservableValue || thing instanceof ComputedValue)\\n\\t\\treturn thing.observe(listener, fireImmediately);\\n\\tif (isPlainObject(thing)) {\\n\\t\\tdeprecated(\\\"Passing plain objects to intercept / observe is deprecated and will be removed in 3.0\\\");\\n\\t\\treturn observeObservable(observable(<Object> thing), listener, fireImmediately);\\n\\t}\\n\\tinvariant(false, \\\"first argument of observe should be some observable value or plain object\\\");\\n}\"\n    }\n  ]\n}",
   "seconds": 18.3,
   "seed": 42
+ },
+ "mobx-heldout-005/NO7@1001": {
+  "answer_tokens": 109,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b9bde68f3bd13dd7",
+  "prompt_tokens": 3137,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"observeObservable\",\n      \"file\": \"src/api/observe.ts\",\n      \"reason\": \"The observeObservable function now needs to pass 'this' as the first argument to observeObservableObject.\",\n      \"new_code\": \"export function observeObservable(object: IIsObservableObject, callback: (changes: IObjectChange) => void, fireImmediately?: boolean): Lambda {\\n    return observeObservableObject(object, callback, fireImmediately);\\n}\"\n    }\n  ]\n}",
+  "seconds": 8.5,
+  "seed": 1001
  },
  "mobx-heldout-005/NO7@42": {
   "answer_tokens": 109,
