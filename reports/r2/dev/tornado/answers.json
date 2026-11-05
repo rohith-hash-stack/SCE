@@ -1619,6 +1619,16 @@
   "seconds": 76.4,
   "seed": 42
  },
+ "tornado-forward-017/NO47@1001": {
+  "answer_tokens": 1181,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "4cd0f5cd53c0561b",
+  "prompt_tokens": 6113,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"tornado.web.RequestHandler.static_url\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The `static_url` method now needs to pass the `settings` dictionary to `make_static_url`.\",\n      \"new_code\": \"def static_url(self, path, include_host=None):\\n        \\\"\\\"\\\"Returns a static URL for the given relative static file path.\\n\\n        This method requires you set the ``static_path`` setting in your\\n        application (which specifies the root directory of your static\\n        files).\\n\\n        We append ``?v=<signature>`` to the returned URL, which makes our\\n        static file handler set an infinite expiration header on the\\n        returned content. The signature is based on the content of the\\n        file.\\n\\n        By default this method returns URLs relative to the current\\n        host, but if ``include_host`` is true the URL returned will be\\n        absolute.  If this handler has an ``include_host`` attribute,\\n        that value will be used as the default for all `static_url`\\n        calls that do not pass ``include_host`` as a keyword argument.\\n        \\\"\\\"\\\"\\n        self.require_setting(\\\"static_path\\\", \\\"static_url\\\")\\n        static_handler_class = self.settings.get(\\n            \\\"static_handler_class\\\", StaticFileHandler)\\n\\n        if include_host is None:\\n            include_host = getattr(self, \\\"include_host\\\", False)\\n\\n        if include_host:\\n            base = self.request.protocol + \\\"://\\\" + self.request.host\\n        else:\\n            base = \\\"\\\"\\n        return base + static_handler_class.make_static_url(self.settings, path)\"\n    },\n    {\n      \"function\": \"demos.s3server.s3server.ObjectHandler.put\",\n      \"file\": \"demos/s3server/s3server.py\",\n      \"reason\": \"The `put` method now needs to use the `settings` dictionary to get the `static_path`.\",\n      \"new_code\": \"def put(self, bucket, object_name):\\n        object_name = urllib.unquote(object_name)\\n        bucket_dir = os.path.abspath(os.path.join(\\n            self.application.settings['static_path'], bucket))\\n        if not bucket_dir.startswith(self.application.settings['static_path']) or \\\\\\n           not os.path.isdir(bucket_dir):\\n            raise web.HTTPError(404)\\n        path = self._object_path(bucket, object_name)\\n        if not path.startswith(bucket_dir) or os.path.isdir(path):\\n            raise web.HTTPError(403)\\n        directory = os.path.dirname(path)\\n        if not os.path.exists(directory):\\n            os.makedirs(directory)\\n        object_file = open(path, \\\"w\\\")\\n        object_file.write(self.request.body)\\n        object_file.close()\\n        self.finish()\"\n    },\n    {\n      \"function\": \"demos.s3server.s3server.BucketHandler.get\",\n      \"file\": \"demos/s3server/s3server.py\",\n      \"reason\": \"The `get` method now needs to use the `settings` dictionary to get the `static_path`.\",\n      \"new_code\": \"def get(self, bucket_name):\\n        prefix = self.get_argument(\\\"prefix\\\", u\\\"\\\")\\n        marker = self.get_argument(\\\"marker\\\", u\\\"\\\")\\n        max_keys = int(self.get_argument(\\\"max-keys\\\", 50000))\\n        path = os.path.abspath(os.path.join(self.application.settings['static_path'],\\n                                            bucket_name))\\n        terse = int(self.get_argument(\\\"terse\\\", 0))\\n        if not path.startswith(self.application.settings['static_path']) or \\\\\\n           not os.path.isdir(path):\\n            raise web.HTTPError(404)\\n        object_names = []\\n        for root, dirs, files in os.walk(path):\\n            for file_name in files:\\n                object_names.append(os.path.join(root, file_name))\\n        skip = len(path) + 1\\n        for i in range(self.application.bucket_depth):\\n            skip += 2 * (i + 1) + 1\\n        object_names = [n[skip:] for n in object_names]\\n        object_names.sort()\\n        contents = []\\n\\n        start_pos = 0\\n        if marker:\\n            start_pos = bisect.bisect_right(object_names, marker, start_pos)\\n        if prefix:\\n            start_pos = bisect.bisect_left(object_names, prefix, start_pos)\\n\\n        truncated = False\\n        for object_name in object_names[start_pos:]:\\n            if not object_name.startswith(prefix):\\n                break\\n            if len(contents) >= max_keys:\\n                truncated = True\\n                break\\n            object_path = self._object_path(bucket_name, object_name)\\n            c = {\\\"Key\\\": object_name}\\n            if not terse:\\n                info = os.stat(object_path)\\n                c.update({\\n                    \\\"LastModified\\\": datetime.datetime.utcfromtimestamp(\\n                        info.st_mtime),\\n                    \\\"Size\\\": info.st_size,\\n                })\\n            contents.append(c)\\n            marker = object_name\\n        self.render_xml({\\\"ListBucketResult\\\": {\\n            \\\"Name\\\": bucket_name,\\n            \\\"Prefix\\\": prefix,\\n            \\\"Marker\\\": marker,\\n            \\\"MaxKeys\\\": max_keys,\\n            \\\"IsTruncated\\\": truncated,\\n            \\\"Contents\\\": contents,\\n        }})\"\n    }\n  ]\n}",
+  "seconds": 87.7,
+  "seed": 1001
+ },
  "tornado-forward-017/NO47@42": {
   "answer_tokens": 922,
   "done_reason": "stop",
@@ -1669,6 +1679,16 @@
   "seconds": 106.1,
   "seed": 42
  },
+ "tornado-forward-017/NO7@1001": {
+  "answer_tokens": 1354,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "91fd4f494f3cf10e",
+  "prompt_tokens": 5920,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"tornado.web.StaticFileHandler.get\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The `get_absolute_path` method now requires `settings` as its first argument, so the `get` method must pass `self.settings` to it.\",\n      \"new_code\": \"def get(self, path, include_body=True):\\n        path = self.parse_url_path(path)\\n        if not self.set_headers(path):\\n            return\\n\\n        body = self.get_content(path)\\n        if not body:\\n            return\\n\\n        self.set_etag_header()\\n        if self.check_etag_header():\\n            self.set_status(304)\\n            return\\n\\n        self.set_header(\\\"Accept-Ranges\\\", \\\"bytes\\\")\\n        request_range = None\\n        range_header = self.request.headers.get(\\\"Range\\\")\\n        if range_header:\\n            request_range = httputil.parse_request_range(range_header)\\n            if not request_range:\\n                # 416: Range Not Satisfiable\\n                self.set_status(416)\\n                self.set_header(\\\"Content-Type\\\", \\\"text/plain\\\")\\n                self.write(utf8(\\\"The provided Range header is not valid: %r\\\\n\\\"\\n                                \\\"Note: multiple ranges are not supported.\\\"\\n                                 %(range_header, )))\\n                return\\n\\n        with open(self.get_absolute_path(self.settings, path), \\\"rb\\\") as file:\\n            data = file.read()\\n            if request_range:\\n                # 206: Partial Content\\n                self.set_status(206)\\n                content_range = httputil.get_content_range(data, request_range)\\n                self.set_header(\\\"Content-Range\\\", content_range)\\n                data = data[request_range]\\n            if include_body:\\n                self.write(data)\\n            else:\\n                assert self.request.method == \\\"HEAD\\\"\\n                self.set_header(\\\"Content-Length\\\", len(data))\"\n    },\n    {\n      \"function\": \"tornado.web.StaticFileHandler.get_content\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The `get_absolute_path` method now requires `settings` as its first argument, so the `get_content` method must pass `self.settings` to it.\",\n      \"new_code\": \"def get_content(self, path):\\n        \\\"\\\"\\\"Retrieve the content of the requested resource which is located\\n        at the given absolute ``path``.\\n        \\\"\\\"\\\"\\n        abspath = self.get_absolute_path(self.settings, path)\\n        with open(abspath, \\\"rb\\\") as file:\\n            return file.read()\\n        return None\"\n    },\n    {\n      \"function\": \"tornado.web.StaticFileHandler.set_headers\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The `get_absolute_path` method now requires `settings` as its first argument, so the `set_headers` method must pass `self.settings` to it.\",\n      \"new_code\": \"def set_headers(self, path):\\n        \\\"\\\"\\\"Set the response headers in order to ensure that client browsers\\n        will cache the requested resource and not proceed to retrieve its content\\n        in the case of a 304 response.\\n        \\\"\\\"\\\"\\n        abspath = self.get_absolute_path(self.settings, path)\\n        stat_result = os.stat(abspath)\\n        modified = datetime.datetime.utcfromtimestamp(stat_result[stat.ST_MTIME])\\n\\n        self.set_header(\\\"Last-Modified\\\", modified)\\n\\n        mime_type, encoding = mimetypes.guess_type(abspath)\\n        if mime_type:\\n            self.set_header(\\\"Content-Type\\\", mime_type)\\n\\n        cache_time = self.get_cache_time(path, modified, mime_type)\\n\\n        if cache_time > 0:\\n            self.set_header(\\\"Expires\\\", datetime.datetime.utcnow() +\\n                            datetime.timedelta(seconds=cache_time))\\n            self.set_header(\\\"Cache-Control\\\", \\\"max-age=\\\" + str(cache_time))\\n\\n        self.set_extra_headers(path)\\n\\n        # Check the If-Modified-Since, and don't send the result if the\\n        # content has not been modified\\n        ims_value = self.request.headers.get(\\\"If-Modified-Since\\\")\\n        if ims_value is not None:\\n            date_tuple = email.utils.parsedate(ims_value)\\n            if_since = datetime.datetime(*date_tuple[:6])\\n            if if_since >= modified:\\n                self.set_status(304)\\n                return False\\n        return True\"\n    },\n    {\n      \"function\": \"tornado.web.RequestHandler.static_url\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The `make_static_url` method now requires `settings` as its first argument, so the `static_url` method must pass `self.settings` to it.\",\n      \"new_code\": \"def static_url(self, path, include_host=None):\\n        \\\"\\\"\\\"Returns a static URL for the given relative static file path.\\n\\n        This method requires you set the ``static_path`` setting in your\\n        application (which specifies the root directory of your static\\n        files).\\n\\n        We append ``?v=<signature>`` to the returned URL, which makes our\\n        static file handler set an infinite expiration header on the\\n        returned content. The signature is based on the content of the\\n        file.\\n\\n        By default this method returns URLs relative to the current\\n        host, but if ``include_host`` is true the URL returned will be\\n        absolute.  If this handler has an ``include_host`` attribute,\\n        that value will be used as the default for all `static_url`\\n        calls that do not pass ``include_host`` as a keyword argument.\\n        \\\"\\\"\\\"\\n        self.require_setting(\\\"static_path\\\", \\\"static_url\\\")\\n        static_handler_class = self.settings.get(\\n            \\\"static_handler_class\\\", StaticFileHandler)\\n\\n        if include_host is None:\\n            include_host = getattr(self, \\\"include_host\\\", False)\\n\\n        if include_host:\\n            base = self.request.protocol + \\\"://\\\" + self.request.host\\n        else:\\n            base = \\\"\\\"\\n        return base + static_handler_class.make_static_url(self.settings, path)\"\n    }\n  ]\n}",
+  "seconds": 104.7,
+  "seed": 1001
+ },
  "tornado-forward-017/NO7@42": {
   "answer_tokens": 1456,
   "done_reason": "stop",
@@ -1698,6 +1718,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 11.4,
   "seed": 42
+ },
+ "tornado-forward-018/NO47@1001": {
+  "answer_tokens": 404,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "e1b51170dc907147",
+  "prompt_tokens": 8334,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"tornado.tcpserver.TCPServer.bind\",\n      \"file\": \"tornado/tcpserver.py\",\n      \"reason\": \"The `bind_sockets` function now accepts an additional `reuse_port` parameter. To maintain compatibility, the `bind` method in `TCPServer` should also accept this parameter and pass it to `bind_sockets`.\",\n      \"new_code\": \"def bind(self, port, address=None, family=socket.AF_UNSPEC, backlog=128, reuse_port=False):\\n        \\\"\\\"\\\"Binds this server to the given port on the given address.\\n\\n        To start the server, call `start`. If you want to run this server\\n        in a single process, you can call `listen` as a shortcut to the\\n        sequence of `bind` and `start` calls.\\n\\n        Address may be either an IP address or hostname.  If it's a hostname,\\n        the server will listen on all IP addresses associated with the\\n        name.  Address may be an empty string or None to listen on all\\n        available interfaces.  Family may be set to either `socket.AF_INET`\\n        or `socket.AF_INET6` to restrict to IPv4 or IPv6 addresses, otherwise\\n        both will be used if available.\\n\\n        The ``backlog`` argument has the same meaning as for\\n        `socket.listen <socket.socket.listen>`.\\n\\n        This method may be called multiple times prior to `start` to listen\\n        on multiple ports or interfaces.\\n        \\\"\\\"\\\"\\n        sockets = bind_sockets(port, address=address, family=family,\\n                               backlog=backlog, reuse_port=reuse_port)\\n        if self._started:\\n            self.add_sockets(sockets)\\n        else:\\n            self._pending_sockets.extend(sockets)\"\n    }\n  ]\n}",
+  "seconds": 33.3,
+  "seed": 1001
  },
  "tornado-forward-018/NO47@42": {
   "answer_tokens": 630,
@@ -1749,6 +1779,16 @@
   "seconds": 55.6,
   "seed": 42
  },
+ "tornado-forward-018/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "e0a669330b2fa8bc",
+  "prompt_tokens": 8532,
+  "raw": "{\"changes\": []}",
+  "seconds": 11.7,
+  "seed": 1001
+ },
  "tornado-forward-018/NO7@42": {
   "answer_tokens": 390,
   "done_reason": "stop",
@@ -1778,6 +1818,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"StaticFileHandler.get\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The `validate_absolute_path` method now requires an additional `root` parameter, which must be passed from the `get` method.\",\n      \"new_code\": \"def get(self, path, include_body=True):\\n        # Set up our path instance variables.\\n        self.path = self.parse_url_path(path)\\n        del path  # make sure we don't refer to path instead of self.path again\\n        absolute_path = self.get_absolute_path(self.settings, self.path)\\n        self.absolute_path = self.validate_absolute_path(self.root, absolute_path)\\n        if self.absolute_path is None:\\n            return\\n\\n        self.modified = self.get_modified_time()\\n        self.set_headers()\\n\\n        if self.should_return_304():\\n            self.set_status(304)\\n            return\\n\\n        request_range = None\\n        range_header = self.request.headers.get(\\\"Range\\\")\\n        if range_header:\\n            request_range = httputil._parse_request_range(range_header)\\n            if not request_range:\\n                self.set_status(416)  # Range Not Satisfiable\\n                self.set_header(\\\"Content-Type\\\", \\\"text/plain\\\")\\n                self.write(\\\"The provided Range header is not valid: %r\\\\n\\\"\\n                           \\\"Note: multiple ranges are not supported.\\\"\\n                           % range_header)\\n                return\\n\\n        if request_range:\\n            start, end = request_range\\n            size = self.get_content_size()\\n            if start < 0:\\n                start += size\\n            # Note: only return HTTP 206 if less than the entire range has been\\n            # requested. Not only is this semantically correct, but Chrome\\n            # refuses to play audio if it gets an HTTP 206 in response to\\n            # ``Range: bytes=0-``.\\n            if size != (end or size) - (start or 0):\\n                self.set_status(206)  # Partial Content\\n                self.set_header(\\\"Content-Range\\\",\\n                                httputil._get_content_range(start, end, size))\\n        else:\\n            start = end = None\\n        content = self.get_content(self.absolute_path, start, end)\\n        if isinstance(content, bytes_type):\\n            content = [content]\\n        content_length = 0\\n        for chunk in content:\\n            if include_body:\\n                self.write(chunk)\\n            else:\\n                content_length += len(chunk)\\n        if not include_body:\\n            assert self.request.method == \\\"HEAD\\\"\\n            self.set_header(\\\"Content-Length\\\", content_length)\"\n    }\n  ]\n}",
   "seconds": 49.3,
   "seed": 42
+ },
+ "tornado-forward-019/NO47@1001": {
+  "answer_tokens": 787,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "fbffa6f9df41f7ec",
+  "prompt_tokens": 5650,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"StaticFileHandler.get_absolute_path\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The new `validate_absolute_path` method requires the `root` parameter, which is now passed from `get_absolute_path`.\",\n      \"new_code\": \"```python\\n@classmethod\\ndef get_absolute_path(cls, settings, path):\\n    \\\"\\\"\\\"Returns the absolute location of ``path``.\\n\\n    This class method may be overridden in subclasses.  By default\\n    it returns a filesystem path, but other strings may be used\\n    as long as they are unique and understood by the subclass's\\n    overridden `get_content`.\\n    \\\"\\\"\\\"\\n    root = settings['static_path']\\n    abspath = os.path.abspath(os.path.join(root, path))\\n    return root, abspath\\n```\"\n    },\n    {\n      \"function\": \"StaticFileHandler.get\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The new `validate_absolute_path` method requires the `root` parameter, which is now passed from `get_absolute_path`.\",\n      \"new_code\": \"```python\\ndef get(self, path, include_body=True):\\n    # Set up our path instance variables.\\n    self.path = self.parse_url_path(path)\\n    del path  # make sure we don't refer to path instead of self.path again\\n    root, absolute_path = self.get_absolute_path(self.settings, self.path)\\n    self.absolute_path = self.validate_absolute_path(root, absolute_path)\\n    if self.absolute_path is None:\\n        return\\n\\n    self.modified = self.get_modified_time()\\n    self.set_headers()\\n\\n    if self.should_return_304():\\n        self.set_status(304)\\n        return\\n\\n    request_range = None\\n    range_header = self.request.headers.get('Range')\\n    if range_header:\\n        request_range = httputil._parse_request_range(range_header)\\n        if not request_range:\\n            self.set_status(416)  # Range Not Satisfiable\\n            self.set_header('Content-Type', 'text/plain')\\n            self.write('The provided Range header is not valid: %r\\\\n'\\n                       'Note: multiple ranges are not supported.'\\n                       % range_header)\\n            return\\n\\n    if request_range:\\n        start, end = request_range\\n        size = self.get_content_size()\\n        if start < 0:\\n            start += size\\n        # Note: only return HTTP 206 if less than the entire range has been\\n        # requested. Not only is this semantically correct, but Chrome\\n        # refuses to play audio if it gets an HTTP 206 in response to\\n        # ``Range: bytes=0-``.\\n        if size != (end or size) - (start or 0):\\n            self.set_status(206)  # Partial Content\\n            self.set_header('Content-Range',\\n                            httputil._get_content_range(start, end, size))\\n    else:\\n        start = end = None\\n    content = self.get_content(self.absolute_path, start, end)\\n    if isinstance(content, bytes_type):\\n        content = [content]\\n    content_length = 0\\n    for chunk in content:\\n        if include_body:\\n            self.write(chunk)\\n        else:\\n            content_length += len(chunk)\\n    if not include_body:\\n        assert self.request.method == 'HEAD'\\n        self.set_header('Content-Length', content_length)\\n```\"\n    }\n  ]\n}",
+  "seconds": 58.2,
+  "seed": 1001
  },
  "tornado-forward-019/NO47@42": {
   "answer_tokens": 817,
@@ -1829,6 +1879,16 @@
   "seconds": 43.9,
   "seed": 42
  },
+ "tornado-forward-019/NO7@1001": {
+  "answer_tokens": 599,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "e500c38196498d8e",
+  "prompt_tokens": 5544,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"tornado.web.StaticFileHandler.get\",\n      \"file\": \"tornado/web.py\",\n      \"reason\": \"The `validate_absolute_path` method now requires an additional `root` parameter, which needs to be passed from the `get` method.\",\n      \"new_code\": \"def get(self, path, include_body=True):\\n        # Set up our path instance variables.\\n        self.path = self.parse_url_path(path)\\n        del path  # make sure we don't refer to path instead of self.path again\\n        absolute_path = self.get_absolute_path(self.settings, self.path)\\n        self.absolute_path = self.validate_absolute_path(self.root, absolute_path)\\n        if self.absolute_path is None:\\n            return\\n\\n        self.modified = self.get_modified_time()\\n        self.set_headers()\\n\\n        if self.should_return_304():\\n            self.set_status(304)\\n            return\\n\\n        request_range = None\\n        range_header = self.request.headers.get(\\\"Range\\\")\\n        if range_header:\\n            request_range = httputil._parse_request_range(range_header)\\n            if not request_range:\\n                self.set_status(416)  # Range Not Satisfiable\\n                self.set_header(\\\"Content-Type\\\", \\\"text/plain\\\")\\n                self.write(\\\"The provided Range header is not valid: %r\\\\n\\\"\\n                           \\\"Note: multiple ranges are not supported.\\\"\\n                           % range_header)\\n                return\\n\\n        if request_range:\\n            start, end = request_range\\n            size = self.get_content_size()\\n            if start < 0:\\n                start += size\\n            # Note: only return HTTP 206 if less than the entire range has been\\n            # requested. Not only is this semantically correct, but Chrome\\n            # refuses to play audio if it gets an HTTP 206 in response to\\n            # ``Range: bytes=0-``.\\n            if size != (end or size) - (start or 0):\\n                self.set_status(206)  # Partial Content\\n                self.set_header(\\\"Content-Range\\\",\\n                                httputil._get_content_range(start, end, size))\\n        else:\\n            start = end = None\\n        content = self.get_content(self.absolute_path, start, end)\\n        if isinstance(content, bytes_type):\\n            content = [content]\\n        content_length = 0\\n        for chunk in content:\\n            if include_body:\\n                self.write(chunk)\\n            else:\\n                content_length += len(chunk)\\n        if not include_body:\\n            assert self.request.method == \\\"HEAD\\\"\\n            self.set_header(\\\"Content-Length\\\", content_length)\"\n    }\n  ]\n}",
+  "seconds": 49.8,
+  "seed": 1001
+ },
  "tornado-forward-019/NO7@42": {
   "answer_tokens": 595,
   "done_reason": "stop",
@@ -1858,6 +1918,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 7.2,
   "seed": 42
+ },
+ "tornado-forward-020/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "36f015471c676f80",
+  "prompt_tokens": 5356,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.0,
+  "seed": 1001
  },
  "tornado-forward-020/NO47@42": {
   "answer_tokens": 6,
@@ -1908,6 +1978,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.6,
   "seed": 42
+ },
+ "tornado-forward-020/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "5f66703b47900ff8",
+  "prompt_tokens": 5351,
+  "raw": "{\"changes\": []}",
+  "seconds": 7.4,
+  "seed": 1001
  },
  "tornado-forward-020/NO7@42": {
   "answer_tokens": 6,
