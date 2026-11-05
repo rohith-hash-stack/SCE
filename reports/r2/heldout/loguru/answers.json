@@ -1,4 +1,14 @@
 {
+ "loguru-heldout-001/FULL@1001": {
+  "answer_tokens": 682,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d7f2f746d1aeb31e",
+  "prompt_tokens": 3581,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Handler.__init__\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the caller must pass the correct argument.\",\n      \"new_code\": \"def __init__(\\n        self,\\n        *,\\n        writer,\\n        stopper,\\n        levelno,\\n        formatter,\\n        is_formatter_dynamic,\\n        filter_,\\n        colorize,\\n        serialize,\\n        catch,\\n        enqueue,\\n        exception_formatter,\\n        id_,\\n        ansi_colors=[]\\n    ):\\n        self._writer = writer\\n        self._stopper = stopper\\n        self._levelno = levelno\\n        self._formatter = formatter\\n        self._is_formatter_dynamic = is_formatter_dynamic\\n        self._filter = filter_\\n        self._colorize = colorize\\n        self._serialize = serialize\\n        self._catch = catch\\n        self._enqueue = enqueue\\n        self._exception_formatter = exception_formatter\\n        self._id = id_\\n\\n        self._static_format = None\\n        self._decolorized_format = None\\n        self._precolorized_formats = {}\\n\\n        self._lock = threading.Lock()\\n        self._queue = None\\n        self._thread = None\\n        self._stopped = False\\n\\n        if not self._is_formatter_dynamic:\\n            self._static_format = self._formatter\\n            self._decolorized_format = self._decolorize_format(self._static_format)\\n\\n            for level_id in ansi_colors:\\n                self.update_format(level_id)\\n\\n        if self._enqueue:\\n            self._queue = multiprocessing.SimpleQueue()\\n            self._thread = threading.Thread(target=self._queued_writer, daemon=True)\\n            self._thread.start()\"\n    },\n    {\n      \"function\": \"Logger.level\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the caller must pass the correct argument.\",\n      \"new_code\": \"def level(self, name, no=None, color=None, icon=None):\\n        \\\"\\\"\\\"Add, update or retrieve a logging level.\\n\\n        Logging levels are defined by their ``name`` to which a severity ``no``, an ansi ``color``\\n        and an ``icon`` are associated and possibly modified at run-time. To |log| to a custom\\n        level, you should necessarily use its name, the severity number is not linked back to levels\\n    # ... lines 1215-1288 not shown ...\\n        if no < 0:\\n            raise ValueError(\\\"Invalid level no, it should be a positive integer, not: %d\\\" % no)\\n\\n        ansi = parse_ansi(color)\\n        self._levels[name] = no, color, icon, ansi\\n\\n        with self._lock:\\n            for handler in self._handlers.values():\\n                handler.update_format(ansi)\\n\\n        return self.level(name)\"\n    }\n  ]\n}",
+  "seconds": 49.0,
+  "seed": 1001
+ },
  "loguru-heldout-001/FULL@42": {
   "answer_tokens": 715,
   "done_reason": "stop",
@@ -8,6 +18,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Handler.__init__\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the caller must pass the appropriate `level_id`.\",\n      \"new_code\": \"def __init__(\\n        self,\\n        *,\\n        writer,\\n        stopper,\\n        levelno,\\n        formatter,\\n        is_formatter_dynamic,\\n        filter_,\\n        colorize,\\n        serialize,\\n        catch,\\n        enqueue,\\n        exception_formatter,\\n        id_,\\n        ansi_colors=[],\\n        levels_ansi_codes={}\\n    ):\\n        self._writer = writer\\n        self._stopper = stopper\\n        self._levelno = levelno\\n        self._formatter = formatter\\n        self._is_formatter_dynamic = is_formatter_dynamic\\n        self._filter = filter_\\n        self._colorize = colorize\\n        self._serialize = serialize\\n        self._catch = catch\\n        self._enqueue = enqueue\\n        self._exception_formatter = exception_formatter\\n        self._id = id_\\n        self._levels_ansi_codes = levels_ansi_codes\\n\\n        self._static_format = None\\n        self._decolorized_format = None\\n        self._precolorized_formats = {}\\n\\n        self._lock = threading.Lock()\\n        self._queue = None\\n        self._thread = None\\n        self._stopped = False\\n\\n        if not self._is_formatter_dynamic:\\n            self._static_format = self._formatter\\n            self._decolorized_format = self._decolorize_format(self._static_format)\\n\\n            for level_id, ansi_code in levels_ansi_codes.items():\\n                self.update_format(level_id)\\n\\n        if self._enqueue:\\n            self._queue = multiprocessing.SimpleQueue()\\n            self._thread = threading.Thread(target=self._queued_writer, daemon=True)\\n            self._thread.start()\"\n    },\n    {\n      \"function\": \"Logger.level\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the caller must pass the appropriate `level_id`.\",\n      \"new_code\": \"def level(self, name, no=None, color=None, icon=None):\\n        \\\"\\\"\\\"Add, update or retrieve a logging level.\\n\\n        Logging levels are defined by their ``name`` to which a severity ``no``, an ansi ``color``\\n        and an ``icon`` are associated and possibly modified at run-time. To |log| to a custom\\n        level, you should necessarily use its name, the severity number is not linked back to levels\\n    # ... lines 1215-1288 not shown ...\\n        if no < 0:\\n            raise ValueError(\\\"Invalid level no, it should be a positive integer, not: %d\\\" % no)\\n\\n        ansi = parse_ansi(color)\\n        self._levels[name] = no, color, icon, ansi\\n\\n        with self._lock:\\n            for handler in self._handlers.values():\\n                handler.update_format(no)\\n\\n        return self.level(name)\"\n    }\n  ]\n}",
   "seconds": 53.0,
   "seed": 42
+ },
+ "loguru-heldout-001/NO47@1001": {
+  "answer_tokens": 659,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "048400c734d6d421",
+  "prompt_tokens": 3580,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._handler.Handler.emit\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `emit` method now needs to use `level_id` instead of `color` to update the format.\",\n      \"new_code\": \"def emit(self, record, level_id, is_ansi, is_raw):\\n    try:\\n        if self._levelno > record['level'].no:\\n            return\\n\\n        if self._filter is not None:\\n            if not self._filter(record):\\n                return\\n\\n        if self._is_formatter_dynamic:\\n            dynamic_format = self._formatter(record)\\n            if self._colorize:\\n                precomputed_format = self._colorize_format(dynamic_format, self._levels_ansi_codes[level_id])\\n            else:\\n                precomputed_format = self._decolorize_format(dynamic_format)\\n        else:\\n            if self._colorize:\\n                precomputed_format = self._precolorized_formats[level_id]\\n            else:\\n                precomputed_format = self._decolorized_format\\n\\n        formatter_record = record.copy()\\n\\n        if not record['exception']:\\n            formatter_record['exception'] = ''\\n        else:\\n            type_, value, tb = record['exception']\\n            lines = self._exception_formatter.format_exception(type_, value, tb)\\n            formatter_record['exception'] = ''.join(lines)\\n\\n        if is_raw:\\n            if not is_ansi:\\n                formatted = record['message']\\n            elif self._colorize:\\n                formatted = self._colorize_format(record['message'], self._levels_ansi_codes[level_id])\\n            else:\\n                formatted = self._decolorize_format(record['message'])\\n        else:\\n            if not is_ansi:\\n                formatted = precomputed_format.format_map(formatter_record)\\n            elif self._colorize:\\n                if self._is_formatter_dynamic:\\n                    format_with_tags = dynamic_format\\n                else:\\n                    format_with_tags = self._static_format\\n                AnsiDict = self._memoize_ansi_messages(\\n                    format_with_tags, self._levels_ansi_codes[level_id], record['message']\\n                )\\n                formatted = precomputed_format.format_map(AnsiDict(formatter_record))\\n            else:\\n                formatter_record['message'] = self._decolorize_format(record['message'])\\n                formatted = precomputed_format.format_map(formatter_record)\\n\\n        if self._serialize:\\n            formatted = self._serialize_record(formatted, record)\\n\\n        str_record = StrRecord(formatted)\\n        str_record.record = record\\n\\n        with self._lock:\\n            if self._stopped:\\n                return\\n            if self._enqueue:\\n                self._queue.put(str_record)\\n            else:\\n                self._writer(str_record)\\n\\n    except Exception:\\n        if self._catch:\\n            self._handle_error(record)\\n        else:\\n            raise\"\n    }\n  ]\n}",
+  "seconds": 46.8,
+  "seed": 1001
  },
  "loguru-heldout-001/NO47@42": {
   "answer_tokens": 655,
@@ -19,6 +39,16 @@
   "seconds": 46.5,
   "seed": 42
  },
+ "loguru-heldout-001/NO4@1001": {
+  "answer_tokens": 287,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "8f9aca29df84eea8",
+  "prompt_tokens": 3494,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._logger.Logger.level\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `level` method now needs to pass the `level_id` instead of `color` to the `update_format` method of the handler.\",\n      \"new_code\": \"def level(self, name, no=None, color=None, icon=None):\\n        \\\"\\\"\\\"Add, update or retrieve a logging level.\\n\\n        Logging levels are defined by their ``name`` to which a severity ``no``, an ansi ``color``\\n        and an ``icon`` are associated and possibly modified at run-time. To |log| to a custom\\n        level, you should necessarily use its name, the severity number is not linked back to levels\\n    # ... lines 1215-1288 not shown ...\\n        if no < 0:\\n            raise ValueError(\\\"Invalid level no, it should be a positive integer, not: %d\\\" % no)\\n\\n        ansi = parse_ansi(color)\\n        self._levels[name] = no, color, icon, ansi\\n\\n        with self._lock:\\n            for handler in self._handlers.values():\\n                handler.update_format(no)\\n\\n        return self.level(name)\"\n    }\n  ]\n}",
+  "seconds": 21.4,
+  "seed": 1001
+ },
  "loguru-heldout-001/NO4@42": {
   "answer_tokens": 179,
   "done_reason": "stop",
@@ -28,6 +58,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Handler.__init__\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the loop that calls `update_format` must be updated.\",\n      \"new_code\": \"for level_id in ansi_colors:\\n    self.update_format(level_id)\"\n    },\n    {\n      \"function\": \"Logger.level\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the call to `update_format` must be updated.\",\n      \"new_code\": \"with self._lock:\\n    for handler in self._handlers.values():\\n        handler.update_format(ansi)\"\n    }\n  ]\n}",
   "seconds": 14.0,
   "seed": 42
+ },
+ "loguru-heldout-001/NO6@1001": {
+  "answer_tokens": 719,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d46d6ece80146aca",
+  "prompt_tokens": 3404,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._handler.Handler.__init__\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the caller must pass the correct argument.\",\n      \"new_code\": \"def __init__(\\n        self,\\n        *,\\n        writer,\\n        stopper,\\n        levelno,\\n        formatter,\\n        is_formatter_dynamic,\\n        filter_,\\n        colorize,\\n        serialize,\\n        catch,\\n        enqueue,\\n        exception_formatter,\\n        id_,\\n        ansi_colors=[],\\n        levels_ansi_codes={}\\n    ):\\n        self._writer = writer\\n        self._stopper = stopper\\n        self._levelno = levelno\\n        self._formatter = formatter\\n        self._is_formatter_dynamic = is_formatter_dynamic\\n        self._filter = filter_\\n        self._colorize = colorize\\n        self._serialize = serialize\\n        self._catch = catch\\n        self._enqueue = enqueue\\n        self._exception_formatter = exception_formatter\\n        self._id = id_\\n        self._levels_ansi_codes = levels_ansi_codes\\n\\n        self._static_format = None\\n        self._decolorized_format = None\\n        self._precolorized_formats = {}\\n\\n        self._lock = threading.Lock()\\n        self._queue = None\\n        self._thread = None\\n        self._stopped = False\\n\\n        if not self._is_formatter_dynamic:\\n            self._static_format = self._formatter\\n            self._decolorized_format = self._decolorize_format(self._static_format)\\n\\n            for level_id, ansi_code in self._levels_ansi_codes.items():\\n                self.update_format(level_id)\\n\\n        if self._enqueue:\\n            self._queue = multiprocessing.SimpleQueue()\\n            self._thread = threading.Thread(target=self._queued_writer, daemon=True)\\n            self._thread.start()\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.level\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the caller must pass the correct argument.\",\n      \"new_code\": \"def level(self, name, no=None, color=None, icon=None):\\n        \\\"\\\"\\\"Add, update or retrieve a logging level.\\n\\n        Logging levels are defined by their ``name`` to which a severity ``no``, an ansi ``color``\\n        and an ``icon`` are associated and possibly modified at run-time. To |log| to a custom\\n        level, you should necessarily use its name, the severity number is not linked back to levels\\n    # ... lines 1215-1288 not shown ...\\n        if no < 0:\\n            raise ValueError(\\\"Invalid level no, it should be a positive integer, not: %d\\\" % no)\\n\\n        ansi = parse_ansi(color)\\n        self._levels[name] = no, color, icon, ansi\\n\\n        with self._lock:\\n            for handler in self._handlers.values():\\n                handler.update_format(no)\\n\\n        return self.level(name)\"\n    }\n  ]\n}",
+  "seconds": 50.6,
+  "seed": 1001
  },
  "loguru-heldout-001/NO6@42": {
   "answer_tokens": 697,
@@ -39,6 +79,16 @@
   "seconds": 49.1,
   "seed": 42
  },
+ "loguru-heldout-001/NO7@1001": {
+  "answer_tokens": 1058,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "23c0ebb1caf3ecb1",
+  "prompt_tokens": 3576,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Handler.__init__\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the initialization code must be updated to pass the correct argument.\",\n      \"new_code\": \"def __init__(\\n        self,\\n        *,\\n        writer,\\n        stopper,\\n        levelno,\\n        formatter,\\n        is_formatter_dynamic,\\n        filter_,\\n        colorize,\\n        serialize,\\n        catch,\\n        enqueue,\\n        exception_formatter,\\n        id_,\\n        ansi_colors=[]\\n    ):\\n        self._writer = writer\\n        self._stopper = stopper\\n        self._levelno = levelno\\n        self._formatter = formatter\\n        self._is_formatter_dynamic = is_formatter_dynamic\\n        self._filter = filter_\\n        self._colorize = colorize\\n        self._serialize = serialize\\n        self._catch = catch\\n        self._enqueue = enqueue\\n        self._exception_formatter = exception_formatter\\n        self._id = id_\\n\\n        self._static_format = None\\n        self._decolorized_format = None\\n        self._precolorized_formats = {}\\n\\n        self._lock = threading.Lock()\\n        self._queue = None\\n        self._thread = None\\n        self._stopped = False\\n\\n        if not self._is_formatter_dynamic:\\n            self._static_format = self._formatter\\n            self._decolorized_format = self._decolorize_format(self._static_format)\\n\\n            for level_id in ansi_colors:\\n                self.update_format(level_id)\\n\\n        if self._enqueue:\\n            self._queue = multiprocessing.SimpleQueue()\\n            self._thread = threading.Thread(target=self._queued_writer, daemon=True)\\n            self._thread.start()\"\n    },\n    {\n      \"function\": \"Handler.emit\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `emit` method now needs to pass `level_id` to `update_format` instead of `color`, and it should use `level_id` to index `_precolorized_formats`.\",\n      \"new_code\": \"def emit(self, record, level_id, is_ansi, is_raw):\\n        try:\\n            if self._levelno > record['level'].no:\\n                return\\n\\n            if self._filter is not None:\\n                if not self._filter(record):\\n                    return\\n\\n            if self._is_formatter_dynamic:\\n                dynamic_format = self._formatter(record)\\n                if self._colorize:\\n                    precomputed_format = self._colorize_format(dynamic_format, level_id)\\n                else:\\n                    precomputed_format = self._decolorize_format(dynamic_format)\\n            else:\\n                if self._colorize:\\n                    precomputed_format = self._precolorized_formats[level_id]\\n                else:\\n                    precomputed_format = self._decolorized_format\\n\\n            formatter_record = record.copy()\\n\\n            if not record['exception']:\\n                formatter_record['exception'] = ''\\n            else:\\n                type_, value, tb = record['exception']\\n                lines = self._exception_formatter.format_exception(type_, value, tb)\\n                formatter_record['exception'] = ''.join(lines)\\n\\n            if is_raw:\\n                if not is_ansi:\\n                    formatted = record['message']\\n                elif self._colorize:\\n                    formatted = self._colorize_format(record['message'], level_id)\\n                else:\\n                    formatted = self._decolorize_format(record['message'])\\n            else:\\n                if not is_ansi:\\n                    formatted = precomputed_format.format_map(formatter_record)\\n                elif self._colorize:\\n                    if self._is_formatter_dynamic:\\n                        format_with_tags = dynamic_format\\n                    else:\\n                        format_with_tags = self._static_format\\n                    AnsiDict = self._memoize_ansi_messages(\\n                        format_with_tags, level_id, record['message']\\n                    )\\n                    formatted = precomputed_format.format_map(AnsiDict(formatter_record))\\n                else:\\n                    formatter_record['message'] = self._decolorize_format(record['message'])\\n                    formatted = precomputed_format.format_map(formatter_record)\\n\\n            if self._serialize:\\n                formatted = self._serialize_record(formatted, record)\\n\\n            str_record = StrRecord(formatted)\\n            str_record.record = record\\n\\n            with self._lock:\\n                if self._stopped:\\n                    return\\n                if self._enqueue:\\n                    self._queue.put(str_record)\\n                else:\\n                    self._writer(str_record)\\n\\n        except Exception:\\n            if self._catch:\\n                self._handle_error(record)\\n            else:\\n                raise\"\n    }\n  ]\n}",
+  "seconds": 74.1,
+  "seed": 1001
+ },
  "loguru-heldout-001/NO7@42": {
   "answer_tokens": 1062,
   "done_reason": "stop",
@@ -48,6 +98,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"Handler.__init__\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the initialization code must be updated to pass the correct argument.\",\n      \"new_code\": \"def __init__(\\n        self,\\n        *,\\n        writer,\\n        stopper,\\n        levelno,\\n        formatter,\\n        is_formatter_dynamic,\\n        filter_,\\n        colorize,\\n        serialize,\\n        catch,\\n        enqueue,\\n        exception_formatter,\\n        id_,\\n        ansi_colors=[]\\n    ):\\n        self._writer = writer\\n        self._stopper = stopper\\n        self._levelno = levelno\\n        self._formatter = formatter\\n        self._is_formatter_dynamic = is_formatter_dynamic\\n        self._filter = filter_\\n        self._colorize = colorize\\n        self._serialize = serialize\\n        self._catch = catch\\n        self._enqueue = enqueue\\n        self._exception_formatter = exception_formatter\\n        self._id = id_\\n\\n        self._static_format = None\\n        self._decolorized_format = None\\n        self._precolorized_formats = {}\\n\\n        self._lock = threading.Lock()\\n        self._queue = None\\n        self._thread = None\\n        self._stopped = False\\n\\n        if not self._is_formatter_dynamic:\\n            self._static_format = self._formatter\\n            self._decolorized_format = self._decolorize_format(self._static_format)\\n\\n            for ansi_code in ansi_colors:\\n                self.update_format(ansi_code)\\n\\n        if self._enqueue:\\n            self._queue = multiprocessing.SimpleQueue()\\n            self._thread = threading.Thread(target=self._queued_writer, daemon=True)\\n            self._thread.start()\"\n    },\n    {\n      \"function\": \"Handler.emit\",\n      \"file\": \"loguru/_handler.py\",\n      \"reason\": \"The `update_format` method now takes `level_id` instead of `color`, so the `emit` method must be updated to pass the correct argument.\",\n      \"new_code\": \"def emit(self, record, level_ansi_code, is_ansi, is_raw):\\n        try:\\n            if self._levelno > record['level'].no:\\n                return\\n\\n            if self._filter is not None:\\n                if not self._filter(record):\\n                    return\\n\\n            if self._is_formatter_dynamic:\\n                dynamic_format = self._formatter(record)\\n                if self._colorize:\\n                    precomputed_format = self._colorize_format(dynamic_format, level_ansi_code)\\n                else:\\n                    precomputed_format = self._decolorize_format(dynamic_format)\\n            else:\\n                if self._colorize:\\n                    precomputed_format = self._precolorized_formats[level_ansi_code]\\n                else:\\n                    precomputed_format = self._decolorized_format\\n\\n            formatter_record = record.copy()\\n\\n            if not record['exception']:\\n                formatter_record['exception'] = ''\\n            else:\\n                type_, value, tb = record['exception']\\n                lines = self._exception_formatter.format_exception(type_, value, tb)\\n                formatter_record['exception'] = ''.join(lines)\\n\\n            if is_raw:\\n                if not is_ansi:\\n                    formatted = record['message']\\n                elif self._colorize:\\n                    formatted = self._colorize_format(record['message'], level_ansi_code)\\n                else:\\n                    formatted = self._decolorize_format(record['message'])\\n            else:\\n                if not is_ansi:\\n                    formatted = precomputed_format.format_map(formatter_record)\\n                elif self._colorize:\\n                    if self._is_formatter_dynamic:\\n                        format_with_tags = dynamic_format\\n                    else:\\n                        format_with_tags = self._static_format\\n                    AnsiDict = self._memoize_ansi_messages(\\n                        format_with_tags, level_ansi_code, record['message']\\n                    )\\n                    formatted = precomputed_format.format_map(AnsiDict(formatter_record))\\n                else:\\n                    formatter_record['message'] = self._decolorize_format(record['message'])\\n                    formatted = precomputed_format.format_map(formatter_record)\\n\\n            if self._serialize:\\n                formatted = self._serialize_record(formatted, record)\\n\\n            str_record = StrRecord(formatted)\\n            str_record.record = record\\n\\n            with self._lock:\\n                if self._stopped:\\n                    return\\n                if self._enqueue:\\n                    self._queue.put(str_record)\\n                else:\\n                    self._writer(str_record)\\n\\n        except Exception:\\n            if self._catch:\\n                self._handle_error(record)\\n            else:\\n                raise\"\n    }\n  ]\n}",
   "seconds": 74.4,
   "seed": 42
+ },
+ "loguru-heldout-002/FULL@1001": {
+  "answer_tokens": 222,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "bbf7aaa821889aeb",
+  "prompt_tokens": 5307,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._logger.Logger.log_function\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The parameters of the `emit` method in `Handler` have changed, so the caller `log_function` must be updated to pass the correct arguments.\",\n      \"new_code\": \"        def log_function(_self, _message, *args, **kwargs):\\n            if not _self._handlers:\\n                return\\n\\n            frame = get_frame(_self._depth + 1)\\n            name = frame.f_globals['__name__']\\n    # ... lines 1565-1652 not shown ...\\n\\n            if Logger._patcher_class:\\n                Logger._patcher_class(record)\\n\\n            if _self._patcher:\\n                _self._patcher(record)\\n\\n            for handler in _self._handlers.values():\\n                handler.emit(record, level_ansi_code, is_ansi, is_raw)\"\n    }\n  ]\n}",
+  "seconds": 17.9,
+  "seed": 1001
  },
  "loguru-heldout-002/FULL@42": {
   "answer_tokens": 221,
@@ -59,6 +119,16 @@
   "seconds": 22.2,
   "seed": 42
  },
+ "loguru-heldout-002/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "82e680fbf399169d",
+  "prompt_tokens": 5103,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.8,
+  "seed": 1001
+ },
  "loguru-heldout-002/NO47@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -68,6 +138,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 1.8,
   "seed": 42
+ },
+ "loguru-heldout-002/NO4@1001": {
+  "answer_tokens": 190,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "9ff560553cb72290",
+  "prompt_tokens": 5261,
+  "raw": "{\"changes\": [{\"function\": \"loguru._logger.Logger.log_function\", \"file\": \"loguru/_logger.py\", \"reason\": \"The parameters passed to `emit` have changed.\", \"new_code\": \"def log_function(_self, _message, *args, **kwargs):\\n            if not _self._handlers:\\n                return\\n\\n            frame = get_frame(_self._depth + 1)\\n            name = frame.f_globals[\\\"__name__\\\"]\\n    # ... lines 1565-1652 not shown ...\\n\\n            if Logger._patcher_class:\\n                Logger._patcher_class(record)\\n\\n            if _self._patcher:\\n                _self._patcher(record)\\n\\n            for handler in _self._handlers.values():\\n                handler.emit(record, level_ansi_code, is_ansi, is_raw)\"}]}",
+  "seconds": 15.0,
+  "seed": 1001
  },
  "loguru-heldout-002/NO4@42": {
   "answer_tokens": 190,
@@ -79,6 +159,16 @@
   "seconds": 15.0,
   "seed": 42
  },
+ "loguru-heldout-002/NO6@1001": {
+  "answer_tokens": 227,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "bcc642f37cb06031",
+  "prompt_tokens": 5306,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._logger.Logger.log_function\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The parameters passed to `emit` have changed. The new parameters are `record`, `level_ansi_code`, `is_ansi`, and `is_raw`.\",\n      \"new_code\": \"def log_function(_self, _message, *args, **kwargs):\\n    if not _self._handlers:\\n        return\\n\\n    frame = get_frame(_self._depth + 1)\\n    name = frame.f_globals['__name__']\\n    # ... lines 1565-1652 not shown ...\\n\\n    if Logger._patcher_class:\\n        Logger._patcher_class(record)\\n\\n    if _self._patcher:\\n        _self._patcher(record)\\n\\n    for handler in _self._handlers.values():\\n        handler.emit(record, level_ansi_code, _self._ansi, _self._raw)\"\n    }\n  ]\n}",
+  "seconds": 17.7,
+  "seed": 1001
+ },
  "loguru-heldout-002/NO6@42": {
   "answer_tokens": 228,
   "done_reason": "stop",
@@ -88,6 +178,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._logger.Logger.log_function\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The parameters passed to `emit` have changed. The new parameters are `record`, `level_ansi_code`, `is_ansi`, and `is_raw`.\",\n      \"new_code\": \"def log_function(_self, _message, *args, **kwargs):\\n    if not _self._handlers:\\n        return\\n\\n    frame = get_frame(_self._depth + 1)\\n    name = frame.f_globals['__name__']\\n    # ... lines 1565-1652 not shown ...\\n\\n    if Logger._patcher_class:\\n        Logger._patcher_class(record)\\n\\n    if _self._patcher:\\n        _self._patcher(record)\\n\\n    for handler in _self._handlers.values():\\n        handler.emit(record, record['level'].name, _self._ansi, _self._raw)\"\n    }\n  ]\n}",
   "seconds": 17.8,
   "seed": 42
+ },
+ "loguru-heldout-002/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "776744f955b7f7f0",
+  "prompt_tokens": 5166,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.7,
+  "seed": 1001
  },
  "loguru-heldout-002/NO7@42": {
   "answer_tokens": 6,
@@ -99,6 +199,16 @@
   "seconds": 1.7,
   "seed": 42
  },
+ "loguru-heldout-003/FULL@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "34d144feed70f6c5",
+  "prompt_tokens": 2952,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.2,
+  "seed": 1001
+ },
  "loguru-heldout-003/FULL@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -108,6 +218,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 4.4,
   "seed": 42
+ },
+ "loguru-heldout-003/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "c0517fb5d9072d50",
+  "prompt_tokens": 2940,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.6,
+  "seed": 1001
  },
  "loguru-heldout-003/NO47@42": {
   "answer_tokens": 6,
@@ -119,6 +239,16 @@
   "seconds": 1.6,
   "seed": 42
  },
+ "loguru-heldout-003/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "061d030a616e32b2",
+  "prompt_tokens": 2907,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.5,
+  "seed": 1001
+ },
  "loguru-heldout-003/NO4@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -128,6 +258,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 1.5,
   "seed": 42
+ },
+ "loguru-heldout-003/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "4b9b15c685550220",
+  "prompt_tokens": 2948,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.6,
+  "seed": 1001
  },
  "loguru-heldout-003/NO6@42": {
   "answer_tokens": 6,
@@ -139,6 +279,16 @@
   "seconds": 1.6,
   "seed": 42
  },
+ "loguru-heldout-003/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "89212a2510713a60",
+  "prompt_tokens": 2815,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.1,
+  "seed": 1001
+ },
  "loguru-heldout-003/NO7@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -148,6 +298,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 1.1,
   "seed": 42
+ },
+ "loguru-heldout-004/FULL@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "924f991662013bd6",
+  "prompt_tokens": 9134,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.8,
+  "seed": 1001
  },
  "loguru-heldout-004/FULL@42": {
   "answer_tokens": 6,
@@ -159,6 +319,16 @@
   "seconds": 12.2,
   "seed": 42
  },
+ "loguru-heldout-004/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b4296831eb954326",
+  "prompt_tokens": 9127,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.3,
+  "seed": 1001
+ },
  "loguru-heldout-004/NO47@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -168,6 +338,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 5.3,
   "seed": 42
+ },
+ "loguru-heldout-004/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b4296831eb954326",
+  "prompt_tokens": 9127,
+  "raw": "{\"changes\": []}",
+  "seconds": 5.3,
+  "seed": 1001
  },
  "loguru-heldout-004/NO4@42": {
   "answer_tokens": 6,
@@ -179,6 +359,16 @@
   "seconds": 5.3,
   "seed": 42
  },
+ "loguru-heldout-004/NO6@1001": {
+  "answer_tokens": 1228,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "aea361443055176f",
+  "prompt_tokens": 9019,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._logger.Logger.trace\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def trace(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'TRACE'``.\\\"\\\"\\\"\\n    __self._log(\\\"TRACE\\\", False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.debug\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def debug(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'DEBUG'``.\\\"\\\"\\\"\\n    __self._log(\\\"DEBUG\\\", False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.info\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def info(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'INFO'``.\\\"\\\"\\\"\\n    __self._log(\\\"INFO\\\", False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.success\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def success(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'SUCCESS'``.\\\"\\\"\\\"\\n    __self._log(\\\"SUCCESS\\\", False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.warning\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def warning(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'WARNING'``.\\\"\\\"\\\"\\n    __self._log(\\\"WARNING\\\", False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.error\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def error(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'ERROR'``.\\\"\\\"\\\"\\n    __self._log(\\\"ERROR\\\", False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.critical\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def critical(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'CRITICAL'``.\\\"\\\"\\\"\\n    __self._log(\\\"CRITICAL\\\", False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.exception\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def exception(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Convenience method for logging an ``'ERROR'`` with exception information.\\\"\\\"\\\"\\n    options = (True,) + __self._options[1:]\\n    __self._log(\\\"ERROR\\\", False, options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.log\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def log(__self, __level, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``level``.\\\"\\\"\\\"\\n    level_id, static_level_no = __self._dynamic_level(__level)\\n    __self._log(level_id, False, __self._options, __message, args, kwargs)\"\n    }\n  ]\n}",
+  "seconds": 99.0,
+  "seed": 1001
+ },
  "loguru-heldout-004/NO6@42": {
   "answer_tokens": 1228,
   "done_reason": "stop",
@@ -188,6 +378,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._logger.Logger.trace\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def trace(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'TRACE'``.\\\"\\\"\\\"\\n    __self._log('TRACE', False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.debug\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def debug(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'DEBUG'``.\\\"\\\"\\\"\\n    __self._log('DEBUG', False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.info\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def info(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'INFO'``.\\\"\\\"\\\"\\n    __self._log('INFO', False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.success\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def success(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'SUCCESS'``.\\\"\\\"\\\"\\n    __self._log('SUCCESS', False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.warning\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def warning(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'WARNING'``.\\\"\\\"\\\"\\n    __self._log('WARNING', False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.error\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def error(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'ERROR'``.\\\"\\\"\\\"\\n    __self._log('ERROR', False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.critical\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def critical(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``'CRITICAL'``.\\\"\\\"\\\"\\n    __self._log('CRITICAL', False, __self._options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.exception\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def exception(__self, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Convenience method for logging an ``'ERROR'`` with exception information.\\\"\\\"\\\"\\n    options = (True,) + __self._options[1:]\\n    __self._log('ERROR', False, options, __message, args, kwargs)\"\n    },\n    {\n      \"function\": \"loguru._logger.Logger.log\",\n      \"file\": \"loguru/_logger.py\",\n      \"reason\": \"The `_log` method signature has changed, removing `static_level_no` and `from_decorator` parameters.\",\n      \"new_code\": \"def log(__self, __level, __message, *args, **kwargs):  # noqa: N805\\n    r\\\"\\\"\\\"Log ``message.format(*args, **kwargs)`` with severity ``level``.\\\"\\\"\\\"\\n    level_id, static_level_no = __self._dynamic_level(__level)\\n    __self._log(level_id, False, __self._options, __message, args, kwargs)\"\n    }\n  ]\n}",
   "seconds": 98.9,
   "seed": 42
+ },
+ "loguru-heldout-004/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "5bd4a1531c402824",
+  "prompt_tokens": 9151,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.8,
+  "seed": 1001
  },
  "loguru-heldout-004/NO7@42": {
   "answer_tokens": 1270,
@@ -199,6 +399,16 @@
   "seconds": 101.1,
   "seed": 42
  },
+ "loguru-heldout-005/FULL@1001": {
+  "answer_tokens": 387,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "02162b6a2fc7a5ae",
+  "prompt_tokens": 4398,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._file_sink.FileSink.initialize_write_function\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `initialize_write_function` method now needs to pass the `teardown` parameter to the `terminate` method.\",\n      \"new_code\": \"def initialize_write_function(self):\\n        self.terminate(teardown=False)\\n\\n        if self.rotation_function is None:\\n            self.write = self.file.write\\n        else:\\n            self.write = self.rotating_write\"\n    },\n    {\n      \"function\": \"loguru._file_sink.FileSink.rotating_write\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `rotating_write` method now needs to pass the `teardown` parameter to the `terminate` method.\",\n      \"new_code\": \"def rotating_write(self, message):\\n        if self.rotation_function(message, self.file):\\n            compress = self.compression_function is not None\\n            manage = self.retention_function is not None\\n            self.terminate(teardown=True)\\n        self.file.write(message)\"\n    },\n    {\n      \"function\": \"loguru._file_sink.FileSink.stop\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `stop` method now needs to pass the `teardown` parameter to the `terminate` method.\",\n      \"new_code\": \"def stop(self):\\n        rotating = self.rotation_function is not None\\n        appending = 'a' in self.mode\\n        compression = (self.compression_function is not None) and (not rotating or not appending)\\n        retention = (self.retention_function is not None) and (not rotating or not appending)\\n        check = compression\\n        self.terminate(teardown=True)\"\n    }\n  ]\n}",
+  "seconds": 29.7,
+  "seed": 1001
+ },
  "loguru-heldout-005/FULL@42": {
   "answer_tokens": 387,
   "done_reason": "stop",
@@ -209,6 +419,36 @@
   "seconds": 32.9,
   "seed": 42
  },
+ "loguru-heldout-005/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d481e22c20705f1f",
+  "prompt_tokens": 4389,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.2,
+  "seed": 1001
+ },
+ "loguru-heldout-005/NO47@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d481e22c20705f1f",
+  "prompt_tokens": 4389,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.3,
+  "seed": 42
+ },
+ "loguru-heldout-005/NO4@1001": {
+  "answer_tokens": 295,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "0d9ca4bc3b3678db",
+  "prompt_tokens": 4237,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._file_sink.FileSink.initialize_write_function\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `initialize_write_function` method calls `terminate` with specific parameters that are no longer valid after the change.\",\n      \"new_code\": \"def initialize_write_function(self):\\n        self.terminate(teardown=False)\\n\\n        if self.rotation_function is None:\\n            self.write = self.file.write\\n        else:\\n            self.write = self.rotating_write\"\n    },\n    {\n      \"function\": \"loguru._file_sink.FileSink.rotating_write\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `rotating_write` method calls `terminate` with specific parameters that are no longer valid after the change.\",\n      \"new_code\": \"def rotating_write(self, message):\\n        if self.rotation_function(message, self.file):\\n            self.terminate(teardown=True)\\n        self.file.write(message)\"\n    },\n    {\n      \"function\": \"loguru._file_sink.FileSink.stop\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `stop` method calls `terminate` with specific parameters that are no longer valid after the change.\",\n      \"new_code\": \"def stop(self):\\n        self.terminate(teardown=True)\"\n    }\n  ]\n}",
+  "seconds": 21.8,
+  "seed": 1001
+ },
  "loguru-heldout-005/NO4@42": {
   "answer_tokens": 436,
   "done_reason": "stop",
@@ -217,6 +457,46 @@
   "prompt_tokens": 4237,
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"FileSink.initialize_write_function\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `initialize_write_function` method calls `terminate` with the `create_new` parameter, which has been removed in the new `terminate` method. The `teardown` parameter should be used instead.\",\n      \"new_code\": \"def initialize_write_function(self):\\n        self.terminate(teardown=True)\\n\\n        if self.rotation_function is None:\\n            self.write = self.file.write\\n        else:\\n            self.write = self.rotating_write\"\n    },\n    {\n      \"function\": \"FileSink.rotating_write\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `rotating_write` method calls `terminate` with the `check_conflict`, `exec_compression`, `exec_retention`, and `create_new` parameters, which have been removed in the new `terminate` method. The `teardown` parameter should be used instead.\",\n      \"new_code\": \"def rotating_write(self, message):\\n        if self.rotation_function(message, self.file):\\n            self.terminate(teardown=True)\\n        self.file.write(message)\"\n    },\n    {\n      \"function\": \"FileSink.stop\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `stop` method calls `terminate` with the `check_conflict`, `exec_compression`, `exec_retention`, and `create_new` parameters, which have been removed in the new `terminate` method. The `teardown` parameter should be used instead.\",\n      \"new_code\": \"def stop(self):\\n        rotating = self.rotation_function is not None\\n        appending = 'a' in self.mode\\n        compression = (self.compression_function is not None) and (not rotating or not appending)\\n        retention = (self.retention_function is not None) and (not rotating or not appending)\\n        check = compression\\n        self.terminate(teardown=True)\"\n    }\n  ]\n}",
   "seconds": 31.5,
+  "seed": 42
+ },
+ "loguru-heldout-005/NO6@1001": {
+  "answer_tokens": 433,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6826368727f4dda7",
+  "prompt_tokens": 4301,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._file_sink.FileSink.initialize_write_function\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `initialize_write_function` method calls `terminate` with the `create_new` parameter, which has been removed. We need to adjust the call to `terminate` to match the new signature.\",\n      \"new_code\": \"def initialize_write_function(self):\\n        self.terminate(teardown=True)\\n\\n        if self.rotation_function is None:\\n            self.write = self.file.write\\n        else:\\n            self.write = self.rotating_write\"\n    },\n    {\n      \"function\": \"loguru._file_sink.FileSink.rotating_write\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `rotating_write` method calls `terminate` with several parameters, which have been removed. We need to adjust the call to `terminate` to match the new signature.\",\n      \"new_code\": \"def rotating_write(self, message):\\n        if self.rotation_function(message, self.file):\\n            compress = self.compression_function is not None\\n            manage = self.retention_function is not None\\n            self.terminate(teardown=compress or manage)\\n        self.file.write(message)\"\n    },\n    {\n      \"function\": \"loguru._file_sink.FileSink.stop\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `stop` method calls `terminate` with several parameters, which have been removed. We need to adjust the call to `terminate` to match the new signature.\",\n      \"new_code\": \"def stop(self):\\n        rotating = self.rotation_function is not None\\n        appending = 'a' in self.mode\\n        compression = (self.compression_function is not None) and (not rotating or not appending)\\n        retention = (self.retention_function is not None) and (not rotating or not appending)\\n        check = compression\\n        self.terminate(teardown=compression or retention)\"\n    }\n  ]\n}",
+  "seconds": 31.4,
+  "seed": 1001
+ },
+ "loguru-heldout-005/NO6@42": {
+  "answer_tokens": 424,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6826368727f4dda7",
+  "prompt_tokens": 4301,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"FileSink.initialize_write_function\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `initialize_write_function` method calls `terminate` with the `create_new` parameter, which has been removed in the new `terminate` method. The `teardown` parameter should be used instead.\",\n      \"new_code\": \"def initialize_write_function(self):\\n        self.terminate(teardown=True)\\n\\n        if self.rotation_function is None:\\n            self.write = self.file.write\\n        else:\\n            self.write = self.rotating_write\"\n    },\n    {\n      \"function\": \"FileSink.rotating_write\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `rotating_write` method calls `terminate` with several parameters, which have been removed in the new `terminate` method. The `teardown` parameter should be used instead.\",\n      \"new_code\": \"def rotating_write(self, message):\\n        if self.rotation_function(message, self.file):\\n            compress = self.compression_function is not None\\n            manage = self.retention_function is not None\\n            self.terminate(teardown=compress or manage)\\n        self.file.write(message)\"\n    },\n    {\n      \"function\": \"FileSink.stop\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `stop` method calls `terminate` with several parameters, which have been removed in the new `terminate` method. The `teardown` parameter should be used instead.\",\n      \"new_code\": \"def stop(self):\\n        rotating = self.rotation_function is not None\\n        appending = 'a' in self.mode\\n        compression = (self.compression_function is not None) and (not rotating or not appending)\\n        retention = (self.retention_function is not None) and (not rotating or not appending)\\n        check = compression\\n        self.terminate(teardown=compression or retention)\"\n    }\n  ]\n}",
+  "seconds": 30.8,
+  "seed": 42
+ },
+ "loguru-heldout-005/NO7@1001": {
+  "answer_tokens": 402,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "e0838150cd2a4e5b",
+  "prompt_tokens": 4326,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"loguru._file_sink.FileSink.initialize_write_function\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `initialize_write_function` method calls `terminate` with the `create_new` parameter, which has been removed. The new `terminate` method only accepts a `teardown` parameter.\",\n      \"new_code\": \"def initialize_write_function(self):\\n        self.terminate(teardown=True)\\n\\n        if self.rotation_function is None:\\n            self.write = self.file.write\\n        else:\\n            self.write = self.rotating_write\"\n    },\n    {\n      \"function\": \"loguru._file_sink.FileSink.rotating_write\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `rotating_write` method calls `terminate` with multiple parameters, which have been removed. The new `terminate` method only accepts a `teardown` parameter.\",\n      \"new_code\": \"def rotating_write(self, message):\\n        if self.rotation_function(message, self.file):\\n            self.terminate(teardown=True)\\n        self.file.write(message)\"\n    },\n    {\n      \"function\": \"loguru._file_sink.FileSink.stop\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `stop` method calls `terminate` with multiple parameters, which have been removed. The new `terminate` method only accepts a `teardown` parameter.\",\n      \"new_code\": \"def stop(self):\\n        rotating = self.rotation_function is not None\\n        appending = 'a' in self.mode\\n        compression = (self.compression_function is not None) and (not rotating or not appending)\\n        retention = (self.retention_function is not None) and (not rotating or not appending)\\n        check = compression\\n        self.terminate(teardown=True)\"\n    }\n  ]\n}",
+  "seconds": 28.9,
+  "seed": 1001
+ },
+ "loguru-heldout-005/NO7@42": {
+  "answer_tokens": 388,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "e0838150cd2a4e5b",
+  "prompt_tokens": 4326,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"FileSink.initialize_write_function\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `initialize_write_function` method calls `terminate` with the `create_new` parameter, which has been removed. We need to adjust the call to `terminate` to match the new signature.\",\n      \"new_code\": \"def initialize_write_function(self):\\n    self.terminate(teardown=True)\\n\\n    if self.rotation_function is None:\\n        self.write = self.file.write\\n    else:\\n        self.write = self.rotating_write\"\n    },\n    {\n      \"function\": \"FileSink.rotating_write\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `rotating_write` method calls `terminate` with several parameters, which have been removed. We need to adjust the call to `terminate` to match the new signature.\",\n      \"new_code\": \"def rotating_write(self, message):\\n    if self.rotation_function(message, self.file):\\n        self.terminate(teardown=True)\\n    self.file.write(message)\"\n    },\n    {\n      \"function\": \"FileSink.stop\",\n      \"file\": \"loguru/_file_sink.py\",\n      \"reason\": \"The `stop` method calls `terminate` with several parameters, which have been removed. We need to adjust the call to `terminate` to match the new signature.\",\n      \"new_code\": \"def stop(self):\\n    rotating = self.rotation_function is not None\\n    appending = 'a' in self.mode\\n    compression = (self.compression_function is not None) and (not rotating or not appending)\\n    retention = (self.retention_function is not None) and (not rotating or not appending)\\n    self.terminate(teardown=compression or retention)\"\n    }\n  ]\n}",
+  "seconds": 28.0,
   "seed": 42
  }
 }
