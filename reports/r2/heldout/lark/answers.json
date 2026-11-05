@@ -1,0 +1,312 @@
+{
+ "lark-heldout-001/FULL@1001": {
+  "answer_tokens": 102,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "882427b12246c7c0",
+  "prompt_tokens": 2615,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"LALR_Parser.serialize\",\n      \"file\": \"lark/parsers/lalr_parser.py\",\n      \"reason\": \"The `serialize` method of `ParseTable` now takes a `memo` parameter, so the caller `LALR_Parser.serialize` must pass this parameter.\",\n      \"new_code\": \"def serialize(self):\\n        return self._parse_table.serialize(memo={})\"\n    }\n  ]\n}",
+  "seconds": 8.1,
+  "seed": 1001
+ },
+ "lark-heldout-001/FULL@42": {
+  "answer_tokens": 100,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "882427b12246c7c0",
+  "prompt_tokens": 2615,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"LALR_Parser.serialize\",\n      \"file\": \"lark/parsers/lalr_parser.py\",\n      \"reason\": \"The `serialize` method of `ParseTable` now takes an additional `memo` parameter, which `LALR_Parser.serialize` needs to pass.\",\n      \"new_code\": \"def serialize(self):\\n        return self._parse_table.serialize(memo={})\"\n    }\n  ]\n}",
+  "seconds": 10.3,
+  "seed": 42
+ },
+ "lark-heldout-001/NO47@1001": {
+  "answer_tokens": 183,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "900f9bd80d5a79cd",
+  "prompt_tokens": 2520,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lark.parsers.lalr_analysis.ParseTable.deserialize\",\n      \"file\": \"lark/parsers/lalr_analysis.py\",\n      \"reason\": \"The `deserialize` method needs to be updated to handle the new structure of the serialized data, specifically removing the 'rules' key.\",\n      \"new_code\": \"    @classmethod\\n    def deserialize(cls, data, memo):\\n        tokens = data['tokens']\\n        states = {\\n            state: {tokens[token]: ((Reduce, memo[arg]) if action==1 else (Shift, arg))\\n                    for token, (action, arg) in actions.items()}\\n            for state, actions in data['states'].items()\\n        }\\n        return cls(states, data['start_state'], data['end_state'])\"\n    }\n  ]\n}",
+  "seconds": 12.8,
+  "seed": 1001
+ },
+ "lark-heldout-001/NO47@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "900f9bd80d5a79cd",
+  "prompt_tokens": 2520,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.1,
+  "seed": 42
+ },
+ "lark-heldout-001/NO4@1001": {
+  "answer_tokens": 637,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "14849f97138f893d",
+  "prompt_tokens": 2573,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"LALR_Analyzer.compute_lookahead\",\n      \"file\": \"lark/parsers/lalr_analysis.py\",\n      \"reason\": \"The `compute_lookahead` method creates a `ParseTable` instance, which now requires a `memo` parameter in its `serialize` method.\",\n      \"new_code\": \"class LALR_Analyzer(GrammarAnalyzer):\\n\\n    def compute_lookahead(self):\\n        self.end_states = []\\n\\n        self.states = {}\\n        def step(state):\\n            lookahead = defaultdict(list)\\n            sat, unsat = classify_bool(state, lambda rp: rp.is_satisfied)\\n            for rp in sat:\\n                for term in self.FOLLOW.get(rp.rule.origin, ()):                    lookahead[term].append((Reduce, rp.rule))\\n\\n            d = classify(unsat, lambda rp: rp.next)\\n            for sym, rps in d.items():\\n                rps = {rp.advance(sym) for rp in rps}\\n\\n                for rp in set(rps):\\n                    if not rp.is_satisfied and not rp.next.is_term:\\n                        rps |= self.expand_rule(rp.next)\\n\\n                new_state = fzset(rps)\\n                lookahead[sym].append((Shift, new_state))\\n                if sym == Terminal('$END'):\\n                    self.end_states.append( new_state )\\n                yield new_state\\n\\n            for k, v in lookahead.items():\\n                if len(v) > 1:\\n                    if self.debug:\\n                        logging.warn(\\\"Shift/reduce conflict for terminal %s:  (resolving as shift)\\\", k.name)\\n                        for act, arg in v:\\n                            logging.warn(' * %s: %s', act, arg)\\n                    for x in v:\\n                        # XXX resolving shift/reduce into shift, like PLY\\n                        # Give a proper warning\\n                        if x[0] is Shift:\\n                            lookahead[k] = [x]\\n\\n            for k, v in lookahead.items():\\n                if not len(v) == 1:\\n                    raise GrammarError(\\\"Collision in %s: %s\\\" %(k, ', '.join(['\\n  * %s: %s' % x for x in v])))\\n\\n            self.states[state] = {k.name:v[0] for k, v in lookahead.items()}\\n\\n        for _ in bfs([self.start_state], step):\\n            pass\\n\\n        self.end_state ,= self.end_states\\n\\n        self._parse_table = ParseTable(self.states, self.start_state, self.end_state)\\n\\n        if self.debug:\\n            self.parse_table = self._parse_table\\n        else:\\n            self.parse_table = IntParseTable.from_ParseTable(self._parse_table)\\n\\n        memo = {}  # Initialize memo dictionary\\n        return self._parse_table.serialize(memo)\"\n    }\n  ]\n}",
+  "seconds": 43.2,
+  "seed": 1001
+ },
+ "lark-heldout-001/NO4@42": {
+  "answer_tokens": 676,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "14849f97138f893d",
+  "prompt_tokens": 2573,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"LALR_Analyzer.compute_lookahead\",\n      \"file\": \"lark/parsers/lalr_analysis.py\",\n      \"reason\": \"The `compute_lookahead` method creates a `ParseTable` instance, which now requires a `memo` parameter in its `serialize` method. Therefore, the `compute_lookahead` method must be updated to pass a `memo` parameter when calling `serialize`.\",\n      \"new_code\": \"class LALR_Analyzer(GrammarAnalyzer):\\n\\n    def compute_lookahead(self):\\n        self.end_states = []\\n\\n        self.states = {}\\n        def step(state):\\n            lookahead = defaultdict(list)\\n            sat, unsat = classify_bool(state, lambda rp: rp.is_satisfied)\\n            for rp in sat:\\n                for term in self.FOLLOW.get(rp.rule.origin, ()):                    lookahead[term].append((Reduce, rp.rule))\\n\\n            d = classify(unsat, lambda rp: rp.next)\\n            for sym, rps in d.items():\\n                rps = {rp.advance(sym) for rp in rps}\\n\\n                for rp in set(rps):\\n                    if not rp.is_satisfied and not rp.next.is_term:\\n                        rps |= self.expand_rule(rp.next)\\n\\n                new_state = fzset(rps)\\n                lookahead[sym].append((Shift, new_state))\\n                if sym == Terminal('$END'):\\n                    self.end_states.append( new_state )\\n                yield new_state\\n\\n            for k, v in lookahead.items():\\n                if len(v) > 1:\\n                    if self.debug:\\n                        logging.warn(\\\"Shift/reduce conflict for terminal %s:  (resolving as shift)\\\", k.name)\\n                        for act, arg in v:\\n                            logging.warn(' * %s: %s', act, arg)\\n                    for x in v:\\n                        # XXX resolving shift/reduce into shift, like PLY\\n                        # Give a proper warning\\n                        if x[0] is Shift:\\n                            lookahead[k] = [x]\\n\\n            for k, v in lookahead.items():\\n                if not len(v) == 1:\\n                    raise GrammarError(\\\"Collision in %s: %s\\\" %(k, ', '.join(['\\n  * %s: %s' % x for x in v])))\\n\\n            self.states[state] = {k.name:v[0] for k, v in lookahead.items()}\\n\\n        for _ in bfs([self.start_state], step):\\n            pass\\n\\n        self.end_state ,= self.end_states\\n\\n        self._parse_table = ParseTable(self.states, self.start_state, self.end_state)\\n\\n        if self.debug:\\n            self.parse_table = self._parse_table\\n        else:\\n            self.parse_table = IntParseTable.from_ParseTable(self._parse_table)\\n\\n        # Add memo parameter when serializing\\n        memo = {}\\n        serialized_parse_table = self._parse_table.serialize(memo)\\n        return serialized_parse_table\"\n    }\n  ]\n}",
+  "seconds": 45.9,
+  "seed": 42
+ },
+ "lark-heldout-001/NO6@1001": {
+  "answer_tokens": 184,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "abd0a0a898df2814",
+  "prompt_tokens": 2607,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lark.parsers.lalr_parser.LALR_Parser.deserialize\",\n      \"file\": \"lark/parsers/lalr_parser.py\",\n      \"reason\": \"The `deserialize` method needs to be updated to handle the new `serialize` method's output, which no longer includes the 'rules' key.\",\n      \"new_code\": \"def deserialize(cls, data, memo):\\n    tokens = data['tokens']\\n    states = {\\n        state: {tokens[token]: ((Reduce, memo[arg]) if action==1 else (Shift, arg))\\n                for token, (action, arg) in actions.items()}\\n        for state, actions in data['states'].items()\\n    }\\n    return cls(states, data['start_state'], data['end_state'])\"\n    }\n  ]\n}",
+  "seconds": 13.0,
+  "seed": 1001
+ },
+ "lark-heldout-001/NO6@42": {
+  "answer_tokens": 101,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "abd0a0a898df2814",
+  "prompt_tokens": 2607,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"LALR_Parser.serialize\",\n      \"file\": \"lark/parsers/lalr_parser.py\",\n      \"reason\": \"The `serialize` method of `LALR_Parser` now needs to pass the `memo` parameter to the `serialize` method of `ParseTable`.\",\n      \"new_code\": \"def serialize(self):\\n        return self._parse_table.serialize(memo)\"\n    }\n  ]\n}",
+  "seconds": 7.5,
+  "seed": 42
+ },
+ "lark-heldout-001/NO7@1001": {
+  "answer_tokens": 133,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d639f4fb503d4bb2",
+  "prompt_tokens": 2579,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"LALR_Parser.serialize\",\n      \"file\": \"lark/parsers/lalr_parser.py\",\n      \"reason\": \"The `serialize` method of `ParseTable` now takes a `memo` parameter, which is used in the `serialize` method of `LALR_Parser`. This change requires the `LALR_Parser` to pass the `memo` parameter to the `serialize` method of `ParseTable`.\",\n      \"new_code\": \"def serialize(self, memo):\\n        return self.parse_table.serialize(memo)\"\n    }\n  ]\n}",
+  "seconds": 9.5,
+  "seed": 1001
+ },
+ "lark-heldout-001/NO7@42": {
+  "answer_tokens": 100,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d639f4fb503d4bb2",
+  "prompt_tokens": 2579,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"LALR_Parser.serialize\",\n      \"file\": \"lark/parsers/lalr_parser.py\",\n      \"reason\": \"The `serialize` method of `ParseTable` now takes an additional `memo` argument, which `LALR_Parser.serialize` should pass to it.\",\n      \"new_code\": \"def serialize(self):\\n        return self.parse_table.serialize(memo={})\"\n    }\n  ]\n}",
+  "seconds": 7.3,
+  "seed": 42
+ },
+ "lark-heldout-002/FULL@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "99a90feb4a78a2ae",
+  "prompt_tokens": 4790,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.0,
+  "seed": 1001
+ },
+ "lark-heldout-002/FULL@42": {
+  "answer_tokens": 702,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "99a90feb4a78a2ae",
+  "prompt_tokens": 4790,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lark.parsers.earley_forest.ForestToParseTree.transform_intermediate_node\",\n      \"file\": \"lark/parsers/earley_forest.py\",\n      \"reason\": \"The function now needs to handle the case where `_check_cycle` does not raise `Discard` but instead returns `None`. This change ensures that the function continues to work as expected.\",\n      \"new_code\": \"def transform_intermediate_node(self, node, data):\\n        if id(node) not in self._successful_visits:\\n            raise Discard()\\n        self._check_cycle(node)\\n        if self._on_cycle_retreat:\\n            return\\n        self._successful_visits.remove(id(node))\\n        if len(data) > 1:\\n            children = [self.tree_class('_inter', c) for c in data]\\n            return self.tree_class('_iambig', children)\\n        return data[0]\"\n    },\n    {\n      \"function\": \"lark.parsers.earley_forest.ForestToParseTree.transform_packed_node\",\n      \"file\": \"lark/parsers/earley_forest.py\",\n      \"reason\": \"The function now needs to handle the case where `_check_cycle` does not raise `Discard` but instead returns `None`. This change ensures that the function continues to work as expected.\",\n      \"new_code\": \"def transform_packed_node(self, node, data):\\n        self._check_cycle(node)\\n        if self._on_cycle_retreat:\\n            return\\n        if self.resolve_ambiguity and id(node.parent) in self._successful_visits:\\n            raise Discard()\\n        if self._use_cache and id(node) in self._cache:\\n            return self._cache[id(node)]\\n        children = []\\n        assert len(data) <= 2\\n        data = PackedData(node, data)\\n        if data.left is not PackedData.NO_DATA:\\n            if node.left.is_intermediate and isinstance(data.left, list):\\n                children += data.left\\n            else:\\n                children.append(data.left)\\n        if data.right is not PackedData.NO_DATA:\\n            children.append(data.right)\\n        if node.parent.is_intermediate:\\n            return self._cache.setdefault(id(node), children)\\n        return self._cache.setdefault(id(node), self._call_rule_func(node, children))\"\n    },\n    {\n      \"function\": \"lark.parsers.earley_forest.ForestToParseTree.transform_symbol_node\",\n      \"file\": \"lark/parsers/earley_forest.py\",\n      \"reason\": \"The function now needs to handle the case where `_check_cycle` does not raise `Discard` but instead returns `None`. This change ensures that the function continues to work as expected.\",\n      \"new_code\": \"def transform_symbol_node(self, node, data):\\n        if id(node) not in self._successful_visits:\\n            raise Discard()\\n        self._check_cycle(node)\\n        if self._on_cycle_retreat:\\n            return\\n        self._successful_visits.remove(id(node))\\n        data = self._collapse_ambig(data)\\n        return self._call_ambig_func(node, data)\"\n    }\n  ]\n}",
+  "seconds": 54.7,
+  "seed": 42
+ },
+ "lark-heldout-002/NO47@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "fda00d411c5bd4d9",
+  "prompt_tokens": 4701,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 42
+ },
+ "lark-heldout-002/NO4@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "8c08e76d35f57216",
+  "prompt_tokens": 4786,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 42
+ },
+ "lark-heldout-002/NO6@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "2afa9439065fd19c",
+  "prompt_tokens": 4787,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 42
+ },
+ "lark-heldout-002/NO7@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "bc2831af3d617f34",
+  "prompt_tokens": 4790,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.2,
+  "seed": 42
+ },
+ "lark-heldout-003/FULL@42": {
+  "answer_tokens": 198,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "fdf0de829dd67149",
+  "prompt_tokens": 5398,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"TraditionalLexer.build\",\n      \"file\": \"lark/lexer.py\",\n      \"reason\": \"The `_create_unless` function now takes an additional `re_` parameter, which must be passed to it.\",\n      \"new_code\": \"def build(self, g_regex_flags=0):\\n        terminals, self.callback = _create_unless(self.terminals, g_regex_flags, re_)\\n        assert all(self.callback.values())\\n\\n        for type_, f in self.user_callbacks.items():\\n            if type_ in self.callback:\\n                # Already a callback there, probably UnlessCallback\\n                self.callback[type_] = CallChain(self.callback[type_], f, lambda t: t.type == type_)\\n            else:\\n                self.callback[type_] = f\\n\\n        self.mres = build_mres(terminals, g_regex_flags)\"\n    }\n  ]\n}",
+  "seconds": 20.7,
+  "seed": 42
+ },
+ "lark-heldout-003/NO47@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "556f4b93aa35b330",
+  "prompt_tokens": 5208,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.3,
+  "seed": 42
+ },
+ "lark-heldout-003/NO4@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "0147195960f814fd",
+  "prompt_tokens": 5355,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 42
+ },
+ "lark-heldout-003/NO6@42": {
+  "answer_tokens": 821,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "1f9ca12c47ec17dd",
+  "prompt_tokens": 5297,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"TraditionalLexer.build\",\n      \"file\": \"lark/lexer.py\",\n      \"reason\": \"The `_create_unless` function now requires an additional `re_` parameter, which must be passed to it.\",\n      \"new_code\": \"def build(self, g_regex_flags=0):\\n        terminals, self.callback = _create_unless(self.terminals, g_regex_flags, re_)\\n        assert all(self.callback.values())\\n\\n        for type_, f in self.user_callbacks.items():\\n            if type_ in self.callback:\\n                # Already a callback there, probably UnlessCallback\\n                self.callback[type_] = CallChain(self.callback[type_], f, lambda t: t.type == type_)\\n            else:\\n                self.callback[type_] = f\\n\\n        self.mres = build_mres(terminals, g_regex_flags)\"\n    },\n    {\n      \"function\": \"examples.standalone.json_parser._create_unless\",\n      \"file\": \"examples/standalone/json_parser.py\",\n      \"reason\": \"The `_create_unless` function now requires an additional `g_regex_flags` parameter, which must be passed to it.\",\n      \"new_code\": \"def _create_unless(terminals, g_regex_flags):\\n    tokens_by_type = classify(terminals, lambda t: type(t.pattern))\\n    assert len(tokens_by_type) <= 2, tokens_by_type.keys()\\n    embedded_strs = set()\\n    callback = {}\\n    for retok in tokens_by_type.get(PatternRE, []):\\n        unless = [] # {}\\n        for strtok in tokens_by_type.get(PatternStr, []):\\n            if strtok.priority > retok.priority:\\n                continue\\n            s = strtok.pattern.value\\n            m = re.match(retok.pattern.to_regexp(), s, g_regex_flags)\\n            if m and m.group(0) == s:\\n                unless.append(strtok)\\n                if strtok.pattern.flags <= retok.pattern.flags:\\n                    embedded_strs.add(strtok)\\n        if unless:\\n            callback[retok.name] = UnlessCallback(build_mres(unless, g_regex_flags, match_whole=True))\\n\\n    terminals = [t for t in terminals if t not in embedded_strs]\\n    return terminals, callback\"\n    },\n    {\n      \"function\": \"examples.standalone.json_parser._build_mres\",\n      \"file\": \"examples/standalone/json_parser.py\",\n      \"reason\": \"The `_build_mres` function now requires an additional `g_regex_flags` parameter, which must be passed to it.\",\n      \"new_code\": \"def _build_mres(terminals, max_size, g_regex_flags, match_whole):\\n    # Python sets an unreasonable group limit (currently 100) in its re module\\n    # Worse, the only way to know we reached it is by catching an AssertionError!\\n    # This function recursively tries less and less groups until it's successful.\\n    postfix = '$' if match_whole else ''\\n    mres = []\\n    while terminals:\\n        try:\\n            mre = re.compile(u'|'.join(u'(?P<%s>%s)'%(t.name, t.pattern.to_regexp()+postfix) for t in terminals[:max_size]), g_regex_flags)\\n        except AssertionError:  # Yes, this is what Python provides us.. :/\\n            return _build_mres(terminals, max_size//2, g_regex_flags, match_whole)\\n\\n        # terms_from_name = {t.name: t for t in terminals[:max_size]}\\n        mres.append((mre, {i:n for n,i in mre.groupindex.items()} ))\\n        terminals = terminals[max_size:]\\n    return mres\"\n    }\n  ]\n}",
+  "seconds": 60.0,
+  "seed": 42
+ },
+ "lark-heldout-003/NO7@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "abc68b3a3e31d7c4",
+  "prompt_tokens": 5269,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.1,
+  "seed": 42
+ },
+ "lark-heldout-004/FULL@42": {
+  "answer_tokens": 399,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d57106994b98d128",
+  "prompt_tokens": 3995,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"EBNF_to_BNF._generate_repeats\",\n      \"file\": \"lark/load_grammar.py\",\n      \"reason\": \"The function `_generate_repeats` calls `small_factors` with a single argument, but the updated `small_factors` now requires two arguments (`n` and `max_factor`).\",\n      \"new_code\": \"def _generate_repeats(self, rule, mn, mx):\\n    mn_factors = small_factors(mn, SMALL_FACTOR_THRESHOLD)\\n    mn_target = rule\\n    for a, b in mn_factors:\\n        mn_target = self._add_repeat_rule(a, b, mn_target, rule)\\n    if mx == mn:\\n        return mn_target\\n\\n    diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\\n    diff_factors = small_factors(diff, SMALL_FACTOR_THRESHOLD)\\n    diff_target = rule  # Match rule 1 times\\n    diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\\n    for a, b in diff_factors[:-1]:\\n        new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n        diff_target = new_diff_target\\n\\n    a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\\n    diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n\\n    return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\"\n    }\n  ]\n}",
+  "seconds": 32.4,
+  "seed": 42
+ },
+ "lark-heldout-004/NO47@42": {
+  "answer_tokens": 397,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "2b6864e798cc4753",
+  "prompt_tokens": 3986,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"EBNF_to_BNF._generate_repeats\",\n      \"file\": \"lark/load_grammar.py\",\n      \"reason\": \"The function `_generate_repeats` calls `small_factors` with a fixed threshold, which needs to be replaced with the new `max_factor` parameter.\",\n      \"new_code\": \"def _generate_repeats(self, rule, mn, mx):\\n    mn_factors = small_factors(mn, self.SMALL_FACTOR_THRESHOLD)\\n    mn_target = rule\\n    for a, b in mn_factors:\\n        mn_target = self._add_repeat_rule(a, b, mn_target, rule)\\n    if mx == mn:\\n        return mn_target\\n\\n    diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\\n    diff_factors = small_factors(diff, self.SMALL_FACTOR_THRESHOLD)\\n    diff_target = rule  # Match rule 1 times\\n    diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\\n    for a, b in diff_factors[:-1]:\\n        new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n        diff_target = new_diff_target\\n\\n    a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\\n    diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n\\n    return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\"\n    }\n  ]\n}",
+  "seconds": 29.4,
+  "seed": 42
+ },
+ "lark-heldout-004/NO4@42": {
+  "answer_tokens": 398,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "39f8c1f35ca4a185",
+  "prompt_tokens": 3859,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"EBNF_to_BNF._generate_repeats\",\n      \"file\": \"lark/load_grammar.py\",\n      \"reason\": \"The function `_generate_repeats` calls `small_factors` with a fixed threshold, which needs to be updated to use the new `max_factor` parameter.\",\n      \"new_code\": \"def _generate_repeats(self, rule, mn, mx):\\n    mn_factors = small_factors(mn, self.SMALL_FACTOR_THRESHOLD)\\n    mn_target = rule\\n    for a, b in mn_factors:\\n        mn_target = self._add_repeat_rule(a, b, mn_target, rule)\\n    if mx == mn:\\n        return mn_target\\n\\n    diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\\n    diff_factors = small_factors(diff, self.SMALL_FACTOR_THRESHOLD)\\n    diff_target = rule  # Match rule 1 times\\n    diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\\n    for a, b in diff_factors[:-1]:\\n        new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n        diff_target = new_diff_target\\n\\n    a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\\n    diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n\\n    return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\"\n    }\n  ]\n}",
+  "seconds": 29.3,
+  "seed": 42
+ },
+ "lark-heldout-004/NO6@42": {
+  "answer_tokens": 481,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "00514baf9fe10649",
+  "prompt_tokens": 3909,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lark.load_grammar.EBNF_to_BNF._generate_repeats\",\n      \"file\": \"lark/load_grammar.py\",\n      \"reason\": \"The function `small_factors` now takes an additional `max_factor` argument.\",\n      \"new_code\": \"def _generate_repeats(self, rule, mn, mx):\\n    \\\"\\\"\\\"\\n    We treat rule~mn..mx as rule~mn rule~0..(diff=mx-mn).\\n    We then use small_factors to split up mn and diff up into values [(a, b), ...]\\n    This values are used with the help of _add_repeat_rule and _add_repeat_rule_opt\\n    to generate a complete rule/expression that matches the corresponding number of repeats\\n    \\\"\\\"\\\"\\n    mn_factors = small_factors(mn, self.SMALL_FACTOR_THRESHOLD)\\n    mn_target = rule\\n    for a, b in mn_factors:\\n        mn_target = self._add_repeat_rule(a, b, mn_target, rule)\\n    if mx == mn:\\n        return mn_target\\n\\n    diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\\n    diff_factors = small_factors(diff, self.SMALL_FACTOR_THRESHOLD)\\n    diff_target = rule  # Match rule 1 times\\n    diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\\n    for a, b in diff_factors[:-1]:\\n        new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n        diff_target = new_diff_target\\n\\n    a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\\n    diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n\\n    return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\"\n    }\n  ]\n}",
+  "seconds": 35.1,
+  "seed": 42
+ },
+ "lark-heldout-004/NO7@42": {
+  "answer_tokens": 409,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "abba51f13e5cc78d",
+  "prompt_tokens": 3923,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"EBNF_to_BNF._generate_repeats\",\n      \"file\": \"lark/load_grammar.py\",\n      \"reason\": \"The function `_generate_repeats` calls `small_factors` with a single argument, but now it requires two arguments (`n` and `max_factor`). We need to pass the appropriate `max_factor` value.\",\n      \"new_code\": \"def _generate_repeats(self, rule, mn, mx):\\n    mn_factors = small_factors(mn, self.SMALL_FACTOR_THRESHOLD)\\n    mn_target = rule\\n    for a, b in mn_factors:\\n        mn_target = self._add_repeat_rule(a, b, mn_target, rule)\\n    if mx == mn:\\n        return mn_target\\n\\n    diff = mx - mn + 1  # We add one because _add_repeat_opt_rule generates rules that match one less\\n    diff_factors = small_factors(diff, self.SMALL_FACTOR_THRESHOLD)\\n    diff_target = rule  # Match rule 1 times\\n    diff_opt_target = ST('expansion', [])  # match rule 0 times (e.g. up to 1 -1 times)\\n    for a, b in diff_factors[:-1]:\\n        new_diff_target = self._add_repeat_rule(a, b, diff_target, rule)\\n        diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n        diff_target = new_diff_target\\n\\n    a, b = diff_factors[-1]  # We do the last on separately since we don't need to call self._add_repeat_rule\\n    diff_opt_target = self._add_repeat_opt_rule(a, b, diff_target, diff_opt_target, rule)\\n\\n    return ST('expansions', [ST('expansion', [mn_target] + [diff_opt_target])])\"\n    }\n  ]\n}",
+  "seconds": 30.0,
+  "seed": 42
+ },
+ "lark-heldout-005/FULL@42": {
+  "answer_tokens": 1131,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "ce34c85a62701323",
+  "prompt_tokens": 3411,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lark.tools.nearley.NearleyToLark.directive\",\n      \"file\": \"lark/tools/nearley.py\",\n      \"reason\": \"The `nearley_to_lark` function now requires a `context` parameter, which is used in the `NearleyToLark` class. The `directive` method needs to pass this context when calling `nearley_to_lark`.\",\n      \"new_code\": \"def directive(self, name, *args):\\n    if name == 'builtin':\\n        arg = args[0][1:-1]\\n        with open(os.path.join(self.builtin_path, arg)) as f:\\n            text = f.read()\\n        return nearley_to_lark(text, self.builtin_path, self.context)\\n    elif name == 'preprocessor':\\n        return ''\\n\\n    raise Exception('Unknown directive: %s' % name)\"\n    },\n    {\n      \"function\": \"lark.tools.nearley.main\",\n      \"file\": \"lark/tools/nearley.py\",\n      \"reason\": \"The `nearley_to_lark` function now requires a `context` parameter. The `main` function needs to provide this context when calling `nearley_to_lark`.\",\n      \"new_code\": \"def main():\\n    try:\\n        nearley_lib = sys.argv[1]\\n    except IndexError:\\n        print(\\\"Reads Nearley grammar from stdin and outputs a lark grammar.\\\")\\n        print(\\\"Usage: %s <nearley_lib_path>\\\" % sys.argv[0])\\n        return\\n\\n    grammar = sys.stdin.read()\\n    context = {}  # Initialize context as needed\\n    print(nearley_to_lark(grammar, os.path.join(nearley_lib, 'builtin'), context))\"\n    },\n    {\n      \"function\": \"lark.tools.nearley.test\",\n      \"file\": \"lark/tools/nearley.py\",\n      \"reason\": \"The `nearley_to_lark` function now requires a `context` parameter. The `test` function needs to provide this context when calling `nearley_to_lark`.\",\n      \"new_code\": \"def test():\\n    css_example_grammar = \\\"\\\"\\\"\\n# http://www.w3.org/TR/css3-color/#colorunits\\n\\n    @builtin \\\"whitespace.ne\\\"\\n    @builtin \\\"number.ne\\\"\\n    @builtin \\\"postprocessors.ne\\\"\\n\\n    csscolor -> \\\"#\\\" hexdigit hexdigit hexdigit hexdigit hexdigit hexdigit {%\\n        function(d) {\\n            return {\\n                \\\"r\\\": parseInt(d[1]+d[2], 16),\\n                \\\"g\\\": parseInt(d[3]+d[4], 16),\\n                \\\"b\\\": parseInt(d[5]+d[6], 16),\\n            }\\n        }\\n    %}\\n              | \\\"#\\\" hexdigit hexdigit hexdigit {%\\n        function(d) {\\n            return {\\n                \\\"r\\\": parseInt(d[1]+d[1], 16),\\n                \\\"g\\\": parseInt(d[2]+d[2], 16),\\n                \\\"b\\\": parseInt(d[3]+d[3], 16),\\n            }\\n        }\\n    %}\\n              | \\\"rgb\\\"  _ \\\"(\\\" _ colnum _ \\\",\\\" _ colnum _ \\\",\\\" _ colnum _ \\\")\\\" {% $({\\\"r\\\": 4, \\\"g\\\": 8, \\\"b\\\": 12}) %}\\n              | \\\"hsl\\\"  _ \\\"(\\\" _ colnum _ \\\",\\\" _ colnum _ \\\",\\\" _ colnum _ \\\")\\\" {% $({\\\"h\\\": 4, \\\"s\\\": 8, \\\"l\\\": 12}) %}\\n              | \\\"rgba\\\" _ \\\"(\\\" _ colnum _ \\\",\\\" _ colnum _ \\\",\\\" _ colnum _ \\\",\\\" _ decimal _ \\\")\\\" {% $({\\\"r\\\": 4, \\\"g\\\": 8, \\\"b\\\": 12, \\\"a\\\": 16}) %}\\n              | \\\"hsla\\\" _ \\\"(\\\" _ colnum _ \\\",\\\" _ colnum _ \\\",\\\" _ colnum _ \\\",\\\" _ decimal _ \\\")\\\" {% $({\\\"h\\\": 4, \\\"s\\\": 8, \\\"l\\\": 12, \\\"a\\\": 16}) %}\\n\\n    hexdigit -> [a-fA-F0-9]\\n    colnum -> unsigned_int {% id %} | percentage {%\\n        function(d) {return Math.floor(d[0]*255); }\\n    %}\\n    \\\"\\\"\\\"\\n    context = {}  # Initialize context as needed\\n    converted_grammar = nearley_to_lark(css_example_grammar, '/home/erez/nearley/builtin', context)\\n    print(converted_grammar)\\n\\n    l = Lark(converted_grammar, start='csscolor')\\n    print(l.parse('#a199ff').pretty())\\n    print(l.parse('rgb(255, 70%, 3)').pretty())\"\n    }\n  ]\n}",
+  "seconds": 81.4,
+  "seed": 42
+ },
+ "lark-heldout-005/NO47@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "25f8b92f863456ca",
+  "prompt_tokens": 3402,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 42
+ },
+ "lark-heldout-005/NO4@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "1df329bd64f1afa7",
+  "prompt_tokens": 3254,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.9,
+  "seed": 42
+ },
+ "lark-heldout-005/NO6@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "50293ad6d1966879",
+  "prompt_tokens": 3407,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 42
+ },
+ "lark-heldout-005/NO7@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "4b64aab5228cf408",
+  "prompt_tokens": 3391,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.4,
+  "seed": 42
+ }
+}
