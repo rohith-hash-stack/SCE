@@ -1019,6 +1019,16 @@
   "seconds": 23.1,
   "seed": 42
  },
+ "axios-forward-011/NO47@1001": {
+  "answer_tokens": 818,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "943cfcb064e86197",
+  "prompt_tokens": 4234,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.core.AxiosError.visit\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `visit` function in `AxiosError` uses a similar logic to detect circular references, but it uses an array `seen` instead of a `Set` named `visited`. To maintain consistency and avoid potential issues, we should update the `seen` array to use a `Set`.\",\n      \"new_code\": \"const visit = (source) => {\\n  if (source === null || typeof source !== 'object') return source;\\n  if (utils.isBuffer(source)) return source;\\n  if (seen.has(source)) return undefined;\\n\\n  if (source instanceof AxiosHeaders) {\\n    source = source.toJSON();\\n  }\\n\\n  seen.add(source);\\n\\n  let result;\\n  if (utils.isArray(source)) {\\n    result = [];\\n    source.forEach((v, i) => {\\n      const reducedValue = visit(v);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[i] = reducedValue;\\n      }\\n    });\\n  } else {\\n    if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n      seen.delete(source);\\n      return source;\\n    }\\n\\n    result = Object.create(null);\\n    for (const [key, value] of Object.entries(source)) {\\n      const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[key] = reducedValue;\\n      }\\n    }\\n  }\\n\\n  seen.delete(source);\\n  return result;\\n};\"\n    },\n    {\n      \"function\": \"lib.core.AxiosError.redactConfig\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `redactConfig` function also uses a similar logic to detect circular references, but it uses an array `seen` instead of a `Set` named `visited`. To maintain consistency and avoid potential issues, we should update the `seen` array to use a `Set`.\",\n      \"new_code\": \"function redactConfig(config, redactKeys) {\\n  const lowerKeys = new Set(redactKeys.map((k) => String(k).toLowerCase()));\\n  const seen = new Set();\\n\\n  const visit = (source) => {\\n    if (source === null || typeof source !== 'object') return source;\\n    if (utils.isBuffer(source)) return source;\\n    if (seen.has(source)) return undefined;\\n\\n    if (source instanceof AxiosHeaders) {\\n      source = source.toJSON();\\n    }\\n\\n    seen.add(source);\\n\\n    let result;\\n    if (utils.isArray(source)) {\\n      result = [];\\n      source.forEach((v, i) => {\\n        const reducedValue = visit(v);\\n        if (!utils.isUndefined(reducedValue)) {\\n          result[i] = reducedValue;\\n        }\\n      });\\n    } else {\\n      if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n        seen.delete(source);\\n        return source;\\n      }\\n\\n      result = Object.create(null);\\n      for (const [key, value] of Object.entries(source)) {\\n        const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n        if (!utils.isUndefined(reducedValue)) {\\n          result[key] = reducedValue;\\n        }\\n      }\\n    }\\n\\n    seen.delete(source);\\n    return result;\\n  };\\n\\n  return visit(config);\\n}\"\n    }\n  ]\n}",
+  "seconds": 57.9,
+  "seed": 1001
+ },
  "axios-forward-011/NO47@42": {
   "answer_tokens": 782,
   "done_reason": "stop",
@@ -1069,6 +1079,16 @@
   "seconds": 54.6,
   "seed": 42
  },
+ "axios-forward-011/NO7@1001": {
+  "answer_tokens": 653,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "2c0cedd223fffb97",
+  "prompt_tokens": 4151,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"lib.utils.toJSONObject\",\n      \"file\": \"lib/utils.js\",\n      \"reason\": \"The `visit` function signature has changed from `(source, i)` to `(source)`, so `toJSONObject` must be updated to reflect this change.\",\n      \"new_code\": \"const toJSONObject = (obj) => {\\n  const visited = new Set();\\n\\n  const visit = (source) => {\\n    if (isObject(source)) {\\n      if (visited.has(source)) {\\n        return;\\n      }\\n\\n      //Buffer check\\n      if (isBuffer(source)) {\\n        return source;\\n      }\\n\\n      if (!('toJSON' in source)) {\\n        // add-on descent / delete-on-ascent: preserves path semantics, so DAG nodes serialise at every occurrence (see #7230).\\n        visited.add(source);\\n        const target = isArray(source) ? [] : {};\\n\\n        forEach(source, (value, key) => {\\n          const reducedValue = visit(value);\\n          !isUndefined(reducedValue) && (target[key] = reducedValue);\\n        });\\n\\n        visited.delete(source);\\n\\n        return target;\\n      }\\n    }\\n\\n    return source;\\n  };\\n\\n  return visit(obj);\\n};\"\n    },\n    {\n      \"function\": \"lib.core.AxiosError.visit\",\n      \"file\": \"lib/core/AxiosError.js\",\n      \"reason\": \"The `visit` function signature has changed from `(source, i)` to `(source)`, so `AxiosError.visit` must be updated to reflect this change.\",\n      \"new_code\": \"const visit = (source) => {\\n  if (source === null || typeof source !== 'object') return source;\\n  if (utils.isBuffer(source)) return source;\\n  if (seen.indexOf(source) !== -1) return undefined;\\n\\n  if (source instanceof AxiosHeaders) {\\n    source = source.toJSON();\\n  }\\n\\n  seen.push(source);\\n\\n  let result;\\n  if (utils.isArray(source)) {\\n    result = [];\\n    source.forEach((v, i) => {\\n      const reducedValue = visit(v);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[i] = reducedValue;\\n      }\\n    });\\n  } else {\\n    if (!utils.isPlainObject(source) && hasOwnOrPrototypeToJSON(source)) {\\n      seen.pop();\\n      return source;\\n    }\\n\\n    result = Object.create(null);\\n    for (const [key, value] of Object.entries(source)) {\\n      const reducedValue = lowerKeys.has(key.toLowerCase()) ? REDACTED : visit(value);\\n      if (!utils.isUndefined(reducedValue)) {\\n        result[key] = reducedValue;\\n      }\\n    }\\n  }\\n\\n  seen.pop();\\n  return result;\\n};\"\n    }\n  ]\n}",
+  "seconds": 47.1,
+  "seed": 1001
+ },
  "axios-forward-011/NO7@42": {
   "answer_tokens": 410,
   "done_reason": "stop",
@@ -1098,6 +1118,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 5.0,
   "seed": 42
+ },
+ "axios-forward-012/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "f3ffdd78340aa099",
+  "prompt_tokens": 3529,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 1001
  },
  "axios-forward-012/NO47@42": {
   "answer_tokens": 6,
@@ -1148,6 +1178,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.6,
   "seed": 42
+ },
+ "axios-forward-012/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6566a3e6dc14f682",
+  "prompt_tokens": 3475,
+  "raw": "{\"changes\": []}",
+  "seconds": 3.2,
+  "seed": 1001
  },
  "axios-forward-012/NO7@42": {
   "answer_tokens": 6,
