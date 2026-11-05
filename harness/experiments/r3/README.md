@@ -60,7 +60,8 @@ tests pass. That is Family B. There is no separate blast family.
   repeat that.
   - If the full candidate pool yields fewer, a family runs with what it yields, down to a minimum of 50.
   - Below 50, that family is not run, and is reported as not run.
-- Each family has at least 8 repositories, with at most 10 tasks from any one.
+- Each family has at least 8 repositories, with at most 10 tasks from any one (Family N: ~~10~~ → at most 20 per
+  repository, amendment R3-2, item 5).
 - At least half of the tasks come from repositories never used before. No suite, R1 or blast2 task is reused.
 - **Training cutoff:** Qwen does not publish the training-data cutoff of `qwen2.5-coder:14b-instruct`. Its public
   release was 2024-11-12 [to be checked against the model card at freeze].
@@ -531,3 +532,30 @@ tested before either is pruned."
   `dead_weight_single` and `harmful_single`.
 - Tests: `tests/test_r2.py`, the two `test_r3_4_*` tests.
 - R2-5's Holm families for the pruning decision grow from three arms to four. No margin, floor, α or seed changes.
+
+## R2 sign-off (2026-11-05; team-accepted)
+
+1. **Tool freeze.**
+   "R2 (commit 2d1a07af, 2026-11-05) found all three sections matter. Full change context retained for R3; nothing
+   pruned. Sections 4, 6 and 7 are each load-bearing on development and held-out sets, both seeds, every language.
+   §4 and §7 are complementary (caller facts + caller code), not redundant — combined removal (−42 dev / −58
+   held-out) confirms the mechanism is the caller information plus style. R3 keeps the full bundle."
+2. **What R2 adds to R1.**
+   "R1 showed the context works (+0.18 vs padded baseline). R2 shows which components earn it: caller facts (§4),
+   style (§6), and caller code (§7) each contribute independently. The claim narrows and strengthens: PRISM's
+   advantage comes from structure — caller information plus style — not from prompt length."
+3. **The gap between development and held-out accuracy.**
+   "Full-context accuracy is 65% on development and 85% on held-out. Ablation deltas are consistent across both (−21,
+   −9, −17/−22, −42/−58). The absolute difference likely reflects task difficulty or repository structure, not a
+   PRISM property. It does not weaken the mechanism finding."
+4. **The scope limit for Family N.**
+   "R2 ablated change_context (Family B's tool). new_function_context (Family N's tool) was not ablated at section
+   level. R3 Family N tests the full tool as a bundle; component attribution is deferred to a future round."
+
+**Corrected predictions** (recorded before the run, falsified by it):
+
+| prediction | outcome |
+|---|---|
+| R2-H6: §6 (style) is dead weight for forward | **wrong:** removing it costs 9 points (dev and held-out) |
+| R2-H7: §7 (callers' code) is redundant once §4 is present | **wrong:** removing it costs 17 (dev) and 22 (held-out) points |
+| Pre-run note: §4 and §7 both name the callers, so single removals would be cheap | **wrong:** each costs about 20 points; both together cost 42 (dev) and 58 (held-out) |

@@ -83,3 +83,30 @@
 - **Scope:** one model, single-shot prompts, forward only. It says nothing about blast, newfn, agents (R3) or other
   models (R5).
 - R2's FULL numbers are not pooled with R1's (R2-4: digest v2).
+
+## R2 sign-off (2026-11-05; team-accepted)
+
+1. **Tool freeze.**
+   "R2 (commit 2d1a07af, 2026-11-05) found all three sections matter. Full change context retained for R3; nothing
+   pruned. Sections 4, 6 and 7 are each load-bearing on development and held-out sets, both seeds, every language.
+   §4 and §7 are complementary (caller facts + caller code), not redundant — combined removal (−42 dev / −58
+   held-out) confirms the mechanism is the caller information plus style. R3 keeps the full bundle."
+2. **What R2 adds to R1.**
+   "R1 showed the context works (+0.18 vs padded baseline). R2 shows which components earn it: caller facts (§4),
+   style (§6), and caller code (§7) each contribute independently. The claim narrows and strengthens: PRISM's
+   advantage comes from structure — caller information plus style — not from prompt length."
+3. **The gap between development and held-out accuracy.**
+   "Full-context accuracy is 65% on development and 85% on held-out. Ablation deltas are consistent across both (−21,
+   −9, −17/−22, −42/−58). The absolute difference likely reflects task difficulty or repository structure, not a
+   PRISM property. It does not weaken the mechanism finding."
+4. **The scope limit for Family N.**
+   "R2 ablated change_context (Family B's tool). new_function_context (Family N's tool) was not ablated at section
+   level. R3 Family N tests the full tool as a bundle; component attribution is deferred to a future round."
+
+**Corrected predictions** (recorded before the run, falsified by it):
+
+| prediction | outcome |
+|---|---|
+| R2-H6: §6 (style) is dead weight for forward | **wrong:** removing it costs 9 points (dev and held-out) |
+| R2-H7: §7 (callers' code) is redundant once §4 is present | **wrong:** removing it costs 17 (dev) and 22 (held-out) points |
+| Pre-run note: §4 and §7 both name the callers, so single removals would be cheap | **wrong:** each costs about 20 points; both together cost 42 (dev) and 58 (held-out) |
