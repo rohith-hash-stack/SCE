@@ -319,6 +319,16 @@
   "seconds": 122.2,
   "seed": 42
  },
+ "zustand-heldout-004/NO47@1001": {
+  "answer_tokens": 399,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "5d007c7d069c0562",
+  "prompt_tokens": 4369,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"useStore\",\n      \"file\": \"src/index.ts\",\n      \"reason\": \"The useStore function needs to be updated to accommodate the new Subscriber interface and its properties.\",\n      \"new_code\": \"const useStore = <StateSlice>(\\n  selector: StateSelector<TState, StateSlice> = getState,\\n  equalityFn: EqualityChecker<StateSlice> = Object.is\\n) => {\\n  const listenerIndex = useRenderId()\\n  const optionsRef = useRef<UseStoreSubscribeOptions<TState, StateSlice>>()\\n  if (!optionsRef.current) {\\n    optionsRef.current = {\\n      selector,\\n      equalityFn,\\n      currentSlice: selector(state),\\n      listenerIndex,\\n    }\\n  }\\n  const options = optionsRef.current\\n\\n  // Update state slice if selector has changed or subscriber errored.\\n  if (selector !== options.selector || options.subscribeError) {\\n    const newStateSlice = selector(state)\\n    if (!equalityFn(options.currentSlice, newStateSlice)) {\\n      options.currentSlice = newStateSlice\\n    }\\n  }\\n\\n  useIsoLayoutEffect(() => {\\n    options.selector = selector\\n    options.equalityFn = equalityFn\\n    options.subscribeError = undefined\\n  })\\n\\n  const forceUpdate = useReducer(forceUpdateReducer, 0)[1]\\n  useIsoLayoutEffect(() => {\\n    const subscriber = {\\n      callback: options.callback,\\n      selector: options.selector,\\n      equalityFn: options.equalityFn,\\n      listener: forceUpdate,\\n      currentSlice: options.currentSlice,\\n      index: options.listenerIndex,\\n      errored: false,\\n    }\\n    return apiSubscribe(subscriber)\\n  }, [])\\n\\n  return options.currentSlice\\n}\"\n    }\n  ]\n}",
+  "seconds": 29.7,
+  "seed": 1001
+ },
  "zustand-heldout-004/NO47@42": {
   "answer_tokens": 398,
   "done_reason": "stop",
@@ -389,6 +399,16 @@
   "seconds": 2.6,
   "seed": 42
  },
+ "zustand-heldout-005/FULL@1001": {
+  "answer_tokens": 337,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "800fab91545c2bb8",
+  "prompt_tokens": 2897,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"rollup.config.exports\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The `createCommonJSConfig` function now takes an additional `options` parameter, so the caller must pass this parameter.\",\n      \"new_code\": \"module.exports = function (args) {\\n  let c = Object.keys(args).find((key) => key.startsWith('config-'))\\n  if (c) {\\n    c = c.slice('config-'.length).replace(/_/g, '/')\\n  } else {\\n    c = 'index'\\n  }\\n  return [\\n    ...(c === 'index' ? [createDeclarationConfig(`src/${c}.ts`, 'dist')] : []),\\n    createCommonJSConfig(`src/${c}.ts`, `dist/${c}`, {}),\\n    createESMConfig(`src/${c}.ts`, `dist/esm/${c}.js`),\\n    createESMConfig(`src/${c}.ts`, `dist/esm/${c}.mjs`),\\n    createUMDConfig(`src/${c}.ts`, `dist/umd/${c}`, 'development'),\\n    createUMDConfig(`src/${c}.ts`, `dist/umd/${c}`, 'production'),\\n    createSystemConfig(`src/${c}.ts`, `dist/system/${c}`, 'development'),\\n    createSystemConfig(`src/${c}.ts`, `dist/system/${c}`, 'production'),\\n  ]\\n}\"\n    }\n  ]\n}",
+  "seconds": 24.5,
+  "seed": 1001
+ },
  "zustand-heldout-005/FULL@42": {
   "answer_tokens": 337,
   "done_reason": "stop",
@@ -398,6 +418,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"rollup.config.exports\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The `createCommonJSConfig` function now takes an additional `options` parameter, so the caller must pass this parameter.\",\n      \"new_code\": \"module.exports = function (args) {\\n  let c = Object.keys(args).find((key) => key.startsWith('config-'))\\n  if (c) {\\n    c = c.slice('config-'.length).replace(/_/g, '/')\\n  } else {\\n    c = 'index'\\n  }\\n  return [\\n    ...(c === 'index' ? [createDeclarationConfig(`src/${c}.ts`, 'dist')] : []),\\n    createCommonJSConfig(`src/${c}.ts`, `dist/${c}`, {}),\\n    createESMConfig(`src/${c}.ts`, `dist/esm/${c}.js`),\\n    createESMConfig(`src/${c}.ts`, `dist/esm/${c}.mjs`),\\n    createUMDConfig(`src/${c}.ts`, `dist/umd/${c}`, 'development'),\\n    createUMDConfig(`src/${c}.ts`, `dist/umd/${c}`, 'production'),\\n    createSystemConfig(`src/${c}.ts`, `dist/system/${c}`, 'development'),\\n    createSystemConfig(`src/${c}.ts`, `dist/system/${c}`, 'production'),\\n  ]\\n}\"\n    }\n  ]\n}",
   "seconds": 26.3,
   "seed": 42
+ },
+ "zustand-heldout-005/NO47@1001": {
+  "answer_tokens": 658,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6b80ed248895d99a",
+  "prompt_tokens": 2775,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"createUMDConfig\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The `createUMDConfig` function needs to be updated to include the `options` parameter and handle the `addModuleExport` option.\",\n      \"new_code\": \"function createUMDConfig(input, output, env, options) {\\n  const c = output.split('/').pop()\\n  return {\\n    input,\\n    output: {\\n      file: `${output}.${env}.js`,\\n      format: 'umd',\\n      name:\\n        c === 'index'\\n          ? 'zustand'\\n          : `zustand${c.slice(0, 1).toUpperCase()}${c.slice(1)}`,\\n      globals: {\\n        react: 'React',\\n        // FIXME not yet supported\\n        'use-sync-external-store/shim/with-selector':\\n          'useSyncExternalStoreShimWithSelector',\\n        'zustand/vanilla': 'zustandVanilla',\\n      },\\n      outro: options.addModuleExport\\n        ? 'module.exports = exports.default; Object.assign(exports.default, exports);'\\n        : '',\\n    },\\n    external,\\n    plugins: [\\n      alias({\\n        entries: {\\n          './vanilla': 'zustand/vanilla',\\n        },\\n      }),\\n      resolve({ extensions }),\\n      replace({\\n        __DEV__: env !== 'production' ? 'true' : 'false',\\n        preventAssignment: true,\\n      }),\\n      babelPlugin(getBabelOptions({ ie: 11 })),\\n      ...(env === 'production' ? [terser()] : []),\\n    ],\\n  }\\n}\"\n    },\n    {\n      \"function\": \"createSystemConfig\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The `createSystemConfig` function needs to be updated to include the `options` parameter and handle the `addModuleExport` option.\",\n      \"new_code\": \"function createSystemConfig(input, output, env, options) {\\n  return {\\n    input,\\n    output: {\\n      file: `${output}.${env}.js`,\\n      format: 'system',\\n      outro: options.addModuleExport\\n        ? 'module.exports = exports.default; Object.assign(exports.default, exports);'\\n        : '',\\n    },\\n    external,\\n    plugins: [\\n      alias({\\n        entries: {\\n          './vanilla': 'zustand/vanilla',\\n        },\\n      }),\\n      resolve({ extensions }),\\n      replace({\\n        __DEV__: env !== 'production' ? 'true' : 'false',\\n        preventAssignment: true,\\n      }),\\n      getEsbuild('node12', env),\\n    ],\\n  }\\n}\"\n    }\n  ]\n}",
+  "seconds": 45.1,
+  "seed": 1001
  },
  "zustand-heldout-005/NO47@42": {
   "answer_tokens": 340,
@@ -409,6 +439,16 @@
   "seconds": 23.9,
   "seed": 42
  },
+ "zustand-heldout-005/NO4@1001": {
+  "answer_tokens": 610,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "efeec9336b67f176",
+  "prompt_tokens": 2863,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"createUMDConfig\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The `createUMDConfig` function needs to be updated to include the `outro` field in the output configuration, similar to the changes made in `createCommonJSConfig`.\",\n      \"new_code\": \"function createUMDConfig(input, output, env) {\\n  const c = output.split('/').pop()\\n  return {\\n    input,\\n    output: {\\n      file: `${output}.${env}.js`,\\n      format: 'umd',\\n      name:\\n        c === 'index'\\n          ? 'zustand'\\n          : `zustand${c.slice(0, 1).toUpperCase()}${c.slice(1)}`,\\n      globals: {\\n        react: 'React',\\n        // FIXME not yet supported\\n        'use-sync-external-store/shim/with-selector':\\n          'useSyncExternalStoreShimWithSelector',\\n        'zustand/vanilla': 'zustandVanilla',\\n      },\\n    },\\n    external,\\n    plugins: [\\n      alias({\\n        entries: {\\n          './vanilla': 'zustand/vanilla',\\n        },\\n      }),\\n      resolve({ extensions }),\\n      replace({\\n        __DEV__: env !== 'production' ? 'true' : 'false',\\n        preventAssignment: true,\\n      }),\\n      babelPlugin(getBabelOptions({ ie: 11 })),\\n      ...(env === 'production' ? [terser()] : []),\\n    ],\\n  }\\n}\"\n    },\n    {\n      \"function\": \"createSystemConfig\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The `createSystemConfig` function needs to be updated to include the `outro` field in the output configuration, similar to the changes made in `createCommonJSConfig`.\",\n      \"new_code\": \"function createSystemConfig(input, output, env) {\\n  return {\\n    input,\\n    output: {\\n      file: `${output}.${env}.js`,\\n      format: 'system',\\n    },\\n    external,\\n    plugins: [\\n      alias({\\n        entries: {\\n          './vanilla': 'zustand/vanilla',\\n        },\\n      }),\\n      resolve({ extensions }),\\n      replace({\\n        __DEV__: env !== 'production' ? 'true' : 'false',\\n        preventAssignment: true,\\n      }),\\n      getEsbuild('node12', env),\\n    ],\\n  }\\n}\"\n    }\n  ]\n}",
+  "seconds": 42.2,
+  "seed": 1001
+ },
  "zustand-heldout-005/NO4@42": {
   "answer_tokens": 606,
   "done_reason": "stop",
@@ -419,6 +459,16 @@
   "seconds": 41.9,
   "seed": 42
  },
+ "zustand-heldout-005/NO6@1001": {
+  "answer_tokens": 337,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "60e99e5e06ea6c3d",
+  "prompt_tokens": 2896,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"rollup.config.exports\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The `createCommonJSConfig` function now takes an additional `options` parameter, so the caller must pass this parameter.\",\n      \"new_code\": \"module.exports = function (args) {\\n  let c = Object.keys(args).find((key) => key.startsWith('config-'))\\n  if (c) {\\n    c = c.slice('config-'.length).replace(/_/g, '/')\\n  } else {\\n    c = 'index'\\n  }\\n  return [\\n    ...(c === 'index' ? [createDeclarationConfig(`src/${c}.ts`, 'dist')] : []),\\n    createCommonJSConfig(`src/${c}.ts`, `dist/${c}`, {}),\\n    createESMConfig(`src/${c}.ts`, `dist/esm/${c}.js`),\\n    createESMConfig(`src/${c}.ts`, `dist/esm/${c}.mjs`),\\n    createUMDConfig(`src/${c}.ts`, `dist/umd/${c}`, 'development'),\\n    createUMDConfig(`src/${c}.ts`, `dist/umd/${c}`, 'production'),\\n    createSystemConfig(`src/${c}.ts`, `dist/system/${c}`, 'development'),\\n    createSystemConfig(`src/${c}.ts`, `dist/system/${c}`, 'production'),\\n  ]\\n}\"\n    }\n  ]\n}",
+  "seconds": 24.0,
+  "seed": 1001
+ },
  "zustand-heldout-005/NO6@42": {
   "answer_tokens": 332,
   "done_reason": "stop",
@@ -428,6 +478,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"module.exports\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The function now requires an additional 'options' parameter to match the updated 'createCommonJSConfig' function.\",\n      \"new_code\": \"module.exports = function (args) {\\n  let c = Object.keys(args).find((key) => key.startsWith('config-'))\\n  if (c) {\\n    c = c.slice('config-'.length).replace(/_/g, '/')\\n  } else {\\n    c = 'index'\\n  }\\n  return [\\n    ...(c === 'index' ? [createDeclarationConfig(`src/${c}.ts`, 'dist')] : []),\\n    createCommonJSConfig(`src/${c}.ts`, `dist/${c}`, {}),\\n    createESMConfig(`src/${c}.ts`, `dist/esm/${c}.js`),\\n    createESMConfig(`src/${c}.ts`, `dist/esm/${c}.mjs`),\\n    createUMDConfig(`src/${c}.ts`, `dist/umd/${c}`, 'development'),\\n    createUMDConfig(`src/${c}.ts`, `dist/umd/${c}`, 'production'),\\n    createSystemConfig(`src/${c}.ts`, `dist/system/${c}`, 'development'),\\n    createSystemConfig(`src/${c}.ts`, `dist/system/${c}`, 'production'),\\n  ]\\n}\"\n    }\n  ]\n}",
   "seconds": 23.6,
   "seed": 42
+ },
+ "zustand-heldout-005/NO7@1001": {
+  "answer_tokens": 253,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "db36c12f41188852",
+  "prompt_tokens": 2826,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"createCommonJSConfig\",\n      \"file\": \"rollup.config.js\",\n      \"reason\": \"The function signature has changed to include an 'options' parameter, which must be handled in the function body.\",\n      \"new_code\": \"function createCommonJSConfig(input, output, options) {\\n  return {\\n    input,\\n    output: {\\n      file: `${output}.js`,\\n      format: 'cjs',\\n      outro: options.addModuleExport\\n        ? 'module.exports = exports.default; Object.assign(exports.default, exports);'\\n        : '',\\n    },\\n    external,\\n    plugins: [\\n      alias({\\n        entries: {\\n          './vanilla': 'zustand/vanilla',\\n        },\\n      }),\\n      resolve({ extensions }),\\n      replace({\\n        __DEV__: '(process.env.NODE_ENV!=='production')',\\n        preventAssignment: true,\\n      }),\\n      babelPlugin(getBabelOptions({ ie: 11 })),\\n    ],\\n  }\\n}\"\n    }\n  ]\n}",
+  "seconds": 18.1,
+  "seed": 1001
  },
  "zustand-heldout-005/NO7@42": {
   "answer_tokens": 1014,
