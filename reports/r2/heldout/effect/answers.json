@@ -1,4 +1,14 @@
 {
+ "effect-heldout-001/FULL@1001": {
+  "answer_tokens": 302,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "f8f0118e4a617659",
+  "prompt_tokens": 4620,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HttpServerRequest.ClientRequestImpl.bytes\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `rawBodyBytes` function now takes an additional `maxBytes` parameter, which must be passed to it.\",\n      \"new_code\": \"private get bytes(): Effect.Effect<Uint8Array, HttpServerError> {\\n  if (this.bytesEffect) {\\n    return this.bytesEffect\\n  }\\n  const body = this.source.body\\n  let effect: Effect.Effect<Uint8Array, HttpServerError>\\n  switch (body._tag) {\\n    case \\\"Empty\\\": {\\n      effect = Effect.succeed(new Uint8Array(0))\\n      break\\n    }\\n    case \\\"Uint8Array\\\": {\\n      effect = Effect.succeed(body.body)\\n      break\\n    }\\n    case \\\"FormData\\\": {\\n      effect = bytesFromBodyInit(this, body.formData)\\n      break\\n    }\\n    case \\\"Stream\\\": {\\n      effect = Stream.mkUint8Array(this.stream)\\n      break\\n    }\\n    case \\\"Raw\\\": {\\n      effect = rawBodyBytes(this, body.body, undefined)\\n      break\\n    }\\n  }\\n  this.bytesEffect = Effect.runSync(Effect.cached(effect))\\n  return this.bytesEffect\\n}\"\n    }\n  ]\n}",
+  "seconds": 23.3,
+  "seed": 1001
+ },
  "effect-heldout-001/FULL@42": {
   "answer_tokens": 310,
   "done_reason": "stop",
@@ -8,6 +18,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.effect.src.http.HttpServerRequest.ClientRequestImpl.bytes\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `rawBodyBytes` function now takes an additional `maxBytes` parameter, so the caller must be updated to pass this parameter.\",\n      \"new_code\": \"private get bytes(): Effect.Effect<Uint8Array, HttpServerError> {\\n  if (this.bytesEffect) {\\n    return this.bytesEffect\\n  }\\n  const body = this.source.body\\n  let effect: Effect.Effect<Uint8Array, HttpServerError>\\n  switch (body._tag) {\\n    case \\\"Empty\\\": {\\n      effect = Effect.succeed(new Uint8Array(0))\\n      break\\n    }\\n    case \\\"Uint8Array\\\": {\\n      effect = Effect.succeed(body.body)\\n      break\\n    }\\n    case \\\"FormData\\\": {\\n      effect = bytesFromBodyInit(this, body.formData)\\n      break\\n    }\\n    case \\\"Stream\\\": {\\n      effect = Stream.mkUint8Array(this.stream)\\n      break\\n    }\\n    case \\\"Raw\\\": {\\n      effect = rawBodyBytes(this, body.body, undefined)\\n      break\\n    }\\n  }\\n  this.bytesEffect = Effect.runSync(Effect.cached(effect))\\n  return this.bytesEffect\\n}\"\n    }\n  ]\n}",
   "seconds": 27.5,
   "seed": 42
+ },
+ "effect-heldout-001/NO47@1001": {
+  "answer_tokens": 672,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "c317c39d5efef54c",
+  "prompt_tokens": 4436,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"rawBodyStream\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `rawBodyStream` function needs to be updated to accept the new `maxBytes` parameter and handle the body size limit.\",\n      \"new_code\": \"const rawBodyStream = (request: HttpServerRequest, body: unknown, maxBytes: number | undefined): Stream.Stream<Uint8Array, HttpServerError> => {\\n  if (body instanceof Request) {\\n    return streamFromReadable(request, body.body, maxBytes)\\n  }\\n  if (isReadableStream(body)) {\\n    return streamFromReadable(request, body, maxBytes)\\n  }\\n  if (isBodyInit(body)) {\\n    return streamFromReadable(request, new Response(body).body, maxBytes)\\n  }\\n  return Stream.fail(requestParseError(request, \\\"Unsupported body type\\\"))\\n}\"\n    },\n    {\n      \"function\": \"bytesEffect\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `bytesEffect` getter needs to be updated to pass the `maxBytes` parameter to `rawBodyBytes`.\",\n      \"new_code\": \"private get bytes(): Effect.Effect<Uint8Array, HttpServerError> {\\n  if (this.bytesEffect) {\\n    return this.bytesEffect\\n  }\\n  const body = this.source.body\\n  let effect: Effect.Effect<Uint8Array, HttpServerError>\\n  switch (body._tag) {\\n    case \\\"Empty\\\": {\\n      effect = Effect.succeed(new Uint8Array(0))\\n      break\\n    }\\n    case \\\"Uint8Array\\\": {\\n      effect = Effect.succeed(body.body)\\n      break\\n    }\\n    case \\\"FormData\\\": {\\n      effect = bytesFromBodyInit(this, body.formData)\\n      break\\n    }\\n    case \\\"Stream\\\": {\\n      effect = Stream.mkUint8Array(this.stream)\\n      break\\n    }\\n    case \\\"Raw\\\": {\\n      effect = rawBodyBytes(this, body.body, undefined)\\n      break\\n    }\\n  }\\n  this.bytesEffect = Effect.runSync(Effect.cached(effect))\\n  return this.bytesEffect\\n}\"\n    },\n    {\n      \"function\": \"multipartStream\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `multipartStream` getter needs to be updated to pass the `maxBytes` parameter to `rawBodyBytes`.\",\n      \"new_code\": \"get multipartStream(): Stream.Stream<Multipart.Part, Multipart.MultipartError> {\\n  const formData = this.source.body._tag === \\\"FormData\\\" && this.source.body.formData\\n  if (formData) {\\n    return Stream.fromIterable(formDataToParts(formData))\\n  }\\n  return Stream.pipeThroughChannel(\\n    Stream.mapError(this.stream, (cause) => Multipart.MultipartError.fromReason(\\\"InternalError\\\", cause)),\\n    Multipart.makeChannel(this.headers)\\n  )\\n}\"\n    }\n  ]\n}",
+  "seconds": 47.5,
+  "seed": 1001
  },
  "effect-heldout-001/NO47@42": {
   "answer_tokens": 652,
@@ -19,6 +39,16 @@
   "seconds": 46.1,
   "seed": 42
  },
+ "effect-heldout-001/NO4@1001": {
+  "answer_tokens": 499,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "aea786310966dc5e",
+  "prompt_tokens": 4563,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HttpServerRequest.rawBodyStream\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `rawBodyStream` function needs to be updated to handle the new `maxBytes` parameter.\",\n      \"new_code\": \"const rawBodyStream = (request: HttpServerRequest, body: unknown, maxBytes: number | undefined): Stream.Stream<Uint8Array, HttpServerError> => {\\n  if (body instanceof Request) {\\n    return bytesFromWeb(request, () => body, maxBytes)\\n  }\\n  if (isReadableStream(body)) {\\n    return bytesFromWeb(request, () => new Response(body), maxBytes)\\n  }\\n  if (isBodyInit(body)) {\\n    return bytesFromWeb(request, () => new Response(body), maxBytes)\\n  }\\n  return Stream.fail(requestParseError(request, \\\"Unsupported body type\\\"))\\n}\"\n    },\n    {\n      \"function\": \"HttpServerRequest.bytes\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `bytes` function needs to be updated to handle the new `maxBytes` parameter.\",\n      \"new_code\": \"private get bytes(): Effect.Effect<Uint8Array, HttpServerError> {\\n  if (this.bytesEffect) {\\n    return this.bytesEffect\\n  }\\n  const body = this.source.body\\n  let effect: Effect.Effect<Uint8Array, HttpServerError>\\n  switch (body._tag) {\\n    case \\\"Empty\\\": {\\n      effect = Effect.succeed(new Uint8Array(0))\\n      break\\n    }\\n    case \\\"Uint8Array\\\": {\\n      effect = Effect.succeed(body.body)\\n      break\\n    }\\n    case \\\"FormData\\\": {\\n      effect = bytesFromBodyInit(this, body.formData)\\n      break\\n    }\\n    case \\\"Stream\\\": {\\n      effect = Stream.mkUint8Array(this.stream)\\n      break\\n    }\\n    case \\\"Raw\\\": {\\n      effect = rawBodyBytes(this, body.body, undefined)\\n      break\\n    }\\n  }\\n  this.bytesEffect = Effect.runSync(Effect.cached(effect))\\n  return this.bytesEffect\\n}\"\n    }\n  ]\n}",
+  "seconds": 35.8,
+  "seed": 1001
+ },
  "effect-heldout-001/NO4@42": {
   "answer_tokens": 434,
   "done_reason": "stop",
@@ -28,6 +58,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HttpServerRequest.bytes\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `rawBodyBytes` function now takes an additional `maxBytes` parameter, which must be passed to it.\",\n      \"new_code\": \"private get bytes(): Effect.Effect<Uint8Array, HttpServerError> {\\n  if (this.bytesEffect) {\\n    return this.bytesEffect\\n  }\\n  const body = this.source.body\\n  let effect: Effect.Effect<Uint8Array, HttpServerError>\\n  switch (body._tag) {\\n    case \\\"Empty\\\": {\\n      effect = Effect.succeed(new Uint8Array(0))\\n      break\\n    }\\n    case \\\"Uint8Array\\\": {\\n      effect = Effect.succeed(body.body)\\n      break\\n    }\\n    case \\\"FormData\\\": {\\n      effect = bytesFromBodyInit(this, body.formData)\\n      break\\n    }\\n    case \\\"Stream\\\": {\\n      effect = Stream.mkUint8Array(this.stream)\\n      break\\n    }\\n    case \\\"Raw\\\": {\\n      effect = rawBodyBytes(this, body.body, undefined)\\n      break\\n    }\\n  }\\n  this.bytesEffect = Effect.runSync(Effect.cached(effect))\\n  return this.bytesEffect\\n}\"\n    },\n    {\n      \"function\": \"HttpServerRequest.arrayBuffer\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `rawBodyBytes` function now takes an additional `maxBytes` parameter, which must be passed to it.\",\n      \"new_code\": \"get arrayBuffer(): Effect.Effect<ArrayBuffer, HttpServerError> {\\n  return Effect.map(\\n    this.bytes,\\n    // Copy this view because Buffer views may share a larger ArrayBuffer.\\n    (bytes) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer\\n  )\\n}\"\n    }\n  ]\n}",
   "seconds": 31.4,
   "seed": 42
+ },
+ "effect-heldout-001/NO6@1001": {
+  "answer_tokens": 309,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "539d3cfcd6c22e5c",
+  "prompt_tokens": 4434,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HttpServerRequest.ClientRequestImpl.bytes\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `rawBodyBytes` function now takes an additional `maxBytes` parameter, so the caller `bytes` must be updated to pass this parameter.\",\n      \"new_code\": \"private get bytes(): Effect.Effect<Uint8Array, HttpServerError> {\\n  if (this.bytesEffect) {\\n    return this.bytesEffect\\n  }\\n  const body = this.source.body\\n  let effect: Effect.Effect<Uint8Array, HttpServerError>\\n  switch (body._tag) {\\n    case \\\"Empty\\\": {\\n      effect = Effect.succeed(new Uint8Array(0))\\n      break\\n    }\\n    case \\\"Uint8Array\\\": {\\n      effect = Effect.succeed(body.body)\\n      break\\n    }\\n    case \\\"FormData\\\": {\\n      effect = bytesFromBodyInit(this, body.formData)\\n      break\\n    }\\n    case \\\"Stream\\\": {\\n      effect = Stream.mkUint8Array(this.stream)\\n      break\\n    }\\n    case \\\"Raw\\\": {\\n      effect = rawBodyBytes(this, body.body, undefined)\\n      break\\n    }\\n  }\\n  this.bytesEffect = Effect.runSync(Effect.cached(effect))\\n  return this.bytesEffect\\n}\"\n    }\n  ]\n}",
+  "seconds": 22.3,
+  "seed": 1001
  },
  "effect-heldout-001/NO6@42": {
   "answer_tokens": 302,
@@ -39,6 +79,16 @@
   "seconds": 21.8,
   "seed": 42
  },
+ "effect-heldout-001/NO7@1001": {
+  "answer_tokens": 302,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "715c6681337e122c",
+  "prompt_tokens": 4510,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"HttpServerRequest.ClientRequestImpl.bytes\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `rawBodyBytes` function now takes an additional `maxBytes` parameter, which must be passed to it.\",\n      \"new_code\": \"private get bytes(): Effect.Effect<Uint8Array, HttpServerError> {\\n  if (this.bytesEffect) {\\n    return this.bytesEffect\\n  }\\n  const body = this.source.body\\n  let effect: Effect.Effect<Uint8Array, HttpServerError>\\n  switch (body._tag) {\\n    case \\\"Empty\\\": {\\n      effect = Effect.succeed(new Uint8Array(0))\\n      break\\n    }\\n    case \\\"Uint8Array\\\": {\\n      effect = Effect.succeed(body.body)\\n      break\\n    }\\n    case \\\"FormData\\\": {\\n      effect = bytesFromBodyInit(this, body.formData)\\n      break\\n    }\\n    case \\\"Stream\\\": {\\n      effect = Stream.mkUint8Array(this.stream)\\n      break\\n    }\\n    case \\\"Raw\\\": {\\n      effect = rawBodyBytes(this, body.body, undefined)\\n      break\\n    }\\n  }\\n  this.bytesEffect = Effect.runSync(Effect.cached(effect))\\n  return this.bytesEffect\\n}\"\n    }\n  ]\n}",
+  "seconds": 21.9,
+  "seed": 1001
+ },
  "effect-heldout-001/NO7@42": {
   "answer_tokens": 486,
   "done_reason": "stop",
@@ -48,6 +98,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"rawBodyBytes\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The function signature has changed to include a new parameter `maxBytes`.\",\n      \"new_code\": \"const rawBodyBytes = (request: HttpServerRequest, body: unknown, maxBytes: number | undefined): Effect.Effect<Uint8Array, HttpServerError> => {\\n  if (body instanceof Request) {\\n    return bytesFromWeb(request, () => body, maxBytes)\\n  }\\n  if (isBodyInit(body)) {\\n    return bytesFromWeb(request, () => new Response(body), maxBytes)\\n  }\\n  return Effect.fail(requestParseError(request, \\\"Unsupported body type\\\"))\\n}\"\n    },\n    {\n      \"function\": \"bytesEffect\",\n      \"file\": \"packages/effect/src/http/HttpServerRequest.ts\",\n      \"reason\": \"The `bytesEffect` property needs to be updated to call the new `rawBodyBytes` function with the `maxBytes` parameter.\",\n      \"new_code\": \"private bytesEffect: Effect.Effect<Uint8Array, HttpServerError> | undefined\\nprivate get bytes(): Effect.Effect<Uint8Array, HttpServerError> {\\n  if (this.bytesEffect) {\\n    return this.bytesEffect\\n  }\\n  const body = this.source.body\\n  let effect: Effect.Effect<Uint8Array, HttpServerError>\\n  switch (body._tag) {\\n    case \\\"Empty\\\": {\\n      effect = Effect.succeed(new Uint8Array(0))\\n      break\\n    }\\n    case \\\"Uint8Array\\\": {\\n      effect = Effect.succeed(body.body)\\n      break\\n    }\\n    case \\\"FormData\\\": {\\n      effect = bytesFromBodyInit(this, body.formData)\\n      break\\n    }\\n    case \\\"Stream\\\": {\\n      effect = Stream.mkUint8Array(this.stream)\\n      break\\n    }\\n    case \\\"Raw\\\": {\\n      effect = rawBodyBytes(this, body.body, undefined)\\n      break\\n    }\\n  }\\n  this.bytesEffect = Effect.runSync(Effect.cached(effect))\\n  return this.bytesEffect\\n}\"\n    }\n  ]\n}",
   "seconds": 34.7,
   "seed": 42
+ },
+ "effect-heldout-002/FULL@1001": {
+  "answer_tokens": 286,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "0269ecf99f15839a",
+  "prompt_tokens": 4926,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"NodeSocket.drain\",\n      \"file\": \"packages/platform/node-shared/src/NodeSocket.ts\",\n      \"reason\": \"The `readAvailable` function now takes an additional `chunkSize` parameter, which `drain` must pass to it.\",\n      \"new_code\": \"function drain() {\\n  if (waiter === undefined || reading) return\\n  let chunk = pending\\n  pending = undefined\\n  if (chunk === undefined && !closed) {\\n    // A data listener can interrupt and replace the pull synchronously.\\n    // The replacement must wait for this read to preserve byte order.\\n    reading = true\\n    try {\\n      chunk = readAvailable(conn, chunkSize)\\n    } finally {\\n      reading = false\\n    }\\n  }\\n  // A close during read() discards the bytes it consumed.\\n  if (closed) chunk = undefined\\n  if (waiter === undefined) {\\n    pending = chunk\\n    return\\n  }\\n  const result = chunk !== undefined\\n    ? Effect.succeed(chunk)\\n    : error !== undefined\\n    ? Effect.fail(error)\\n    : undefined\\n  if (result === undefined) return\\n  const resume = waiter\\n  waiter = undefined\\n  resume(result)\\n}\"\n    }\n  ]\n}",
+  "seconds": 22.8,
+  "seed": 1001
  },
  "effect-heldout-002/FULL@42": {
   "answer_tokens": 296,
@@ -59,6 +119,16 @@
   "seconds": 26.9,
   "seed": 42
  },
+ "effect-heldout-002/NO47@1001": {
+  "answer_tokens": 382,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "93f384841cb84904",
+  "prompt_tokens": 4920,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"frameBody\",\n      \"file\": \"packages/platform/node/src/internal/upgrade.ts\",\n      \"reason\": \"The function `frameBody` calls `conn.read()` which now requires a `chunkSize` parameter.\",\n      \"new_code\": \"export const frameBody = (conn: Duplex, head: Buffer, length: number, chunkSize: number): {\\n  readonly body: Readable\\n  readonly rest: Buffer\\n} => {\\n  if (head.length >= length) {\\n    return {\\n      body: Readable.from(length === 0 ? [] : [head.subarray(0, length)], { objectMode: false }),\\n      rest: head.subarray(length)\\n    }\\n  }\\n  let remaining = length - head.length\\n  let reading = false\\n  const stop = () => {\\n    conn.off(\\\"readable\\\", onReadable)\\n    conn.off(\\\"end\\\", onEnd)\\n  }\\n  const onReadable = () => {\\n    while (remaining > 0) {\\n      let chunk = conn.read(chunkSize) as Buffer | null\\n      if (chunk === null) return\\n      if (chunk.length > remaining) {\\n        conn.unshift(chunk.subarray(remaining))\\n        chunk = chunk.subarray(0, remaining)\\n      }\\n      remaining -= chunk.length\\n      if (!body.push(chunk) && remaining > 0) return\\n    }\\n    stop()\\n    body.push(null)\\n  }\\n  const onEnd = () => {\\n    stop()\\n    body.destroy(new Error(\\\"The connection closed before the request body ended\\\"))\\n  }\\n  const body = new Readable({\\n    read() {\\n\"\n    }\n  ]\n}",
+  "seconds": 28.7,
+  "seed": 1001
+ },
  "effect-heldout-002/NO47@42": {
   "answer_tokens": 403,
   "done_reason": "stop",
@@ -68,6 +138,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"frameBody\",\n      \"file\": \"packages/platform/node/src/internal/upgrade.ts\",\n      \"reason\": \"The function `frameBody` reads from the `conn` object, which now expects a `chunkSize` parameter. It needs to be updated to pass this parameter to the `readAvailable` function.\",\n      \"new_code\": \"export const frameBody = (conn: Duplex, head: Buffer, length: number, chunkSize: number): {\\n  readonly body: Readable\\n  readonly rest: Buffer\\n} => {\\n  if (head.length >= length) {\\n    return {\\n      body: Readable.from(length === 0 ? [] : [head.subarray(0, length)], { objectMode: false }),\\n      rest: head.subarray(length)\\n    }\\n  }\\n  let remaining = length - head.length\\n  let reading = false\\n  const stop = () => {\\n    conn.off(\\\"readable\\\", onReadable)\\n    conn.off(\\\"end\\\", onEnd)\\n  }\\n  const onReadable = () => {\\n    while (remaining > 0) {\\n      let chunk = readAvailable(conn, chunkSize) as Buffer | null\\n      if (chunk === null) return\\n      if (chunk.length > remaining) {\\n        conn.unshift(chunk.subarray(remaining))\\n        chunk = chunk.subarray(0, remaining)\\n      }\\n      remaining -= chunk.length\\n      if (!body.push(chunk) && remaining > 0) return\\n    }\\n    stop()\\n    body.push(null)\\n  }\\n  const onEnd = () => {\\n    stop()\\n    body.destroy(new Error(\\\"The connection closed before the request body ended\\\"))\\n  }\\n  const body = new Readable({\\n    read() {\"\n    }\n  ]\n}",
   "seconds": 30.2,
   "seed": 42
+ },
+ "effect-heldout-002/NO4@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6c0efb617b277370",
+  "prompt_tokens": 4850,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.5,
+  "seed": 1001
  },
  "effect-heldout-002/NO4@42": {
   "answer_tokens": 6,
@@ -79,6 +159,16 @@
   "seconds": 2.5,
   "seed": 42
  },
+ "effect-heldout-002/NO6@1001": {
+  "answer_tokens": 287,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6d0541c65340aaa0",
+  "prompt_tokens": 4926,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"NodeSocket.drain\",\n      \"file\": \"packages/platform/node-shared/src/NodeSocket.ts\",\n      \"reason\": \"The `readAvailable` function now takes an additional `chunkSize` parameter, which affects how many chunks are read from the connection.\",\n      \"new_code\": \"function drain() {\\n  if (waiter === undefined || reading) return\\n  let chunk = pending\\n  pending = undefined\\n  if (chunk === undefined && !closed) {\\n    // A data listener can interrupt and replace the pull synchronously.\\n    // The replacement must wait for this read to preserve byte order.\\n    reading = true\\n    try {\\n      chunk = readAvailable(conn, chunkSize)\\n    } finally {\\n      reading = false\\n    }\\n  }\\n  // A close during read() discards the bytes it consumed.\\n  if (closed) chunk = undefined\\n  if (waiter === undefined) {\\n    pending = chunk\\n    return\\n  }\\n  const result = chunk !== undefined\\n    ? Effect.succeed(chunk)\\n    : error !== undefined\\n    ? Effect.fail(error)\\n    : undefined\\n  if (result === undefined) return\\n  const resume = waiter\\n  waiter = undefined\\n  resume(result)\\n}\"\n    }\n  ]\n}",
+  "seconds": 22.1,
+  "seed": 1001
+ },
  "effect-heldout-002/NO6@42": {
   "answer_tokens": 286,
   "done_reason": "stop",
@@ -88,6 +178,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"NodeSocket.drain\",\n      \"file\": \"packages/platform/node-shared/src/NodeSocket.ts\",\n      \"reason\": \"The `readAvailable` function now takes an additional `chunkSize` parameter, which `drain` needs to pass along.\",\n      \"new_code\": \"function drain() {\\n  if (waiter === undefined || reading) return\\n  let chunk = pending\\n  pending = undefined\\n  if (chunk === undefined && !closed) {\\n    // A data listener can interrupt and replace the pull synchronously.\\n    // The replacement must wait for this read to preserve byte order.\\n    reading = true\\n    try {\\n      chunk = readAvailable(conn, chunkSize)\\n    } finally {\\n      reading = false\\n    }\\n  }\\n  // A close during read() discards the bytes it consumed.\\n  if (closed) chunk = undefined\\n  if (waiter === undefined) {\\n    pending = chunk\\n    return\\n  }\\n  const result = chunk !== undefined\\n    ? Effect.succeed(chunk)\\n    : error !== undefined\\n    ? Effect.fail(error)\\n    : undefined\\n  if (result === undefined) return\\n  const resume = waiter\\n  waiter = undefined\\n  resume(result)\\n}\"\n    }\n  ]\n}",
   "seconds": 22.1,
   "seed": 42
+ },
+ "effect-heldout-002/NO7@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "aa99a739fb02ea47",
+  "prompt_tokens": 4713,
+  "raw": "{\"changes\": []}",
+  "seconds": 1.2,
+  "seed": 1001
  },
  "effect-heldout-002/NO7@42": {
   "answer_tokens": 6,
@@ -99,6 +199,16 @@
   "seconds": 1.2,
   "seed": 42
  },
+ "effect-heldout-003/FULL@1001": {
+  "answer_tokens": 212,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "1ee990d036c837d1",
+  "prompt_tokens": 5468,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.sql.mysql2.src.MysqlClient.ConnectionImpl.executeStream\",\n      \"file\": \"packages/sql/mysql2/src/MysqlClient.ts\",\n      \"reason\": \"The `queryStream` function now requires an additional `connectionOptions` parameter, `permit` parameter, and `permit` is used in the function. The `executeStream` function must be updated to pass these new parameters.\",\n      \"new_code\": \"      executeStream(\\n        sql: string,\\n        params: ReadonlyArray<unknown>,\\n        transformRows: (<A extends object>(row: ReadonlyArray<A>) => ReadonlyArray<A>) | undefined\\n      ) {\\n        const permit = Semaphore.make(1)\\n        const stream = queryStream(this.connectionOptions, this.conn as any, permit, sql, params)\\n        return transformRows\\n          ? Stream.mapArray(stream, (_) => transformRows(_) as any)\\n          : stream\\n      }\"\n    }\n  ]\n}",
+  "seconds": 18.1,
+  "seed": 1001
+ },
  "effect-heldout-003/FULL@42": {
   "answer_tokens": 182,
   "done_reason": "stop",
@@ -108,6 +218,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"MysqlClient.ConnectionImpl.executeStream\",\n      \"file\": \"packages/sql/mysql2/src/MysqlClient.ts\",\n      \"reason\": \"The `queryStream` function now requires an additional `connectionOptions` parameter, so `executeStream` must be updated to pass this parameter.\",\n      \"new_code\": \"      executeStream(\\n        sql: string,\\n        params: ReadonlyArray<unknown>,\\n        transformRows: (<A extends object>(row: ReadonlyArray<A>) => ReadonlyArray<A>) | undefined\\n      ) {\\n        const stream = queryStream(this.connectionOptions, this.conn as any, this.semaphore, sql, params)\\n        return transformRows\\n          ? Stream.mapArray(stream, (_) => transformRows(_) as any)\\n          : stream\\n      }\"\n    }\n  ]\n}",
   "seconds": 19.7,
   "seed": 42
+ },
+ "effect-heldout-003/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "5ed1c0997d01578d",
+  "prompt_tokens": 5288,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.7,
+  "seed": 1001
  },
  "effect-heldout-003/NO47@42": {
   "answer_tokens": 6,
@@ -119,6 +239,16 @@
   "seconds": 2.7,
   "seed": 42
  },
+ "effect-heldout-003/NO4@1001": {
+  "answer_tokens": 200,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b3c8ae48fd53d701",
+  "prompt_tokens": 5411,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.sql.mysql2.src.MysqlClient.ConnectionImpl.executeStream\",\n      \"file\": \"packages/sql/mysql2/src/MysqlClient.ts\",\n      \"reason\": \"The `queryStream` function now requires an additional `connectionOptions` parameter, which is used to create an `ActiveStatement`. The `executeStream` method needs to pass this parameter to `queryStream`.\",\n      \"new_code\": \"      executeStream(\\n        sql: string,\\n        params: ReadonlyArray<unknown>,\\n        transformRows: (<A extends object>(row: ReadonlyArray<A>) => ReadonlyArray<A>) | undefined\\n      ) {\\n        const stream = queryStream(this.options, this.conn as any, this.semaphore, sql, params)\\n        return transformRows\\n          ? Stream.mapArray(stream, (_) => transformRows(_) as any)\\n          : stream\\n      }\"\n    }\n  ]\n}",
+  "seconds": 16.5,
+  "seed": 1001
+ },
  "effect-heldout-003/NO4@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -128,6 +258,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.9,
   "seed": 42
+ },
+ "effect-heldout-003/NO6@1001": {
+  "answer_tokens": 228,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "dab9fabb3af1d147",
+  "prompt_tokens": 5216,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.sql.mysql2.src.MysqlClient.ConnectionImpl.executeStream\",\n      \"file\": \"packages/sql/mysql2/src/MysqlClient.ts\",\n      \"reason\": \"The `queryStream` function now requires an additional `connectionOptions` and `permit` parameter, so `executeStream` must be updated to pass these parameters.\",\n      \"new_code\": \"      executeStream(\\n        sql: string,\\n        params: ReadonlyArray<unknown>,\\n        transformRows: (<A extends object>(row: ReadonlyArray<A>) => ReadonlyArray<A>) | undefined\\n      ) {\\n        const connectionOptions = this.options; // Assuming `this.options` contains the connection options\\n        const permit = this.permit; // Assuming `this.permit` is a Semaphore instance\\n        const stream = queryStream(connectionOptions, this.conn as any, permit, sql, params);\\n        return transformRows\\n          ? Stream.mapArray(stream, (_) => transformRows(_) as any)\\n          : stream;\\n      }\"\n    }\n  ]\n}",
+  "seconds": 18.2,
+  "seed": 1001
  },
  "effect-heldout-003/NO6@42": {
   "answer_tokens": 173,
@@ -139,6 +279,16 @@
   "seconds": 14.3,
   "seed": 42
  },
+ "effect-heldout-003/NO7@1001": {
+  "answer_tokens": 125,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "4eab20cda0d1545b",
+  "prompt_tokens": 5362,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.sql.mysql2.src.MysqlClient.ConnectionImpl.executeStream\",\n      \"file\": \"packages/sql/mysql2/src/MysqlClient.ts\",\n      \"reason\": \"The `queryStream` function now requires an additional `connectionOptions` and `permit` parameter, so `executeStream` must be updated to pass these parameters.\",\n      \"new_code\": \"private executeStream(sql: string, params?: ReadonlyArray<any>) { return queryStream(this.connectionOptions, this.conn, this.permit, sql, params); }\"\n    }\n  ]\n}",
+  "seconds": 10.7,
+  "seed": 1001
+ },
  "effect-heldout-003/NO7@42": {
   "answer_tokens": 163,
   "done_reason": "stop",
@@ -148,6 +298,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"ConnectionImpl.executeStream\",\n      \"file\": \"packages/sql/mysql2/src/MysqlClient.ts\",\n      \"reason\": \"The `queryStream` function now requires an additional `connectionOptions` parameter, which is used to create an `ActiveStatement`. The `ConnectionImpl.executeStream` function needs to pass this parameter to `queryStream`.\",\n      \"new_code\": \"private executeStream(sql: string, params?: ReadonlyArray<any>) { const connectionOptions = { host: this.options.host, port: this.options.port, user: this.options.user, password: this.options.password, database: this.options.database }; return queryStream(connectionOptions, this.conn, this.semaphore, sql, params); }\"\n    }\n  ]\n}",
   "seconds": 13.4,
   "seed": 42
+ },
+ "effect-heldout-004/FULL@1001": {
+  "answer_tokens": 332,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "5a1a04b848c3c815",
+  "prompt_tokens": 5174,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"step\",\n      \"file\": \"packages/effect/src/internal/glob.ts\",\n      \"reason\": \"The `matchWildcard` function now takes only three arguments instead of four. The `chars` argument is no longer needed.\",\n      \"new_code\": \"const step = (compiled: Compiled, states: States, name: string): Step => {\\n  const explicit = new Set<number>()\\n  const viaGlobstar = new Set<number>()\\n  // only a literal segment can name the root of an absolute path\\n  const root = isRoot(name)\\n  for (const state of states) {\\n    const node = compiled.nodes[state]\\n    switch (node._tag) {\\n      case \\\"Globstar\\\": {\\n        if (!root && name !== \\\".\\\" && name !== \\\"..\\\" && (compiled.dot || !name.startsWith(\\\".\\\"))) {\\n          viaGlobstar.add(state)\\n        }\\n        break\\n      }\\n      case \\\"Literal\\\": {\\n        if (node.value === name) {\\n          explicit.add(state + 1)\\n        }\\n        break\\n      }\\n      case \\\"Wildcard\\\": {\\n        if (!root && matchWildcard(node, name, compiled.dot)) {\\n          explicit.add(state + 1)\\n        }\\n        break\\n      }\\n    }\\n  }\\n  return { explicit: closure(compiled.nodes, explicit), globstar: closure(compiled.nodes, viaGlobstar) }\\n}\"\n    }\n  ]\n}",
+  "seconds": 26.1,
+  "seed": 1001
  },
  "effect-heldout-004/FULL@42": {
   "answer_tokens": 337,
@@ -159,6 +319,16 @@
   "seconds": 30.3,
   "seed": 42
  },
+ "effect-heldout-004/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "74f9d214b3ff1c5e",
+  "prompt_tokens": 5173,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.6,
+  "seed": 1001
+ },
  "effect-heldout-004/NO47@42": {
   "answer_tokens": 389,
   "done_reason": "stop",
@@ -168,6 +338,16 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"matchWildcard\",\n      \"file\": \"packages/effect/src/internal/glob.ts\",\n      \"reason\": \"The function signature has changed, so any call sites need to be updated.\",\n      \"new_code\": \"(\\n  node: Extract<Node, { _tag: \\\"Wildcard\\\" }>,\\n  name: string,\\n  dot: boolean\\n): boolean => {\\n  if (name === \\\".\\\" || name === \\\"..\\\" || (name.startsWith(\\\".\\\") && !dot && !node.leadingDot)) {\\n    return false\\n  }\\n  if (node.affixes !== undefined) {\\n    const { prefix, suffix } = node.affixes\\n    return name.length >= prefix.length + suffix.length && name.startsWith(prefix) && name.endsWith(suffix)\\n  }\\n  const { tokens } = node\\n  let t = 0\\n  let c = 0\\n  let star = -1\\n  let resume = 0\\n  while (c < name.length) {\\n    if (tokens[t]?._tag === \\\"Star\\\") {\\n      star = t++\\n      resume = c\\n      continue\\n    }\\n    const code = name.codePointAt(c)!\\n    if (t < tokens.length && matchToken(tokens[t], code)) {\\n      t++\\n      c += width(code)\\n    } else if (star !== -1) {\\n      t = star + 1\\n      resume += width(name.codePointAt(resume)!\\n      c = resume\\n    } else {\\n      return false\\n    }\\n  }\\n  while (tokens[t]?._tag === \\\"Star\\\") {\\n    t++\\n  }\\n  return t === tokens.length\\n}\"\n    }\n  ]\n}",
   "seconds": 29.4,
   "seed": 42
+ },
+ "effect-heldout-004/NO4@1001": {
+  "answer_tokens": 344,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "d210c22327a2f27e",
+  "prompt_tokens": 5108,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"step\",\n      \"file\": \"packages/effect/src/internal/glob.ts\",\n      \"reason\": \"The `matchWildcard` function signature has changed, removing the `chars` parameter. The `step` function calls `matchWildcard` and needs to be updated to reflect this change.\",\n      \"new_code\": \"const step = (compiled: Compiled, states: States, name: string): Step => {\\n  const explicit = new Set<number>()\\n  const viaGlobstar = new Set<number>()\\n  // only a literal segment can name the root of an absolute path\\n  const root = isRoot(name)\\n  for (const state of states) {\\n    const node = compiled.nodes[state]\\n    switch (node._tag) {\\n      case \\\"Globstar\\\": {\\n        if (!root && name !== \\\".\\\" && name !== \\\"..\\\" && (compiled.dot || !name.startsWith(\\\".\\\"))) {\\n          viaGlobstar.add(state)\\n        }\\n        break\\n      }\\n      case \\\"Literal\\\": {\\n        if (node.value === name) {\\n          explicit.add(state + 1)\\n        }\\n        break\\n      }\\n      case \\\"Wildcard\\\": {\\n        if (!root && matchWildcard(node, name, compiled.dot)) {\\n          explicit.add(state + 1)\\n        }\\n        break\\n      }\\n    }\\n  }\\n  return { explicit: closure(compiled.nodes, explicit), globstar: closure(compiled.nodes, viaGlobstar) }\\n}\"\n    }\n  ]\n}",
+  "seconds": 25.9,
+  "seed": 1001
  },
  "effect-heldout-004/NO4@42": {
   "answer_tokens": 6,
@@ -179,6 +359,16 @@
   "seconds": 2.3,
   "seed": 42
  },
+ "effect-heldout-004/NO6@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "6580b1dfe25cdea9",
+  "prompt_tokens": 5077,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.3,
+  "seed": 1001
+ },
  "effect-heldout-004/NO6@42": {
   "answer_tokens": 6,
   "done_reason": "stop",
@@ -188,6 +378,16 @@
   "raw": "{\"changes\": []}",
   "seconds": 2.3,
   "seed": 42
+ },
+ "effect-heldout-004/NO7@1001": {
+  "answer_tokens": 330,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "59f6081b79bffc13",
+  "prompt_tokens": 5171,
+  "raw": "{\"changes\": [{\"function\": \"step\", \"file\": \"packages/effect/src/internal/glob.ts\", \"reason\": \"The `matchWildcard` function now takes three arguments instead of four. The `chars` argument is no longer needed.\", \"new_code\": \"const step = (compiled: Compiled, states: States, name: string): Step => {\\n  const explicit = new Set<number>()\\n  const viaGlobstar = new Set<number>()\\n  // only a literal segment can name the root of an absolute path\\n  const root = isRoot(name)\\n  let chars: ReadonlyArray<string> | undefined\\n  for (const state of states) {\\n    const node = compiled.nodes[state]\\n    switch (node._tag) {\\n      case \\\"Globstar\\\": {\\n        if (!root && name !== \\\".\\\" && name !== \\\"..\\\" && (compiled.dot || !name.startsWith(\\\".\\\"))) {\\n          viaGlobstar.add(state)\\n        }\\n        break\\n      }\\n      case \\\"Literal\\\": {\\n        if (node.value === name) {\\n          explicit.add(state + 1)\\n        }\\n        break\\n      }\\n      case \\\"Wildcard\\\": {\\n        if (!root && matchWildcard(node, name, compiled.dot)) {\\n          explicit.add(state + 1)\\n        }\\n        break\\n      }\\n    }\\n  }\\n  return { explicit: closure(compiled.nodes, explicit), globstar: closure(compiled.nodes, viaGlobstar) }\\n}\"}]}",
+  "seconds": 24.9,
+  "seed": 1001
  },
  "effect-heldout-004/NO7@42": {
   "answer_tokens": 646,
@@ -199,6 +399,16 @@
   "seconds": 47.2,
   "seed": 42
  },
+ "effect-heldout-005/FULL@1001": {
+  "answer_tokens": 632,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "7fabdd85fec33168",
+  "prompt_tokens": 5950,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.effect.src.persistence.CircuitBreaker.execute\",\n      \"file\": \"packages/effect/src/persistence/CircuitBreaker.ts\",\n      \"reason\": \"The `classifyExit` function now takes an additional `probe` parameter, so `execute` must be updated to pass this parameter.\",\n      \"new_code\": \"const execute = <A, E, R, R2>(\\n  self: Effect.Effect<A, E, R>,\\n  { classify, key, onRejection }: {\\n    readonly key: string\\n    readonly classify?: Classifier<A, E, R2> | undefined\\n    readonly onRejection?: \\\"fail\\\" | \\\"allow\\\" | undefined\\n  }\\n): Effect.Effect<A, E | CircuitBreakerError, R | R2> =>\\n  Effect.uninterruptibleMask((restore) =>\\n    Effect.scopedWith(Effect.fnUntraced(function*(admitScope) {\\n      const admitted = yield* Effect.exit(Scope.provide(store.admit(key), admitScope))\\n      if (Exit.isFailure(admitted)) {\\n        const error = Cause.findErrorOption(admitted.cause)\\n        if (error._tag === \\\"None\\\") return yield* Effect.failCause(admitted.cause)\\n        if (error.value.reason._tag !== \\\"CircuitBreakerStoreError\\\") {\\n          return onRejection === \\\"allow\\\" && !Cause.hasDies(admitted.cause)\\n            ? yield* restore(self)\\n            : yield* Effect.failCause(admitted.cause)\\n        }\\n        if (onStoreError === \\\"fail\\\") return yield* Effect.failCause(admitted.cause)\\n        yield* reportUnhandled(\\\"CircuitBreaker store unavailable, running the call unrecorded\\\", admitted.cause)\\n        return yield* restore(self)\\n      }\\n      const admission = admitted.value\\n      yield* publish(admission.transition)\\n      const exit = yield* Effect.exit(restore(self))\\n      const classified = yield* classifyExit(exit, probe, classify, restore)\\n      const outcome = Exit.isSuccess(classified) ? classified.value : ignored\\n      yield* store.record({\\n        key,\\n        generation: admission.generation,\\n        outcome: outcome._tag,\\n        tripPolicy: options.tripPolicy,\\n        openFor: yield* openFor(outcome, admission)\\n      }).pipe(\\n        Effect.flatMap(publish),\\n        Effect.catchCauseFilter(\\n          findRecoverableError,\\n          (_, cause) => reportUnhandled(\\\"CircuitBreaker failed to record an outcome\\\", cause)\\n        )\\n      )\\n      if (Exit.isSuccess(classified)) return yield* exit\\n      return yield* Effect.failCause(\\n        Exit.isFailure(exit) ? Cause.combine(exit.cause, classified.cause) : classified.cause\\n      )\\n    }))\\n  )\"\n    }\n  ]\n}",
+  "seconds": 48.4,
+  "seed": 1001
+ },
  "effect-heldout-005/FULL@42": {
   "answer_tokens": 630,
   "done_reason": "stop",
@@ -208,6 +418,36 @@
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"CircuitBreaker.execute\",\n      \"file\": \"packages/effect/src/persistence/CircuitBreaker.ts\",\n      \"reason\": \"The `classifyExit` function now takes an additional `probe` parameter, so `execute` must be updated to pass this parameter.\",\n      \"new_code\": \"const execute = <A, E, R, R2>(\\n  self: Effect.Effect<A, E, R>,\\n  { classify, key, onRejection }: {\\n    readonly key: string\\n    readonly classify?: Classifier<A, E, R2> | undefined\\n    readonly onRejection?: 'fail' | 'allow' | undefined\\n  }\\n): Effect.Effect<A, E | CircuitBreakerError, R | R2> =>\\n  Effect.uninterruptibleMask((restore) =>\\n    Effect.scopedWith(Effect.fnUntraced(function*(admitScope) {\\n      const admitted = yield* Effect.exit(Scope.provide(store.admit(key), admitScope))\\n      if (Exit.isFailure(admitted)) {\\n        const error = Cause.findErrorOption(admitted.cause)\\n        if (error._tag === 'None') return yield* Effect.failCause(admitted.cause)\\n        if (error.value.reason._tag !== 'CircuitBreakerStoreError') {\\n          return onRejection === 'allow' && !Cause.hasDies(admitted.cause)\\n            ? yield* restore(self)\\n            : yield* Effect.failCause(admitted.cause)\\n        }\\n        if (onStoreError === 'fail') return yield* Effect.failCause(admitted.cause)\\n        yield* reportUnhandled('CircuitBreaker store unavailable, running the call unrecorded', admitted.cause)\\n        return yield* restore(self)\\n      }\\n      const admission = admitted.value\\n      yield* publish(admission.transition)\\n      const exit = yield* Effect.exit(restore(self))\\n      const classified = yield* classifyExit(exit, admission.probe, classify, restore)\\n      const outcome = Exit.isSuccess(classified) ? classified.value : ignored\\n      yield* store.record({\\n        key,\\n        generation: admission.generation,\\n        outcome: outcome._tag,\\n        tripPolicy: options.tripPolicy,\\n        openFor: yield* openFor(outcome, admission)\\n      }).pipe(\\n        Effect.flatMap(publish),\\n        Effect.catchCauseFilter(\\n          findRecoverableError,\\n          (_, cause) => reportUnhandled('CircuitBreaker failed to record an outcome', cause)\\n        )\\n      )\\n      if (Exit.isSuccess(classified)) return yield* exit\\n      return yield* Effect.failCause(\\n        Exit.isFailure(exit) ? Cause.combine(exit.cause, classified.cause) : classified.cause\\n      )\\n    }))\\n  )\"\n    }\n  ]\n}",
   "seconds": 52.5,
   "seed": 42
+ },
+ "effect-heldout-005/NO47@1001": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "0e18d89343de5a89",
+  "prompt_tokens": 5881,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.8,
+  "seed": 1001
+ },
+ "effect-heldout-005/NO47@42": {
+  "answer_tokens": 6,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "0e18d89343de5a89",
+  "prompt_tokens": 5881,
+  "raw": "{\"changes\": []}",
+  "seconds": 2.8,
+  "seed": 42
+ },
+ "effect-heldout-005/NO4@1001": {
+  "answer_tokens": 640,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "b0310a17c09a6efc",
+  "prompt_tokens": 5904,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.effect.src.persistence.CircuitBreaker.execute\",\n      \"file\": \"packages/effect/src/persistence/CircuitBreaker.ts\",\n      \"reason\": \"The `execute` function calls `classifyExit`, which now has an additional `probe` parameter.\",\n      \"new_code\": \"const execute = <A, E, R, R2>(\\n  self: Effect.Effect<A, E, R>,\\n  { classify, key, onRejection }: {\\n    readonly key: string\\n    readonly classify?: Classifier<A, E, R2> | undefined\\n    readonly onRejection?: \\\"fail\\\" | \\\"allow\\\" | undefined\\n  }\\n): Effect.Effect<A, E | CircuitBreakerError, R | R2> =>\\n  Effect.uninterruptibleMask((restore) =>\\n    Effect.scopedWith(Effect.fnUntraced(function*(admitScope) {\\n      const admitted = yield* Effect.exit(Scope.provide(store.admit(key), admitScope))\\n      if (Exit.isFailure(admitted)) {\\n        const error = Cause.findErrorOption(admitted.cause)\\n        if (error._tag === \\\"None\\\") return yield* Effect.failCause(admitted.cause)\\n        if (error.value.reason._tag !== \\\"CircuitBreakerStoreError\\\") {\\n          return onRejection === \\\"allow\\\" && !Cause.hasDies(admitted.cause)\\n            ? yield* restore(self)\\n            : yield* Effect.failCause(admitted.cause)\\n        }\\n        if (onStoreError === \\\"fail\\\") return yield* Effect.failCause(admitted.cause)\\n        yield* reportUnhandled(\\\"CircuitBreaker store unavailable, running the call unrecorded\\\", admitted.cause)\\n        return yield* restore(self)\\n      }\\n      const admission = admitted.value\\n      yield* publish(admission.transition)\\n      const exit = yield* Effect.exit(restore(self))\\n      const classified = yield* classifyExit(exit, classify !== undefined ? (exit) => classify(exit, { probe: false }) : undefined, restore)\\n      const outcome = Exit.isSuccess(classified) ? classified.value : ignored\\n      yield* store.record({\\n        key,\\n        generation: admission.generation,\\n        outcome: outcome._tag,\\n        tripPolicy: options.tripPolicy,\\n        openFor: yield* openFor(outcome, admission)\\n      }).pipe(\\n        Effect.flatMap(publish),\\n        Effect.catchCauseFilter(\\n          findRecoverableError,\\n          (_, cause) => reportUnhandled(\\\"CircuitBreaker failed to record an outcome\\\", cause)\\n        )\\n      )\\n      if (Exit.isSuccess(classified)) return yield* exit\\n      return yield* Effect.failCause(\\n        Exit.isFailure(exit) ? Cause.combine(exit.cause, classified.cause) : classified.cause\\n      )\\n    }))\\n  )\"\n    }\n  ]\n}",
+  "seconds": 48.0,
+  "seed": 1001
  },
  "effect-heldout-005/NO4@42": {
   "answer_tokens": 626,
@@ -219,6 +459,16 @@
   "seconds": 47.1,
   "seed": 42
  },
+ "effect-heldout-005/NO6@1001": {
+  "answer_tokens": 642,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "8356ecc9d173bb91",
+  "prompt_tokens": 5663,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.effect.src.persistence.CircuitBreaker.execute\",\n      \"file\": \"packages/effect/src/persistence/CircuitBreaker.ts\",\n      \"reason\": \"The `classifyExit` function now takes an additional `probe` parameter, so `execute` must be updated to pass this parameter.\",\n      \"new_code\": \"const execute = <A, E, R, R2>(\\n  self: Effect.Effect<A, E, R>,\\n  { classify, key, onRejection }: {\\n    readonly key: string\\n    readonly classify?: Classifier<A, E, R2> | undefined\\n    readonly onRejection?: \\\"fail\\\" | \\\"allow\\\" | undefined\\n  }\\n): Effect.Effect<A, E | CircuitBreakerError, R | R2> =>\\n  Effect.uninterruptibleMask((restore) =>\\n    Effect.scopedWith(Effect.fnUntraced(function*(admitScope) {\\n      const admitted = yield* Effect.exit(Scope.provide(store.admit(key), admitScope))\\n      if (Exit.isFailure(admitted)) {\\n        const error = Cause.findErrorOption(admitted.cause)\\n        if (error._tag === \\\"None\\\") return yield* Effect.failCause(admitted.cause)\\n        if (error.value.reason._tag !== \\\"CircuitBreakerStoreError\\\") {\\n          return onRejection === \\\"allow\\\" && !Cause.hasDies(admitted.cause)\\n            ? yield* restore(self)\\n            : yield* Effect.failCause(admitted.cause)\\n        }\\n        if (onStoreError === \\\"fail\\\") return yield* Effect.failCause(admitted.cause)\\n        yield* reportUnhandled(\\\"CircuitBreaker store unavailable, running the call unrecorded\\\", admitted.cause)\\n        return yield* restore(self)\\n      }\\n      const admission = admitted.value\\n      yield* publish(admission.transition)\\n      const exit = yield* Effect.exit(restore(self))\\n      const classified = yield* classifyExit(exit, classify !== undefined ? classify : undefined, restore, { probe: false })\\n      const outcome = Exit.isSuccess(classified) ? classified.value : ignored\\n      yield* store.record({\\n        key,\\n        generation: admission.generation,\\n        outcome: outcome._tag,\\n        tripPolicy: options.tripPolicy,\\n        openFor: yield* openFor(outcome, admission)\\n      }).pipe(\\n        Effect.flatMap(publish),\\n        Effect.catchCauseFilter(\\n          findRecoverableError,\\n          (_, cause) => reportUnhandled(\\\"CircuitBreaker failed to record an outcome\\\", cause)\\n        )\\n      )\\n      if (Exit.isSuccess(classified)) return yield* exit\\n      return yield* Effect.failCause(\\n        Exit.isFailure(exit) ? Cause.combine(exit.cause, classified.cause) : classified.cause\\n      )\\n    }))\\n  )\"\n    }\n  ]\n}",
+  "seconds": 47.8,
+  "seed": 1001
+ },
  "effect-heldout-005/NO6@42": {
   "answer_tokens": 638,
   "done_reason": "stop",
@@ -227,6 +477,26 @@
   "prompt_tokens": 5663,
   "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"CircuitBreaker.execute\",\n      \"file\": \"packages/effect/src/persistence/CircuitBreaker.ts\",\n      \"reason\": \"The `classifyExit` function now takes an additional `probe` parameter, so `execute` must be updated to pass this parameter.\",\n      \"new_code\": \"const execute = <A, E, R, R2>(\\n  self: Effect.Effect<A, E, R>,\\n  { classify, key, onRejection }: {\\n    readonly key: string\\n    readonly classify?: Classifier<A, E, R2> | undefined\\n    readonly onRejection?: \\\"fail\\\" | \\\"allow\\\" | undefined\\n  }\\n): Effect.Effect<A, E | CircuitBreakerError, R | R2> =>\\n  Effect.uninterruptibleMask((restore) =>\\n    Effect.scopedWith(Effect.fnUntraced(function*(admitScope) {\\n      const admitted = yield* Effect.exit(Scope.provide(store.admit(key), admitScope))\\n      if (Exit.isFailure(admitted)) {\\n        const error = Cause.findErrorOption(admitted.cause)\\n        if (error._tag === \\\"None\\\") return yield* Effect.failCause(admitted.cause)\\n        if (error.value.reason._tag !== \\\"CircuitBreakerStoreError\\\") {\\n          return onRejection === \\\"allow\\\" && !Cause.hasDies(admitted.cause)\\n            ? yield* restore(self)\\n            : yield* Effect.failCause(admitted.cause)\\n        }\\n        if (onStoreError === \\\"fail\\\") return yield* Effect.failCause(admitted.cause)\\n        yield* reportUnhandled(\\\"CircuitBreaker store unavailable, running the call unrecorded\\\", admitted.cause)\\n        return yield* restore(self)\\n      }\\n      const admission = admitted.value\\n      yield* publish(admission.transition)\\n      const exit = yield* Effect.exit(restore(self))\\n      const classified = yield* classifyExit(exit, classify !== undefined ? classify : undefined, restore, { probe: false })\\n      const outcome = Exit.isSuccess(classified) ? classified.value : ignored\\n      yield* store.record({\\n        key,\\n        generation: admission.generation,\\n        outcome: outcome._tag,\\n        tripPolicy: options.tripPolicy,\\n        openFor: yield* openFor(outcome, admission)\\n      }).pipe(\\n        Effect.flatMap(publish),\\n        Effect.catchCauseFilter(\\n          findRecoverableError,\\n          (_, cause) => reportUnhandled(\\\"CircuitBreaker failed to record an outcome\\\", cause)\\n        )\\n      )\\n      if (Exit.isSuccess(classified)) return yield* exit\\n      return yield* Effect.failCause(\\n        Exit.isFailure(exit) ? Cause.combine(exit.cause, classified.cause) : classified.cause\\n      )\\n    }))\\n  )\"\n    }\n  ]\n}",
   "seconds": 47.4,
+  "seed": 42
+ },
+ "effect-heldout-005/NO7@1001": {
+  "answer_tokens": 634,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "acdce545fc3ab6c5",
+  "prompt_tokens": 5944,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"packages.effect.src.persistence.CircuitBreaker.execute\",\n      \"file\": \"packages/effect/src/persistence/CircuitBreaker.ts\",\n      \"reason\": \"The `classifyExit` function now takes an additional `probe` parameter, so `execute` must be updated to pass this parameter.\",\n      \"new_code\": \"const execute = <A, E, R, R2>(\\n  self: Effect.Effect<A, E, R>,\\n  { classify, key, onRejection }: {\\n    readonly key: string\\n    readonly classify?: Classifier<A, E, R2> | undefined\\n    readonly onRejection?: \\\"fail\\\" | \\\"allow\\\" | undefined\\n  }\\n): Effect.Effect<A, E | CircuitBreakerError, R | R2> =>\\n  Effect.uninterruptibleMask((restore) =>\\n    Effect.scopedWith(Effect.fnUntraced(function*(admitScope) {\\n      const admitted = yield* Effect.exit(Scope.provide(store.admit(key), admitScope))\\n      if (Exit.isFailure(admitted)) {\\n        const error = Cause.findErrorOption(admitted.cause)\\n        if (error._tag === \\\"None\\\") return yield* Effect.failCause(admitted.cause)\\n        if (error.value.reason._tag !== \\\"CircuitBreakerStoreError\\\") {\\n          return onRejection === \\\"allow\\\" && !Cause.hasDies(admitted.cause)\\n            ? yield* restore(self)\\n            : yield* Effect.failCause(admitted.cause)\\n        }\\n        if (onStoreError === \\\"fail\\\") return yield* Effect.failCause(admitted.cause)\\n        yield* reportUnhandled(\\\"CircuitBreaker store unavailable, running the call unrecorded\\\", admitted.cause)\\n        return yield* restore(self)\\n      }\\n      const admission = admitted.value\\n      yield* publish(admission.transition)\\n      const exit = yield* Effect.exit(restore(self))\\n      const classified = yield* classifyExit(exit, classify, admission.probe, restore)\\n      const outcome = Exit.isSuccess(classified) ? classified.value : ignored\\n      yield* store.record({\\n        key,\\n        generation: admission.generation,\\n        outcome: outcome._tag,\\n        tripPolicy: options.tripPolicy,\\n        openFor: yield* openFor(outcome, admission)\\n      }).pipe(\\n        Effect.flatMap(publish),\\n        Effect.catchCauseFilter(\\n          findRecoverableError,\\n          (_, cause) => reportUnhandled(\\\"CircuitBreaker failed to record an outcome\\\", cause)\\n        )\\n      )\\n      if (Exit.isSuccess(classified)) return yield* exit\\n      return yield* Effect.failCause(\\n        Exit.isFailure(exit) ? Cause.combine(exit.cause, classified.cause) : classified.cause\\n      )\\n    }))\\n  )\"\n    }\n  ]\n}",
+  "seconds": 47.5,
+  "seed": 1001
+ },
+ "effect-heldout-005/NO7@42": {
+  "answer_tokens": 630,
+  "done_reason": "stop",
+  "model": "qwen2.5-coder:14b-instruct-q8_0",
+  "prompt_sha": "acdce545fc3ab6c5",
+  "prompt_tokens": 5944,
+  "raw": "{\n  \"changes\": [\n    {\n      \"function\": \"CircuitBreaker.execute\",\n      \"file\": \"packages/effect/src/persistence/CircuitBreaker.ts\",\n      \"reason\": \"The `classifyExit` function now takes an additional `probe` parameter, so `execute` must be updated to pass this parameter.\",\n      \"new_code\": \"const execute = <A, E, R, R2>(\\n  self: Effect.Effect<A, E, R>,\\n  { classify, key, onRejection }: {\\n    readonly key: string\\n    readonly classify?: Classifier<A, E, R2> | undefined\\n    readonly onRejection?: \\\"fail\\\" | \\\"allow\\\" | undefined\\n  }\\n): Effect.Effect<A, E | CircuitBreakerError, R | R2> =>\\n  Effect.uninterruptibleMask((restore) =>\\n    Effect.scopedWith(Effect.fnUntraced(function*(admitScope) {\\n      const admitted = yield* Effect.exit(Scope.provide(store.admit(key), admitScope))\\n      if (Exit.isFailure(admitted)) {\\n        const error = Cause.findErrorOption(admitted.cause)\\n        if (error._tag === \\\"None\\\") return yield* Effect.failCause(admitted.cause)\\n        if (error.value.reason._tag !== \\\"CircuitBreakerStoreError\\\") {\\n          return onRejection === \\\"allow\\\" && !Cause.hasDies(admitted.cause)\\n            ? yield* restore(self)\\n            : yield* Effect.failCause(admitted.cause)\\n        }\\n        if (onStoreError === \\\"fail\\\") return yield* Effect.failCause(admitted.cause)\\n        yield* reportUnhandled(\\\"CircuitBreaker store unavailable, running the call unrecorded\\\", admitted.cause)\\n        return yield* restore(self)\\n      }\\n      const admission = admitted.value\\n      yield* publish(admission.transition)\\n      const exit = yield* Effect.exit(restore(self))\\n      const classified = yield* classifyExit(exit, classify, admission.probe, restore)\\n      const outcome = Exit.isSuccess(classified) ? classified.value : ignored\\n      yield* store.record({\\n        key,\\n        generation: admission.generation,\\n        outcome: outcome._tag,\\n        tripPolicy: options.tripPolicy,\\n        openFor: yield* openFor(outcome, admission)\\n      }).pipe(\\n        Effect.flatMap(publish),\\n        Effect.catchCauseFilter(\\n          findRecoverableError,\\n          (_, cause) => reportUnhandled(\\\"CircuitBreaker failed to record an outcome\\\", cause)\\n        )\\n      )\\n      if (Exit.isSuccess(classified)) return yield* exit\\n      return yield* Effect.failCause(\\n        Exit.isFailure(exit) ? Cause.combine(exit.cause, classified.cause) : classified.cause\\n      )\\n    }))\\n  )\"\n    }\n  ]\n}",
+  "seconds": 47.3,
   "seed": 42
  }
 }
