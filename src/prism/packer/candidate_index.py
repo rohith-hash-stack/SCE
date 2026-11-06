@@ -234,10 +234,13 @@ def _upstream_walk(
     """`{caller: hop}` for every transitive caller of `seed_id` within
     `max_hops`, breadth-first over `CALLS`/`INSTANTIATES` in-edges of the
     structural graph (tentative dispatch edges included). Callers that are
-    test code (`SymbolRole.VERIFICATION`) are excluded and not walked
-    through, unless the seed itself is test code or `include_tests`."""
+    test code are excluded and not walked through, unless the seed itself is
+    test code or `include_tests`. Test code is a `SymbolRole.VERIFICATION`
+    symbol or any symbol defined in a test file (`_in_test_file`): a helper
+    in `test/drivers/*.test.ts` keeps an implementation role but is still
+    test code."""
     seed_info = builder.symbol_table.get(seed_id)
-    allow_tests = include_tests or (seed_info is not None and seed_info.role == SymbolRole.VERIFICATION)
+    allow_tests = include_tests or (seed_info is not None and _is_test_code(builder, seed_info))
     # 0-1 breadth-first: a closure's enclosing function (`ENCLOSES`) sits
     # at the closure's own hop - at run time the closure's frame is the
     # enclosing function's behaviour, one call deep, not two (Fix C).
@@ -259,7 +262,7 @@ def _upstream_walk(
             info = builder.symbol_table.get(pred)
             if info is None or info.kind not in ("function", "method"):
                 continue
-            if info.role == SymbolRole.VERIFICATION and not allow_tests:
+            if not allow_tests and _is_test_code(builder, info):
                 continue
             hops[pred] = depth + step
             (queue.appendleft if step == 0 else queue.append)(pred)
@@ -280,6 +283,11 @@ def _upstream_predecessors(builder: ConcreteGraphBuilder, node: str) -> list[tup
             pairs += [(pred, cls) for pred in builder.graph.predecessors(cls)
                       if (builder.graph.get_edge_data(pred, cls) or {}).get("relation") == "INSTANTIATES"]
     return pairs
+
+
+def _is_test_code(builder: ConcreteGraphBuilder, info) -> bool:
+    """A verification-role symbol, or any symbol defined in a test file."""
+    return info.role == SymbolRole.VERIFICATION or bool(builder._in_test_file(info.file))
 
 
 def upstream_callers_by_hop(

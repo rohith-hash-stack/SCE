@@ -10,12 +10,13 @@ TEST_SEGMENT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(^|/)tests?/"),
     re.compile(r"(^|/)__tests__/"),
     re.compile(r"(^|/)testing/"),
+    re.compile(r"(^|/)specs?/"),
     re.compile(r"(^|/)tests?\.py$"),
     re.compile(r"(^|/)conftest\.py$"),
     re.compile(r"(^|/)test_[^/]+\.py$"),
     re.compile(r"(^|/)[^/]+_test\.py$"),
     re.compile(r"(^|/)[^/]+_test\.go$"),
-    re.compile(r"\.(test|spec)\.(ts|tsx|js|jsx)$"),
+    re.compile(r"\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$"),
 )
 
 
