@@ -47,7 +47,7 @@ from harness.experiments.r3.jsenv import detect
 
 NODE_INDEX = "https://nodejs.org/dist/index.json"
 TEST_FILE = re.compile(r"\.(test|spec)\.(m|c)?[jt]sx?$")
-SKIP_DIRS = re.compile(r"(^|/)(node_modules|fixtures?|__fixtures__|e2e|playwright|browser|examples?|docs?|bench(mark)?s?)/")
+SKIP_DIRS = re.compile(r"(^|/)(node_modules|[^/]*fixtures?[^/]*|e2e|playwright|browser|examples?|docs?|bench(mark)?s?)/")
 INSTALL_TIMEOUT, BUILD_TIMEOUT, TEST_TIMEOUT = 1800, 1800, 600
 MAX_CANDIDATES = 6
 
