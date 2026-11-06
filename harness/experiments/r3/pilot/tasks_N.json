@@ -1,0 +1,77 @@
+{
+ "family": "N",
+ "seed": 6601,
+ "want": 10,
+ "per_repo": 20,
+ "status": "short",
+ "tasks_sha256": "9b9f3e2005cf04aa23c0030cfaf3b8d321ef5ffdb1f1d0372255a4ff0add9d2f",
+ "tasks": [
+  {
+   "family": "N",
+   "repo": "sqlglot",
+   "language": "python",
+   "commit": "af654216a062c1451168c4ce58a98d3c4637e3f6",
+   "parent": "534354acace404a94497e8155ad58077e31b063e",
+   "commit_date": "2024-10-07T15:33:49+03:00",
+   "author_date": "2024-10-07T14:33:49+02:00",
+   "subject": "Feat: add builder methods to exp.Update and add with_ arg to exp.update (#4217)",
+   "target": "sqlglot/expressions.py::Update.from_",
+   "target_file": "sqlglot/expressions.py",
+   "signature": "def from_(\n        self,\n        expression: t.Optional[ExpOrStr] = None,\n        dialect: DialectType = None,\n        copy: bool = True,\n        **opts,\n    ) -> Update:",
+   "docstring": "Set the FROM expression.\n\n        Example:\n            >>> Update().table(\"my_table\").set_(\"x = 1\").from_(\"baz\").sql()\n            'UPDATE my_table SET x = 1 FROM baz'\n\n        Args:\n            expression : the SQL code strings to parse.\n                If a `From` instance is passed, this is used as-is.\n                If another `Expression` instance is passed, it will be wrapped in a `From`.\n                If nothing is passed in then a from is not applied to the expression\n            dialect: the dialect used to parse the input expression.\n            copy: if `False`, modify this expression instance in-place.\n            opts: other options to use to parse the input expressions.\n\n        Returns:\n            The modified Update expression.",
+   "after": null,
+   "helpers": [
+    "_apply_builder",
+    "maybe_copy"
+   ],
+   "depth": 2,
+   "stratum": "2",
+   "start_patch": null,
+   "start_files": [],
+   "start_functions": [],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/test_build.py b/tests/test_build.py\nindex 7518b72a2..5d383ad00 100644\n--- a/tests/test_build.py\n+++ b/tests/test_build.py\n@@ -577,6 +577,36 @@ class TestBuild(unittest.TestCase):\n                 lambda: exp.update(\"tbl\", {\"x\": 1}, from_=\"tbl2 cross join tbl3\"),\n                 \"UPDATE tbl SET x = 1 FROM tbl2 CROSS JOIN tbl3\",\n             ),\n+            (\n+                lambda: exp.update(\n+                    \"my_table\",\n+                    {\"x\": 1},\n+                    from_=\"baz\",\n+                    where=\"my_table.id = baz.id\",\n+                    with_={\"baz\": \"SELECT id FROM foo UNION SELECT id FROM bar\"},\n+                ),\n+                \"WITH baz AS (SELECT id FROM foo UNION SELECT id FROM bar) UPDATE my_table SET x = 1 FROM baz WHERE my_table.id = baz.id\",\n+            ),\n+            (\n+                lambda: exp.update(\"my_table\").set_(\"x = 1\"),\n+                \"UPDATE my_table SET x = 1\",\n+            ),\n+            (\n+                lambda: exp.update(\"my_table\").set_(\"x = 1\").where(\"y = 2\"),\n+                \"UPDATE my_table SET x = 1 WHERE y = 2\",\n+            ),\n+            (\n+                lambda: exp.update(\"my_table\").set_(\"a = 1\").set_(\"b = 2\"),\n+                \"UPDATE my_table SET a = 1, b = 2\",\n+            ),\n+            (\n+                lambda: exp.update(\"my_table\")\n+                .set_(\"x = 1\")\n+                .where(\"my_table.id = baz.id\")\n+                .from_(\"baz\")\n+                .with_(\"baz\", \"SELECT id FROM foo\"),\n+                \"WITH baz AS (SELECT id FROM foo) UPDATE my_table SET x = 1 FROM baz WHERE my_table.id = baz.id\",\n+            ),\n             (\n                 lambda: union(\"SELECT * FROM foo\", \"SELECT * FROM bla\"),\n                 \"SELECT * FROM foo UNION SELECT * FROM bla\",\n",
+   "test_files": [
+    "tests/test_build.py"
+   ],
+   "visible_tests": [
+    "tests/test_build.py"
+   ],
+   "gold_files": [
+    "sqlglot/expressions.py"
+   ],
+   "gold_functions": [
+    "sqlglot/expressions.py::Update.from_",
+    "sqlglot/expressions.py::Update.set_",
+    "sqlglot/expressions.py::Update.table",
+    "sqlglot/expressions.py::Update.where",
+    "sqlglot/expressions.py::Update.with_",
+    "sqlglot/expressions.py::update"
+   ],
+   "prompt": "Add a new function in class `Update` of `sqlglot/expressions.py`. Its signature and description:\n\n```\ndef from_(\n        self,\n        expression: t.Optional[ExpOrStr] = None,\n        dialect: DialectType = None,\n        copy: bool = True,\n        **opts,\n    ) -> Update:\n```\n\nSet the FROM expression.\n\n        Example:\n            >>> Update().table(\"my_table\").set_(\"x = 1\").from_(\"baz\").sql()\n            'UPDATE my_table SET x = 1 FROM baz'\n\n        Args:\n            expression : the SQL code strings to parse.\n                If a `From` instance is passed, this is used as-is.\n                If another `Expression` instance is passed, it will be wrapped in a `From`.\n                If nothing is passed in then a from is not applied to the expression\n            dialect: the dialect used to parse the input expression.\n            copy: if `False`, modify this expression instance in-place.\n            opts: other options to use to parse the input expressions.\n\n        Returns:\n            The modified Update expression.\n\nImplement it so the project's tests pass. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/test_build.py": [
+     "tests.test_build.TestBuild::test_build"
+    ]
+   },
+   "pass_to_pass": {},
+   "tests_run": [
+    "tests/test_build.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-N-01",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  }
+ ]
+}

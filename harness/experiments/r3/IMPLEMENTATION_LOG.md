@@ -267,3 +267,143 @@ as unresolved. Genuine open question entering the pilot, not a covered case.
 **2. Cost picture for R3a.** Real turn counts were 6 per run on notice-check tasks, against the earlier 15–25 estimate.
 If R3 tasks average 6–12 turns, R3a's call count is likely ~2–3× lower than the ~10–17k pre-run estimate. The pilot's
 turn distribution will give the real number; do not re-plan on this yet, but note it for the R3a cost forecast.
+
+## 2026-11-06: pilot tasks mined and gated; analysis code; stuck vs unresolved (no model calls)
+
+**Code** (the same for the pilot and for R3a; only the dates differ):
+- `mine.py`;
+- `gate.py`;
+- `analyze.py`;
+- `dryrun.py`;
+- loop and runner changes.
+
+Pilot artifacts are in `pilot/` (yield, candidates, gate log, attrition, frozen tasks).
+
+**Mining rules** (R3a's own; the pilot window is 2024-10-01 to 2024-11-30, by committer date):
+- **Family B:** R1 forward's miner, the suite's type 1:
+  - `change_history/mine.py --forced`, pass 1 and pass 2 (production callers in PRISM's index at the parent);
+  - `select.py --forced --no-self-callers`'s caller filter;
+  - one task per commit;
+  - plus at least one changed test file.
+- **Family N:** pool_scan's relaxed rule, plus the three things suite type 2's prompt needs: the function's file
+  exists at the parent, its class exists, and it has a description of at least 5 words.
+  - pool_scan's "non-nested" test was a no-op (`"." not in q.split(".")[-1]`). The miner applies type 2's real
+    test.
+- **Both families:** backports, cherry-picks and repeats of one diff (`git patch-id`) are dropped first.
+  - The first gate drew aiohttp's e80d5854 three times: the commit and its 3.10 and 3.11 backports. Those are not
+    independent tasks.
+  - 304 of aiohttp's 584 window commits are backports.
+
+**Yield per repository** (`pilot/yield.json`):
+
+| repository | commits in window (kept) | B candidates | N candidates |
+|---|---|---|---|
+| sqlglot | 190 | 4 | 1 |
+| poetry | 81 | 4 | — |
+| litestar | 68 | 2 | — |
+| aiohttp | 584 (262) | 2 | 0 |
+| vitest | 177 | 3 | 0 (2 relaxed; 1 with file and class; 0 with a JSDoc) |
+| packaging, multidict, yarl, typer, scrapy, werkzeug, tornado, nitro, h3, execa, unstorage, msw, unplugin | 9-238 each | 0 | 0 (packaging, scrapy, nitro, h3) |
+| **total** | 1,769 (1,447) | **15** | **1** |
+
+- pool_scan's cheaper rules, run over the same window, give 42 B and 5 N candidates. Only 4 of those 5 are in Family
+  N's pool repositories.
+- So the window itself is thin, before any of the miner's extra steps.
+
+**Gate** (`gate.py`; seeded draw, seed 6601; F2P/P2P over 3 runs per state; scoring check through `runner.score`):
+
+| family | candidates | drawn | passed | failed (reason) |
+|---|---|---|---|---|
+| B | 15 | 15 | **10** (frozen, sha256 `bf87d595…`) | vitest 3 (browser-mode tests, no results in this environment); litestar 1 and poetry 1 (no fail-to-pass test) |
+| N | 1 | 1 | **1** (short of 10) | — |
+
+- **Tasks:** sqlglot 4, poetry 3, aiohttp 2, litestar 1 (B); sqlglot 1 (N). All are Python, and every B task is in
+  depth stratum "1" (one changed caller).
+- **Scoring check:** on every task the developer's patch scores resolved, with file and function F1 1.0, and the
+  unchanged start state scores unresolved.
+
+**Fixes the gate found** (each made, then everything re-gated from scratch on one code version):
+- **pybuild:**
+  - PDM dev-dependency groups (litestar before uv);
+  - every optional extra first, then only the test extras (litestar's tests import redis);
+  - test extras requested by name when pyproject declares none (sqlglot's `setup.py` dev extra: duckdb);
+  - a release that was yanked later is pinned exactly (PEP 592; poetry's cleo 2.2.1).
+  - The Python self-check still passes 22 of 22 revisions with these install changes. The yanked retry runs only
+    after a failed install, so it cannot change a passing one.
+- **gate:**
+  - hidden test modules in folders the builder's own list skips are run (litestar's `tests/examples`);
+  - fixture-only test changes run the test modules that name the fixture (sqlglot's `qualify_columns.sql`);
+  - visible tests are the runnable test files that exist at the parent;
+  - "no results in this environment" is reported apart.
+- **runner.score:**
+  - the agent's files and functions are diffed from a snapshot of the start state;
+  - the old base (parent minus the start patch's files) lost callers in the anchor's own file, so the developer's own
+    patch scored file F1 0.0;
+  - the gold side uses the same code.
+- **jsbuild:** a repository whose tests use built output is rebuilt before `run_tests` and before scoring, when the
+  tree changed since the last build. Without this, both would test the start state's build.
+- **edit_file:** a span is unique only when no second match starts anywhere. `str.count` skips overlapping matches,
+  so such a span passed as unique, and the first match was edited.
+
+**Stuck vs unresolved (BUILD_PLAN section 4, criterion 6), wired:**
+- The run summary has `done_called` and `stop` (done, stuck, budget or error), plus per-run tool counts.
+- The turn log keeps the first 300 characters of each tool output.
+- A harness death writes `.error.json`.
+- `runner.outcome` gives one of `resolved`, `unresolved`, `stuck`, `budget` or `error`. `analyze.py` adds `missing`,
+  and its primary table shows every category per family, version and seed.
+
+**Analysis code** (`analyze.py`, `tests/test_r3_analyze.py`, synthetic runs end to end):
+- Wilcoxon, McNemar per seed, Holm, the bootstrap (suite `stats.py`), labels and `invalid`, per-seed results and
+  `unstable` flags, scaling (Spearman plus the deepest-vs-shallowest bootstrap), pass@2, and secondaries;
+- the pilot criteria and the turn-cap rule;
+- the Family B interim boundaries. The first version used α*(t) = 2 − 2Φ(z_{α/2}/√t), which does not give R3-1's
+  table. The form 4 − 4Φ(z_{α/4}/√t) reproduces it exactly: 0.0008/0.0247 and 0.0031/0.0490.
+
+**Metrics the analysis surfaced** (flagged; no rule changed):
+1. **A cap-hit run is unresolved even when its tree passes** (pre-registration: "they count as unresolved"). The
+   primary counts only `done` and passing. The tree's own pass is kept as a diagnostic column (`tree_resolved`),
+   never in a test.
+2. **"The first turn at which every F2P test passes"** (a pre-registered process measure) cannot be computed. The
+   hidden tests are never in the tree during the run, and running them per turn would leak them or add a test run
+   per turn. It is not in `analyze.py`.
+3. **The file-F1 answer key is every non-test file the commit changed,** changelogs and lockfiles included
+   (aiohttp's `CHANGES/*.rst`, poetry's `poetry.lock`), as the pre-registration's "against the merged commit" reads.
+   An agent rarely edits those, which lowers file F1 in both versions alike.
+4. **Visible tests are the parent's versions.** When the developer's commit changed them, the correct change fails
+   some visible tests (pilot-B-08: 2 of 11), in both versions. That is the realistic case, but it can mislead an
+   agent.
+
+**Dry run** (`dryrun.py`: the real runner on all 11 pilot tasks, both versions, no model calls):
+- **Two scripts per task and version:**
+  - the developer's change, replayed through `edit_file` (a deleted file is emptied: the tools cannot delete);
+  - `done` at once.
+- **Result: 44 of 44 runs ended as expected.** Every replay scored `resolved` with file and function F1 1.0, and
+  every immediate `done` scored `unresolved`.
+- **`analyze.py --pilot` on those run files:** criteria 1 (no harness error), 3 (tests found and run) and 5
+  (scoring path) pass. The outcome split is reported per version and seed.
+- **It found a memory leak.** One process kept every finished run's index (PRISM's server cache and the parse cache;
+  every run has its own shadow path), and the dry run was killed at 4.2 GB after about 30 runs.
+  - `ToolLayer.close()` now frees both.
+  - 6 runs in one process now hold at 330-360 MB (before: 547 to 1,348 MB).
+  - About 8 MB of growth per run remains. That does not matter for the pilot's 20 runs. **For R3a's 640 runs, the
+    Kaggle cell should run each task in its own process** (`runner.py`'s command line does).
+
+**Shortfalls and open points entering the pilot** (reported; nothing substituted):
+1. **Family N: 1 pilot task of 10.** The window gives 1 candidate under R3a's rules, and 5 under pool_scan's looser
+   rules, only 4 of them in N's pool repositories.
+   - Mined as a check, never used: 2024-04-01 to 2024-09-30 adds 1 more (aiohttp).
+   - vitest has 4 relaxed candidates there, and none has a JSDoc description.
+   - The description requirement (the prompt gives "the signature and the docstring or JSDoc") removes most N
+     candidates.
+2. **No JS/TS pilot task.**
+   - All 3 of vitest's B candidates are browser-mode tests, which produce no results without a browser.
+   - No other JS/TS repository gives a B candidate in the window.
+   - So pilot criterion 3 (tests run inside the loop in both languages) cannot be met for JS/TS.
+   - The earlier window (a check only) has 19 JS/TS B candidates: vitest 11, execa 8.
+3. **Depth:** all 10 B tasks are in stratum "1" (one changed caller). The pilot says nothing about deep tasks.
+4. **R3a's own sizes are at risk.** This is a projection from the pilot window, to be replaced by mining the main
+   window.
+   - Family B's candidates come from 5 repositories here.
+   - At ~10× the window, and at most 10 per repository, that is about 50 before the gate.
+   - vitest's are mostly browser tests.
+   - Family N projects to well under 50, so it would move to R3b by amendment R3-2, item 5.

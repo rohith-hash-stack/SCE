@@ -1,0 +1,1264 @@
+{
+ "family": "B",
+ "seed": 6601,
+ "want": 10,
+ "per_repo": 10,
+ "status": "frozen",
+ "tasks_sha256": "bf87d5953295340695598d6977b3c5a89cb40aa6093b36b976318c3f6907293e",
+ "tasks": [
+  {
+   "family": "B",
+   "repo": "litestar",
+   "language": "python",
+   "commit": "91ec7a385c8c9ce54f52ef62706e9d4541fbaf11",
+   "parent": "5255ec375335b18bef60cec903a481d97cc9da2c",
+   "commit_date": "2024-10-22T20:43:59+02:00",
+   "author_date": "2024-10-22T21:43:59+03:00",
+   "subject": "fix: set correct path_template value for trie node (#3806) (#3807)",
+   "anchor": "litestar._asgi.routing_trie.types.create_node",
+   "anchor_file": "litestar/_asgi/routing_trie/types.py",
+   "forced": [
+    "parameter removed or renamed: path_template"
+   ],
+   "changed_callers": [
+    "litestar._asgi.routing_trie.mapping.add_route_to_trie"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/litestar/_asgi/routing_trie/types.py\n+++ b/litestar/_asgi/routing_trie/types.py\n@@ -68,7 +68,7 @@\n     \"\"\"The path template string used to lower prometheus cardinality when group_path enabled\"\"\"\n \n \n-def create_node(path_template: str = \"\") -> RouteTrieNode:\n+def create_node() -> RouteTrieNode:\n     \"\"\"Create a RouteMapNode instance.\n \n     Returns:\n@@ -85,5 +85,5 @@\n         is_static=False,\n         is_path_type=False,\n         path_parameters={},\n-        path_template=path_template,\n+        path_template=\"\",\n     )\n",
+   "start_files": [
+    "litestar/_asgi/routing_trie/types.py"
+   ],
+   "start_functions": [
+    "litestar/_asgi/routing_trie/types.py::create_node"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/examples/test_contrib/prometheus/test_prometheus_exporter_example.py b/tests/examples/test_contrib/prometheus/test_prometheus_exporter_example.py\nindex 5ea31042c..569fd614a 100644\n--- a/tests/examples/test_contrib/prometheus/test_prometheus_exporter_example.py\n+++ b/tests/examples/test_contrib/prometheus/test_prometheus_exporter_example.py\n@@ -3,7 +3,7 @@ from typing import Any, Dict\n import pytest\n from prometheus_client import REGISTRY\n \n-from litestar import get\n+from litestar import Controller, Litestar, Request, get\n from litestar.contrib.prometheus import PrometheusMiddleware\n from litestar.status_codes import HTTP_200_OK\n from litestar.testing import TestClient\n@@ -60,3 +60,25 @@ def test_prometheus_exporter_example(\n         assert metrics_exporter_response.status_code == HTTP_200_OK\n         metrics = metrics_exporter_response.content.decode()\n         assert expected_path in metrics\n+\n+\n+def test_correct_population_path_template() -> None:\n+    class TestController(Controller):\n+        path = \"/prefix\"\n+\n+        @get(\"/{id_:int}\")\n+        async def b(self, request: Request, id_: int) -> str:\n+            return request.scope[\"path_template\"]\n+\n+        @get(\"/{id_:int}/postfix\")\n+        async def a(self, request: Request, id_: int) -> str:\n+            return request.scope[\"path_template\"]\n+\n+    app = Litestar([TestController])\n+\n+    with TestClient(app) as client:\n+        without_postfix_resp = client.get(\"/prefix/1\")\n+        with_postfix_resp = client.get(\"/prefix/1/postfix\")\n+\n+        assert without_postfix_resp.content.decode() == \"/prefix/{id_}\"\n+        assert with_postfix_resp.content.decode() == \"/prefix/{id_}/postfix\"\n",
+   "test_files": [
+    "tests/examples/test_contrib/prometheus/test_prometheus_exporter_example.py"
+   ],
+   "visible_tests": [
+    "tests/examples/test_contrib/prometheus/test_prometheus_exporter_example.py"
+   ],
+   "gold_files": [
+    "litestar/_asgi/routing_trie/mapping.py",
+    "litestar/_asgi/routing_trie/types.py"
+   ],
+   "gold_functions": [
+    "litestar/_asgi/routing_trie/mapping.py::add_route_to_trie",
+    "litestar/_asgi/routing_trie/mapping.py::configure_node"
+   ],
+   "prompt": "Function `litestar._asgi.routing_trie.types.create_node` in `litestar/_asgi/routing_trie/types.py` was changed as shown:\n\n```diff\n@@ -68,7 +68,7 @@\n     \"\"\"The path template string used to lower prometheus cardinality when group_path enabled\"\"\"\n \n \n-def create_node(path_template: str = \"\") -> RouteTrieNode:\n+def create_node() -> RouteTrieNode:\n     \"\"\"Create a RouteMapNode instance.\n \n     Returns:\n@@ -85,5 +85,5 @@\n         is_static=False,\n         is_path_type=False,\n         path_parameters={},\n-        path_template=path_template,\n+        path_template=\"\",\n     )\n```\n\nUpdate the rest of the project so its tests pass. The change to `litestar._asgi.routing_trie.types.create_node` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/examples/test_contrib/prometheus/test_prometheus_exporter_example.py": [
+     "tests.examples.test_contrib.prometheus.test_prometheus_exporter_example::test_correct_population_path_template",
+     "tests.examples.test_contrib.prometheus.test_prometheus_exporter_example::test_prometheus_exporter_example[False-/project/123a/team/abc/test/hi-project/{project:str}/team/{team:str}/test/{name:str}-/project/123a/team/abc/test/hi]",
+     "tests.examples.test_contrib.prometheus.test_prometheus_exporter_example::test_prometheus_exporter_example[False-/test/litestar-test/litestar-/test/litestar]",
+     "tests.examples.test_contrib.prometheus.test_prometheus_exporter_example::test_prometheus_exporter_example[False-/test/litestar-test/{name:str}-/test/litestar]",
+     "tests.examples.test_contrib.prometheus.test_prometheus_exporter_example::test_prometheus_exporter_example[True-/project/123a/team/abc/test/hi-project/{project:str}/team/{team:str}/test/{name:str}-/project/{project}/team/{team}/test/{name}]",
+     "tests.examples.test_contrib.prometheus.test_prometheus_exporter_example::test_prometheus_exporter_example[True-/test/litestar-test/litestar-/test/litestar]",
+     "tests.examples.test_contrib.prometheus.test_prometheus_exporter_example::test_prometheus_exporter_example[True-/test/litestar-test/{name:str}-/test/{name}]"
+    ]
+   },
+   "pass_to_pass": {},
+   "tests_run": [
+    "tests/examples/test_contrib/prometheus/test_prometheus_exporter_example.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-01",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "aiohttp",
+   "language": "python",
+   "commit": "b20908e531ff349545cff5e90de24975bc27afda",
+   "parent": "216e082807d02fafaacca57fc883c86826b126d3",
+   "commit_date": "2024-10-10T11:49:27-05:00",
+   "author_date": "2024-10-10T11:49:27-05:00",
+   "subject": "Simplify DNS throttle implementation (#9454)",
+   "anchor": "aiohttp.connector.TCPConnector._resolve_host_with_throttle",
+   "anchor_file": "aiohttp/connector.py",
+   "forced": [
+    "new required parameter: futures"
+   ],
+   "changed_callers": [
+    "aiohttp.connector.TCPConnector._resolve_host"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/aiohttp/connector.py\n+++ b/aiohttp/connector.py\n@@ -938,41 +938,39 @@\n         key: Tuple[str, int],\n         host: str,\n         port: int,\n+        futures: Set[asyncio.Future[None]],\n         traces: Optional[Sequence[\"Trace\"]],\n     ) -> List[ResolveResult]:\n-        \"\"\"Resolve host with a dns events throttle.\"\"\"\n-        if key in self._throttle_dns_events:\n-            # get event early, before any await (#4014)\n-            event = self._throttle_dns_events[key]\n+        \"\"\"Resolve host and set result for all waiters.\n+\n+        This method must be run in a task and shielded from cancellation\n+        to avoid cancelling the underlying lookup.\n+        \"\"\"\n+        if traces:\n+            for trace in traces:\n+                await trace.send_dns_cache_miss(host)\n+        try:\n             if traces:\n                 for trace in traces:\n-                    await trace.send_dns_cache_hit(host)\n-            await event.wait()\n-        else:\n-            # update dict early, before any await (#4014)\n-            self._throttle_dns_events[key] = EventResultOrError(self._loop)\n+                    await trace.send_dns_resolvehost_start(host)\n+\n+            addrs = await self._resolver.resolve(host, port, family=self._family)\n             if traces:\n                 for trace in traces:\n-                    await trace.send_dns_cache_miss(host)\n-            try:\n-                if traces:\n-                    for trace in traces:\n-                        await trace.send_dns_resolvehost_start(host)\n-\n-                addrs = await self._resolver.resolve(host, port, family=self._family)\n-                if traces:\n-                    for trace in traces:\n-                        await trace.send_dns_resolvehost_end(host)\n-\n-                self._cached_hosts.add(key, addrs)\n-                self._throttle_dns_events[key].set()\n-            except BaseException as e:\n-                # any DNS exception, independently of the implementation\n-                # is set for the waiters to raise the same exception.\n-                self._throttle_dns_events[key].set(exc=e)\n-                raise\n-            finally:\n-                self._throttle_dns_events.pop(key)\n+                    await trace.send_dns_resolvehost_end(host)\n+\n+            self._cached_hosts.add(key, addrs)\n+            for fut in futures:\n+                set_result(fut, None)\n+        except BaseException as e:\n+            # any DNS exception is set for the waiters to raise the same exception.\n+            # This coro is always run in task that is shielded from cancellation so\n+            # we should never be propagating cancellation here.\n+            for fut in futures:\n+                set_exception(fut, e)\n+            raise\n+        finally:\n+            self._throttle_dns_futures.pop(key)\n \n         return self._cached_hosts.next_addrs(key)\n \n",
+   "start_files": [
+    "aiohttp/connector.py"
+   ],
+   "start_functions": [
+    "aiohttp/connector.py::TCPConnector._resolve_host_with_throttle"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/test_connector.py b/tests/test_connector.py\nindex f142105df..6e0bc232e 100644\n--- a/tests/test_connector.py\n+++ b/tests/test_connector.py\n@@ -47,7 +47,6 @@ from aiohttp.connector import (\n     TCPConnector,\n     _DNSCacheTable,\n )\n-from aiohttp.locks import EventResultOrError\n from aiohttp.pytest_plugin import AiohttpClient, AiohttpServer\n from aiohttp.test_utils import make_mocked_coro, unused_port\n from aiohttp.tracing import Trace\n@@ -1921,8 +1920,8 @@ async def test_close_cancels_cleanup_handle(\n async def test_close_cancels_resolve_host(loop: asyncio.AbstractEventLoop) -> None:\n     cancelled = False\n \n-    async def delay_resolve_host(*args: object) -> None:\n-        \"\"\"Delay _resolve_host() task in order to test cancellation.\"\"\"\n+    async def delay_resolve(*args: object, **kwargs: object) -> None:\n+        \"\"\"Delay resolve() task in order to test cancellation.\"\"\"\n         nonlocal cancelled\n         try:\n             await asyncio.sleep(10)\n@@ -1934,7 +1933,7 @@ async def test_close_cancels_resolve_host(loop: asyncio.AbstractEventLoop) -> No\n     req = ClientRequest(\n         \"GET\", URL(\"http://localhost:80\"), loop=loop, response_class=mock.Mock()\n     )\n-    with mock.patch.object(conn, \"_resolve_host_with_throttle\", delay_resolve_host):\n+    with mock.patch.object(conn._resolver, \"resolve\", delay_resolve):\n         t = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n         # Let it create the internal task\n         await asyncio.sleep(0)\n@@ -1951,6 +1950,301 @@ async def test_close_cancels_resolve_host(loop: asyncio.AbstractEventLoop) -> No\n             await t\n \n \n+async def test_multiple_dns_resolution_requests_success(\n+    loop: asyncio.AbstractEventLoop,\n+) -> None:\n+    \"\"\"Verify that multiple DNS resolution requests are handled correctly.\"\"\"\n+\n+    async def delay_resolve(*args: object, **kwargs: object) -> List[ResolveResult]:\n+        \"\"\"Delayed resolve() task.\"\"\"\n+        for _ in range(3):\n+            await asyncio.sleep(0)\n+        return [\n+            {\n+                \"hostname\": \"localhost\",\n+                \"host\": \"127.0.0.1\",\n+                \"port\": 80,\n+                \"family\": socket.AF_INET,\n+                \"proto\": 0,\n+                \"flags\": socket.AI_NUMERICHOST,\n+            },\n+        ]\n+\n+    conn = aiohttp.TCPConnector(force_close=True)\n+    req = ClientRequest(\n+        \"GET\", URL(\"http://localhost:80\"), loop=loop, response_class=mock.Mock()\n+    )\n+    with mock.patch.object(conn._resolver, \"resolve\", delay_resolve), mock.patch(\n+        \"aiohttp.connector.aiohappyeyeballs.start_connection\",\n+        side_effect=OSError(1, \"Forced connection to fail\"),\n+    ):\n+        task1 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        # Let it create the internal task\n+        await asyncio.sleep(0)\n+        # Let that task start running\n+        await asyncio.sleep(0)\n+\n+        # Ensure the task is running\n+        assert len(conn._resolve_host_tasks) == 1\n+\n+        task2 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+        task3 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"Forced connection to fail\"\n+        ):\n+            await task1\n+\n+        # Verify the the task is finished\n+        assert len(conn._resolve_host_tasks) == 0\n+\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"Forced connection to fail\"\n+        ):\n+            await task2\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"Forced connection to fail\"\n+        ):\n+            await task3\n+\n+\n+async def test_multiple_dns_resolution_requests_failure(\n+    loop: asyncio.AbstractEventLoop,\n+) -> None:\n+    \"\"\"Verify that DNS resolution failure for multiple requests is handled correctly.\"\"\"\n+\n+    async def delay_resolve(*args: object, **kwargs: object) -> List[ResolveResult]:\n+        \"\"\"Delayed resolve() task.\"\"\"\n+        for _ in range(3):\n+            await asyncio.sleep(0)\n+        raise OSError(None, \"DNS Resolution mock failure\")\n+\n+    conn = aiohttp.TCPConnector(force_close=True)\n+    req = ClientRequest(\n+        \"GET\", URL(\"http://localhost:80\"), loop=loop, response_class=mock.Mock()\n+    )\n+    with mock.patch.object(conn._resolver, \"resolve\", delay_resolve), mock.patch(\n+        \"aiohttp.connector.aiohappyeyeballs.start_connection\",\n+        side_effect=OSError(1, \"Forced connection to fail\"),\n+    ):\n+        task1 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        # Let it create the internal task\n+        await asyncio.sleep(0)\n+        # Let that task start running\n+        await asyncio.sleep(0)\n+\n+        # Ensure the task is running\n+        assert len(conn._resolve_host_tasks) == 1\n+\n+        task2 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+        task3 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"DNS Resolution mock failure\"\n+        ):\n+            await task1\n+\n+        # Verify the the task is finished\n+        assert len(conn._resolve_host_tasks) == 0\n+\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"DNS Resolution mock failure\"\n+        ):\n+            await task2\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"DNS Resolution mock failure\"\n+        ):\n+            await task3\n+\n+\n+async def test_multiple_dns_resolution_requests_cancelled(\n+    loop: asyncio.AbstractEventLoop,\n+) -> None:\n+    \"\"\"Verify that DNS resolution cancellation does not affect other tasks.\"\"\"\n+\n+    async def delay_resolve(*args: object, **kwargs: object) -> List[ResolveResult]:\n+        \"\"\"Delayed resolve() task.\"\"\"\n+        for _ in range(3):\n+            await asyncio.sleep(0)\n+        raise OSError(None, \"DNS Resolution mock failure\")\n+\n+    conn = aiohttp.TCPConnector(force_close=True)\n+    req = ClientRequest(\n+        \"GET\", URL(\"http://localhost:80\"), loop=loop, response_class=mock.Mock()\n+    )\n+    with mock.patch.object(conn._resolver, \"resolve\", delay_resolve), mock.patch(\n+        \"aiohttp.connector.aiohappyeyeballs.start_connection\",\n+        side_effect=OSError(1, \"Forced connection to fail\"),\n+    ):\n+        task1 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        # Let it create the internal task\n+        await asyncio.sleep(0)\n+        # Let that task start running\n+        await asyncio.sleep(0)\n+\n+        # Ensure the task is running\n+        assert len(conn._resolve_host_tasks) == 1\n+\n+        task2 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+        task3 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        task1.cancel()\n+        with pytest.raises(asyncio.CancelledError):\n+            await task1\n+\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"DNS Resolution mock failure\"\n+        ):\n+            await task2\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"DNS Resolution mock failure\"\n+        ):\n+            await task3\n+\n+        # Verify the the task is finished\n+        assert len(conn._resolve_host_tasks) == 0\n+\n+\n+async def test_multiple_dns_resolution_requests_first_cancelled(\n+    loop: asyncio.AbstractEventLoop,\n+) -> None:\n+    \"\"\"Verify that first DNS resolution cancellation does not make other resolutions fail.\"\"\"\n+\n+    async def delay_resolve(*args: object, **kwargs: object) -> List[ResolveResult]:\n+        \"\"\"Delayed resolve() task.\"\"\"\n+        for _ in range(3):\n+            await asyncio.sleep(0)\n+        return [\n+            {\n+                \"hostname\": \"localhost\",\n+                \"host\": \"127.0.0.1\",\n+                \"port\": 80,\n+                \"family\": socket.AF_INET,\n+                \"proto\": 0,\n+                \"flags\": socket.AI_NUMERICHOST,\n+            },\n+        ]\n+\n+    conn = aiohttp.TCPConnector(force_close=True)\n+    req = ClientRequest(\n+        \"GET\", URL(\"http://localhost:80\"), loop=loop, response_class=mock.Mock()\n+    )\n+    with mock.patch.object(conn._resolver, \"resolve\", delay_resolve), mock.patch(\n+        \"aiohttp.connector.aiohappyeyeballs.start_connection\",\n+        side_effect=OSError(1, \"Forced connection to fail\"),\n+    ):\n+        task1 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        # Let it create the internal task\n+        await asyncio.sleep(0)\n+        # Let that task start running\n+        await asyncio.sleep(0)\n+\n+        # Ensure the task is running\n+        assert len(conn._resolve_host_tasks) == 1\n+\n+        task2 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+        task3 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        task1.cancel()\n+        with pytest.raises(asyncio.CancelledError):\n+            await task1\n+\n+        # The second and third tasks should still make the connection\n+        # even if the first one is cancelled\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"Forced connection to fail\"\n+        ):\n+            await task2\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"Forced connection to fail\"\n+        ):\n+            await task3\n+\n+        # Verify the the task is finished\n+        assert len(conn._resolve_host_tasks) == 0\n+\n+\n+async def test_multiple_dns_resolution_requests_first_fails_second_successful(\n+    loop: asyncio.AbstractEventLoop,\n+) -> None:\n+    \"\"\"Verify that first DNS resolution fails the first time and is successful the second time.\"\"\"\n+    attempt = 0\n+\n+    async def delay_resolve(*args: object, **kwargs: object) -> List[ResolveResult]:\n+        \"\"\"Delayed resolve() task.\"\"\"\n+        nonlocal attempt\n+        for _ in range(3):\n+            await asyncio.sleep(0)\n+        attempt += 1\n+        if attempt == 1:\n+            raise OSError(None, \"DNS Resolution mock failure\")\n+        return [\n+            {\n+                \"hostname\": \"localhost\",\n+                \"host\": \"127.0.0.1\",\n+                \"port\": 80,\n+                \"family\": socket.AF_INET,\n+                \"proto\": 0,\n+                \"flags\": socket.AI_NUMERICHOST,\n+            },\n+        ]\n+\n+    conn = aiohttp.TCPConnector(force_close=True)\n+    req = ClientRequest(\n+        \"GET\", URL(\"http://localhost:80\"), loop=loop, response_class=mock.Mock()\n+    )\n+    with mock.patch.object(conn._resolver, \"resolve\", delay_resolve), mock.patch(\n+        \"aiohttp.connector.aiohappyeyeballs.start_connection\",\n+        side_effect=OSError(1, \"Forced connection to fail\"),\n+    ):\n+        task1 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        # Let it create the internal task\n+        await asyncio.sleep(0)\n+        # Let that task start running\n+        await asyncio.sleep(0)\n+\n+        # Ensure the task is running\n+        assert len(conn._resolve_host_tasks) == 1\n+\n+        task2 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"DNS Resolution mock failure\"\n+        ):\n+            await task1\n+\n+        assert len(conn._resolve_host_tasks) == 0\n+        # The second task should also get the dns resolution failure\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"DNS Resolution mock failure\"\n+        ):\n+            await task2\n+\n+        # The third task is created after the resolution finished so\n+        # it should try again and succeed\n+        task3 = asyncio.create_task(conn.connect(req, [], ClientTimeout()))\n+        # Let it create the internal task\n+        await asyncio.sleep(0)\n+        # Let that task start running\n+        await asyncio.sleep(0)\n+\n+        # Ensure the task is running\n+        assert len(conn._resolve_host_tasks) == 1\n+\n+        with pytest.raises(\n+            aiohttp.ClientConnectorError, match=\"Forced connection to fail\"\n+        ):\n+            await task3\n+\n+        # Verify the the task is finished\n+        assert len(conn._resolve_host_tasks) == 0\n+\n+\n async def test_close_abort_closed_transports(loop: asyncio.AbstractEventLoop) -> None:\n     tr = mock.Mock()\n \n@@ -2996,12 +3290,13 @@ async def test_connector_throttle_trace_race(loop: asyncio.AbstractEventLoop) ->\n             \"\"\"Dummy\"\"\"\n \n         async def send_dns_cache_hit(self, *args: object, **kwargs: object) -> None:\n-            event = connector._throttle_dns_events.pop(key)\n-            event.set()\n+            futures = connector._throttle_dns_futures.pop(key)\n+            for fut in futures:\n+                fut.set_result(None)\n             connector._cached_hosts.add(key, [token])\n \n     connector = TCPConnector()\n-    connector._throttle_dns_events[key] = EventResultOrError(loop)\n+    connector._throttle_dns_futures[key] = set()\n     traces = [DummyTracer()]\n     assert await connector._resolve_host(\"\", 0, traces) == [token]\n \ndiff --git a/tests/test_locks.py b/tests/test_locks.py\ndeleted file mode 100644\nindex 60a816ed6..000000000\n--- a/tests/test_locks.py\n+++ /dev/null\n@@ -1,55 +0,0 @@\n-# Tests of custom aiohttp locks implementations\n-import asyncio\n-from typing import Any, Union\n-\n-import pytest\n-\n-from aiohttp.locks import EventResultOrError\n-\n-\n-class TestEventResultOrError:\n-    async def test_set_exception(self, loop: Any) -> None:\n-        ev = EventResultOrError(loop=loop)\n-\n-        async def c() -> Union[int, Exception]:\n-            try:\n-                await ev.wait()\n-            except Exception as e:\n-                return e\n-            return 1\n-\n-        t = loop.create_task(c())\n-        await asyncio.sleep(0)\n-        e = Exception()\n-        ev.set(exc=e)\n-        assert (await t) == e\n-\n-    async def test_set(self, loop: Any) -> None:\n-        ev = EventResultOrError(loop=loop)\n-\n-        async def c() -> int:\n-            await ev.wait()\n-            return 1\n-\n-        t = loop.create_task(c())\n-        await asyncio.sleep(0)\n-        ev.set()\n-        assert (await t) == 1\n-\n-    async def test_cancel_waiters(self, loop: Any) -> None:\n-        ev = EventResultOrError(loop=loop)\n-\n-        async def c() -> None:\n-            await ev.wait()\n-\n-        t1 = loop.create_task(c())\n-        t2 = loop.create_task(c())\n-        await asyncio.sleep(0)\n-        ev.cancel()\n-        ev.set()\n-\n-        with pytest.raises(asyncio.CancelledError):\n-            await t1\n-\n-        with pytest.raises(asyncio.CancelledError):\n-            await t2\n",
+   "test_files": [
+    "tests/test_connector.py",
+    "tests/test_locks.py"
+   ],
+   "visible_tests": [
+    "tests/test_connector.py",
+    "tests/test_locks.py"
+   ],
+   "gold_files": [
+    "CHANGES/9454.misc.rst",
+    "aiohttp/connector.py",
+    "aiohttp/locks.py"
+   ],
+   "gold_functions": [
+    "aiohttp/connector.py::TCPConnector.__init__",
+    "aiohttp/connector.py::TCPConnector._close_immediately",
+    "aiohttp/connector.py::TCPConnector._resolve_host",
+    "aiohttp/locks.py::EventResultOrError.__init__",
+    "aiohttp/locks.py::EventResultOrError.cancel",
+    "aiohttp/locks.py::EventResultOrError.set",
+    "aiohttp/locks.py::EventResultOrError.wait"
+   ],
+   "prompt": "Function `aiohttp.connector.TCPConnector._resolve_host_with_throttle` in `aiohttp/connector.py` was changed as shown:\n\n```diff\n@@ -938,41 +938,39 @@\n         key: Tuple[str, int],\n         host: str,\n         port: int,\n+        futures: Set[asyncio.Future[None]],\n         traces: Optional[Sequence[\"Trace\"]],\n     ) -> List[ResolveResult]:\n-        \"\"\"Resolve host with a dns events throttle.\"\"\"\n-        if key in self._throttle_dns_events:\n-            # get event early, before any await (#4014)\n-            event = self._throttle_dns_events[key]\n+        \"\"\"Resolve host and set result for all waiters.\n+\n+        This method must be run in a task and shielded from cancellation\n+        to avoid cancelling the underlying lookup.\n+        \"\"\"\n+        if traces:\n+            for trace in traces:\n+                await trace.send_dns_cache_miss(host)\n+        try:\n             if traces:\n                 for trace in traces:\n-                    await trace.send_dns_cache_hit(host)\n-            await event.wait()\n-        else:\n-            # update dict early, before any await (#4014)\n-            self._throttle_dns_events[key] = EventResultOrError(self._loop)\n+                    await trace.send_dns_resolvehost_start(host)\n+\n+            addrs = await self._resolver.resolve(host, port, family=self._family)\n             if traces:\n                 for trace in traces:\n-                    await trace.send_dns_cache_miss(host)\n-            try:\n-                if traces:\n-                    for trace in traces:\n-                        await trace.send_dns_resolvehost_start(host)\n-\n-                addrs = await self._resolver.resolve(host, port, family=self._family)\n-                if traces:\n-                    for trace in traces:\n-                        await trace.send_dns_resolvehost_end(host)\n-\n-                self._cached_hosts.add(key, addrs)\n-                self._throttle_dns_events[key].set()\n-            except BaseException as e:\n-                # any DNS exception, independently of the implementation\n-                # is set for the waiters to raise the same exception.\n-                self._throttle_dns_events[key].set(exc=e)\n-                raise\n-            finally:\n-                self._throttle_dns_events.pop(key)\n+                    await trace.send_dns_resolvehost_end(host)\n+\n+            self._cached_hosts.add(key, addrs)\n+            for fut in futures:\n+                set_result(fut, None)\n+        except BaseException as e:\n+            # any DNS exception is set for the waiters to raise the same exception.\n+            # This coro is always run in task that is shielded from cancellation so\n+            # we should never be propagating cancellation here.\n+            for fut in futures:\n+                set_exception(fut, e)\n+            raise\n+        finally:\n+            self._throttle_dns_futures.pop(key)\n \n         return self._cached_hosts.next_addrs(key)\n \n```\n\nUpdate the rest of the project so its tests pass. The change to `aiohttp.connector.TCPConnector._resolve_host_with_throttle` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/test_connector.py": [
+     "tests.test_connector::test_close_cancels_resolve_host[pyloop]",
+     "tests.test_connector::test_connector_throttle_trace_race[pyloop]",
+     "tests.test_connector::test_dns_error[pyloop]",
+     "tests.test_connector::test_multiple_dns_resolution_requests_cancelled[pyloop]",
+     "tests.test_connector::test_multiple_dns_resolution_requests_failure[pyloop]",
+     "tests.test_connector::test_multiple_dns_resolution_requests_first_cancelled[pyloop]",
+     "tests.test_connector::test_multiple_dns_resolution_requests_first_fails_second_successful[pyloop]",
+     "tests.test_connector::test_multiple_dns_resolution_requests_success[pyloop]",
+     "tests.test_connector::test_tcp_connector_cancel_dns_error_captured[pyloop]",
+     "tests.test_connector::test_tcp_connector_dns_cache_forever[pyloop]",
+     "tests.test_connector::test_tcp_connector_dns_cache_not_expired[pyloop]",
+     "tests.test_connector::test_tcp_connector_dns_throttle_requests[pyloop]",
+     "tests.test_connector::test_tcp_connector_dns_throttle_requests_cancelled_when_close[pyloop]",
+     "tests.test_connector::test_tcp_connector_dns_throttle_requests_exception_spread[pyloop]",
+     "tests.test_connector::test_tcp_connector_dns_tracing[pyloop]",
+     "tests.test_connector::test_tcp_connector_dns_tracing_cache_disabled[pyloop]",
+     "tests.test_connector::test_tcp_connector_dns_tracing_throttle_requests[pyloop]",
+     "tests.test_connector::test_tcp_connector_resolve_host[pyloop]",
+     "tests.test_connector::test_tcp_connector_use_dns_cache_disabled[pyloop]"
+    ]
+   },
+   "pass_to_pass": {
+    "tests/test_connector.py": [
+     "tests.test_connector.TestDNSCacheTable::test_always_expire",
+     "tests.test_connector.TestDNSCacheTable::test_clear",
+     "tests.test_connector.TestDNSCacheTable::test_expired_ttl",
+     "tests.test_connector.TestDNSCacheTable::test_never_expire",
+     "tests.test_connector.TestDNSCacheTable::test_next_addrs",
+     "tests.test_connector.TestDNSCacheTable::test_next_addrs_basic",
+     "tests.test_connector.TestDNSCacheTable::test_next_addrs_single",
+     "tests.test_connector.TestDNSCacheTable::test_not_expired_ttl",
+     "tests.test_connector.TestDNSCacheTable::test_not_expired_ttl_None",
+     "tests.test_connector.TestDNSCacheTable::test_remove",
+     "tests.test_connector::test___get_ssl_context1",
+     "tests.test_connector::test___get_ssl_context2",
+     "tests.test_connector::test___get_ssl_context3",
+     "tests.test_connector::test___get_ssl_context4",
+     "tests.test_connector::test___get_ssl_context5",
+     "tests.test_connector::test___get_ssl_context6",
+     "tests.test_connector::test__drop_acquire_per_host1[pyloop]",
+     "tests.test_connector::test__drop_acquire_per_host2[pyloop]",
+     "tests.test_connector::test__drop_acquire_per_host3[pyloop]",
+     "tests.test_connector::test_async_context_manager[pyloop]",
+     "tests.test_connector::test_base_connector_allows_high_level_protocols[pyloop]",
+     "tests.test_connector::test_cancelled_waiter[pyloop]",
+     "tests.test_connector::test_cleanup",
+     "tests.test_connector::test_cleanup2[pyloop]",
+     "tests.test_connector::test_cleanup3[pyloop]",
+     "tests.test_connector::test_cleanup_close_ssl_transport[pyloop]",
+     "tests.test_connector::test_cleanup_closed[pyloop]",
+     "tests.test_connector::test_cleanup_closed_disabled[pyloop]",
+     "tests.test_connector::test_close",
+     "tests.test_connector::test_close_abort_closed_transports[pyloop]",
+     "tests.test_connector::test_close_cancels_cleanup_closed_handle[pyloop]",
+     "tests.test_connector::test_close_cancels_cleanup_handle[pyloop]",
+     "tests.test_connector::test_close_during_connect[pyloop]",
+     "tests.test_connector::test_close_twice[pyloop]",
+     "tests.test_connector::test_close_with_acquired_connection[pyloop]",
+     "tests.test_connector::test_connect[pyloop]",
+     "tests.test_connector::test_connect_queued_operation_tracing[pyloop]",
+     "tests.test_connector::test_connect_reuseconn_tracing[pyloop]",
+     "tests.test_connector::test_connect_tracing[pyloop]",
+     "tests.test_connector::test_connect_waiters_cleanup[pyloop]",
+     "tests.test_connector::test_connect_waiters_cleanup_key_error[pyloop]",
+     "tests.test_connector::test_connect_with_capacity_release_waiters[pyloop]",
+     "tests.test_connector::test_connect_with_limit[pyloop]",
+     "tests.test_connector::test_connect_with_limit_and_limit_per_host[pyloop]",
+     "tests.test_connector::test_connect_with_limit_cancelled[pyloop]",
+     "tests.test_connector::test_connect_with_limit_concurrent[pyloop]",
+     "tests.test_connector::test_connect_with_no_limit_and_limit_per_host[pyloop]",
+     "tests.test_connector::test_connect_with_no_limits[pyloop]",
+     "tests.test_connector::test_connection_del[pyloop]",
+     "tests.test_connector::test_connection_del_loop_closed[pyloop]",
+     "tests.test_connector::test_connection_del_loop_debug[pyloop]",
+     "tests.test_connector::test_connector_cache_trace_race",
+     "tests.test_connector::test_connector_does_not_remove_needed_waiters[pyloop]",
+     "tests.test_connector::test_connector_multiple_event_loop",
+     "tests.test_connector::test_create_conn",
+     "tests.test_connector::test_ctor_cleanup",
+     "tests.test_connector::test_ctor_with_default_loop[pyloop]",
+     "tests.test_connector::test_default_force_close[pyloop]",
+     "tests.test_connector::test_default_ssl_context_creation_without_ssl",
+     "tests.test_connector::test_default_use_dns_cache",
+     "tests.test_connector::test_del[pyloop]",
+     "tests.test_connector::test_del_empty_connector[pyloop]",
+     "tests.test_connector::test_del_with_closed_loop[pyloop]",
+     "tests.test_connector::test_error_on_connection[pyloop]",
+     "tests.test_connector::test_error_on_connection_with_cancelled_waiter[pyloop]",
+     "tests.test_connector::test_force_close_and_explicit_keep_alive[pyloop]",
+     "tests.test_connector::test_get[pyloop]",
+     "tests.test_connector::test_get_expired[pyloop]",
+     "tests.test_connector::test_get_expired_ssl[pyloop]",
+     "tests.test_connector::test_get_pop_empty_conns[pyloop]",
+     "tests.test_connector::test_get_unconnected_proto[pyloop]",
+     "tests.test_connector::test_get_unconnected_proto_ssl[pyloop]",
+     "tests.test_connector::test_insecure_fingerprint_md5[pyloop]",
+     "tests.test_connector::test_insecure_fingerprint_sha1[pyloop]",
+     "tests.test_connector::test_invalid_ssl_param",
+     "tests.test_connector::test_limit_per_host_property[pyloop]",
+     "tests.test_connector::test_limit_per_host_property_default[pyloop]",
+     "tests.test_connector::test_limit_property[pyloop]",
+     "tests.test_connector::test_limit_property_default[pyloop]",
+     "tests.test_connector::test_release[pyloop]",
+     "tests.test_connector::test_release_acquired",
+     "tests.test_connector::test_release_acquired_closed",
+     "tests.test_connector::test_release_already_closed",
+     "tests.test_connector::test_release_close",
+     "tests.test_connector::test_release_close_do_not_add_to_pool[pyloop]",
+     "tests.test_connector::test_release_close_do_not_delete_existing_connections[pyloop]",
+     "tests.test_connector::test_release_not_opened[pyloop]",
+     "tests.test_connector::test_release_not_started[pyloop]",
+     "tests.test_connector::test_release_proto_closed_future[pyloop]",
+     "tests.test_connector::test_release_ssl_transport[pyloop]",
+     "tests.test_connector::test_release_waiter_first_available[pyloop]",
+     "tests.test_connector::test_release_waiter_no_available[pyloop]",
+     "tests.test_connector::test_release_waiter_no_limit[pyloop]",
+     "tests.test_connector::test_release_waiter_per_host[pyloop]",
+     "tests.test_connector::test_release_waiter_release_first[pyloop]",
+     "tests.test_connector::test_release_waiter_skip_done_waiter[pyloop]",
+     "tests.test_connector::test_resolver_not_called_with_address_is_ip[pyloop]",
+     "tests.test_connector::test_ssl_context_once",
+     "tests.test_connector::test_tcp_connector[pyloop]",
+     "tests.test_connector::test_tcp_connector_allowed_protocols[pyloop]",
+     "tests.test_connector::test_tcp_connector_certificate_error[pyloop]",
+     "tests.test_connector::test_tcp_connector_clear_dns_cache[pyloop]",
+     "tests.test_connector::test_tcp_connector_clear_dns_cache_bad_args[pyloop]",
+     "tests.test_connector::test_tcp_connector_ctor[pyloop]",
+     "tests.test_connector::test_tcp_connector_ctor_fingerprint_valid[pyloop]",
+     "tests.test_connector::test_tcp_connector_do_not_raise_connector_ssl_error[pyloop-domain name]",
+     "tests.test_connector::test_tcp_connector_do_not_raise_connector_ssl_error[pyloop-fully-qualified domain name with multiple trailing dots]",
+     "tests.test_connector::test_tcp_connector_do_not_raise_connector_ssl_error[pyloop-fully-qualified domain name]",
+     "tests.test_connector::test_tcp_connector_do_not_raise_connector_ssl_error[pyloop-idna fully-qualified domain name]",
+     "tests.test_connector::test_tcp_connector_do_not_raise_connector_ssl_error[pyloop-ip address]",
+     "tests.test_connector::test_tcp_connector_family_is_respected[pyloop]",
+     "tests.test_connector::test_tcp_connector_multiple_hosts_errors[pyloop]",
+     "tests.test_connector::test_tcp_connector_multiple_hosts_one_timeout[pyloop-http://mocked.host]",
+     "tests.test_connector::test_tcp_connector_multiple_hosts_one_timeout[pyloop-https://mocked.host]",
+     "tests.test_connector::test_tcp_connector_raise_connector_ssl_error[pyloop]",
+     "tests.test_connector::test_tcp_connector_server_hostname_default[pyloop]",
+     "tests.test_connector::test_tcp_connector_server_hostname_override[pyloop]",
+     "tests.test_connector::test_tcp_connector_uses_provided_local_addr[pyloop]",
+     "tests.test_connector::test_unix_connector[pyloop]",
+     "tests.test_connector::test_unix_connector_not_found[pyloop]",
+     "tests.test_connector::test_unix_connector_permission[pyloop]"
+    ]
+   },
+   "tests_run": [
+    "tests/test_connector.py",
+    "tests/test_locks.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-02",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "sqlglot",
+   "language": "python",
+   "commit": "739df5ea2731a6fa8dbbd39c1e20164aa6b34689",
+   "parent": "c4c1d45c2c5f21c3d301ab7750f584e7b1aa93d3",
+   "commit_date": "2024-11-22T21:13:53+02:00",
+   "author_date": "2024-11-22T21:13:53+02:00",
+   "subject": "Fix(optimizer)!: fix datetime coercion in the canonicalize rule (#4431)",
+   "anchor": "sqlglot.optimizer.canonicalize.coerce_type",
+   "anchor_file": "sqlglot/optimizer/canonicalize.py",
+   "forced": [
+    "new required parameter: promote_to_inferred_datetime_type"
+   ],
+   "changed_callers": [
+    "sqlglot.optimizer.canonicalize._canonicalize"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/sqlglot/optimizer/canonicalize.py\n+++ b/sqlglot/optimizer/canonicalize.py\n@@ -68,11 +68,11 @@\n )\n \n \n-def coerce_type(node: exp.Expression) -> exp.Expression:\n+def coerce_type(node: exp.Expression, promote_to_inferred_datetime_type: bool) -> exp.Expression:\n     if isinstance(node, COERCIBLE_DATE_OPS):\n-        _coerce_date(node.left, node.right)\n+        _coerce_date(node.left, node.right, promote_to_inferred_datetime_type)\n     elif isinstance(node, exp.Between):\n-        _coerce_date(node.this, node.args[\"low\"])\n+        _coerce_date(node.this, node.args[\"low\"], promote_to_inferred_datetime_type)\n     elif isinstance(node, exp.Extract) and not node.expression.type.is_type(\n         *exp.DataType.TEMPORAL_TYPES\n     ):\n",
+   "start_files": [
+    "sqlglot/optimizer/canonicalize.py"
+   ],
+   "start_functions": [
+    "sqlglot/optimizer/canonicalize.py::coerce_type"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/fixtures/optimizer/canonicalize.sql b/tests/fixtures/optimizer/canonicalize.sql\nindex 66c6c95c9..3610f1628 100644\n--- a/tests/fixtures/optimizer/canonicalize.sql\n+++ b/tests/fixtures/optimizer/canonicalize.sql\n@@ -2,7 +2,7 @@ SELECT w.d + w.e AS c FROM w AS w;\n SELECT CONCAT(\"w\".\"d\", \"w\".\"e\") AS \"c\" FROM \"w\" AS \"w\";\n \n SELECT CAST(w.d AS DATE) > w.e AS a FROM w AS w;\n-SELECT CAST(\"w\".\"d\" AS DATE) > CAST(\"w\".\"e\" AS DATETIME) AS \"a\" FROM \"w\" AS \"w\";\n+SELECT CAST(\"w\".\"d\" AS DATE) > CAST(\"w\".\"e\" AS DATE) AS \"a\" FROM \"w\" AS \"w\";\n \n SELECT CAST(1 AS VARCHAR) AS a FROM w AS w;\n SELECT CAST(1 AS VARCHAR) AS \"a\" FROM \"w\" AS \"w\";\n@@ -102,7 +102,7 @@ DATEDIFF('2023-01-01', '2023-01-02', DAY);\n DATEDIFF(CAST('2023-01-01' AS DATETIME), CAST('2023-01-02' AS DATETIME), DAY);\n \n SELECT \"t\".\"d\" > '2023-01-01' AS \"d\" FROM \"temporal\" AS \"t\";\n-SELECT \"t\".\"d\" > CAST('2023-01-01' AS DATETIME) AS \"d\" FROM \"temporal\" AS \"t\";\n+SELECT \"t\".\"d\" > CAST('2023-01-01' AS DATE) AS \"d\" FROM \"temporal\" AS \"t\";\n \n SELECT \"t\".\"d\" > CAST('2023-01-01' AS DATETIME) AS \"d\" FROM \"temporal\" AS \"t\";\n SELECT \"t\".\"d\" > CAST('2023-01-01' AS DATETIME) AS \"d\" FROM \"temporal\" AS \"t\";\n@@ -110,6 +110,17 @@ SELECT \"t\".\"d\" > CAST('2023-01-01' AS DATETIME) AS \"d\" FROM \"temporal\" AS \"t\";\n SELECT \"t\".\"t\" > '2023-01-01 00:00:01' AS \"t\" FROM \"temporal\" AS \"t\";\n SELECT \"t\".\"t\" > CAST('2023-01-01 00:00:01' AS DATETIME) AS \"t\" FROM \"temporal\" AS \"t\";\n \n+WITH \"t\" AS (SELECT CAST(\"ext\".\"created_at\" AS TIMESTAMP) AS \"created_at\" FROM \"ext\" AS \"ext\") SELECT \"t\".\"created_at\" > '2024-10-01 12:05:02' AS \"col\" FROM \"t\" AS \"t\";\n+WITH \"t\" AS (SELECT CAST(\"ext\".\"created_at\" AS TIMESTAMP) AS \"created_at\" FROM \"ext\" AS \"ext\") SELECT \"t\".\"created_at\" > CAST('2024-10-01 12:05:02' AS TIMESTAMP) AS \"col\" FROM \"t\" AS \"t\";\n+\n+# dialect: mysql\n+SELECT `t`.`d` < '2023-01-01 00:00:01' AS `col` FROM `temporal` AS `t`;\n+SELECT CAST(`t`.`d` AS DATETIME) < CAST('2023-01-01 00:00:01' AS DATETIME) AS `col` FROM `temporal` AS `t`;\n+\n+# dialect: mysql\n+SELECT CAST(`t`.`some_col` AS DATE) < CAST(`t`.`other_col` AS CHAR) AS `col` FROM `other_table` AS `t`;\n+SELECT CAST(CAST(`t`.`some_col` AS DATE) AS DATETIME) < CAST(CAST(`t`.`other_col` AS CHAR) AS DATETIME) AS `col` FROM `other_table` AS `t`;\n+\n --------------------------------------\n -- Remove redundant casts\n --------------------------------------\ndiff --git a/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql b/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql\nindex 290d2760b..59bc432fd 100644\n--- a/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql\n+++ b/tests/fixtures/optimizer/tpc-ds/tpc-ds.sql\n@@ -736,8 +736,8 @@ WITH \"salesreturns\" AS (\n     \"date_dim\".\"d_date\" AS \"d_date\"\n   FROM \"date_dim\" AS \"date_dim\"\n   WHERE\n-    CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2002-09-05' AS DATE)\n-    AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('2002-08-22' AS DATE)\n+    CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2002-09-05' AS DATE)\n+    AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('2002-08-22' AS DATE)\n ), \"ssr\" AS (\n   SELECT\n     \"store\".\"s_store_id\" AS \"s_store_id\",\n@@ -1853,8 +1853,8 @@ SELECT\n FROM \"web_sales\" AS \"web_sales\"\n JOIN \"date_dim\" AS \"date_dim\"\n   ON \"date_dim\".\"d_date_sk\" = \"web_sales\".\"ws_sold_date_sk\"\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2000-06-10' AS DATE)\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('2000-05-11' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2000-06-10' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('2000-05-11' AS DATE)\n JOIN \"item\" AS \"item\"\n   ON \"item\".\"i_category\" IN ('Home', 'Men', 'Women')\n   AND \"item\".\"i_item_sk\" = \"web_sales\".\"ws_item_sk\"\n@@ -2422,7 +2422,7 @@ JOIN \"date_dim\" AS \"date_dim\"\n   AND \"date_dim\".\"d_date\" >= '2002-3-01'\n   AND (\n     CAST('2002-3-01' AS DATE) + INTERVAL '60' DAY\n-  ) >= CAST(\"date_dim\".\"d_date\" AS DATETIME)\n+  ) >= CAST(\"date_dim\".\"d_date\" AS DATE)\n WHERE\n   \"_u_3\".\"_u_4\" IS NULL\n   AND ARRAY_ANY(\"_u_0\".\"_u_2\", \"_x\" -> \"cs1\".\"cs_warehouse_sk\" <> \"_x\")\n@@ -2731,8 +2731,8 @@ SELECT\n FROM \"catalog_sales\" AS \"catalog_sales\"\n JOIN \"date_dim\" AS \"date_dim\"\n   ON \"catalog_sales\".\"cs_sold_date_sk\" = \"date_dim\".\"d_date_sk\"\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2001-03-05' AS DATE)\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('2001-02-03' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2001-03-05' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('2001-02-03' AS DATE)\n JOIN \"item\" AS \"item\"\n   ON \"catalog_sales\".\"cs_item_sk\" = \"item\".\"i_item_sk\"\n   AND \"item\".\"i_category\" IN ('Children', 'Women', 'Electronics')\n@@ -2811,8 +2811,8 @@ WITH \"x\" AS (\n   FROM \"inventory\" AS \"inventory\"\n   JOIN \"date_dim\" AS \"date_dim\"\n     ON \"date_dim\".\"d_date_sk\" = \"inventory\".\"inv_date_sk\"\n-    AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2000-06-12' AS DATE)\n-    AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('2000-04-13' AS DATE)\n+    AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2000-06-12' AS DATE)\n+    AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('2000-04-13' AS DATE)\n   JOIN \"item\" AS \"item\"\n     ON \"inventory\".\"inv_item_sk\" = \"item\".\"i_item_sk\"\n     AND \"item\".\"i_current_price\" <= 1.49\n@@ -3944,7 +3944,7 @@ WITH \"catalog_sales_2\" AS (\n   FROM \"date_dim\" AS \"date_dim\"\n   WHERE\n     \"date_dim\".\"d_date\" >= '2001-03-04'\n-    AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2001-06-02' AS DATE)\n+    AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2001-06-02' AS DATE)\n ), \"_u_0\" AS (\n   SELECT\n     1.3 * AVG(\"catalog_sales\".\"cs_ext_discount_amt\") AS \"_col_0\",\n@@ -4510,8 +4510,8 @@ JOIN \"inventory\" AS \"inventory\"\n   AND \"inventory\".\"inv_quantity_on_hand\" >= 100\n JOIN \"date_dim\" AS \"date_dim\"\n   ON \"date_dim\".\"d_date_sk\" = \"inventory\".\"inv_date_sk\"\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('1999-05-05' AS DATE)\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('1999-03-06' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('1999-05-05' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('1999-03-06' AS DATE)\n WHERE\n   \"item\".\"i_current_price\" <= 50\n   AND \"item\".\"i_current_price\" >= 20\n@@ -4787,8 +4787,8 @@ LEFT JOIN \"catalog_returns\" AS \"catalog_returns\"\n   AND \"catalog_returns\".\"cr_order_number\" = \"catalog_sales\".\"cs_order_number\"\n JOIN \"date_dim\" AS \"date_dim\"\n   ON \"catalog_sales\".\"cs_sold_date_sk\" = \"date_dim\".\"d_date_sk\"\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2002-07-01' AS DATE)\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('2002-05-02' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2002-07-01' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('2002-05-02' AS DATE)\n JOIN \"item\" AS \"item\"\n   ON \"catalog_sales\".\"cs_item_sk\" = \"item\".\"i_item_sk\"\n   AND \"item\".\"i_current_price\" <= 1.49\n@@ -10318,8 +10318,8 @@ WITH \"date_dim_2\" AS (\n     \"date_dim\".\"d_date\" AS \"d_date\"\n   FROM \"date_dim\" AS \"date_dim\"\n   WHERE\n-    CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2001-09-15' AS DATE)\n-    AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('2001-08-16' AS DATE)\n+    CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2001-09-15' AS DATE)\n+    AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('2001-08-16' AS DATE)\n ), \"store_2\" AS (\n   SELECT\n     \"store\".\"s_store_sk\" AS \"s_store_sk\"\n@@ -10828,8 +10828,8 @@ WITH \"date_dim_2\" AS (\n     \"date_dim\".\"d_date\" AS \"d_date\"\n   FROM \"date_dim\" AS \"date_dim\"\n   WHERE\n-    CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2000-09-25' AS DATE)\n-    AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('2000-08-26' AS DATE)\n+    CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2000-09-25' AS DATE)\n+    AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('2000-08-26' AS DATE)\n ), \"item_2\" AS (\n   SELECT\n     \"item\".\"i_item_sk\" AS \"i_item_sk\",\n@@ -11109,8 +11109,8 @@ JOIN \"store_sales\" AS \"store_sales\"\n   ON \"item\".\"i_item_sk\" = \"store_sales\".\"ss_item_sk\"\n JOIN \"date_dim\" AS \"date_dim\"\n   ON \"date_dim\".\"d_date_sk\" = \"inventory\".\"inv_date_sk\"\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('1998-06-26' AS DATE)\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('1998-04-27' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('1998-06-26' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('1998-04-27' AS DATE)\n WHERE\n   \"item\".\"i_current_price\" <= 93\n   AND \"item\".\"i_current_price\" >= 63\n@@ -12180,7 +12180,7 @@ WITH \"web_sales_2\" AS (\n   FROM \"date_dim\" AS \"date_dim\"\n   WHERE\n     \"date_dim\".\"d_date\" >= '2002-03-29'\n-    AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2002-06-27' AS DATE)\n+    AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2002-06-27' AS DATE)\n ), \"_u_0\" AS (\n   SELECT\n     1.3 * AVG(\"web_sales\".\"ws_ext_discount_amt\") AS \"_col_0\",\n@@ -12321,7 +12321,7 @@ JOIN \"date_dim\" AS \"date_dim\"\n   AND \"date_dim\".\"d_date_sk\" = \"ws1\".\"ws_ship_date_sk\"\n   AND (\n     CAST('2000-3-01' AS DATE) + INTERVAL '60' DAY\n-  ) >= CAST(\"date_dim\".\"d_date\" AS DATETIME)\n+  ) >= CAST(\"date_dim\".\"d_date\" AS DATE)\n JOIN \"web_site\" AS \"web_site\"\n   ON \"web_site\".\"web_company_name\" = 'pri'\n   AND \"web_site\".\"web_site_sk\" = \"ws1\".\"ws_web_site_sk\"\n@@ -12411,7 +12411,7 @@ JOIN \"date_dim\" AS \"date_dim\"\n   AND \"date_dim\".\"d_date_sk\" = \"ws1\".\"ws_ship_date_sk\"\n   AND (\n     CAST('2000-4-01' AS DATE) + INTERVAL '60' DAY\n-  ) >= CAST(\"date_dim\".\"d_date\" AS DATETIME)\n+  ) >= CAST(\"date_dim\".\"d_date\" AS DATE)\n JOIN \"web_site\" AS \"web_site\"\n   ON \"web_site\".\"web_company_name\" = 'pri'\n   AND \"web_site\".\"web_site_sk\" = \"ws1\".\"ws_web_site_sk\"\n@@ -12595,8 +12595,8 @@ SELECT\n FROM \"store_sales\" AS \"store_sales\"\n JOIN \"date_dim\" AS \"date_dim\"\n   ON \"date_dim\".\"d_date_sk\" = \"store_sales\".\"ss_sold_date_sk\"\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) <= CAST('2000-06-17' AS DATE)\n-  AND CAST(\"date_dim\".\"d_date\" AS DATETIME) >= CAST('2000-05-18' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) <= CAST('2000-06-17' AS DATE)\n+  AND CAST(\"date_dim\".\"d_date\" AS DATE) >= CAST('2000-05-18' AS DATE)\n JOIN \"item\" AS \"item\"\n   ON \"item\".\"i_category\" IN ('Men', 'Home', 'Electronics')\n   AND \"item\".\"i_item_sk\" = \"store_sales\".\"ss_item_sk\"\ndiff --git a/tests/test_optimizer.py b/tests/test_optimizer.py\nindex 0fa4ff6cc..4a41e4a77 100644\n--- a/tests/test_optimizer.py\n+++ b/tests/test_optimizer.py\n@@ -132,7 +132,6 @@ class TestOptimizer(unittest.TestCase):\n         func,\n         pretty=False,\n         execute=False,\n-        set_dialect=False,\n         only=None,\n         **kwargs,\n     ):\n@@ -158,7 +157,7 @@ class TestOptimizer(unittest.TestCase):\n                         validate_qualify_columns\n                     )\n \n-                if set_dialect and dialect:\n+                if dialect:\n                     func_kwargs[\"dialect\"] = dialect\n \n                 future = pool.submit(parse_and_optimize, func, sql, dialect, **func_kwargs)\n@@ -207,7 +206,6 @@ class TestOptimizer(unittest.TestCase):\n             pretty=True,\n             execute=True,\n             schema=schema,\n-            set_dialect=True,\n         )\n \n     def test_isolate_table_selects(self):\n@@ -235,7 +233,6 @@ class TestOptimizer(unittest.TestCase):\n             optimizer.qualify_tables.qualify_tables,\n             db=\"db\",\n             catalog=\"c\",\n-            set_dialect=True,\n         )\n \n     def test_normalize(self):\n@@ -446,11 +443,8 @@ class TestOptimizer(unittest.TestCase):\n             qualify_columns,\n             execute=True,\n             schema=self.schema,\n-            set_dialect=True,\n-        )\n-        self.check_file(\n-            \"qualify_columns_ddl\", qualify_columns, schema=self.schema, set_dialect=True\n         )\n+        self.check_file(\"qualify_columns_ddl\", qualify_columns, schema=self.schema)\n \n     def test_qualify_columns__with_invisible(self):\n         schema = MappingSchema(self.schema, {\"x\": {\"a\"}, \"y\": {\"b\"}, \"z\": {\"b\"}})\n@@ -475,7 +469,6 @@ class TestOptimizer(unittest.TestCase):\n         self.check_file(\n             \"normalize_identifiers\",\n             optimizer.normalize_identifiers.normalize_identifiers,\n-            set_dialect=True,\n         )\n \n         self.assertEqual(optimizer.normalize_identifiers.normalize_identifiers(\"a%\").sql(), '\"a%\"')\n@@ -484,14 +477,13 @@ class TestOptimizer(unittest.TestCase):\n         self.check_file(\n             \"quote_identifiers\",\n             optimizer.qualify_columns.quote_identifiers,\n-            set_dialect=True,\n         )\n \n     def test_pushdown_projection(self):\n         self.check_file(\"pushdown_projections\", pushdown_projections, schema=self.schema)\n \n     def test_simplify(self):\n-        self.check_file(\"simplify\", simplify, set_dialect=True)\n+        self.check_file(\"simplify\", simplify)\n \n         expression = parse_one(\"SELECT a, c, b FROM table1 WHERE 1 = 1\")\n         self.assertEqual(simplify(simplify(expression.find(exp.Where))).sql(), \"WHERE TRUE\")\n",
+   "test_files": [
+    "tests/fixtures/optimizer/canonicalize.sql",
+    "tests/fixtures/optimizer/tpc-ds/tpc-ds.sql",
+    "tests/test_optimizer.py"
+   ],
+   "visible_tests": [
+    "tests/test_optimizer.py"
+   ],
+   "gold_files": [
+    "sqlglot/dialects/dialect.py",
+    "sqlglot/dialects/mysql.py",
+    "sqlglot/expressions.py",
+    "sqlglot/optimizer/canonicalize.py"
+   ],
+   "gold_functions": [
+    "sqlglot/optimizer/canonicalize.py::_coerce_date",
+    "sqlglot/optimizer/canonicalize.py::_replace_cast",
+    "sqlglot/optimizer/canonicalize.py::canonicalize",
+    "sqlglot/optimizer/canonicalize.py::canonicalize._canonicalize"
+   ],
+   "prompt": "Function `sqlglot.optimizer.canonicalize.coerce_type` in `sqlglot/optimizer/canonicalize.py` was changed as shown:\n\n```diff\n@@ -68,11 +68,11 @@\n )\n \n \n-def coerce_type(node: exp.Expression) -> exp.Expression:\n+def coerce_type(node: exp.Expression, promote_to_inferred_datetime_type: bool) -> exp.Expression:\n     if isinstance(node, COERCIBLE_DATE_OPS):\n-        _coerce_date(node.left, node.right)\n+        _coerce_date(node.left, node.right, promote_to_inferred_datetime_type)\n     elif isinstance(node, exp.Between):\n-        _coerce_date(node.this, node.args[\"low\"])\n+        _coerce_date(node.this, node.args[\"low\"], promote_to_inferred_datetime_type)\n     elif isinstance(node, exp.Extract) and not node.expression.type.is_type(\n         *exp.DataType.TEMPORAL_TYPES\n     ):\n```\n\nUpdate the rest of the project so its tests pass. The change to `sqlglot.optimizer.canonicalize.coerce_type` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/test_optimizer.py": [
+     "tests.test_optimizer.TestOptimizer::test_canonicalize",
+     "tests.test_optimizer.TestOptimizer::test_expand_alias_refs",
+     "tests.test_optimizer.TestOptimizer::test_file_schema",
+     "tests.test_optimizer.TestOptimizer::test_lateral_annotation",
+     "tests.test_optimizer.TestOptimizer::test_no_pseudocolumn_expansion",
+     "tests.test_optimizer.TestOptimizer::test_optimize",
+     "tests.test_optimizer.TestOptimizer::test_quotes",
+     "tests.test_optimizer.TestOptimizer::test_schema_with_spaces",
+     "tests.test_optimizer.TestOptimizer::test_tpcds",
+     "tests.test_optimizer.TestOptimizer::test_tpch",
+     "tests.test_optimizer.TestOptimizer::test_union_annotation"
+    ]
+   },
+   "pass_to_pass": {
+    "tests/test_optimizer.py": [
+     "tests.test_optimizer.TestOptimizer::test_aggfunc_annotation",
+     "tests.test_optimizer.TestOptimizer::test_annotate_funcs",
+     "tests.test_optimizer.TestOptimizer::test_annotate_types",
+     "tests.test_optimizer.TestOptimizer::test_binary_annotation",
+     "tests.test_optimizer.TestOptimizer::test_bracket_annotation",
+     "tests.test_optimizer.TestOptimizer::test_cache_annotation",
+     "tests.test_optimizer.TestOptimizer::test_cast_type_annotation",
+     "tests.test_optimizer.TestOptimizer::test_concat_annotation",
+     "tests.test_optimizer.TestOptimizer::test_cte_column_annotation",
+     "tests.test_optimizer.TestOptimizer::test_derived_tables_column_annotation",
+     "tests.test_optimizer.TestOptimizer::test_eliminate_ctes",
+     "tests.test_optimizer.TestOptimizer::test_eliminate_joins",
+     "tests.test_optimizer.TestOptimizer::test_eliminate_subqueries",
+     "tests.test_optimizer.TestOptimizer::test_function_annotation",
+     "tests.test_optimizer.TestOptimizer::test_interval_math_annotation",
+     "tests.test_optimizer.TestOptimizer::test_isolate_table_selects",
+     "tests.test_optimizer.TestOptimizer::test_map_annotation",
+     "tests.test_optimizer.TestOptimizer::test_merge_subqueries",
+     "tests.test_optimizer.TestOptimizer::test_nested_type_annotation",
+     "tests.test_optimizer.TestOptimizer::test_normalization_distance",
+     "tests.test_optimizer.TestOptimizer::test_normalize",
+     "tests.test_optimizer.TestOptimizer::test_normalize_identifiers",
+     "tests.test_optimizer.TestOptimizer::test_optimize_joins",
+     "tests.test_optimizer.TestOptimizer::test_predicate_annotation",
+     "tests.test_optimizer.TestOptimizer::test_pushdown_cte_alias_columns",
+     "tests.test_optimizer.TestOptimizer::test_pushdown_predicates",
+     "tests.test_optimizer.TestOptimizer::test_pushdown_projection",
+     "tests.test_optimizer.TestOptimizer::test_qualify_columns",
+     "tests.test_optimizer.TestOptimizer::test_qualify_columns__invalid",
+     "tests.test_optimizer.TestOptimizer::test_qualify_columns__with_invisible",
+     "tests.test_optimizer.TestOptimizer::test_qualify_tables",
+     "tests.test_optimizer.TestOptimizer::test_quote_identifiers",
+     "tests.test_optimizer.TestOptimizer::test_recursive_cte",
+     "tests.test_optimizer.TestOptimizer::test_root_subquery_annotation",
+     "tests.test_optimizer.TestOptimizer::test_scope",
+     "tests.test_optimizer.TestOptimizer::test_scope_warning",
+     "tests.test_optimizer.TestOptimizer::test_semistructured",
+     "tests.test_optimizer.TestOptimizer::test_simplify",
+     "tests.test_optimizer.TestOptimizer::test_type_annotation_cache",
+     "tests.test_optimizer.TestOptimizer::test_typeddiv_annotation",
+     "tests.test_optimizer.TestOptimizer::test_unknown_annotation",
+     "tests.test_optimizer.TestOptimizer::test_unnest_annotation",
+     "tests.test_optimizer.TestOptimizer::test_unnest_subqueries",
+     "tests.test_optimizer.TestOptimizer::test_user_defined_type_annotation"
+    ]
+   },
+   "tests_run": [
+    "tests/test_optimizer.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-03",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "sqlglot",
+   "language": "python",
+   "commit": "9e9c75f52bb77fcf8ddffa2c19125bebee90a71b",
+   "parent": "7599cc8329c884886d2183eb868d50242df271e1",
+   "commit_date": "2024-10-15T15:32:32-07:00",
+   "author_date": "2024-10-15T15:32:32-07:00",
+   "subject": "Feat: support non-strict qualify_columns (#4243)",
+   "anchor": "sqlglot.optimizer.qualify_columns._qualify_columns",
+   "anchor_file": "sqlglot/optimizer/qualify_columns.py",
+   "forced": [
+    "new required parameter: allow_partial_qualification"
+   ],
+   "changed_callers": [
+    "sqlglot.optimizer.qualify_columns.qualify_columns"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/sqlglot/optimizer/qualify_columns.py\n+++ b/sqlglot/optimizer/qualify_columns.py\n@@ -441,7 +441,7 @@\n         scope.clear_cache()\n \n \n-def _qualify_columns(scope: Scope, resolver: Resolver) -> None:\n+def _qualify_columns(scope: Scope, resolver: Resolver, allow_partial_qualification: bool) -> None:\n     \"\"\"Disambiguate columns, ensuring each column specifies a source\"\"\"\n     for column in scope.columns:\n         column_table = column.table\n@@ -449,7 +449,12 @@\n \n         if column_table and column_table in scope.sources:\n             source_columns = resolver.get_source_columns(column_table)\n-            if source_columns and column_name not in source_columns and \"*\" not in source_columns:\n+            if (\n+                not allow_partial_qualification\n+                and source_columns\n+                and column_name not in source_columns\n+                and \"*\" not in source_columns\n+            ):\n                 raise OptimizeError(f\"Unknown column: {column_name}\")\n \n         if not column_table:\n",
+   "start_files": [
+    "sqlglot/optimizer/qualify_columns.py"
+   ],
+   "start_functions": [
+    "sqlglot/optimizer/qualify_columns.py::_qualify_columns"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/fixtures/optimizer/qualify_columns.sql b/tests/fixtures/optimizer/qualify_columns.sql\nindex 68c0caacf..2c99a81da 100644\n--- a/tests/fixtures/optimizer/qualify_columns.sql\n+++ b/tests/fixtures/optimizer/qualify_columns.sql\n@@ -190,6 +190,12 @@ SELECT x._col_0 AS _col_0, x._col_1 AS _col_1 FROM (VALUES (1, 2)) AS x(_col_0,\n SELECT SOME_UDF(data).* FROM t;\n SELECT SOME_UDF(t.data).* FROM t AS t;\n \n+# execute: false\n+# allow_partial_qualification: true\n+# validate_qualify_columns: false\n+SELECT a + 1 AS i, missing_column FROM x;\n+SELECT x.a + 1 AS i, missing_column AS missing_column FROM x AS x;\n+\n --------------------------------------\n -- Derived tables\n --------------------------------------\n",
+   "test_files": [
+    "tests/fixtures/optimizer/qualify_columns.sql"
+   ],
+   "visible_tests": [
+    "tests/test_optimizer.py"
+   ],
+   "gold_files": [
+    "sqlglot/optimizer/qualify.py",
+    "sqlglot/optimizer/qualify_columns.py"
+   ],
+   "gold_functions": [
+    "sqlglot/optimizer/qualify.py::qualify",
+    "sqlglot/optimizer/qualify_columns.py::qualify_columns"
+   ],
+   "prompt": "Function `sqlglot.optimizer.qualify_columns._qualify_columns` in `sqlglot/optimizer/qualify_columns.py` was changed as shown:\n\n```diff\n@@ -441,7 +441,7 @@\n         scope.clear_cache()\n \n \n-def _qualify_columns(scope: Scope, resolver: Resolver) -> None:\n+def _qualify_columns(scope: Scope, resolver: Resolver, allow_partial_qualification: bool) -> None:\n     \"\"\"Disambiguate columns, ensuring each column specifies a source\"\"\"\n     for column in scope.columns:\n         column_table = column.table\n@@ -449,7 +449,12 @@\n \n         if column_table and column_table in scope.sources:\n             source_columns = resolver.get_source_columns(column_table)\n-            if source_columns and column_name not in source_columns and \"*\" not in source_columns:\n+            if (\n+                not allow_partial_qualification\n+                and source_columns\n+                and column_name not in source_columns\n+                and \"*\" not in source_columns\n+            ):\n                 raise OptimizeError(f\"Unknown column: {column_name}\")\n \n         if not column_table:\n```\n\nUpdate the rest of the project so its tests pass. The change to `sqlglot.optimizer.qualify_columns._qualify_columns` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/test_optimizer.py": [
+     "tests.test_optimizer.TestOptimizer::test_canonicalize",
+     "tests.test_optimizer.TestOptimizer::test_expand_alias_refs",
+     "tests.test_optimizer.TestOptimizer::test_file_schema",
+     "tests.test_optimizer.TestOptimizer::test_lateral_annotation",
+     "tests.test_optimizer.TestOptimizer::test_merge_subqueries",
+     "tests.test_optimizer.TestOptimizer::test_no_pseudocolumn_expansion",
+     "tests.test_optimizer.TestOptimizer::test_optimize",
+     "tests.test_optimizer.TestOptimizer::test_pushdown_projection",
+     "tests.test_optimizer.TestOptimizer::test_qualify_columns",
+     "tests.test_optimizer.TestOptimizer::test_qualify_columns__invalid",
+     "tests.test_optimizer.TestOptimizer::test_qualify_columns__with_invisible",
+     "tests.test_optimizer.TestOptimizer::test_quotes",
+     "tests.test_optimizer.TestOptimizer::test_schema_with_spaces",
+     "tests.test_optimizer.TestOptimizer::test_semistructured",
+     "tests.test_optimizer.TestOptimizer::test_tpcds",
+     "tests.test_optimizer.TestOptimizer::test_tpch",
+     "tests.test_optimizer.TestOptimizer::test_unnest_annotation"
+    ]
+   },
+   "pass_to_pass": {
+    "tests/test_optimizer.py": [
+     "tests.test_optimizer.TestOptimizer::test_aggfunc_annotation",
+     "tests.test_optimizer.TestOptimizer::test_annotate_funcs",
+     "tests.test_optimizer.TestOptimizer::test_annotate_types",
+     "tests.test_optimizer.TestOptimizer::test_binary_annotation",
+     "tests.test_optimizer.TestOptimizer::test_bracket_annotation",
+     "tests.test_optimizer.TestOptimizer::test_cache_annotation",
+     "tests.test_optimizer.TestOptimizer::test_cast_type_annotation",
+     "tests.test_optimizer.TestOptimizer::test_concat_annotation",
+     "tests.test_optimizer.TestOptimizer::test_cte_column_annotation",
+     "tests.test_optimizer.TestOptimizer::test_derived_tables_column_annotation",
+     "tests.test_optimizer.TestOptimizer::test_eliminate_ctes",
+     "tests.test_optimizer.TestOptimizer::test_eliminate_joins",
+     "tests.test_optimizer.TestOptimizer::test_eliminate_subqueries",
+     "tests.test_optimizer.TestOptimizer::test_function_annotation",
+     "tests.test_optimizer.TestOptimizer::test_interval_math_annotation",
+     "tests.test_optimizer.TestOptimizer::test_isolate_table_selects",
+     "tests.test_optimizer.TestOptimizer::test_map_annotation",
+     "tests.test_optimizer.TestOptimizer::test_nested_type_annotation",
+     "tests.test_optimizer.TestOptimizer::test_normalization_distance",
+     "tests.test_optimizer.TestOptimizer::test_normalize",
+     "tests.test_optimizer.TestOptimizer::test_normalize_identifiers",
+     "tests.test_optimizer.TestOptimizer::test_optimize_joins",
+     "tests.test_optimizer.TestOptimizer::test_predicate_annotation",
+     "tests.test_optimizer.TestOptimizer::test_pushdown_cte_alias_columns",
+     "tests.test_optimizer.TestOptimizer::test_pushdown_predicates",
+     "tests.test_optimizer.TestOptimizer::test_qualify_tables",
+     "tests.test_optimizer.TestOptimizer::test_quote_identifiers",
+     "tests.test_optimizer.TestOptimizer::test_recursive_cte",
+     "tests.test_optimizer.TestOptimizer::test_root_subquery_annotation",
+     "tests.test_optimizer.TestOptimizer::test_scope",
+     "tests.test_optimizer.TestOptimizer::test_scope_warning",
+     "tests.test_optimizer.TestOptimizer::test_simplify",
+     "tests.test_optimizer.TestOptimizer::test_type_annotation_cache",
+     "tests.test_optimizer.TestOptimizer::test_typeddiv_annotation",
+     "tests.test_optimizer.TestOptimizer::test_union_annotation",
+     "tests.test_optimizer.TestOptimizer::test_unknown_annotation",
+     "tests.test_optimizer.TestOptimizer::test_unnest_subqueries",
+     "tests.test_optimizer.TestOptimizer::test_user_defined_type_annotation"
+    ]
+   },
+   "tests_run": [
+    "tests/test_optimizer.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-04",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "sqlglot",
+   "language": "python",
+   "commit": "719d996c901e6aae7d6c8f42b70cc32eee9302b0",
+   "parent": "fdadf37d7a7d87e12c3de1547e00b8586b72231b",
+   "commit_date": "2024-10-08T20:30:56+03:00",
+   "author_date": "2024-10-08T20:30:56+03:00",
+   "subject": "Feat!: refactor set operation builders so they can work with N expressions (#4226)",
+   "anchor": "sqlglot.expressions.except_",
+   "anchor_file": "sqlglot/expressions.py",
+   "forced": [
+    "parameter removed or renamed: left, right",
+    "new required parameter: expressions"
+   ],
+   "changed_callers": [
+    "sqlglot.expressions.Query.except_"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/sqlglot/expressions.py\n+++ b/sqlglot/expressions.py\n@@ -6931,25 +6931,22 @@\n \n \n def except_(\n-    left: ExpOrStr,\n-    right: ExpOrStr,\n+    *expressions: ExpOrStr,\n     distinct: bool = True,\n     dialect: DialectType = None,\n     copy: bool = True,\n     **opts,\n ) -> Except:\n     \"\"\"\n-    Initializes a syntax tree from one EXCEPT expression.\n+    Initializes a syntax tree for the `EXCEPT` operation.\n \n     Example:\n         >>> except_(\"SELECT * FROM foo\", \"SELECT * FROM bla\").sql()\n         'SELECT * FROM foo EXCEPT SELECT * FROM bla'\n \n     Args:\n-        left: the SQL code string corresponding to the left-hand side.\n-            If an `Expression` instance is passed, it will be used as-is.\n-        right: the SQL code string corresponding to the right-hand side.\n-            If an `Expression` instance is passed, it will be used as-is.\n+        expressions: the SQL code strings, corresponding to the `EXCEPT`'s operands.\n+            If `Expression` instances are passed, they will be used as-is.\n         distinct: set the DISTINCT flag if and only if this is true.\n         dialect: the dialect used to parse the input expression.\n         copy: whether to copy the expression.\n@@ -6958,10 +6955,10 @@\n     Returns:\n         The new Except instance.\n     \"\"\"\n-    left = maybe_parse(sql_or_expression=left, dialect=dialect, copy=copy, **opts)\n-    right = maybe_parse(sql_or_expression=right, dialect=dialect, copy=copy, **opts)\n-\n-    return Except(this=left, expression=right, distinct=distinct)\n+    assert len(expressions) >= 2, \"At least two expressions are required by `except_`.\"\n+    return _apply_set_operation(\n+        *expressions, set_operation=Except, distinct=distinct, dialect=dialect, copy=copy, **opts\n+    )\n \n \n def select(*expressions: ExpOrStr, dialect: DialectType = None, **opts) -> Select:\n",
+   "start_files": [
+    "sqlglot/expressions.py"
+   ],
+   "start_functions": [
+    "sqlglot/expressions.py::except_"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/test_build.py b/tests/test_build.py\nindex 5d383ad00..92a7b2eab 100644\n--- a/tests/test_build.py\n+++ b/tests/test_build.py\n@@ -801,6 +801,10 @@ class TestBuild(unittest.TestCase):\n                 ),\n                 \"MERGE INTO target_table AS target USING source_table AS source ON target.id = source.id WHEN MATCHED THEN UPDATE SET target.name = source.name RETURNING target.*\",\n             ),\n+            (\n+                lambda: exp.union(\"SELECT 1\", \"SELECT 2\", \"SELECT 3\", \"SELECT 4\"),\n+                \"SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4\",\n+            ),\n         ]:\n             with self.subTest(sql):\n                 self.assertEqual(expression().sql(dialect[0] if dialect else None), sql)\n",
+   "test_files": [
+    "tests/test_build.py"
+   ],
+   "visible_tests": [
+    "tests/test_build.py"
+   ],
+   "gold_files": [
+    "sqlglot/expressions.py"
+   ],
+   "gold_functions": [
+    "sqlglot/expressions.py::Query.except_",
+    "sqlglot/expressions.py::Query.intersect",
+    "sqlglot/expressions.py::Query.union",
+    "sqlglot/expressions.py::_apply_set_operation",
+    "sqlglot/expressions.py::intersect",
+    "sqlglot/expressions.py::union"
+   ],
+   "prompt": "Function `sqlglot.expressions.except_` in `sqlglot/expressions.py` was changed as shown:\n\n```diff\n@@ -6931,25 +6931,22 @@\n \n \n def except_(\n-    left: ExpOrStr,\n-    right: ExpOrStr,\n+    *expressions: ExpOrStr,\n     distinct: bool = True,\n     dialect: DialectType = None,\n     copy: bool = True,\n     **opts,\n ) -> Except:\n     \"\"\"\n-    Initializes a syntax tree from one EXCEPT expression.\n+    Initializes a syntax tree for the `EXCEPT` operation.\n \n     Example:\n         >>> except_(\"SELECT * FROM foo\", \"SELECT * FROM bla\").sql()\n         'SELECT * FROM foo EXCEPT SELECT * FROM bla'\n \n     Args:\n-        left: the SQL code string corresponding to the left-hand side.\n-            If an `Expression` instance is passed, it will be used as-is.\n-        right: the SQL code string corresponding to the right-hand side.\n-            If an `Expression` instance is passed, it will be used as-is.\n+        expressions: the SQL code strings, corresponding to the `EXCEPT`'s operands.\n+            If `Expression` instances are passed, they will be used as-is.\n         distinct: set the DISTINCT flag if and only if this is true.\n         dialect: the dialect used to parse the input expression.\n         copy: whether to copy the expression.\n@@ -6958,10 +6955,10 @@\n     Returns:\n         The new Except instance.\n     \"\"\"\n-    left = maybe_parse(sql_or_expression=left, dialect=dialect, copy=copy, **opts)\n-    right = maybe_parse(sql_or_expression=right, dialect=dialect, copy=copy, **opts)\n-\n-    return Except(this=left, expression=right, distinct=distinct)\n+    assert len(expressions) >= 2, \"At least two expressions are required by `except_`.\"\n+    return _apply_set_operation(\n+        *expressions, set_operation=Except, distinct=distinct, dialect=dialect, copy=copy, **opts\n+    )\n \n \n def select(*expressions: ExpOrStr, dialect: DialectType = None, **opts) -> Select:\n```\n\nUpdate the rest of the project so its tests pass. The change to `sqlglot.expressions.except_` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/test_build.py": [
+     "tests.test_build.TestBuild::test_build"
+    ]
+   },
+   "pass_to_pass": {},
+   "tests_run": [
+    "tests/test_build.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-05",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "aiohttp",
+   "language": "python",
+   "commit": "e80d58544812bdc537a256d3776920481daf0578",
+   "parent": "eaa108609f4962ac0ee8e2c3347c010877d5d1bf",
+   "commit_date": "2024-11-10T18:52:38+00:00",
+   "author_date": "2024-11-10T18:52:38+00:00",
+   "subject": "Small cleanups to enabling compression in web_response (#9771)",
+   "anchor": "aiohttp.web_response.StreamResponse._do_start_compression",
+   "anchor_file": "aiohttp/web_response.py",
+   "forced": [
+    "returning nothing added or removed"
+   ],
+   "changed_callers": [
+    "aiohttp.web_response.StreamResponse._start_compression"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/aiohttp/web_response.py\n+++ b/aiohttp/web_response.py\n@@ -330,15 +330,16 @@\n         self._headers[CONTENT_TYPE] = ctype\n \n     async def _do_start_compression(self, coding: ContentCoding) -> None:\n-        if coding != ContentCoding.identity:\n-            assert self._payload_writer is not None\n-            self._headers[hdrs.CONTENT_ENCODING] = coding.value\n-            self._payload_writer.enable_compression(\n-                coding.value, self._compression_strategy\n-            )\n-            # Compressed payload may have different content length,\n-            # remove the header\n-            self._headers.popall(hdrs.CONTENT_LENGTH, None)\n+        if coding is ContentCoding.identity:\n+            return\n+        assert self._payload_writer is not None\n+        self._headers[hdrs.CONTENT_ENCODING] = coding.value\n+        self._payload_writer.enable_compression(\n+            coding.value, self._compression_strategy\n+        )\n+        # Compressed payload may have different content length,\n+        # remove the header\n+        self._headers.popall(hdrs.CONTENT_LENGTH, None)\n \n     async def _start_compression(self, request: \"BaseRequest\") -> None:\n         if self._compression_force:\n",
+   "start_files": [
+    "aiohttp/web_response.py"
+   ],
+   "start_functions": [
+    "aiohttp/web_response.py::StreamResponse._do_start_compression"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/test_web_response.py b/tests/test_web_response.py\nindex 0b9330225..545a6f7ac 100644\n--- a/tests/test_web_response.py\n+++ b/tests/test_web_response.py\n@@ -427,6 +427,24 @@ async def test_force_compression_deflate() -> None:\n     assert \"deflate\" == resp.headers.get(hdrs.CONTENT_ENCODING)\n \n \n+async def test_force_compression_deflate_large_payload() -> None:\n+    \"\"\"Make sure a warning is thrown for large payloads compressed in the event loop.\"\"\"\n+    req = make_request(\n+        \"GET\", \"/\", headers=CIMultiDict({hdrs.ACCEPT_ENCODING: \"gzip, deflate\"})\n+    )\n+    resp = web.Response(body=b\"large\")\n+\n+    resp.enable_compression(web.ContentCoding.deflate)\n+    assert resp.compression\n+\n+    with pytest.warns(\n+        Warning, match=\"Synchronous compression of large response bodies\"\n+    ), mock.patch(\"aiohttp.web_response.LARGE_BODY_SIZE\", 2):\n+        msg = await resp.prepare(req)\n+        assert msg is not None\n+    assert \"deflate\" == resp.headers.get(hdrs.CONTENT_ENCODING)\n+\n+\n async def test_force_compression_no_accept_deflate() -> None:\n     req = make_request(\"GET\", \"/\")\n     resp = web.StreamResponse()\n",
+   "test_files": [
+    "tests/test_web_response.py"
+   ],
+   "visible_tests": [
+    "tests/test_web_response.py"
+   ],
+   "gold_files": [
+    "aiohttp/web_response.py"
+   ],
+   "gold_functions": [
+    "aiohttp/web_response.py::Response._do_start_compression",
+    "aiohttp/web_response.py::StreamResponse._start_compression"
+   ],
+   "prompt": "Function `aiohttp.web_response.StreamResponse._do_start_compression` in `aiohttp/web_response.py` was changed as shown:\n\n```diff\n@@ -330,15 +330,16 @@\n         self._headers[CONTENT_TYPE] = ctype\n \n     async def _do_start_compression(self, coding: ContentCoding) -> None:\n-        if coding != ContentCoding.identity:\n-            assert self._payload_writer is not None\n-            self._headers[hdrs.CONTENT_ENCODING] = coding.value\n-            self._payload_writer.enable_compression(\n-                coding.value, self._compression_strategy\n-            )\n-            # Compressed payload may have different content length,\n-            # remove the header\n-            self._headers.popall(hdrs.CONTENT_LENGTH, None)\n+        if coding is ContentCoding.identity:\n+            return\n+        assert self._payload_writer is not None\n+        self._headers[hdrs.CONTENT_ENCODING] = coding.value\n+        self._payload_writer.enable_compression(\n+            coding.value, self._compression_strategy\n+        )\n+        # Compressed payload may have different content length,\n+        # remove the header\n+        self._headers.popall(hdrs.CONTENT_LENGTH, None)\n \n     async def _start_compression(self, request: \"BaseRequest\") -> None:\n         if self._compression_force:\n```\n\nUpdate the rest of the project so its tests pass. The change to `aiohttp.web_response.StreamResponse._do_start_compression` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/test_web_response.py": [
+     "tests.test_web_response::test_force_compression_deflate_large_payload",
+     "tests.test_web_response::test_force_compression_no_accept_deflate"
+    ]
+   },
+   "pass_to_pass": {
+    "tests/test_web_response.py": [
+     "tests.test_web_response.TestJSONResponse::test_content_type_is_application_json_by_default",
+     "tests.test_web_response.TestJSONResponse::test_content_type_is_overrideable",
+     "tests.test_web_response.TestJSONResponse::test_data_and_body_raises_value_error",
+     "tests.test_web_response.TestJSONResponse::test_data_and_text_raises_value_error",
+     "tests.test_web_response.TestJSONResponse::test_passing_text_only",
+     "tests.test_web_response.TestJSONResponse::test_text_is_json_encoded",
+     "tests.test_web_response::test_304_response_omits_content_length_when_body_unset",
+     "tests.test_web_response::test___repr__",
+     "tests.test_web_response::test___repr___after_eof",
+     "tests.test_web_response::test___repr___not_prepared",
+     "tests.test_web_response::test_assign_nonbyteish_body",
+     "tests.test_web_response::test_assign_nonstr_text",
+     "tests.test_web_response::test_body_in_ctor_with_content_type_header_multidict",
+     "tests.test_web_response::test_cannot_write_after_eof",
+     "tests.test_web_response::test_cannot_write_eof_before_headers",
+     "tests.test_web_response::test_cannot_write_eof_twice",
+     "tests.test_web_response::test_change_content_length_if_compression_enabled",
+     "tests.test_web_response::test_change_content_threaded_compression_enabled",
+     "tests.test_web_response::test_change_content_threaded_compression_enabled_explicit",
+     "tests.test_web_response::test_changing_status_after_prepare_raises",
+     "tests.test_web_response::test_charset_without_content_type",
+     "tests.test_web_response::test_chunked_encoding",
+     "tests.test_web_response::test_chunked_encoding_forbidden_for_http_10",
+     "tests.test_web_response::test_compression_default_coding",
+     "tests.test_web_response::test_compression_no_accept",
+     "tests.test_web_response::test_consecutive_write_eof",
+     "tests.test_web_response::test_content_length",
+     "tests.test_web_response::test_content_length_on_chunked",
+     "tests.test_web_response::test_content_length_setter",
+     "tests.test_web_response::test_content_length_setter_with_enable_chunked_encoding",
+     "tests.test_web_response::test_content_type_with_set_body",
+     "tests.test_web_response::test_content_type_with_set_text",
+     "tests.test_web_response::test_ctor_both_charset_param_and_header",
+     "tests.test_web_response::test_ctor_both_charset_param_and_header_with_text",
+     "tests.test_web_response::test_ctor_both_content_type_param_and_header",
+     "tests.test_web_response::test_ctor_both_content_type_param_and_header_with_text",
+     "tests.test_web_response::test_ctor_charset",
+     "tests.test_web_response::test_ctor_charset_default_utf8",
+     "tests.test_web_response::test_ctor_charset_in_content_type",
+     "tests.test_web_response::test_ctor_charset_without_text",
+     "tests.test_web_response::test_ctor_content_type",
+     "tests.test_web_response::test_ctor_content_type_with_extra",
+     "tests.test_web_response::test_ctor_text",
+     "tests.test_web_response::test_ctor_text_body_combined",
+     "tests.test_web_response::test_ctor_with_headers_and_status",
+     "tests.test_web_response::test_default_charset",
+     "tests.test_web_response::test_default_content_type_in_response",
+     "tests.test_web_response::test_default_content_type_in_stream_response",
+     "tests.test_web_response::test_drain_before_start",
+     "tests.test_web_response::test_drop_content_length_header_on_setting_len_to_None",
+     "tests.test_web_response::test_enable_chunked_encoding_with_content_length",
+     "tests.test_web_response::test_etag_any",
+     "tests.test_web_response::test_etag_class[etag0-W/\"0123-weak-kotik\"]",
+     "tests.test_web_response::test_etag_class[etag1-\"0123-strong-kotik\"]",
+     "tests.test_web_response::test_etag_initial",
+     "tests.test_web_response::test_etag_invalid_value_class[123]",
+     "tests.test_web_response::test_etag_invalid_value_class[invalid1]",
+     "tests.test_web_response::test_etag_invalid_value_get[\"\\u2200 x \\u2209 ascii\"]",
+     "tests.test_web_response::test_etag_invalid_value_get[forgotten quotes]",
+     "tests.test_web_response::test_etag_invalid_value_set[\"invalid\"]",
+     "tests.test_web_response::test_etag_invalid_value_set[\\u043f\\u043e\\u0432\\u0438\\u043d\\u0435\\u043d \\u0431\\u0443\\u0442\\u0438 ascii]",
+     "tests.test_web_response::test_etag_invalid_value_set[invalid_value2]",
+     "tests.test_web_response::test_etag_invalid_value_set[invalid_value3]",
+     "tests.test_web_response::test_etag_reset",
+     "tests.test_web_response::test_etag_string",
+     "tests.test_web_response::test_force_close",
+     "tests.test_web_response::test_force_compression_deflate",
+     "tests.test_web_response::test_force_compression_gzip",
+     "tests.test_web_response::test_force_compression_identity",
+     "tests.test_web_response::test_force_compression_identity_response",
+     "tests.test_web_response::test_force_compression_no_accept_gzip",
+     "tests.test_web_response::test_head_response_keeps_content_length_of_original_body",
+     "tests.test_web_response::test_head_response_omits_content_length_when_body_unset",
+     "tests.test_web_response::test_keep_alive_http09",
+     "tests.test_web_response::test_keep_alive_http10_default",
+     "tests.test_web_response::test_keep_alive_http10_switched_on",
+     "tests.test_web_response::test_last_modified_datetime",
+     "tests.test_web_response::test_last_modified_initial",
+     "tests.test_web_response::test_last_modified_reset",
+     "tests.test_web_response::test_last_modified_string",
+     "tests.test_web_response::test_last_modified_string_invalid[Tue, 08 Oct 2000 00:56:80 GMT]",
+     "tests.test_web_response::test_last_modified_string_invalid[Tue, 08 Oct 4446413 00:56:40 GMT]",
+     "tests.test_web_response::test_last_modified_string_invalid[xxyyzz]",
+     "tests.test_web_response::test_last_modified_timestamp",
+     "tests.test_web_response::test_multiline_reason",
+     "tests.test_web_response::test_nonstr_text_in_ctor",
+     "tests.test_web_response::test_payload_body_get_text[async_iter-None]",
+     "tests.test_web_response::test_payload_body_get_text[payload1-test]",
+     "tests.test_web_response::test_payload_body_get_text[payload2-test]",
+     "tests.test_web_response::test_payload_body_get_text[payload3-test]",
+     "tests.test_web_response::test_payload_body_get_text[payload4-test]",
+     "tests.test_web_response::test_payload_body_get_text[payload5-test]",
+     "tests.test_web_response::test_payload_body_get_text[payload7-None]",
+     "tests.test_web_response::test_payload_body_get_text[payload8---x\\nContent-Type: text/plain; charset=utf-8\\r\\nContent-Length: 4\\r\\n\\r\\ntest]",
+     "tests.test_web_response::test_payload_body_get_text[test-test]",
+     "tests.test_web_response::test_prepare_calls_signal",
+     "tests.test_web_response::test_prepare_twice",
+     "tests.test_web_response::test_prepared_after_eof",
+     "tests.test_web_response::test_prepared_when_not_started",
+     "tests.test_web_response::test_prepared_when_started",
+     "tests.test_web_response::test_remove_content_length_if_compression_enabled_http10",
+     "tests.test_web_response::test_remove_content_length_if_compression_enabled_http11",
+     "tests.test_web_response::test_render_with_body",
+     "tests.test_web_response::test_request_iter",
+     "tests.test_web_response::test_reset_charset",
+     "tests.test_web_response::test_reset_charset_after_setting",
+     "tests.test_web_response::test_response_ctor",
+     "tests.test_web_response::test_response_prepared_after_header_preparation",
+     "tests.test_web_response::test_response_set_content_length",
+     "tests.test_web_response::test_response_with_content_length_header_without_body",
+     "tests.test_web_response::test_response_with_immutable_headers",
+     "tests.test_web_response::test_rm_content_length_1xx_204_304_responses[100]",
+     "tests.test_web_response::test_rm_content_length_1xx_204_304_responses[101]",
+     "tests.test_web_response::test_rm_content_length_1xx_204_304_responses[102]",
+     "tests.test_web_response::test_rm_content_length_1xx_204_304_responses[204]",
+     "tests.test_web_response::test_rm_content_length_1xx_204_304_responses[304]",
+     "tests.test_web_response::test_rm_content_length_if_204",
+     "tests.test_web_response::test_rm_content_length_if_compression_http10",
+     "tests.test_web_response::test_rm_content_length_if_compression_http11",
+     "tests.test_web_response::test_rm_transfer_encoding_rfc_9112_6_3_http_11[100]",
+     "tests.test_web_response::test_rm_transfer_encoding_rfc_9112_6_3_http_11[101]",
+     "tests.test_web_response::test_rm_transfer_encoding_rfc_9112_6_3_http_11[204]",
+     "tests.test_web_response::test_rm_transfer_encoding_rfc_9112_6_3_http_11[304]",
+     "tests.test_web_response::test_send_headers_for_empty_body",
+     "tests.test_web_response::test_send_set_cookie_header",
+     "tests.test_web_response::test_set_content_length_if_compression_enabled",
+     "tests.test_web_response::test_set_content_length_to_None_on_non_set",
+     "tests.test_web_response::test_set_status_with_empty_reason",
+     "tests.test_web_response::test_set_status_with_reason",
+     "tests.test_web_response::test_set_text_with_charset",
+     "tests.test_web_response::test_set_text_with_content_type",
+     "tests.test_web_response::test_setting_charset",
+     "tests.test_web_response::test_setting_content_type",
+     "tests.test_web_response::test_start",
+     "tests.test_web_response::test_start_force_close",
+     "tests.test_web_response::test_stream_response_ctor",
+     "tests.test_web_response::test_stream_response_delitem",
+     "tests.test_web_response::test_stream_response_eq",
+     "tests.test_web_response::test_stream_response_hashable",
+     "tests.test_web_response::test_stream_response_is_mutable_mapping",
+     "tests.test_web_response::test_stream_response_len",
+     "tests.test_web_response::test_text_in_ctor_with_content_type",
+     "tests.test_web_response::test_text_in_ctor_with_content_type_header",
+     "tests.test_web_response::test_text_in_ctor_with_content_type_header_multidict",
+     "tests.test_web_response::test_text_with_empty_payload",
+     "tests.test_web_response::test_weakref_creation",
+     "tests.test_web_response::test_write_before_start",
+     "tests.test_web_response::test_write_non_byteish"
+    ]
+   },
+   "tests_run": [
+    "tests/test_web_response.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-06",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "poetry",
+   "language": "python",
+   "commit": "d09f2384f1ed93b8aa880f08ef9bc360a03287fe",
+   "parent": "31d18de8028cb1fb30e5f0c48118bb449a8bf5e5",
+   "commit_date": "2024-11-18T16:36:17+00:00",
+   "author_date": "2024-11-18T16:36:17+00:00",
+   "subject": "Try finding commit using short SHA if it is not on HEAD (#9748)",
+   "anchor": "src.poetry.vcs.git.backend.GitRefSpec._normalise",
+   "anchor_file": "src/poetry/vcs/git/backend.py",
+   "forced": [
+    "new required parameter: repo",
+    "returning nothing added or removed"
+   ],
+   "changed_callers": [
+    "src.poetry.vcs.git.backend.GitRefSpec.resolve"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/src/poetry/vcs/git/backend.py\n+++ b/src/poetry/vcs/git/backend.py\n@@ -61,7 +61,7 @@\n         self._normalise(remote_refs=remote_refs)\n         self._set_head(remote_refs=remote_refs)\n \n-    def _normalise(self, remote_refs: FetchPackResult) -> None:\n+    def _normalise(self, remote_refs: FetchPackResult, repo: Repo) -> None:\n         \"\"\"\n         Internal helper method to determine if given revision is\n             1. a branch or tag; if so, set corresponding properties.\n@@ -98,7 +98,12 @@\n             for sha in remote_refs.refs.values():\n                 if sha.startswith(short_sha):\n                     self.revision = sha.decode(\"utf-8\")\n-                    break\n+                    return\n+\n+            # no heads with such SHA, let's check all objects\n+            for sha in repo.object_store.iter_prefix(short_sha):\n+                self.revision = sha.decode(\"utf-8\")\n+                return\n \n     def _set_head(self, remote_refs: FetchPackResult) -> None:\n         \"\"\"\n",
+   "start_files": [
+    "src/poetry/vcs/git/backend.py"
+   ],
+   "start_functions": [
+    "src/poetry/vcs/git/backend.py::GitRefSpec._normalise"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/conftest.py b/tests/conftest.py\nindex f666f5b3..ba9423f3 100644\n--- a/tests/conftest.py\n+++ b/tests/conftest.py\n@@ -22,6 +22,7 @@ from keyring.backends.fail import Keyring as FailKeyring\n from keyring.credentials import SimpleCredential\n from keyring.errors import KeyringError\n from keyring.errors import KeyringLocked\n+from pytest import FixtureRequest\n \n from poetry.config.config import Config as BaseConfig\n from poetry.config.dict_config_source import DictConfigSource\n@@ -323,7 +324,10 @@ def isolate_environ() -> Iterator[None]:\n \n \n @pytest.fixture(autouse=True)\n-def git_mock(mocker: MockerFixture) -> None:\n+def git_mock(mocker: MockerFixture, request: FixtureRequest) -> None:\n+    if request.node.get_closest_marker(\"skip_git_mock\"):\n+        return\n+\n     # Patch git module to not actually clone projects\n     mocker.patch(\"poetry.vcs.git.Git.clone\", new=mock_clone)\n     p = mocker.patch(\"poetry.vcs.git.Git.get_revision\")\ndiff --git a/tests/vcs/git/conftest.py b/tests/vcs/git/conftest.py\nnew file mode 100644\nindex 00000000..61c99cb2\n--- /dev/null\n+++ b/tests/vcs/git/conftest.py\n@@ -0,0 +1,58 @@\n+from __future__ import annotations\n+\n+from typing import TYPE_CHECKING\n+\n+import dulwich.repo\n+import pytest\n+\n+from tests.vcs.git.git_fixture import TempRepoFixture\n+\n+\n+if TYPE_CHECKING:\n+    from pathlib import Path\n+\n+\n+@pytest.fixture()\n+def temp_repo(tmp_path: Path) -> TempRepoFixture:\n+    \"\"\"Temporary repository with 2 commits\"\"\"\n+    repo = dulwich.repo.Repo.init(str(tmp_path))\n+\n+    # init commit\n+    (tmp_path / \"foo\").write_text(\"foo\", encoding=\"utf-8\")\n+    repo.stage([\"foo\"])\n+\n+    init_commit = repo.do_commit(\n+        committer=b\"User <user@example.com>\",\n+        author=b\"User <user@example.com>\",\n+        message=b\"init\",\n+        no_verify=True,\n+    )\n+\n+    # one commit which is not \"head\"\n+    (tmp_path / \"bar\").write_text(\"bar\", encoding=\"utf-8\")\n+    repo.stage([\"bar\"])\n+    middle_commit = repo.do_commit(\n+        committer=b\"User <user@example.com>\",\n+        author=b\"User <user@example.com>\",\n+        message=b\"extra\",\n+        no_verify=True,\n+    )\n+\n+    # extra commit\n+    (tmp_path / \"third\").write_text(\"third file\", encoding=\"utf-8\")\n+    repo.stage([\"third\"])\n+\n+    head_commit = repo.do_commit(\n+        committer=b\"User <user@example.com>\",\n+        author=b\"User <user@example.com>\",\n+        message=b\"extra\",\n+        no_verify=True,\n+    )\n+\n+    return TempRepoFixture(\n+        path=tmp_path,\n+        repo=repo,\n+        init_commit=init_commit.decode(),\n+        middle_commit=middle_commit.decode(),\n+        head_commit=head_commit.decode(),\n+    )\ndiff --git a/tests/vcs/git/git_fixture.py b/tests/vcs/git/git_fixture.py\nnew file mode 100644\nindex 00000000..31237bbf\n--- /dev/null\n+++ b/tests/vcs/git/git_fixture.py\n@@ -0,0 +1,17 @@\n+from __future__ import annotations\n+\n+import typing\n+\n+\n+if typing.TYPE_CHECKING:\n+    from pathlib import Path\n+\n+    import dulwich.repo\n+\n+\n+class TempRepoFixture(typing.NamedTuple):\n+    path: Path\n+    repo: dulwich.repo.Repo\n+    init_commit: str\n+    middle_commit: str\n+    head_commit: str\ndiff --git a/tests/vcs/git/test_backend.py b/tests/vcs/git/test_backend.py\nindex ac619de5..9a2481b7 100644\n--- a/tests/vcs/git/test_backend.py\n+++ b/tests/vcs/git/test_backend.py\n@@ -1,5 +1,6 @@\n from __future__ import annotations\n \n+from typing import TYPE_CHECKING\n from unittest.mock import MagicMock\n \n import pytest\n@@ -12,6 +13,12 @@ from poetry.vcs.git.backend import is_revision_sha\n from poetry.vcs.git.backend import urlpathjoin\n \n \n+if TYPE_CHECKING:\n+    from pathlib import Path\n+\n+    from tests.vcs.git.git_fixture import TempRepoFixture\n+\n+\n VALID_SHA = \"c5c7624ef64f34d9f50c3b7e8118f7f652fddbbd\"\n \n \n@@ -75,3 +82,28 @@ def test_urlpathjoin(url: str, expected_result: str) -> None:\n     path = \"../other-repo\"\n     result = urlpathjoin(url, path)\n     assert result == expected_result\n+\n+\n+@pytest.mark.skip_git_mock\n+def test_clone_success(tmp_path: Path, temp_repo: TempRepoFixture) -> None:\n+    source_root_dir = tmp_path / \"test-repo\"\n+    Git.clone(\n+        url=temp_repo.path.as_uri(), source_root=source_root_dir, name=\"clone-test\"\n+    )\n+\n+    target_dir = source_root_dir / \"clone-test\"\n+    assert (target_dir / \".git\").is_dir()\n+\n+\n+@pytest.mark.skip_git_mock\n+def test_short_sha_not_in_head(tmp_path: Path, temp_repo: TempRepoFixture) -> None:\n+    source_root_dir = tmp_path / \"test-repo\"\n+    Git.clone(\n+        url=temp_repo.path.as_uri(),\n+        revision=temp_repo.middle_commit[:6],\n+        name=\"clone-test\",\n+        source_root=source_root_dir,\n+    )\n+\n+    target_dir = source_root_dir / \"clone-test\"\n+    assert (target_dir / \".git\").is_dir()\ndiff --git a/tests/vcs/git/test_system.py b/tests/vcs/git/test_system.py\nindex 5763b360..262fe340 100644\n--- a/tests/vcs/git/test_system.py\n+++ b/tests/vcs/git/test_system.py\n@@ -5,7 +5,6 @@ import shutil\n import subprocess\n import typing\n \n-import dulwich.repo\n import pytest\n \n from poetry.vcs.git.system import SystemGit\n@@ -14,8 +13,9 @@ from poetry.vcs.git.system import SystemGit\n if typing.TYPE_CHECKING:\n     from pathlib import Path\n \n+    from tests.vcs.git.git_fixture import TempRepoFixture\n \n-GIT_NOT_INSTALLLED = shutil.which(\"git\") is None\n+GIT_NOT_INSTALLED = shutil.which(\"git\") is None\n \n \n def get_head_sha(cwd: Path) -> str:\n@@ -27,49 +27,7 @@ def get_head_sha(cwd: Path) -> str:\n     ).strip()\n \n \n-class TempRepoFixture(typing.NamedTuple):\n-    path: Path\n-    repo: dulwich.repo.Repo\n-    init_commit: str\n-    head_commit: str\n-\n-\n-@pytest.fixture()\n-def temp_repo(tmp_path: Path) -> TempRepoFixture:\n-    \"\"\"Temporary repository with 2 commits\"\"\"\n-    repo = dulwich.repo.Repo.init(str(tmp_path))\n-\n-    # init commit\n-    (tmp_path / \"foo\").write_text(\"foo\", encoding=\"utf-8\")\n-    repo.stage([\"foo\"])\n-\n-    init_commit = repo.do_commit(\n-        committer=b\"User <user@example.com>\",\n-        author=b\"User <user@example.com>\",\n-        message=b\"init\",\n-        no_verify=True,\n-    )\n-\n-    # extra commit\n-    (tmp_path / \"foo\").write_text(\"bar\", encoding=\"utf-8\")\n-    repo.stage([\"foo\"])\n-\n-    head_commit = repo.do_commit(\n-        committer=b\"User <user@example.com>\",\n-        author=b\"User <user@example.com>\",\n-        message=b\"extra\",\n-        no_verify=True,\n-    )\n-\n-    return TempRepoFixture(\n-        path=tmp_path,\n-        repo=repo,\n-        init_commit=init_commit.decode(),\n-        head_commit=head_commit.decode(),\n-    )\n-\n-\n-@pytest.mark.skipif(GIT_NOT_INSTALLLED, reason=\"These tests requires git cli\")\n+@pytest.mark.skipif(GIT_NOT_INSTALLED, reason=\"These tests requires git cli\")\n class TestSystemGit:\n     def test_clone_success(self, tmp_path: Path, temp_repo: TempRepoFixture) -> None:\n         target_dir = tmp_path / \"test-repo\"\n",
+   "test_files": [
+    "tests/conftest.py",
+    "tests/vcs/git/conftest.py",
+    "tests/vcs/git/git_fixture.py",
+    "tests/vcs/git/test_backend.py",
+    "tests/vcs/git/test_system.py"
+   ],
+   "visible_tests": [
+    "tests/vcs/git/test_backend.py",
+    "tests/vcs/git/test_system.py"
+   ],
+   "gold_files": [
+    "poetry.lock",
+    "pyproject.toml",
+    "src/poetry/vcs/git/backend.py"
+   ],
+   "gold_functions": [
+    "src/poetry/vcs/git/backend.py::Git._clone",
+    "src/poetry/vcs/git/backend.py::GitRefSpec.resolve"
+   ],
+   "prompt": "Function `src.poetry.vcs.git.backend.GitRefSpec._normalise` in `src/poetry/vcs/git/backend.py` was changed as shown:\n\n```diff\n@@ -61,7 +61,7 @@\n         self._normalise(remote_refs=remote_refs)\n         self._set_head(remote_refs=remote_refs)\n \n-    def _normalise(self, remote_refs: FetchPackResult) -> None:\n+    def _normalise(self, remote_refs: FetchPackResult, repo: Repo) -> None:\n         \"\"\"\n         Internal helper method to determine if given revision is\n             1. a branch or tag; if so, set corresponding properties.\n@@ -98,7 +98,12 @@\n             for sha in remote_refs.refs.values():\n                 if sha.startswith(short_sha):\n                     self.revision = sha.decode(\"utf-8\")\n-                    break\n+                    return\n+\n+            # no heads with such SHA, let's check all objects\n+            for sha in repo.object_store.iter_prefix(short_sha):\n+                self.revision = sha.decode(\"utf-8\")\n+                return\n \n     def _set_head(self, remote_refs: FetchPackResult) -> None:\n         \"\"\"\n```\n\nUpdate the rest of the project so its tests pass. The change to `src.poetry.vcs.git.backend.GitRefSpec._normalise` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/vcs/git/test_backend.py": [
+     "tests.vcs.git.test_backend::test_annotated_tag[my-tag0]",
+     "tests.vcs.git.test_backend::test_annotated_tag[my-tag1]",
+     "tests.vcs.git.test_backend::test_clone_success",
+     "tests.vcs.git.test_backend::test_get_name_from_source_url[git@github.com:python-poetry/poetry.git]",
+     "tests.vcs.git.test_backend::test_get_name_from_source_url[https://github.com/python-poetry/poetry.git]",
+     "tests.vcs.git.test_backend::test_get_name_from_source_url[https://github.com/python-poetry/poetry/]",
+     "tests.vcs.git.test_backend::test_get_name_from_source_url[https://github.com/python-poetry/poetry]",
+     "tests.vcs.git.test_backend::test_get_remote_url",
+     "tests.vcs.git.test_backend::test_invalid_revision_sha",
+     "tests.vcs.git.test_backend::test_invalid_revision_sha_max_len",
+     "tests.vcs.git.test_backend::test_invalid_revision_sha_min_len",
+     "tests.vcs.git.test_backend::test_short_sha_not_in_head",
+     "tests.vcs.git.test_backend::test_urlpathjoin[ssh://git@github.com/org/repo-ssh://git@github.com/other-repo]",
+     "tests.vcs.git.test_backend::test_urlpathjoin[ssh://git@github.com/org/repo/-ssh://git@github.com/org/other-repo]",
+     "tests.vcs.git.test_backend::test_valid_revision_sha"
+    ]
+   },
+   "pass_to_pass": {
+    "tests/vcs/git/test_system.py": [
+     "tests.vcs.git.test_system.TestSystemGit::test_checkout_1",
+     "tests.vcs.git.test_system.TestSystemGit::test_checkout_2",
+     "tests.vcs.git.test_system.TestSystemGit::test_clone_invalid_parameter",
+     "tests.vcs.git.test_system.TestSystemGit::test_clone_success"
+    ]
+   },
+   "tests_run": [
+    "tests/vcs/git/test_backend.py",
+    "tests/vcs/git/test_system.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-07",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "sqlglot",
+   "language": "python",
+   "commit": "17b8c0bdb33ab893e71ec9a2a6463ec57accfc7d",
+   "parent": "0422b4a1951d3f1d712fde8711b3ef524140b79a",
+   "commit_date": "2024-10-22T13:52:52+03:00",
+   "author_date": "2024-10-22T13:52:52+03:00",
+   "subject": "Refactor(diff)!: include the target node for Move edits (#4277)",
+   "anchor": "sqlglot.diff.ChangeDistiller._generate_edit_script",
+   "anchor_file": "sqlglot/diff.py",
+   "forced": [
+    "parameter removed or renamed: matching_set",
+    "new required parameter: matchings"
+   ],
+   "changed_callers": [
+    "sqlglot.diff.ChangeDistiller.diff"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/sqlglot/diff.py\n+++ b/sqlglot/diff.py\n@@ -188,17 +188,13 @@\n         matching_set = self._compute_matching_set() | set(pre_matched_nodes.items())\n         return self._generate_edit_script(matching_set, delta_only)\n \n-    def _generate_edit_script(\n-        self,\n-        matching_set: t.Set[t.Tuple[int, int]],\n-        delta_only: bool,\n-    ) -> t.List[Edit]:\n+    def _generate_edit_script(self, matchings: t.Dict[int, int], delta_only: bool) -> t.List[Edit]:\n         edit_script: t.List[Edit] = []\n         for removed_node_id in self._unmatched_source_nodes:\n             edit_script.append(Remove(self._source_index[removed_node_id]))\n         for inserted_node_id in self._unmatched_target_nodes:\n             edit_script.append(Insert(self._target_index[inserted_node_id]))\n-        for kept_source_node_id, kept_target_node_id in matching_set:\n+        for kept_source_node_id, kept_target_node_id in matchings.items():\n             source_node = self._source_index[kept_source_node_id]\n             target_node = self._target_index[kept_target_node_id]\n \n@@ -206,9 +202,7 @@\n                 not isinstance(source_node, UPDATABLE_EXPRESSION_TYPES)\n                 or source_node == target_node\n             ):\n-                edit_script.extend(\n-                    self._generate_move_edits(source_node, target_node, matching_set)\n-                )\n+                edit_script.extend(self._generate_move_edits(source_node, target_node, matchings))\n \n                 source_non_expression_leaves = dict(_get_non_expression_leaves(source_node))\n                 target_non_expression_leaves = dict(_get_non_expression_leaves(target_node))\n",
+   "start_files": [
+    "sqlglot/diff.py"
+   ],
+   "start_functions": [
+    "sqlglot/diff.py::ChangeDistiller._generate_edit_script"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/test_diff.py b/tests/test_diff.py\nindex f0e0747c5..65802277f 100644\n--- a/tests/test_diff.py\n+++ b/tests/test_diff.py\n@@ -81,35 +81,54 @@ class TestDiff(unittest.TestCase):\n         )\n \n     def test_node_position_changed(self):\n+        expr_src = parse_one(\"SELECT a, b, c\")\n+        expr_tgt = parse_one(\"SELECT c, a, b\")\n+\n         self._validate_delta_only(\n-            diff_delta_only(parse_one(\"SELECT a, b, c\"), parse_one(\"SELECT c, a, b\")),\n+            diff_delta_only(expr_src, expr_tgt),\n             [\n-                Move(parse_one(\"c\")),  # the Column node\n+                Move(source=expr_src.selects[2], target=expr_tgt.selects[0]),\n             ],\n         )\n \n+        expr_src = parse_one(\"SELECT a + b\")\n+        expr_tgt = parse_one(\"SELECT b + a\")\n+\n         self._validate_delta_only(\n-            diff_delta_only(parse_one(\"SELECT a + b\"), parse_one(\"SELECT b + a\")),\n+            diff_delta_only(expr_src, expr_tgt),\n             [\n-                Move(parse_one(\"a\")),  # the Column node\n+                Move(source=expr_src.selects[0].left, target=expr_tgt.selects[0].right),\n             ],\n         )\n \n+        expr_src = parse_one(\"SELECT aaaa AND bbbb\")\n+        expr_tgt = parse_one(\"SELECT bbbb AND aaaa\")\n+\n         self._validate_delta_only(\n-            diff_delta_only(parse_one(\"SELECT aaaa AND bbbb\"), parse_one(\"SELECT bbbb AND aaaa\")),\n+            diff_delta_only(expr_src, expr_tgt),\n             [\n-                Move(parse_one(\"aaaa\")),  # the Column node\n+                Move(source=expr_src.selects[0].left, target=expr_tgt.selects[0].right),\n             ],\n         )\n \n+        expr_src = parse_one(\"SELECT aaaa OR bbbb OR cccc\")\n+        expr_tgt = parse_one(\"SELECT cccc OR bbbb OR aaaa\")\n+\n         self._validate_delta_only(\n-            diff_delta_only(\n-                parse_one(\"SELECT aaaa OR bbbb OR cccc\"),\n-                parse_one(\"SELECT cccc OR bbbb OR aaaa\"),\n-            ),\n+            diff_delta_only(expr_src, expr_tgt),\n+            [\n+                Move(source=expr_src.selects[0].left.left, target=expr_tgt.selects[0].right),\n+                Move(source=expr_src.selects[0].right, target=expr_tgt.selects[0].left.left),\n+            ],\n+        )\n+\n+        expr_src = parse_one(\"SELECT a, b FROM t WHERE CONCAT('a', 'b') = 'ab'\")\n+        expr_tgt = parse_one(\"SELECT a FROM t WHERE CONCAT('a', 'b', b) = 'ab'\")\n+\n+        self._validate_delta_only(\n+            diff_delta_only(expr_src, expr_tgt),\n             [\n-                Move(parse_one(\"aaaa\")),  # the Column node\n-                Move(parse_one(\"cccc\")),  # the Column node\n+                Move(source=expr_src.selects[1], target=expr_tgt.find(exp.Concat).expressions[-1]),\n             ],\n         )\n \n@@ -274,7 +293,7 @@ class TestDiff(unittest.TestCase):\n                     source=expr_src.find(exp.Order).expressions[0],\n                     target=expr_tgt.find(exp.Order).expressions[0],\n                 ),\n-                Move(parse_one(\"a\")),\n+                Move(source=expr_src.selects[0], target=expr_tgt.selects[1]),\n             ],\n         )\n \n",
+   "test_files": [
+    "tests/test_diff.py"
+   ],
+   "visible_tests": [
+    "tests/test_diff.py"
+   ],
+   "gold_files": [
+    "sqlglot/diff.py"
+   ],
+   "gold_functions": [
+    "sqlglot/diff.py::ChangeDistiller._generate_move_edits",
+    "sqlglot/diff.py::ChangeDistiller.diff"
+   ],
+   "prompt": "Function `sqlglot.diff.ChangeDistiller._generate_edit_script` in `sqlglot/diff.py` was changed as shown:\n\n```diff\n@@ -188,17 +188,13 @@\n         matching_set = self._compute_matching_set() | set(pre_matched_nodes.items())\n         return self._generate_edit_script(matching_set, delta_only)\n \n-    def _generate_edit_script(\n-        self,\n-        matching_set: t.Set[t.Tuple[int, int]],\n-        delta_only: bool,\n-    ) -> t.List[Edit]:\n+    def _generate_edit_script(self, matchings: t.Dict[int, int], delta_only: bool) -> t.List[Edit]:\n         edit_script: t.List[Edit] = []\n         for removed_node_id in self._unmatched_source_nodes:\n             edit_script.append(Remove(self._source_index[removed_node_id]))\n         for inserted_node_id in self._unmatched_target_nodes:\n             edit_script.append(Insert(self._target_index[inserted_node_id]))\n-        for kept_source_node_id, kept_target_node_id in matching_set:\n+        for kept_source_node_id, kept_target_node_id in matchings.items():\n             source_node = self._source_index[kept_source_node_id]\n             target_node = self._target_index[kept_target_node_id]\n \n@@ -206,9 +202,7 @@\n                 not isinstance(source_node, UPDATABLE_EXPRESSION_TYPES)\n                 or source_node == target_node\n             ):\n-                edit_script.extend(\n-                    self._generate_move_edits(source_node, target_node, matching_set)\n-                )\n+                edit_script.extend(self._generate_move_edits(source_node, target_node, matchings))\n \n                 source_non_expression_leaves = dict(_get_non_expression_leaves(source_node))\n                 target_non_expression_leaves = dict(_get_non_expression_leaves(target_node))\n```\n\nUpdate the rest of the project so its tests pass. The change to `sqlglot.diff.ChangeDistiller._generate_edit_script` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/test_diff.py": [
+     "tests.test_diff.TestDiff::test_cte",
+     "tests.test_diff.TestDiff::test_dialect_aware_diff",
+     "tests.test_diff.TestDiff::test_identifier",
+     "tests.test_diff.TestDiff::test_join",
+     "tests.test_diff.TestDiff::test_lambda",
+     "tests.test_diff.TestDiff::test_node_position_changed",
+     "tests.test_diff.TestDiff::test_non_expression_leaf_delta",
+     "tests.test_diff.TestDiff::test_pre_matchings",
+     "tests.test_diff.TestDiff::test_simple",
+     "tests.test_diff.TestDiff::test_udf",
+     "tests.test_diff.TestDiff::test_window_functions"
+    ]
+   },
+   "pass_to_pass": {},
+   "tests_run": [
+    "tests/test_diff.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-08",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "poetry",
+   "language": "python",
+   "commit": "b59d9abfc61b1d81c6029aa1cbaaf5448654dd99",
+   "parent": "aa675c951055c7ecd1f8034d22b62cabc5bde4ee",
+   "commit_date": "2024-11-18T01:18:13+01:00",
+   "author_date": "2024-11-16T19:04:48+01:00",
+   "subject": "feat: add confirmation step",
+   "anchor": "src.poetry.config.config_source.ConfigSourceMigration.apply",
+   "anchor_file": "src/poetry/config/config_source.py",
+   "forced": [
+    "parameter removed or renamed: io"
+   ],
+   "changed_callers": [
+    "src.poetry.console.commands.config.ConfigCommand._migrate"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/src/poetry/config/config_source.py\n+++ b/src/poetry/config/config_source.py\n@@ -39,9 +39,7 @@\n     new_key: str | None\n     value_migration: dict[Any, Any] = dataclasses.field(default_factory=dict)\n \n-    def apply(self, config_source: ConfigSource, io: IO | None = None) -> None:\n-        io = io or NullIO()\n-\n+    def apply(self, config_source: ConfigSource) -> None:\n         try:\n             old_value = config_source.get_property(self.old_key)\n         except PropertyNotFoundError:\n@@ -53,17 +51,8 @@\n \n         config_source.remove_property(self.old_key)\n \n-        msg = f\"<c1>{self.old_key}</c1> = <c2>{json.dumps(old_value)}</c2>\"\n-\n         if self.new_key is not None and new_value is not UNSET:\n-            msg += f\" -> <c1>{self.new_key}</c1> = <c2>{json.dumps(new_value)}</c2>\"\n             config_source.add_property(self.new_key, new_value)\n-        elif self.new_key is None:\n-            msg += \" -> <c1>Removed from config</c1>\"\n-        elif self.new_key and new_value is UNSET:\n-            msg += f\" -> <c1>{self.new_key}</c1> = <c2>Not explicit set</c2>\"\n-\n-        io.write_line(msg)\n \n \n def drop_empty_config_category(\n",
+   "start_files": [
+    "src/poetry/config/config_source.py"
+   ],
+   "start_functions": [
+    "src/poetry/config/config_source.py::ConfigSourceMigration.apply"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/console/commands/test_config.py b/tests/console/commands/test_config.py\nindex 9c811532..d4925b85 100644\n--- a/tests/console/commands/test_config.py\n+++ b/tests/console/commands/test_config.py\n@@ -569,32 +569,54 @@ def test_config_solver_lazy_wheel(\n     assert not repo._lazy_wheel\n \n \n+current_config = \"\"\"\\\n+[experimental]\n+system-git-client = true\n+\n+[virtualenvs]\n+prefer-active-python = false\n+\"\"\"\n+\n+config_migrated = \"\"\"\\\n+system-git-client = true\n+\n+[virtualenvs]\n+use-poetry-python = true\n+\"\"\"\n+\n+\n+@pytest.mark.parametrize(\n+    [\"proceed\", \"expected_config\"],\n+    [\n+        (\"yes\", config_migrated),\n+        (\"no\", current_config),\n+    ],\n+)\n def test_config_migrate(\n-    tester: CommandTester, mocker: MockerFixture, tmp_path: Path\n+    proceed: str,\n+    expected_config: str,\n+    tester: CommandTester,\n+    mocker: MockerFixture,\n+    tmp_path: Path,\n ) -> None:\n     config_dir = tmp_path / \"config\"\n     mocker.patch(\"poetry.locations.CONFIG_DIR\", config_dir)\n \n     config_file = Path(config_dir / \"config.toml\")\n-    config_data = textwrap.dedent(\"\"\"\\\n-    [experimental]\n-    system-git-client = true\n-\n-    [virtualenvs]\n-    prefer-active-python = false\n-    \"\"\")\n     with config_file.open(\"w\") as fh:\n-        fh.write(config_data)\n-\n-    tester.execute(\"--migrate\")\n+        fh.write(current_config)\n \n-    expected_config = textwrap.dedent(\"\"\"\\\n-    system-git-client = true\n+    tester.execute(\"--migrate\", inputs=proceed)\n \n-    [virtualenvs]\n-    use-poetry-python = true\n+    expected_output = textwrap.dedent(\"\"\"\\\n+    Checking for required migrations ...\n+    experimental.system-git-client = true -> system-git-client = true\n+    virtualenvs.prefer-active-python = false -> virtualenvs.use-poetry-python = true\n     \"\"\")\n \n+    output = tester.io.fetch_output()\n+    assert output.startswith(expected_output)\n+\n     with config_file.open(\"r\") as fh:\n         assert fh.read() == expected_config\n \n@@ -612,7 +634,7 @@ def test_config_migrate_local_config(tester: CommandTester, poetry: Poetry) -> N\n     with local_config.open(\"w\") as fh:\n         fh.write(config_data)\n \n-    tester.execute(\"--migrate --local\")\n+    tester.execute(\"--migrate --local\", inputs=\"yes\")\n \n     expected_config = textwrap.dedent(\"\"\"\\\n         system-git-client = true\n@@ -629,4 +651,4 @@ def test_config_migrate_local_config_should_raise_if_not_found(\n     tester: CommandTester,\n ) -> None:\n     with pytest.raises(RuntimeError, match=\"No local config file found\"):\n-        tester.execute(\"--migrate --local\")\n+        tester.execute(\"--migrate --local\", inputs=\"yes\")\n",
+   "test_files": [
+    "tests/console/commands/test_config.py"
+   ],
+   "visible_tests": [
+    "tests/console/commands/test_config.py"
+   ],
+   "gold_files": [
+    "src/poetry/config/config_source.py",
+    "src/poetry/console/commands/config.py"
+   ],
+   "gold_functions": [
+    "src/poetry/config/config_source.py::ConfigSourceMigration.dry_run",
+    "src/poetry/console/commands/config.py::ConfigCommand._migrate"
+   ],
+   "prompt": "Function `src.poetry.config.config_source.ConfigSourceMigration.apply` in `src/poetry/config/config_source.py` was changed as shown:\n\n```diff\n@@ -39,9 +39,7 @@\n     new_key: str | None\n     value_migration: dict[Any, Any] = dataclasses.field(default_factory=dict)\n \n-    def apply(self, config_source: ConfigSource, io: IO | None = None) -> None:\n-        io = io or NullIO()\n-\n+    def apply(self, config_source: ConfigSource) -> None:\n         try:\n             old_value = config_source.get_property(self.old_key)\n         except PropertyNotFoundError:\n@@ -53,17 +51,8 @@\n \n         config_source.remove_property(self.old_key)\n \n-        msg = f\"<c1>{self.old_key}</c1> = <c2>{json.dumps(old_value)}</c2>\"\n-\n         if self.new_key is not None and new_value is not UNSET:\n-            msg += f\" -> <c1>{self.new_key}</c1> = <c2>{json.dumps(new_value)}</c2>\"\n             config_source.add_property(self.new_key, new_value)\n-        elif self.new_key is None:\n-            msg += \" -> <c1>Removed from config</c1>\"\n-        elif self.new_key and new_value is UNSET:\n-            msg += f\" -> <c1>{self.new_key}</c1> = <c2>Not explicit set</c2>\"\n-\n-        io.write_line(msg)\n \n \n def drop_empty_config_category(\n```\n\nUpdate the rest of the project so its tests pass. The change to `src.poetry.config.config_source.ConfigSourceMigration.apply` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/console/commands/test_config.py": [
+     "tests.console.commands.test_config::test_config_migrate[no-[experimental]\\nsystem-git-client = true\\n\\n[virtualenvs]\\nprefer-active-python = false\\n]",
+     "tests.console.commands.test_config::test_config_migrate[yes-system-git-client = true\\n\\n[virtualenvs]\\nuse-poetry-python = true\\n]",
+     "tests.console.commands.test_config::test_config_migrate_local_config"
+    ]
+   },
+   "pass_to_pass": {
+    "tests/console/commands/test_config.py": [
+     "tests.console.commands.test_config::test_cannot_set_invalid_value",
+     "tests.console.commands.test_config::test_cannot_set_with_multiple_values",
+     "tests.console.commands.test_config::test_cannot_unset_with_value",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[-expected7-installer.no-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[-expected7-installer.only-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[0-expected3-installer.no-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[0-expected3-installer.only-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[1-expected1-installer.no-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[1-expected1-installer.only-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[PyTest-expected5-installer.no-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[PyTest-expected5-installer.only-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[false-expected2-installer.no-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[false-expected2-installer.only-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[pytest,black-expected6-installer.no-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[pytest,black-expected6-installer.only-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[pytest-expected4-installer.no-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[pytest-expected4-installer.only-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[true-expected0-installer.no-binary]",
+     "tests.console.commands.test_config::test_config_installer_binary_filter_config[true-expected0-installer.only-binary]",
+     "tests.console.commands.test_config::test_config_installer_parallel",
+     "tests.console.commands.test_config::test_config_migrate_local_config_should_raise_if_not_found",
+     "tests.console.commands.test_config::test_config_solver_lazy_wheel",
+     "tests.console.commands.test_config::test_display_empty_repositories_setting",
+     "tests.console.commands.test_config::test_display_single_local_setting",
+     "tests.console.commands.test_config::test_display_single_setting[repositories.foo.url-{'url': 'https://bar.com/simple/'}\\n]",
+     "tests.console.commands.test_config::test_display_single_setting[virtualenvs.create-true\\n]",
+     "tests.console.commands.test_config::test_display_undefined_setting[foo-There is no foo setting.]",
+     "tests.console.commands.test_config::test_display_undefined_setting[repositories.foo-There is no foo repository defined]",
+     "tests.console.commands.test_config::test_list_displays_default_value_if_not_set",
+     "tests.console.commands.test_config::test_list_displays_set_get_local_setting",
+     "tests.console.commands.test_config::test_list_displays_set_get_setting",
+     "tests.console.commands.test_config::test_list_must_not_display_sources_from_pyproject_toml",
+     "tests.console.commands.test_config::test_set_cert[false-False]",
+     "tests.console.commands.test_config::test_set_cert[path/to/ca.pem-path/to/ca.pem]",
+     "tests.console.commands.test_config::test_set_cert[true-True]",
+     "tests.console.commands.test_config::test_set_client_cert",
+     "tests.console.commands.test_config::test_set_client_cert_unsuccessful_multiple_values",
+     "tests.console.commands.test_config::test_set_http_basic",
+     "tests.console.commands.test_config::test_set_http_basic_unsuccessful_multiple_values",
+     "tests.console.commands.test_config::test_set_malformed_repositories_setting",
+     "tests.console.commands.test_config::test_set_pypi_token",
+     "tests.console.commands.test_config::test_set_pypi_token_no_values",
+     "tests.console.commands.test_config::test_set_pypi_token_unsuccessful_multiple_values",
+     "tests.console.commands.test_config::test_show_config_with_local_config_file_empty",
+     "tests.console.commands.test_config::test_unset_cert",
+     "tests.console.commands.test_config::test_unset_http_basic",
+     "tests.console.commands.test_config::test_unset_nonempty_repositories_section[repositories-You cannot remove the [repositories] section]",
+     "tests.console.commands.test_config::test_unset_nonempty_repositories_section[repositories.test-There is no test repository defined]",
+     "tests.console.commands.test_config::test_unset_pypi_token",
+     "tests.console.commands.test_config::test_unset_repo_setting",
+     "tests.console.commands.test_config::test_unset_setting",
+     "tests.console.commands.test_config::test_unset_value_not_exists"
+    ]
+   },
+   "tests_run": [
+    "tests/console/commands/test_config.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-09",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  },
+  {
+   "family": "B",
+   "repo": "poetry",
+   "language": "python",
+   "commit": "0c22ca5adabd203c0533ebfcc30b07e7583002c4",
+   "parent": "a923878911d9247b81a0b4053c6eb10e9bc4652b",
+   "commit_date": "2024-11-18T00:41:23+01:00",
+   "author_date": "2024-11-16T22:35:08+01:00",
+   "subject": "Ignore http credentials with empty usernames",
+   "anchor": "src.poetry.utils.password_manager.PasswordManager.get_http_auth",
+   "anchor_file": "src/poetry/utils/password_manager.py",
+   "forced": [
+    "returning nothing added or removed"
+   ],
+   "changed_callers": [
+    "src.poetry.utils.authenticator.AuthenticatorRepositoryConfig.get_http_credentials"
+   ],
+   "depth": 1,
+   "stratum": "1",
+   "start_patch": "--- a/src/poetry/utils/password_manager.py\n+++ b/src/poetry/utils/password_manager.py\n@@ -192,29 +192,17 @@\n \n         self.keyring.delete_password(repo_name, \"__token__\")\n \n-    def get_http_auth(self, repo_name: str) -> dict[str, str | None] | None:\n+    def get_http_auth(self, repo_name: str) -> HTTPAuthCredential:\n         username = self._config.get(f\"http-basic.{repo_name}.username\")\n         password = self._config.get(f\"http-basic.{repo_name}.password\")\n \n-        # we only return None if both values are None or \"\"\n-        # password can be None at this stage with the username \"\"\n-        if (username is password is None) or (username == password == \"\"):\n-            return None\n-\n-        if not password:\n-            if self.use_keyring:\n-                password = self.keyring.get_password(repo_name, username)\n-            elif not username:\n-                # at this tage if username is \"\" or None, auth is invalid\n-                return None\n-\n-        if not username and not password:\n-            return None\n-\n-        return {\n-            \"username\": username or \"\",\n-            \"password\": password or \"\",\n-        }\n+        if not username:\n+            return HTTPAuthCredential()\n+\n+        if password is None and self.use_keyring:\n+            password = self.keyring.get_password(repo_name, username)\n+\n+        return HTTPAuthCredential(username=username, password=password)\n \n     def set_http_password(self, repo_name: str, username: str, password: str) -> None:\n         auth = {\"username\": username}\n",
+   "start_files": [
+    "src/poetry/utils/password_manager.py"
+   ],
+   "start_functions": [
+    "src/poetry/utils/password_manager.py::PasswordManager.get_http_auth"
+   ],
+   "after_index_patch": null,
+   "hidden_patch": "diff --git a/tests/utils/test_authenticator.py b/tests/utils/test_authenticator.py\nindex bd25702e..12d91ab6 100644\n--- a/tests/utils/test_authenticator.py\n+++ b/tests/utils/test_authenticator.py\n@@ -153,7 +153,7 @@ def test_authenticator_uses_empty_strings_as_default_password(\n     assert request.headers[\"Authorization\"] == f\"Basic {basic_auth}\"\n \n \n-def test_authenticator_uses_empty_strings_as_default_username(\n+def test_authenticator_ignores_empty_strings_as_default_username(\n     config: Config,\n     mock_remote: None,\n     repo: dict[str, dict[str, str]],\n@@ -170,8 +170,7 @@ def test_authenticator_uses_empty_strings_as_default_username(\n     authenticator.request(\"get\", \"https://foo.bar/files/foo-0.1.0.tar.gz\")\n \n     request = http.last_request()\n-    basic_auth = base64.b64encode(b\":bar\").decode()\n-    assert request.headers[\"Authorization\"] == f\"Basic {basic_auth}\"\n+    assert request.headers[\"Authorization\"] is None\n \n \n def test_authenticator_falls_back_to_keyring_url(\ndiff --git a/tests/utils/test_password_manager.py b/tests/utils/test_password_manager.py\nindex 00058e46..def300e8 100644\n--- a/tests/utils/test_password_manager.py\n+++ b/tests/utils/test_password_manager.py\n@@ -8,6 +8,7 @@ from unittest.mock import MagicMock\n \n import pytest\n \n+from poetry.utils.password_manager import HTTPAuthCredential\n from poetry.utils.password_manager import PasswordManager\n from poetry.utils.password_manager import PoetryKeyring\n from poetry.utils.password_manager import PoetryKeyringError\n@@ -40,7 +41,7 @@ def test_set_http_password(\n     (\"username\", \"password\", \"is_valid\"),\n     [\n         (\"bar\", \"baz\", True),\n-        (\"\", \"baz\", True),\n+        (\"\", \"baz\", False),\n         (\"bar\", \"\", True),\n         (\"\", \"\", False),\n     ],\n@@ -62,10 +63,10 @@ def test_get_http_auth(\n \n     if is_valid:\n         assert auth is not None\n-        assert auth[\"username\"] == username\n-        assert auth[\"password\"] == password\n+        assert auth.username == username\n+        assert auth.password == password\n     else:\n-        assert auth is None\n+        assert auth.username is auth.password is None\n \n \n def test_delete_http_password(\n@@ -134,7 +135,7 @@ def test_set_http_password_with_unavailable_backend(\n     (\"username\", \"password\", \"is_valid\"),\n     [\n         (\"bar\", \"baz\", True),\n-        (\"\", \"baz\", True),\n+        (\"\", \"baz\", False),\n         (\"bar\", \"\", True),\n         (\"\", \"\", False),\n     ],\n@@ -156,10 +157,10 @@ def test_get_http_auth_with_unavailable_backend(\n \n     if is_valid:\n         assert auth is not None\n-        assert auth[\"username\"] == username\n-        assert auth[\"password\"] == password\n+        assert auth.username == username\n+        assert auth.password == password\n     else:\n-        assert auth is None\n+        assert auth.username is auth.password is None\n \n \n def test_delete_http_password_with_unavailable_backend(\n@@ -304,7 +305,7 @@ def test_get_http_auth_from_environment_variables(\n     manager = PasswordManager(config)\n \n     auth = manager.get_http_auth(\"foo\")\n-    assert auth == {\"username\": \"bar\", \"password\": \"baz\"}\n+    assert auth == HTTPAuthCredential(username=\"bar\", password=\"baz\")\n \n \n def test_get_http_auth_does_not_call_keyring_when_credentials_in_environment_variables(\n@@ -317,7 +318,7 @@ def test_get_http_auth_does_not_call_keyring_when_credentials_in_environment_var\n     manager.keyring = MagicMock()\n \n     auth = manager.get_http_auth(\"foo\")\n-    assert auth == {\"username\": \"bar\", \"password\": \"baz\"}\n+    assert auth == HTTPAuthCredential(username=\"bar\", password=\"baz\")\n     manager.keyring.get_password.assert_not_called()\n \n \n@@ -335,7 +336,7 @@ def test_get_http_auth_does_not_call_keyring_when_password_in_environment_variab\n     manager.keyring = MagicMock()\n \n     auth = manager.get_http_auth(\"foo\")\n-    assert auth == {\"username\": \"bar\", \"password\": \"baz\"}\n+    assert auth == HTTPAuthCredential(username=\"bar\", password=\"baz\")\n     manager.keyring.get_password.assert_not_called()\n \n \n",
+   "test_files": [
+    "tests/utils/test_authenticator.py",
+    "tests/utils/test_password_manager.py"
+   ],
+   "visible_tests": [
+    "tests/utils/test_authenticator.py",
+    "tests/utils/test_password_manager.py"
+   ],
+   "gold_files": [
+    "docs/repositories.md",
+    "src/poetry/utils/authenticator.py",
+    "src/poetry/utils/password_manager.py"
+   ],
+   "gold_functions": [
+    "src/poetry/utils/authenticator.py::AuthenticatorRepositoryConfig.get_http_credentials",
+    "src/poetry/utils/password_manager.py::PasswordManager.delete_http_password",
+    "src/poetry/utils/password_manager.py::PasswordManager.get_credential"
+   ],
+   "prompt": "Function `src.poetry.utils.password_manager.PasswordManager.get_http_auth` in `src/poetry/utils/password_manager.py` was changed as shown:\n\n```diff\n@@ -192,29 +192,17 @@\n \n         self.keyring.delete_password(repo_name, \"__token__\")\n \n-    def get_http_auth(self, repo_name: str) -> dict[str, str | None] | None:\n+    def get_http_auth(self, repo_name: str) -> HTTPAuthCredential:\n         username = self._config.get(f\"http-basic.{repo_name}.username\")\n         password = self._config.get(f\"http-basic.{repo_name}.password\")\n \n-        # we only return None if both values are None or \"\"\n-        # password can be None at this stage with the username \"\"\n-        if (username is password is None) or (username == password == \"\"):\n-            return None\n-\n-        if not password:\n-            if self.use_keyring:\n-                password = self.keyring.get_password(repo_name, username)\n-            elif not username:\n-                # at this tage if username is \"\" or None, auth is invalid\n-                return None\n-\n-        if not username and not password:\n-            return None\n-\n-        return {\n-            \"username\": username or \"\",\n-            \"password\": password or \"\",\n-        }\n+        if not username:\n+            return HTTPAuthCredential()\n+\n+        if password is None and self.use_keyring:\n+            password = self.keyring.get_password(repo_name, username)\n+\n+        return HTTPAuthCredential(username=username, password=password)\n \n     def set_http_password(self, repo_name: str, username: str, password: str) -> None:\n         auth = {\"username\": username}\n```\n\nUpdate the rest of the project so its tests pass. The change to `src.poetry.utils.password_manager.PasswordManager.get_http_auth` is already in the working tree. When your changes are complete, call done.",
+   "fail_to_pass": {
+    "tests/utils/test_authenticator.py": [
+     "tests.utils.test_authenticator::test_authenticator_git_repositories",
+     "tests.utils.test_authenticator::test_authenticator_uses_certs_from_config_if_not_provided[/path/to/provided/cert-None]",
+     "tests.utils.test_authenticator::test_authenticator_uses_certs_from_config_if_not_provided[/path/to/provided/cert-path/to/provided/client-cert]",
+     "tests.utils.test_authenticator::test_authenticator_uses_certs_from_config_if_not_provided[None-None]",
+     "tests.utils.test_authenticator::test_authenticator_uses_certs_from_config_if_not_provided[None-path/to/provided/client-cert]"
+    ],
+    "tests/utils/test_password_manager.py": [
+     "tests.utils.test_password_manager::test_delete_http_password",
+     "tests.utils.test_password_manager::test_delete_http_password_with_unavailable_backend",
+     "tests.utils.test_password_manager::test_disabled_keyring_never_called"
+    ]
+   },
+   "pass_to_pass": {
+    "tests/utils/test_authenticator.py": [
+     "tests.utils.test_authenticator::test_repository_certificate_configuration_create[False-None-result5]",
+     "tests.utils.test_authenticator::test_repository_certificate_configuration_create[False-path/to/client.pem-result6]",
+     "tests.utils.test_authenticator::test_repository_certificate_configuration_create[None-None-result0]",
+     "tests.utils.test_authenticator::test_repository_certificate_configuration_create[None-path/to/client.pem-result2]",
+     "tests.utils.test_authenticator::test_repository_certificate_configuration_create[True-None-result4]",
+     "tests.utils.test_authenticator::test_repository_certificate_configuration_create[path/to/ca.pem-None-result3]",
+     "tests.utils.test_authenticator::test_repository_certificate_configuration_create[path/to/ca.pem-path/to/client.pem-result1]"
+    ],
+    "tests/utils/test_password_manager.py": [
+     "tests.utils.test_password_manager::test_delete_pypi_token",
+     "tests.utils.test_password_manager::test_delete_pypi_token_with_unavailable_backend",
+     "tests.utils.test_password_manager::test_erroneous_keyring_should_be_available",
+     "tests.utils.test_password_manager::test_fail_keyring_should_be_unavailable",
+     "tests.utils.test_password_manager::test_get_http_auth[--False]",
+     "tests.utils.test_password_manager::test_get_http_auth[-baz-False]",
+     "tests.utils.test_password_manager::test_get_http_auth[bar--True]",
+     "tests.utils.test_password_manager::test_get_http_auth[bar-baz-True]",
+     "tests.utils.test_password_manager::test_get_http_auth_does_not_call_keyring_when_credentials_in_environment_variables",
+     "tests.utils.test_password_manager::test_get_http_auth_does_not_call_keyring_when_password_in_environment_variables",
+     "tests.utils.test_password_manager::test_get_http_auth_from_environment_variables",
+     "tests.utils.test_password_manager::test_get_http_auth_with_unavailable_backend[--False]",
+     "tests.utils.test_password_manager::test_get_http_auth_with_unavailable_backend[-baz-False]",
+     "tests.utils.test_password_manager::test_get_http_auth_with_unavailable_backend[bar--True]",
+     "tests.utils.test_password_manager::test_get_http_auth_with_unavailable_backend[bar-baz-True]",
+     "tests.utils.test_password_manager::test_get_pypi_token",
+     "tests.utils.test_password_manager::test_get_pypi_token_with_env_var_not_available",
+     "tests.utils.test_password_manager::test_get_pypi_token_with_env_var_positive",
+     "tests.utils.test_password_manager::test_get_pypi_token_with_unavailable_backend",
+     "tests.utils.test_password_manager::test_keyring_raises_errors_on_keyring_errors",
+     "tests.utils.test_password_manager::test_keyring_returns_none_on_erroneous_keyring",
+     "tests.utils.test_password_manager::test_keyring_returns_none_on_locked_keyring",
+     "tests.utils.test_password_manager::test_keyring_with_chainer_backend_and_fail_keyring_should_be_unavailable",
+     "tests.utils.test_password_manager::test_keyring_with_chainer_backend_and_null_keyring_should_be_unavailable",
+     "tests.utils.test_password_manager::test_locked_keyring_should_be_available",
+     "tests.utils.test_password_manager::test_null_keyring_should_be_unavailable",
+     "tests.utils.test_password_manager::test_set_http_password",
+     "tests.utils.test_password_manager::test_set_http_password_with_unavailable_backend",
+     "tests.utils.test_password_manager::test_set_pypi_token",
+     "tests.utils.test_password_manager::test_set_pypi_token_with_unavailable_backend"
+    ]
+   },
+   "tests_run": [
+    "tests/utils/test_authenticator.py",
+    "tests/utils/test_password_manager.py"
+   ],
+   "scoring_check": {
+    "gold": true,
+    "empty": false,
+    "gold_file_f1": 1.0,
+    "gold_function_f1": 1.0
+   },
+   "id": "pilot-B-10",
+   "env": {
+    "python_version": "3.12",
+    "strategy": "pip",
+    "node_version": null,
+    "pm_version": null,
+    "built": false
+   }
+  }
+ ]
+}
