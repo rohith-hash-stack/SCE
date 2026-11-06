@@ -172,3 +172,20 @@ system's 22.22.0. It also works with no Node installed (checked).
 
 **`run_tests`** (`shared_tools.SharedTools`) runs through whichever builder fits the repository (`make_env`). Both
 were in place before the shared tools were built (BUILD_PLAN, section 6, item 1).
+
+## 2026-11-06: the qwen notice check ran on Kaggle (results at 2bbf531b)
+
+- **JS/TS smoke test on Kaggle (install only):** h3 at `f0e17808` **passes**: Node 22.23.4 from the release index,
+  pnpm 12.3.4, install in 4.1 s. No new structural problem.
+- **Notice:** acted on in 5 of 5 runs (R3-5, results table).
+- **All 5 runs hit the 30-turn cap without `done`** (~200k of the 300k budget, ~2 minutes each). Replaying seed 42's
+  calls locally against the real tools shows why:
+  - turn 3: `edit_file` `old="except ValueError:"` is refused because it occurs twice in the file (correct behaviour);
+  - turns 4–30: the model reads lines 159–163, then sends
+    `old="except ValueError:\n              return default"`, with 14 spaces. The file has 12. `read_file` prints
+    `f"{i:>5}  {line}"`, so the model took the gutter's two separator spaces as part of the indentation. Every later
+    edit fails "not found"; the model widens the read by one line each time and repeats.
+- **Shared-tool defect, not a model result.** Both versions run the same `read_file` and `edit_file`, so parity holds.
+  It would still cost resolved runs and turns in both arms, so it is fixed before the pilot.
+- **Seeds:** 4 of the 5 seeds produced byte-identical 30-turn trajectories at temperature 0.2. Seed 3003 diverged at
+  turn 4. Sampling does vary; the model is very peaked on this task.

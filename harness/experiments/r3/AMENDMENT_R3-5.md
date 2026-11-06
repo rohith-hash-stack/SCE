@@ -106,7 +106,7 @@ Written before the R3 harness is built or frozen, and before any R3a model call.
 | E1 clean edit (Python repo; TypeScript repo) | **pass** on both: werkzeug @ 2adaad1ab683, unstorage @ 5781aae96f7f; 9 answers each, byte-identical to an independent cold build | 2026-11-06 | see the note below |
 | E2 broken edit (Revision 2's (a)-(e)) | **pass** on both: (a) answers, notice aside, byte-identical to the cold build at the last parsable version; (b) the notice names the file, edit 1 and its hash; (c) the disk holds the broken bytes; (d) a clean-file answer referencing the gated file carries the notice; (e) `related_code` serves last-good entries with the notice | 2026-11-06 | |
 | E3 consecutive edits (clean, broken, clean) | **pass** on both: each step byte-identical to its snapshot's cold build; the middle step carries the edit-1 notice; the last carries none and shows edit 3 | 2026-11-06 | |
-| qwen notice check (5 runs) | not yet run: before the pilot | | |
+| qwen notice check (5 runs) | **acts on the notice in 5 of 5**: werkzeug @ 2adaad1ab683, `qwen2.5-coder:14b-instruct-q8_0`, seeds 42, 1001, 2002, 3003, 4004. In every run the notice appears on turn 1 (`prism_change_context` on `Headers.get`) and the next call is `read_file` on the named file. No change to the notice's wording or the refusal is needed | 2026-11-06 | code 46a80b8b; results 2bbf531b, `reports/r3/notice_check/` |
 
 **How E1-E3 were run:**
 - Command: `python -m harness.experiments.r3.equivalence CLONE SCRATCH`, or `tests/test_r3_equivalence.py` with
@@ -128,6 +128,13 @@ Written before the R3 harness is built or frozen, and before any R3a model call.
   answer, outside the cap**. That is a few dozen tokens per gated file, the same in both versions, so a notice never
   changes what is served.
 - The passes above are with this placement.
+
+**Note from the qwen notice check (2026-11-06):** the notice result is above. Separately, all 5 runs ended at the
+30-turn cap without calling `done`. From turn 3 on, every `edit_file` failed: first because `except ValueError:` occurs
+twice, then because the model copied `read_file`'s line-number gutter (two separator spaces) into the indentation
+of its `old` text (14 spaces where the file has 12). That is a shared-tool defect (it affects both versions equally),
+not a notice result; it is in IMPLEMENTATION_LOG.
+
 
 ## Build cost (replaces the 2-3 day estimate)
 
