@@ -141,3 +141,34 @@ genuinely needed."
 - a per-repository install cache.
 
 The pnpm store already caches between revisions here.
+
+## 2026-11-06: both environment builders pass on R3's whole pool (36 of 36, one version of the code: `a09967d4`)
+
+**Per repository, both the earliest post-cutoff revision and HEAD:**
+- install;
+- find the tests;
+- a named test file passes, with machine-readable per-test output;
+- 3 runs give the same result.
+
+| builder | repositories | revisions passing |
+|---|---|---|
+| Python (`pybuild`) | sqlglot, poetry, litestar, packaging, multidict, yarl, typer, scrapy, aiohttp, werkzeug, tornado | 22 of 22 |
+| JS/TS (`jsbuild`) | h3, unstorage, execa, unplugin, msw, nitro, vitest | 14 of 14 |
+
+**What the Python builder needed** (each found by a failing revision, none structural):
+- dependencies resolved as of the commit date when there is no lockfile (`uv --exclude-newer`): scrapy's `w3lib`;
+- Poetry's test and dev groups (poetry's `httpretty`);
+- git dependencies on a branch pinned to the branch's commit as of that date, kept through a `--no-deps` reinstall
+  (poetry's `poetry-core`);
+- C extensions built first, with a pure-Python retry (multidict's C-extension test variants);
+- the repository's own pytest `addopts`, minus coverage and parallelism options:
+  - aiohttp's `-p no:aiohttp` prevents a double plugin registration;
+  - a TOML-list `addopts` is used token for token (packaging's `-m "not property"`).
+
+**The JS/TS builder now resolves Node from the release index only:** the newest 22.x where the spec allows it,
+otherwise the newest satisfying LTS release. It never uses the machine's own Node, so this container and Kaggle
+resolve every revision identically. That is why these runs show Node 22.23.4 where the earlier ones showed the
+system's 22.22.0. It also works with no Node installed (checked).
+
+**`run_tests`** (`shared_tools.SharedTools`) runs through whichever builder fits the repository (`make_env`). Both
+were in place before the shared tools were built (BUILD_PLAN, section 6, item 1).
