@@ -226,3 +226,32 @@ hash-committed file changes. The entry above is accurate as written: the replay,
   `budget`; the analysis and the pilot report must carry it.)
 - **Next:** re-run the notice check on Kaggle (5 calls, same setup). The criterion is whether the agent reaches `done`
   in all 5 runs. If not, there is a second bug: it is reported, not piloted around.
+
+## 2026-11-06: notice-check re-run after the shared-tool fix: the fix works (results at af5240ac)
+
+Code c60381da, the same setup and revisions, results in `reports/r3/notice_check_2/`.
+
+- **Criterion met:** all 5 runs end with `done` (`ended_with_done: 5`, `stuck_at_turn_cap: 0`). That is 6 turns each,
+  ~26k tokens of the 300k budget, ~25 s of model time. Before the fix it was 30 turns, ~200k tokens and ~2 minutes per
+  run.
+- **Notice:** shown on turn 1 in all 5 runs, and the next call is `read_file` on the named file (5 of 5, as before).
+- **Same sequence in every run:**
+  1. `prism_change_context`;
+  2. `read_file` 122–163;
+  3. `edit_file` on `except ValueError:`, refused because it occurs twice;
+  4. `read_file` around lines 160–163;
+  5. `edit_file` with the 12-space indent, which succeeds at line 162;
+  6. `done`.
+  The whitespace hint was never needed: the tab separator alone fixed it.
+- **Final diff checked by replaying each run's calls** (seeds 42, 2002, 3003, 4004; 1001 is byte-identical to 42):
+  `Headers.get` now has `except (ValueError, TypeError):`, and `getlist`'s `except ValueError:` is untouched. That is
+  the requested change and nothing else.
+- **Observation, not a criterion:** no run repaired the line the check broke in `Headers.__repr__` (line ~603). The
+  task does not ask for it. The agent read only lines 122–163, so the final tree still does not parse. The notice
+  works as a pointer to the file; it does not make the agent look for the break. Pilot tasks start from a clean
+  tree, so this matters only for the agent's own broken edits mid-run. The pilot's per-turn logs (parse gate, notice
+  turns) will show whether agents leave their own breaks behind.
+- **Seeds:** 42 and 1001 are byte-identical over all 6 turns. 2002, 3003 and 4004 differ only in turn 4's read range
+  and in the wording of the `done` summary. This is consistent with the seed-variance note above.
+- **Status:** the harness is ready for the pilot apart from the items BUILD_PLAN lists before it: pilot task mining
+  and gating for both families, the analysis code, and the explicit `done`/stuck reporting (section 4, item 6).
