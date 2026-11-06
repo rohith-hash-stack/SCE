@@ -255,3 +255,15 @@ Code c60381da, the same setup and revisions, results in `reports/r3/notice_check
   and in the wording of the `done` summary. This is consistent with the seed-variance note above.
 - **Status:** the harness is ready for the pilot apart from the items BUILD_PLAN lists before it: pilot task mining
   and gating for both families, the analysis code, and the explicit `done`/stuck reporting (section 4, item 6).
+
+## 2026-11-06: two notes entering the pilot (log entries only; no amendment)
+
+**1. Open question for the pilot: the planted-break case.** Notice check 2 verified notice → read →
+complete-scoped-task (5/5). It did not test notice → read → repair-agent-generated-break. The planted break in
+Headers.__repr__ was outside the task scope, and the agent correctly left it alone in all 5 runs. The pilot's per-turn
+logs and the stuck-vs-unresolved distinction will show whether an agent-generated break is repaired, stalls, or counts
+as unresolved. Genuine open question entering the pilot, not a covered case.
+
+**2. Cost picture for R3a.** Real turn counts were 6 per run on notice-check tasks, against the earlier 15–25 estimate.
+If R3 tasks average 6–12 turns, R3a's call count is likely ~2–3× lower than the ~10–17k pre-run estimate. The pilot's
+turn distribution will give the real number; do not re-plan on this yet, but note it for the R3a cost forecast.
