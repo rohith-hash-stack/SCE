@@ -103,10 +103,31 @@ Written before the R3 harness is built or frozen, and before any R3a model call.
 
 | item | result | date | commit |
 |---|---|---|---|
-| E1 clean edit (Python repo; TypeScript repo) | not yet run: the mechanism is not built | | |
-| E2 broken edit | not yet run | | |
-| E3 consecutive edits | not yet run | | |
+| E1 clean edit (Python repo; TypeScript repo) | **pass** on both: werkzeug @ 2adaad1ab683, unstorage @ 5781aae96f7f; 9 answers each, byte-identical to an independent cold build | 2026-11-06 | see the note below |
+| E2 broken edit (Revision 2's (a)-(e)) | **pass** on both: (a) answers, notice aside, byte-identical to the cold build at the last parsable version; (b) the notice names the file, edit 1 and its hash; (c) the disk holds the broken bytes; (d) a clean-file answer referencing the gated file carries the notice; (e) `related_code` serves last-good entries with the notice | 2026-11-06 | |
+| E3 consecutive edits (clean, broken, clean) | **pass** on both: each step byte-identical to its snapshot's cold build; the middle step carries the edit-1 notice; the last carries none and shows edit 3 | 2026-11-06 | |
 | qwen notice check (5 runs) | not yet run: before the pilot | | |
+
+**How E1-E3 were run:**
+- Command: `python -m harness.experiments.r3.equivalence CLONE SCRATCH`, or `tests/test_r3_equivalence.py` with
+  `R3_EQ_REPOS` and `R3_EQ_SCRATCH` set.
+- The live side is one `WorkingIndex` + `ToolLayer` over a worktree the test edits. The cold side is a fresh worktree
+  per snapshot, with its own index built from nothing.
+- 9 answers per snapshot:
+  - change context of the edited function, a caller in another file, a function in an unedited file, and a
+    clean-file callee;
+  - blast radius;
+  - digests of three functions;
+  - a new-function context;
+  - one `prism_ask` and one `related_code` query.
+
+**Note found by the first E2 run (2026-11-06; awaiting the team's sign-off, before the freeze):**
+- The first run failed E2(a) on the 3 answers that reach the 4,000-token cap. The notice had been placed inside the
+  cap, so it moved the cut, and the served body was an exact prefix of the cold one.
+- The tool layer now caps the tool's own answer at 4,000 tokens, and places the notice **in front of the capped
+  answer, outside the cap**. That is a few dozen tokens per gated file, the same in both versions, so a notice never
+  changes what is served.
+- The passes above are with this placement.
 
 ## Build cost (replaces the 2-3 day estimate)
 
