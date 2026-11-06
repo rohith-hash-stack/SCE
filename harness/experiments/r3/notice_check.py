@@ -14,7 +14,9 @@
 - whether a notice was shown;
 - the turn it appeared on;
 - whether the agent called `read_file` on the named file within the next 2 turns;
-- the tools it called instead.
+- the tools it called instead;
+- how the run ended (`done`, `turn_cap` or `budget`). Since the shared-tool fix of 2026-11-06, the re-run's criterion
+  is that every run ends with `done`; a run stuck at the turn cap points to a second bug.
 
 `summarize` writes the result that goes in R3-5's results table.
 """
@@ -55,7 +57,12 @@ def make_task(clone: str, rev: str) -> dict:
 def analyze(jsonl_path: str) -> dict:
     turns = [json.loads(ln) for ln in open(jsonl_path)]
     first = next((t for t in turns if t.get("notice")), None)
-    rec = {"turns": len(turns), "notice_shown": first is not None}
+    end = None
+    final = jsonl_path[:-len(".jsonl")] + ".score.json"
+    if os.path.exists(final):
+        end = json.load(open(final)).get("end")
+    rec = {"turns": len(turns), "end": end, "done_called": any(t.get("tool") == "done" for t in turns),
+           "notice_shown": first is not None}
     if first is None:
         rec["tools"] = [t.get("tool") for t in turns]
         return rec
@@ -103,7 +110,9 @@ def main(argv=None) -> int:
     shown = [r for r in runs.values() if r["notice_shown"]]
     out = {"runs": runs, "runs_done": len(runs), "notice_shown": len(shown),
            "read_named_file_within_2_turns": sum(r["read_named_file"] for r in shown),
-           "read_named_file_at_all": sum(r["read_named_file_ever"] for r in shown)}
+           "read_named_file_at_all": sum(r["read_named_file_ever"] for r in shown),
+           "ended_with_done": sum(1 for r in runs.values() if r["end"] == "done"),
+           "stuck_at_turn_cap": sum(1 for r in runs.values() if r["end"] == "turn_cap")}
     json.dump(out, open(os.path.join(a.out, "summary.json"), "w"), indent=1)
     print(json.dumps(out, indent=1))
     return 0

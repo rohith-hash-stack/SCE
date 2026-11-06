@@ -1,10 +1,11 @@
 """Render the R3 Kaggle cell (the qwen notice check), pinned to a code commit and to the repositories' revisions.
 
-    python -m harness.experiments.r3.cell COMMIT SMOKE_REV NOTICE_REV   # kaggle/r3_cell.template.py -> kaggle/r3_cell.py
+    python -m harness.experiments.r3.cell COMMIT SMOKE_REV NOTICE_REV RESULTS_PATH   # template -> kaggle/r3_cell.py
 
 - COMMIT: the commit holding the harness;
 - SMOKE_REV: the h3 revision for the install-only smoke test;
-- NOTICE_REV: the werkzeug revision for the notice check.
+- NOTICE_REV: the werkzeug revision for the notice check;
+- RESULTS_PATH: where results go under the repository (a new path per run: finished runs there are skipped).
 
 It fills in the commit, the git tree ids of `src` and `harness` at that commit, and the two revisions. The cell
 refuses to run if the code it checks out differs.
@@ -25,12 +26,13 @@ def git(*args: str) -> str:
 
 def main(argv=None) -> int:
     args = argv if argv is not None else sys.argv[1:]
-    if len(args) != 3 or not all(re.fullmatch(r"[0-9a-f]{40}", a) for a in args[1:]):
+    if len(args) != 4 or not all(re.fullmatch(r"[0-9a-f]{40}", a) for a in args[1:3]) \
+            or not re.fullmatch(r"reports/r3/[a-z0-9_]+", args[3]):
         raise SystemExit(__doc__)
     commit = git("rev-parse", args[0])
     fills = {"@@CODE_COMMIT@@": commit, "@@SRC_TREE@@": git("rev-parse", f"{commit}:src"),
              "@@HARNESS_TREE@@": git("rev-parse", f"{commit}:harness"), "@@SMOKE_REV@@": args[1],
-             "@@NOTICE_REV@@": args[2]}
+             "@@NOTICE_REV@@": args[2], "@@RESULTS_PATH@@": args[3]}
     text = (ROOT / "kaggle" / "r3_cell.template.py").read_text()
     for k, v in fills.items():
         if k not in text:

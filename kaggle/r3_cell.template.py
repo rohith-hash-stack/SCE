@@ -45,7 +45,7 @@ CHECKPOINT_MIN = 10
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
-RESULTS_PATH = "reports/r3/notice_check"
+RESULTS_PATH = "@@RESULTS_PATH@@"
 CACHE = f"{WORK}/r3cache"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
