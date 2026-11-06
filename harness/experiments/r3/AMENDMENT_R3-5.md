@@ -260,3 +260,18 @@ Two changes; nothing else in R3-5 or Revision 1 changes.
 
 **Edit and hash terms (Revision 1):** confirmed by the team as written. n is the file's edit count (0 is the start
 state); the hash is the first 12 hex digits of the sha256 of the bytes shown.
+
+## Revision 3 (2026-11-06; before the harness is frozen, before any R3a call): the notice sits outside the cap
+
+- The note above, "awaiting the team's sign-off", is approved as this revision.
+- **Rule:** "Tool responses cap content at 4,000 tokens; the staleness notice (file name, edit number, hash) is added
+  outside this cap because it is metadata about the content, not content itself. Notices count against the run's
+  300,000-token total budget but not against the per-call content cap. Both arms carry the notice on gated files
+  symmetrically. The pilot will record the actual notice overhead per run and report it alongside the primary
+  results."
+- **Rationale:** "Without the fix, E2 failed because notices displaced content, truncating the body compared to a cold
+  build. The equivalence test correctly caught this. Moving notices outside the cap preserves the
+  content-equivalence invariant the amendment requires."
+- **Implementation:** `harness/experiments/r3/tools.py`, `ToolLayer.call`, which returns the notice followed by the
+  capped answer. The token accounting (still to be built) counts the whole response, notice included, against the
+  300,000 tokens.
