@@ -118,6 +118,8 @@ def main(argv=None) -> int:
     p.add_argument("--cache-js", required=True)
     p.add_argument("--ids", nargs="*")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--versions", nargs="*", default=["PRISM", "BASELINE"])
+    p.add_argument("--scripts", nargs="*", default=["gold", "empty"])
     a = p.parse_args(argv)
     from harness.experiments.r3.runner import run_task
     clones = dict(s.split("=", 1) for s in a.repos)
@@ -128,9 +130,11 @@ def main(argv=None) -> int:
         if a.ids and t["id"] not in a.ids:
             continue
         cache = a.cache_js if t["language"] == "js" else a.cache_py
-        for version in ("PRISM", "BASELINE"):
-            for kind, seed, model in (("gold", a.seed, Script(gold_calls(t, clones[t["repo"]], version))),
-                                      ("empty", a.seed + 1, Script([]))):
+        for version in [v for v in ("PRISM", "BASELINE") if v in a.versions]:
+            scripts = [("gold", a.seed, lambda: Script(gold_calls(t, clones[t["repo"]], version))),
+                       ("empty", a.seed + 1, lambda: Script([]))]
+            for kind, seed, make in [x for x in scripts if x[0] in a.scripts]:
+                model = make()
                 res = run_task(t, version, seed, os.path.abspath(clones[t["repo"]]), a.out, cache, model, 30)
                 want = "resolved" if kind == "gold" else "unresolved"
                 ok = res.get("outcome") == want

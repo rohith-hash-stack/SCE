@@ -77,6 +77,9 @@ tools answer from the **current** tree. The index is rebuilt lazily on the next 
   3 times.
 - Gate attrition reported per repository; freeze with sha256.
 - Estimate: 2-3 days, most of it environment time.
+- **Depth requirement (2026-11-06, after the pilot's mining):** R3a's mining reports the caller-count distribution of
+  Family B (1, 2, 3-4, 5+ changed callers), per repository, mined and gated. If the main window skews to 1-caller
+  tasks, the scaling test is unrunnable, and mining must be re-strategized before R3a's hash-commit.
 
 ## 4. Pilot (after the builders and the harness; not run yet)
 
@@ -129,3 +132,27 @@ Kaggle cell:
 6. scoring;
 7. the Kaggle cell (the JS/TS install smoke test first);
 8. the qwen notice check (5 calls).
+
+## 7. Process per run (R3a; a build requirement, 2026-11-06)
+
+"R3a runs each task in its own process. The Kaggle cell must spawn per-task subprocesses, not reuse a resident
+process. Verified by a 20-run sequential test showing memory flat within a run and released after each."
+
+- **Why:** the pilot's dry run was killed at 4.2 GB after about 30 runs in one process. Each run's index stayed
+  resident. `ToolLayer.close()` frees most of it, but about 8 MB per run still remains, which is too much over 640
+  runs.
+- **How:** the cell's driver launches `python -m harness.experiments.r3.runner TASK VERSION SEED ...` once per run
+  and waits for it. The driver holds no index, model or environment of its own. Resume stays per run (a finished
+  run's `.score.json` is never repeated).
+- **The 20-run memory test** (before the pilot; no model calls; `dryrun.py`'s scripted models through the same
+  per-run subprocess path the cell uses):
+  - 20 runs in sequence on pilot tasks: 5 tasks (both languages), each as (PRISM, gold) and (BASELINE, empty), in
+    two passes, so every run is measured twice;
+  - the driver's RSS and each child's RSS sampled once a second;
+  - **pass when:**
+    - the driver's RSS grows by less than 50 MB over the 20 runs;
+    - every child has exited, and its memory is released, before the next one starts;
+    - within a run, the child's RSS does not keep growing (the peak of its last quarter of samples is at most 100 MB
+      above the peak of the first three quarters);
+    - the children's peaks show no trend (each run's second peak is within 10% of its first).
+  - The test is `memtest.py`. Its result is recorded here and in IMPLEMENTATION_LOG before the pilot cell is built.
