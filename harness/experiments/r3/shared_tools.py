@@ -49,6 +49,27 @@ class ToolCallError(Exception):
     pass
 
 
+def whitespace_matches(text: str, old: str) -> list[int]:
+    """1-based line numbers where `old` matches `text` line by line once leading and trailing whitespace is ignored.
+
+    The first line of `old` may end a file line and the last may begin one, as an exact span may.
+    """
+    want = [ln.strip() for ln in old.strip("\n").split("\n")]
+    if not any(want):
+        return []
+    have = [ln.strip() for ln in text.split("\n")]
+    k, hits = len(want), []
+    for i in range(len(have) - k + 1):
+        win = have[i:i + k]
+        if k == 1:
+            ok = want[0] in win[0]
+        else:
+            ok = (win[0].endswith(want[0]) and win[-1].startswith(want[-1]) and win[1:-1] == want[1:-1])
+        if ok:
+            hits.append(i + 1)
+    return hits
+
+
 class SharedTools:
     NAMES = ("read_file", "list_dir", "grep", "edit_file", "run_tests", "done")
 
@@ -97,7 +118,9 @@ class SharedTools:
             lines = fh.read().decode("utf8", "replace").splitlines()
         start = max(1, int(start))
         end = len(lines) if end is None else min(len(lines), int(end))
-        body = "\n".join(f"{i:>5}  {lines[i - 1]}" for i in range(start, end + 1))
+        # The number and the line are separated by one tab: indentation is spaces, so the prefix cannot be read as
+        # part of it (the qwen notice check, 2026-11-06: a space gutter was copied into `edit_file`'s `old` text).
+        body = "\n".join(f"{i}\t{lines[i - 1]}" for i in range(start, end + 1))
         return f"{path} (lines {start}-{end} of {len(lines)})\n{body}"
 
     def _list_dir(self, path: str = ".") -> str:
@@ -140,6 +163,12 @@ class SharedTools:
             text = fh.read()
         n = text.count(old)
         if n == 0:
+            near = whitespace_matches(text, old)
+            if len(near) == 1:
+                raise ToolCallError(
+                    f"the text to replace was not found in {path}, but it matches once apart from whitespace, at line "
+                    f"{near[0]}. Copy the indentation exactly; the line-number prefix that read_file shows (the number "
+                    f"and a tab) is not part of the file")
             raise ToolCallError(f"the text to replace was not found in {path}")
         if n > 1:
             raise ToolCallError(f"the text to replace occurs {n} times in {path}; give a longer, unique span")

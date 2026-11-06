@@ -189,3 +189,40 @@ were in place before the shared tools were built (BUILD_PLAN, section 6, item 1)
   It would still cost resolved runs and turns in both arms, so it is fixed before the pilot.
 - **Seeds:** 4 of the 5 seeds produced byte-identical 30-turn trajectories at temperature 0.2. Seed 3003 diverged at
   turn 4. Sampling does vary; the model is very peaked on this task.
+
+## 2026-11-06: shared-tool fix for the edit loop (follow-up to 4ccc16a5; no amendment)
+
+This is a shared-tool bug, not a change to PRISM's behaviour. Both versions get the fix equally. No rule or
+hash-committed file changes. The entry above is accurate as written: the replay, the 14-vs-12 spaces, ~200k tokens and
+~2 minutes per run.
+
+- **`read_file`:** each line is now `{n}\t{line}` (was `f"{n:>5}  {line}"`). Indentation is spaces and the separator is
+  one tab, so the prefix cannot be read as indentation. `read_file` is the only tool that renders line numbers. `grep`
+  keeps git grep's `path:n:line`, whose separator is a colon.
+- **`edit_file`:** when the text is not found but matches exactly once apart from leading and trailing whitespace
+  (line by line; the first line may end a file line and the last may begin one), the error says so, gives the line,
+  and says the line-number prefix (the number and a tab) is not part of the file. It does not apply the edit. With no
+  whitespace match, or with more than one, the error is unchanged.
+- **Regression test** (`tests/test_r3_shared_tools_edit.py`, 7 tests):
+  - It uses a file shaped like werkzeug's `headers.py` at 2adaad1a: `return default` on line 163 and a second
+    `except ValueError:`.
+  - It reads lines 159–163 and counts line 163's indentation as the model did: drop the number, and one tab if there
+    is one.
+  - It then sends the edit.
+  - With the tab: 12 spaces, and the edit succeeds.
+  - With the old gutter: 14 spaces, and the edit is "not found".
+  - Put back the old gutter, and the two tab tests fail (checked). With the fix, all 7 pass.
+- **Replay on real werkzeug at 2adaad1a** with the fixed tools:
+  - turn 3 is still refused (2 occurrences);
+  - turn 4 shows `163\t            return default`;
+  - the Kaggle run's 14-space edit gets the new error naming line 162;
+  - the 12-space edit succeeds.
+- **Seed variance:** At temp 0.2, qwen2.5-coder:14b produced identical turns on 4/5 seeds for the notice-check task.
+  Two-seed results should be read knowing the model is nearly deterministic on shallow tasks; variance is expected to
+  come from task depth, which is what the scaling test measures.
+- **Before the pilot, not now:** the pilot logs `done` explicitly per run, per arm. A run that reaches the 30-turn cap
+  without `done` is a named failure condition in the analysis ("stuck"), not silently "unresolved". This tells "PRISM
+  didn't help" apart from "the agent got stuck". (The run summary already records `end`: `done`, `turn_cap` or
+  `budget`; the analysis and the pilot report must carry it.)
+- **Next:** re-run the notice check on Kaggle (5 calls, same setup). The criterion is whether the agent reaches `done`
+  in all 5 runs. If not, there is a second bug: it is reported, not piloted around.

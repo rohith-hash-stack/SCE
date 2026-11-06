@@ -96,6 +96,9 @@ tools answer from the **current** tree. The index is rebuilt lazily on the next 
   4. truncation and budget or turn-cap hits are logged per version;
   5. the scoring path, end to end on synthetic answers: the developer's patch scores resolved on every pilot task,
      and an empty patch scores unresolved.
+  6. (added 2026-11-06, after the qwen notice check) `done` is logged explicitly per run, per version. A run that
+     reaches the turn cap without `done` is a named failure condition in the analysis ("stuck"), reported apart from
+     "unresolved", so that "PRISM didn't help" is told apart from "the agent got stuck".
 
 ## 5. Critical path
 
