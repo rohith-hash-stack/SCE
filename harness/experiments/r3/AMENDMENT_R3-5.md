@@ -275,3 +275,31 @@ state); the hash is the first 12 hex digits of the sha256 of the bytes shown.
 - **Implementation:** `harness/experiments/r3/tools.py`, `ToolLayer.call`, which returns the notice followed by the
   capped answer. The token accounting (still to be built) counts the whole response, notice included, against the
   300,000 tokens.
+
+## Revision 4 (2026-11-06; before the harness is frozen, before any R3a call): the JS/TS builder's stop rule
+
+**What it supersedes:**
+- The one-week rule in the hash-committed `README.md` (the recommendations table, row "JS/TS builder contingency":
+  "within 5 working days of starting").
+- Every later reference to a builder deadline, including BUILD_PLAN's "2026-11-12".
+- The hash-committed file is not edited; this revision holds.
+
+**The rule:**
+- ~~"If the builder does not pass its own check within 5 working days of starting, on all 7 JS/TS repositories ...,
+  R3 round 1 is Python-only"~~ → "The JS/TS builder runs until one of the following:
+  - Self-check passes on all 7 repos → R3a runs full-scope (both languages).
+  - Any repo fails its self-check twice with a structural cause (Node version incompatible, no working test runner,
+    no reproducible build step) → R3a runs Python-only. The existing "no R3" stop condition applies if the
+    Python-only Family B pool is <50 after gating. Flake failures and missing-package failures don't count; only
+    structural failures trigger the rule.
+
+  No calendar deadline. The stop is triggered by a structural failure, not by elapsed time."
+
+**Rationale:**
+- "The original one-week rule was written when an external team deadline existed. That deadline no longer exists
+  (single-builder project). The rule's intent — don't let the builder block R3 indefinitely — is preserved by tying
+  the stop condition to a structural failure signal (two consecutive failures with a structural cause) rather than to
+  elapsed calendar time. Flakes and missing packages are not structural; they are fixable and do not trigger the
+  rule."
+
+**Unchanged:** the Python-only fallback's content, the "no R3" stop condition, task mining and every other rule.

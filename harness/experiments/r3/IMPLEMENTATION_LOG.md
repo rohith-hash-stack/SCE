@@ -76,3 +76,9 @@ classification use):
 **Effect on R3:** R3's `prism_blast_radius` uses `include_tests=False`, so this fix changes R3's output: blast radius
 no longer lists test helpers. It is part of the code R3 freezes. It does not affect R1 or R2: both are complete, and
 their frozen tasks and contexts are unchanged.
+
+## 2026-11-06: project framing
+
+"2026-11-06 Project framing: single-builder, no external team. 'Team approval' / '[TBD — team]' / 'end of week'
+language retired. Design choices recorded in amendments as before; clear reviewer decisions surfaced only when
+genuinely needed."
