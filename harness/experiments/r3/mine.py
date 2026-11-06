@@ -34,7 +34,10 @@ caller and a test change"):
 - **Start state:** the parent. **Depth stratum:** the number of existing repository functions the body calls
   (2, 3-4, 5+).
 
-**Both families:**
+**Both families:** backports, cherry-picks and repeats of one diff (`git patch-id`) are dropped first
+(`window_commits`): two tasks from one change are not independent.
+
+**Both families, per task:**
 - `hidden_patch` is the commit's change to its test files, applied only for gating and scoring.
 - `visible_tests` are the changed test files that already exist at the parent.
 - `gold_files` and `gold_functions` here are provisional (the commit's source changes from the parent). The gate
@@ -70,9 +73,34 @@ LANGUAGE = {"vitest": "js", "nitro": "js", "h3": "js", "execa": "js", "unstorage
             "unplugin": "js"}
 
 
-def window_commits(clone: str, since: str, until: str) -> list[str]:
-    return git(clone, "rev-list", "--no-merges", f"--since={since}T00:00:00Z", f"--until={until}T23:59:59Z",
-               "HEAD").split()
+BACKPORT = re.compile(r"\bbackport\b|cherry picked from commit", re.I)
+
+
+def window_commits(clone: str, since: str, until: str) -> tuple[list[str], dict]:
+    """The window's non-merge commits, oldest first, without backports and repeats of one change.
+
+    - A backport or cherry-pick (its message says so: aiohttp's `[PR #9771/e80d5854 backport][3.10] ...`) repeats a
+      change made elsewhere, so it is not a separate task.
+    - Of commits with the same `git patch-id` (the same diff), only the first is kept.
+    Two tasks from one change are not independent, which the tests over tasks assume.
+    """
+    commits = git(clone, "rev-list", "--reverse", "--no-merges", f"--since={since}T00:00:00Z",
+                  f"--until={until}T23:59:59Z", "HEAD").split()
+    kept, seen, n_backport, n_repeat = [], set(), 0, 0
+    for c in commits:
+        if BACKPORT.search(git(clone, "log", "-1", "--format=%B", c)):
+            n_backport += 1
+            continue
+        diff = subprocess.run(["git", "-C", clone, "show", "--format=", c], capture_output=True).stdout
+        pid = subprocess.run(["git", "-C", clone, "patch-id", "--stable"], input=diff, capture_output=True,
+                             text=False).stdout.split()[:1]
+        if pid and pid[0] in seen:
+            n_repeat += 1
+            continue
+        if pid:
+            seen.add(pid[0])
+        kept.append(c)
+    return kept, {"commits_in_window": len(commits), "backports_dropped": n_backport, "repeats_dropped": n_repeat}
 
 
 def commit_meta(clone: str, c: str) -> dict:
@@ -327,7 +355,7 @@ def main(argv=None) -> int:
         name, _, rest = spec.partition("=")
         clone, _, fams = rest.partition(":")
         fams = fams or "BN"
-        commits = window_commits(clone, a.since, a.until)
+        commits, wcounts = window_commits(clone, a.since, a.until)
         for fam in fams:
             key = f"{name}:{fam}"
             if key in yld:
@@ -336,7 +364,7 @@ def main(argv=None) -> int:
                 tasks, counts = mine_b(name, clone, commits, scratch)
             else:
                 tasks, counts = mine_n(name, clone, commits)
-            yld[key] = {"repo": name, "family": fam, "commits_in_window": len(commits), **counts,
+            yld[key] = {"repo": name, "family": fam, **wcounts, "commits_kept": len(commits), **counts,
                         "candidates": len(tasks)}
             allc[fam] = [t for t in allc[fam] if t["repo"] != name] + tasks
             (out / f"candidates_{fam}.json").write_text(json.dumps(allc[fam], indent=1) + "\n")
