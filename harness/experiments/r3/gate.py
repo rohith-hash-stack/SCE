@@ -69,9 +69,19 @@ def runnable_tests(env, task: dict) -> list[str]:
         TEST_PATH if getattr(env, "d", {}).get("runner") == "pytest" else None
     files = [f for f in task["test_files"] if f in known or (named is not None and named.search(f)
                                                               and os.path.isfile(os.path.join(env.work, f)))]
+    snap = [snapshot_owner(f) for f in task["test_files"] if "__snapshots__/" in f and f.endswith(".snap")]
+    files += [f for f in snap if f and f not in files and os.path.isfile(os.path.join(env.work, f))
+              and (f in known or (named is not None and named.search(f)))]
     if files:
         return files
     return fixture_readers(env, task["test_files"])
+
+
+def snapshot_owner(path: str) -> str | None:
+    """The test file a snapshot belongs to: `dir/__snapshots__/name.test.ts.snap` -> `dir/name.test.ts` (vitest and
+    jest)."""
+    d, _, name = path.rpartition("__snapshots__/")
+    return (d + name[:-len(".snap")]) if name.endswith(".snap") else None
 
 
 FIXTURE_READERS_MAX = 3
