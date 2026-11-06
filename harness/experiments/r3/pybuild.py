@@ -17,8 +17,10 @@ Per repository and revision (a fresh git worktree; the clone is never modified):
      - pytest.
 
      Requirement files and tox deps are best effort: a pin that no longer installs does not stop the build.
-   - C extensions that have pure-Python fallbacks are built without them (`*_NO_EXTENSIONS=1`). Git submodules are
-     initialised.
+   - with no lockfile, every dependency is resolved as of the revision's commit date (`uv --exclude-newer`);
+   - Poetry's test and dev groups (`[tool.poetry.group.*]`) are installed too;
+   - C extensions are built; if that install fails, it is redone without them (`*_NO_EXTENSIONS=1`). Git submodules
+     are initialised.
 3. **Tests:** pytest on a named file (and optional test ids), with `--junitxml`, giving a per-test outcome.
 
 **Self-check per revision:**
@@ -106,7 +108,9 @@ class PyEnv:
         versions = [v for v in PY_PREFERENCE if _spec_ok(v, spec)]
         if not versions:
             raise SetupError("structural", f"no supported Python satisfies requires-python {spec!r}")
-        self.env = dict(os.environ, **NO_EXT, UV_CACHE_DIR=os.path.join(self.cache, "uv-cache"), PYTHONDONTWRITEBYTECODE="1")
+        self.env = dict(os.environ, SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0",
+                        UV_CACHE_DIR=os.path.join(self.cache, "uv-cache"), PYTHONDONTWRITEBYTECODE="1")
+        self.no_extensions = False
         if os.path.exists(os.path.join(self.work, ".gitmodules")):
             rc, out, secs = _run(["git", "-C", self.work, "submodule", "update", "--init", "--depth", "1"], self.work,
                                  self.env, INSTALL_TIMEOUT)
@@ -127,8 +131,23 @@ class PyEnv:
                 return
         raise SetupError("missing_package" if NETWORK.search(last) else "structural", f"install failed: {last[-600:]}")
 
+    def _commit_date(self) -> str:
+        return subprocess.run(["git", "-C", self.work, "log", "-1", "--format=%cI", "HEAD"], capture_output=True,
+                              text=True).stdout.strip()
+
     def _install(self, pp: dict) -> tuple[bool, str]:
-        pip = ["uv", "pip", "install", "-q", "-p", self.py]
+        """With C extensions built first; if that install fails, again without them (`*_NO_EXTENSIONS=1`)."""
+        ok, out = self._install_once(pp)
+        if ok:
+            return True, ""
+        self._step("retry without C extensions", 0, out[-600:], 0)
+        self.env.update(NO_EXT)
+        self.no_extensions = True
+        return self._install_once(pp)
+
+    def _install_once(self, pp: dict) -> tuple[bool, str]:
+        # no lockfile: resolve every dependency as of the revision's commit date (the counterpart of npm --before)
+        pip = ["uv", "pip", "install", "-q", "-p", self.py, "--exclude-newer", self._commit_date()]
         if os.path.exists(os.path.join(self.work, "uv.lock")):
             for extra in (["--all-extras"], []):
                 rc, out, secs = _run(["uv", "sync", "--frozen", "--all-groups", *extra], self.work, self.env,
@@ -154,14 +173,63 @@ class PyEnv:
             if os.path.exists(os.path.join(self.work, req)):
                 rc, out, secs = _run(pip + ["-r", req], self.work, self.env, INSTALL_TIMEOUT)
                 self._step(f"requirements {req} (best effort)", rc, out, secs)
+        for req in self._poetry_git_deps(pp):
+            rc, out, secs = _run(pip + [req], self.work, self.env, INSTALL_TIMEOUT)
+            self._step(f"git dependency {req}", rc, out, secs)
+        poetry = self._poetry_group_deps(pp)
+        if poetry:
+            rc, out, secs = _run(pip + poetry, self.work, self.env, INSTALL_TIMEOUT)
+            self._step(f"poetry groups ({len(poetry)} packages)", rc, out, secs)
         deps = self._tox_deps()
         if deps:
             rc, out, secs = _run(pip + deps, self.work, self.env, INSTALL_TIMEOUT)
             self._step("tox deps (best effort)", rc, out, secs)
-        rc, out, secs = _run(pip + ["-e", target], self.work, self.env, INSTALL_TIMEOUT)  # keep the checkout installed
+        # keep the checkout installed as the package; --no-deps so the pins above (git dependencies, groups) stay
+        rc, out, secs = _run(pip + ["--no-deps", "-e", target], self.work, self.env, INSTALL_TIMEOUT)
         self._step("reinstall checkout", rc, out, secs)
         self.strategy = "pip"
         return rc == 0, out
+
+    def _poetry_git_deps(self, pp: dict) -> list[str]:
+        """Poetry dependencies on a git branch (`{git = URL, branch = B}`), pinned to the branch's commit as of the
+        revision's commit date, the same date rule as `--exclude-newer`. An explicit `rev` or `tag` is used as given."""
+        deps = ((pp.get("tool") or {}).get("poetry") or {}).get("dependencies") or {}
+        date, out = self._commit_date(), []
+        for name, spec in deps.items():
+            if not isinstance(spec, dict) or "git" not in spec:
+                continue
+            url, ref = spec["git"], spec.get("rev") or spec.get("tag")
+            if not ref:
+                branch = spec.get("branch", "HEAD")
+                bare = os.path.join(self.cache, "git", re.sub(r"\W+", "_", url))
+                if not os.path.isdir(bare):
+                    subprocess.run(["git", "clone", "-q", "--bare", "--filter=blob:none", url, bare], capture_output=True)
+                subprocess.run(["git", "-C", bare, "fetch", "-q", "origin", "+refs/heads/*:refs/heads/*"], capture_output=True)
+                ref = subprocess.run(["git", "-C", bare, "rev-list", "-1", f"--before={date}", branch],
+                                     capture_output=True, text=True).stdout.strip()
+                if not ref:
+                    continue
+            out.append(f"{name} @ git+{url}@{ref}")
+        return out
+
+    @staticmethod
+    def _poetry_group_deps(pp: dict) -> list[str]:
+        """`[tool.poetry.group.<test|tests|testing|dev>.dependencies]` (and the older `dev-dependencies`) as pip
+        requirements. Poetry's `^x.y` and `~x.y` become `>=x.y`; the commit-date cutoff bounds the rest."""
+        poetry = (pp.get("tool") or {}).get("poetry") or {}
+        tables = [((poetry.get("group") or {}).get(g) or {}).get("dependencies") or {} for g in TEST_GROUPS]
+        tables.append(poetry.get("dev-dependencies") or {})
+        out = []
+        for table in tables:
+            for name, spec in table.items():
+                if name.lower() == "python":
+                    continue
+                v = spec.get("version", "") if isinstance(spec, dict) else str(spec)
+                if isinstance(spec, dict) and ("path" in spec or "git" in spec or "url" in spec):
+                    continue
+                v = re.sub(r"^[\^~]=?", ">=", v.strip()) if v.strip() not in ("", "*") else ""
+                out.append(name + (v if v.startswith((">", "<", "=", "!")) else (f"=={v}" if v else "")))
+        return sorted(set(out))
 
     def _tox_deps(self) -> list[str]:
         cfg = configparser.ConfigParser(interpolation=None)
@@ -182,14 +250,60 @@ class PyEnv:
         files = subprocess.run(["git", "-C", self.work, "ls-files"], capture_output=True, text=True).stdout.split()
         return sorted(f for f in files if TEST_PATH.search(f) and not SKIP.search(f))
 
+    #: Options dropped from the repository's own pytest `addopts`: coverage and parallelism (they need plugins and
+    #: change nothing about pass/fail). Everything else is kept, e.g. `-p no:aiohttp` and `-m "not dev_mode"`.
+    _DROP_FLAG = re.compile(r"^(--cov(-[\w-]+)?(=.*)?|--no-cov(-on-fail)?|--durations(=.*)?|--numprocesses(=.*)?|"
+                            r"-n\S*|--dist(=.*)?|--maxprocesses(=.*)?)$")
+    _DROP_WITH_VALUE = {"--cov", "--cov-config", "--cov-context", "--cov-report", "--durations", "--numprocesses",
+                        "-n", "--dist", "--maxprocesses"}
+
+    def _addopts(self) -> str:
+        """The repository's pytest `addopts` (pytest.ini, pyproject, tox.ini or setup.cfg), minus coverage and
+        parallelism options."""
+        import shlex
+        raw = None
+        for f, section in (("pytest.ini", "pytest"), ("tox.ini", "pytest"), ("setup.cfg", "tool:pytest")):
+            cfg = configparser.ConfigParser(interpolation=None)
+            try:
+                cfg.read(os.path.join(self.work, f))
+                if cfg.has_option(section, "addopts"):
+                    raw = cfg.get(section, "addopts")
+                    break
+            except configparser.Error:
+                continue
+        if raw is None:
+            ini = ((self._pyproject().get("tool") or {}).get("pytest") or {}).get("ini_options") or {}
+            raw = ini.get("addopts", "")
+            raw = " ".join(raw) if isinstance(raw, list) else raw
+        lines = [ln.split(" #", 1)[0] for ln in (raw or "").splitlines() if not ln.strip().startswith("#")]
+        try:
+            toks = shlex.split(" ".join(lines))
+        except ValueError:
+            return ""
+        out, skip = [], False
+        for i, t in enumerate(toks):
+            if skip:
+                skip = False
+                continue
+            if t in ("-p",) and i + 1 < len(toks) and toks[i + 1] in ("pytest_cov", "xdist", "xdist.plugin"):
+                skip = True
+                continue
+            if t in self._DROP_WITH_VALUE and i + 1 < len(toks) and not toks[i + 1].startswith("-"):
+                skip = True
+                continue
+            if self._DROP_FLAG.match(t):
+                continue
+            out.append(t)
+        return shlex.join(out)
+
     def run_test(self, rel: str, ids: list[str] | None = None) -> dict:
         """Run one test file (or the given test ids in it); per-test outcomes from pytest's JUnit XML."""
         report = os.path.join(self.work, ".r3-junit.xml")
         if os.path.exists(report):
             os.remove(report)
         target = [f"{rel}::{i}" for i in ids] if ids else [rel]
-        cmd = [self.py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:randomly", "-o", "addopts=",
-               f"--junitxml={report}", *target]
+        cmd = [self.py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:randomly", "-o",
+               f"addopts={self._addopts()}", f"--junitxml={report}", *target]
         rc, out, secs = _run(cmd, self.work, self.env, TEST_TIMEOUT)
         res = {"file": rel, "rc": rc, "seconds": round(secs, 1), "passed": 0, "failed": 0, "skipped": 0,
                "parsed": False, "tests": {}}
