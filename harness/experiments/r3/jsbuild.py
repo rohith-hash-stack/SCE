@@ -347,6 +347,30 @@ class Env:
         if rc != 0:
             raise SetupError("missing_package" if NETWORK.search(out) else "structural", f"build failed: {out[-600:]}")
         self.built = True
+        self._built_tree = self._tree_fingerprint()
+
+    def _tree_fingerprint(self) -> str:
+        """The working tree's state: tracked changes against HEAD plus the untracked files' names and contents."""
+        import hashlib
+        h = hashlib.sha256(subprocess.run(["git", "-C", self.work, "diff", "HEAD", "--binary"], capture_output=True)
+                           .stdout)
+        h.update(subprocess.run(["git", "-C", self.work, "rev-parse", "HEAD"], capture_output=True).stdout)
+        untracked = subprocess.run(["git", "-C", self.work, "ls-files", "--others", "--exclude-standard", "-z"],
+                                   capture_output=True).stdout.split(b"\0")
+        for f in sorted(u for u in untracked if u and not u.startswith(b".r3-")):
+            h.update(f)
+            try:
+                h.update(open(os.path.join(self.work, f.decode()), "rb").read())
+            except OSError:
+                pass
+        return h.hexdigest()
+
+    def ensure_current_build(self) -> None:
+        """Tests that use built output see the working tree as it is: rebuild when it changed since the last build.
+        Nothing happens for a repository whose tests run on the source."""
+        if self.built and self._tree_fingerprint() != getattr(self, "_built_tree", None):
+            self.built = False
+            self.build()
 
     def test_files(self) -> list[str]:
         files = subprocess.run(["git", "-C", self.work, "ls-files"], capture_output=True, text=True).stdout.split()

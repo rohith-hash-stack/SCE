@@ -112,3 +112,35 @@ def test_no_hint_when_the_text_is_absent_or_ambiguous_apart_from_whitespace(tool
 def test_tool_errors_are_returned_not_raised(tools):
     with pytest.raises(ToolCallError):
         tools._edit_file(FILE, "not here", "x")
+
+
+def test_built_output_is_rebuilt_only_when_the_tree_changed(tmp_path):
+    """JS/TS repositories whose tests use built output: run_tests and scoring see the agent's edits."""
+    import subprocess
+    from harness.experiments.r3.jsbuild import Env
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "src.js").write_text("a\n")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=x@y", "-c", "user.name=x", "commit", "-qm", "x"],
+                   check=True)
+    env = Env.__new__(Env)
+    env.work, env.built, builds = str(tmp_path), False, []
+
+    def fake_build():
+        builds.append(1)
+        env.built = True
+        env._built_tree = env._tree_fingerprint()
+    env.build = fake_build
+    env.ensure_current_build()
+    assert builds == []                                  # tests run on the source: nothing to rebuild
+    env.build()
+    env.ensure_current_build()
+    assert len(builds) == 1                              # unchanged since the build
+    (tmp_path / "src.js").write_text("b\n")
+    env.ensure_current_build()
+    assert len(builds) == 2                              # an edit: rebuilt
+    (tmp_path / "new.js").write_text("c\n")
+    env.ensure_current_build()
+    assert len(builds) == 3                              # a new file: rebuilt
+    env.ensure_current_build()
+    assert len(builds) == 3

@@ -182,6 +182,12 @@ class SharedTools:
         if not files:
             raise ToolCallError("no test files given, and the task has no visible tests")
         out = []
+        ensure = getattr(self.env, "ensure_current_build", None)
+        if ensure is not None:
+            try:
+                ensure()      # tests that use built output see the agent's edits
+            except Exception as exc:
+                return f"the build failed, so the tests were not run:\n{str(exc)[-FAIL_TAIL_CHARS:]}"
         for rel in files:
             self._path(rel)
             if not os.path.isfile(os.path.join(self.work, rel)):

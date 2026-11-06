@@ -106,6 +106,33 @@ class OllamaChat:
                 "seconds": round(time.time() - t, 1)}
 
 
+OUTPUT_HEAD_CHARS = 300      # the start of each tool output, kept in the turn log for diagnosis (never shown again)
+
+
+def stop_kind(end: str | None) -> str:
+    """How a run stopped, as the analysis names it (BUILD_PLAN section 4, criterion 6):
+    `done`: the agent called done; `stuck`: the turn cap, without done; `budget`: the token budget, without done;
+    `error`: the model call failed (infrastructure)."""
+    if end == "done":
+        return "done"
+    if end == "turn_cap":
+        return "stuck"
+    if end == "budget":
+        return "budget"
+    return "error"
+
+
+def turn_counts(log_path: str) -> dict:
+    """Per-run process counts from the turn log."""
+    turns = [json.loads(ln) for ln in open(log_path)] if os.path.exists(log_path) else []
+    return {"parse_errors": sum(1 for t in turns if t.get("parse_error")),
+            "tool_calls": {k: sum(1 for t in turns if t.get("tool") == k) for k in sorted({t.get("tool") for t in turns
+                                                                                          if t.get("tool")})},
+            "outputs_cut": sum(1 for t in turns if t.get("output_cut")),
+            "turns_stubbed": sum(1 for t in turns if t.get("stubbed")),
+            "notice_turns": sum(1 for t in turns if t.get("notice"))}
+
+
 def parse_call(text: str) -> tuple[str, dict] | None:
     """`(tool, args)` from the model's reply, or None when it is not exactly one tool call."""
     s = text.strip()
@@ -221,6 +248,7 @@ class AgentRun:
                 t = time.time()
                 res = self.execute(tool, args)
                 rec.update(tool_seconds=round(time.time() - t, 1), output_tokens=self.n(res["output"]),
+                           output_head=res["output"][:OUTPUT_HEAD_CHARS],
                            output_cut="[cut at 4,000 tokens]" in res["output"],
                            **{k: v for k, v in res.items() if k != "output"})
                 log.write(json.dumps(rec) + "\n")
@@ -231,8 +259,9 @@ class AgentRun:
                     end = "done"
                     break
         summary = {"run": run_id, "task": self.task["id"], "version": self.version, "seed": self.seed, "turns": turn,
-                   "end": end, "used_tokens": used, "seconds": round(time.time() - t0, 1),
-                   "done_summary": self.shared.done_summary, "turn_cap": self.turn_cap}
+                   "end": end, "done_called": end == "done", "stop": stop_kind(end), "used_tokens": used,
+                   "seconds": round(time.time() - t0, 1), "done_summary": self.shared.done_summary,
+                   "turn_cap": self.turn_cap, **turn_counts(log_path)}
         with open(summary_path, "w") as fh:
             json.dump(summary, fh, indent=1)
         return summary

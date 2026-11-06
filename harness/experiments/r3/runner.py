@@ -94,6 +94,13 @@ def score(task: dict, work: str, env) -> dict:
         res.update(hidden_patch_applied=False, resolved=False, reason=f"hidden tests do not apply: {exc.stderr[-300:]}")
         return res
     outcomes = {}
+    ensure = getattr(env, "ensure_current_build", None)
+    if ensure is not None:
+        try:
+            ensure()          # tests that use built output score the final tree, not the start state's build
+        except Exception as exc:
+            res.update(resolved=False, reason=f"the final tree does not build: {str(exc)[-300:]}")
+            return res
     for group in ("fail_to_pass", "pass_to_pass"):
         for f, ids in (task.get(group) or {}).items():
             r = env.run_test(f)
@@ -104,6 +111,22 @@ def score(task: dict, work: str, env) -> dict:
     res["fail_to_pass_passed"] = sum(1 for g, s in outcomes.values() if g == "fail_to_pass" and s == "passed")
     res["pass_to_pass_broken"] = sum(1 for g, s in outcomes.values() if g == "pass_to_pass" and s != "passed")
     return res
+
+
+def outcome(result: dict) -> str:
+    """The run's outcome, one of five (BUILD_PLAN section 4, criterion 6):
+    - `resolved`: the agent called done, and the final tree passes every scored test;
+    - `unresolved`: the agent called done, and the final tree does not pass (it tried and failed);
+    - `stuck`: the turn cap was reached without done;
+    - `budget`: the token budget ran out without done;
+    - `error`: the model call failed (infrastructure).
+    Only `resolved` counts as resolved: runs that stop at the cap or the budget count as unresolved
+    (pre-registration, "Tests and decisions"), and they are reported apart."""
+    stop = result.get("stop") or ("done" if result.get("end") == "done" else "stuck" if result.get("end") == "turn_cap"
+                                  else "budget" if result.get("end") == "budget" else "error")
+    if stop != "done":
+        return stop
+    return "resolved" if (result.get("score") or {}).get("resolved") else "unresolved"
 
 
 def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: str, model, turn_cap: int,
@@ -120,21 +143,37 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
     work, shadow = os.path.join(scratch, "work"), os.path.join(scratch, "shadow")
     _git("-C", clone, "worktree", "add", "-q", "--detach", work, task["parent"])
     wi = None
+    stage = "start state"
     try:
         apply_patch(work, task.get("start_patch"))
+        stage = "environment"
         env = make_env(clone, task["parent"], work, cache)
         env.setup()
+        stage = "index"
         wi = WorkingIndex(work, shadow)
         apply_patch(work, task.get("after_index_patch"))
         layer = ToolLayer(wi, TOKENIZER)
         shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER)
+        stage = "loop"
         summary = AgentRun(task, version, seed, model, shared, layer, TOKENIZER, turn_cap).run(out)
         result = {**summary}
         if score_run:
+            stage = "scoring"
             result["score"] = score(task, work, env)
+        result["outcome"] = outcome(result)
         with open(final, "w") as fh:
             json.dump(result, fh, indent=1)
+        err = os.path.join(out, run_id + ".error.json")
+        if os.path.exists(err):
+            os.remove(err)
         return result
+    except Exception as exc:   # a harness or infrastructure death: recorded, never silently missing
+        import traceback
+        with open(os.path.join(out, run_id + ".error.json"), "w") as fh:
+            json.dump({"run": run_id, "task": task["id"], "version": version, "seed": seed, "stage": stage,
+                       "error": f"{type(exc).__name__}: {exc}"[:2000], "traceback": traceback.format_exc()[-4000:]},
+                      fh, indent=1)
+        raise
     finally:
         if wi is not None:
             wi.close()

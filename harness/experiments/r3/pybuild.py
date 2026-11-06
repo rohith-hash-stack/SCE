@@ -299,6 +299,9 @@ class PyEnv:
             out.append(t)
         return shlex.join(out)
 
+    def ensure_current_build(self) -> None:
+        """The same interface as `jsbuild.Env`: the install is editable, so the tests always see the working tree."""
+
     def run_test(self, rel: str, ids: list[str] | None = None) -> dict:
         """Run one test file (or the given test ids in it); per-test outcomes from pytest's JUnit XML."""
         report = os.path.join(self.work, ".r3-junit.xml")

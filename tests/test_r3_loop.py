@@ -65,13 +65,17 @@ def test_run_ends_on_done_turn_cap_and_budget(tmp_path):
     r = L.AgentRun(task(), "BASELINE", 42, Model([json.dumps({"tool": "done", "args": {"summary": "ok"}})]), Shared())
     s = r.run(str(tmp_path / "a"))
     assert s["end"] == "done" and s["turns"] == 1 and s["done_summary"] == "ok"
+    assert s["done_called"] and s["stop"] == "done" and s["tool_calls"] == {"done": 1}
     s = L.AgentRun(task(), "BASELINE", 42, Model([]), Shared(), turn_cap=3).run(str(tmp_path / "b"))
     assert s["end"] == "turn_cap" and s["turns"] == 3
+    assert not s["done_called"] and s["stop"] == "stuck" and s["tool_calls"] == {"read_file": 3}
+    first = json.loads(open(tmp_path / "b" / "t1__BASELINE__42.jsonl").readline())
+    assert first["output_head"] == "x" * 10                   # the start of each tool output is logged
     old = L.BUDGET_TOKENS
     try:
         L.BUDGET_TOKENS = 2500
         s = L.AgentRun(task(), "BASELINE", 42, Model([]), Shared()).run(str(tmp_path / "c"))
-        assert s["end"] == "budget"
+        assert s["end"] == "budget" and s["stop"] == "budget"
     finally:
         L.BUDGET_TOKENS = old
 
