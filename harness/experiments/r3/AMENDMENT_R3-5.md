@@ -28,58 +28,64 @@ Written before the R3 harness is built or frozen, and before any R3a model call.
   - then a content hash of the files that disagree.
 - The index is rebuilt only if a file's bytes moved. Edits with no index-backed call in between cost nothing.
 
-**The gate, and the fairness rule:**
-- A changed file whose tree-sitter tree reports an error (`root_node.has_error`) is **gated**.
-  - Its index content stays at its **last parsable version**: the agent's last edit that parsed, or the task's start
-    state if it never parsed.
-  - It is never indexed as broken.
-- When a tool call requests content from a gated file, the tool does not return the last parsable version as if it
-  were current. It returns:
-  - (a) a notice naming the gated file: "file X was edited and does not currently parse; read it directly for the
-    current content";
-  - (b) whatever information the call would otherwise provide that is not that file's content: for example, callers
-    from the graph, flagged "based on last parsable version".
-- The agent must call `read_file` to see the broken content. Both versions are then on equal footing: both must read
-  broken files directly, and neither can silently serve stale content in place of current.
-- **A harness requirement, not only a PRISM behaviour:**
-  - the harness never retries a gated call in a way that lets the agent skip `read_file`;
-  - an agent that ignores the notice and asks again gets the same notice.
+**The gate (as revised by Revision 1, below; the original refuse rule is struck through here):**
+
+> ~~**The gate, and the fairness rule:**~~
+> ~~- A changed file whose tree-sitter tree reports an error (`root_node.has_error`) is **gated**.~~
+> ~~  - Its index content stays at its **last parsable version**: the agent's last edit that parsed, or the task's start~~
+> ~~    state if it never parsed.~~
+> ~~  - It is never indexed as broken.~~
+> ~~- When a tool call requests content from a gated file, the tool does not return the last parsable version as if it~~
+> ~~  were current. It returns:~~
+> ~~  - (a) a notice naming the gated file: "file X was edited and does not currently parse; read it directly for the~~
+> ~~    current content";~~
+> ~~  - (b) whatever information the call would otherwise provide that is not that file's content: for example, callers~~
+> ~~    from the graph, flagged "based on last parsable version".~~
+> ~~- The agent must call `read_file` to see the broken content. Both versions are then on equal footing: both must read~~
+> ~~  broken files directly, and neither can silently serve stale content in place of current.~~
+> ~~- **A harness requirement, not only a PRISM behaviour:**~~
+> ~~  - the harness never retries a gated call in a way that lets the agent skip `read_file`;~~
+> ~~  - an agent that ignores the notice and asks again gets the same notice.~~
+
+→ replaced by Revision 1.
 
 **Equivalence:**
 - Every index-backed answer equals, byte for byte, the answer of a cold build of the working tree, with gated files
   at their last parsable version, for all content not from a gated file.
 
-## Equivalence tests (mandatory; the amendment is complete only when all three pass)
+## Equivalence tests (as first written; superseded by Revision 1)
 
-- **Where:** in `tests/`, against the harness's real tool layer, on real repositories from R3's pool: at least one
-  Python and one TypeScript.
-- **What "answer" means:** the full rendered output of each index-backed tool, for a fixed set of queries per
-  repository:
-  - the edited function;
-  - one caller of it;
-  - one function in an unedited file;
-  - one `prism_ask` and one `related_code` query.
-
-**E1, a clean edit:**
-1. Cold build.
-2. Edit a file so that it still parses.
-3. Make the tool calls (which re-index).
-4. Compare with a fresh cold build of the edited tree. **Byte-identical.**
-
-**E2, a broken edit:**
-1. Cold build.
-2. Edit a file so that it has a syntax error.
-3. Make the tool calls. Assert that the file is gated, that the notice appears, and that the gated content is not
-   served as current.
-4. Compare with a fresh cold build of the tree with that file at its last parsable version. **Byte-identical for all
-   non-gated content.**
-
-**E3, consecutive edits:**
-- Three consecutive edits to the same file, each followed by the tool calls.
-- Each answer must match the cold build of that snapshot.
-- Include one broken edit between two clean ones, so the last parsable version advances correctly.
-
-**If any test fails:** this amendment is revised before the harness is frozen, never frozen with a failing test.
+>
+> - **Where:** in `tests/`, against the harness's real tool layer, on real repositories from R3's pool: at least one
+>   Python and one TypeScript.
+> - **What "answer" means:** the full rendered output of each index-backed tool, for a fixed set of queries per
+>   repository:
+>   - the edited function;
+>   - one caller of it;
+>   - one function in an unedited file;
+>   - one `prism_ask` and one `related_code` query.
+>
+> **E1, a clean edit:**
+> 1. Cold build.
+> 2. Edit a file so that it still parses.
+> 3. Make the tool calls (which re-index).
+> 4. Compare with a fresh cold build of the edited tree. **Byte-identical.**
+>
+> **E2, a broken edit:**
+> 1. Cold build.
+> 2. Edit a file so that it has a syntax error.
+> 3. Make the tool calls. Assert that the file is gated, that the notice appears, and that the gated content is not
+>    served as current.
+> 4. Compare with a fresh cold build of the tree with that file at its last parsable version. **Byte-identical for all
+>    non-gated content.**
+>
+> **E3, consecutive edits:**
+> - Three consecutive edits to the same file, each followed by the tool calls.
+> - Each answer must match the cold build of that snapshot.
+> - Include one broken edit between two clean ones, so the last parsable version advances correctly.
+>
+> **If any test fails:** this amendment is revised before the harness is frozen, never frozen with a failing test.
+>
 
 ## The qwen notice check (a known model behaviour; not a pass/fail condition)
 
@@ -115,3 +121,80 @@ Written before the R3 harness is built or frozen, and before any R3a model call.
 
 **Runtime cost:** a full reindex per drifted call. Measured at 2-9 s on mid-sized repositories and 34-43 s on
 aiohttp- and vitest-sized ones. The pilot's logs give the real per-run total.
+
+## Revision 1 (2026-11-06; before the harness is built or frozen, before any R3a call)
+
+**What changes:** the refuse rule is reverted to serving the last good version with a notice. The rest of R3-5 stands:
+- the trigger;
+- the index-backed tools, `related_code` included;
+- the cold-build equivalence;
+- the qwen check;
+- the cost.
+
+**Rationale:** "Refusing to serve gated content eliminated PRISM's specialized tools entirely on broken files, making
+the PRISM and baseline arms equivalent when the agent writes broken code. The correct approach is to serve the last
+parsable version with an explicit notice — preserving PRISM's value while being honest about staleness. read_file
+provides the current bytes to either arm. Full versioning (tracking every edit as a version, diffing across
+versions) belongs in R4 for divergence detection."
+
+**The rule:**
+- "When an index-backed tool is asked about a file that does not currently parse, it answers from the file's last
+  parsable version and adds a notice at the top of the response: '⚠️ File X was edited and does not currently parse.
+  Content shown is from the last parsable version (edit [n], commit [hash]). Read the file directly for the current
+  content.' read_file is not gated — it returns current bytes. related_code remains gated (keyword search would serve
+  stale entries silently)."
+- **Terms, fixed here:**
+  - **"edit [n]":** the number of the agent's edits to that file that the drift probe has seen; 0 means the task's
+    start state.
+  - **"commit [hash]":** inside a task, edits are not commits, so this is the first 12 hex digits of the sha256 of the
+    bytes shown.
+  - **"Gated" for `related_code`:** it does not return entries from a gated file, and it adds the same notice naming
+    the file.
+- **The fairness note from the first draft is withdrawn:** "the harness never retries a gated call in a way that lets
+  the agent skip read_file". With content served, there is nothing to skip. The harness passes every tool response
+  through unchanged.
+
+**Limitation:**
+- "When a file does not parse, PRISM's tools serve the last parsable version with an explicit notice; the baseline's
+  related_code is gated, and its read_file/grep serve the current broken bytes. Both arms can therefore see the
+  current broken content via read_file. PRISM additionally offers a structured view of the last good version. The
+  comparative advantage PRISM has on valid files is reduced but not eliminated on broken files; R3 measures PRISM with
+  this partial availability, not its absence."
+
+**The equivalence tests (mandatory; they replace the versions above):**
+- **Where:** in `tests/`, against the harness's real tool layer, on at least one Python and one TypeScript repository
+  from R3's pool.
+- **What "answer" means:** the full rendered output of each index-backed tool, for a fixed set of queries per
+  repository:
+  - the edited function;
+  - one caller of it;
+  - one function in an unedited file;
+  - one `prism_ask` query;
+  - one `related_code` query.
+
+**E1, a clean edit (unchanged):**
+1. Cold build.
+2. Edit a file so that it still parses.
+3. Make the tool calls (which re-index).
+4. Every answer is byte-identical to a fresh cold build of the edited tree.
+
+**E2, a broken edit (serve with a notice):**
+1. Cold build.
+2. Edit a file so that it has a syntax error.
+3. Make the tool calls, and check:
+   - (a) every answer, notice aside, is byte-identical to a cold build of the tree with that file at its last
+     parsable version;
+   - (b) the notice appears, names the file, and states that the content is from the last parsable version, with
+     its edit number and hash;
+   - (c) `read_file` on the same file returns the current broken bytes;
+   - (d) a cross-reference from a clean file to a caller in the gated file is served with a flag naming the gated
+     file;
+   - (e) `related_code` returns no entry from the gated file, and carries the notice.
+
+**E3, consecutive edits:**
+1. Three edits to the same file: clean, then broken, then clean. Each is followed by the tool calls.
+2. Each call matches the cold build of its snapshot.
+3. The middle call serves the first edit's version (edit 1, with its hash) with the notice.
+4. The last call serves the third edit with no notice.
+
+**Results:** the results table above is filled in against these tests, before the harness freeze.
