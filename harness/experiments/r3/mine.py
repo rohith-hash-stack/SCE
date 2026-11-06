@@ -140,8 +140,23 @@ def source_changes(clone: str, parent: str, c: str) -> tuple[list[str], set[str]
     return files, fns
 
 
+def free_index_caches() -> None:
+    """Each pass-2 index is built in its own worktree, so PRISM's parse cache (keyed by path) and its derived caches
+    only grow over a repository's history. They are dropped after every index (the same leak `ToolLayer.close`
+    fixes for runs)."""
+    from prism.parser.cache import clear_cache
+    from prism.traversal._cache_keys import evict_derived_caches
+    clear_cache()
+    evict_derived_caches()
+
+
 def b_stratum(n: int) -> str:
     return "1" if n == 1 else "2-4" if n <= 4 else "5+"
+
+
+def caller_bucket(n: int) -> str:
+    """The caller-count distribution R3a's mining reports (finer than the stratum): 1, 2, 3-4, 5+."""
+    return "1" if n == 1 else "2" if n == 2 else "3-4" if n <= 4 else "5+"
 
 
 def n_stratum(n: int) -> str:
@@ -217,6 +232,8 @@ def mine_b(name: str, clone: str, commits: list[str], scratch: str) -> tuple[lis
         except Exception as exc:  # one bad revision must not stop the mining
             print(f"  {name} {cand['commit'][:10]}: index skipped ({type(exc).__name__}: {exc})", flush=True)
             continue
+        finally:
+            free_index_caches()
         kept = []
         for t in found:
             real = [c for c in t["changed_callers"] if c["qname"] != t["anchor"] and touches_call(t, c)]
@@ -247,6 +264,7 @@ def mine_b(name: str, clone: str, commits: list[str], scratch: str) -> tuple[lis
             "anchor": t["anchor"], "anchor_file": t["anchor_file"], "forced": forced_reasons(t),
             "changed_callers": [c["qname"] for c in t["changed_callers"]],
             "depth": len(t["changed_callers"]), "stratum": b_stratum(len(t["changed_callers"])),
+            "caller_bucket": caller_bucket(len(t["changed_callers"])),
             "start_patch": sp, "start_files": [t["anchor_file"]], "start_functions": [anchor_leafq],
             "after_index_patch": None, "hidden_patch": test_patch(clone, meta["parent"], t["commit"], tests),
             "test_files": tests, "visible_tests": visible_tests(clone, meta["parent"], tests),
