@@ -58,7 +58,18 @@ classification use):
 
 **Checks:**
 - 159 PRISM tests in the affected areas pass.
-- The full suite was running when this entry was committed; its result is added below when it finishes.
+- **The full suite** (`pytest tests/`, 52 min): 3,125 passed, 22 failed, 4 errors. The 26 were re-run on the code
+  before the fix (`50138edb`'s two source files restored, then put back):
+  - **25 fail the same way before the fix, so they are pre-existing:**
+    - 12 need the `transformers` package, not installed in this container;
+    - the rest compare against recorded values (NLQ ranks, proof states, chunk counts) or need an npm dependency
+      (`etag`) that is not installed here.
+  - **1** (`test_fuzzy_seed_suggestion.py::test_fuzzy_match_performance_on_real_corpus`) passed before and failed
+    after. It is a wall-clock assertion: a fuzzy match on Django under 50 ms. It measured 53.5 ms during the suite
+    run, which shared the machine with the E1-E3 runs, and passed 2 of 3 standalone re-runs on the fixed code. The
+    fix does not touch fuzzy matching, so this is a timing flake, not a regression.
+  - **None of the 26 is caused by the fix.** The 25 pre-existing failures are left as they are: outside this fix's
+    scope.
 - E1-E3 were re-run with cold builds regenerated after the fix: E1, E2 (a-e, including the blast-radius answer equal
   to the new cold build, with the notice) and E3 pass on werkzeug and unstorage.
 
