@@ -171,7 +171,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
     scratch = tempfile.mkdtemp(prefix="r3run_", dir=os.path.join(cache, "runs") if os.path.isdir(os.path.join(cache, "runs")) else None)
     work, shadow = os.path.join(scratch, "work"), os.path.join(scratch, "shadow")
     _git("-C", clone, "worktree", "add", "-q", "--detach", work, task["parent"])
-    wi = None
+    wi = layer = None
     stage = "start state"
     try:
         apply_patch(work, task.get("start_patch"))
@@ -205,6 +205,8 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
                       fh, indent=1)
         raise
     finally:
+        if layer is not None:
+            layer.close()
         if wi is not None:
             wi.close()
         _git("-C", clone, "worktree", "remove", "--force", work, check=False)

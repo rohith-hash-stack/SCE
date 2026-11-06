@@ -74,6 +74,23 @@ class ToolLayer:
         self._digests = None
         self._nlq = None
 
+    def close(self) -> None:
+        """Remove this run's index from PRISM's server cache. Every run has its own shadow path, so without this the
+        indexes of all finished runs in one process stay in memory (the dry run was killed at 4.2 GB after about
+        30 runs; a Kaggle cell runs many tasks in one process)."""
+        from prism.mcp import server
+        from prism.traversal._cache_keys import evict_derived_caches
+        from prism.parser import cache as parse_cache
+        if self._key is not None:
+            server._cache._entries.pop(self._key, None)
+        server._nlq_indexes.clear()
+        evict_derived_caches()
+        prefix = self.wi.shadow.replace("\\", "/").rstrip("/") + "/"      # the parse cache is keyed "path:sha256"
+        with parse_cache._lock:
+            for k in [k for k in parse_cache._cache if k.startswith(prefix)]:
+                del parse_cache._cache[k]
+        self._ctx_builder = self._newfn = self._digests = self._nlq = None
+
     def _sync(self):
         from prism.mcp import server
         r = self.wi.refresh()

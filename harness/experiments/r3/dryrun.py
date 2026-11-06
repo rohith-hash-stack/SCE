@@ -51,8 +51,8 @@ def start_contents(clone: str, task: dict, files: list[str]) -> dict[str, str | 
 
 def edits_for(old: str | None, new: str | None, path: str) -> list[dict]:
     """`edit_file` calls turning `old` into `new`, each span unique in the text as it is when the call runs."""
-    if new is None:
-        return []                                   # a deleted file: the tools cannot delete; left as is
+    if new is None:   # a deleted file: the tools cannot delete, so it is emptied (scored as changed, functions removed)
+        return [{"path": path, "old": old, "new": ""}] if old else []
     if old is None:
         return [{"path": path, "old": "", "new": new}]
     a, b = old.splitlines(keepends=True), new.splitlines(keepends=True)
