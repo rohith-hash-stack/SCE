@@ -198,3 +198,44 @@ versions) belongs in R4 for divergence detection."
 4. The last call serves the third edit with no notice.
 
 **Results:** the results table above is filled in against these tests, before the harness freeze.
+
+## Revision 2 (2026-11-06; before the harness is frozen, before any R3a call)
+
+Two changes; nothing else in R3-5 or Revision 1 changes.
+
+### 1. `related_code` serves the last parsable version (replaces Revision 1's "related_code remains gated")
+
+- ~~"related_code remains gated (keyword search would serve stale entries silently)"~~, and ~~"`related_code` does
+  not return entries from a gated file, and adds the same notice"~~ → replaced:
+- "related_code behaves like PRISM's index-backed tools: on a file that does not currently parse, it serves entries
+  from the file's last parsable version and carries the same notice. This preserves symmetry — both arms' index-based
+  tools serve last-good when a file is broken; both arms' disk tools (read_file, grep) serve current bytes."
+- **Why:** if `related_code` returned nothing on gated files while PRISM's tools served the last good version, PRISM's
+  advantage on broken-file tasks would come from the asymmetric gate, not from PRISM's design. That is a confound.
+- **E2(e), updated:** ~~"(e) `related_code` returns no entry from the gated file, and carries the notice."~~ →
+  "(e) related_code returns entries from the last parsable version of the gated file, and carries the same notice
+  naming the file, edit number, and hash. It does not return current (broken) bytes."
+- **The limitation note, updated to match:** "When a file does not parse, both arms' index-backed tools (PRISM's five
+  and the baseline's related_code) serve its last parsable version with the same explicit notice; both arms'
+  read_file and grep serve the current broken bytes."
+
+### 2. What counts as a file that does not parse (the gate)
+
+- "Gating is based on whether the edit adds error nodes compared with the file's last indexed version, not on
+  absolute has_error. For files that parse cleanly at task start, this is equivalent to has_error. For files that
+  start with pre-existing error nodes (from grammar limitations, e.g. tree-sitter grammar coverage), a clean edit
+  does not gate the file; only an edit that adds error nodes does.
+- last indexed version means the last version written to the WorkingIndex shadow worktree — the version the agent
+  was last served. Pre-existing error nodes are recorded per file at task start and used as the baseline for the
+  delta comparison.
+- Examples from the R3 pool: vitest has 9 files with pre-existing errors (e.g. packages/mocker/src/node/esmWalker.ts),
+  h3 has 2 test files. Under the literal has_error rule these would be gated for the whole task even after a clean
+  edit. Under Revision 2 they are gated only if the agent's edit adds new error nodes."
+
+**Where it is implemented:**
+- `harness/experiments/r3/working_index.py`: `WorkingIndex._gated`, with `FileState.shown_errors` (the ERROR plus
+  MISSING count of the shadow's bytes) as the baseline.
+- At task start, every file's count is recorded, and nothing is gated.
+
+**Edit and hash terms (Revision 1):** confirmed by the team as written. n is the file's edit count (0 is the start
+state); the hash is the first 12 hex digits of the sha256 of the bytes shown.
