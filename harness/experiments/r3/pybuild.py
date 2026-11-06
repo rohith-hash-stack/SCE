@@ -171,14 +171,12 @@ class PyEnv:
             if t not in tries:
                 tries.append(t)
         for target in tries:
-            rc, out, secs = _run(pip + ["-e", target, "pytest"], self.work, self.env, INSTALL_TIMEOUT)
-            self._step(f"install -e {target}", rc, out, secs)
+            rc, out = self._pip_yanked_ok(pip + ["-e", target, "pytest"], f"install -e {target}")
             if rc == 0:
                 break
         if rc != 0 and not optional:
             target = "."
-            rc, out, secs = _run(pip + ["-e", target, "pytest"], self.work, self.env, INSTALL_TIMEOUT)
-            self._step(f"install -e {target}", rc, out, secs)
+            rc, out = self._pip_yanked_ok(pip + ["-e", target, "pytest"], f"install -e {target}")
         if rc != 0:
             return False, out
         groups = [g for g in TEST_GROUPS if g in (pp.get("dependency-groups") or {})]
@@ -209,6 +207,20 @@ class PyEnv:
         self._step("reinstall checkout", rc, out, secs)
         self.strategy = "pip"
         return rc == 0, out
+
+    YANKED = re.compile(r"Because ([A-Za-z0-9_.\-]+)==([A-Za-z0-9_.+!\-]+) was yanked")
+
+    def _pip_yanked_ok(self, cmd: list[str], name: str) -> tuple[int, str]:
+        """Run a `uv pip install`; when resolution fails only because the release it needs was yanked later (poetry's
+        cleo 2.2.1), retry with that release pinned exactly, which PEP 592 allows."""
+        rc, out, secs = _run(cmd, self.work, self.env, INSTALL_TIMEOUT)
+        self._step(name, rc, out, secs)
+        pins: list[str] = []
+        while rc != 0 and (m := self.YANKED.search(out)) and f"{m.group(1)}=={m.group(2)}" not in pins and len(pins) < 5:
+            pins.append(f"{m.group(1)}=={m.group(2)}")
+            rc, out, secs = _run(cmd + pins, self.work, self.env, INSTALL_TIMEOUT)
+            self._step(f"{name} (pinned yanked {', '.join(pins)})", rc, out, secs)
+        return rc, out
 
     def _poetry_git_deps(self, pp: dict) -> list[str]:
         """Poetry dependencies on a git branch (`{git = URL, branch = B}`), pinned to the branch's commit as of the

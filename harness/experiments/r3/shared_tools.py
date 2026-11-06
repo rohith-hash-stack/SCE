@@ -49,6 +49,16 @@ class ToolCallError(Exception):
     pass
 
 
+def occurrences(text: str, span: str) -> int:
+    """How many places `span` starts in `text`, overlapping ones included (`str.count` skips them, so a span that
+    occurs twice, overlapping, would pass as unique and the first place would be edited)."""
+    n, i = 0, text.find(span)
+    while i != -1:
+        n += 1
+        i = text.find(span, i + 1)
+    return n
+
+
 def whitespace_matches(text: str, old: str) -> list[int]:
     """1-based line numbers where `old` matches `text` line by line once leading and trailing whitespace is ignored.
 
@@ -161,7 +171,7 @@ class SharedTools:
             raise ToolCallError(f"no file {path!r}")
         with open(p, encoding="utf8", errors="replace") as fh:
             text = fh.read()
-        n = text.count(old)
+        n = occurrences(text, old)
         if n == 0:
             near = whitespace_matches(text, old)
             if len(near) == 1:

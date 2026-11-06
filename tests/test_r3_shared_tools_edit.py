@@ -144,3 +144,10 @@ def test_built_output_is_rebuilt_only_when_the_tree_changed(tmp_path):
     assert len(builds) == 3                              # a new file: rebuilt
     env.ensure_current_build()
     assert len(builds) == 3
+
+
+def test_overlapping_occurrences_are_not_unique(tmp_path):
+    (tmp_path / "f.txt").write_text("ab\nab\nab\n")
+    t = SharedTools(str(tmp_path), None, [], None)
+    out = t.call("edit_file", path="f.txt", old="ab\nab\n", new="X\n")      # at line 1 and, overlapping, line 2
+    assert "occurs 2 times" in out and (tmp_path / "f.txt").read_text() == "ab\nab\nab\n"

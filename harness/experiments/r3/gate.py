@@ -67,8 +67,37 @@ def runnable_tests(env, task: dict) -> list[str]:
     known = set(env.test_files())
     named = TEST_FILE if getattr(env, "d", {}).get("runner") in ("vitest", "jest", "mocha") else \
         TEST_PATH if getattr(env, "d", {}).get("runner") == "pytest" else None
-    return [f for f in task["test_files"] if f in known or (named is not None and named.search(f)
-                                                             and os.path.isfile(os.path.join(env.work, f)))]
+    files = [f for f in task["test_files"] if f in known or (named is not None and named.search(f)
+                                                              and os.path.isfile(os.path.join(env.work, f)))]
+    if files:
+        return files
+    return fixture_readers(env, task["test_files"])
+
+
+FIXTURE_READERS_MAX = 3
+
+
+def fixture_readers(env, changed: list[str]) -> list[str]:
+    """When the commit's test changes are only fixtures (sqlglot's `tests/fixtures/optimizer/qualify_columns.sql`):
+    the test modules that name a changed fixture, by its path below the fixtures folder or by its file name, at most
+    `FIXTURE_READERS_MAX`, in path order."""
+    keys = set()
+    for f in changed:
+        keys.add(os.path.basename(f))
+        if "fixtures/" in f:
+            keys.add(f.split("fixtures/", 1)[1])
+    out = []
+    for t in sorted(env.test_files()):
+        try:
+            text = open(os.path.join(env.work, t), encoding="utf8", errors="replace").read()
+        except OSError:
+            continue
+        stems = {k.rsplit(".", 1)[0] for k in keys}
+        if any(k in text for k in keys) or any(f'"{st}"' in text or f"'{st}'" in text for st in stems):
+            out.append(t)
+            if len(out) >= FIXTURE_READERS_MAX:
+                break
+    return out
 
 
 def run_states(env, files: list[str]) -> dict[str, list[str]]:
@@ -151,9 +180,14 @@ def gate_one(task: dict, clone: str, cache: str, scratch: str) -> dict:
                    n_f2p=sum(map(len, cls["fail_to_pass"].values())), n_p2p=sum(map(len, cls["pass_to_pass"].values())),
                    n_flaky=len(cls["flaky"]), flaky=cls["flaky"][:20])
         if not cls["fail_to_pass"]:
-            rec.update(passed=False, reason="no fail-to-pass test")
+            silent = set(start["__unparsed__"]) == set(end["__unparsed__"]) == set(files)
+            rec.update(passed=False, reason="the hidden tests produce no results in this environment" if silent
+                       else "no fail-to-pass test")
             return rec
-        gated = {**task, "fail_to_pass": cls["fail_to_pass"], "pass_to_pass": cls["pass_to_pass"]}
+        parent_files = set(_git("ls-tree", "-r", "--name-only", task["parent"], "--", *files, cwd=work).stdout
+                           .split("\n"))
+        gated = {**task, "fail_to_pass": cls["fail_to_pass"], "pass_to_pass": cls["pass_to_pass"],
+                 "tests_run": files, "visible_tests": sorted(f for f in files if f in parent_files)}
         # the answer key for diff quality, by the same code that scores the agent: the developer's non-test changes,
         # diffed from the start state
         reset_to(work, task["parent"])
