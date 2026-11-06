@@ -194,6 +194,9 @@ def _worker_safe_node_options() -> str:
     return " ".join(o for o in opts if not o.startswith(_WORKER_UNSAFE))
 
 
+NATIVE_BUILD = re.compile(r"gyp ERR!|node-gyp|prebuild-install.*(fail|err)|make: \*\*\*", re.I)
+
+
 class SetupError(Exception):
     def __init__(self, kind: str, message: str):
         super().__init__(message)
@@ -279,10 +282,37 @@ class Env:
         else:
             rc, out, secs = _run(cmd, self.work, self.env, INSTALL_TIMEOUT)
             self._step("install", rc, out, secs)
+        if rc != 0 and NATIVE_BUILD.search(out) and not re.fullmatch(r"v?\d+\.\d+\.\d+", (d.get("node") or "").strip()):
+            rc, out = self._retry_older_node(cmd, rc, out)
         if rc != 0:
             raise SetupError("missing_package" if NETWORK.search(out) else "structural", f"install failed: {out[-600:]}")
         if self._needs_build_first():
             self.build()
+
+    def _retry_older_node(self, cmd, rc, out):
+        """A native module that does not compile against the chosen Node (no prebuilt binary for it): retry the install
+        with the newest satisfying release of each older LTS major, newest first. The lockfile is unchanged; only the
+        Node version moves back toward the revision's era."""
+        index = _node_index(self.cache)
+        chosen = _ver(self.node_version)[0]
+        majors = sorted({_ver(x["version"])[0] for x in index if x.get("lts") and _ver(x["version"])[0] < chosen},
+                        reverse=True)
+        for major in majors[:3]:
+            cands = [x["version"].lstrip("v") for x in index if x.get("lts") and _ver(x["version"])[0] == major
+                     and satisfies(x["version"].lstrip("v"), self.d.get("node"))]
+            if not cands:
+                continue
+            node_bin = ensure_node(cands[0], self.cache)
+            pm_bins = [p for p in self.env["PATH"].split(os.pathsep) if os.sep + "pm" + os.sep in p]
+            self.env["PATH"] = os.pathsep.join(pm_bins + [node_bin, os.environ["PATH"]])
+            shutil.rmtree(os.path.join(self.work, "node_modules"), ignore_errors=True)
+            rc, out, secs = _run(cmd, self.work, self.env, INSTALL_TIMEOUT)
+            self._step(f"install (Node {cands[0]}, after a native-module build failure)", rc, out, secs)
+            if rc == 0:
+                self.node_version, self.node_why = cands[0], f"{self.node_why}; a native module did not build on " \
+                    f"Node {chosen}, so the newest Node {major} LTS was used"
+                return rc, out
+        return rc, out
 
     def _needs_build_first(self) -> bool:
         scripts = json.load(open(os.path.join(self.work, "package.json"))).get("scripts") or {}
@@ -309,29 +339,48 @@ class Env:
             out = [f for f in files if TEST_FILE.search(f)]
         return sorted(f for f in out if not SKIP_DIRS.search(f) and not f.endswith(".d.ts"))
 
+    CONFIG_NAMES = re.compile(r"^(vitest\.(config|workspace)|vite\.config|jest\.config)\.(m|c)?[jt]s$")
+
+    def _config_dir(self, rel: str) -> str:
+        """The nearest directory above `rel` (within the worktree) with its own vitest/vite/jest config, where the
+        runner must start for that file's settings to apply (monorepo test folders); the root otherwise."""
+        d = os.path.dirname(rel)
+        while d:
+            try:
+                if any(self.CONFIG_NAMES.match(n) for n in os.listdir(os.path.join(self.work, d))):
+                    return d
+            except OSError:
+                pass
+            d = os.path.dirname(d)
+        return ""
+
     def run_test(self, rel: str) -> dict:
         """Run one test file; `{passed, failed, skipped, rc, seconds, parsed}`."""
         runner, out_json = self.d["runner"], os.path.join(self.work, ".r3-test-result.json")
+        cwd = os.path.join(self.work, self._config_dir(rel)) if runner in ("vitest", "jest") else self.work
+        rel_run = os.path.relpath(os.path.join(self.work, rel), cwd)
         if os.path.exists(out_json):
             os.remove(out_json)
         if runner == "vitest":
-            cmd = [self.d["package_manager"], "exec", "vitest", "run", rel, "--reporter=json", f"--outputFile={out_json}",
-                   "--no-coverage"] if self.d["package_manager"] == "pnpm" else \
-                  ["npx", "--no-install", "vitest", "run", rel, "--reporter=json", f"--outputFile={out_json}"]
+            cmd = [self.d["package_manager"], "exec", "vitest", "run", rel_run, "--reporter=json",
+                   f"--outputFile={out_json}", "--no-coverage"] if self.d["package_manager"] == "pnpm" else \
+                  ["npx", "--no-install", "vitest", "run", rel_run, "--reporter=json", f"--outputFile={out_json}"]
         elif runner == "jest":
-            cmd = ["npx", "--no-install", "jest", rel, "--json", f"--outputFile={out_json}"]
+            cmd = ["npx", "--no-install", "jest", rel_run, "--json", f"--outputFile={out_json}"]
         elif runner == "mocha":
             cmd = ["npx", "--no-install", "mocha", rel, "--reporter", "json"]
         elif runner == "ava":
             cmd = ["npx", "--no-install", "ava", rel, "--tap"]
         else:
             cmd = ["node", "--test", "--test-reporter=tap", rel]
-        rc, out, secs = _run(cmd, self.work, self.env, TEST_TIMEOUT)
-        res = {"file": rel, "rc": rc, "seconds": round(secs, 1), "passed": 0, "failed": 0, "skipped": 0, "parsed": False}
+        rc, out, secs = _run(cmd, cwd, self.env, TEST_TIMEOUT)
+        res = {"file": rel, "cwd": os.path.relpath(cwd, self.work), "rc": rc, "seconds": round(secs, 1), "passed": 0, "failed": 0, "skipped": 0, "parsed": False}
+        messages = []
         if runner in ("vitest", "jest") and os.path.exists(out_json):
             data = json.load(open(out_json))
             res.update(passed=data.get("numPassedTests", 0), failed=data.get("numFailedTests", 0),
                        skipped=data.get("numPendingTests", 0) + data.get("numTodoTests", 0), parsed=True)
+            messages = [tr.get("message") or "" for tr in data.get("testResults", [])]
         elif runner == "mocha":
             try:
                 st = json.loads(out[out.index("{"):]).get("stats", {})
@@ -348,6 +397,7 @@ class Env:
                 if oks or nots:
                     res.update(passed=oks, failed=nots, parsed=True)
         res["tail"] = out[-1200:]
+        res["text"] = out + "\n" + "\n".join(messages)     # the whole output and the report's errors, for diagnosis
         return res
 
 
@@ -379,11 +429,11 @@ def self_check_revision(clone: str, rev: str, cache: str, scratch: str) -> dict:
         tried = []
         for f in sizes[:MAX_CANDIDATES]:
             r = env.run_test(f)
-            if r["parsed"] is False and not env.built and UNRESOLVED_BUILD.search(r["tail"]):
+            if not env.built and r["passed"] == 0 and UNRESOLVED_BUILD.search(r["text"]):
                 env.build()
                 rec["built_after_resolve_error"] = True
                 r = env.run_test(f)
-            tried.append({k: r[k] for k in ("file", "rc", "passed", "failed", "skipped", "parsed", "seconds")})
+            tried.append({k: r[k] for k in ("file", "cwd", "rc", "passed", "failed", "skipped", "parsed", "seconds")})
             if r["parsed"] and r["passed"] >= 1 and r["failed"] == 0:
                 runs = [env.run_test(f) for _ in range(2)] + [r]
                 same = len({(x["passed"], x["failed"]) for x in runs}) == 1
