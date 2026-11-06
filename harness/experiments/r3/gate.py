@@ -59,8 +59,16 @@ def draw_order(cands: list[dict], seed: int) -> list[dict]:
 
 
 def runnable_tests(env, task: dict) -> list[str]:
+    """The hidden test files the runner can run: the builder's own test files, plus any changed file named as a test
+    module. The builder's list leaves out fixture and example folders, which is right for picking a test to self-check
+    on, but the developer's tests are named explicitly here (e.g. litestar's `tests/examples/.../test_*.py`)."""
+    from harness.experiments.r3.jsbuild import TEST_FILE
+    from harness.experiments.r3.pybuild import TEST_PATH
     known = set(env.test_files())
-    return [f for f in task["test_files"] if f in known]
+    named = TEST_FILE if getattr(env, "d", {}).get("runner") in ("vitest", "jest", "mocha") else \
+        TEST_PATH if getattr(env, "d", {}).get("runner") == "pytest" else None
+    return [f for f in task["test_files"] if f in known or (named is not None and named.search(f)
+                                                             and os.path.isfile(os.path.join(env.work, f)))]
 
 
 def run_states(env, files: list[str]) -> dict[str, list[str]]:
@@ -110,7 +118,7 @@ def classify(start: dict, end: dict) -> dict:
 
 
 def gate_one(task: dict, clone: str, cache: str, scratch: str) -> dict:
-    from harness.experiments.r3.runner import apply_patch, score
+    from harness.experiments.r3.runner import apply_patch, changed_functions, score, snapshot_tree
     from harness.experiments.r3.shared_tools import make_env
     work = os.path.join(scratch, "w")
     shutil.rmtree(work, ignore_errors=True)
@@ -146,17 +154,25 @@ def gate_one(task: dict, clone: str, cache: str, scratch: str) -> dict:
             rec.update(passed=False, reason="no fail-to-pass test")
             return rec
         gated = {**task, "fail_to_pass": cls["fail_to_pass"], "pass_to_pass": cls["pass_to_pass"]}
-        # scoring check: the developer's patch resolves; no change does not
+        # the answer key for diff quality, by the same code that scores the agent: the developer's non-test changes,
+        # diffed from the start state
         reset_to(work, task["parent"])
         apply_patch(work, task.get("start_patch"))
+        start_tree = snapshot_tree(work)
         source = [f for f in changed if f not in set(task["test_files"])]
         set_files_to(work, task["commit"], source)
-        gold = score(gated, work, env)
+        gold_tree = snapshot_tree(work)
+        gated["gold_files"] = sorted(f for f in _git("diff", "--name-only", "--no-renames", start_tree, gold_tree,
+                                                     cwd=work).stdout.split("\n") if f)
+        gated["gold_functions"] = sorted(changed_functions(work, start_tree, gated["gold_files"]))
+        # scoring check: the developer's patch resolves (with diff-quality F1 1.0); no change does not
+        gold = score(gated, work, env, start_tree)
         reset_to(work, task["parent"])
         apply_patch(work, task.get("start_patch"))
-        empty = score(gated, work, env)
+        empty = score(gated, work, env, start_tree)
         rec.update(gold_resolved=gold.get("resolved"), empty_resolved=empty.get("resolved"),
-                   gold_file_f1=gold.get("file_f1"), gold_function_f1=gold.get("function_f1"))
+                   gold_file_f1=gold.get("file_f1"), gold_function_f1=gold.get("function_f1"),
+                   empty_file_f1=empty.get("file_f1"))
         if not gold.get("resolved"):
             bad = {k: v for k, v in (gold.get("tests") or {}).items() if v != "passed"}
             rec.update(passed=False, reason=f"the developer's patch does not score resolved: {list(bad.items())[:5]}")

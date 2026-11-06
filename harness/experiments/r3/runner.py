@@ -72,19 +72,48 @@ def changed_functions(work: str, base_rev: str, files: list[str]) -> set[str]:
     return out
 
 
-def score(task: dict, work: str, env) -> dict:
-    """Score the final tree in `work` (it is modified: the hidden patch is applied)."""
-    start = _git("stash", "create", cwd=work, check=False).stdout.strip() or _git("rev-parse", "HEAD", cwd=work).stdout.strip()
-    changed = [ln for ln in _git("diff", "--name-only", "HEAD", cwd=work).stdout.split() if ln]
-    untracked = _git("ls-files", "--others", "--exclude-standard", cwd=work).stdout.split()
-    agent_files = {f for f in changed + untracked if not f.startswith(".r3-")}
-    start_files = set(task.get("start_files", []))         # files the start patch itself changed
-    res = {"agent_files": sorted(agent_files - start_files)}
+def snapshot_tree(work: str) -> str:
+    """A git tree of the working tree as it is now (tracked and untracked, ignored files and `.r3-*` left out), made
+    with a temporary index, so nothing in the worktree changes."""
+    fd, idx = tempfile.mkstemp(prefix="r3idx_")
+    os.close(fd)
+    os.remove(idx)
+    env = dict(os.environ, GIT_INDEX_FILE=idx)
+    try:
+        subprocess.run(["git", "read-tree", "HEAD"], cwd=work, env=env, check=True, capture_output=True)
+        subprocess.run(["git", "add", "-A", "--", ".", ":(glob,exclude)**/.r3-*"], cwd=work, env=env, check=True,
+                       capture_output=True)
+        return subprocess.run(["git", "write-tree"], cwd=work, env=env, check=True, capture_output=True,
+                              text=True).stdout.strip()
+    finally:
+        if os.path.exists(idx):
+            os.remove(idx)
+
+
+def score(task: dict, work: str, env, start_tree: str | None = None) -> dict:
+    """Score the final tree in `work` (it is modified: the hidden patch is applied).
+
+    `start_tree` is the start state (`snapshot_tree` after the start patch). The agent's files and functions are what
+    differs from it; the gold ones (`gold_files`, `gold_functions`) are what the developer changed beyond the start
+    state. Without `start_tree`, the parent is the base and the start patch's own files and functions are left out.
+    """
+    if start_tree:
+        final = snapshot_tree(work)
+        agent_files = {f for f in _git("diff", "--name-only", "--no-renames", start_tree, final, cwd=work).stdout
+                       .split("\n") if f}
+        res = {"agent_files": sorted(agent_files)}
+        base, drop_fns = start_tree, set()
+    else:
+        changed = [ln for ln in _git("diff", "--name-only", "HEAD", cwd=work).stdout.split() if ln]
+        untracked = _git("ls-files", "--others", "--exclude-standard", cwd=work).stdout.split()
+        agent_files = {f for f in changed + untracked if not f.startswith(".r3-")} - set(task.get("start_files", []))
+        res = {"agent_files": sorted(agent_files)}
+        base, drop_fns = task["parent"], set(task.get("start_functions", []))
     res["file_f1"] = f1(set(res["agent_files"]), set(task.get("gold_files", [])))
     try:
-        fns = changed_functions(work, task["parent"], sorted(agent_files))
-        start_fns = set(task.get("start_functions", []))
-        res["function_f1"] = f1(fns - start_fns, set(task.get("gold_functions", [])))
+        fns = changed_functions(work, base, sorted(agent_files))
+        res["agent_functions"] = sorted(fns - drop_fns)
+        res["function_f1"] = f1(fns - drop_fns, set(task.get("gold_functions", [])))
     except Exception as exc:  # diff quality is secondary: recorded, never fatal
         res["function_f1"], res["function_error"] = None, f"{type(exc).__name__}: {exc}"
     try:
@@ -152,6 +181,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         stage = "index"
         wi = WorkingIndex(work, shadow)
         apply_patch(work, task.get("after_index_patch"))
+        start_tree = snapshot_tree(work)      # the start state, after setup: what the agent changes is diffed from it
         layer = ToolLayer(wi, TOKENIZER)
         shared = SharedTools(work, env, task.get("visible_tests", []), TOKENIZER)
         stage = "loop"
@@ -159,7 +189,7 @@ def run_task(task: dict, version: str, seed: int, clone: str, out: str, cache: s
         result = {**summary}
         if score_run:
             stage = "scoring"
-            result["score"] = score(task, work, env)
+            result["score"] = score(task, work, env, start_tree)
         result["outcome"] = outcome(result)
         with open(final, "w") as fh:
             json.dump(result, fh, indent=1)

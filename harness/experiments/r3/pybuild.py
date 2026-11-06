@@ -159,10 +159,26 @@ class PyEnv:
                     self.strategy = "uv.lock"
                     return True, ""
             last = out
-        extras = [e for e in TEST_GROUPS if e in ((pp.get("project") or {}).get("optional-dependencies") or {})]
-        target = "." + (f"[{','.join(extras)}]" if extras else "")
-        rc, out, secs = _run(pip + ["-e", target, "pytest"], self.work, self.env, INSTALL_TIMEOUT)
-        self._step(f"install -e {target}", rc, out, secs)
+        # every extra first (a test suite may import any of them, as with `uv sync --all-extras` above), then only the
+        # test extras when that does not install
+        optional = list((pp.get("project") or {}).get("optional-dependencies") or {})
+        # extras declared outside pyproject (setup.py's extras_require, or `dynamic`): ask for the test extras by
+        # name; an extra the package does not have is only a warning
+        candidates = (optional, [e for e in TEST_GROUPS if e in optional]) if optional else (list(TEST_GROUPS),)
+        tries = []
+        for extras in candidates:
+            t = "." + (f"[{','.join(extras)}]" if extras else "")
+            if t not in tries:
+                tries.append(t)
+        for target in tries:
+            rc, out, secs = _run(pip + ["-e", target, "pytest"], self.work, self.env, INSTALL_TIMEOUT)
+            self._step(f"install -e {target}", rc, out, secs)
+            if rc == 0:
+                break
+        if rc != 0 and not optional:
+            target = "."
+            rc, out, secs = _run(pip + ["-e", target, "pytest"], self.work, self.env, INSTALL_TIMEOUT)
+            self._step(f"install -e {target}", rc, out, secs)
         if rc != 0:
             return False, out
         groups = [g for g in TEST_GROUPS if g in (pp.get("dependency-groups") or {})]
@@ -180,6 +196,10 @@ class PyEnv:
         if poetry:
             rc, out, secs = _run(pip + poetry, self.work, self.env, INSTALL_TIMEOUT)
             self._step(f"poetry groups ({len(poetry)} packages)", rc, out, secs)
+        pdm = self._pdm_group_deps(pp)
+        if pdm:
+            rc, out, secs = _run(pip + pdm, self.work, self.env, INSTALL_TIMEOUT)
+            self._step(f"pdm dev groups ({len(pdm)} packages)", rc, out, secs)
         deps = self._tox_deps()
         if deps:
             rc, out, secs = _run(pip + deps, self.work, self.env, INSTALL_TIMEOUT)
@@ -229,6 +249,19 @@ class PyEnv:
                     continue
                 v = re.sub(r"^[\^~]=?", ">=", v.strip()) if v.strip() not in ("", "*") else ""
                 out.append(name + (v if v.startswith((">", "<", "=", "!")) else (f"=={v}" if v else "")))
+        return sorted(set(out))
+
+    @staticmethod
+    def _pdm_group_deps(pp: dict) -> list[str]:
+        """`[tool.pdm.dev-dependencies]` groups named test, tests, testing or dev (litestar before it moved to uv):
+        PEP 508 strings, used as given; editable and path entries are left out (the checkout itself is installed)."""
+        groups = ((pp.get("tool") or {}).get("pdm") or {}).get("dev-dependencies") or {}
+        out = []
+        for g in TEST_GROUPS:
+            for req in groups.get(g) or []:
+                req = str(req).strip()
+                if req and not req.startswith(("-e", "file:", ".", "/")) and "${" not in req:
+                    out.append(req)
         return sorted(set(out))
 
     def _tox_deps(self) -> list[str]:

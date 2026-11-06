@@ -37,7 +37,9 @@ caller and a test change"):
 **Both families:**
 - `hidden_patch` is the commit's change to its test files, applied only for gating and scoring.
 - `visible_tests` are the changed test files that already exist at the parent.
-- `gold_files` and `gold_functions` are the commit's source changes, minus what the start state already holds.
+- `gold_files` and `gold_functions` here are provisional (the commit's source changes from the parent). The gate
+  replaces them with the developer's non-test changes diffed from the start state, by the same code that scores the
+  agent (`runner.snapshot_tree`, `runner.changed_functions`).
 
 Output: `candidates_B.json`, `candidates_N.json` and `yield.json` (per repository: commits in the window, then each
 step's survivors).
