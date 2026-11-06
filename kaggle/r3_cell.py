@@ -25,9 +25,9 @@ import urllib.request
 
 # ---------- Config ----------
 BRANCH = "feature/option3-contract-axis"
-CODE_COMMIT = "46a80b8bd90c067e71fc1b65d782b9063ae9b245"
+CODE_COMMIT = "c60381da715951c15079cad0ebf83c09befef923"
 CODE_TREES = {"src": "ca512abf03bdd0fceb8e07a85b9bb295ff5aa85e",
-              "harness": "a5f70be73eb74a9b4bc36e67c39ce6080fe8bde3"}
+              "harness": "3e02b54dfc564b08eaccc596204aecd3a52a8a83"}
 REPO_URL = "https://github.com/rohith-hash-stack/SCE.git"
 EXPECTED_GITHUB_USER = "rohith-hash-stack"
 SUMMARIZER = "qwen2.5-coder:14b-instruct-q8_0"   # the locked model
@@ -45,7 +45,7 @@ CHECKPOINT_MIN = 10
 WORK = "/kaggle/working"
 SCE_DIR = f"{WORK}/SCE"
 PUSH_WT = f"{WORK}/SCE_results"
-RESULTS_PATH = "reports/r3/notice_check"
+RESULTS_PATH = "reports/r3/notice_check_2"
 CACHE = f"{WORK}/r3cache"
 PUSH_RESULTS = True
 GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
