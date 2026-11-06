@@ -97,6 +97,7 @@ def satisfies(version: str, spec: str | None) -> bool:
 
 # ------------------------------------------------------------------ Node
 def _node_index(cache: str) -> list[dict]:
+    os.makedirs(cache, exist_ok=True)
     path = os.path.join(cache, "node-index.json")
     if not os.path.exists(path) or time.time() - os.path.getmtime(path) > 86400:
         with urllib.request.urlopen(NODE_INDEX, timeout=60) as r:
@@ -107,28 +108,44 @@ def _node_index(cache: str) -> list[dict]:
         return json.load(fh)
 
 
+def _system_node() -> str:
+    """The system Node's version without 'v', or "" when there is none (e.g. a fresh Kaggle machine)."""
+    if shutil.which("node") is None:
+        return ""
+    return subprocess.run(["node", "--version"], capture_output=True, text=True).stdout.strip().lstrip("v")
+
+
+#: The Node major preferred whenever the spec allows it: the one the self-check validated (2026-11-06). The choice
+#: never depends on the machine's own Node, so this container and Kaggle resolve every revision identically.
+PREFERRED_NODE_MAJOR = 22
+
+
 def resolve_node(spec: str | None, cache: str) -> tuple[str | None, str]:
-    """(version without 'v', why). System Node first when it satisfies the spec."""
-    system = subprocess.run(["node", "--version"], capture_output=True, text=True).stdout.strip().lstrip("v")
+    """(version without 'v', why), from nodejs.org's release index only:
+    - `lts/*` or `lts/<name>`: the newest matching LTS release;
+    - otherwise, the newest 22.x release if the spec allows 22, else the newest satisfying LTS release, else the
+      newest satisfying release.
+    The system Node is never consulted here: `ensure_node` reuses it only if it is exactly the resolved version."""
     s = (spec or "").strip()
+    index = _node_index(cache)
     if s.startswith("lts/"):
-        index = _node_index(cache)
         name = s.split("/", 1)[1].lower()
         lts = [x for x in index if x.get("lts") and (name in ("*", "latest") or str(x["lts"]).lower() == name)]
-        return (lts[0]["version"].lstrip("v"), f"{s} -> latest matching LTS") if lts else (None, f"no LTS named {s}")
-    if system and satisfies(system, s or None):
-        return system, "system Node satisfies the spec"
-    index = _node_index(cache)
-    ok = [x["version"].lstrip("v") for x in index if satisfies(x["version"].lstrip("v"), s)]
-    lts_ok = [v for v in ok if any(x["version"].lstrip("v") == v and x.get("lts") for x in index)]
-    pick = (lts_ok or ok)[:1]
-    return (pick[0], "newest satisfying release" + (" (LTS)" if lts_ok else "")) if pick else (None, f"no release satisfies {s!r}")
+        return (lts[0]["version"].lstrip("v"), f"{s} -> newest matching LTS") if lts else (None, f"no LTS named {s}")
+    ok = [x for x in index if satisfies(x["version"].lstrip("v"), s or None)]
+    if not ok:
+        return None, f"no release satisfies {s!r}"
+    pref = [x for x in ok if _ver(x["version"])[0] == PREFERRED_NODE_MAJOR]
+    if pref:
+        return pref[0]["version"].lstrip("v"), f"newest Node {PREFERRED_NODE_MAJOR}.x (the spec allows it)"
+    lts = [x for x in ok if x.get("lts")]
+    return (lts or ok)[0]["version"].lstrip("v"), "newest satisfying release" + (" (LTS)" if lts else "")
 
 
 def ensure_node(version: str, cache: str) -> str:
     """The bin directory of Node `version` (system Node if it is that version)."""
-    system = subprocess.run(["node", "--version"], capture_output=True, text=True).stdout.strip().lstrip("v")
-    if system == version:
+    system = _system_node()
+    if system and system == version:
         return os.path.dirname(shutil.which("node"))
     root = os.path.join(cache, "node", version)
     bin_dir = os.path.join(root, f"node-v{version}-linux-x64", "bin")
@@ -171,10 +188,12 @@ def ensure_pm(name: str, version: str, node_bin: str, cache: str) -> str:
     if not os.path.exists(os.path.join(bin_dir, name)):
         os.makedirs(prefix, exist_ok=True)
         env = dict(os.environ, PATH=node_bin + os.pathsep + os.environ["PATH"])
-        r = subprocess.run(["npm", "install", "--no-save", "--prefix", prefix, f"{name}@{version}"], env=env,
+        npm = os.path.join(node_bin, "npm") if os.path.exists(os.path.join(node_bin, "npm")) else "npm"
+        r = subprocess.run([npm, "install", "--no-save", "--prefix", prefix, f"{name}@{version}"], env=env,
                            capture_output=True, text=True, timeout=INSTALL_TIMEOUT)
         if r.returncode != 0:
             raise RuntimeError(f"installing {name}@{version} failed: {r.stderr[-800:]}")
+    # the downloaded Node's own npm installed it; it runs with whichever Node is first on PATH
     return bin_dir
 
 
@@ -472,6 +491,31 @@ def self_check_revision(clone: str, rev: str, cache: str, scratch: str) -> dict:
     return rec
 
 
+def smoke(clone: str, rev: str, cache: str, scratch: str) -> int:
+    """Install only (Node, the package manager, the lockfile install, any build step), no test run. Prints one JSON
+    line; exit 0 on success, 2 on a structural failure, 3 on a network/package failure."""
+    work = os.path.join(scratch, f"smoke-{os.path.basename(clone)}-{rev[:8]}")
+    shutil.rmtree(work, ignore_errors=True)
+    subprocess.run(["git", "-C", clone, "worktree", "prune"], capture_output=True)
+    subprocess.run(["git", "-C", clone, "worktree", "add", "-q", "--detach", work, rev], check=True, capture_output=True)
+    env, t0 = Env(clone, rev, work, cache), time.time()
+    out = {"repo": os.path.basename(clone), "rev": rev}
+    try:
+        env.setup()
+        out.update(status="pass", node=env.node_version, node_why=env.node_why, pm=env.pm_version, built=env.built)
+        code = 0
+    except SetupError as exc:
+        out.update(status="fail", kind=exc.kind, reason=str(exc)[:1500])
+        code = 2 if exc.kind == "structural" else 3
+    except Exception as exc:
+        out.update(status="fail", kind="structural", reason=f"{type(exc).__name__}: {exc}"[:1500])
+        code = 2
+    out["seconds"], out["steps"] = round(time.time() - t0, 1), [(x["step"], x["rc"], x["seconds"]) for x in env.log]
+    print(json.dumps(out), flush=True)
+    subprocess.run(["git", "-C", clone, "worktree", "remove", "--force", work], capture_output=True)
+    return code
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -481,9 +525,16 @@ def main(argv=None) -> int:
     s.add_argument("--cache", required=True)
     s.add_argument("--scratch", required=True)
     s.add_argument("--out")
+    k = sub.add_parser("smoke", help="install only, no test run (the Kaggle cell's first check)")
+    k.add_argument("clone")
+    k.add_argument("rev")
+    k.add_argument("--cache", required=True)
+    k.add_argument("--scratch", required=True)
     a = p.parse_args(argv)
     os.makedirs(a.cache, exist_ok=True)
     os.makedirs(a.scratch, exist_ok=True)
+    if a.cmd == "smoke":
+        return smoke(os.path.abspath(a.clone), a.rev, a.cache, a.scratch)
     res = {"repo": os.path.basename(a.clone), "revisions": [self_check_revision(os.path.abspath(a.clone), r, a.cache,
                                                                                a.scratch) for r in a.revs]}
     res["pass"] = all(r["status"] == "pass" for r in res["revisions"])
