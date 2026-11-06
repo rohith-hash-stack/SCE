@@ -82,3 +82,62 @@ their frozen tasks and contexts are unchanged.
 "2026-11-06 Project framing: single-builder, no external team. 'Team approval' / '[TBD — team]' / 'end of week'
 language retired. Design choices recorded in amendments as before; clear reviewer decisions surfaced only when
 genuinely needed."
+
+## 2026-11-06: JS/TS builder self-check passes on all 7 repositories, so R3a runs full-scope (R3-5, Revision 4)
+
+**What was run:**
+- Command: `python -m harness.experiments.r3.jsbuild selfcheck CLONE REV1 REV2 --cache DIR --scratch DIR`, with code
+  `0d75e6e4`.
+- Revisions per repository: the earliest commit on or after R3's cutoff (2024-12-01), and HEAD. Together they span
+  the task revisions' range.
+- Per revision:
+  - it installs from the lockfile, with a direct pnpm binary, not corepack;
+  - it finds the test files;
+  - a named test file passes, with machine-readable output;
+  - 3 runs of that file give the same result.
+- All 14 revisions, from one run on one version of the code:
+
+| repository | revision | Node | package manager | runner | build in setup | named test file | tests passing | result |
+|---|---|---|---|---|---|---|---|---|
+| execa | `2aa3b0ce` | 22.22.0 | 10.9.4 | ava | no | `test/methods/override-promise.js` | 1 | pass |
+| execa | `HEAD` | 22.22.0 | 10.9.4 | node:test | no | `test/methods/override-promise.js` | 1 | pass |
+| h3 | `2aac4f98` | 22.22.0 | 9.7.1 | vitest | no | `test/unit/sse.test.ts` | 2 | pass |
+| h3 | `HEAD` | 22.22.0 | 12.3.4 | vitest | no | `test/unit/h3.test.ts` | 1 | pass |
+| msw | `48e4c760` | 18.19.0 | 9.14.0 | vitest | no | `src/core/graphql.test.ts` | 1 | pass |
+| msw | `HEAD` | 24.22.2 | 11.27.1 | vitest | yes | `src/http/http.test.ts` | 1 | pass |
+| nitro | `61e3f881` | 20.20.2 | 9.14.2 | vitest | yes | `test/presets/static.test.ts` | 1 | pass |
+| nitro | `HEAD` | 24.22.2 | 11.28.10 | vitest | yes | `test/unit/virtual.test.ts` | 1 | pass |
+| unplugin | `1b697de1` | 22.22.0 | 9.14.4 | vitest | no | `test/unit-tests/resolve-id/resolve-id.test.ts` | 5 | pass |
+| unplugin | `HEAD` | 22.22.0 | 12.14.0 | vitest | yes | `test/unit-tests/unloader/index.test.ts` | 4 | pass |
+| unstorage | `61fb931f` | 22.22.0 | 9.14.4 | vitest | no | `test/drivers/memory.test.ts` | 15 | pass |
+| unstorage | `HEAD` | 22.22.0 | 11.28.6 | vitest | no | `test/drivers/overlay.test.ts` | 15 | pass |
+| vitest | `721a5b84` | 22.22.0 | 9.12.3 | vitest | yes | `test/core/test/timers-node.test.ts` | 125 | pass |
+| vitest | `HEAD` | 22.22.0 | 11.28.6 | vitest | yes | `test/unit/test/timers-node.test.ts` | 220 | pass |
+
+**Failures on the way.** Every one was a builder bug, none structural, so none counted toward Revision 4's stop rule:
+- **h3 HEAD:** picked pnpm 9 from lockfile format 9.0.
+  - Fix: read the pnpm version the lockfile records (`packageManagerDependencies`); fall back to newer majors on
+    `ERR_PNPM_BROKEN_LOCKFILE`.
+- **msw early:** this container's `NODE_OPTIONS=--use-openssl-ca` is rejected by Node 18's worker threads.
+  - Fix: drop worker-incompatible flags from the child environment. The proxy CA stays trusted through
+    `NODE_EXTRA_CA_CERTS`.
+  - Kaggle does not set this variable.
+- **msw HEAD and nitro early:** the tests import build output (`./lib/vite`, and `nitropack/core` by the package's
+  own name).
+  - Fix: detect "could not resolve" and "failed to load url" errors in the full output and in the report's messages,
+    then build in setup.
+- **nitro early:** `better-sqlite3@8.7.0` has no prebuilt binary for Node 22, and its source does not compile
+  against it.
+  - Fix: on a native-module build failure, with Node not pinned exactly, retry with the newest satisfying release of
+    older LTS majors. Node 20 was used.
+- **vitest early:** run from the repository root, monorepo test folders lost their own vitest config.
+  - Fix: run each file from the nearest folder with its own vitest, vite or jest config.
+- **nitro HEAD (in a later run):** a named test inside `test/vite/vitest-fixture/`, a sample project, varied between
+  runs.
+  - Fix: skip any fixture-named folder.
+
+**Still open for the Kaggle cell:**
+- installing Node versions and the pnpm binaries in the cell, as here, through the same `jsbuild` functions;
+- a per-repository install cache.
+
+The pnpm store already caches between revisions here.
