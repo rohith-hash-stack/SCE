@@ -106,3 +106,23 @@ tools answer from the **current** tree. The index is rebuilt lazily on the next 
 - If the JS/TS builder misses its check by 2026-11-12:
   - round 1 is Python-only;
   - if Python-only Family B is below 50 after the gate, R3a is reported as not run (the stop condition).
+
+## 6. Order after the JS/TS builder (2026-11-06)
+
+"Builder accepted, full-scope R3a. Proceed with the harness in the order you listed. Two additions when you reach the
+Kaggle cell:
+1. confirm run_tests wires both the JS/TS builder and the Python builder before the cell is built — the Python
+   builder additions (~1 day) need to land before shared tools, not after.
+2. As the first thing the Kaggle cell runs, smoke-test the JS/TS builder on one repo in the Kaggle environment —
+   install only, no test run — before wiring the full pipeline. This container's behavior doesn't guarantee
+   Kaggle's. Five-minute check, saves five-hour debugging later."
+
+**The order:**
+1. Python builder additions;
+2. shared tools (`run_tests` over both builders);
+3. agent loop;
+4. token accounting;
+5. resume and logging;
+6. scoring;
+7. the Kaggle cell (the JS/TS install smoke test first);
+8. the qwen notice check (5 calls).
