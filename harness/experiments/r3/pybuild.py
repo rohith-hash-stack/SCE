@@ -271,15 +271,18 @@ class PyEnv:
                     break
             except configparser.Error:
                 continue
+        toks = None
         if raw is None:
             ini = ((self._pyproject().get("tool") or {}).get("pytest") or {}).get("ini_options") or {}
             raw = ini.get("addopts", "")
-            raw = " ".join(raw) if isinstance(raw, list) else raw
-        lines = [ln.split(" #", 1)[0] for ln in (raw or "").splitlines() if not ln.strip().startswith("#")]
-        try:
-            toks = shlex.split(" ".join(lines))
-        except ValueError:
-            return ""
+            if isinstance(raw, list):     # a TOML list: each element is already one argument ("-m", "not property")
+                toks = [str(t) for t in raw]
+        if toks is None:
+            lines = [ln.split(" #", 1)[0] for ln in (raw or "").splitlines() if not ln.strip().startswith("#")]
+            try:
+                toks = shlex.split(" ".join(lines))
+            except ValueError:
+                return ""
         out, skip = [], False
         for i, t in enumerate(toks):
             if skip:
