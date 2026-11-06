@@ -184,6 +184,16 @@ NETWORK = re.compile(r"ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|ERR_PNPM_FETCH|E
                      r"ERR_SOCKET|tarball", re.I)
 
 
+#: NODE_OPTIONS flags Node's worker threads reject (ERR_WORKER_INVALID_EXEC_ARGV): test runners start workers, so
+#: these are dropped from the child environment. The proxy's CA stays trusted through NODE_EXTRA_CA_CERTS.
+_WORKER_UNSAFE = ("--use-openssl-ca", "--use-bundled-ca", "--openssl-config")
+
+
+def _worker_safe_node_options() -> str:
+    opts = os.environ.get("NODE_OPTIONS", "").split()
+    return " ".join(o for o in opts if not o.startswith(_WORKER_UNSAFE))
+
+
 class SetupError(Exception):
     def __init__(self, kind: str, message: str):
         super().__init__(message)
@@ -224,7 +234,7 @@ class Env:
         self.pm_version = None
         node_bin = ensure_node(version, self.cache)
         self.env = dict(os.environ, PATH=node_bin + os.pathsep + os.environ["PATH"], CI="1", COREPACK_ENABLE_STRICT="0",
-                        COREPACK_ENABLE_AUTO_PIN="0", NODE_OPTIONS=os.environ.get("NODE_OPTIONS", ""),
+                        COREPACK_ENABLE_AUTO_PIN="0", NODE_OPTIONS=_worker_safe_node_options(),
                         npm_config_store_dir=os.path.join(self.cache, "pnpm-store"),
                         PNPM_HOME=os.path.join(self.cache, "pnpm-home"), FORCE_COLOR="0", NO_COLOR="1")
         pm = d["package_manager"]
@@ -342,7 +352,8 @@ class Env:
 
 
 UNRESOLVED_BUILD = re.compile(r"Failed to resolve (entry|import)|Cannot find module .*?(dist|lib|build)/|"
-                              r"ERR_MODULE_NOT_FOUND|Does the file exist|Failed to load url", re.I)
+                              r"ERR_MODULE_NOT_FOUND|Does the file exist|Failed to load url|"
+                              r"Could not resolve '\.{0,2}/?(dist|lib|build)/|UNRESOLVED_IMPORT|failed to load config", re.I)
 
 
 def self_check_revision(clone: str, rev: str, cache: str, scratch: str) -> dict:
