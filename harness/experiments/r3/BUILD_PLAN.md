@@ -50,9 +50,22 @@ Estimate: 1 day.
 | analysis: per family, Wilcoxon and McNemar per seed, Holm across B and N, Family B interim look at 40/80 (boundaries in amendment R3-1), per-seed and unstable flags, labels | R2's `analyze.py` | 1 |
 | Kaggle cell: Ollama 0.34.0, uv, Node via corepack; environments built on Kaggle; hash checks against the frozen manifest | R2's cell | 1 |
 
-**One harness detail to fix in a dated amendment before the first R3a call:** when the agent has edited files, PRISM's
+~~**One harness detail to fix in a dated amendment before the first R3a call:** when the agent has edited files, PRISM's
 tools answer from the **current** tree. The index is rebuilt lazily on the next PRISM call after an edit, and
-`related_code` re-indexes the same way. Both versions see their own edits, symmetric.
+`related_code` re-indexes the same way. Both versions see their own edits, symmetric.~~ → replaced (2026-11-06):
+
+**Edit handling per Amendment R3-5:**
+- Before each index-backed tool call, run a `(size, mtime)` then content-hash drift probe against the files last
+  indexed. Reindex only if something moved.
+- A file that does not parse is gated: its index content stays at the last parsable version, and index-backed tools
+  refuse to serve it as current.
+- Equivalence tests E1-E3 must pass before the harness is frozen.
+- `read_file` is not gated.
+- **The fairness rule is a harness requirement, not just a PRISM behaviour:**
+  - the harness must not retry a gated call in a way that lets the agent skip `read_file`;
+  - if the agent ignores the notice and asks again, it gets the same notice, and must read the file directly.
+- The baseline's `related_code` is index-backed and follows the same probe and gate (R3-5).
+- Added cost: 3-4 days (R3-5, "Build cost"). The harness strand is about 12-13 days in all.
 
 ## 3. Tasks
 
