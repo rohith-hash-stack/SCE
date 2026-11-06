@@ -374,13 +374,18 @@ class Env:
         else:
             cmd = ["node", "--test", "--test-reporter=tap", rel]
         rc, out, secs = _run(cmd, cwd, self.env, TEST_TIMEOUT)
-        res = {"file": rel, "cwd": os.path.relpath(cwd, self.work), "rc": rc, "seconds": round(secs, 1), "passed": 0, "failed": 0, "skipped": 0, "parsed": False}
+        res = {"tests": {}, "file": rel, "cwd": os.path.relpath(cwd, self.work), "rc": rc, "seconds": round(secs, 1), "passed": 0, "failed": 0, "skipped": 0, "parsed": False}
         messages = []
         if runner in ("vitest", "jest") and os.path.exists(out_json):
             data = json.load(open(out_json))
             res.update(passed=data.get("numPassedTests", 0), failed=data.get("numFailedTests", 0),
                        skipped=data.get("numPendingTests", 0) + data.get("numTodoTests", 0), parsed=True)
             messages = [tr.get("message") or "" for tr in data.get("testResults", [])]
+            for tr in data.get("testResults", []):           # per-test outcomes (vitest and jest share this shape)
+                for a in tr.get("assertionResults", []):
+                    st = a.get("status")
+                    res["tests"][a.get("fullName") or a.get("title", "")] = \
+                        "passed" if st == "passed" else "failed" if st == "failed" else "skipped"
         elif runner == "mocha":
             try:
                 st = json.loads(out[out.index("{"):]).get("stats", {})
@@ -388,6 +393,9 @@ class Env:
             except ValueError:
                 pass
         elif runner in ("node:test", "ava"):
+            for m in re.finditer(r"^\s*(not ok|ok) \d+ - (.+?)(?:\s+#\s*(SKIP|TODO).*)?$", out, re.M):
+                res["tests"][m.group(2).strip()] = "skipped" if m.group(3) else \
+                    ("failed" if m.group(1) == "not ok" else "passed")
             p = re.search(r"^# pass (\d+)", out, re.M)
             f = re.search(r"^# fail (\d+)", out, re.M)
             if p or f:
