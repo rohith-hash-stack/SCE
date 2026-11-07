@@ -407,3 +407,32 @@ Pilot artifacts are in `pilot/` (yield, candidates, gate log, attrition, frozen 
    - At ~10× the window, and at most 10 per repository, that is about 50 before the gate.
    - vitest's are mostly browser tests.
    - Family N projects to well under 50, so it would move to R3b by amendment R3-2, item 5.
+
+## 2026-11-07: widened pilot gate (amendment R3-6); builders kill a test's process group (no model calls)
+
+**Widened pilot gate** (`pilot/widened/`, gate code `1db22821`, seed 6601):
+- 34 Family B candidates: Python 12 (2024-10-01 to 2024-11-30), JS/TS 22 (2024-04-01 to 2024-11-30: vitest 14,
+  execa 8; nitro, h3, unstorage, msw, unplugin 0).
+- 19 drawn, 10 passed: sqlglot 2, aiohttp 2, poetry 1, execa 5. **5 of the 10 are JS/TS**, so the R3-6 target (at
+  least 2) is met. All 5 run under node:test.
+- Failures: vitest 7 (6 give no test results in this environment, as browser-mode tests; 1 failed to install);
+  litestar 1 and poetry 1 (no fail-to-pass test).
+- Every task has exactly 1 changed caller.
+- The gate was first run on the code before `1a997fdf` (the snapshot-owner fix), and the container restarted at 9 of
+  10. It was re-run from scratch on one version of the code; the partial run is not kept in the repository. The
+  re-run gave the same outcome for every candidate the partial run reached (9 passes, the same 9). Only the reason
+  text for vitest 48c502fbeb changed ("no runnable hidden test file" became "no test results"). The re-run's 10th
+  pass, dce0393b04, had not been reached.
+
+**Leftover test processes** (fixed at `1db22821`):
+- execa's IPC tests leave child `node` processes running after the test call. 45 were left during the first widened
+  gate, about 3 GB in all.
+- The builders' `_run` (both languages use it) now starts each command in its own process group and kills the group
+  when the command ends or times out (`tests/test_r3_run_group.py`).
+- `memtest.py` now also fails a run that leaves any process in its `/tmp/r3run_*` worktree. Before, it checked only
+  that its own child had exited, which would not have caught this.
+
+**Container restarts:** two restarts killed vitest's main-window mining (over 2 hours in one process). It now runs
+in 8 quarterly chunks, each its own process, with a done marker per chunk, so a restart loses only the chunks in
+flight. The mining rules apply per commit. The one check that spans the window (the same diff by `git patch-id`) is
+re-applied over the whole window when the chunks are merged.

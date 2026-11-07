@@ -44,4 +44,12 @@ re-strategized before R3a's hash-commit."
   - `gate_B.jsonl`, `gate_N.jsonl`;
   - `attrition_B.json`, `attrition_N.json`;
   - `tasks_B.json` (10, sha256 of the task list `bf87d595…`), `tasks_N.json` (1, not run).
-- **Widened gate** (Family B; amendment R3-6): `widened/`.
+- **Widened gate** (Family B; amendment R3-6; 2026-11-07; gate code at `1db22821`): `widened/`.
+  - Candidates: Python 2024-10-01 to 2024-11-30, JS/TS 2024-04-01 to 2024-11-30 (`yield.json`, `candidates_B.json`;
+    34 candidates).
+  - Gate: seed 6601, 19 drawn, 10 passed (`gate_B.jsonl`, `attrition_B.json`).
+  - `tasks_B.json`: 10 tasks, sha256 of the task list `fe934d16…`. **5 Python** (sqlglot 2, aiohttp 2, poetry 1),
+    **5 JS/TS** (execa, node:test). The target of at least 2 JS/TS is met.
+  - Every task has exactly 1 changed caller (the depth limitation above holds here too).
+  - vitest: 7 drawn, none passed. 6 give no test results in this environment (browser mode), 1 failed to install.
+  - This gate supersedes the first gate's `tasks_B.json` for the pilot. That gate's list stays as a record.

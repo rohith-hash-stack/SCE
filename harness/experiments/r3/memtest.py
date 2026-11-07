@@ -9,7 +9,8 @@ second.
 
 **Pass when:**
 - the driver's RSS grows by less than 50 MB over all runs;
-- each child has exited before the next one starts;
+- each child has exited before the next one starts, and no process of its run is left (none whose command line or
+  working directory is in the run's `/tmp/r3run_*` worktree);
 - within a run, the child's RSS does not keep growing: the peak of its last quarter of samples is at most 100 MB
   above the peak of the first three quarters;
 - the children's peaks show no trend: every (task, version, script) runs twice, and its second peak is within 10% of
@@ -41,6 +42,25 @@ def rss_mb(pid: int) -> float | None:
     except OSError:
         return None
     return None
+
+
+def leftovers() -> list[dict]:
+    """Processes still running in, or from, a run's worktree (`/tmp/r3run_*`): a test's children that outlived it.
+
+    The child's own exit is not enough: execa's IPC tests left node processes behind (2026-11-07), reparented away
+    from the run, which holds their memory into the next run."""
+    found = []
+    for d in os.listdir("/proc"):
+        if not d.isdigit():
+            continue
+        try:
+            cmd = open(f"/proc/{d}/cmdline", "rb").read().replace(b"\0", b" ").decode("utf8", "replace")
+            cwd = os.readlink(f"/proc/{d}/cwd")
+        except OSError:
+            continue
+        if "/r3run_" in cmd or "/r3run_" in cwd:
+            found.append({"pid": int(d), "rss_mb": round(rss_mb(int(d)) or 0.0, 1), "cmd": cmd[:160]})
+    return found
 
 
 def plan(tasks: list[dict], runs: int) -> list[tuple[str, str, str]]:
@@ -86,6 +106,8 @@ def main(argv=None) -> int:
                 samples.append(round(r, 1))
             time.sleep(1)
         text = child.stdout.read()
+        time.sleep(2)
+        left = leftovers()
         line = next((ln for ln in text.splitlines() if ln.startswith("{")), "{}")
         res = json.loads(line)
         cut = max(1, int(len(samples) * 0.75))
@@ -93,7 +115,8 @@ def main(argv=None) -> int:
         rec = {"run": i, "task": tid, "version": version, "script": script, "rc": child.returncode,
                "outcome": res.get("outcome"), "ok": res.get("ok"), "seconds": round(time.time() - t0, 1),
                "child_peak_mb": max(samples) if samples else None, "late_growth_mb": round(late, 1),
-               "exited_before_next": child.poll() is not None and rss_mb(child.pid) is None,
+               "exited_before_next": child.poll() is not None and rss_mb(child.pid) is None and not left,
+               "leftover_processes": left,
                "driver_mb": round(rss_mb(me), 1), "samples": samples}
         records.append(rec)
         print(json.dumps({k: v for k, v in rec.items() if k != "samples"}), flush=True)
