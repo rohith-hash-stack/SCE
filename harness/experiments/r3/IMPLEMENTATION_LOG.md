@@ -444,3 +444,37 @@ re-applied over the whole window when the chunks are merged.
 - **Fails "no late growth within a run"**: runs 9 (+186 MB), 16 (+101 MB) and 19 (+167 MB). Each is a single step
   late in the run, flat afterwards (8 to 14 flat samples to the end), and repeated within 3% in the other pass.
 - Recorded as a failure. The rule is not changed after seeing the result. Whether to re-specify the check is open.
+
+## 2026-11-07: R3a main window mined and gated (no model calls; `r3a_tasks/`)
+
+**Mining** (2024-12-01 to HEAD, 18 repositories, both families, the pilot's rules):
+- Family B: 132 candidates from 16,556 kept commits. Changed callers: 1: 102, 2: 21, 3-4: 7, 5+: 2.
+  - By repository: vitest 31, sqlglot 25, scrapy 19, execa 9, h3 9, nitro 8, packaging 7, poetry 6, unstorage 6,
+    tornado 3, aiohttp 2, litestar 2, typer 2, multidict 1, unplugin 1, yarl 1, msw 0, werkzeug 0.
+- Family N (strict docstring/JSDoc rule): 28 candidates. scrapy 8, sqlglot 5, h3 4, nitro 4, aiohttp 3,
+  packaging 3, vitest 1. The other repositories gave none.
+- vitest was mined in 8 quarterly chunks after two container restarts. The whole-window repeat check found no
+  repeats across chunks, so the chunks equal one run.
+
+**Gate** (seed 5501, target 80, caps B 10 and N 20 per repository):
+- **Family B: 66 of 80** (117 drawn). Python 38, JS/TS 28. Changed callers: 1: 52, 2: 10, 3-4: 3, 5+: 1. So 14 of
+  66 (21%) have 2 or more.
+  - Every candidate except 15 of sqlglot's (left out by its cap) was drawn, so 66 is the most this pool gives.
+  - vitest: 0 of 31. All of them give no test results here (browser mode). It held 10 of the 30 mined candidates
+    with 2 or more callers.
+  - scrapy: 8 of 19 (11 with no fail-to-pass test). poetry 3 of 6. msw and werkzeug gave no candidates.
+- **Family N: 23 of 28.** Python 15, JS/TS 8. scrapy 4 of 8; vitest 0 of 1.
+
+**Environment incidents during the B gate:**
+- The disk allowance filled (the JS/TS install caches). 5 candidates failed setup in that stretch, 3 of them naming
+  ENOSPC. Old scratch checkouts and the global npm/pnpm/pip caches were cleared. The 5 results were removed from
+  `gate_B.jsonl` (the earlier file is kept in scratch) and re-gated on the same code: 4 failed for ordinary reasons
+  (3 vitest browser mode, 1 execa with no fail-to-pass test), and h3 cad67c8476 passed. No other result was touched:
+  a full disk cannot make a candidate pass. Family N's results came before the disk filled.
+- The global caches were cleared twice more during the run, each time when no install was running.
+
+**Gate resume bug (bookkeeping only):** on a resume, every earlier pass is preloaded, so a repository already at
+its cap (sqlglot) had its earlier draws skipped before they were counted. `attrition_B.json` read sqlglot 0 drawn
+and 117 as 107. Fixed in `gate.py`: a commit already gated counts as drawn before the cap check. The outputs were
+recomputed from the same `gate_B.jsonl`, with no new gating. The task list is unchanged (sha256 `b796d29e…`
+before and after), and Family N's outputs recompute byte-identical.

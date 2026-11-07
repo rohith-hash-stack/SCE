@@ -265,6 +265,9 @@ def main(argv=None) -> int:
         for t in order:
             if len(passed) >= a.want:
                 break
+            if t["commit"] in done:     # gated before a resume: drawn then, whatever the caps say now (all passes
+                drawn.append(t["commit"])   # are preloaded, so a repository's cap can read as full on replay)
+                continue
             n_repo = sum(1 for r in passed if r["repo"] == t["repo"])
             n_used = sum(1 for r in passed if r["repo"] in USED_REPOS)
             if n_repo >= per_repo or (t["repo"] in USED_REPOS and n_used >= a.want // 2):
