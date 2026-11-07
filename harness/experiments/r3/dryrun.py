@@ -1,6 +1,6 @@
 """R3 dry run: the real runner on gated tasks with a scripted model, end to end (no model calls).
 
-    python -m harness.experiments.r3.dryrun TASKS.json OUT_DIR --cache-py DIR --cache-js DIR NAME=CLONE ... \
+    python -m harness.experiments.r3.dryrun TASKS.json OUT_DIR --cache-py DIR --cache-js DIR NAME=CLONE ... [--pad N] [--turn-cap N] \
         [--ids ID ...] [--seed 42]
 
 Two scripted "models", both versions each (pilot pass criterion 5, "the scoring path, end to end on synthetic
@@ -22,6 +22,7 @@ import argparse
 import difflib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -86,6 +87,21 @@ class Script:
                 "seconds": 0.0}
 
 
+def pad_calls(task: dict, version: str, n: int) -> list[dict]:
+    """`n` read-only calls, cycling the disk tools and the version's index-backed tool (the memory test's check that
+    memory does not grow with the number of tool calls, amendment R3-7). They change nothing in the tree."""
+    path = task.get("anchor_file") or task["target"].split("::", 1)[0]
+    symbol = task.get("anchor") or task["target"].split("::", 1)[1]
+    leaf = symbol.rsplit(".", 1)[-1]
+    index = ({"tool": "prism_change_context", "args": {"symbol": symbol}} if version == "PRISM"
+             else {"tool": "related_code", "args": {"query": leaf}})
+    cycle = [{"tool": "read_file", "args": {"path": path, "start": 1, "end": 200}},
+             {"tool": "grep", "args": {"pattern": re.escape(leaf)}},
+             {"tool": "list_dir", "args": {"path": os.path.dirname(path) or "."}},
+             index]
+    return [cycle[i % len(cycle)] for i in range(n)]
+
+
 def gold_calls(task: dict, clone: str, version: str) -> list[dict]:
     files = [f for f in _git("-C", clone, "diff", "--name-only", "--no-renames", task["parent"], task["commit"])
              .stdout.split("\n") if f and f not in set(task["test_files"])]
@@ -120,6 +136,8 @@ def main(argv=None) -> int:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--versions", nargs="*", default=["PRISM", "BASELINE"])
     p.add_argument("--scripts", nargs="*", default=["gold", "empty"])
+    p.add_argument("--pad", type=int, default=0, help="read-only calls before each script's own calls")
+    p.add_argument("--turn-cap", type=int, default=30)
     a = p.parse_args(argv)
     from harness.experiments.r3.runner import run_task
     clones = dict(s.split("=", 1) for s in a.repos)
@@ -131,11 +149,12 @@ def main(argv=None) -> int:
             continue
         cache = a.cache_js if t["language"] == "js" else a.cache_py
         for version in [v for v in ("PRISM", "BASELINE") if v in a.versions]:
-            scripts = [("gold", a.seed, lambda: Script(gold_calls(t, clones[t["repo"]], version))),
-                       ("empty", a.seed + 1, lambda: Script([]))]
+            pad = pad_calls(t, version, a.pad)
+            scripts = [("gold", a.seed, lambda: Script(pad + gold_calls(t, clones[t["repo"]], version))),
+                       ("empty", a.seed + 1, lambda: Script(list(pad)))]
             for kind, seed, make in [x for x in scripts if x[0] in a.scripts]:
                 model = make()
-                res = run_task(t, version, seed, os.path.abspath(clones[t["repo"]]), a.out, cache, model, 30)
+                res = run_task(t, version, seed, os.path.abspath(clones[t["repo"]]), a.out, cache, model, a.turn_cap)
                 want = "resolved" if kind == "gold" else "unresolved"
                 ok = res.get("outcome") == want
                 bad += not ok

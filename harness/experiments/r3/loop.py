@@ -122,6 +122,18 @@ def stop_kind(end: str | None) -> str:
     return "error"
 
 
+def _rss_mb() -> float | None:
+    """This process's resident memory after a tool call (the memory test's per-call series, amendment R3-7)."""
+    try:
+        with open("/proc/self/status") as fh:
+            for ln in fh:
+                if ln.startswith("VmRSS:"):
+                    return round(int(ln.split()[1]) / 1024, 1)
+    except OSError:
+        return None
+    return None
+
+
 def turn_counts(log_path: str) -> dict:
     """Per-run process counts from the turn log."""
     turns = [json.loads(ln) for ln in open(log_path)] if os.path.exists(log_path) else []
@@ -249,7 +261,7 @@ class AgentRun:
                 res = self.execute(tool, args)
                 rec.update(tool_seconds=round(time.time() - t, 1), output_tokens=self.n(res["output"]),
                            output_head=res["output"][:OUTPUT_HEAD_CHARS],
-                           output_cut="[cut at 4,000 tokens]" in res["output"],
+                           output_cut="[cut at 4,000 tokens]" in res["output"], rss_mb=_rss_mb(),
                            **{k: v for k, v in res.items() if k != "output"})
                 log.write(json.dumps(rec) + "\n")
                 log.flush()

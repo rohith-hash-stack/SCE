@@ -7,14 +7,24 @@ The driver runs `--runs` runs in sequence, each in its own child process (`dryru
 version and script): the per-run subprocess path the Kaggle cell uses. It samples its own RSS and the child's once a
 second.
 
-**Pass when:**
-- the driver's RSS grows by less than 50 MB over all runs;
-- each child has exited before the next one starts, and no process of its run is left (none whose command line or
-  working directory is in the run's `/tmp/r3run_*` worktree);
-- within a run, the child's RSS does not keep growing: the peak of its last quarter of samples is at most 100 MB
-  above the peak of the first three quarters;
-- the children's peaks show no trend: every (task, version, script) runs twice, and its second peak is within 10% of
-  its first.
+**Pass when** (amendment R3-7, which replaced the first rule after its 2026-11-07 result):
+- (a) within a run, memory plateaus before the run ends, and does not grow with the number of tool calls:
+  - plateau: neither of the child's last two steps between samples rises by more than max(2% of its peak, 10 MB)
+    (a flat or falling end passes, a still-climbing end fails);
+  - per call: every run starts with `--pad` read-only calls (the disk tools and the version's index-backed tool,
+    `dryrun.pad_calls`). The loop logs the process's RSS after each call. The least-squares slope of RSS over pad
+    calls 5 to the last (the first 4 include building the index) is at most 1 MB per call.
+  - A single heavy phase late in a run is expected, not a failure.
+- (b) across runs, peak memory repeats within 10%: every (task, version, script) runs twice, and its second peak is
+  within 10% of its first;
+- (c) memory is released after each run exits: the child has exited and holds nothing before the next starts, and
+  the driver's RSS grows by less than 50 MB over all runs;
+- (d) no orphaned processes survive: none whose command line or working directory is in a run's `/tmp/r3run_*`
+  worktree;
+- and every run ends as its script should (gold resolved, empty unresolved).
+
+The first rule's late-growth figure (the peak of the last quarter of samples minus the peak of the rest) is still
+recorded per run, as a diagnostic only.
 
 `OUT_DIR/memtest.json` holds the samples, the per-run peaks and the verdict.
 """
@@ -29,8 +39,27 @@ import sys
 import time
 
 DRIVER_GROWTH_MB = 50
-LATE_GROWTH_MB = 100
+LATE_GROWTH_MB = 100   # the first rule's figure; a diagnostic only since amendment R3-7
 PEAK_DRIFT = 0.10
+MB_PER_CALL = 1.0
+PLATEAU_FRAC, PLATEAU_MB = 0.02, 10.0
+
+
+def plateaued(samples: list[float]) -> bool:
+    """The run's memory had stopped rising when it ended: neither of the last two steps between samples rises by more
+    than max(2% of the peak, 10 MB). Flat and falling ends both pass; a still-climbing end fails."""
+    if len(samples) < 3:
+        return True
+    tol, tail = max(PLATEAU_FRAC * max(samples), PLATEAU_MB), samples[-3:]
+    return all(b - a <= tol for a, b in zip(tail, tail[1:]))
+
+
+def _slope(ys: list[float]) -> float | None:
+    if len(ys) < 2:
+        return None
+    n = len(ys)
+    mx, my = (n - 1) / 2, sum(ys) / n
+    return sum((x - mx) * (y - my) for x, y in enumerate(ys)) / sum((x - mx) ** 2 for x in range(n))
 
 
 def rss_mb(pid: int) -> float | None:
@@ -80,6 +109,8 @@ def main(argv=None) -> int:
     p.add_argument("--cache-py", required=True)
     p.add_argument("--cache-js", required=True)
     p.add_argument("--runs", type=int, default=20)
+    p.add_argument("--pad", type=int, default=24)
+    p.add_argument("--turn-cap", type=int, default=60)
     a = p.parse_args(argv)
     task_files = [x for x in a.args if x.endswith(".json")]
     repos = [x for x in a.args if "=" in x]
@@ -95,7 +126,7 @@ def main(argv=None) -> int:
     for i, (tid, version, script) in enumerate(plan(tasks, a.runs)):
         cmd = [sys.executable, "-B", "-m", "harness.experiments.r3.dryrun", merged, os.path.join(runs_dir, str(i)),
                *repos, "--cache-py", a.cache_py, "--cache-js", a.cache_js, "--ids", tid, "--versions", version,
-               "--scripts", script]
+               "--scripts", script, "--pad", str(a.pad), "--turn-cap", str(a.turn_cap)]
         t0 = time.time()
         child = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                  env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
@@ -110,14 +141,22 @@ def main(argv=None) -> int:
         left = leftovers()
         line = next((ln for ln in text.splitlines() if ln.startswith("{")), "{}")
         res = json.loads(line)
+        seed = 42 if script == "gold" else 43
+        log = os.path.join(runs_dir, str(i), f"{tid}__{version}__{seed}.jsonl")
+        per_call = [r.get("rss_mb") for r in (json.loads(ln) for ln in open(log)) if r.get("rss_mb") is not None]\
+            if os.path.exists(log) else []
+        pad_rss = per_call[4:a.pad]
+        slope = _slope(pad_rss)
         cut = max(1, int(len(samples) * 0.75))
         late = (max(samples[cut:]) - max(samples[:cut])) if len(samples) > 3 else 0.0
         rec = {"run": i, "task": tid, "version": version, "script": script, "rc": child.returncode,
                "outcome": res.get("outcome"), "ok": res.get("ok"), "seconds": round(time.time() - t0, 1),
                "child_peak_mb": max(samples) if samples else None, "late_growth_mb": round(late, 1),
-               "exited_before_next": child.poll() is not None and rss_mb(child.pid) is None and not left,
+               "exited_before_next": child.poll() is not None and rss_mb(child.pid) is None,
                "leftover_processes": left,
-               "driver_mb": round(rss_mb(me), 1), "samples": samples}
+               "plateau": plateaued(samples), "pad_calls_measured": len(pad_rss),
+               "mb_per_call": None if slope is None else round(slope, 3),
+               "driver_mb": round(rss_mb(me), 1), "per_call_rss": per_call, "samples": samples}
         records.append(rec)
         print(json.dumps({k: v for k, v in rec.items() if k != "samples"}), flush=True)
     growth = records[-1]["driver_mb"] - driver_start if records else 0.0
@@ -128,10 +167,12 @@ def main(argv=None) -> int:
         if len(peaks) > 1:
             drift["/".join(key)] = round((peaks[-1] - peaks[0]) / peaks[0], 3)
     checks = {
-        "driver_growth_under_50mb": growth < DRIVER_GROWTH_MB,
-        "children_exited": all(r["exited_before_next"] for r in records),
-        "no_late_growth_within_a_run": all(r["late_growth_mb"] <= LATE_GROWTH_MB for r in records),
-        "no_peak_trend": all(abs(d) <= PEAK_DRIFT for d in drift.values()),
+        "a_plateau_within_a_run": all(r["plateau"] for r in records),
+        "a_no_growth_with_tool_calls": all(r["mb_per_call"] is not None and r["pad_calls_measured"] >= 10
+                                           and r["mb_per_call"] <= MB_PER_CALL for r in records),
+        "b_peaks_repeat_within_10pct": bool(drift) and all(abs(d) <= PEAK_DRIFT for d in drift.values()),
+        "c_released_after_exit": all(r["exited_before_next"] for r in records) and growth < DRIVER_GROWTH_MB,
+        "d_no_orphans": all(not r["leftover_processes"] for r in records),
         "runs_as_expected": all(r["ok"] for r in records),
     }
     verdict = {"runs": len(records), "driver_start_mb": round(driver_start, 1), "driver_growth_mb": round(growth, 1),
