@@ -1,0 +1,495 @@
+[
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "b50f3a1a44038b5f6304f77263f6e08c157f9aa8",
+  "parent": "8dd616b7d6eed0048ae97b91dd597b173086e995",
+  "commit_date": "2025-02-05T00:42:50+00:00",
+  "author_date": "2025-02-05T00:42:50+00:00",
+  "subject": "Use union types instead of join in binder (#18538)",
+  "anchor": "mypy.binder.ConditionalTypeBinder.assign_type",
+  "anchor_file": "mypy/binder.py",
+  "forced": [
+   "parameter removed or renamed: restrict_any"
+  ],
+  "changed_callers": [
+   "mypy.checker.TypeChecker.check_assignment",
+   "mypy.checker.TypeChecker.check_multi_assignment_from_union"
+  ],
+  "depth": 2,
+  "stratum": "2-4",
+  "caller_bucket": "2",
+  "start_patch": "--- a/mypy/binder.py\n+++ b/mypy/binder.py\n@@ -300,9 +300,7 @@\n         yield self.type_assignments\n         self.type_assignments = old_assignments\n \n-    def assign_type(\n-        self, expr: Expression, type: Type, declared_type: Type | None, restrict_any: bool = False\n-    ) -> None:\n+    def assign_type(self, expr: Expression, type: Type, declared_type: Type | None) -> None:\n         # We should erase last known value in binder, because if we are using it,\n         # it means that the target is not final, and therefore can't hold a literal.\n         type = remove_instance_last_known_values(type)\n@@ -333,41 +331,39 @@\n \n         p_declared = get_proper_type(declared_type)\n         p_type = get_proper_type(type)\n-        enclosing_type = get_proper_type(self.most_recent_enclosing_type(expr, type))\n-        if isinstance(enclosing_type, AnyType) and not restrict_any:\n-            # If x is Any and y is int, after x = y we do not infer that x is int.\n-            # This could be changed.\n-            # Instead, since we narrowed type from Any in a recent frame (probably an\n-            # isinstance check), but now it is reassigned, we broaden back\n-            # to Any (which is the most recent enclosing type)\n-            self.put(expr, enclosing_type)\n-        # As a special case, when assigning Any to a variable with a\n-        # declared Optional type that has been narrowed to None,\n-        # replace all the Nones in the declared Union type with Any.\n-        # This overrides the normal behavior of ignoring Any assignments to variables\n-        # in order to prevent false positives.\n-        # (See discussion in #3526)\n-        elif (\n-            isinstance(p_type, AnyType)\n-            and isinstance(p_declared, UnionType)\n-            and any(isinstance(get_proper_type(item), NoneType) for item in p_declared.items)\n-            and isinstance(\n-                get_proper_type(self.most_recent_enclosing_type(expr, NoneType())), NoneType\n-            )\n-        ):\n-            # Replace any Nones in the union type with Any\n-            new_items = [\n-                type if isinstance(get_proper_type(item), NoneType) else item\n-                for item in p_declared.items\n-            ]\n-            self.put(expr, UnionType(new_items))\n-        elif isinstance(p_type, AnyType) and not (\n-            isinstance(p_declared, UnionType)\n-            and any(isinstance(get_proper_type(item), AnyType) for item in p_declared.items)\n-        ):\n-            # Assigning an Any value doesn't affect the type to avoid false negatives, unless\n-            # there is an Any item in a declared union type.\n-            self.put(expr, declared_type)\n+        if isinstance(p_type, AnyType):\n+            # Any type requires some special casing, for both historical reasons,\n+            # and to optimise user experience without sacrificing correctness too much.\n+            if isinstance(expr, RefExpr) and isinstance(expr.node, Var) and expr.node.is_inferred:\n+                # First case: a local/global variable without explicit annotation,\n+                # in this case we just assign Any (essentially following the SSA logic).\n+                self.put(expr, type)\n+            elif isinstance(p_declared, UnionType) and any(\n+                isinstance(get_proper_type(item), NoneType) for item in p_declared.items\n+            ):\n+                # Second case: explicit optional type, in this case we optimize for a common\n+                # pattern when an untyped value used as a fallback replacing None.\n+                new_items = [\n+                    type if isinstance(get_proper_type(item), NoneType) else item\n+                    for item in p_declared.items\n+                ]\n+                self.put(expr, UnionType(new_items))\n+            elif isinstance(p_declared, UnionType) and any(\n+                isinstance(get_proper_type(item), AnyType) for item in p_declared.items\n+            ):\n+                # Third case: a union already containing Any (most likely from an un-imported\n+                # name), in this case we allow assigning Any as well.\n+                self.put(expr, type)\n+            else:\n+                # In all other cases we don't narrow to Any to minimize false negatives.\n+                self.put(expr, declared_type)\n+        elif isinstance(p_declared, AnyType):\n+            # Mirroring the first case above, we don't narrow to a precise type if the variable\n+            # has an explicit `Any` type annotation.\n+            if isinstance(expr, RefExpr) and isinstance(expr.node, Var) and expr.node.is_inferred:\n+                self.put(expr, type)\n+            else:\n+                self.put(expr, declared_type)\n         else:\n             self.put(expr, type)\n \n",
+  "start_files": [
+   "mypy/binder.py"
+  ],
+  "start_functions": [
+   "mypy/binder.py::ConditionalTypeBinder.assign_type"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypy/test/testtypes.py b/mypy/test/testtypes.py\nindex 35102be8..17444123 100644\n--- a/mypy/test/testtypes.py\n+++ b/mypy/test/testtypes.py\n@@ -7,7 +7,7 @@ from unittest import TestCase, skipUnless\n \n from mypy.erasetype import erase_type, remove_instance_last_known_values\n from mypy.indirection import TypeIndirectionVisitor\n-from mypy.join import join_simple, join_types\n+from mypy.join import join_types\n from mypy.meet import meet_types, narrow_declared_type\n from mypy.nodes import (\n     ARG_NAMED,\n@@ -817,12 +817,12 @@ class JoinSuite(Suite):\n             self.assert_join(t, self.fx.anyt, self.fx.anyt)\n \n     def test_mixed_truth_restricted_type_simple(self) -> None:\n-        # join_simple against differently restricted truthiness types drops restrictions.\n+        # make_simplified_union against differently restricted truthiness types drops restrictions.\n         true_a = true_only(self.fx.a)\n         false_o = false_only(self.fx.o)\n-        j = join_simple(self.fx.o, true_a, false_o)\n-        assert j.can_be_true\n-        assert j.can_be_false\n+        u = make_simplified_union([true_a, false_o])\n+        assert u.can_be_true\n+        assert u.can_be_false\n \n     def test_mixed_truth_restricted_type(self) -> None:\n         # join_types against differently restricted truthiness types drops restrictions.\n",
+  "test_files": [
+   "mypy/test/testtypes.py"
+  ],
+  "visible_tests": [
+   "mypy/test/testtypes.py"
+  ],
+  "gold_files": [
+   "mypy/binder.py",
+   "mypy/checker.py",
+   "mypy/fastparse.py",
+   "mypy/join.py"
+  ],
+  "gold_functions": [
+   "mypy/binder.py::ConditionalTypeBinder.most_recent_enclosing_type",
+   "mypy/binder.py::ConditionalTypeBinder.update_from_options",
+   "mypy/checker.py::TypeChecker.check_assignment",
+   "mypy/checker.py::TypeChecker.check_multi_assignment_from_union",
+   "mypy/checker.py::TypeChecker.visit_del_stmt",
+   "mypy/fastparse.py::ASTConverter.make_argument",
+   "mypy/join.py::join_simple"
+  ],
+  "prompt": "Function `mypy.binder.ConditionalTypeBinder.assign_type` in `mypy/binder.py` was changed as shown:\n\n```diff\n@@ -300,9 +300,7 @@\n         yield self.type_assignments\n         self.type_assignments = old_assignments\n \n-    def assign_type(\n-        self, expr: Expression, type: Type, declared_type: Type | None, restrict_any: bool = False\n-    ) -> None:\n+    def assign_type(self, expr: Expression, type: Type, declared_type: Type | None) -> None:\n         # We should erase last known value in binder, because if we are using it,\n         # it means that the target is not final, and therefore can't hold a literal.\n         type = remove_instance_last_known_values(type)\n@@ -333,41 +331,39 @@\n \n         p_declared = get_proper_type(declared_type)\n         p_type = get_proper_type(type)\n-        enclosing_type = get_proper_type(self.most_recent_enclosing_type(expr, type))\n-        if isinstance(enclosing_type, AnyType) and not restrict_any:\n-            # If x is Any and y is int, after x = y we do not infer that x is int.\n-            # This could be changed.\n-            # Instead, since we narrowed type from Any in a recent frame (probably an\n-            # isinstance check), but now it is reassigned, we broaden back\n-            # to Any (which is the most recent enclosing type)\n-            self.put(expr, enclosing_type)\n-        # As a special case, when assigning Any to a variable with a\n-        # declared Optional type that has been narrowed to None,\n-        # replace all the Nones in the declared Union type with Any.\n-        # This overrides the normal behavior of ignoring Any assignments to variables\n-        # in order to prevent false positives.\n-        # (See discussion in #3526)\n-        elif (\n-            isinstance(p_type, AnyType)\n-            and isinstance(p_declared, UnionType)\n-            and any(isinstance(get_proper_type(item), NoneType) for item in p_declared.items)\n-            and isinstance(\n-                get_proper_type(self.most_recent_enclosing_type(expr, NoneType())), NoneType\n-            )\n-        ):\n-            # Replace any Nones in the union type with Any\n-            new_items = [\n-                type if isinstance(get_proper_type(item), NoneType) else item\n-                for item in p_declared.items\n-            ]\n-            self.put(expr, UnionType(new_items))\n-        elif isinstance(p_type, AnyType) and not (\n-            isinstance(p_declared, UnionType)\n-            and any(isinstance(get_proper_type(item), AnyType) for item in p_declared.items)\n-        ):\n-            # Assigning an Any value doesn't affect the type to avoid false negatives, unless\n-            # there is an Any item in a declared union type.\n-            self.put(expr, declared_type)\n+        if isinstance(p_type, AnyType):\n+            # Any type requires some special casing, for both historical reasons,\n+            # and to optimise user experience without sacrificing correctness too much.\n+            if isinstance(expr, RefExpr) and isinstance(expr.node, Var) and expr.node.is_inferred:\n+                # First case: a local/global variable without explicit annotation,\n+                # in this case we just assign Any (essentially following the SSA logic).\n+                self.put(expr, type)\n+            elif isinstance(p_declared, UnionType) and any(\n+                isinstance(get_proper_type(item), NoneType) for item in p_declared.items\n+            ):\n+                # Second case: explicit optional type, in this case we optimize for a common\n+                # pattern when an untyped value used as a fallback replacing None.\n+                new_items = [\n+                    type if isinstance(get_proper_type(item), NoneType) else item\n+                    for item in p_declared.items\n+                ]\n+                self.put(expr, UnionType(new_items))\n+            elif isinstance(p_declared, UnionType) and any(\n+                isinstance(get_proper_type(item), AnyType) for item in p_declared.items\n+            ):\n+                # Third case: a union already containing Any (most likely from an un-imported\n+                # name), in this case we allow assigning Any as well.\n+                self.put(expr, type)\n+            else:\n+                # In all other cases we don't narrow to Any to minimize false negatives.\n+                self.put(expr, declared_type)\n+        elif isinstance(p_declared, AnyType):\n+            # Mirroring the first case above, we don't narrow to a precise type if the variable\n+            # has an explicit `Any` type annotation.\n+            if isinstance(expr, RefExpr) and isinstance(expr.node, Var) and expr.node.is_inferred:\n+                self.put(expr, type)\n+            else:\n+                self.put(expr, declared_type)\n         else:\n             self.put(expr, type)\n \n```\n\nUpdate the rest of the project so its tests pass. The change to `mypy.binder.ConditionalTypeBinder.assign_type` is already in the working tree. When your changes are complete, call done."
+ },
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "4b1a2558e8afe9429f7baaf7dc593c978f63eb09",
+  "parent": "836019a625072665904447e7612ca7c3ada73d62",
+  "commit_date": "2025-03-28T16:01:44+00:00",
+  "author_date": "2025-03-28T16:01:44+00:00",
+  "subject": "[mypyc] Various improvements to annotated html generation (#18848)",
+  "anchor": "mypyc.annotate.generate_annotations",
+  "anchor_file": "mypyc/annotate.py",
+  "forced": [
+   "new required parameter: mapper"
+  ],
+  "changed_callers": [
+   "mypyc.annotate.generate_annotated_html"
+  ],
+  "depth": 1,
+  "stratum": "1",
+  "caller_bucket": "1",
+  "start_patch": "--- a/mypyc/annotate.py\n+++ b/mypyc/annotate.py\n@@ -145,15 +145,18 @@\n \n \n def generate_annotations(\n-    path: str, tree: MypyFile, ir: ModuleIR, type_map: dict[Expression, Type]\n+    path: str, tree: MypyFile, ir: ModuleIR, type_map: dict[Expression, Type], mapper: Mapper\n ) -> AnnotatedSource:\n     anns = {}\n     for func_ir in ir.functions:\n         anns.update(function_annotations(func_ir, tree))\n-    visitor = ASTAnnotateVisitor(type_map)\n+    visitor = ASTAnnotateVisitor(type_map, mapper)\n     for defn in tree.defs:\n         defn.accept(visitor)\n     anns.update(visitor.anns)\n+    for line in visitor.ignored_lines:\n+        if line in anns:\n+            del anns[line]\n     return AnnotatedSource(path, anns)\n \n \n",
+  "start_files": [
+   "mypyc/annotate.py"
+  ],
+  "start_functions": [
+   "mypyc/annotate.py::generate_annotations"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypyc/test/test_annotate.py b/mypyc/test/test_annotate.py\nindex bb494106..4a9a2c1a 100644\n--- a/mypyc/test/test_annotate.py\n+++ b/mypyc/test/test_annotate.py\n@@ -44,13 +44,15 @@ class TestReport(MypycDataSuite):\n \n             ir = None\n             try:\n-                ir, tree, type_map = build_ir_for_single_file2(testcase.input, options)\n+                ir, tree, type_map, mapper = build_ir_for_single_file2(testcase.input, options)\n             except CompileError as e:\n                 actual = e.messages\n             else:\n-                annotations = generate_annotations(\"native.py\", tree, ir, type_map)\n+                annotations = generate_annotations(\"native.py\", tree, ir, type_map, mapper)\n                 actual = []\n-                for line_num, line_anns in annotations.annotations.items():\n+                for line_num, line_anns in sorted(\n+                    annotations.annotations.items(), key=lambda it: it[0]\n+                ):\n                     anns = get_max_prio(line_anns)\n                     str_anns = [a.message for a in anns]\n                     s = \" \".join(str_anns)\ndiff --git a/mypyc/test/test_run.py b/mypyc/test/test_run.py\nindex f4798660..e5b7e242 100644\n--- a/mypyc/test/test_run.py\n+++ b/mypyc/test/test_run.py\n@@ -251,7 +251,7 @@ class TestRun(MypycDataSuite):\n                 alt_lib_path=\".\",\n             )\n             errors = Errors(options)\n-            ir, cfiles = emitmodule.compile_modules_to_c(\n+            ir, cfiles, _ = emitmodule.compile_modules_to_c(\n                 result, compiler_options=compiler_options, errors=errors, groups=groups\n             )\n             if errors.num_errors:\ndiff --git a/mypyc/test/testutil.py b/mypyc/test/testutil.py\nindex 1961c47e..7b56b8aa 100644\n--- a/mypyc/test/testutil.py\n+++ b/mypyc/test/testutil.py\n@@ -100,7 +100,7 @@ def build_ir_for_single_file(\n \n def build_ir_for_single_file2(\n     input_lines: list[str], compiler_options: CompilerOptions | None = None\n-) -> tuple[ModuleIR, MypyFile, dict[Expression, Type]]:\n+) -> tuple[ModuleIR, MypyFile, dict[Expression, Type], Mapper]:\n     program_text = \"\\n\".join(input_lines)\n \n     # By default generate IR compatible with the earliest supported Python C API.\n@@ -125,13 +125,9 @@ def build_ir_for_single_file2(\n         raise CompileError(result.errors)\n \n     errors = Errors(options)\n+    mapper = Mapper({\"__main__\": None})\n     modules = build_ir(\n-        [result.files[\"__main__\"]],\n-        result.graph,\n-        result.types,\n-        Mapper({\"__main__\": None}),\n-        compiler_options,\n-        errors,\n+        [result.files[\"__main__\"]], result.graph, result.types, mapper, compiler_options, errors\n     )\n     if errors.num_errors:\n         raise CompileError(errors.new_messages())\n@@ -141,7 +137,7 @@ def build_ir_for_single_file2(\n         assert_func_ir_valid(fn)\n     tree = result.graph[module.fullname].tree\n     assert tree is not None\n-    return module, tree, result.types\n+    return module, tree, result.types, mapper\n \n \n def update_testcase_output(testcase: DataDrivenTestCase, output: list[str]) -> None:\n",
+  "test_files": [
+   "mypyc/test/test_annotate.py",
+   "mypyc/test/test_run.py",
+   "mypyc/test/testutil.py"
+  ],
+  "visible_tests": [
+   "mypyc/test/test_annotate.py",
+   "mypyc/test/test_run.py",
+   "mypyc/test/testutil.py"
+  ],
+  "gold_files": [
+   "mypyc/annotate.py",
+   "mypyc/build.py",
+   "mypyc/codegen/emitmodule.py"
+  ],
+  "gold_functions": [
+   "mypyc/annotate.py::ASTAnnotateVisitor.__init__",
+   "mypyc/annotate.py::ASTAnnotateVisitor.annotate",
+   "mypyc/annotate.py::ASTAnnotateVisitor.check_iteration",
+   "mypyc/annotate.py::ASTAnnotateVisitor.visit_assignment_stmt",
+   "mypyc/annotate.py::ASTAnnotateVisitor.visit_call_expr",
+   "mypyc/annotate.py::ASTAnnotateVisitor.visit_class_def",
+   "mypyc/annotate.py::ASTAnnotateVisitor.visit_dictionary_comprehension",
+   "mypyc/annotate.py::ASTAnnotateVisitor.visit_for_stmt",
+   "mypyc/annotate.py::ASTAnnotateVisitor.visit_generator_expr",
+   "mypyc/annotate.py::ASTAnnotateVisitor.visit_with_stmt",
+   "mypyc/annotate.py::function_annotations",
+   "mypyc/annotate.py::generate_annotated_html",
+   "mypyc/build.py::generate_c",
+   "mypyc/codegen/emitmodule.py::compile_modules_to_c"
+  ],
+  "prompt": "Function `mypyc.annotate.generate_annotations` in `mypyc/annotate.py` was changed as shown:\n\n```diff\n@@ -145,15 +145,18 @@\n \n \n def generate_annotations(\n-    path: str, tree: MypyFile, ir: ModuleIR, type_map: dict[Expression, Type]\n+    path: str, tree: MypyFile, ir: ModuleIR, type_map: dict[Expression, Type], mapper: Mapper\n ) -> AnnotatedSource:\n     anns = {}\n     for func_ir in ir.functions:\n         anns.update(function_annotations(func_ir, tree))\n-    visitor = ASTAnnotateVisitor(type_map)\n+    visitor = ASTAnnotateVisitor(type_map, mapper)\n     for defn in tree.defs:\n         defn.accept(visitor)\n     anns.update(visitor.anns)\n+    for line in visitor.ignored_lines:\n+        if line in anns:\n+            del anns[line]\n     return AnnotatedSource(path, anns)\n \n \n```\n\nUpdate the rest of the project so its tests pass. The change to `mypyc.annotate.generate_annotations` is already in the working tree. When your changes are complete, call done."
+ },
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "75f7a2579179380b07f8bc4fc56e6b6cb1523647",
+  "parent": "f20988875ad7e02844c53231829f404c4a26f70c",
+  "commit_date": "2025-06-11T11:22:54+01:00",
+  "author_date": "2025-06-11T11:22:54+01:00",
+  "subject": "[mypyc] Support overriding the group name used in output files (#19272)",
+  "anchor": "mypyc.build.construct_groups",
+  "anchor_file": "mypyc/build.py",
+  "forced": [
+   "new required parameter: group_name_override"
+  ],
+  "changed_callers": [
+   "mypyc.build.mypyc_build"
+  ],
+  "depth": 1,
+  "stratum": "1",
+  "caller_bucket": "1",
+  "start_patch": "--- a/mypyc/build.py\n+++ b/mypyc/build.py\n@@ -357,6 +357,7 @@\n     sources: list[BuildSource],\n     separate: bool | list[tuple[list[str], str | None]],\n     use_shared_lib: bool,\n+    group_name_override: str | None,\n ) -> emitmodule.Groups:\n     \"\"\"Compute Groups given the input source list and separate configs.\n \n@@ -386,7 +387,10 @@\n     # Generate missing names\n     for i, (group, name) in enumerate(groups):\n         if use_shared_lib and not name:\n-            name = group_name([source.module for source in group])\n+            if group_name_override is not None:\n+                name = group_name_override\n+            else:\n+                name = group_name([source.module for source in group])\n         groups[i] = (group, name)\n \n     return groups\n",
+  "start_files": [
+   "mypyc/build.py"
+  ],
+  "start_functions": [
+   "mypyc/build.py::construct_groups"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypyc/test/test_run.py b/mypyc/test/test_run.py\nindex e5b7e242..b96c4241 100644\n--- a/mypyc/test/test_run.py\n+++ b/mypyc/test/test_run.py\n@@ -235,7 +235,7 @@ class TestRun(MypycDataSuite):\n             else False\n         )\n \n-        groups = construct_groups(sources, separate, len(module_names) > 1)\n+        groups = construct_groups(sources, separate, len(module_names) > 1, None)\n \n         try:\n             compiler_options = CompilerOptions(\n",
+  "test_files": [
+   "mypyc/test/test_run.py"
+  ],
+  "visible_tests": [
+   "mypyc/test/test_run.py"
+  ],
+  "gold_files": [
+   "mypyc/build.py",
+   "mypyc/options.py"
+  ],
+  "gold_functions": [
+   "mypyc/build.py::mypyc_build",
+   "mypyc/build.py::mypycify",
+   "mypyc/options.py::CompilerOptions.__init__"
+  ],
+  "prompt": "Function `mypyc.build.construct_groups` in `mypyc/build.py` was changed as shown:\n\n```diff\n@@ -357,6 +357,7 @@\n     sources: list[BuildSource],\n     separate: bool | list[tuple[list[str], str | None]],\n     use_shared_lib: bool,\n+    group_name_override: str | None,\n ) -> emitmodule.Groups:\n     \"\"\"Compute Groups given the input source list and separate configs.\n \n@@ -386,7 +387,10 @@\n     # Generate missing names\n     for i, (group, name) in enumerate(groups):\n         if use_shared_lib and not name:\n-            name = group_name([source.module for source in group])\n+            if group_name_override is not None:\n+                name = group_name_override\n+            else:\n+                name = group_name([source.module for source in group])\n         groups[i] = (group, name)\n \n     return groups\n```\n\nUpdate the rest of the project so its tests pass. The change to `mypyc.build.construct_groups` is already in the working tree. When your changes are complete, call done."
+ },
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "5bdfe7ef86ea45dc7da0d618104ae93537bc7c6c",
+  "parent": "904fc779118a7fe9538286de704dc563d20b69b6",
+  "commit_date": "2025-11-03T17:30:11+00:00",
+  "author_date": "2025-11-03T18:30:11+01:00",
+  "subject": "Respect force-union-syntax flag in error hint (#20165)",
+  "anchor": "mypy.messages.MessageBuilder.need_annotation_for_var",
+  "anchor_file": "mypy/messages.py",
+  "forced": [
+   "parameter removed or renamed: python_version"
+  ],
+  "changed_callers": [
+   "mypy.checker.TypeChecker.check_simple_assignment",
+   "mypy.checker.TypeChecker.handle_partial_var_type",
+   "mypy.checker.TypeChecker.infer_variable_type"
+  ],
+  "depth": 3,
+  "stratum": "2-4",
+  "caller_bucket": "3-4",
+  "start_patch": "--- a/mypy/messages.py\n+++ b/mypy/messages.py\n@@ -1803,18 +1803,17 @@\n         )\n \n     def need_annotation_for_var(\n-        self, node: SymbolNode, context: Context, python_version: tuple[int, int] | None = None\n+        self, node: SymbolNode, context: Context, options: Options | None = None\n     ) -> None:\n         hint = \"\"\n-        pep604_supported = not python_version or python_version >= (3, 10)\n         # type to recommend the user adds\n         recommended_type = None\n         # Only gives hint if it's a variable declaration and the partial type is a builtin type\n-        if python_version and isinstance(node, Var) and isinstance(node.type, PartialType):\n+        if options and isinstance(node, Var) and isinstance(node.type, PartialType):\n             type_dec = \"<type>\"\n             if not node.type.type:\n                 # partial None\n-                if pep604_supported:\n+                if options.use_or_syntax():\n                     recommended_type = f\"{type_dec} | None\"\n                 else:\n                     recommended_type = f\"Optional[{type_dec}]\"\n",
+  "start_files": [
+   "mypy/messages.py"
+  ],
+  "start_functions": [
+   "mypy/messages.py::MessageBuilder.need_annotation_for_var"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypy/test/testcheck.py b/mypy/test/testcheck.py\nindex f59cce70..f2b7057d 100644\n--- a/mypy/test/testcheck.py\n+++ b/mypy/test/testcheck.py\n@@ -140,7 +140,7 @@ class TypeCheckSuite(DataSuite):\n             options.hide_error_codes = False\n         if \"abstract\" not in testcase.file:\n             options.allow_empty_bodies = not testcase.name.endswith(\"_no_empty\")\n-        if \"union-error\" not in testcase.file:\n+        if \"union-error\" not in testcase.file and \"Pep604\" not in testcase.name:\n             options.force_union_syntax = True\n \n         if incremental_step and options.incremental:\n",
+  "test_files": [
+   "mypy/test/testcheck.py"
+  ],
+  "visible_tests": [
+   "mypy/test/testcheck.py"
+  ],
+  "gold_files": [
+   "mypy/checker.py",
+   "mypy/messages.py",
+   "mypy/suggestions.py"
+  ],
+  "gold_functions": [
+   "mypy/checker.py::TypeChecker.check_simple_assignment",
+   "mypy/checker.py::TypeChecker.enter_partial_types",
+   "mypy/checker.py::TypeChecker.handle_partial_var_type",
+   "mypy/checker.py::TypeChecker.infer_variable_type",
+   "mypy/suggestions.py::TypeFormatter.visit_union_type"
+  ],
+  "prompt": "Function `mypy.messages.MessageBuilder.need_annotation_for_var` in `mypy/messages.py` was changed as shown:\n\n```diff\n@@ -1803,18 +1803,17 @@\n         )\n \n     def need_annotation_for_var(\n-        self, node: SymbolNode, context: Context, python_version: tuple[int, int] | None = None\n+        self, node: SymbolNode, context: Context, options: Options | None = None\n     ) -> None:\n         hint = \"\"\n-        pep604_supported = not python_version or python_version >= (3, 10)\n         # type to recommend the user adds\n         recommended_type = None\n         # Only gives hint if it's a variable declaration and the partial type is a builtin type\n-        if python_version and isinstance(node, Var) and isinstance(node.type, PartialType):\n+        if options and isinstance(node, Var) and isinstance(node.type, PartialType):\n             type_dec = \"<type>\"\n             if not node.type.type:\n                 # partial None\n-                if pep604_supported:\n+                if options.use_or_syntax():\n                     recommended_type = f\"{type_dec} | None\"\n                 else:\n                     recommended_type = f\"Optional[{type_dec}]\"\n```\n\nUpdate the rest of the project so its tests pass. The change to `mypy.messages.MessageBuilder.need_annotation_for_var` is already in the working tree. When your changes are complete, call done."
+ },
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "7ff36effcdbc01e6786424278b56037eb5cbc163",
+  "parent": "40ffeda96b6d43a2eb0753ac29710d4e606b3c91",
+  "commit_date": "2026-03-17T22:24:41+00:00",
+  "author_date": "2026-03-17T22:24:41+00:00",
+  "subject": "Write errors to a separate cache file (#21022)",
+  "anchor": "mypy.build.find_cache_meta",
+  "anchor_file": "mypy/build.py",
+  "forced": [
+   "returning nothing added or removed"
+  ],
+  "changed_callers": [
+   "mypy.build.State.reload_meta"
+  ],
+  "depth": 1,
+  "stratum": "1",
+  "caller_bucket": "1",
+  "start_patch": "--- a/mypy/build.py\n+++ b/mypy/build.py\n@@ -1688,7 +1688,7 @@\n \n def find_cache_meta(\n     id: str, path: str, manager: BuildManager, skip_validation: bool = False\n-) -> CacheMeta | None:\n+) -> tuple[CacheMeta | None, list[ErrorTuple]]:\n     \"\"\"Find cache data for a module.\n \n     Args:\n@@ -1705,15 +1705,12 @@\n     meta_file, data_file, _ = get_cache_names(id, path, manager.options)\n     if manager.tracing_enabled:\n         manager.trace(f\"Looking for {id} at {meta_file}\")\n-    meta: bytes | dict[str, Any] | None\n     if manager.stats_enabled:\n         t0 = time.time()\n     if manager.options.fixed_format_cache:\n         meta = _load_ff_file(\n             meta_file, manager, log_error_fmt=\"Could not load cache for {}: \", id=id\n         )\n-        if meta is None:\n-            return None\n     else:\n         meta = _load_json_file(\n             meta_file,\n@@ -1721,13 +1718,8 @@\n             log_success=f\"Meta {id} \",\n             log_error=f\"Could not load cache for {id}: \",\n         )\n-        if meta is None:\n-            return None\n-        if not isinstance(meta, dict):\n-            manager.log(  # type: ignore[unreachable]\n-                f\"Could not load cache for {id}: meta cache is not a dict: {repr(meta)}\"\n-            )\n-            return None\n+    if meta is None:\n+        return None, []\n     if manager.stats_enabled:\n         t1 = time.time()\n     if isinstance(meta, bytes):\n@@ -1736,31 +1728,31 @@\n         # TODO: switch to something like librt.internal.read_byte() if this is slow.\n         if meta[0] != cache_version() or meta[1] != CACHE_VERSION:\n             manager.log(f\"Metadata abandoned for {id}: incompatible cache format\")\n-            return None\n+            return None, []\n         data_io = ReadBuffer(meta[2:])\n         m = CacheMeta.read(data_io, data_file)\n     else:\n         m = CacheMeta.deserialize(meta, data_file)\n     if m is None:\n         manager.log(f\"Metadata abandoned for {id}: cannot deserialize data\")\n-        return None\n+        return None, []\n     if manager.stats_enabled:\n         t2 = time.time()\n         manager.add_stats(\n             load_meta_time=t2 - t0, load_meta_load_time=t1 - t0, load_meta_from_dict_time=t2 - t1\n         )\n     if skip_validation:\n-        return m\n+        return m, []\n \n     # Ignore cache if generated by an older mypy version.\n     if m.version_id != manager.version_id and not manager.options.skip_version_check:\n         manager.log(f\"Metadata abandoned for {id}: different mypy version\")\n-        return None\n+        return None, []\n \n     total_deps = len(m.dependencies) + len(m.suppressed)\n     if len(m.dep_prios) != total_deps or len(m.dep_lines) != total_deps:\n         manager.log(f\"Metadata abandoned for {id}: broken dependencies\")\n-        return None\n+        return None, []\n \n     # Ignore cache if (relevant) options aren't the same.\n     # Note that it's fine to mutilate cached_options since it's only used here.\n@@ -1782,12 +1774,12 @@\n                             key, cached_options.get(key), current_options.get(key)\n                         )\n                     )\n-        return None\n+        return None, []\n     if manager.old_plugins_snapshot and manager.plugins_snapshot:\n         # Check if plugins are still the same.\n         if manager.plugins_snapshot != manager.old_plugins_snapshot:\n             manager.log(f\"Metadata abandoned for {id}: plugins differ\")\n-            return None\n+            return None, []\n     plugin_data = manager.plugin.report_config_data(ReportConfigContext(id, path, is_check=True))\n     if not manager.options.fixed_format_cache:\n         # So that plugins can return data with tuples in it without\n@@ -1796,10 +1788,31 @@\n         plugin_data = json_loads(json_dumps(plugin_data))\n     if m.plugin_data != plugin_data:\n         manager.log(f\"Metadata abandoned for {id}: plugin configuration differs\")\n-        return None\n-\n+        return None, []\n+\n+    # Load cached errors for this file, even if empty. This is needed to avoid\n+    # invalid cache state after a crash/blocker/Ctrl+C etc.\n+    errors_file = get_errors_name(meta_file)\n+    if manager.options.fixed_format_cache:\n+        errors = _load_ff_file(\n+            errors_file, manager, log_error_fmt=\"Could not load errors for {}: \", id=id\n+        )\n+    else:\n+        errors = _load_json_file(\n+            errors_file,\n+            manager,\n+            log_success=f\"Errors {id} \",\n+            log_error=f\"Could not load errors for {id}: \",\n+        )\n+    if errors is None:\n+        return None, []\n+    if isinstance(errors, bytes):\n+        data_io = ReadBuffer(errors)\n+        e = read_errors(data_io)\n+    else:\n+        e = [tuple(err) for err in errors[\"error_lines\"]]\n     manager.add_stats(fresh_metas=1)\n-    return m\n+    return m, e\n \n \n def validate_meta(\n",
+  "start_files": [
+   "mypy/build.py"
+  ],
+  "start_functions": [
+   "mypy/build.py::find_cache_meta"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypy/test/test_diff_cache.py b/mypy/test/test_diff_cache.py\nindex a62c3a18..d35cd99f 100644\n--- a/mypy/test/test_diff_cache.py\n+++ b/mypy/test/test_diff_cache.py\n@@ -127,7 +127,7 @@ class DiffCacheIntegrationTests(unittest.TestCase):\n             a_keys = {k for k in keys if \"/a.\" in k or k.startswith(\"a.\")}\n             assert len(a_keys) == 0, f\"Unexpected a.* entries in diff: {a_keys}\"\n             assert len(b_keys) == 2, f\"Expected 2 b.* entries in diff, got: {b_keys}\"\n-            assert len(c_keys) == 3, f\"Expected 3 c.* entries in diff, got: {c_keys}\"\n+            assert len(c_keys) == 4, f\"Expected 3 c.* entries in diff, got: {c_keys}\"\n \n             # The new access to a.x in b.py should create a fine-grained\n             # dependency recorded in @root.deps.json.\ndiff --git a/mypy/test/testcheck.py b/mypy/test/testcheck.py\nindex cbb9c023..96d6f536 100644\n--- a/mypy/test/testcheck.py\n+++ b/mypy/test/testcheck.py\n@@ -293,7 +293,7 @@ class TypeCheckSuite(DataSuite):\n         ignore_errors = True\n         missing = {}\n         for id, path in modules.items():\n-            meta = build.find_cache_meta(id, path, manager)\n+            meta, _ = build.find_cache_meta(id, path, manager)\n             if not build.validate_meta(meta, id, path, ignore_errors, manager):\n                 missing[id] = path\n         return set(missing.values())\n",
+  "test_files": [
+   "mypy/test/test_diff_cache.py",
+   "mypy/test/testcheck.py"
+  ],
+  "visible_tests": [
+   "mypy/test/test_diff_cache.py",
+   "mypy/test/testcheck.py"
+  ],
+  "gold_files": [
+   "misc/diff-cache.py",
+   "mypy/build.py",
+   "mypy/cache.py",
+   "mypy/exportjson.py"
+  ],
+  "gold_functions": [
+   "misc/diff-cache.py::load",
+   "mypy/build.py::State.new_state",
+   "mypy/build.py::State.reload_meta",
+   "mypy/build.py::get_errors_name",
+   "mypy/build.py::process_stale_scc",
+   "mypy/build.py::write_cache",
+   "mypy/build.py::write_errors_file",
+   "mypy/cache.py::CacheMeta.__init__",
+   "mypy/cache.py::CacheMeta.deserialize",
+   "mypy/cache.py::CacheMeta.read",
+   "mypy/cache.py::CacheMeta.serialize",
+   "mypy/cache.py::CacheMeta.write",
+   "mypy/exportjson.py::convert_binary_cache_meta_to_json"
+  ],
+  "prompt": "Function `mypy.build.find_cache_meta` in `mypy/build.py` was changed as shown:\n\n```diff\n@@ -1688,7 +1688,7 @@\n \n def find_cache_meta(\n     id: str, path: str, manager: BuildManager, skip_validation: bool = False\n-) -> CacheMeta | None:\n+) -> tuple[CacheMeta | None, list[ErrorTuple]]:\n     \"\"\"Find cache data for a module.\n \n     Args:\n@@ -1705,15 +1705,12 @@\n     meta_file, data_file, _ = get_cache_names(id, path, manager.options)\n     if manager.tracing_enabled:\n         manager.trace(f\"Looking for {id} at {meta_file}\")\n-    meta: bytes | dict[str, Any] | None\n     if manager.stats_enabled:\n         t0 = time.time()\n     if manager.options.fixed_format_cache:\n         meta = _load_ff_file(\n             meta_file, manager, log_error_fmt=\"Could not load cache for {}: \", id=id\n         )\n-        if meta is None:\n-            return None\n     else:\n         meta = _load_json_file(\n             meta_file,\n@@ -1721,13 +1718,8 @@\n             log_success=f\"Meta {id} \",\n             log_error=f\"Could not load cache for {id}: \",\n         )\n-        if meta is None:\n-            return None\n-        if not isinstance(meta, dict):\n-            manager.log(  # type: ignore[unreachable]\n-                f\"Could not load cache for {id}: meta cache is not a dict: {repr(meta)}\"\n-            )\n-            return None\n+    if meta is None:\n+        return None, []\n     if manager.stats_enabled:\n         t1 = time.time()\n     if isinstance(meta, bytes):\n@@ -1736,31 +1728,31 @@\n         # TODO: switch to something like librt.internal.read_byte() if this is slow.\n         if meta[0] != cache_version() or meta[1] != CACHE_VERSION:\n             manager.log(f\"Metadata abandoned for {id}: incompatible cache format\")\n-            return None\n+            return None, []\n         data_io = ReadBuffer(meta[2:])\n         m = CacheMeta.read(data_io, data_file)\n     else:\n         m = CacheMeta.deserialize(meta, data_file)\n     if m is None:\n         manager.log(f\"Metadata abandoned for {id}: cannot deserialize data\")\n-        return None\n+        return None, []\n     if manager.stats_enabled:\n         t2 = time.time()\n         manager.add_stats(\n             load_meta_time=t2 - t0, load_meta_load_time=t1 - t0, load_meta_from_dict_time=t2 - t1\n         )\n     if skip_validation:\n-        return m\n+        return m, []\n \n     # Ignore cache if generated by an older mypy version.\n     if m.version_id != manager.version_id and not manager.options.skip_version_check:\n         manager.log(f\"Metadata abandoned for {id}: different mypy version\")\n-        return None\n+        return None, []\n \n     total_deps = len(m.dependencies) + len(m.suppressed)\n     if len(m.dep_prios) != total_deps or len(m.dep_lines) != total_deps:\n         manager.log(f\"Metadata abandoned for {id}: broken dependencies\")\n-        return None\n+        return None, []\n \n     # Ignore cache if (relevant) options aren't the same.\n     # Note that it's fine to mutilate cached_options since it's only used here.\n@@ -1782,12 +1774,12 @@\n                             key, cached_options.get(key), current_options.get(key)\n                         )\n                     )\n-        return None\n+        return None, []\n     if manager.old_plugins_snapshot and manager.plugins_snapshot:\n         # Check if plugins are still the same.\n         if manager.plugins_snapshot != manager.old_plugins_snapshot:\n             manager.log(f\"Metadata abandoned for {id}: plugins differ\")\n-            return None\n+            return None, []\n     plugin_data = manager.plugin.report_config_data(ReportConfigContext(id, path, is_check=True))\n     if not manager.options.fixed_format_cache:\n         # So that plugins can return data with tuples in it without\n@@ -1796,10 +1788,31 @@\n         plugin_data = json_loads(json_dumps(plugin_data))\n     if m.plugin_data != plugin_data:\n         manager.log(f\"Metadata abandoned for {id}: plugin configuration differs\")\n-        return None\n-\n+        return None, []\n+\n+    # Load cached errors for this file, even if empty. This is needed to avoid\n+    # invalid cache state after a crash/blocker/Ctrl+C etc.\n+    errors_file = get_errors_name(meta_file)\n+    if manager.options.fixed_format_cache:\n+        errors = _load_ff_file(\n+            errors_file, manager, log_error_fmt=\"Could not load errors for {}: \", id=id\n+        )\n+    else:\n+        errors = _load_json_file(\n+            errors_file,\n+            manager,\n+            log_success=f\"Errors {id} \",\n+            log_error=f\"Could not load errors for {id}: \",\n+        )\n+    if errors is None:\n+        return None, []\n+    if isinstance(errors, bytes):\n+        data_io = ReadBuffer(errors)\n+        e = read_errors(data_io)\n+    else:\n+        e = [tuple(err) for err in errors[\"error_lines\"]]\n     manager.add_stats(fresh_metas=1)\n-    return m\n+    return m, e\n \n \n def validate_meta(\n```\n\nUpdate the rest of the project so its tests pass. The change to `mypy.build.find_cache_meta` is already in the working tree. When your changes are complete, call done."
+ },
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "20acf99d967ee1bc7894fe070d33cbe5949d38ab",
+  "parent": "ea8efbd19ac763a7ee467246514feffba7c4ed98",
+  "commit_date": "2026-04-13T20:02:16+02:00",
+  "author_date": "2026-04-13T20:02:16+02:00",
+  "subject": "[mypyc] Move API table definitions to .c files (#21183)",
+  "anchor": "mypyc.build.build_single_module",
+  "anchor_file": "mypyc/build.py",
+  "forced": [
+   "new required parameter: extra_include_dirs"
+  ],
+  "changed_callers": [
+   "mypyc.build.mypycify"
+  ],
+  "depth": 1,
+  "stratum": "1",
+  "caller_bucket": "1",
+  "start_patch": "--- a/mypyc/build.py\n+++ b/mypyc/build.py\n@@ -399,7 +399,10 @@\n \n \n def build_single_module(\n-    sources: list[BuildSource], cfiles: list[str], extra_compile_args: list[str]\n+    sources: list[BuildSource],\n+    cfiles: list[str],\n+    extra_compile_args: list[str],\n+    extra_include_dirs: list[str],\n ) -> list[Extension]:\n     \"\"\"Produce the list of extension modules for a standalone extension.\n \n@@ -409,7 +412,7 @@\n         get_extension()(\n             sources[0].module,\n             sources=cfiles,\n-            include_dirs=[include_dir()],\n+            include_dirs=[include_dir()] + extra_include_dirs,\n             extra_compile_args=extra_compile_args,\n         )\n     ]\n",
+  "start_files": [
+   "mypyc/build.py"
+  ],
+  "start_functions": [
+   "mypyc/build.py::build_single_module"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypyc/test/test_run.py b/mypyc/test/test_run.py\nindex 8e35f7b1..c8d16fb0 100644\n--- a/mypyc/test/test_run.py\n+++ b/mypyc/test/test_run.py\n@@ -102,7 +102,7 @@ from mypyc.build import mypycify\n setup(name='test_run_output',\n       ext_modules=mypycify({}, separate={}, skip_cgen_input={!r}, strip_asserts=False,\n                            multi_file={}, opt_level='{}', install_librt={},\n-                           experimental_features={}),\n+                           experimental_features={}, depends_on_librt_internal={}),\n )\n \"\"\"\n \n@@ -298,7 +298,13 @@ class TestRun(MypycDataSuite):\n             ir, cfiles, _ = emitmodule.compile_modules_to_c(\n                 result, compiler_options=compiler_options, errors=errors, groups=groups\n             )\n-            deps = sorted(dep.path for dep in collect_source_dependencies(ir))\n+            deps = sorted(\n+                (\n+                    (dep.path, dep.include_dirs, dep.internal)\n+                    for dep in collect_source_dependencies(ir)\n+                ),\n+                key=lambda tup: tup[0],\n+            )\n             if errors.num_errors:\n                 errors.flush_errors()\n                 assert False, \"Compile error\"\n@@ -329,6 +335,7 @@ class TestRun(MypycDataSuite):\n                     opt_level,\n                     False,  # install_librt - use cached version instead\n                     experimental_features,\n+                    librt_internal,\n                 )\n             )\n \ndiff --git a/mypyc/test/test_serialization.py b/mypyc/test/test_serialization.py\nindex d9380a38..d0c4b668 100644\n--- a/mypyc/test/test_serialization.py\n+++ b/mypyc/test/test_serialization.py\n@@ -91,6 +91,8 @@ def assert_modules_same(ir1: ModuleIR, ir2: ModuleIR) -> None:\n \n     assert_blobs_same(ir1.final_names, ir2.final_names, (ir1.fullname, \"final_names\"))\n \n+    assert ir1.dependencies == ir2.dependencies\n+\n \n def check_serialization_roundtrip(irs: dict[str, ModuleIR]) -> None:\n     \"\"\"Check that we can serialize modules out and deserialize them to the same thing.\"\"\"\n",
+  "test_files": [
+   "mypyc/test/test_run.py",
+   "mypyc/test/test_serialization.py"
+  ],
+  "visible_tests": [
+   "mypyc/test/test_run.py",
+   "mypyc/test/test_serialization.py"
+  ],
+  "gold_files": [
+   "mypyc/build.py",
+   "mypyc/codegen/emitmodule.py",
+   "mypyc/ir/deps.py",
+   "mypyc/ir/module_ir.py"
+  ],
+  "gold_functions": [
+   "mypyc/build.py::build_using_shared_lib",
+   "mypyc/build.py::mypyc_build",
+   "mypyc/build.py::mypycify",
+   "mypyc/codegen/emitmodule.py::GroupGenerator.generate_c_for_modules",
+   "mypyc/codegen/emitmodule.py::GroupGenerator.generate_c_for_modules.emit_dep_headers",
+   "mypyc/codegen/emitmodule.py::collect_source_dependencies",
+   "mypyc/ir/deps.py::Capsule.external_dep",
+   "mypyc/ir/deps.py::Capsule.internal_dep",
+   "mypyc/ir/deps.py::SourceDep.__init__",
+   "mypyc/ir/module_ir.py::ModuleIR.deserialize",
+   "mypyc/ir/module_ir.py::ModuleIR.serialize"
+  ],
+  "prompt": "Function `mypyc.build.build_single_module` in `mypyc/build.py` was changed as shown:\n\n```diff\n@@ -399,7 +399,10 @@\n \n \n def build_single_module(\n-    sources: list[BuildSource], cfiles: list[str], extra_compile_args: list[str]\n+    sources: list[BuildSource],\n+    cfiles: list[str],\n+    extra_compile_args: list[str],\n+    extra_include_dirs: list[str],\n ) -> list[Extension]:\n     \"\"\"Produce the list of extension modules for a standalone extension.\n \n@@ -409,7 +412,7 @@\n         get_extension()(\n             sources[0].module,\n             sources=cfiles,\n-            include_dirs=[include_dir()],\n+            include_dirs=[include_dir()] + extra_include_dirs,\n             extra_compile_args=extra_compile_args,\n         )\n     ]\n```\n\nUpdate the rest of the project so its tests pass. The change to `mypyc.build.build_single_module` is already in the working tree. When your changes are complete, call done."
+ },
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "8d58fce81caac0dc2b62c098bdd84bec919f9344",
+  "parent": "cd71671fc1301bf8558b3cc5536d7cfe7ff0a70e",
+  "commit_date": "2026-04-14T15:24:37+02:00",
+  "author_date": "2026-04-14T15:24:37+02:00",
+  "subject": "[mypyc] Add new type for expressing header dependencies (#21223)",
+  "anchor": "mypyc.codegen.emitmodule.collect_source_dependencies",
+  "anchor_file": "mypyc/codegen/emitmodule.py",
+  "forced": [
+   "parameter removed or renamed: internal"
+  ],
+  "changed_callers": [
+   "mypyc.codegen.emitmodule.GroupGenerator.emit_dep_headers",
+   "mypyc.codegen.emitmodule.GroupGenerator.generate_c_for_modules"
+  ],
+  "depth": 2,
+  "stratum": "2-4",
+  "caller_bucket": "2",
+  "start_patch": "--- a/mypyc/codegen/emitmodule.py\n+++ b/mypyc/codegen/emitmodule.py\n@@ -436,23 +436,16 @@\n     return modules\n \n \n-def collect_source_dependencies(\n-    modules: dict[str, ModuleIR], *, internal: bool = True\n-) -> set[SourceDep]:\n-    \"\"\"Collect all SourceDep dependencies from all modules.\n-\n-    If internal is set to False, returns only the dependencies that can be exported to C extensions\n-    dependent on the one currently being compiled.\n-    \"\"\"\n+def collect_source_dependencies(modules: dict[str, ModuleIR]) -> set[SourceDep]:\n+    \"\"\"Collect all SourceDep dependencies from all modules.\"\"\"\n     source_deps: set[SourceDep] = set()\n     for module in modules.values():\n         for dep in module.dependencies:\n             if isinstance(dep, SourceDep):\n-                if internal == dep.internal:\n+                if dep.internal:\n                     source_deps.add(dep)\n-            else:\n-                capsule_dep = dep.internal_dep() if internal else dep.external_dep()\n-                source_deps.add(capsule_dep)\n+            elif isinstance(dep, Capsule):\n+                source_deps.add(dep.internal_dep())\n     return source_deps\n \n \n",
+  "start_files": [
+   "mypyc/codegen/emitmodule.py"
+  ],
+  "start_functions": [
+   "mypyc/codegen/emitmodule.py::collect_source_dependencies"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypyc/test/test_cheader.py b/mypyc/test/test_cheader.py\nindex d955e51e..e13f12ea 100644\n--- a/mypyc/test/test_cheader.py\n+++ b/mypyc/test/test_cheader.py\n@@ -7,7 +7,7 @@ import os\n import re\n import unittest\n \n-from mypyc.ir.deps import SourceDep\n+from mypyc.ir.deps import HeaderDep, SourceDep\n from mypyc.ir.ops import PrimitiveDescription\n from mypyc.primitives import (\n     bytearray_ops,\n@@ -79,7 +79,7 @@ class TestHeaderInclusion(unittest.TestCase):\n         for op in all_ops:\n             if op.dependencies:\n                 for dep in op.dependencies:\n-                    if isinstance(dep, SourceDep):\n+                    if isinstance(dep, (SourceDep, HeaderDep)):\n                         header_fnam = os.path.join(base_dir, dep.get_header())\n                         if os.path.isfile(header_fnam):\n                             with open(os.path.join(base_dir, header_fnam)) as f:\n",
+  "test_files": [
+   "mypyc/test/test_cheader.py"
+  ],
+  "visible_tests": [
+   "mypyc/test/test_cheader.py"
+  ],
+  "gold_files": [
+   "mypyc/codegen/emitmodule.py",
+   "mypyc/common.py",
+   "mypyc/ir/deps.py",
+   "mypyc/ir/module_ir.py"
+  ],
+  "gold_functions": [
+   "mypyc/codegen/emitmodule.py::GroupGenerator.generate_c_for_modules",
+   "mypyc/codegen/emitmodule.py::GroupGenerator.generate_c_for_modules.emit_dep_headers",
+   "mypyc/codegen/emitmodule.py::collect_header_dependencies",
+   "mypyc/ir/deps.py::Capsule.external_dep",
+   "mypyc/ir/deps.py::HeaderDep.__eq__",
+   "mypyc/ir/deps.py::HeaderDep.__hash__",
+   "mypyc/ir/deps.py::HeaderDep.__init__",
+   "mypyc/ir/deps.py::HeaderDep.__repr__",
+   "mypyc/ir/deps.py::HeaderDep.get_header",
+   "mypyc/ir/module_ir.py::ModuleIR.deserialize",
+   "mypyc/ir/module_ir.py::ModuleIR.serialize"
+  ],
+  "prompt": "Function `mypyc.codegen.emitmodule.collect_source_dependencies` in `mypyc/codegen/emitmodule.py` was changed as shown:\n\n```diff\n@@ -436,23 +436,16 @@\n     return modules\n \n \n-def collect_source_dependencies(\n-    modules: dict[str, ModuleIR], *, internal: bool = True\n-) -> set[SourceDep]:\n-    \"\"\"Collect all SourceDep dependencies from all modules.\n-\n-    If internal is set to False, returns only the dependencies that can be exported to C extensions\n-    dependent on the one currently being compiled.\n-    \"\"\"\n+def collect_source_dependencies(modules: dict[str, ModuleIR]) -> set[SourceDep]:\n+    \"\"\"Collect all SourceDep dependencies from all modules.\"\"\"\n     source_deps: set[SourceDep] = set()\n     for module in modules.values():\n         for dep in module.dependencies:\n             if isinstance(dep, SourceDep):\n-                if internal == dep.internal:\n+                if dep.internal:\n                     source_deps.add(dep)\n-            else:\n-                capsule_dep = dep.internal_dep() if internal else dep.external_dep()\n-                source_deps.add(capsule_dep)\n+            elif isinstance(dep, Capsule):\n+                source_deps.add(dep.internal_dep())\n     return source_deps\n \n \n```\n\nUpdate the rest of the project so its tests pass. The change to `mypyc.codegen.emitmodule.collect_source_dependencies` is already in the working tree. When your changes are complete, call done."
+ },
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "dea7b79172d9053e1744311d47540868db3c5fc8",
+  "parent": "3ca6857e6ab0d824164fdcd91eaaffc26c27808c",
+  "commit_date": "2026-09-07T16:49:52+01:00",
+  "author_date": "2026-09-07T16:49:52+01:00",
+  "subject": "[mypyc] Move private generator spills from environ to generator objects (#21955)",
+  "anchor": "mypyc.transform.spill.spill_regs",
+  "anchor_file": "mypyc/transform/spill.py",
+  "forced": [
+   "parameter removed or renamed: env, self_reg",
+   "new required parameter: frame, frame_reg"
+  ],
+  "changed_callers": [
+   "mypyc.transform.spill.insert_spills"
+  ],
+  "depth": 1,
+  "stratum": "1",
+  "caller_bucket": "1",
+  "start_patch": "--- a/mypyc/transform/spill.py\n+++ b/mypyc/transform/spill.py\n@@ -50,30 +50,24 @@\n \n def spill_regs(\n     blocks: list[BasicBlock],\n-    env: ClassIR,\n+    frame: ClassIR,\n     to_spill: set[Value],\n     live: AnalysisResult[Value],\n-    self_reg: Register,\n+    frame_reg: Register,\n ) -> list[BasicBlock]:\n-    env_reg: Value\n-    for op in blocks[0].ops:\n-        if isinstance(op, GetAttr) and op.attr == \"__mypyc_env__\":\n-            env_reg = op\n-            break\n-    else:\n-        # Environment has been merged into generator object\n-        env_reg = self_reg\n-\n     spill_locs = {}\n     # Sort values to make the order deterministic. All the spilled values are\n     # known to be Op instances, so the cast is safe.\n     for i, val in enumerate(sort_values(cast(set[Op], to_spill), blocks)):\n-        name = f\"{TEMP_ATTR_NAME}2_{i}\"\n-        env.attributes[name] = val.type\n+        # Generator classes for overriding methods can inherit from one another. Include the\n+        # module-qualified owning class name so unrelated helper spills don't alias an inherited\n+        # struct field.\n+        name = f\"{TEMP_ATTR_NAME}2_{exported_name(frame.fullname)}_{i}\"\n+        frame.attributes[name] = val.type\n         if val.type.error_overlap:\n             # We can safely treat as always initialized, since the type has no pointers.\n             # This way we also don't need to manage the defined attribute bitfield.\n-            env._always_initialized_attrs.add(name)\n+            frame._always_initialized_attrs.add(name)\n         spill_locs[val] = name\n \n     for block in blocks:\n@@ -91,13 +85,13 @@\n                 # value is not live *when we include yields in the\n                 # CFG*. (The original decrefs are computed without that.)\n                 #\n-                # We also skip a decref is the env register is not\n+                # We also skip a decref if the frame register is not\n                 # live. That should only happen when an exception is\n                 # being raised, so everything should be handled there.\n-                if op.src not in live.after[block, i] and env_reg in live.after[block, i]:\n+                if op.src not in live.after[block, i] and frame_reg in live.after[block, i]:\n                     # Skip the DecRef but null out the spilled location\n                     null = LoadErrorValue(op.src.type)\n-                    block.ops.extend([null, SetAttr(env_reg, spill_locs[op.src], null, op.line)])\n+                    block.ops.extend([null, SetAttr(frame_reg, spill_locs[op.src], null, op.line)])\n                 continue\n \n             if (\n@@ -110,7 +104,7 @@\n                 stolen = op.stolen()\n                 for src in op.sources():\n                     if src in spill_locs:\n-                        read = GetAttr(env_reg, spill_locs[src], op.line)\n+                        read = GetAttr(frame_reg, spill_locs[src], op.line)\n                         block.ops.append(read)\n                         new_sources.append(read)\n                         if src.type.is_refcounted and src not in stolen:\n@@ -127,6 +121,6 @@\n \n             if op in spill_locs:\n                 # XXX: could we set uninit?\n-                block.ops.append(SetAttr(env_reg, spill_locs[op], op, op.line))\n+                block.ops.append(SetAttr(frame_reg, spill_locs[op], op, op.line))\n \n     return blocks\n",
+  "start_files": [
+   "mypyc/transform/spill.py"
+  ],
+  "start_functions": [
+   "mypyc/transform/spill.py::spill_regs"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypyc/test/test_spill.py b/mypyc/test/test_spill.py\nnew file mode 100644\nindex 00000000..898f6e92\n--- /dev/null\n+++ b/mypyc/test/test_spill.py\n@@ -0,0 +1,47 @@\n+from __future__ import annotations\n+\n+import unittest\n+\n+from mypyc.common import (\n+    ENV_ATTR_NAME,\n+    GENERATOR_ATTRIBUTE_PREFIX,\n+    NEXT_LABEL_ATTR_NAME,\n+    TEMP_ATTR_NAME,\n+)\n+from mypyc.ir.rtypes import RInstance\n+from mypyc.test.testutil import build_ir_for_single_file2\n+from mypyc.transform.spill import insert_spills\n+\n+\n+class TestSpill(unittest.TestCase):\n+    def test_separate_generator_environment_keeps_private_frame_state(self) -> None:\n+        # A nested generator needs a separate environment. Since make() is\n+        # evaluated before the yield, its result must be spilled across the\n+        # suspension point by the post-IRBuild spill pass.\n+        source = \"\"\"\\\n+def make() -> str:\n+    return \"left\"\n+\n+def outer():\n+    def nested(value: str):\n+        return make() + (yield value)\n+    return nested(\"right\")\n+\"\"\"\n+        module, _, _, _ = build_ir_for_single_file2(source.splitlines())\n+        frame = next(cl for cl in module.classes if cl.has_running_flag)\n+        assert frame.env_user_function is not None\n+\n+        insert_spills(frame.env_user_function, frame)\n+\n+        env_type = frame.attributes[ENV_ATTR_NAME]\n+        assert isinstance(env_type, RInstance)\n+        environment = env_type.class_ir\n+\n+        # Private generator resume state lives on the generator frame, which\n+        # is protected by the running flag and can use plain attribute access.\n+        assert frame.attrs_are_thread_confined()\n+        assert NEXT_LABEL_ATTR_NAME in frame.attributes\n+        assert any(name.startswith(TEMP_ATTR_NAME + \"2_\") for name in frame.attributes)\n+\n+        # Source-level variables stay in the shared environment.\n+        assert GENERATOR_ATTRIBUTE_PREFIX + \"value\" in environment.attributes\n",
+  "test_files": [
+   "mypyc/test/test_spill.py"
+  ],
+  "visible_tests": [],
+  "gold_files": [
+   "mypyc/codegen/emitmodule.py",
+   "mypyc/ir/class_ir.py",
+   "mypyc/irbuild/generator.py",
+   "mypyc/transform/spill.py"
+  ],
+  "gold_functions": [
+   "mypyc/codegen/emitmodule.py::compile_scc_to_ir",
+   "mypyc/ir/class_ir.py::ClassIR.__init__",
+   "mypyc/ir/class_ir.py::ClassIR.attrs_are_thread_confined",
+   "mypyc/ir/class_ir.py::ClassIR.deserialize",
+   "mypyc/ir/class_ir.py::ClassIR.serialize",
+   "mypyc/irbuild/generator.py::add_helper_to_generator_class",
+   "mypyc/irbuild/generator.py::instantiate_generator_class",
+   "mypyc/irbuild/generator.py::setup_env_for_generator_class",
+   "mypyc/irbuild/generator.py::setup_generator_class",
+   "mypyc/transform/spill.py::insert_spills"
+  ],
+  "prompt": "Function `mypyc.transform.spill.spill_regs` in `mypyc/transform/spill.py` was changed as shown:\n\n```diff\n@@ -50,30 +50,24 @@\n \n def spill_regs(\n     blocks: list[BasicBlock],\n-    env: ClassIR,\n+    frame: ClassIR,\n     to_spill: set[Value],\n     live: AnalysisResult[Value],\n-    self_reg: Register,\n+    frame_reg: Register,\n ) -> list[BasicBlock]:\n-    env_reg: Value\n-    for op in blocks[0].ops:\n-        if isinstance(op, GetAttr) and op.attr == \"__mypyc_env__\":\n-            env_reg = op\n-            break\n-    else:\n-        # Environment has been merged into generator object\n-        env_reg = self_reg\n-\n     spill_locs = {}\n     # Sort values to make the order deterministic. All the spilled values are\n     # known to be Op instances, so the cast is safe.\n     for i, val in enumerate(sort_values(cast(set[Op], to_spill), blocks)):\n-        name = f\"{TEMP_ATTR_NAME}2_{i}\"\n-        env.attributes[name] = val.type\n+        # Generator classes for overriding methods can inherit from one another. Include the\n+        # module-qualified owning class name so unrelated helper spills don't alias an inherited\n+        # struct field.\n+        name = f\"{TEMP_ATTR_NAME}2_{exported_name(frame.fullname)}_{i}\"\n+        frame.attributes[name] = val.type\n         if val.type.error_overlap:\n             # We can safely treat as always initialized, since the type has no pointers.\n             # This way we also don't need to manage the defined attribute bitfield.\n-            env._always_initialized_attrs.add(name)\n+            frame._always_initialized_attrs.add(name)\n         spill_locs[val] = name\n \n     for block in blocks:\n@@ -91,13 +85,13 @@\n                 # value is not live *when we include yields in the\n                 # CFG*. (The original decrefs are computed without that.)\n                 #\n-                # We also skip a decref is the env register is not\n+                # We also skip a decref if the frame register is not\n                 # live. That should only happen when an exception is\n                 # being raised, so everything should be handled there.\n-                if op.src not in live.after[block, i] and env_reg in live.after[block, i]:\n+                if op.src not in live.after[block, i] and frame_reg in live.after[block, i]:\n                     # Skip the DecRef but null out the spilled location\n                     null = LoadErrorValue(op.src.type)\n-                    block.ops.extend([null, SetAttr(env_reg, spill_locs[op.src], null, op.line)])\n+                    block.ops.extend([null, SetAttr(frame_reg, spill_locs[op.src], null, op.line)])\n                 continue\n \n             if (\n@@ -110,7 +104,7 @@\n                 stolen = op.stolen()\n                 for src in op.sources():\n                     if src in spill_locs:\n-                        read = GetAttr(env_reg, spill_locs[src], op.line)\n+                        read = GetAttr(frame_reg, spill_locs[src], op.line)\n                         block.ops.append(read)\n                         new_sources.append(read)\n                         if src.type.is_refcounted and src not in stolen:\n@@ -127,6 +121,6 @@\n \n             if op in spill_locs:\n                 # XXX: could we set uninit?\n-                block.ops.append(SetAttr(env_reg, spill_locs[op], op, op.line))\n+                block.ops.append(SetAttr(frame_reg, spill_locs[op], op, op.line))\n \n     return blocks\n```\n\nUpdate the rest of the project so its tests pass. The change to `mypyc.transform.spill.spill_regs` is already in the working tree. When your changes are complete, call done."
+ },
+ {
+  "family": "B",
+  "repo": "mypy",
+  "language": "python",
+  "commit": "a9928e30cb152ba940a2dd38794648ac078f5747",
+  "parent": "a645d53a7f81d55551257b5aaf5454333eba4bcf",
+  "commit_date": "2026-10-13T13:45:14+02:00",
+  "author_date": "2026-10-13T13:45:14+02:00",
+  "subject": "[mypyc] Skip recursive setup for frame-private nested functions (#22187)",
+  "anchor": "mypyc.irbuild.env_class.setup_func_for_recursive_call",
+  "anchor_file": "mypyc/irbuild/env_class.py",
+  "forced": [
+   "parameter removed or renamed: prefix",
+   "returning nothing added or removed"
+  ],
+  "changed_callers": [
+   "mypyc.irbuild.env_class.load_env_registers",
+   "mypyc.irbuild.generator.gen_generator_func_body"
+  ],
+  "depth": 2,
+  "stratum": "2-4",
+  "caller_bucket": "2",
+  "start_patch": "--- a/mypyc/irbuild/env_class.py\n+++ b/mypyc/irbuild/env_class.py\n@@ -328,9 +328,7 @@\n                     )\n \n \n-def setup_func_for_recursive_call(\n-    builder: IRBuilder, fdef: FuncDef, base: ImplicitClass, prefix: str = \"\"\n-) -> None:\n+def setup_func_for_recursive_call(builder: IRBuilder, fdef: FuncDef, base: ImplicitClass) -> None:\n     \"\"\"Enable calling a nested function (with a callable class) recursively.\n \n     Adds the instance of the callable class representing the given\n@@ -338,10 +336,18 @@\n     be called recursively. Note that this needs to be done only for\n     nested functions.\n     \"\"\"\n-    # First, set the attribute of the environment class so that GetAttr can be called on it.\n     prev_env = builder.fn_infos[-2].env_class\n-    attr_name = prefix + fdef.name\n-    prev_env.attributes[attr_name] = builder.type_to_rtype(fdef.type)\n+    target_symbol = get_func_target_symbol(fdef)\n+    target = builder.symtables[-2].get(target_symbol)\n+    if (\n+        not isinstance(target_symbol, FuncDef)\n+        or not isinstance(target, AssignmentTargetAttr)\n+        or not isinstance(target.obj.type, RInstance)\n+        or target.obj.type.class_ir is not prev_env\n+    ):\n+        return\n+\n+    attr_name = target.attr\n     line = fdef.line\n \n     if isinstance(base, GeneratorClass):\n@@ -355,7 +361,7 @@\n     # Obtain the instance of the callable class representing the FuncDef, and add it to the\n     # current environment.\n     val = builder.add(GetAttr(prev_env_reg, attr_name, line))\n-    target = builder.add_local_reg(fdef, object_rprimitive)\n+    target = builder.add_local_reg(target_symbol, object_rprimitive)\n     builder.assign(target, val, line)\n \n \n",
+  "start_files": [
+   "mypyc/irbuild/env_class.py"
+  ],
+  "start_functions": [
+   "mypyc/irbuild/env_class.py::setup_func_for_recursive_call"
+  ],
+  "after_index_patch": null,
+  "hidden_patch": "diff --git a/mypyc/test/test_generator_spills.py b/mypyc/test/test_generator_spills.py\nindex a6e06181..462d2a77 100644\n--- a/mypyc/test/test_generator_spills.py\n+++ b/mypyc/test/test_generator_spills.py\n@@ -184,6 +184,56 @@ def gen() -> Iterator[Any]:\n         )\n         assert environment is not frame\n \n+    def test_nested_generator_private_helper_stays_on_frame(self) -> None:\n+        module, _, _, _ = build_ir_for_single_file2(\"\"\"\\\n+from typing import Iterator\n+\n+def outer() -> Iterator[int]:\n+    def captured() -> Iterator[int]:\n+        yield 1\n+    def private() -> Iterator[int]:\n+        yield from captured()\n+    yield from private()\n+\"\"\".splitlines())\n+        outer_frame = next(cl for cl in module.classes if cl.name == \"outer_gen\")\n+        environment_type = outer_frame.attributes[ENV_ATTR_NAME]\n+        assert isinstance(environment_type, RInstance)\n+        environment = environment_type.class_ir\n+\n+        assert GENERATOR_ATTRIBUTE_PREFIX + \"captured\" in environment.attributes\n+        assert \"private\" in frame_variables(outer_frame)\n+        assert GENERATOR_ATTRIBUTE_PREFIX + \"private\" not in environment.attributes\n+\n+        private_frame = next(cl for cl in module.classes if cl.name.startswith(\"private_gen___\"))\n+        private_helper = private_frame.env_user_function\n+        assert private_helper is not None\n+        assert not any(\n+            isinstance(op, GetAttr) and op.attr == GENERATOR_ATTRIBUTE_PREFIX + \"private\"\n+            for block in private_helper.blocks\n+            for op in block.ops\n+        )\n+\n+    def test_redefined_nested_helper_has_single_storage_location(self) -> None:\n+        module, _, _, _ = build_ir_for_single_file2(\"\"\"\\\n+from typing import Iterator\n+\n+def outer(flag: bool) -> Iterator[int]:\n+    if flag:\n+        def helper(n: int) -> int:\n+            return 1\n+    else:\n+        def helper(n: int) -> int:\n+            return helper(1) if not n else 2\n+    yield helper(0)\n+\"\"\".splitlines())\n+        outer_frame = next(cl for cl in module.classes if cl.name == \"outer_gen\")\n+        environment_type = outer_frame.attributes[ENV_ATTR_NAME]\n+        assert isinstance(environment_type, RInstance)\n+        environment = environment_type.class_ir\n+\n+        assert GENERATOR_ATTRIBUTE_PREFIX + \"helper\" in environment.attributes\n+        assert \"helper\" not in frame_variables(outer_frame)\n+\n     def test_nested_finally_promotes_each_saved_exception(self) -> None:\n         cl = generator_class(\n             \"\"\"\\\n",
+  "test_files": [
+   "mypyc/test/test_generator_spills.py"
+  ],
+  "visible_tests": [
+   "mypyc/test/test_generator_spills.py"
+  ],
+  "gold_files": [
+   "mypyc/irbuild/env_class.py",
+   "mypyc/irbuild/function.py",
+   "mypyc/irbuild/generator.py",
+   "mypyc/irbuild/util.py"
+  ],
+  "gold_functions": [
+   "mypyc/irbuild/env_class.py::add_vars_to_env",
+   "mypyc/irbuild/env_class.py::load_env_registers",
+   "mypyc/irbuild/function.py::get_func_target",
+   "mypyc/irbuild/generator.py::gen_generator_func_body",
+   "mypyc/irbuild/util.py::get_func_target_symbol"
+  ],
+  "prompt": "Function `mypyc.irbuild.env_class.setup_func_for_recursive_call` in `mypyc/irbuild/env_class.py` was changed as shown:\n\n```diff\n@@ -328,9 +328,7 @@\n                     )\n \n \n-def setup_func_for_recursive_call(\n-    builder: IRBuilder, fdef: FuncDef, base: ImplicitClass, prefix: str = \"\"\n-) -> None:\n+def setup_func_for_recursive_call(builder: IRBuilder, fdef: FuncDef, base: ImplicitClass) -> None:\n     \"\"\"Enable calling a nested function (with a callable class) recursively.\n \n     Adds the instance of the callable class representing the given\n@@ -338,10 +336,18 @@\n     be called recursively. Note that this needs to be done only for\n     nested functions.\n     \"\"\"\n-    # First, set the attribute of the environment class so that GetAttr can be called on it.\n     prev_env = builder.fn_infos[-2].env_class\n-    attr_name = prefix + fdef.name\n-    prev_env.attributes[attr_name] = builder.type_to_rtype(fdef.type)\n+    target_symbol = get_func_target_symbol(fdef)\n+    target = builder.symtables[-2].get(target_symbol)\n+    if (\n+        not isinstance(target_symbol, FuncDef)\n+        or not isinstance(target, AssignmentTargetAttr)\n+        or not isinstance(target.obj.type, RInstance)\n+        or target.obj.type.class_ir is not prev_env\n+    ):\n+        return\n+\n+    attr_name = target.attr\n     line = fdef.line\n \n     if isinstance(base, GeneratorClass):\n@@ -355,7 +361,7 @@\n     # Obtain the instance of the callable class representing the FuncDef, and add it to the\n     # current environment.\n     val = builder.add(GetAttr(prev_env_reg, attr_name, line))\n-    target = builder.add_local_reg(fdef, object_rprimitive)\n+    target = builder.add_local_reg(target_symbol, object_rprimitive)\n     builder.assign(target, val, line)\n \n \n```\n\nUpdate the rest of the project so its tests pass. The change to `mypyc.irbuild.env_class.setup_func_for_recursive_call` is already in the working tree. When your changes are complete, call done."
+ }
+]

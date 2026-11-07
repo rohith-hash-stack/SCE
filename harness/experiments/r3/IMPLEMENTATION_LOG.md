@@ -502,3 +502,27 @@ Code `81ad2e86`; 20 fresh runs; `memtest/memtest_2026-11-07_r3-7.json`. All four
 - (c) children exited, and the driver grew by 0.5 MB;
 - (d) no orphans.
 20 of 20 runs ended as expected. The first run's failed result stays in the record (`memtest_2026-11-07.json`).
+
+## 2026-11-07: R3-8 pre-screen result: the week proceeds (3 repositories at or above 40%)
+
+The Family B miner over R3a's main window (2024-12-01 to each clone's HEAD), with the same rules as for the 18,
+mined in quarterly chunks (64 jobs, all exited 0) and merged with the whole-window dedupe. No gating.
+Outputs: `r3a_tasks/screen/` (`screen.json`, `candidates_B_<repo>.json`, `merge_screen.py`).
+Deep = 2 or more changed callers. Reference: 21% gated (14 of 66), 23% mined (30 of 132).
+
+| repo | HEAD | commits kept | mined | 1 | 2 | 3-4 | 5+ | deep | share | ≥40% |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mypy | 55472c03090a | 1845 | 9 | 5 | 3 | 1 | 0 | 4 | 44% | yes |
+| sqlalchemy | 2918faf29c58 | 884 | 1 | 1 | 0 | 0 | 0 | 0 | 0% | no |
+| rollup | 73fae6e8977c | 712 | 12 | 6 | 5 | 1 | 0 | 6 | 50% | yes |
+| prettier | b09dd90022c8 | 2356 | 14 | 9 | 4 | 0 | 1 | 5 | 36% | no |
+| pydantic | b947584cc89e | 1321 | 10 | 6 | 3 | 1 | 0 | 4 | 40% | yes |
+| pylint | 79c8d0c9813b | 856 | 5 | 5 | 0 | 0 | 0 | 0 | 0% | no |
+| eslint | bdd4b1da21dc | 1257 | 9 | 8 | 0 | 1 | 0 | 1 | 11% | no |
+| svelte | 7775f73b7cbe | 1760 | 24 | 16 | 6 | 1 | 1 | 8 | 33% | no |
+| all 8 | | 10991 | 84 | 56 | 21 | 5 | 2 | 28 | 33% | |
+
+- The condition is met by mypy, rollup and pydantic, so the week proceeds under R3-8.
+- The shares rest on 9 to 12 candidates each; pydantic is exactly at the threshold (4 of 10).
+- The screen ran the full main-window miner, so these candidates are the mining for the week. What remains is the
+  gate.
