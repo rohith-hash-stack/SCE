@@ -493,3 +493,12 @@ before and after), and Family N's outputs recompute byte-identical.
     the compiler. Risk: tests are sample folders, which the gate maps to their runner file (to be seen).
 - Clones are shallow from 2024-11-01, which covers the window and each first commit's parent, to save disk.
 - `mine.py`'s `LANGUAGE` gains rollup, prettier, eslint and svelte (metadata only: the task's `language` field).
+
+## 2026-11-07: memory test rerun under amendment R3-7: passes
+
+Code `81ad2e86`; 20 fresh runs; `memtest/memtest_2026-11-07_r3-7.json`. All four clauses pass:
+- (a) plateau in 20 of 20 runs, and RSS slope over pad calls at most 0.004 MB per call;
+- (b) peak drift at most 1.4%;
+- (c) children exited, and the driver grew by 0.5 MB;
+- (d) no orphans.
+20 of 20 runs ended as expected. The first run's failed result stays in the record (`memtest_2026-11-07.json`).

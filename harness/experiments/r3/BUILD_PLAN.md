@@ -173,3 +173,15 @@ widened pilot tasks (pilot-B-01, 02, 03, 05, 06; Python and JS/TS).
   the two passes.
 - The check as written does not tell a late one-time step from growth. Not changed: the pass rule is fixed before
   the test, so changing it is the user's decision.
+
+**Rerun under amendment R3-7, 2026-11-07 (code `81ad2e86`; `memtest/memtest_2026-11-07_r3-7.json`): PASS.**
+- 20 fresh runs, same tasks and plan; each run starts with 24 read-only pad calls (turn cap 60 in this test).
+- (a) every run's memory is flat or falling at its end. Over pad calls 5-24, the RSS slope is 0.0 MB per call in
+  19 runs and 0.004 MB per call in 1 (limit 1).
+- (b) peak drift between passes at most 1.4% (limit 10%).
+- (c) every child exited; driver RSS 12.2 MB to 12.7 MB (+0.5 MB).
+- (d) no leftover processes in any run.
+- 20 of 20 runs ended as their scripts should.
+- Child peaks 380-605 MB. The first rule's late-growth figure is now -22 to +0.1 MB: with the pad calls first, the
+  heavy phase no longer falls alone in the last quarter.
+- Process-per-run is verified for the Kaggle cell.
