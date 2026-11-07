@@ -156,3 +156,20 @@ process. Verified by a 20-run sequential test showing memory flat within a run a
       above the peak of the first three quarters);
     - the children's peaks show no trend (each run's second peak is within 10% of its first).
   - The test is `memtest.py`. Its result is recorded here and in IMPLEMENTATION_LOG before the pilot cell is built.
+
+**Result, 2026-11-07 (code `ca9b4368`; `memtest/memtest_2026-11-07.json`): FAIL on one check.** 20 runs on the
+widened pilot tasks (pilot-B-01, 02, 03, 05, 06; Python and JS/TS).
+- Passed:
+  - driver RSS 12.2 MB to 12.6 MB (+0.4 MB);
+  - every child exited, and no run left a process behind;
+  - peak drift between the two passes at most 3.1% (limit 10%);
+  - all 20 runs ended as expected (10 gold resolved, 10 empty unresolved).
+- Failed: "no late growth within a run". 3 of the 20 runs exceeded 100 MB:
+  - run 9, pilot-B-06 BASELINE empty: +186 MB;
+  - run 16, pilot-B-03 PRISM gold: +101 MB;
+  - run 19, pilot-B-06 BASELINE empty: +167 MB.
+- In all three the RSS rises once and then stays flat to the end of the run (peak at sample 45 of 59, 27 of 35,
+  48 of 58). It is one late step in a short run, not continued growth. The same runs' peaks repeat within 3% across
+  the two passes.
+- The check as written does not tell a late one-time step from growth. Not changed: the pass rule is fixed before
+  the test, so changing it is the user's decision.

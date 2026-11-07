@@ -436,3 +436,11 @@ Pilot artifacts are in `pilot/` (yield, candidates, gate log, attrition, frozen 
 in 8 quarterly chunks, each its own process, with a done marker per chunk, so a restart loses only the chunks in
 flight. The mining rules apply per commit. The one check that spans the window (the same diff by `git patch-id`) is
 re-applied over the whole window when the chunks are merged.
+
+## 2026-11-07: 20-run memory test (BUILD_PLAN section 7): fails one check
+
+- Code `ca9b4368`; 20 runs on the widened pilot tasks; `memtest/memtest_2026-11-07.json`.
+- Driver +0.4 MB; every child exited; no leftover processes; peak drift at most 3.1%; 20 of 20 runs as expected.
+- **Fails "no late growth within a run"**: runs 9 (+186 MB), 16 (+101 MB) and 19 (+167 MB). Each is a single step
+  late in the run, flat afterwards (8 to 14 flat samples to the end), and repeated within 3% in the other pass.
+- Recorded as a failure. The rule is not changed after seeing the result. Whether to re-specify the check is open.
