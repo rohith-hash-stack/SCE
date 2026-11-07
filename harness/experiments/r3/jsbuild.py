@@ -37,6 +37,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -223,12 +224,29 @@ class SetupError(Exception):
 
 
 def _run(cmd, cwd, env, timeout):
+    """Run `cmd` in its own process group, and kill the whole group when it ends (normally or on timeout).
+
+    A test that leaves children running (execa's IPC fixtures do) must not leak them past the call: they would
+    hold memory across runs and break process-per-run (BUILD_PLAN section 7)."""
     t = time.time()
+    p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                         errors="replace", start_new_session=True)
     try:
-        r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout, errors="replace")
-        return r.returncode, (r.stdout or "") + (r.stderr or ""), time.time() - t
-    except subprocess.TimeoutExpired as exc:
-        return 124, f"timeout after {timeout}s: {(exc.stdout or b'')[-500:]!r}", time.time() - t
+        out, err = p.communicate(timeout=timeout)
+        return p.returncode, (out or "") + (err or ""), time.time() - t
+    except subprocess.TimeoutExpired:
+        kill_group(p.pid)
+        out, _ = p.communicate()
+        return 124, f"timeout after {timeout}s: {(out or '')[-500:]!r}", time.time() - t
+    finally:
+        kill_group(p.pid)
+
+
+def kill_group(pgid: int) -> None:
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 class Env:
