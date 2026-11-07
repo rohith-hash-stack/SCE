@@ -478,3 +478,18 @@ its cap (sqlglot) had its earlier draws skipped before they were counted. `attri
 and 117 as 107. Fixed in `gate.py`: a commit already gated counts as drawn before the cap check. The outputs were
 recomputed from the same `gate_B.jsonl`, with no new gating. The task list is unchanged (sha256 `b796d29e…`
 before and after), and Family N's outputs recompute byte-identical.
+
+## 2026-11-07: R3-8 pre-screen: the 8 repositories, chosen before the screen runs
+
+- Named in the decision: **mypy**, **sqlalchemy** (Python); **rollup**, **prettier** (JS/TS).
+- Chosen to match (2 Python, 2 JS/TS). Each was picked on a guess about change shape, not a measured yield:
+  - **pydantic** (Python): validation, schema and field machinery is shared across many call sites, and signature
+    changes there tend to propagate. Pure-Python package, pytest. Risk: pinned `pydantic-core` wheels.
+  - **pylint** (Python): checkers call shared `utils` and astroid helpers, so a helper signature change touches
+    several checkers in one commit. Pure Python, pytest. Risk: functional tests are data files, as with mypy.
+  - **eslint** (JS/TS): rules and the linter share `lib/shared` and `ast-utils` helpers. Mocha, Node only, one
+    package.
+  - **svelte** (JS/TS): the compiler's phases call shared helpers from many visitors. pnpm, vitest in Node mode for
+    the compiler. Risk: tests are sample folders, which the gate maps to their runner file (to be seen).
+- Clones are shallow from 2024-11-01, which covers the window and each first commit's parent, to save disk.
+- `mine.py`'s `LANGUAGE` gains rollup, prettier, eslint and svelte (metadata only: the task's `language` field).

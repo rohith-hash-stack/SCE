@@ -70,7 +70,9 @@ N_MIN_LINES, N_MAX_LINES = 6, 80
 N_MAX_SOURCE_FILES = 15
 USED_REPOS = {"scrapy", "aiohttp", "werkzeug", "tornado"}       # the pool table's "used" repositories
 LANGUAGE = {"vitest": "js", "nitro": "js", "h3": "js", "execa": "js", "unstorage": "js", "msw": "js",
-            "unplugin": "js"}
+            "unplugin": "js",
+            # R3-8's pre-screen (2026-11-07)
+            "rollup": "js", "prettier": "js", "eslint": "js", "svelte": "js"}
 
 
 BACKPORT = re.compile(r"\bbackport\b|cherry picked from commit", re.I)
